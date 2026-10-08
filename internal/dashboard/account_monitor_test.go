@@ -273,3 +273,68 @@ func TestD132_RestSnapshotWrites(t *testing.T) {
 		t.Fatalf("WS 覆盖键不得双写, got %d", count())
 	}
 }
+
+// TestD133_ConfigDeletePrunesGhost D-133 域2 验收锚：删配置行→querier 哈希变→键集淘汰，
+// 被删账户行从 Snapshot/states/cur 即刻消失（不再残留到重启），事件流补发一条
+// online=false 末态 upsert（既有 proto 无 remove——回放源摘除=新连接绝迹）。
+func TestD133_ConfigDeletePrunesGhost(t *testing.T) {
+	ctx := context.Background()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v3/account":
+			_, _ = w.Write([]byte(`{"balances":[{"asset":"USDT","free":"50","locked":"0"}]}`))
+		default: // perp /fapi/v2/account 等
+			_, _ = w.Write([]byte(`{"totalWalletBalance":"345.72","availableBalance":"300"}`))
+		}
+	}))
+	defer srv.Close()
+	t0 := time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC)
+	store := &fakeExchangeStore{cfgs: []pgstore.ExchangeConfig{
+		{ID: 1, Venue: "binance", VenueType: "perp", APIKey: "k", APISecret: "s",
+			BaseURL: srv.URL, Simulated: false, CreatedAt: t0},
+		{ID: 2, Venue: "binance", VenueType: "spot", APIKey: "k", APISecret: "s",
+			BaseURL: srv.URL, Simulated: false, CreatedAt: t0},
+	}}
+	topic := bus.NewTopic[*v1.AccountEvent]()
+	evCh, _ := topic.Subscribe()
+	m := NewAccountMonitor(NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute), topic)
+	m.SetExchangeStore(store)
+
+	got := m.Refresh(ctx)
+	if len(got) != 2 {
+		t.Fatalf("初始 snapshot want 2, got %d", len(got))
+	}
+
+	// 删 binance:spot 配置行（生产 binance:earn 删除同款场景）→ 哈希变→键集淘汰。
+	store.cfgs = store.cfgs[:1]
+	got = m.Refresh(ctx)
+	if len(got) != 1 || got[0].VenueKey != "binance:perp" {
+		t.Fatalf("删行后 snapshot want 仅 binance:perp, got %+v", got)
+	}
+	if _, ok := m.states["binance:spot"]; ok {
+		t.Error("states 残留 binance:spot 幽灵态")
+	}
+	m.mu.RLock()
+	_, inCur := m.cur["binance:spot"]
+	m.mu.RUnlock()
+	if inCur {
+		t.Error("cur 残留 binance:spot 幽灵行（回放源未摘除）")
+	}
+
+	// 事件流应收到 binance:spot 的 offline 末态 upsert。
+	deadline := time.After(2 * time.Second)
+	found := false
+	for !found {
+		select {
+		case ev := <-evCh:
+			if ev.Account != nil && ev.Account.VenueKey == "binance:spot" {
+				found = true
+				if ev.Account.Online {
+					t.Error("摘除末事件 want Online=false, got true")
+				}
+			}
+		case <-deadline:
+			t.Fatal("未收到 binance:spot 摘除末事件（offline upsert）")
+		}
+	}
+}

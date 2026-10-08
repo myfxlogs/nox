@@ -6,15 +6,11 @@ package dashboard
 
 import (
 	"context"
-	"log"
-	"os"
 	"sort"
-	"strings"
 	"time"
 
 	"arb/internal/bus"
 	"arb/internal/reconcile"
-	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/gen/dashboardv1"
 
@@ -198,75 +194,4 @@ func acctSame(a, b *reconcile.AccountInfo) bool {
 	pa := accountToProto(a, false, time.Time{})
 	pb := accountToProto(b, false, time.Time{})
 	return proto.Equal(pa, pb)
-}
-
-// resolveExchangeBaseURL 推导 CEX 交易所 base（D-059 抽公共，账户查询与执行器共用）。
-// 行为与原 queriers() 内联一致：base_url 显式 → 用之；空 → binance 默认 BINANCE_PROXY_URL
-// （无则 fapi 直连，451 由部署负责）、okx 默认 www.okx.com；binance 代理 base 是 fapi 风格，
-// 无 /api/ 段则 fapi→api 得 spot base（与采集一致）。
-func resolveExchangeBaseURL(c pgstore.ExchangeConfig) string {
-	base := c.BaseURL
-	if base == "" {
-		switch c.Venue {
-		case "binance":
-			base = os.Getenv("BINANCE_PROXY_URL")
-			if base == "" {
-				base = "https://fapi.binance.com" // 无代理直连；451 由部署负责
-			}
-		case "okx":
-			base = "https://www.okx.com" // 实盘域名
-		}
-	}
-	if c.Venue == "binance" && c.VenueType == "spot" && !strings.Contains(base, "/api/") {
-		// 与采集一致：仅 spot 需从 fapi 风格代理 base 推导 spot base。
-		// naive replace 按首命中换段——仅 spot 走此推导（perp base 含 fapi 段原样保留，
-		// 历史 demo 形前缀同样不被错改；D-516 起 sim 行上游 fail-closed 不入此路径）。
-		base = strings.Replace(base, "fapi", "api", 1)
-	}
-	return base
-}
-
-func (m *AccountMonitor) queriers(ctx context.Context) []reconcile.AccountQuerier {
-	qs := m.bm.AccountQueriers()
-	m.mu.RLock()
-	exchs := m.exchs
-	m.mu.RUnlock()
-	if exchs != nil {
-		cfgs, err := exchs.ListExchangeConfigs(ctx)
-		if err != nil {
-			log.Printf("[account-mon] list exchanges: %v", err)
-		} else {
-			// D-362 S2/R1：撞键归一（赢家 canonical/输家 #id，与 executor/持仓同源）。
-			// D-516：sim 行先于归一剔除——不占 canonical、不建查询器。
-			m.mu.Lock()
-			live := realOnlyConfigs(cfgs, &m.simWarned, "account")
-			h := exchConfigsHash(live)
-			if h == m.qCacheHash && m.qCache != nil {
-				qs = append(qs, m.qCache...)
-				m.mu.Unlock()
-			} else {
-				m.mu.Unlock()
-				// D-362 S2/R1：撞键归一（赢家 canonical/输家 #id，与 executor/持仓同源）。
-				winners := cexKeyWinners(live)
-				var built []reconcile.AccountQuerier
-				for i := range live {
-					c := &live[i]
-					base := resolveExchangeBaseURL(*c)
-					q := reconcile.NewCEXAccountQuerier(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Website, c.Simulated)
-					q.SetKeyOverride(reconcile.CexVenueKey(c.Venue, c.VenueType, c.ID, winners))
-					built = append(built, q)
-					log.Printf("[account] cex querier: %s:%s", c.Venue, c.VenueType)
-				}
-				cexQuerierBuildTotal.Add(1)
-				m.mu.Lock()
-				m.qCacheHash, m.qCache = h, built
-				m.mu.Unlock()
-				qs = append(qs, built...)
-			}
-		}
-	}
-	m.mu.RLock()
-	qs = append(qs, m.statics...)
-	m.mu.RUnlock()
-	return qs
 }
