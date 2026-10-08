@@ -262,6 +262,16 @@ func TestD132_RestSnapshotWrites(t *testing.T) {
 	if count() != 2 {
 		t.Fatalf("值变应再写, got %d", count())
 	}
+	// D-136：仅非入库字段变（Holdings 浮动子项=earn 每轮 accrual 噪声形态）→ 零写。
+	q.acct = &reconcile.AccountInfo{
+		VenueKey: "okx:earn", Venue: "okx", VenueType: "earn", AssetType: "cex",
+		Balance: 101, Equity: 121, FreeMargin: 101, Currency: "USDT",
+		Holdings: []*v1.Holding{{Ccy: "USDT", Qty: 121.00000001, UsdtValue: 121}},
+	}
+	m.Refresh(ctx)
+	if count() != 2 {
+		t.Fatalf("非入库字段变不得写, got %d", count())
+	}
 	// WS 覆盖键（binance:perp 有私有流）值变也不写。
 	q2 := &fakeAccountQuerier{key: "binance:perp", acct: &reconcile.AccountInfo{
 		VenueKey: "binance:perp", Venue: "binance", VenueType: "perp", AssetType: "cex",
