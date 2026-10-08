@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/fbsobreira/gotron-sdk/pkg/account"
 	"github.com/fbsobreira/gotron-sdk/pkg/proto/api"
 	"github.com/fbsobreira/gotron-sdk/pkg/proto/core"
 )
@@ -52,11 +51,11 @@ func (f *fakeStore) LastExecutedRebalanceAt(_ context.Context) (time.Time, error
 
 // mockAccountFetcher 实现 AccountFetcher 接口。
 type mockAccountFetcher struct {
-	acc *account.Account
+	acc *AccountDetail
 	err error
 }
 
-func (m *mockAccountFetcher) GetAccountDetailedCtx(_ context.Context, _ string) (*account.Account, error) {
+func (m *mockAccountFetcher) GetAccountDetail(_ context.Context, _ string) (*AccountDetail, error) {
 	return m.acc, m.err
 }
 
@@ -224,7 +223,7 @@ func TestDoRebalance_MinIntervalExpired(t *testing.T) {
 		rebalancedToday: false,
 		lastExecutedAt:  time.Now().Add(-3 * time.Hour), // 3h 前 executed > 2h MinInterval
 	}
-	accFetcher := &mockAccountFetcher{acc: &account.Account{
+	accFetcher := &mockAccountFetcher{acc: &AccountDetail{
 		Votes:     map[string]int64{"SR1": 18070},
 		TronPower: 18070,
 	}}
@@ -252,7 +251,7 @@ func TestDoRebalance_MinIntervalZero(t *testing.T) {
 		rebalancedToday: false,
 		lastExecutedAt:  time.Now().Add(-1 * time.Minute), // 1min 前 executed
 	}
-	accFetcher := &mockAccountFetcher{acc: &account.Account{
+	accFetcher := &mockAccountFetcher{acc: &AccountDetail{
 		Votes:     map[string]int64{"SR1": 18070},
 		TronPower: 18070,
 	}}

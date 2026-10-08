@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/fbsobreira/gotron-sdk/pkg/account"
 	"github.com/fbsobreira/gotron-sdk/pkg/proto/api"
 	"github.com/fbsobreira/gotron-sdk/pkg/proto/core"
 )
@@ -74,15 +73,15 @@ func (c *integrationConn) GetAccountResourceCtx(_ context.Context, _ string) (*a
 
 // integrationAccount 是集成测试用的 mock AccountFetcher。
 type integrationAccount struct {
-	acc *account.Account
+	acc *AccountDetail
 }
 
-func (a *integrationAccount) GetAccountDetailedCtx(_ context.Context, _ string) (*account.Account, error) {
+func (a *integrationAccount) GetAccountDetail(_ context.Context, _ string) (*AccountDetail, error) {
 	return a.acc, nil
 }
 
 // makeIntegrationScheduler 构造集成测试用 Scheduler（httptest TronScan + mock gRPC + fake store）。
-func makeIntegrationScheduler(t *testing.T, srFixture string, store *integrationStore, conn *integrationConn, acc *account.Account) (*Scheduler, *Executor, *httptest.Server) {
+func makeIntegrationScheduler(t *testing.T, srFixture string, store *integrationStore, conn *integrationConn, acc *AccountDetail) (*Scheduler, *Executor, *httptest.Server) {
 	t.Helper()
 	// httptest mock TronScan /api/witness
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +128,7 @@ func TestIntegration_RebalanceExecute(t *testing.T) {
 		voteTxExt: makeTxExt(txid),
 	}
 	// 当前投 SRbad（高票低 yield）→ 目标选 SRgood（低票高 yield）→ NeedRebalance=true
-	acc := &account.Account{
+	acc := &AccountDetail{
 		TronPower: 10000,
 		Votes:     map[string]int64{"SRbad": 10000},
 	}
@@ -178,7 +177,7 @@ func TestIntegration_RebalanceNoExecute(t *testing.T) {
 	// 当前已等权投两个 SR（与目标一致）→ NeedRebalance=false
 	// 注意：DefaultConfig MinSRs=3 但只有 2 个候选 → n=2，等权分配 5000 TRX each
 	// acc.Votes 单位是 TRX（链上 vote_count=TRX）
-	acc := &account.Account{
+	acc := &AccountDetail{
 		TronPower: 10000,
 		Votes:     map[string]int64{"SRgood": 5000, "SRbad": 5000},
 	}
@@ -223,7 +222,7 @@ func TestIntegration_RebalanceExecuteFailed(t *testing.T) {
 	conn := &integrationConn{
 		voteTxExt: &api.TransactionExtention{Transaction: nil},
 	}
-	acc := &account.Account{
+	acc := &AccountDetail{
 		TronPower: 10000,
 		Votes:     map[string]int64{"SRbad": 10000},
 	}
@@ -267,7 +266,7 @@ func TestIntegration_RebalanceBandwidthLowCooldown(t *testing.T) {
 			NetLimit: 1285, NetUsed: 1280,
 		},
 	}
-	acc := &account.Account{
+	acc := &AccountDetail{
 		TronPower: 10000,
 		Votes:     map[string]int64{"SRbad": 10000}, // NeedRebalance=true
 	}

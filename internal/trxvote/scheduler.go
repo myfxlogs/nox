@@ -10,12 +10,18 @@ import (
 	"time"
 
 	"arb/internal/safego"
-	"github.com/fbsobreira/gotron-sdk/pkg/account"
 )
+
+// AccountDetail 账户投票详情——读面本地域结构（D-117：与 gotron proto 解耦，
+// tronscan REST 主读 / gRPC 兜底同源供给）。
+type AccountDetail struct {
+	Votes     map[string]int64 // SR 地址 → 已投票数（TRX 单位）
+	TronPower int64            // 总 TP=总票数
+}
 
 // AccountFetcher 获取账户详情（当前投票+总 TP），便于 mock 测试。
 type AccountFetcher interface {
-	GetAccountDetailedCtx(ctx context.Context, addr string) (*account.Account, error)
+	GetAccountDetail(ctx context.Context, addr string) (*AccountDetail, error)
 }
 
 // Scheduler 调度 TRX 投票收益优化器的两个独立 tick。
@@ -30,6 +36,7 @@ type Scheduler struct {
 	lastClaimFailAt      time.Time // 领奖阻塞冷却（失败/带宽不足共用，15min）
 	lastRebalanceBlockAt time.Time // 改投阻塞冷却（带宽不足/查询失败共用，15min）
 	aboveThreshold       bool      // reward 是否在 >10e6 区间（状态迁移才打日志）
+	accountQueryFailing  bool      // D-117：账户查询失败 episode 标记（告警去重+恢复边沿）
 }
 
 // Store 是 Scheduler 依赖的存储接口（解耦 pgstore.Store 供测试注入）。
@@ -173,16 +180,24 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 		return
 	}
 
-	// 3. 拉当前投票分布 + 总 TP
-	accDetail, err := s.account.GetAccountDetailedCtx(ctx, s.address)
+	// 3. 拉当前投票分布 + 总 TP（D-117：tronscan /api/vote 主读，trongrid gRPC 兜底——
+	//    gRPC 读面 17:59Z 起持续性 429 实证；失败告警 episode 去重不再每 tick 刷）。
+	accDetail, err := s.account.GetAccountDetail(ctx, s.address)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			log.Printf("[trxvote] get account detail canceled (container shutdown)")
 			return
 		}
 		log.Printf("[trxvote] get account detail: %v", err)
-		s.executor.Alert("warn", "[投票账户查询失败] "+err.Error())
+		if !s.accountQueryFailing { // episode 首报 warn，期内失败只 log
+			s.accountQueryFailing = true
+			s.executor.Alert("warn", "[投票账户查询失败] "+err.Error())
+		}
 		return
+	}
+	if s.accountQueryFailing { // 恢复边沿各报一条（去重对账完整）
+		s.accountQueryFailing = false
+		s.executor.Alert("warn", "[投票账户查询恢复] tronscan/gRPC 账户读路恢复")
 	}
 	currentVotes := convertVotes(accDetail.Votes)
 	tp := accDetail.TronPower
