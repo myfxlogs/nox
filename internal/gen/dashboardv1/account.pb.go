@@ -514,6 +514,10 @@ type GetPnlAnchorResponse struct {
 	RealizedToday       float64                `protobuf:"fixed64,3,opt,name=realized_today,json=realizedToday,proto3" json:"realized_today,omitempty"`                     // D-508 S8：当日已实现（closed_at>=当日零点，DB 时钟口径；前端直读不再聚合）
 	FloatingNetUsd      float64                `protobuf:"fixed64,4,opt,name=floating_net_usd,json=floatingNetUsd,proto3" json:"floating_net_usd,omitempty"`                // D-508 S8：Σ broker 持仓 (pnl+swap+commission) venue 权威净值
 	FloatingAvailable   bool                   `protobuf:"varint,5,opt,name=floating_available,json=floatingAvailable,proto3" json:"floating_available,omitempty"`          // D-508 S8：false=broker 离线无数据 → 前端「—」不冒充 0
+	// D-123：真北行——30d 净年化（selfwatch/stage2 同源 NetRealizedSince(30d)/CapitalBase；
+	// 前端直读零算）。available=false（CapitalBase 缺/查询败）→ 前端「—」不冒充。
+	NetAnn_30DPct       float64 `protobuf:"fixed64,6,opt,name=net_ann_30d_pct,json=netAnn30dPct,proto3" json:"net_ann_30d_pct,omitempty"`
+	NetAnn_30DAvailable bool    `protobuf:"varint,7,opt,name=net_ann_30d_available,json=netAnn30dAvailable,proto3" json:"net_ann_30d_available,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -579,6 +583,20 @@ func (x *GetPnlAnchorResponse) GetFloatingNetUsd() float64 {
 func (x *GetPnlAnchorResponse) GetFloatingAvailable() bool {
 	if x != nil {
 		return x.FloatingAvailable
+	}
+	return false
+}
+
+func (x *GetPnlAnchorResponse) GetNetAnn_30DPct() float64 {
+	if x != nil {
+		return x.NetAnn_30DPct
+	}
+	return 0
+}
+
+func (x *GetPnlAnchorResponse) GetNetAnn_30DAvailable() bool {
+	if x != nil {
+		return x.NetAnn_30DAvailable
 	}
 	return false
 }
@@ -1995,13 +2013,15 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\x16AddDailyIncomeResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x18\n" +
 	"\awarning\x18\x02 \x01(\tR\awarning\"\x15\n" +
-	"\x13GetPnlAnchorRequest\"\xfe\x01\n" +
+	"\x13GetPnlAnchorRequest\"\xd8\x02\n" +
 	"\x14GetPnlAnchorResponse\x122\n" +
 	"\x06anchor\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x06anchor\x122\n" +
 	"\x15realized_since_anchor\x18\x02 \x01(\x01R\x13realizedSinceAnchor\x12%\n" +
 	"\x0erealized_today\x18\x03 \x01(\x01R\rrealizedToday\x12(\n" +
 	"\x10floating_net_usd\x18\x04 \x01(\x01R\x0efloatingNetUsd\x12-\n" +
-	"\x12floating_available\x18\x05 \x01(\bR\x11floatingAvailable\"\x17\n" +
+	"\x12floating_available\x18\x05 \x01(\bR\x11floatingAvailable\x12%\n" +
+	"\x0fnet_ann_30d_pct\x18\x06 \x01(\x01R\fnetAnn30dPct\x121\n" +
+	"\x15net_ann_30d_available\x18\a \x01(\bR\x12netAnn30dAvailable\"\x17\n" +
 	"\x15ResetPnlAnchorRequest\"L\n" +
 	"\x16ResetPnlAnchorResponse\x122\n" +
 	"\x06anchor\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x06anchor\"\x8f\x01\n" +
