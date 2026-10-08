@@ -181,53 +181,21 @@ func (v *View) LiveSnaps(ctx context.Context, venueKey string, snaps []pgstore.V
 	return v.live(ctx, venueKey, snaps, false)
 }
 
-func (v *View) live(ctx context.Context, venueKey string, snaps []pgstore.VenueAccountLatest, force bool) (Funds, bool) {
-	if IsCEXVenue(venueKey) {
-		k := keydomain.Parse(venueKey)
-		if v.d.Ledger != nil {
-			for _, key := range PoolKeys(k.Venue, k.Type) {
-				if e, ok := v.d.Ledger.Get(key, v.restTTL(), time.Now()); ok {
-					// D-563 S4c：force=决策面拒收 rest TTL 内校准值（变相快照）；
-					// ws 实推条目非缓存语义——仍认 live 直读。
-					if !force || e.Src != SrcRest {
-						return liveFunds(e), true
-					}
-				}
-			}
-		}
-		// 账本未装配也走 REST 校准（执行面裁定：REST 败才 fail-closed，不因账本缺席直落快照）。
-		if f, ok := v.calibrate(ctx, venueKey, force); ok {
-			return f, true
-		}
-	} else if f, ok := v.mtFrame(venueKey); ok {
-		return f, true // D-572 S2：MT 键先走流帧（fresh 即 live，龄闸不触发）；超窗/miss 落快照兜底
-	}
-	if snaps == nil {
-		if v.d.Snapshots == nil {
-			return Funds{}, false
-		}
-		var err error
-		if snaps, err = v.d.Snapshots(ctx); err != nil {
-			return Funds{}, false
-		}
-	}
-	r, ok := SnapPick(snaps, venueKey)
-	if !ok {
-		return Funds{}, false
-	}
-	return SnapFundsOf(r, time.Now()), true
-}
-
 // calibrate 脏/空路径：单飞互斥下一发 REST 校准（复用 CEXAccountQuerier 经代理）→
 // 回写账本 src=rest（RestTTL 内复用）。败→false 走快照兜底。
-func (v *View) calibrate(ctx context.Context, venueKey string, force bool) (Funds, bool) {
+// exact=true（D-130 域1 展示面）：账本复查限精确键，PoolKeys 回退不复用（错账根因）。
+func (v *View) calibrate(ctx context.Context, venueKey string, force, exact bool) (Funds, bool) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	// 获锁后复查——并发腿可能刚校准过同池（spot×perp 两腿同 venue 常见）。
 	// D-563 S4c：force=决策面实拉跳过复用（TTL 缓存对决策=变相快照）。
 	k := keydomain.Parse(venueKey)
 	if v.d.Ledger != nil {
-		for _, key := range PoolKeys(k.Venue, k.Type) {
+		recheckKeys := PoolKeys(k.Venue, k.Type)
+		if exact {
+			recheckKeys = []string{keydomain.Join(k.Venue, k.Type)}
+		}
+		for _, key := range recheckKeys {
 			if e, ok := v.d.Ledger.Get(key, v.restTTL(), time.Now()); ok {
 				if !force || e.Src != SrcRest {
 					return liveFunds(e), true
