@@ -160,8 +160,9 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 	if got := resp.Rows[1].Status; got != "$-123.45" {
 		t.Errorf("CMC status = %q, want $-123.45（直数负号如实）", got)
 	}
-	if resp.Rows[1].StatusHint != "手动持仓中" || resp.Rows[1].PoolHint != "手动持仓监控域" {
-		t.Errorf("CMC hints = %q/%q, want 手动持仓中/手动持仓监控域", resp.Rows[1].StatusHint, resp.Rows[1].PoolHint)
+	// D-129：说明收说明列（hint 字段摘除）
+	if resp.Rows[1].Note != "手动持仓监控域；手动持仓中" {
+		t.Errorf("CMC note = %q, want 手动持仓监控域；手动持仓中", resp.Rows[1].Note)
 	}
 	// D-127 占用行：值=eq−fm=500；RealMoney=false（净值子集视图不入分母）∧Productive=true（入分子）
 	occRow := resp.Rows[2]
@@ -175,9 +176,9 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 	if !occRow.HasApr || occRow.AprPct < 4.9999 || occRow.AprPct > 5.0001 {
 		t.Errorf("占用行年化应 5.0（按名义额折算）, got %f has=%v", occRow.AprPct, occRow.HasApr)
 	}
-	// D-128：占用行悬停层=各账户占用明细
-	if occRow.Status != "占用中" || occRow.StatusHint != "binance·永续 $500.00" {
-		t.Errorf("占用行 status/hint = %q/%q, want 占用中/binance·永续 $500.00", occRow.Status, occRow.StatusHint)
+	// D-129：占用明细收说明列
+	if occRow.Status != "占用中" || !strings.Contains(occRow.Note, "；占用明细 binance·永续 $500.00") {
+		t.Errorf("占用行 status/note = %q/%q, want 占用中+占用明细 binance·永续 $500.00", occRow.Status, occRow.Note)
 	}
 	// venue 行：入分母不入分子，note 带「可用」；状态=业务词（occ>0→部分占用）
 	venRow := resp.Rows[3]

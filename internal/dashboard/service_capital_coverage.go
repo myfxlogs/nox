@@ -153,13 +153,13 @@ func cmcPoolRow(ctx context.Context, s *Service) *v1.CapitalCoverageRow {
 		return nil
 	}
 	r := covRow("CMC 账户")
-	r.PoolHint = "手动持仓监控域"
+	r.Note = "手动持仓监控域"
 	r.BalanceUsd = sum.TotalAccountValue
 	r.HasBalance = true
 	r.RealMoney = true
 	if pnl, n, err := s.store.LastCMCPositionSnapshotSummary(ctx); err == nil && n > 0 && pnl != nil {
-		r.Status = fmt.Sprintf("$%.2f", *pnl)
-		r.StatusHint = "手动持仓中"
+		r.Status = fmt.Sprintf("$%.2f", *pnl) // D-128：浮盈直数（负号如实）
+		r.Note += "；手动持仓中"                    // D-129：说明收说明列（hint 字段摘除）
 		r.Productive = true
 	} else {
 		r.Status = "现金闲置"

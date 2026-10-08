@@ -63,13 +63,15 @@ func marginOccupancyRow(ctx context.Context, s *Service, occ venueOcc) *v1.Capit
 		r.BalanceUsd = occ.sum
 		r.HasBalance = true
 		r.Status = "占用中"
-		r.StatusHint = strings.Join(occ.items, " · ") // D-128：各账户占用明细（悬停层）
 	} else if notional > 0 {
 		r.Status = "占用未知" // 有仓但可用额全未采——fail-closed 不入分子（防虚胖）
 	} else {
 		r.Status = "零占用"
 	}
 	note := "账户级占用（含同账户手动仓，腿级切分不可得）"
+	if len(occ.items) > 0 { // D-129：占用明细收说明列（hint 字段摘除）
+		note += "；占用明细 " + strings.Join(occ.items, " · ")
+	}
 	if occ.missing > 0 {
 		note += fmt.Sprintf("；%d 账户可用额未采不计", occ.missing)
 	}
