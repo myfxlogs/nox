@@ -226,8 +226,6 @@ message CapitalCoverageRow {
   string note        = 8;
   bool   productive  = 9;
   bool   real_money  = 10;
-  string pool_hint   = 11;  // D-128：池名说明性括注（悬停层；空=无）
-  string status_hint = 12;  // D-128：状态说明/明细（占用行=各账户占用清单；空=无）
 }
 
 message GetCapitalCoverageResponse {

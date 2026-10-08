@@ -1992,8 +1992,6 @@ type CapitalCoverageRow struct {
 	Note          string                 `protobuf:"bytes,8,opt,name=note,proto3" json:"note,omitempty"`
 	Productive    bool                   `protobuf:"varint,9,opt,name=productive,proto3" json:"productive,omitempty"`
 	RealMoney     bool                   `protobuf:"varint,10,opt,name=real_money,json=realMoney,proto3" json:"real_money,omitempty"`
-	PoolHint      string                 `protobuf:"bytes,11,opt,name=pool_hint,json=poolHint,proto3" json:"pool_hint,omitempty"`       // D-128：池名说明性括注（悬停层；空=无）
-	StatusHint    string                 `protobuf:"bytes,12,opt,name=status_hint,json=statusHint,proto3" json:"status_hint,omitempty"` // D-128：状态说明/明细（占用行=各账户占用清单；空=无）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2096,20 +2094,6 @@ func (x *CapitalCoverageRow) GetRealMoney() bool {
 		return x.RealMoney
 	}
 	return false
-}
-
-func (x *CapitalCoverageRow) GetPoolHint() string {
-	if x != nil {
-		return x.PoolHint
-	}
-	return ""
-}
-
-func (x *CapitalCoverageRow) GetStatusHint() string {
-	if x != nil {
-		return x.StatusHint
-	}
-	return ""
 }
 
 type GetCapitalCoverageResponse struct {
@@ -3016,7 +3000,7 @@ const file_dashboardv1_ops_proto_rawDesc = "" +
 	"\fdays_elapsed\x18\x03 \x01(\x05R\vdaysElapsed\x12 \n" +
 	"\fdays_to_gate\x18\x04 \x01(\x05R\n" +
 	"daysToGate\"\x1b\n" +
-	"\x19GetCapitalCoverageRequest\"\xe0\x02\n" +
+	"\x19GetCapitalCoverageRequest\"\xa2\x02\n" +
 	"\x12CapitalCoverageRow\x12\x12\n" +
 	"\x04pool\x18\x01 \x01(\tR\x04pool\x12\x1f\n" +
 	"\vbalance_usd\x18\x02 \x01(\x01R\n" +
@@ -3033,10 +3017,7 @@ const file_dashboardv1_ops_proto_rawDesc = "" +
 	"productive\x12\x1d\n" +
 	"\n" +
 	"real_money\x18\n" +
-	" \x01(\bR\trealMoney\x12\x1b\n" +
-	"\tpool_hint\x18\v \x01(\tR\bpoolHint\x12\x1f\n" +
-	"\vstatus_hint\x18\f \x01(\tR\n" +
-	"statusHint\"\xc7\x02\n" +
+	" \x01(\bR\trealMoney\"\xc7\x02\n" +
 	"\x1aGetCapitalCoverageResponse\x128\n" +
 	"\x04rows\x18\x01 \x03(\v2$.arb.dashboard.v1.CapitalCoverageRowR\x04rows\x12\x1b\n" +
 	"\ttotal_usd\x18\x02 \x01(\x01R\btotalUsd\x12%\n" +
