@@ -43,10 +43,6 @@ func (s *Service) GetFinanceOverview(ctx context.Context, req *connect.Request[v
 
 // buildFinanceOverview 全量聚合（缓存未命中时执行）。
 func (s *Service) buildFinanceOverview(ctx context.Context) (*v1.GetFinanceOverviewResponse, error) {
-	deposited, err := s.store.LedgerDepositedTotal(ctx)
-	if err != nil {
-		return nil, err
-	}
 	pnls, err := s.store.FinancePnlByEnv(ctx)
 	if err != nil {
 		return nil, err
@@ -65,9 +61,7 @@ func (s *Service) buildFinanceOverview(ctx context.Context) (*v1.GetFinanceOverv
 	}
 
 	resp := &v1.GetFinanceOverviewResponse{
-		DepositedUsd:   deposited,
 		TotalEquityUsd: equity,
-		NetPnlUsd:      equity - deposited,
 	}
 	var totalRealized float64
 	for _, r := range pnls {
