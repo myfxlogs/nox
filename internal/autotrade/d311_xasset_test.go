@@ -412,7 +412,7 @@ func TestD311_HandleOpportunityXAssetPreIntercept(t *testing.T) {
 		qb := bus.New()
 		qb.Publish(bus.Quote{Symbol: "WTIUSD", Venue: "3001157", VenueType: "mt5", Bid: 59.9, Ask: 60.0, Time: time.Now()})
 		qb.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "gate", VenueType: "perp", Bid: 60.5, Ask: 60.6, Time: time.Now()})
-		svc := dashboard.New(nil, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, 0, nil, nil, 0, 0, nil)
+		svc := dashboard.New(nil, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, 0, nil, nil, 0, 0, nil, 0)
 		return &Engine{
 			store: s, service: svc, quotes: qb,
 			csMissCounts: map[string]int{}, csMissSent: map[string]time.Time{},

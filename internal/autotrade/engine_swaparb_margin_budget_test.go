@@ -44,7 +44,7 @@ func newEngineWithAccts(t *testing.T, accts ...*mockAcctQuerier) *Engine {
 		am.AddStatic(q)
 	}
 	am.Refresh(context.Background())
-	svc := dashboard.New(nil, bus.New(), nil, bm, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, 0, am, nil, 0, 0, nil)
+	svc := dashboard.New(nil, bus.New(), nil, bm, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, 0, am, nil, 0, 0, nil, 0)
 	return &Engine{
 		cfg:             Config{SwapArbMarginBudgetPct: 0.8},
 		service:         svc,

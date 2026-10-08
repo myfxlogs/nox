@@ -34,7 +34,7 @@ func d406Engine(s *pgstore.Store, qb *bus.QuoteBus, maxPerDay int) *Engine {
 		Equity: 2000, Currency: "USD", BufferMultiple: 4.0,
 	}})
 	acctMon.Refresh(context.Background())
-	svc := dashboard.New(s, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, 0, acctMon, nil, 0, 0, nil)
+	svc := dashboard.New(s, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, 0, acctMon, nil, 0, 0, nil, 0)
 	svc.SetLegContractSize(func(_, _ string) (float64, bool) { return 100, true })
 	svc.SetCexContractSize(func(_, _ string) (float64, bool) { return 1.0, true })
 	// D-549：CEX 执行链资金数=活账本/REST 实拉（快照兜底禁用）——喂 ws 活值
