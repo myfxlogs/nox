@@ -244,25 +244,28 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venu
 			}
 			return frames
 		},
-		OnFrame: func(data []byte) {
+		// D-154：binance 业务帧=被消费的本类帧——ticker 连接=24hrTicker 帧解析成
+		// 功（vol24h fact 面）；markPrice 连接=markPriceUpdate 帧（fallback 到
+		// bookTicker 产出 quote 亦计）；bookTicker 连接=bookTicker 解析产 quote。
+		// subscribe ack/解析失败帧不计业务帧（遮订阅死病灶同 okx）。
+		OnFrame: func(data []byte) bool {
 			if isSubscribeAck(data) {
-				return // {result:null,id:1} ack；{result:…,error} 已在 isSubscribeAck 记日志
+				return false // {result:null,id:1} ack；{result:…,error} 已在 isSubscribeAck 记日志
 			}
 			if kind == "ticker" {
 				b.lastFrameTicker.Store(b.now().UnixNano()) // D-109 R1①：帧到=流活（含解析失败帧——有流量即非死流）
 				// D-080：24hrTicker 数组帧→vol24h facts（D-591 S6 handler 自创建日起
 				// 零调用者，OnFrame 缺 ticker 分流=帧落 handleBookTicker 被静默丢弃；
 				// ticker 连接不订 bookTicker，全帧归 handleTicker，解析失败静默）。
-				b.handleTicker(ctx, data)
-				return
+				return b.handleTicker(ctx, data)
 			}
 			if kind == "markPrice" {
 				b.lastFrameMarkPrice.Store(b.now().UnixNano()) // D-109 R1①
 			}
 			if kind == "markPrice" && b.handleMarkPrice(ctx, data) {
-				return // markPriceUpdate 帧已消费（market 连接先 markPrice 后 bookTicker 兜底）
+				return true // markPriceUpdate 帧已消费（market 连接先 markPrice 后 bookTicker 兜底）
 			}
-			b.handleBookTicker(data, venueType, publish)
+			return b.handleBookTicker(data, venueType, publish)
 		},
 		OnReconnect: meter.record,
 	})

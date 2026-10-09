@@ -12,10 +12,12 @@ import (
 	"arb/internal/bus"
 )
 
-func (b *BinanceMarketWS) handleBookTicker(data []byte, venueType string, publish func(bus.Quote)) {
+// D-154：返回是否业务产出帧（parseBookTicker 成功→publish 报价=true；
+// ack/无关帧=false 不续数据看门狗）。
+func (b *BinanceMarketWS) handleBookTicker(data []byte, venueType string, publish func(bus.Quote)) bool {
 	f, ok := parseBookTicker(data)
 	if !ok {
-		return // 订阅 ack/错误帧/无关帧静默（ack 已在 isSubscribeAck 分流）
+		return false // 订阅 ack/错误帧/无关帧静默（ack 已在 isSubscribeAck 分流）
 	}
 	var bidF, askF float64
 	fmt.Sscanf(f.B, "%f", &bidF)
@@ -28,6 +30,7 @@ func (b *BinanceMarketWS) handleBookTicker(data []byte, venueType string, publis
 		Symbol: f.S, Venue: VenueBinance, VenueType: venueType, VenueSymbol: f.S,
 		Bid: bidF, Ask: askF, Time: ts,
 	})
+	return true
 }
 
 // isSubscribeAck 订阅 ack/错误帧判定：{result:…,id} 形（数据帧无 result 字段）。

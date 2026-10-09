@@ -30,6 +30,7 @@ type OKXWebSocket struct {
 	readIdle         time.Duration
 	pingEvery        time.Duration
 	reconnectBackoff time.Duration
+	dataIdle         time.Duration // D-154 g)：业务帧看门狗字段化（测试缩窗同 D-507 先例）
 	// emitFacts D-509：funding fact 发射口（FactEmitter 去重节流；nil=不 emit）。
 	emitFacts func(ctx context.Context, fs []fact.Fact) error
 	// catalog D-524：instruments 存在性闸（watchlist 方言符号归一化后过目录，不伪造）。
@@ -45,7 +46,8 @@ func NewOKXWebSocket(cfg Config) *OKXWebSocket {
 	return &OKXWebSocket{cfg: cfg, dialer: d, header: h,
 		wsURLs:   wsViaProxyURLs("/okxws/ws/v5/public", okxPublicWSURL),
 		readIdle: quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff,
-		catalog: newOKXInstCatalog(cfg)}
+		dataIdle: quoteWSDataIdle,
+		catalog:  newOKXInstCatalog(cfg)}
 }
 
 // Run 连接 OKX WS 并持续推送报价到 publish 回调。阻塞至 ctx 取消。
@@ -61,6 +63,7 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 		DepKey:   "okx:ws-market", // D-579：dephealth 记账键
 		AlertFn:  o.cfg.AlertFn,   // D-074 ①：冷却循环升级「通道死」告警同管道
 		ReadIdle: o.readIdle, PingEvery: o.pingEvery, ReconnectBackoff: o.reconnectBackoff,
+		DataIdle:  o.dataIdle, // D-154：业务帧窗（默认 quoteWSDataIdle）
 		OnConnect: func() { subscribed = map[string]bool{} },
 		InitialSubs: func() []any {
 			return []any{map[string]any{"op": "subscribe", "args": o.subscribeArgs(ctx, o.syms(), subscribed, quarantined)}}
@@ -71,7 +74,10 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 				_ = s.Send(map[string]any{"op": "subscribe", "args": args})
 			}
 		},
-		OnFrame:     func(data []byte) { o.handleMessage(ctx, data, publish) },
+		// D-154：okx 业务帧=仅 tickers 且走完整 publish 路径（bid/ask 非零产出
+		// quote）——ack/channel-conn-count/error/instruments/funding-rate/解析
+		// 失败帧全不计（funding 帧持续发射但遮订阅死=审计实证不入集）。
+		OnFrame:     func(data []byte) bool { return o.handleMessage(ctx, data, publish) },
 		OnReconnect: meter.record,
 	})
 }
@@ -124,37 +130,40 @@ func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms []string, subscri
 	return args
 }
 
-func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish func(bus.Quote)) {
+// handleMessage D-154：返回「本帧是否业务产出帧」（仅 tickers bid/ask 非零走
+// publish=true；funding-rate 是 fact 面产出但审计实证不入业务帧集——同帧流
+// 会遮订阅死，独立死由 SwapFactMaxAge 兜底）。
+func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish func(bus.Quote)) bool {
 	var msg wsMsg
 	if err := json.Unmarshal(data, &msg); err != nil {
-		return
+		return false
 	}
 	if msg.Event == "subscribe" || msg.Event == "channel-conn-count" {
-		return
+		return false
 	}
 	// 服务端拒绝帧（error/login 失败等）必须留痕——静默吞帧=僵尸连接难查
 	// （实证：订阅被拒后 pong 续期遮读限、零日志断流 18min）。
 	if msg.Event == "error" {
 		log.Printf("[okx-ws] 服务端 error 帧: %s", data)
-		return
+		return false
 	}
 	// D-509 S4：funding-rate 帧分流（fundingRate/fundingTime/nextFundingTime 三字段原生）。
 	if msg.Arg.Channel == "funding-rate" {
 		o.handleFundingRate(ctx, msg)
-		return
+		return false
 	}
 	// D-566 包B S6-d：instruments 变更帧 → 逐 instId 失效规格缓存（事件主失效通道）。
 	if msg.Arg.Channel == "instruments" {
 		o.handleInstruments(msg)
-		return
+		return false
 	}
 	if msg.Arg.Channel != "tickers" || len(msg.Data) == 0 {
-		return
+		return false
 	}
 
 	instID, _ := msg.Arg.InstID.(string)
 	if instID == "" {
-		return
+		return false
 	}
 	venueSymbol := instID
 	isPerp := strings.HasSuffix(instID, "-SWAP")
@@ -174,7 +183,7 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 	fmt.Sscanf(bidS, "%f", &bid)
 	fmt.Sscanf(askS, "%f", &ask)
 	if bid == 0 || ask == 0 {
-		return
+		return false
 	}
 
 	ts := time.Now()
@@ -191,6 +200,7 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 		Time:        ts,
 		VenueType:   venueType,
 	})
+	return true
 }
 
 func parseOKXTS(s string) (time.Time, error) {

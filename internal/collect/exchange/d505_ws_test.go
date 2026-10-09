@@ -89,6 +89,8 @@ func TestD507_GateDeadPeerStillReconnects(t *testing.T) {
 }
 
 // TestD507_OkxQuietFeedStaysAlive okx 同 quiet 形态（S0 同红→S1 绿）。
+// D-154 h) 语义修正：quiet feed（pong 活零业务帧）存活只在 dataIdle 窗内成立——
+// 默认 10min，本测观察窗 ~1.5s 不受影响；窗后判死重连正是本票新语义。
 func TestD507_OkxQuietFeedStaysAlive(t *testing.T) {
 	url, n := d507Server(t, false)
 	ctx, cancel := context.WithCancel(context.Background())

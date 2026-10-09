@@ -18,16 +18,18 @@ const tickerEmitEvery = 15 * time.Minute
 
 // handleTicker D-591 S6：24hrTicker 数组帧→vol24h facts（每符号 15min 节流；
 // 仅 ticker 连接 goroutine 调用，map 无锁）。缺字段/脏值跳过；ack 已分流。
-func (b *BinanceMarketWS) handleTicker(ctx context.Context, data []byte) {
-	if b.emitFacts == nil {
-		return
-	}
+// D-154：返回是否本类帧（数组解析成功=本连接业务帧——节流内跳过仍计消费，
+// 「帧属于本流」≠「帧产出 fact」）；解析失败=false。
+func (b *BinanceMarketWS) handleTicker(ctx context.Context, data []byte) bool {
 	var arr []struct {
 		Symbol      string `json:"s"`
 		QuoteVolume string `json:"q"`
 	}
 	if err := json.Unmarshal(data, &arr); err != nil {
-		return
+		return false
+	}
+	if b.emitFacts == nil {
+		return true
 	}
 	if b.tickerEmit == nil {
 		b.tickerEmit = make(map[string]time.Time)
@@ -50,9 +52,10 @@ func (b *BinanceMarketWS) handleTicker(ctx context.Context, data []byte) {
 			Value: vol, Unit: fact.UnitUSD, Ts: now, Src: "binance_ws_ticker"})
 	}
 	if len(fs) == 0 {
-		return
+		return true
 	}
 	if err := b.emitFacts(ctx, fs); err != nil {
 		log.Printf("[binance-mkt-ws] ticker emit: %v", err)
 	}
+	return true
 }

@@ -144,11 +144,12 @@ func TestD541_A2_CooldownFallback(t *testing.T) {
 	spec.ReconnectBackoff = 30 * time.Millisecond
 	spec.CooldownKills = 2
 	spec.CooldownWindow = 700 * time.Millisecond // 测试覆写窗（A2「30min」语义等价）
-	spec.OnFrame = func(d []byte) {
+	spec.OnFrame = func(d []byte) bool {
 		select {
 		case dataFrames <- d:
 		default:
 		}
+		return true // D-154：冷却测试全帧计业务
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

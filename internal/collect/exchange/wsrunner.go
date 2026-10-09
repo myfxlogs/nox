@@ -75,10 +75,15 @@ type WSSpec struct {
 	CooldownKills  int
 	CooldownWindow time.Duration
 
-	InitialSubs func() []any      // 首连+每重连订阅帧集（逐帧经 Sender.Send 发出）
-	OnFrame     func(data []byte) // 数据帧分发（ack/无关帧由实现方自滤）
-	OnConnect   func()            // 可选：每连接拨号成功后回调（差集表等每连接状态重置走此）
-	OnAliveTick func(s Sender)    // 可选：每 ping tick 回调（okx/gate 差集补订走此）
+	InitialSubs func() []any // 首连+每重连订阅帧集（逐帧经 Sender.Send 发出）
+	// OnFrame D-154：数据帧分发+业务帧判定——返回「本连接业务目的产出帧」
+	// （okx=tickers 产出 quote；gate=产出 quote 的 update；binance=被消费的本类帧）。
+	// 仅 true 帧刷新 lastDataAt/sawData——ack/无关帧/funding 帧/解析失败帧不续期
+	// （服务端订阅态半丢时杂帧流遮 dataIdle=僵尸不自愈，生产实证 10-09）。
+	// nil=全帧计（wsrunner 骨架测试等向后兼容锚）。
+	OnFrame     func(data []byte) bool
+	OnConnect   func()         // 可选：每连接拨号成功后回调（差集表等每连接状态重置走此）
+	OnAliveTick func(s Sender) // 可选：每 ping tick 回调（okx/gate 差集补订走此）
 	// OnReconnect 可选：重连错误事件（reconnectMeter.record 走此）。入参=候选冷却
 	// 循环中（D-074 ②：true=看门狗确定性杀，storm 判定排除）。
 	OnReconnect func(inCooldownLoop bool)
@@ -218,8 +223,9 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 				// 长期缺席=订阅态丢失/上游静默（readIdle 被 pong 遮蔽兜不住）——
 				// Close 使读循环报错，走既有退避重连。
 				if elapsed := time.Since(time.Unix(0, lastDataAt.Load())); elapsed > dataIdle {
-					// D-532 S3：kill 归因——与「对端 1006/readIdle 读超时」日志可区分。
-					log.Printf("[%s] data watchdog: no data frames for %v (>%v), closing to force reconnect", spec.Name, elapsed, dataIdle)
+					// D-532 S3：kill 归因——与「对端 1006/readIdle 读超时」日志可区分；
+					// D-154：判据=业务帧（杂帧流不续期 lastDataAt）。
+					log.Printf("[%s] data watchdog: no business data frames for %v (>%v), closing to force reconnect", spec.Name, elapsed, dataIdle)
 					st.dataKil.Store(true) // D-541 S3：僵尸杀归当前候选（连续达阈→冷却）
 					_ = conn.Close()
 					return
@@ -256,10 +262,11 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 			return fmt.Errorf("read: %w", err)
 		}
 		_ = conn.SetReadDeadline(time.Now().Add(readIdle))
-		lastDataAt.Store(time.Now().UnixNano())
-		st.sawData.Store(true) // D-074 ①：到帧即证通道活过（冷却循环断链证据）
-		if spec.OnFrame != nil {
-			spec.OnFrame(data)
+		// D-154：帧≠业务数据——OnFrame 回报本帧是否业务产出帧，仅业务帧刷新
+		// lastDataAt/sawData（杂帧遮死判径病灶根治）；nil=全帧计兼容锚。
+		if spec.OnFrame == nil || spec.OnFrame(data) {
+			lastDataAt.Store(time.Now().UnixNano())
+			st.sawData.Store(true) // D-074 ①：业务帧到=通道活过（冷却循环断链证据）
 		}
 	}
 }

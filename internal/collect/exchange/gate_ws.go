@@ -149,7 +149,7 @@ func gateSubFrames(channels []string, pairs []string, extra []any) []any {
 
 // runLoop 单连接重连循环——D-511 S3：骨架收编 RunWS（dial/保活/读循环/退避一处钉死），
 // 本函数只装配协议钩子（候选=urls 代理件+proxied 时 native 直连兜底位——R4/R3）。
-func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channels []string, native string, wl *gatePairWhitelist, handle func(context.Context, []byte, func(bus.Quote)), publish func(bus.Quote), extraSubs []any) {
+func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channels []string, native string, wl *gatePairWhitelist, handle func(context.Context, []byte, func(bus.Quote)) bool, publish func(bus.Quote), extraSubs []any) {
 	meter := newReconnectMeter(urls[0], g.cfg.AlertFn)
 	// subscribed 差集表为每连接状态——OnConnect 每拨号重置（重连全量重订阅语义不变）。
 	var subscribed map[string]bool
@@ -196,7 +196,9 @@ func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channels []s
 				}
 			}
 		},
-		OnFrame:     func(data []byte) { handle(ctx, data, publish) },
+		// D-154：gate 业务帧=产出 quote 的 update 帧（订阅 ack/contract_info/
+		// adl_warning/解析失败帧不续期）。
+		OnFrame:     func(data []byte) bool { return handle(ctx, data, publish) },
 		OnReconnect: meter.record,
 	})
 }
@@ -211,21 +213,21 @@ type gateSpotUpdate struct {
 	} `json:"result"`
 }
 
-// handleSpot 解析 spot.tickers 更新并发布报价。
-func (g *GateWebSocket) handleSpot(_ context.Context, data []byte, publish func(bus.Quote)) {
+// handleSpot 解析 spot.tickers 更新并发布报价（D-154：publish 产出=true）。
+func (g *GateWebSocket) handleSpot(_ context.Context, data []byte, publish func(bus.Quote)) bool {
 	var msg gateSpotUpdate
 	if err := json.Unmarshal(data, &msg); err != nil || msg.Event != "update" {
-		return
+		return false
 	}
 	pair := msg.Result.CurrencyPair
 	if pair == "" {
-		return
+		return false
 	}
 	var bid, ask float64
 	fmt.Sscanf(msg.Result.HighestBid, "%f", &bid)
 	fmt.Sscanf(msg.Result.LowestAsk, "%f", &ask)
 	if bid == 0 || ask == 0 {
-		return
+		return false
 	}
 	publish(bus.Quote{
 		Symbol:      canonicalFromGate(pair),
@@ -236,6 +238,7 @@ func (g *GateWebSocket) handleSpot(_ context.Context, data []byte, publish func(
 		Ask:         ask,
 		Time:        time.Now(),
 	})
+	return true
 }
 
 // canonicalFromGate 将 Gate 交易对/合约名（BTC_USDT）映射为 canonical（BTCUSDT）。

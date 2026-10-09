@@ -56,7 +56,7 @@ func wsRunnerSpec(url string, frames chan<- []byte) WSSpec {
 				map[string]any{"method": "SUB", "id": 2},
 			}
 		},
-		OnFrame:          func(data []byte) {},
+		OnFrame:          func(data []byte) bool { return true }, // D-154：骨架测试全帧计
 		ReadIdle:         300 * time.Millisecond,
 		PingEvery:        60 * time.Millisecond,
 		ReconnectBackoff: 40 * time.Millisecond,

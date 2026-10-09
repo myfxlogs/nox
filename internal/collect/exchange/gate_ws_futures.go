@@ -16,29 +16,32 @@ import (
 
 // handleFuturesDispatch D-570 包C：futures 连接多频道分派（channel 字段路由；
 // 未知频道静默——公共帧无审计表，WarnUnconsumed 是私有域机制）。
-func (g *GateWebSocket) handleFuturesDispatch(ctx context.Context, data []byte, publish func(bus.Quote)) {
+// D-154：业务帧=产出 quote 的 update（tickers/book_ticker 处理器回报）；
+// contract_info/adl_warning/ack 帧=非业务帧不续期数据看门狗。
+func (g *GateWebSocket) handleFuturesDispatch(ctx context.Context, data []byte, publish func(bus.Quote)) bool {
 	var env struct {
 		Channel string `json:"channel"`
 	}
 	if err := json.Unmarshal(data, &env); err != nil {
-		return
+		return false
 	}
 	switch env.Channel {
 	case "futures.tickers":
-		g.handleFutures(ctx, data, publish)
+		return g.handleFutures(ctx, data, publish)
 	case "futures.book_ticker":
-		g.handleBookTicker(data, publish)
+		return g.handleBookTicker(data, publish)
 	case "futures.contract_info":
 		g.onContractInfoFrame(data)
 	case "futures.adl_warning":
 		g.onADLWarning(data)
 	}
+	return false
 }
 
 // handleBookTicker D-570 包C S8：futures.book_ticker 真形帧 {t,u,s,b,B,a,A}——
 // s=contract、b/a=最优买/卖价串（空串=空边 skip 整帧，快照 :1945 钉死）；mark 近似保留为断流兜底
 // （两源同键 fresher wins，fresher 由 QuoteBus Time 决定）。
-func (g *GateWebSocket) handleBookTicker(data []byte, publish func(bus.Quote)) {
+func (g *GateWebSocket) handleBookTicker(data []byte, publish func(bus.Quote)) bool {
 	var msg struct {
 		Event  string                     `json:"event"`
 		Result map[string]json.RawMessage `json:"result"`
@@ -46,19 +49,19 @@ func (g *GateWebSocket) handleBookTicker(data []byte, publish func(bus.Quote)) {
 	// result 走 map 精确键查表——struct tag "b" 会被同帧 "B"（量）大小写不敏感
 	// 匹配覆写（D-569 "e"/"E" 碰撞同病灶，实弹帧 b/B/a/A 四键并存必踩）。
 	if err := json.Unmarshal(data, &msg); err != nil || msg.Event != "update" {
-		return
+		return false
 	}
 	var s, bp, ap string
 	_ = json.Unmarshal(msg.Result["s"], &s)
 	_ = json.Unmarshal(msg.Result["b"], &bp)
 	_ = json.Unmarshal(msg.Result["a"], &ap)
 	if s == "" || bp == "" || ap == "" {
-		return // 空边帧 skip（不崩不发布——半盘口非报价）
+		return false // 空边帧 skip（不崩不发布——半盘口非报价）
 	}
 	bid, berr := f64z(bp)
 	ask, aerr := f64z(ap)
 	if berr != nil || aerr != nil || bid <= 0 || ask <= 0 {
-		return
+		return false
 	}
 	ts := time.Now()
 	var tms int64
@@ -74,6 +77,7 @@ func (g *GateWebSocket) handleBookTicker(data []byte, publish func(bus.Quote)) {
 		Ask:         ask,
 		Time:        ts,
 	})
+	return true
 }
 
 // onContractInfoFrame D-570 包C S6④：futures.contract_info 帧（event=all 首帧与
@@ -174,12 +178,13 @@ type gateFuturesUpdate struct {
 	} `json:"result"`
 }
 
-// handleFutures 解析 futures.tickers 更新并发布报价。
-func (g *GateWebSocket) handleFutures(ctx context.Context, data []byte, publish func(bus.Quote)) {
+// handleFutures 解析 futures.tickers 更新并发布报价（D-154：任一项产出 quote=true）。
+func (g *GateWebSocket) handleFutures(ctx context.Context, data []byte, publish func(bus.Quote)) bool {
 	var msg gateFuturesUpdate
 	if err := json.Unmarshal(data, &msg); err != nil || msg.Event != "update" {
-		return
+		return false
 	}
+	published := false
 	for _, item := range msg.Result {
 		if item.Contract == "" {
 			continue
@@ -202,6 +207,7 @@ func (g *GateWebSocket) handleFutures(ctx context.Context, data []byte, publish 
 			Ask:         mark,
 			Time:        ts,
 		})
+		published = true
 		// D-509 S3：帧内原生 funding 字段→fact（缺字段=缺省不造，venue 禁借用律）。
 		if g.emitFacts != nil && item.FundingRate != "" {
 			var rate float64
@@ -225,4 +231,5 @@ func (g *GateWebSocket) handleFutures(ctx context.Context, data []byte, publish 
 			}
 		}
 	}
+	return published
 }
