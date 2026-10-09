@@ -163,17 +163,27 @@ func TestD137_SelfTxConfirmBounded(t *testing.T) {
 
 // TestD137_R2_BoundaryConsumed reward-delta 评估后本地滚动消费边界——
 // failsafeCheck 紧接着不误补第二轮（R2 退回①）。
+// R3 场景收窄到宽限窗内：reward 结算延迟落在边界+90s 内属常态，
+// 窗内评估同样必须消费边界（滚动条件不带 grace）。
 func TestD137_R2_BoundaryConsumed(t *testing.T) {
 	store := &fakeStore{}
 	sched, cleanup := d137Fixture(t, store)
 	defer cleanup()
-	// 缓存已过期边界（failsafe 视角：已过+宽限）
-	sched.nextMaint = sched.now().Add(-time.Hour)
+	// 缓存边界刚过、仍在 grace 窗内（failsafe 视角：尚未触发条件——
+	// 但评估若发生，此边界必须被消费否则 grace 一过 failsafe 误补）
+	sched.nextMaint = sched.now().Add(-time.Minute)
 	// 模拟 reward-delta 评估路径（eventLoop boundaryCh 分支同款调用序）
 	sched.doRebalance(context.Background())
 	sched.noteEvaluated(context.Background())
 	if store.insertedID != 1 {
 		t.Fatalf("eval should insert 1 record, got %d", store.insertedID)
+	}
+	// nextMaint 应已被前滚消费（now-1min → now+6h-1min > now）
+	sched.nextMaintMu.Lock()
+	rolled := sched.nextMaint
+	sched.nextMaintMu.Unlock()
+	if !rolled.After(sched.now()) {
+		t.Fatalf("nextMaint should roll forward past now after eval, got %v", rolled)
 	}
 	// failsafeCheck 立即再查——边界已被本地前滚消费，不得二次评估
 	sched.failsafeCheck(context.Background())

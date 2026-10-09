@@ -129,11 +129,13 @@ func (s *Scheduler) refreshNextMaintenance(ctx context.Context) (time.Time, bool
 	return next, true
 }
 
-// noteEvaluated 评估后记：本地滚动消费当前边界（nextMaint 按 6h 周期前滚至 now+宽限之后，
-// 零外部调用）→ reward-delta/确认窗评估后 failsafe 不误补；onEvaluated 回调。
+// noteEvaluated 评估后记：本地滚动消费当前边界（nextMaint 按 6h 周期前滚至 >now，
+// 零外部调用）→ reward-delta/确认窗/boot 评估后 failsafe 不误补；onEvaluated 回调。
+// R3：滚动条件去宽限——边界刚过仍在 grace 窗内的评估也是真实边界消费（宽限只是
+// failsafe 的容忍窗，不是边界归属判据）。
 func (s *Scheduler) noteEvaluated(ctx context.Context) {
 	s.nextMaintMu.Lock()
-	for !s.nextMaint.IsZero() && !s.nextMaint.Add(boundaryGrace).After(s.now()) {
+	for !s.nextMaint.IsZero() && !s.nextMaint.After(s.now()) {
 		s.nextMaint = s.nextMaint.Add(maintenancePeriod)
 	}
 	s.nextMaintMu.Unlock()
