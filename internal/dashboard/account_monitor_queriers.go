@@ -5,7 +5,6 @@ package dashboard
 import (
 	"context"
 	"log"
-	"os"
 	"strings"
 	"time"
 
@@ -15,8 +14,15 @@ import (
 	v1 "arb/internal/gen/dashboardv1"
 )
 
+// binanceProxyBase D-145 env 收口：BINANCE_PROXY_URL 缺省回退值由装配层注入
+// （cfg 产物，boot 单次；空=fapi 直连语义不变）。
+var binanceProxyBase string
+
+// SetBinanceProxyBase boot 注入 binance 缺省 base（先于一切 querier 装配调用）。
+func SetBinanceProxyBase(v string) { binanceProxyBase = v }
+
 // resolveExchangeBaseURL 推导 CEX 交易所 base（D-059 抽公共，账户查询与执行器共用）。
-// 行为与原 queriers() 内联一致：base_url 显式 → 用之；空 → binance 默认 BINANCE_PROXY_URL
+// 行为与原 queriers() 内联一致：base_url 显式 → 用之；空 → binance 默认注入代理基址
 // （无则 fapi 直连，451 由部署负责）、okx 默认 www.okx.com；binance 代理 base 是 fapi 风格，
 // 无 /api/ 段则 fapi→api 得 spot base（与采集一致）。
 func resolveExchangeBaseURL(c pgstore.ExchangeConfig) string {
@@ -24,7 +30,7 @@ func resolveExchangeBaseURL(c pgstore.ExchangeConfig) string {
 	if base == "" {
 		switch c.Venue {
 		case "binance":
-			base = os.Getenv("BINANCE_PROXY_URL")
+			base = binanceProxyBase
 			if base == "" {
 				base = "https://fapi.binance.com" // 无代理直连；451 由部署负责
 			}

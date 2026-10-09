@@ -71,7 +71,7 @@ func aliveSrv(t *testing.T) *httptest.Server {
 // newTestProbe 装配测试探针：targets 按 alias 映射到测试端点，sink/now/代理基址可控。
 func newTestProbe(t *testing.T, sink *fakeEgressSink, urls map[string]string, proxyURL string, now func() time.Time) *EgressProbe {
 	t.Helper()
-	p := NewEgressProbe(&fakeAlertInserter{})
+	p := NewEgressProbe(&fakeAlertInserter{}, "")
 	p.sink = sink
 	p.now = now
 	p.proxyURL = proxyURL

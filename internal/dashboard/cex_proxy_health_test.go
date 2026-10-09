@@ -135,13 +135,10 @@ func TestCexProxyHealth_BothDeadDistinguished(t *testing.T) {
 // TestCexProxyHealth_EmptyEnvFailOpen P4：BINANCE_PROXY_URL 空 → 构造返回 nil（不监控不崩，
 // fail-open）；配置 primary（backup 空）→ 单端监控。
 func TestCexProxyHealth_EmptyEnvFailOpen(t *testing.T) {
-	t.Setenv("BINANCE_PROXY_URL", "")
-	if m := NewCexProxyHealthMonitor(&fakeAlertInserter{}); m != nil {
-		t.Fatal("P4: empty BINANCE_PROXY_URL want nil monitor (fail-open)")
+	if m := NewCexProxyHealthMonitor(&fakeAlertInserter{}, "", ""); m != nil {
+		t.Fatal("P4: empty primary want nil monitor (fail-open)")
 	}
-	t.Setenv("BINANCE_PROXY_URL", "http://example.invalid")
-	t.Setenv("BINANCE_PROXY_URL_BACKUP", "")
-	m := NewCexProxyHealthMonitor(&fakeAlertInserter{})
+	m := NewCexProxyHealthMonitor(&fakeAlertInserter{}, "http://example.invalid", "")
 	if m == nil {
 		t.Fatal("P4: primary set want monitor")
 	}

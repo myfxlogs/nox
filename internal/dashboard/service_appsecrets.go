@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"sort"
 
 	"connectrpc.com/connect"
@@ -30,15 +29,16 @@ var hotSecretKeys = map[string]bool{
 // SetSecretResolver 注入热读缓存（nil=未装配：List 仍可用，Update 仅写库不 panic）。
 func (s *Service) SetSecretResolver(r *config.SecretResolver) { s.secRes = r }
 
-// secretView 键视图：行=DB 行元数据（有行=source db 且 has_value），无行按 env 回落画 source。
-func secretView(key string, rows map[string]pgstore.AppSecretRow) *dashv1.AppSecretKey {
+// secretView 键视图：行=DB 行元数据（有行=source db 且 has_value），无行按 resolver
+// 回落画 source（D-145：resolver DB∪env 种子统一供值，本包不再直读 env）。
+func (s *Service) secretView(key string, rows map[string]pgstore.AppSecretRow) *dashv1.AppSecretKey {
 	v := &dashv1.AppSecretKey{Key: key, Group: appSecretGroup(key), Desc: appSecretDescs[key], Hot: hotSecretKeys[key]}
 	if r, ok := rows[key]; ok {
 		v.HasValue = true
 		v.ValueSource = "db"
 		v.UpdatedAt = timestamppb.New(r.UpdatedAt)
 		v.Note = r.Note
-	} else if os.Getenv(key) != "" {
+	} else if s.secRes != nil && s.secRes.Get(key) != "" {
 		v.HasValue = true
 		v.ValueSource = "env"
 	} else {
@@ -63,7 +63,7 @@ func (s *Service) ListAppSecrets(ctx context.Context, _ *connect.Request[dashv1.
 	sort.Strings(sorted)
 	out := make([]*dashv1.AppSecretKey, 0, len(sorted))
 	for _, k := range sorted {
-		out = append(out, secretView(k, rows))
+		out = append(out, s.secretView(k, rows))
 	}
 	return connect.NewResponse(&dashv1.ListAppSecretsResponse{Keys: out}), nil
 }
@@ -110,5 +110,5 @@ func (s *Service) UpdateAppSecret(ctx context.Context, req *connect.Request[dash
 	for _, r := range dbRows {
 		rows[r.Key] = r
 	}
-	return connect.NewResponse(&dashv1.UpdateAppSecretResponse{Key: secretView(key, rows)}), nil
+	return connect.NewResponse(&dashv1.UpdateAppSecretResponse{Key: s.secretView(key, rows)}), nil
 }

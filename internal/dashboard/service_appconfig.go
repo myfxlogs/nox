@@ -4,7 +4,6 @@ package dashboard
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"syscall"
 	"time"
@@ -32,7 +31,7 @@ func (s *Service) SetAppConfigView(running, defaults *config.Config, envSnap map
 }
 
 func (s *Service) appConfigView(ctx context.Context, key string, db map[string]pgstore.AppConfigRow) (*dashv1.AppConfigKey, error) {
-	meta, envPass, ok := config.AppConfigKeyMeta(key)
+	meta, ok := config.AppConfigKeyMeta(key)
 	if !ok {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("key %s not whitelisted", key))
 	}
@@ -47,14 +46,8 @@ func (s *Service) appConfigView(ctx context.Context, key string, db map[string]p
 		out.DbValue, out.Note = row.Value, row.Note
 		out.UpdatedAt = timestamppb.New(row.UpdatedAt)
 	}
-	var running, def string
-	if envPass {
-		running = os.Getenv(key) // boot overlay 已把 DB 值注入 env——进程内生效值即 env 现值
-	} else {
-		running = meta.Get(s.acv.running)
-		def = meta.Get(s.acv.defaults)
-	}
-	out.RunningValue, out.DefaultValue = running, def
+	running := meta.Get(s.acv.running)
+	out.RunningValue, out.DefaultValue = running, meta.Get(s.acv.defaults)
 
 	// valueSource = boot 优先级链 db>env>default。
 	switch {
@@ -67,20 +60,16 @@ func (s *Service) appConfigView(ctx context.Context, key string, db map[string]p
 	}
 
 	// pendingRestart：重启后生效值（db??env??default 解析后）≠ 进程内 running。
-	eff := def
+	eff := out.DefaultValue
 	if hasEnv {
 		eff = envV
 	}
 	if hasDB {
 		eff = row.Value
 	}
-	if envPass {
-		out.PendingRestart = eff != running
-	} else {
-		c2 := *s.acv.running // 浅拷足矣：setter 只写自身字段/换指针
-		if err := meta.Set(&c2, eff); err == nil {
-			out.PendingRestart = meta.Get(&c2) != running
-		}
+	c2 := *s.acv.running // 浅拷足矣：setter 只写自身字段/换指针
+	if err := meta.Set(&c2, eff); err == nil {
+		out.PendingRestart = meta.Get(&c2) != running
 	}
 	return out, nil
 }
@@ -107,7 +96,7 @@ func (s *Service) ListAppConfig(ctx context.Context, _ *connect.Request[dashv1.L
 
 func (s *Service) UpdateAppConfig(ctx context.Context, req *connect.Request[dashv1.UpdateAppConfigRequest]) (*connect.Response[dashv1.UpdateAppConfigResponse], error) {
 	key, val, note := req.Msg.GetKey(), req.Msg.GetValue(), req.Msg.GetNote()
-	meta, envPass, ok := config.AppConfigKeyMeta(key)
+	meta, ok := config.AppConfigKeyMeta(key)
 	if !ok {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("key %s not whitelisted", key))
 	}
@@ -128,11 +117,10 @@ func (s *Service) UpdateAppConfig(ctx context.Context, req *connect.Request[dash
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("string value must be non-empty"))
 		}
 	}
-	if !envPass { // 用真 setter 再验一遍（durv/setv 等的解析域严于外形）
-		c2 := *s.acv.running
-		if err := meta.Set(&c2, val); err != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid value: %v", err))
-		}
+	// 用真 setter 再验一遍（durv/setv 等的解析域严于外形）
+	c2 := *s.acv.running
+	if err := meta.Set(&c2, val); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid value: %v", err))
 	}
 	if err := s.store.UpsertAppConfig(ctx, key, val, note); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)

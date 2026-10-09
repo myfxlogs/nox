@@ -15,7 +15,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -43,12 +42,12 @@ type CexProxyHealthMonitor struct {
 	lastOK    map[string]bool // endpoint → 最近一次探测结果（对端状态行用）
 }
 
-// NewCexProxyHealthMonitor 从 env 构造：BINANCE_PROXY_URL 空 → nil（不监控，fail-open）；
-// BINANCE_PROXY_URL_BACKUP 空 = 单端。客户端复用 httpx.Client（CA+token 单源），超时压到 5s。
-func NewCexProxyHealthMonitor(insert alertInserter) *CexProxyHealthMonitor {
-	primary := os.Getenv("BINANCE_PROXY_URL")
+// NewCexProxyHealthMonitor 装配构造：primary 空 → nil（不监控，fail-open）；
+// backup 空 = 单端。客户端复用 httpx.Client（CA+token 单源），超时压到 5s。
+// D-145：端点由装配层 cfg 注入（原 env 直读退役）。
+func NewCexProxyHealthMonitor(insert alertInserter, primary, backup string) *CexProxyHealthMonitor {
 	if primary == "" {
-		log.Printf("[cex-proxy-health] BINANCE_PROXY_URL 未配置 → 不监控（fail-open）")
+		log.Printf("[cex-proxy-health] 主端点未配置 → 不监控（fail-open）")
 		return nil
 	}
 	client := httpx.Client()
@@ -57,7 +56,7 @@ func NewCexProxyHealthMonitor(insert alertInserter) *CexProxyHealthMonitor {
 		insert:    insert,
 		client:    client,
 		primary:   primary,
-		backup:    os.Getenv("BINANCE_PROXY_URL_BACKUP"),
+		backup:    backup,
 		tick:      cexProxyTick,
 		consec:    make(map[string]int),
 		deadNoted: make(map[string]bool),

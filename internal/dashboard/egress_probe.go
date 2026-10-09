@@ -15,7 +15,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -72,13 +71,14 @@ type EgressProbe struct {
 	lastCrit    time.Time // 1h 去重锚（恢复时一并清零——新一轮全断首轮即警，不吞进冷却窗）
 }
 
-// NewEgressProbe 装配（BINANCE_PROXY_URL 空 → 聚合归因失效，fail-open 只记 per-domain）。
-func NewEgressProbe(insert alertInserter) *EgressProbe {
+// NewEgressProbe 装配（proxyURL 空 → 聚合归因失效，fail-open 只记 per-domain）。
+// D-145：proxyURL 由装配层 cfg 注入（原 env 直读退役）。
+func NewEgressProbe(insert alertInserter, proxyURL string) *EgressProbe {
 	c := httpx.Client()
 	c.Timeout = egressPollTimeout
-	proxyURL := strings.TrimRight(os.Getenv("BINANCE_PROXY_URL"), "/")
+	proxyURL = strings.TrimRight(proxyURL, "/")
 	if proxyURL == "" {
-		log.Printf("[egress-probe] BINANCE_PROXY_URL 未配置 → 聚合归因失效（只记 per-domain dephealth）")
+		log.Printf("[egress-probe] 代理端点未配置 → 聚合归因失效（只记 per-domain dephealth）")
 	}
 	return &EgressProbe{
 		insert:   insert,

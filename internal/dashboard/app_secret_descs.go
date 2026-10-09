@@ -19,6 +19,7 @@ var appSecretDescs = map[string]string{
 	"TRX_VOTE_PRIVATE_KEY":    "TRX 质押/投票签名私钥（链上投票执行）",
 	"TRONGRID_API_KEY":        "TronGrid API Key（TRX 链上采集限速提额）",
 	"ARB_AUTH_TOKEN":          "面板/API 认证令牌（Bearer；改后 ≤5s 生效，旧令牌即失效，无需重启）",
+	"ARB_BINANCE_PROXY_TOKEN": "币安代理通道 Bearer 令牌（D-145 入 secrets；仅发往代理端点，不泄给原生 venue 端点）",
 }
 
 // appSecretGroup 密钥键分组（密钥卡列展示；按消费域归类）。
@@ -28,7 +29,7 @@ func appSecretGroup(k string) string {
 		return "宏观采集"
 	case k == "TRONGRID_API_KEY" || k == "TRX_VOTE_PRIVATE_KEY":
 		return "TRX 链上"
-	case k == "ARB_AUTH_TOKEN":
+	case k == "ARB_AUTH_TOKEN" || k == "ARB_BINANCE_PROXY_TOKEN":
 		return "接入认证"
 	case len(k) >= 11 && k[:11] == "ARB_FEISHU_":
 		return "推送通道"
