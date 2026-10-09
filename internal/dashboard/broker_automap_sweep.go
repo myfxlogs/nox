@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"arb/internal/store/pgstore"
 )
 
 // autoMapSweepInterval 目录重识别周期（D-148）：商目录漂移/alias 表长进/归一规则修复
@@ -51,4 +53,63 @@ func (s *Service) autoMapSweepOnce(ctx context.Context) {
 			log.Printf("[auto-map sweep] alert: %v", err)
 		}
 	}
+}
+
+// equivSeedTargets D-149：venue 已映射 canonical 中 ∈ 既有 equiv class 域者，
+// 投影为待补 (class, canonical, venueType, venue) 行集（纯函数）。class 只复用
+// 既有 canonical→class 域——不替 venue 猜类；域外品种（无 CEX 对手盘语义的
+// 指数/外汇）不产行；venue 已有行（含 disabled）不重复产。
+func equivSeedTargets(mappedCanonicals []string, equiv []pgstore.AssetEquivEntry, venueType, venue string) []*pgstore.AssetEquivEntry {
+	clsOf := map[string]string{}
+	have := map[string]bool{}
+	for _, e := range equiv {
+		if _, ok := clsOf[e.Canonical]; !ok {
+			clsOf[e.Canonical] = e.AssetClass
+		}
+		if e.Venue == venue {
+			have[e.AssetClass+"|"+e.Canonical] = true
+		}
+	}
+	var out []*pgstore.AssetEquivEntry
+	seen := map[string]bool{}
+	for _, canon := range mappedCanonicals {
+		cls, ok := clsOf[canon]
+		key := cls + "|" + canon
+		if !ok || have[key] || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, &pgstore.AssetEquivEntry{AssetClass: cls, Canonical: canon, VenueType: venueType, Venue: venue})
+	}
+	return out
+}
+
+// seedAssetEquivVenue D-149：automap 应用映射后为 venue 补 asset_equiv 行。
+// 簿三元组派生（cfdBookSpecs）与开仓读侧（cfdPairCandidates）经 venue|canonical
+// 查 equiv——新账户零行时退 legacy spec（ExSym=canonical），原生 ticks 键
+// （XM OILCash# 等）簿写不出→新开仓 entry_basis/est_fee NULL 重演（生产实证）。
+func (s *Service) seedAssetEquivVenue(ctx context.Context, venue string, mappedCanonicals []string) (int, error) {
+	equiv, err := s.store.ListAssetEquiv(ctx)
+	if err != nil {
+		return 0, err
+	}
+	a, err := s.store.GetBrokerAccount(ctx, venue)
+	if err != nil {
+		return 0, fmt.Errorf("broker account: %w", err)
+	}
+	venueType := "mt5"
+	if a.Platform == 0 {
+		venueType = "mt4"
+	}
+	n := 0
+	for _, e := range equivSeedTargets(mappedCanonicals, equiv, venueType, venue) {
+		ok, err := s.store.InsertAssetEquivIfAbsent(ctx, e)
+		if err != nil {
+			return n, err
+		}
+		if ok {
+			n++
+		}
+	}
+	return n, nil
 }

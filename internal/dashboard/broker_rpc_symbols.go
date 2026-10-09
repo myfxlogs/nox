@@ -205,7 +205,8 @@ func (s *Service) autoMapVenue(ctx context.Context, venue string) (results []*v1
 		}
 	}
 
-	var newSyms []string // 待补订阅的符号
+	var newSyms []string   // 待补订阅的符号
+	var newCanons []string // 新落 canonical（D-149 equiv 种子域）
 
 	for _, g := range groups {
 		brokerSym := g.Symbol
@@ -278,6 +279,7 @@ func (s *Service) autoMapVenue(ctx context.Context, venue string) (results []*v1
 		results = append(results, result)
 		applied++
 		newSyms = append(newSyms, brokerSym)
+		newCanons = append(newCanons, canon)
 	}
 
 	// 运行时生效：重推映射 + 补订阅 + swap 补轮
@@ -286,6 +288,19 @@ func (s *Service) autoMapVenue(ctx context.Context, venue string) (results []*v1
 		s.bm.Resubscribe(venue, newSyms)
 		if fs, err := s.bm.SwapFacts(ctx); err == nil {
 			log.Printf("[auto-map] %s: %d facts 补轮", venue, len(fs))
+		}
+		// D-149：equiv 种子以 venue 全量已映射 canonical 为域（存量+本轮新增）——
+		// class 域后续长进也能在下次应用时补齐，幂等。
+		var mapped []string
+		for _, m := range all {
+			if m.Venue == venue {
+				mapped = append(mapped, m.Canonical)
+			}
+		}
+		if n, err := s.seedAssetEquivVenue(ctx, venue, append(mapped, newCanons...)); err != nil {
+			log.Printf("[auto-map] %s: equiv seed: %v", venue, err)
+		} else if n > 0 {
+			log.Printf("[auto-map] %s: equiv seed +%d", venue, n)
 		}
 	}
 
