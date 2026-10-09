@@ -160,3 +160,24 @@ func TestD137_SelfTxConfirmBounded(t *testing.T) {
 		t.Fatal("confirm window must be bounded (~3 receipts then give up)")
 	}
 }
+
+// TestD137_R2_BoundaryConsumed reward-delta 评估后本地滚动消费边界——
+// failsafeCheck 紧接着不误补第二轮（R2 退回①）。
+func TestD137_R2_BoundaryConsumed(t *testing.T) {
+	store := &fakeStore{}
+	sched, cleanup := d137Fixture(t, store)
+	defer cleanup()
+	// 缓存已过期边界（failsafe 视角：已过+宽限）
+	sched.nextMaint = sched.now().Add(-time.Hour)
+	// 模拟 reward-delta 评估路径（eventLoop boundaryCh 分支同款调用序）
+	sched.doRebalance(context.Background())
+	sched.noteEvaluated(context.Background())
+	if store.insertedID != 1 {
+		t.Fatalf("eval should insert 1 record, got %d", store.insertedID)
+	}
+	// failsafeCheck 立即再查——边界已被本地前滚消费，不得二次评估
+	sched.failsafeCheck(context.Background())
+	if store.insertedID != 1 {
+		t.Fatalf("boundary consumed check: insertedID=%d, want 1（failsafe 误补）", store.insertedID)
+	}
+}

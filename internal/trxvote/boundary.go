@@ -11,6 +11,8 @@ import (
 	"context"
 	"log"
 	"time"
+
+	"arb/internal/safego"
 )
 
 // maintenancePeriod TRON SR 维护期=6h（00/06/12/18 UTC 边界，实证±90s 结算）。
@@ -127,8 +129,14 @@ func (s *Scheduler) refreshNextMaintenance(ctx context.Context) (time.Time, bool
 	return next, true
 }
 
-// noteEvaluated 评估后记：消费当前边界（滚入缓存 nextMaint 若为过期）+ onEvaluated 回调。
+// noteEvaluated 评估后记：本地滚动消费当前边界（nextMaint 按 6h 周期前滚至 now+宽限之后，
+// 零外部调用）→ reward-delta/确认窗评估后 failsafe 不误补；onEvaluated 回调。
 func (s *Scheduler) noteEvaluated(ctx context.Context) {
+	s.nextMaintMu.Lock()
+	for !s.nextMaint.IsZero() && !s.nextMaint.Add(boundaryGrace).After(s.now()) {
+		s.nextMaint = s.nextMaint.Add(maintenancePeriod)
+	}
+	s.nextMaintMu.Unlock()
 	if s.onEvaluated != nil {
 		s.onEvaluated(ctx)
 	}
@@ -161,7 +169,7 @@ func (s *Scheduler) confirmSelfTx(ctx context.Context, txHash string) {
 	log.Printf("[trxvote] self tx %s not confirmed within %vs window (deferred to trx_txs reconcile)", txHash, 19)
 }
 
-// watchSelfTx 广播成功后起确认窗（goroutine，safego 由调用点保证）。
+// watchSelfTx 广播成功后起确认窗（safego panic 护栏）。
 func (s *Scheduler) watchSelfTx(ctx context.Context, txHash string) {
-	go s.confirmSelfTx(ctx, txHash)
+	safego.Go("trxvote:confirmSelfTx", func() { s.confirmSelfTx(ctx, txHash) })
 }
