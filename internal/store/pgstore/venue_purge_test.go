@@ -3,6 +3,7 @@ package pgstore
 // D-150 锚点：①venue 有活跃真金仓 → 删除闸拒（CountVenueOpenPositions>0）；
 // ②PurgeVenueData 清采集域（ticks/facts/equiv/universe/monitor）+纸面退出，
 // 审计域（positions/legs）行不动。
+// D-151：PurgeVenueData 劈为 PurgeVenueDerived（同步小表）+PurgeVenueBulk（异步批量）。
 
 import (
 	"context"
@@ -73,13 +74,22 @@ func TestD150_PurgeVenueData(t *testing.T) {
 	`); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.PurgeVenueData(ctx, "62200001")
+	derived, err := s.PurgeVenueDerived(ctx, "62200001")
 	if err != nil {
-		t.Fatalf("purge: %v", err)
+		t.Fatalf("derived purge: %v", err)
 	}
-	for _, k := range []string{"ticks", "facts", "asset_equiv", "fin_carry_universe", "fin_xasset_monitor", "paper_exited"} {
-		if got[k] != 1 {
-			t.Fatalf("%s want 1, got %v (all=%v)", k, got[k], got)
+	for _, k := range []string{"asset_equiv", "fin_carry_universe", "fin_xasset_monitor", "paper_exited"} {
+		if derived[k] != 1 {
+			t.Fatalf("derived %s want 1, got %v (all=%v)", k, derived[k], derived)
+		}
+	}
+	bulk, err := s.PurgeVenueBulk(ctx, "62200001")
+	if err != nil {
+		t.Fatalf("bulk purge: %v", err)
+	}
+	for _, k := range []string{"ticks", "facts"} {
+		if bulk[k] != 1 {
+			t.Fatalf("bulk %s want 1, got %v (all=%v)", k, bulk[k], bulk)
 		}
 	}
 	var st, reason string

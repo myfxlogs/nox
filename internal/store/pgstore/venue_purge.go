@@ -18,21 +18,28 @@ func (s *Store) CountVenueOpenPositions(ctx context.Context, venue string) (int,
 	return n, err
 }
 
-// PurgeVenueData D-150：账号删除级联清市场观测域（业主令：删号即清采集数据）。
-// 覆盖 ticks/facts/asset_equiv/fin_carry_universe/fin_xasset_monitor（typed+bare 键形）+
-// active 纸面仓退出 venue_removed（不留孤儿行）。
-// 保留域：alerts/positions/position_legs 等审计域一行不动。
-// 返回各表清理行数（观测日志用）。
-func (s *Store) PurgeVenueData(ctx context.Context, venue string) (map[string]int64, error) {
-	out := map[string]int64{}
-	del := func(name, q string, args ...any) error {
-		tag, err := s.pool.Exec(ctx, q, args...)
-		if err != nil {
-			return fmt.Errorf("purge %s: %w", name, err)
-		}
-		out[name] = tag.RowsAffected()
-		return nil
+// BrokerAccountExists D-151 异步清理起步闸：账号若在清理窗内被重建 → 放弃
+// 批量清（残行陈旧但随新采集覆盖；继续清会擦掉新账号数据）。
+func (s *Store) BrokerAccountExists(ctx context.Context, venue string) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM broker_accounts WHERE venue=$1)`, venue).Scan(&ok)
+	return ok, err
+}
+
+func (s *Store) purgeDel(ctx context.Context, out map[string]int64, name, q string, args ...any) error {
+	tag, err := s.pool.Exec(ctx, q, args...)
+	if err != nil {
+		return fmt.Errorf("purge %s: %w", name, err)
 	}
+	out[name] = tag.RowsAffected()
+	return nil
+}
+
+// PurgeVenueDerived D-151 同步半：RemoveBroker 账号行删除前跑——全是小表且喂正确性
+// （纸面仓退出 venue_removed + 等价类/universe/监控簿行，不清则幽灵三元组）。
+// ticks/facts 批量观测行不在此（PurgeVenueBulk 异步）。
+func (s *Store) PurgeVenueDerived(ctx context.Context, venue string) (map[string]int64, error) {
+	out := map[string]int64{}
 	// 纸面仓先退出（UPDATE 不是 DELETE——行留作退出史，仅状态翻）。
 	tag, err := s.pool.Exec(ctx,
 		`UPDATE paper_spot_carry SET status='exited', exit_reason='venue_removed', exit_ts=now()
@@ -41,16 +48,38 @@ func (s *Store) PurgeVenueData(ctx context.Context, venue string) (map[string]in
 		return out, fmt.Errorf("purge paper positions: %w", err)
 	}
 	out["paper_exited"] = tag.RowsAffected()
-	for _, d := range []struct{ name, q string }{
-		{"ticks", `DELETE FROM ticks WHERE venue=$1`},
-		{"facts", `DELETE FROM facts WHERE venue=$1`},
-		{"asset_equiv", `DELETE FROM asset_equiv WHERE venue=$1`},
-		{"fin_carry_universe", `DELETE FROM fin_carry_universe WHERE mt_venue=$1`},
-		{"fin_xasset_monitor", `DELETE FROM fin_xasset_monitor WHERE mt_venue=$1 OR mt_venue LIKE $1 || ':%'`},
-	} {
-		if err := del(d.name, d.q, venue); err != nil {
-			return out, err
-		}
+	if err := s.purgeDel(ctx, out, "asset_equiv", `DELETE FROM asset_equiv WHERE venue=$1`, venue); err != nil {
+		return out, err
+	}
+	if err := s.purgeVenueDerivedRows(ctx, out, venue); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
+// purgeVenueDerivedRows universe+监控簿删除（同步首扫与异步末扫共用——末扫收扫描竞态行）。
+func (s *Store) purgeVenueDerivedRows(ctx context.Context, out map[string]int64, venue string) error {
+	if err := s.purgeDel(ctx, out, "fin_carry_universe", `DELETE FROM fin_carry_universe WHERE mt_venue=$1`, venue); err != nil {
+		return err
+	}
+	return s.purgeDel(ctx, out, "fin_xasset_monitor",
+		`DELETE FROM fin_xasset_monitor WHERE mt_venue=$1 OR mt_venue LIKE $1 || ':%'`, venue)
+}
+
+// PurgeVenueBulk D-151 异步半：RemoveBroker 返回后跑——ticks/facts 批量观测行
+// （万行级 DELETE，同步会卡 RPC ~30s）。facts 先删：发现层 venue 过滤对缺席账号
+// fail-open，facts 在窗内仍可配对出幽灵 universe 行→最先清最短窗；末尾重扫
+// universe/monitor 收该窗内扫描器竞态写入。
+func (s *Store) PurgeVenueBulk(ctx context.Context, venue string) (map[string]int64, error) {
+	out := map[string]int64{}
+	if err := s.purgeDel(ctx, out, "facts", `DELETE FROM facts WHERE venue=$1`, venue); err != nil {
+		return out, err
+	}
+	if err := s.purgeDel(ctx, out, "ticks", `DELETE FROM ticks WHERE venue=$1`, venue); err != nil {
+		return out, err
+	}
+	if err := s.purgeVenueDerivedRows(ctx, out, venue); err != nil {
+		return out, err
 	}
 	return out, nil
 }
