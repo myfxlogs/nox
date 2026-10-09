@@ -12,7 +12,8 @@ import (
 
 // deliver 报告投递：①落档 <ReportDir>/selfwatch-<tag>-<BJ日期>.md（同日幂等覆盖，
 // 同 sysretro 先例）②InsertAlert(level) 落 alerts 表（StreamUpdates 同步透出）
-// ③显式飞书推送（info 级告警 hook 不推——报告属主动触达，走 ChatID 直发）。
+// ③飞书直推仅 warn+ 级（D-147 推送收口业主域：全绿 info 报告=系统自检常态，
+// 留档+留痕不打扰；报告检出异常时调用方传 warn 自动恢复直推）。
 func (d Deps) deliver(ctx context.Context, tag, level, body string) {
 	dir := d.reportDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -25,6 +26,9 @@ func (d Deps) deliver(ctx context.Context, tag, level, body string) {
 	}
 	if err := d.Store.InsertAlert(ctx, nil, level, body); err != nil {
 		log.Printf("[selfwatch] report alert insert: %v", err)
+	}
+	if level == "info" {
+		return // D-147：全绿自检报告不推送（业主域=异常/决策/资金变动，info 留痕即足）
 	}
 	if d.Notify == nil || !d.Notify.Enabled() || d.ChatID == nil {
 		return
