@@ -90,13 +90,13 @@ func buildPositionIDIndex(ctx context.Context, store PositionLegLister) (map[str
 	if store == nil {
 		return posIdx, orderIdx
 	}
-	openPositions, err := store.ListPositions(ctx, "OPEN", 200, 0)
+	// D-121：也查 LEGGED（CEX 单腿成交的持仓需要 broker position 匹配浮盈）。
+	// D-141 核查项：扩 OPENING/CLOSING——过渡态腿的 PositionId 不标注会被误当游离/外单
+	// （双计风险：仓级 close_now_net 与游离腿 close_now_estimate 同计）。ACTIVE 单查覆盖四态。
+	allPositions, err := store.ListPositions(ctx, "ACTIVE", 500, 0)
 	if err != nil {
 		return posIdx, orderIdx
 	}
-	// D-121：也查 LEGGED（CEX 单腿成交的持仓需要 broker position 匹配浮盈）
-	leggedPositions, _ := store.ListPositions(ctx, "LEGGED", 200, 0)
-	allPositions := append(openPositions, leggedPositions...)
 	for _, p := range allPositions {
 		legs, err := store.ListPositionLegs(ctx, p.ID)
 		if err != nil {

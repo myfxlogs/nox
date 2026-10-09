@@ -16,7 +16,7 @@ type fakePositionLegLister struct {
 }
 
 func (f *fakePositionLegLister) ListPositions(_ context.Context, status string, _, _ int) ([]pgstore.Position, error) {
-	if status != "OPEN" {
+	if status != "ACTIVE" && status != "OPEN" {
 		return nil, nil
 	}
 	return f.positions, nil
