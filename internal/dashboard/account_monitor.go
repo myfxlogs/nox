@@ -7,7 +7,6 @@ package dashboard
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 
@@ -25,6 +24,10 @@ type acctVenueState struct {
 	restOnline bool // REST 成败（流状态缺席时兜底，镜像 bpMon）
 	acct       *reconcile.AccountInfo
 	asOf       time.Time // 数据时点：REST=采到时刻 / 流帧=FrameTime / ledger=entry.At
+	// snapBase D-136：REST 快照审计去重基准=上次成功写行的五列副本。与 acct 分离——
+	// acct 是可变展示态（OnLedgerAcct/流帧 patch 会改写），不能当审计去重基准；
+	// snapBase 只在写成功后前进，写败保旧值→下一轮同值自动重试（留痕口径不吃亏）。
+	snapBase *reconcile.AccountInfo
 }
 
 // AccountMonitor 跟踪全部账户（CFD + CEX）资金并发射逐 venue 变更事件。
@@ -247,45 +250,8 @@ func (m *AccountMonitor) pollImpl(ctx context.Context, match func(vk string) boo
 	}
 }
 
-// applyAcctResult REST 结果落态：err→restOnline=false（在线翻转则脏化，离线保留最近
-// 成功快照 D-052）；ok→restOnline=true+acct 落态+dirty。cooldown Record 在锁内。
-func (m *AccountMonitor) applyAcctResult(ctx context.Context, vk string, acct *reconcile.AccountInfo, err error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.cooldown.Record(vk, err)
-	st := m.states[vk]
-	if err != nil {
-		st.restOnline = false
-		wasOnline := st.online
-		st.online = m.onlineLocked(vk, st)
-		if !wasOnline {
-			// 从未在线：也记录一次（CEX 首次配置失败曾静默无日志，难排障）
-			log.Printf("[account-mon] %s first-poll error: %v", vk, err)
-			return
-		}
-		m.states[vk] = st
-		log.Printf("[account-mon] %s offline: %v", vk, err)
-		if !st.online {
-			m.dirtyLocked(vk)
-		}
-		return
-	}
-	changed := !acctSame(st.acct, acct)
-	st.restOnline = true
-	prev := st.acct // D-136：快照去重比较基准（入库列口径，先于覆写捕获）
-	cp := *acct     // 防共享指针原地改写：querier 侧复用/突变对象不回流本态
-	st.acct = &cp
-	st.asOf = time.Now()
-	st.online = m.onlineLocked(vk, st)
-	m.states[vk] = st
-	m.dirtyLocked(vk)
-	m.mu.Unlock()
-	m.writeRestSnapshot(ctx, vk, prev, acct) // D-132/D-136：REST-only 面入库列值变→审计留痕
-	if changed {
-		m.notifyFunds() // D-568：REST 值变→funds 通知（值不变不触）
-	}
-	m.mu.Lock()
-}
+// applyAcctResult 已迁至 account_monitor_snapshot.go（D-136 R1 行数纪律：
+// REST 结果落态+快照留痕写径同文件，二者本就是同一数据面的两段）。
 
 // accountToProto 已移至 account_monitor_proto.go（D-107 P2 拆分）；accountFingerprint 随
 // D-571 包B 事件化退役删除（dirty 集即发射集，proto.Equal 在 flush 去重）。
