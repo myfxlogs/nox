@@ -272,6 +272,20 @@ func TestD132_RestSnapshotWrites(t *testing.T) {
 	if count() != 2 {
 		t.Fatalf("非入库字段变不得写, got %d", count())
 	}
+	// D-136 R1：展示态被账本 patch 污染也不重写——去重基准是 snapBase（上次成功
+	// 写行），非可变 st.acct（生产实证：capitalview 校准回写账本→OnLedgerAcct
+	// 把 fm 0 patch 成 equity→每轮照写灌行）。
+	m.mu.Lock()
+	p := *m.states["okx:earn"].acct
+	p.FreeMargin = 121
+	stP := m.states["okx:earn"]
+	stP.acct = &p
+	m.states["okx:earn"] = stP
+	m.mu.Unlock()
+	m.Refresh(ctx)
+	if count() != 2 {
+		t.Fatalf("展示态污染不得写快照, got %d", count())
+	}
 	// WS 覆盖键（binance:perp 有私有流）值变也不写。
 	q2 := &fakeAccountQuerier{key: "binance:perp", acct: &reconcile.AccountInfo{
 		VenueKey: "binance:perp", Venue: "binance", VenueType: "perp", AssetType: "cex",
@@ -282,6 +296,45 @@ func TestD132_RestSnapshotWrites(t *testing.T) {
 	if count() != 2 {
 		t.Fatalf("WS 覆盖键不得双写, got %d", count())
 	}
+}
+
+// TestD136_LedgerPatchStreamOnly D-136 R1 验收锚：账本 patch 仅限私有流覆盖键——
+// REST-only 键（okx:earn）的账本条目是 capitalview REST 校准回写（SrcRest，
+// Available=equity 回退），回填会把 fm 0 污染成 equity；binance:perp（有流键）
+// 账本 patch 语义保留。
+func TestD136_LedgerPatchStreamOnly(t *testing.T) {
+	ctx := context.Background()
+	q := &fakeAccountQuerier{key: "okx:earn", acct: &reconcile.AccountInfo{
+		VenueKey: "okx:earn", Venue: "okx", VenueType: "earn", AssetType: "cex",
+		Balance: 169, Equity: 169, FreeMargin: 0, Currency: "USDT",
+	}}
+	q2 := &fakeAccountQuerier{key: "binance:perp", acct: &reconcile.AccountInfo{
+		VenueKey: "binance:perp", Venue: "binance", VenueType: "perp", AssetType: "cex",
+		Balance: 10, Equity: 12, FreeMargin: 9, Currency: "USDT",
+	}}
+	m, _, _ := newAcctMonTest(t, q)
+	m.AddStatic(q2)
+	l := bus.NewBalanceLedger()
+	m.SetBalanceLedger(l)
+	m.Refresh(ctx)
+	// REST-only 键：账本命中也不 patch（equity-fallback 不回填 FreeMargin）。
+	l.Put("okx:earn", 169, 169, "USDT", "rest", time.Now())
+	m.OnLedgerAcct("okx:earn")
+	m.mu.RLock()
+	if got := m.states["okx:earn"].acct.FreeMargin; got != 0 {
+		m.mu.RUnlock()
+		t.Fatalf("REST-only 键 fm 被账本污染: %v", got)
+	}
+	m.mu.RUnlock()
+	// 私有流覆盖键：账本 patch 照常生效。
+	l.Put("binance:perp", 88, 99, "USDT", "ws", time.Now())
+	m.OnLedgerAcct("binance:perp")
+	m.mu.RLock()
+	if got := m.states["binance:perp"].acct.FreeMargin; got != 88 {
+		m.mu.RUnlock()
+		t.Fatalf("流覆盖键账本 patch 失效: %v", got)
+	}
+	m.mu.RUnlock()
 }
 
 // TestD133_ConfigDeletePrunesGhost D-133 域2 验收锚：删配置行→querier 哈希变→键集淘汰，

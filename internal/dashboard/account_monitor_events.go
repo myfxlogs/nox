@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/keydomain"
 	"arb/internal/reconcile"
+	"arb/internal/venue"
 
 	v1 "arb/internal/gen/dashboardv1"
 
@@ -170,6 +172,16 @@ func (m *AccountMonitor) OnLedgerAcct(vk string) {
 		if kick {
 			m.Kick(vk)
 		}
+		return
+	}
+	// D-136：账本 patch 仅限私有流覆盖键。REST-only 键（okx earn/funding）的
+	// 账本条目来自 capitalview REST 校准回写（SrcRest，Available=equity 回退
+	// 口径）——回填会把 FreeMargin 从 venue 真值 0 污染成 equity（生产实证
+	// earn fm 0↔169.39 逐轮震荡，且污染快照去重基准致 rest_poll 行灌水）。
+	// REST-only 键账户态只由 poll 权威维护，账本条目仅服务资金池读口。
+	kk := keydomain.Parse(vk)
+	if !venue.HasPrivateStream(kk.Venue, kk.Type, st.acct.Simulated) {
+		m.mu.Unlock()
 		return
 	}
 	cp := *st.acct // 防共享指针原地改写：复制后 patch
