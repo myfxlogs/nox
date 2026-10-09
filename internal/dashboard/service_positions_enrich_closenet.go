@@ -42,7 +42,7 @@ func (s *Service) closeNowNet(ctx context.Context, pb *v1.Position, openLegs []p
 			log.Printf("[enrich] pos=%d leg %s %s 报价缺（nativeKey=%s canonical=%s）→close_now_net NULL", pb.Id, l.Venue, l.Symbol, bus.CexSymbolKey(l.Symbol), canonical)
 			return 0, 0, false // 报价缺→整列 NULL
 		}
-		if now.Sub(q.Time) <= s.freshTTL {
+		if quoteFreshForDisplay(s.qbus, q, s.freshTTL, now) { // D-155：脉冲续命分档
 			exitPx := q.Bid // BUY 腿平仓卖→bid
 			if l.Side == "SELL" {
 				exitPx = q.Ask // SELL 腿平仓买回→ask

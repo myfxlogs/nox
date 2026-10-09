@@ -64,18 +64,18 @@ func TestD009_S2_DirectionPrice(t *testing.T) {
 	mk := func(side string) venue.Order {
 		return venue.Order{Venue: "b", VenueKey: "b:perp", Ticket: "1", Symbol: "X", Side: side, Volume: 1, OpenPrice: 100}
 	}
-	buy := brokerPositionToProto(mk("BUY"), "X", price, true, true, ttl, now, 0, nil, 0)
+	buy := brokerPositionToProto(mk("BUY"), "X", price, true, true, nil, ttl, now, 0, nil, 0)
 	if buy.CurrentPrice != 99.5 {
 		t.Fatalf("BUY 仓平仓价应=bid 99.5, got %v", buy.CurrentPrice)
 	}
 	if buy.PriceBid != 99.5 || buy.PriceAsk != 100.5 {
 		t.Fatalf("双价应齐填 99.5/100.5, got %v/%v", buy.PriceBid, buy.PriceAsk)
 	}
-	sell := brokerPositionToProto(mk("SELL"), "X", price, true, true, ttl, now, 0, nil, 0)
+	sell := brokerPositionToProto(mk("SELL"), "X", price, true, true, nil, ttl, now, 0, nil, 0)
 	if sell.CurrentPrice != 100.5 {
 		t.Fatalf("SELL 仓平仓价应=ask 100.5, got %v", sell.CurrentPrice)
 	}
-	stale := brokerPositionToProto(mk("BUY"), "X", bus.Quote{Bid: 1, Ask: 2, Time: now.Add(-time.Hour)}, true, true, ttl, now, 0, nil, 0)
+	stale := brokerPositionToProto(mk("BUY"), "X", bus.Quote{Bid: 1, Ask: 2, Time: now.Add(-time.Hour)}, true, true, nil, ttl, now, 0, nil, 0)
 	if stale.Fresh || stale.CurrentPrice != 0 || stale.PriceBid != 0 {
 		t.Fatalf("超龄报价应诚实空态, got %+v", stale)
 	}

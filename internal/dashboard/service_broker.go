@@ -255,7 +255,7 @@ func (s *Service) ListAccounts(ctx context.Context, req *connect.Request[v1.List
 //	JPY 计价符号差 ~660 倍。venue 每次 poll 拿最新 Profit（已实时），无需重算。
 //
 // venueOnline=false = 离线 venue 的最近快照（非实时，诚实标注，D-052）。
-func brokerPositionToProto(o venue.Order, canonical string, price bus.Quote, hasPrice bool, venueOnline bool, freshTTL time.Duration, now time.Time, margin float64, swapChargeAt *timestamppb.Timestamp, fundingRatePeriodicPct float64) *v1.BrokerPosition {
+func brokerPositionToProto(o venue.Order, canonical string, price bus.Quote, hasPrice bool, venueOnline bool, qbus *bus.QuoteBus, freshTTL time.Duration, now time.Time, margin float64, swapChargeAt *timestamppb.Timestamp, fundingRatePeriodicPct float64) *v1.BrokerPosition {
 	pb := &v1.BrokerPosition{
 		Venue:       o.Venue,
 		VenueKey:    o.VenueKey,
@@ -275,7 +275,7 @@ func brokerPositionToProto(o venue.Order, canonical string, price bus.Quote, has
 		Margin:      margin,     // D-124：方案 C 分摊保证金（0=未知/CEX/无账户数据）
 		Sl:          o.StopLoss, // D-155：broker 端 SL 透传（MT5/MT4 Order.StopLoss；0=未设/CEX）
 	}
-	if hasPrice && now.Sub(price.Time) <= freshTTL {
+	if hasPrice && quoteFreshForDisplay(qbus, price, freshTTL, now) { // D-155：脉冲续命分档
 		// D-009 S2：现价=平仓方向价（BUY仓平吃 bid / SELL仓平吃 ask）；双值齐填。
 		pb.PriceBid, pb.PriceAsk = price.Bid, price.Ask
 		pb.CurrentPrice = price.Bid
