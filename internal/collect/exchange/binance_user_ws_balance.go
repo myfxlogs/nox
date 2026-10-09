@@ -12,17 +12,19 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// balPut D-542 S1：ACCOUNT_UPDATE → 活账本（available=wb−Σ持仓保证金，冻结无帧内字段不计，钳负为 0）。
+// balPut D-542 S1：ACCOUNT_UPDATE → 活账本。D-142：equity=wb+ΣUP（合约权益含未实现盈亏），
+// available=eq−Σiw（持仓保证金扣除不变），冻结无帧内字段不计，钳负为 0。
 // wb NaN=本帧无 USDT 余额行 → 不更账本（B/P 可独立出现，勿以 0 覆盖真值）。
-func (b *BinanceUserWS) balPut(wb, iwSum float64, now time.Time) {
+func (b *BinanceUserWS) balPut(wb, upSum, iwSum float64, now time.Time) {
 	if b.simulated || math.IsNaN(wb) {
 		return
 	}
-	avail := wb - iwSum
+	eq := wb + upSum // D-142：权益=钱包余额+未实现盈亏（与 REST totalMarginBalance 同口径）
+	avail := eq - iwSum
 	if avail < 0 {
 		avail = 0
 	}
-	b.balLedger.Put(b.balPoolKey(), avail, wb, "USDT", "ws", now)
+	b.balLedger.Put(b.balPoolKey(), avail, eq, "USDT", "ws", now)
 }
 
 // onSpotAccountPosition outboundAccountPosition → B[{a,f,l}] USDT free+locked 落快照。
