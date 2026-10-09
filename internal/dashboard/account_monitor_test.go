@@ -170,7 +170,7 @@ func (f *fakeExchangeStore) ListExchangeConfigs(context.Context) ([]pgstore.Exch
 func TestAccountMonitor_CollisionKeys(t *testing.T) {
 	ctx := context.Background()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"totalWalletBalance":"345.72"}`))
+		_, _ = w.Write([]byte(`{"totalWalletBalance":"345.72","totalMarginBalance":"345.72"}`))
 	}))
 	defer srv.Close()
 	t0 := time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC)
@@ -347,7 +347,7 @@ func TestD133_ConfigDeletePrunesGhost(t *testing.T) {
 		case "/api/v3/account":
 			_, _ = w.Write([]byte(`{"balances":[{"asset":"USDT","free":"50","locked":"0"}]}`))
 		default: // perp /fapi/v2/account 等
-			_, _ = w.Write([]byte(`{"totalWalletBalance":"345.72","availableBalance":"300"}`))
+			_, _ = w.Write([]byte(`{"totalWalletBalance":"345.72","totalMarginBalance":"345.72","availableBalance":"300"}`))
 		}
 	}))
 	defer srv.Close()
