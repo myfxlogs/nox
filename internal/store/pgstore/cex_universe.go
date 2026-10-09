@@ -158,12 +158,12 @@ func (s *Store) InsertCexRadar(ctx context.Context, rows []CexRadarRow, now time
 }
 
 // PruneCexRadar 滚动清理：删除 ts 早于 keepDays 前的快照行。
+// D-152 接线 janitor 日轮（keepDays=14）；本体改走 pruneTTL 轨——分批删+
+// (venue,symbol) 组终值卫兵（停发 symbol 末帧永存，读侧只消费最新扫描不受影响）。
 func (s *Store) PruneCexRadar(ctx context.Context, keepDays int) error {
-	cutoff := time.Now().Add(-time.Duration(keepDays) * 24 * time.Hour)
-	if _, err := s.pool.Exec(ctx, `DELETE FROM fin_cex_radar WHERE ts < $1`, cutoff); err != nil {
-		return fmt.Errorf("prune cex_radar: %w", err)
-	}
-	return nil
+	_, err := s.pruneTTL(ctx, "fin_cex_radar", "ts", []string{"venue", "symbol"},
+		time.Now().Add(-time.Duration(keepDays)*24*time.Hour))
+	return err
 }
 
 // TouchCexUniverseAlert 写 last_alert_ts（告警冷却用）。
