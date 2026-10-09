@@ -35,6 +35,8 @@ type TronClient interface {
 	GetRewardsInfoCtx(ctx context.Context, addr string) (int64, error)
 	BroadcastCtx(ctx context.Context, tx *core.Transaction) (*api.Return, error)
 	GetAccountResourceCtx(ctx context.Context, addr string) (*api.AccountResourceMessage, error)
+	// D-137③：自发 tx 回执查询（有界确认窗用）。
+	GetTransactionInfoByIDCtx(ctx context.Context, id string) (*core.TransactionInfo, error)
 }
 
 // Executor 执行 TRX 投票交易（改投+领奖）。
@@ -134,6 +136,16 @@ func (e *Executor) ClaimReward(ctx context.Context) (string, int64, error) {
 		return "", 0, fmt.Errorf("recompute withdraw txid: %w", err)
 	}
 	return txHash, reward, nil
+}
+
+// TxConfirmed D-137③：查自发 tx 链上回执。确认=err==nil（回执存在即已打包）。
+// 未确认/查询失败均返回 (false, err)——调用方在有界窗内重试，不区分两类错误。
+func (e *Executor) TxConfirmed(ctx context.Context, txHash string) (bool, error) {
+	info, err := e.conn.GetTransactionInfoByIDCtx(ctx, txHash)
+	if err != nil {
+		return false, err
+	}
+	return info != nil, nil
 }
 
 // Alert 发送告警（封装 alertSink nil 安全）。

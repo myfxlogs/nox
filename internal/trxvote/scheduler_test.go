@@ -29,6 +29,9 @@ type fakeStore struct {
 	// D-293 S3：防抖查询 mock
 	lastExecutedAt  time.Time
 	lastExecutedErr error
+	// D-137：boot 补课查询 mock
+	lastDecidedAt  time.Time
+	lastDecidedErr error
 }
 
 func (f *fakeStore) InsertTrxVoteRebalance(_ context.Context, rec TRXVoteRebalanceRecord) (int64, error) {
@@ -47,6 +50,9 @@ func (f *fakeStore) TrxVoteRebalancedToday(_ context.Context, _ int) bool {
 }
 func (f *fakeStore) LastExecutedRebalanceAt(_ context.Context) (time.Time, error) {
 	return f.lastExecutedAt, f.lastExecutedErr
+}
+func (f *fakeStore) LastRebalanceDecidedAt(_ context.Context) (time.Time, error) {
+	return f.lastDecidedAt, f.lastDecidedErr
 }
 
 // mockAccountFetcher 实现 AccountFetcher 接口。
@@ -72,6 +78,9 @@ type testExecutorConn struct {
 	// 带宽预检 mock（nil=返回充足带宽）
 	acctResource *api.AccountResourceMessage
 	acctResErr   error
+	// D-137：自发 tx 回执 mock
+	txInfo    *core.TransactionInfo
+	txInfoErr error
 }
 
 func (m *testExecutorConn) VoteWitnessAccountCtx(_ context.Context, _ string, _ map[string]int64) (*api.TransactionExtention, error) {
@@ -86,6 +95,9 @@ func (m *testExecutorConn) GetRewardsInfoCtx(_ context.Context, _ string) (int64
 func (m *testExecutorConn) BroadcastCtx(_ context.Context, _ *core.Transaction) (*api.Return, error) {
 	m.broadcastCalled = true
 	return &api.Return{}, m.broadcastErr
+}
+func (m *testExecutorConn) GetTransactionInfoByIDCtx(_ context.Context, _ string) (*core.TransactionInfo, error) {
+	return m.txInfo, m.txInfoErr
 }
 func (m *testExecutorConn) GetAccountResourceCtx(_ context.Context, _ string) (*api.AccountResourceMessage, error) {
 	if m.acctResErr != nil {

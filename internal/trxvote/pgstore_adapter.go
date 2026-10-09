@@ -42,5 +42,10 @@ func (a *PgStoreAdapter) LastExecutedRebalanceAt(ctx context.Context) (time.Time
 	return a.Store.LastExecutedRebalanceAt(ctx)
 }
 
+// LastRebalanceDecidedAt D-137 透传。
+func (a *PgStoreAdapter) LastRebalanceDecidedAt(ctx context.Context) (time.Time, error) {
+	return a.Store.LastRebalanceDecidedAt(ctx)
+}
+
 // compile-time: *PgStoreAdapter 实现 Store 接口。
 var _ Store = (*PgStoreAdapter)(nil)

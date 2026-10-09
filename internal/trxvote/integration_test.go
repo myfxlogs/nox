@@ -23,6 +23,8 @@ type integrationStore struct {
 	updatedStatus   string
 	// D-293 S3：防抖查询 mock
 	lastExecutedAt time.Time
+	// D-137：boot 补课查询 mock
+	lastDecidedAt time.Time
 }
 
 func (s *integrationStore) InsertTrxVoteRebalance(_ context.Context, rec TRXVoteRebalanceRecord) (int64, error) {
@@ -42,6 +44,9 @@ func (s *integrationStore) TrxVoteRebalancedToday(_ context.Context, _ int) bool
 func (s *integrationStore) LastExecutedRebalanceAt(_ context.Context) (time.Time, error) {
 	return s.lastExecutedAt, nil
 }
+func (s *integrationStore) LastRebalanceDecidedAt(_ context.Context) (time.Time, error) {
+	return s.lastDecidedAt, nil
+}
 
 // integrationConn 是集成测试用的 mock TronClient。
 type integrationConn struct {
@@ -50,6 +55,9 @@ type integrationConn struct {
 	withdrawTxExt *api.TransactionExtention
 	broadcastErr  error
 	acctResource  *api.AccountResourceMessage // nil=返回充足带宽
+	// D-137：自发 tx 回执 mock
+	txInfo    *core.TransactionInfo
+	txInfoErr error
 }
 
 func (c *integrationConn) VoteWitnessAccountCtx(_ context.Context, _ string, _ map[string]int64) (*api.TransactionExtention, error) {
@@ -63,6 +71,9 @@ func (c *integrationConn) GetRewardsInfoCtx(_ context.Context, _ string) (int64,
 }
 func (c *integrationConn) BroadcastCtx(_ context.Context, _ *core.Transaction) (*api.Return, error) {
 	return &api.Return{}, c.broadcastErr
+}
+func (c *integrationConn) GetTransactionInfoByIDCtx(_ context.Context, _ string) (*core.TransactionInfo, error) {
+	return c.txInfo, c.txInfoErr
 }
 func (c *integrationConn) GetAccountResourceCtx(_ context.Context, _ string) (*api.AccountResourceMessage, error) {
 	if c.acctResource != nil {

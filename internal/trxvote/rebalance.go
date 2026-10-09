@@ -33,12 +33,12 @@ type RebalanceConfig struct {
 	MaxBrokerage int // 最大可接受 brokerage（默认 20，即 20%）
 	MinRank      int // 最低排名要求（默认 127，即 top 127 都可）
 	// D-297 deprecated: 改用 SpreadThreshold 触发，保留 env 兼容
-	YieldDropPct       float64       // 触发改投的收益下降阈值（默认 15%）
-	BetterOppPct       float64       // 触发改投的更优机会阈值（默认 20%）
-	MaxRebalancePerDay int           // 每日最大改投次数（默认 1）
-	TickInterval       time.Duration // D-293 S3：评估周期（默认 30min，原 6h）
-	MinInterval        time.Duration // D-293 S3：防抖间隔（距上次 executed <MinInterval → 跳过，默认 2h）
-	SpreadThreshold    float64       // D-297：价差触发改投阈值（pp，默认 0.001）
+	YieldDropPct       float64 // 触发改投的收益下降阈值（默认 15%）
+	BetterOppPct       float64 // 触发改投的更优机会阈值（默认 20%）
+	MaxRebalancePerDay int     // 每日最大改投次数（默认 1）
+	// D-137：TickInterval 字段已随 30min 盲醒 tick 摘除（改投=边界事件驱动）。
+	MinInterval     time.Duration // D-293 S3：防抖间隔（距上次 executed <MinInterval → 跳过，默认 2h）
+	SpreadThreshold float64       // D-297：价差触发改投阈值（pp，默认 0.001）
 }
 
 // RebalanceInput 是决策引擎输入。
@@ -69,9 +69,8 @@ func DefaultConfig() RebalanceConfig {
 		YieldDropPct:       15.0,
 		BetterOppPct:       0.0,
 		MaxRebalancePerDay: 1,
-		TickInterval:       30 * time.Minute, // D-293 S3：6h→30min
-		MinInterval:        2 * time.Hour,    // D-293 S3：防抖 2h（env ARB_TRX_VOTE_MIN_INTERVAL_MINUTES 可调）
-		SpreadThreshold:    0.001,            // D-297：价差触发改投阈值 0.001pp
+		MinInterval:        2 * time.Hour, // D-293 S3：防抖 2h（env ARB_TRX_VOTE_MIN_INTERVAL_MINUTES 可调）
+		SpreadThreshold:    0.001,         // D-297：价差触发改投阈值 0.001pp
 	}
 }
 

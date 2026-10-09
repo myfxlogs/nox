@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"sync"
 	"time"
 
 	"arb/internal/safego"
@@ -36,6 +37,15 @@ type Scheduler struct {
 	lastRebalanceBlockAt time.Time // 改投阻塞冷却（带宽不足/查询失败共用，15min）
 	aboveThreshold       bool      // reward 是否在 >10e6 区间（状态迁移才打日志）
 	accountQueryFailing  bool      // D-117：账户查询失败 episode 标记（告警去重+恢复边沿）
+	// D-137：事件驱动改投（30min 盲醒 tick 已摘除，见 boundary.go）。
+	boundaryCh        chan string
+	nextMaintFn       func(ctx context.Context) (time.Time, error) // GetNextMaintenanceTime 源（failsafe 用）
+	nextMaint         time.Time                                    // 缓存下一维护期边界
+	nextMaintMu       sync.Mutex
+	failsafeEvery     time.Duration             // failsafe 核醒间隔（默认 60s，纯本地比对）
+	confirmSteps      []time.Duration           // 自发 tx 确认窗节奏（测试可注）
+	onEvaluated       func(ctx context.Context) // 评估完成回调（apr/推送刷新）
+	onSelfTxConfirmed func(ctx context.Context) // 自发 tx 确认回调（account/apr 重取）
 }
 
 // Store 是 Scheduler 依赖的存储接口（解耦 pgstore.Store 供测试注入）。
@@ -44,6 +54,7 @@ type Store interface {
 	UpdateTrxVoteRebalanceResult(ctx context.Context, id int64, txHash, status string) error
 	TrxVoteRebalancedToday(ctx context.Context, maxPerDay int) bool
 	LastExecutedRebalanceAt(ctx context.Context) (time.Time, error) // D-293 S3：防抖查询
+	LastRebalanceDecidedAt(ctx context.Context) (time.Time, error)  // D-137：boot 补课（最近评估时刻）
 }
 
 // TRXVoteRebalanceRecord 是 Store.InsertTrxVoteRebalance 的输入（解耦 pgstore struct 供测试）。
@@ -67,35 +78,16 @@ func NewScheduler(executor *Executor, store Store, address, tronscanBase string,
 		config:       config,
 		account:      account,
 		now:          time.Now,
+		boundaryCh:   make(chan string, 4),
 	}
 }
 
 // SetNow 替换 now 函数（测试用）。
 func (s *Scheduler) SetNow(fn func() time.Time) { s.now = fn }
 
-// Run 启动改投 tick（每 30min，boot 后等 5min 首次执行）。
+// Run 启动事件驱动改投评估（D-137：reward 差分/自 tx 确认/failsafe/boot 补课四触发源）。
 func (s *Scheduler) Run(ctx context.Context) {
-	safego.GoLoop("trxvote:rebalance", func() { s.rebalanceLoop(ctx) })
-}
-
-// rebalanceLoop 每 TickInterval 执行改投决策。
-func (s *Scheduler) rebalanceLoop(ctx context.Context) {
-	interval := s.config.TickInterval
-	if interval <= 0 {
-		interval = 30 * time.Minute // 默认 30min
-	}
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	time.Sleep(5 * time.Minute) // boot 后等 5min 首次执行
-	s.doRebalance(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.doRebalance(ctx)
-		}
-	}
+	safego.GoLoop("trxvote:rebalance", func() { s.eventLoop(ctx) })
 }
 
 // ClaimCheck 领奖条件触发（搭车 60s 采集流）。三态：≤10e6 跳过；冷却<15min 跳过；否则预检→ClaimReward。
@@ -144,6 +136,7 @@ func (s *Scheduler) ClaimCheck(ctx context.Context, rewardSun int64) {
 	}
 	log.Printf("[trxvote] claim success: tx=%s amount=%d sun (%.4f TRX)", txHash, amount, float64(amount)/1e6)
 	s.executor.Alert("warn", formatClaimAlert(txHash, amount))
+	s.watchSelfTx(ctx, txHash) // D-137③：自发 tx 有界确认窗
 }
 
 // doRebalance 执行一轮改投决策（设计 §5）。
@@ -258,4 +251,5 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 		txHash, formatFloat(decision.CurrentYield), formatFloat(decision.TargetYield),
 		formatFloat(decision.Improvement), topSRPrefix(currentVotes), topSRPrefix(decision.Target))
 	s.executor.Alert("warn", formatRebalanceAlert(txHash, decision, currentVotes))
+	s.watchSelfTx(ctx, txHash) // D-137③：自发 tx 有界确认窗
 }

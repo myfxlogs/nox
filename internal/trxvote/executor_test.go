@@ -30,6 +30,9 @@ type mockTronClient struct {
 	// 带宽查询 mock（nil=充足带宽）
 	acctResource *api.AccountResourceMessage
 	acctResErr   error
+	// D-137：自发 tx 回执查询 mock
+	txInfo    *core.TransactionInfo
+	txInfoErr error
 }
 
 func (m *mockTronClient) VoteWitnessAccountCtx(_ context.Context, _ string, _ map[string]int64) (*api.TransactionExtention, error) {
@@ -47,6 +50,9 @@ func (m *mockTronClient) BroadcastCtx(_ context.Context, tx *core.Transaction) (
 		m.broadcastPermID = tx.RawData.Contract[0].GetPermissionId()
 	}
 	return &api.Return{}, m.broadcastErr
+}
+func (m *mockTronClient) GetTransactionInfoByIDCtx(_ context.Context, _ string) (*core.TransactionInfo, error) {
+	return m.txInfo, m.txInfoErr
 }
 func (m *mockTronClient) GetAccountResourceCtx(_ context.Context, _ string) (*api.AccountResourceMessage, error) {
 	if m.acctResErr != nil {
