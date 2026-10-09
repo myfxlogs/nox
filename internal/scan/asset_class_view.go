@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -49,18 +50,21 @@ func newAssetClassView(rows []pgstore.AssetEquivEntry) *assetClassView {
 	return v
 }
 
+// venue 键查找统一 BareOf 归一（D-146）：map 键存裸 venue（asset_equiv.venue 原形），
+// 调用方 venue 形参裸/带后缀（"3001157"/"3001157:mt5"/"okx"/"okx:perp"）皆收——
+// monitorVenueKeys 产出的 typed 键若直查恒 miss，equiv 解析静默失能。
 func (v *assetClassView) cexClassOf(venue, factsSym string) string {
 	if v == nil {
 		return ""
 	}
-	return v.cexClass[venue+"|"+factsSym]
+	return v.cexClass[keydomain.BareOf(venue)+"|"+factsSym]
 }
 
 func (v *assetClassView) mtClassOf(venue, canonical string) string {
 	if v == nil {
 		return ""
 	}
-	return v.mtClass[venue+"|"+canonical]
+	return v.mtClass[keydomain.BareOf(venue)+"|"+canonical]
 }
 
 // classOfCanon 无 venue 键形查类（fin_cex_universe.hedge_canonical 等）。
@@ -76,7 +80,7 @@ func (v *assetClassView) cexCanons(class, venue string) []string {
 	if v == nil {
 		return nil
 	}
-	return v.cexByCls[class+"|"+venue]
+	return v.cexByCls[class+"|"+keydomain.BareOf(venue)]
 }
 
 // mtCanon class×venue 的 MT canonical（asset_equiv 原形；空=无注册腿）。
@@ -84,7 +88,7 @@ func (v *assetClassView) mtCanon(class, venue string) string {
 	if v == nil {
 		return ""
 	}
-	return v.mtByCls[class+"|"+venue]
+	return v.mtByCls[class+"|"+keydomain.BareOf(venue)]
 }
 
 // joinKeys 单腿 join 键集=legacy canonical ∪ asset_class（双侧同类即相遇；
