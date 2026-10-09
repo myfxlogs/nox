@@ -96,6 +96,13 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 	} else {
 		log.Printf("[cfd paper] asset_equiv: %v（退化 legacy 键）", eerr)
 	}
+	// D-144 ③：簿覆盖闸合约面——fin_cex_universe 全表（venue|symbol→status）一次加载；
+	// 读失败置 nil=cex 合约腿不判（基础设施抖动≠结构性不可覆盖，fail-open 不误杀）。
+	uni, uerr := st.ListCexUniverse(ctx)
+	if uerr != nil {
+		log.Printf("[cfd paper] cex universe: %v（簿覆盖闸 cex 腿停用）", uerr)
+		uni = nil
+	}
 	for _, r := range rows {
 		if !cfdStructures[r.Structure] {
 			continue
@@ -176,7 +183,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 	dataLost := func(venueA, venueB, symbol string) bool {
 		return dataLostCooldown(ctx, st, venueA, venueB, symbol, now) // D-042 R2 同守卫（err fail-closed）
 	}
-	var missing []string
+	var missing, uncoverable []string
 	for _, sl := range slots {
 		if _, ok := activePairKeys[sl.key]; ok {
 			continue
@@ -214,6 +221,12 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			}
 			continue
 		}
+		// D-144 ③：簿结构性不可覆盖→不开记因（测不了的仓不验证；放宇宙行缺席 warn 之后
+		// ——无行已不开不重复记）。
+		if reason := bookUncoverableReason(ctx, st, uni, view, r.Canonical, sl.mtVenue, sl.cexVenue, now); reason != "" {
+			uncoverable = append(uncoverable, sl.key+"（"+reason+"）")
+			continue
+		}
 		if err := insertCfdPaper(ctx, st, r, sl.mtVenue, sl.cexVenue, view, now); err != nil {
 			if err == pgstore.ErrPaperExists {
 				continue
@@ -229,15 +242,22 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			log.Printf("[cfd paper] authorized-miss alert: %v", err)
 		}
 	}
+	if len(uncoverable) > 0 {
+		// D-144 ③：簿结构性不可覆盖组合拒开留痕（节流同 missing 每轮至多一条）。
+		if err := st.InsertAlert(ctx, nil, "warn", "[cfd 纸面保底] 簿结构性不可覆盖拒开（测不了的仓不验证）: "+strings.Join(uncoverable, ", ")); err != nil {
+			log.Printf("[cfd paper] uncoverable alert: %v", err)
+		}
+	}
 	warnMonitorBookAbsent(ctx, st, slots, view) // D-419 S3：簿覆盖哨兵（不阻断开仓）
+	warnActiveBookAbsent(ctx, st, active, view) // D-144 ④：active 仓簿缺席自盯
 	// ① 开仓（发现段）——D-050：干净行全量开，无数量槽（实现拆 paper_cfd_open.go）。
-	discOpened, sk, err := openCfdDiscovery(ctx, st, rows, activeStructKeys, flags, view, now, opts, dataLost)
+	discOpened, sk, err := openCfdDiscovery(ctx, st, rows, activeStructKeys, flags, view, uni, now, opts, dataLost)
 	if err != nil {
 		return opened, exited, err
 	}
 	opened = append(opened, discOpened...)
-	log.Printf("[cfd paper] 本轮 opened=%d cooldown=%d stale=%d below_floor=%d over_band=%d",
-		len(opened), sk.cooldown+skipCooldown, sk.stale, sk.belowFloor, sk.overBand)
+	log.Printf("[cfd paper] 本轮 opened=%d cooldown=%d stale=%d below_floor=%d over_band=%d uncoverable=%d",
+		len(opened), sk.cooldown+skipCooldown, sk.stale, sk.belowFloor, sk.overBand, sk.uncoverable+len(uncoverable))
 	// ② 累积 + ③ 退出（仅 cfd 行；spot 轨行不归本函数）——D-474a 起拆至 paper_cfd_accrue.go。
 	n, err := accrueExitCfdPaper(ctx, st, accrable, rowByKey, dirtyPair, silentMt, view, now) // D-028 ③：dirty=suspend 判定走 venue 对级（结构无关）
 	if err != nil {

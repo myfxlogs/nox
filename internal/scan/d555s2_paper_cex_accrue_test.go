@@ -191,6 +191,7 @@ func TestD555S2_MtCexUntouched(t *testing.T) {
 	ctx := context.Background()
 	// cfd 行：本轨步进零触碰（structure 不同键）。
 	rows := []UniverseRow{d374Row("XAUUSD", "3001157", "gate", "long_cfd_short_perp", 10.95, "")}
+	d144BookCover(t, s, "XAUUSD", "3001157", "gate") // D-144 ③
 	if opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil || len(opened) != 1 {
 		t.Fatalf("cfd open: %v", err)
 	}

@@ -21,6 +21,7 @@ func TestD056_ExitNoteCfd(t *testing.T) {
 	swapLong := 4.2
 	row := UniverseRow{Canonical: "D056X", MtVenue: "277842155", CexVenue: "binance",
 		NetAnnual: 10.95, FundingAnn: 11.10, SwapLongPct: &swapLong, Structure: "long_cfd_short_perp"}
+	d144BookCover(t, s, "D056X", "277842155", "binance") // D-144 ③
 	if opened, _, err := StepPaperCfdCarry(ctx, s, []UniverseRow{row}, time.Now(), d410Opts(), nil); err != nil || len(opened) != 1 {
 		t.Fatalf("open: opened=%v err=%v", opened, err)
 	}

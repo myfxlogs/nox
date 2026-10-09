@@ -169,6 +169,7 @@ func TestD410_CfdMonitorBasis(t *testing.T) {
 	pair := "D410CUSDT-D410C"
 	d410SeedMonitor(t, s, pair, time.Now().Add(-time.Minute), 12.0) // entry=+12
 	rows := []UniverseRow{d374Row("D410C", "3001157", "okx", "long_cfd_short_perp", 10.95, "")}
+	d144BookCover(t, s, "D410C", "3001157", "okx") // D-144 ③
 	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
 	if err != nil || len(opened) != 1 {
 		t.Fatalf("open: %v opened=%v", err, opened)
@@ -237,7 +238,9 @@ func TestD410_GuaranteedSlot(t *testing.T) {
 	// 6 个 top-N 合格行 + 保底行同轮并存——全量开（D-050 无槽）
 	for i, sym := range []string{"D410A", "D410B", "D410E", "D410F", "D410H", "D410I"} {
 		rows = append(rows, d374Row(sym, "277842155", "binance", "long_cfd_short_perp", 20.0-float64(i), ""))
+		d144BookCover(t, s, sym, "277842155", "binance") // D-144 ③
 	}
+	d144BookCover(t, s, "D410G", "3001157", "okx") // D-144 ③：保底行同闸
 	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
 	if err != nil {
 		t.Fatalf("step: %v", err)
@@ -260,6 +263,7 @@ func TestD410_GuaranteedFlap(t *testing.T) {
 	ctx := context.Background()
 	d410SeedCombo(t, s, "D410FUSD", "3001157:mt5", "D410FUSDT", "okx:perp", false)
 	rows := []UniverseRow{d374Row("D410F", "3001157", "okx", "long_cfd_short_perp", 2.0, "")}
+	d144BookCover(t, s, "D410F", "3001157", "okx") // D-144 ③
 	// 开 → 退（miss×3 → data_lost，D-474a S4 连缺阈值）→ 下轮保底在冷却内不得重开
 	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil {
 		t.Fatalf("open: %v", err)

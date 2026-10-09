@@ -152,8 +152,9 @@ func TestD463_CfdLegFlagBlocks(t *testing.T) {
 	if err != nil || len(opened) != 0 || len(st.rows) != 0 {
 		t.Fatalf("leg blocked: opened=%v rows=%d err=%v", opened, len(st.rows), err)
 	}
-	// 对照：无关 venue 旗→照开。
+	// 对照：无关 venue 旗→照开。D-144 ③：簿可覆盖前置（mt tick 种子）。
 	st2 := newFakeMtmPaperStore()
+	st2.ticks["277842155|SOL"] = []pgstore.TickRow{{Ts: time.Now(), Venue: "277842155", Symbol: "SOL", Bid: 1, Ask: 1}}
 	opened, _, err = StepPaperCfdCarry(ctx, st2, rows, time.Now(), d410Opts(), map[string]pgstore.VenueSymbolFlag{
 		pgstore.FlagKey("okx", "SOL"): {Venue: "okx", Symbol: "SOL", Level: "blocked", Reason: "异 venue"},
 	})

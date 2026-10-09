@@ -24,6 +24,7 @@ func TestD374_CfdOpen_ComboVenue(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
 	rows := []UniverseRow{d374Row("SOL", "277842155", "binance", "long_cfd_short_perp", 10.95, "")}
+	d144BookCover(t, s, "SOL", "277842155", "binance") // D-144 ③
 	opened, exited, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
 	if err != nil {
 		t.Fatalf("step: %v", err)
@@ -82,6 +83,7 @@ func TestD374_CfdExit_MissStreak(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
 	rows := []UniverseRow{d374Row("SOL", "277842155", "binance", "long_cfd_short_perp", 10.95, "")}
+	d144BookCover(t, s, "SOL", "277842155", "binance") // D-144 ③
 	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -138,26 +140,27 @@ func TestD374_CfdAccrual(t *testing.T) {
 	// 共享测试库 facts 历史行会盖过本次种子（LatestFacts 取 max ts）——钉钟语义下
 	// 先清本测试用键，隔离旧 run 残留。
 	for _, q := range []string{
-		`DELETE FROM facts WHERE venue='binance' AND symbol='SOL'`,
-		`DELETE FROM facts WHERE venue='277842155' AND symbol='SOLUSD'`,
+		`DELETE FROM facts WHERE venue='binance' AND symbol='D374X'`,
+		`DELETE FROM facts WHERE venue='277842155' AND symbol='D374XUSD'`,
 	} {
 		if _, err := s.Pool().Exec(ctx, q); err != nil {
 			t.Fatalf("facts clean: %v", err)
 		}
 	}
-	rows := []UniverseRow{d374Row("SOL", "277842155", "binance", "long_cfd_short_perp", 10.95, "")}
+	rows := []UniverseRow{d374Row("D374X", "277842155", "binance", "long_cfd_short_perp", 10.95, "")}
 	// D-474a S1：结算对齐累积需双腿事实面——cex funding 边界+MT swap 边界+符号映射。
-	seedUni(t, s, "binance", "SOL", "TRADING", "T3", 72*time.Hour, 11.1)
-	seedSettleFacts(t, s, "binance", "SOL", now)
+	seedUni(t, s, "binance", "D374X", "TRADING", "T3", 72*time.Hour, 11.1)
+	seedSettleFacts(t, s, "binance", "D374X", now)
 	if _, err := s.Pool().Exec(ctx, `INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('277842155','mt5','h',443,'p') ON CONFLICT (venue) DO NOTHING; INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, is_primary)
-		VALUES ('277842155','SOLUSD','SOL',true) ON CONFLICT DO NOTHING`); err != nil {
+		VALUES ('277842155','D374XUSD','D374X',true) ON CONFLICT DO NOTHING`); err != nil {
 		t.Fatalf("seed symbol map: %v", err)
 	}
 	if err := s.InsertFacts(ctx, []fact.Fact{
-		{Kind: "swap_long", Venue: "277842155", Symbol: "SOLUSD", Value: 0, Ts: now}, // swap-free 腿=0
+		{Kind: "swap_long", Venue: "277842155", Symbol: "D374XUSD", Value: 0, Ts: now}, // swap-free 腿=0
 	}); err != nil {
 		t.Fatalf("seed swap facts: %v", err)
 	}
+	d144BookCover(t, s, "D374X", "277842155", "binance") // D-144 ③
 	if _, _, err := StepPaperCfdCarry(ctx, s, rows, now, d410Opts(), nil); err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -184,7 +187,7 @@ func TestD374_CfdAccrual(t *testing.T) {
 		t.Fatalf("锚B5: net=10.95 want streak=0, got %d", p.LowStreak)
 	}
 	// 下一轮 net=7 → streak=1（未达 2 轮不退）且照常累积
-	low := []UniverseRow{d374Row("SOL", "277842155", "binance", "long_cfd_short_perp", 7, "")}
+	low := []UniverseRow{d374Row("D374X", "277842155", "binance", "long_cfd_short_perp", 7, "")}
 	if _, exited, err := StepPaperCfdCarry(ctx, s, low, time.Now(), d410Opts(), nil); err != nil || exited != 0 {
 		t.Fatalf("low round: err=%v exited=%d", err, exited)
 	}

@@ -78,6 +78,7 @@ func TestD028_LongRowWeekendNoAdverse(t *testing.T) {
 		{Canonical: "XAU", MtVenue: "3001157", CexVenue: "okx", NetAnnual: -12.0, FundingAnn: 0,
 			Structure: "short_cfd_long_perp"},
 	}
+	d144BookCover(t, s, "XAU", "3001157", "okx") // D-144 ③：开仓须簿可覆盖（tick+合约）
 	if _, _, err := StepPaperCfdCarry(ctx, s, rows, now, d410Opts(), nil); err != nil {
 		t.Fatalf("open: %v", err)
 	}

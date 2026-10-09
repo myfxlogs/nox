@@ -144,6 +144,7 @@ func TestD555_CfdSlotSilentForSpotPerp(t *testing.T) {
 	// mt×cex 回归：universe 行在 → cfd 轨照常开（StepPaperCfdCarry 既有测试族已锚，
 	// 此处仅验 spot×perp combo 未挤占/未污染 cfd 槽判定）。
 	rows := []UniverseRow{d374Row("XAUUSD", "3001157", "gate", "long_cfd_short_perp", 10.95, "")}
+	d144BookCover(t, s, "XAUUSD", "3001157", "gate") // D-144 ③
 	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
 	if err != nil || len(opened) != 1 {
 		t.Fatalf("mt×cex 回归: opened=%v err=%v", opened, err)

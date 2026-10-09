@@ -85,6 +85,7 @@ func d550AccrueCaseAt(t *testing.T, cexVenue, rawSym, canonical, factSym string,
 		t.Fatalf("seed swap facts: %v", err)
 	}
 	rows := []UniverseRow{d374Row(canonical, "277842155", cexVenue, "long_cfd_short_perp", 10.95, "")}
+	d144BookCover(t, s, canonical, "277842155", cexVenue) // D-144 ③
 	if _, _, err := StepPaperCfdCarry(ctx, s, rows, now, d410Opts(), nil); err != nil {
 		t.Fatalf("open: %v", err)
 	}

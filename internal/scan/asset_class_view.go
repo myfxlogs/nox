@@ -114,3 +114,30 @@ func (v *assetClassView) cfdPairCandidates(symbol, cexVenue, mtVenue string) []s
 	}
 	return out
 }
+
+// CfdBookSpec D-144：簿对展开的写侧投影——每候选带 exSym（该 MT 账户 ticks 实查键）
+// 与 CexCanon（DB 键形 perp canonical，调用方按 venue 约定转原生符号）。pair 键集与
+// cfdPairCandidates 逐行同序（读侧候选=写侧簿行，单源防公式漂移）。
+type CfdBookSpec struct{ Pair, ExSym, CexCanon string }
+
+func (v *assetClassView) cfdBookSpecs(canonical, cexVenue, mtVenue string) []CfdBookSpec {
+	mt := v.mtCanon(canonical, mtVenue)
+	if mt == "" {
+		mt = canonical // 无 equiv 行退 legacy 口径（与 cfdPairCandidates 首候选同域）
+	}
+	out := []CfdBookSpec{{Pair: paperCfdPairKey(canonical), ExSym: mt, CexCanon: canonical + "USDT"}}
+	if v.mtCanon(canonical, mtVenue) != "" {
+		for _, cc := range v.cexCanons(canonical, cexVenue) {
+			p := cc + "-" + strings.TrimSuffix(mt, "USD")
+			if p != out[0].Pair {
+				out = append(out, CfdBookSpec{Pair: p, ExSym: mt, CexCanon: cc})
+			}
+		}
+	}
+	return out
+}
+
+// CfdBookSpecs 跨包出口：xasset-monitor 簿派生与开仓覆盖闸共用（equiv=ListAssetEquiv 行集）。
+func CfdBookSpecs(equiv []pgstore.AssetEquivEntry, canonical, cexVenue, mtVenue string) []CfdBookSpec {
+	return newAssetClassView(equiv).cfdBookSpecs(canonical, cexVenue, mtVenue)
+}

@@ -78,7 +78,8 @@ type fakeMtmPaperStore struct {
 	// D-122：注入钟面——EntryTs/LastAccrueTs 与步进轮 now 同钟；零值回落墙钟
 	// （真实钟测试不变）。混双钟曾使 base=真实 now 越过注入轮，UTC 日界空窗
 	// accrue 恒 0（D-465 T2 腐化根因）。
-	now time.Time
+	now    time.Time
+	alerts []string // D-144：InsertAlert 留痕（level|msg）
 }
 
 func newFakeMtmPaperStore() *fakeMtmPaperStore {
@@ -224,7 +225,10 @@ func (f *fakeMtmPaperStore) LoadXAssetAllowCombos(context.Context, string) ([]pg
 func (f *fakeMtmPaperStore) LatestPaperExitTs(context.Context, string, string, string) (*time.Time, error) {
 	return nil, nil
 }
-func (f *fakeMtmPaperStore) InsertAlert(context.Context, *int64, string, string) error { return nil }
+func (f *fakeMtmPaperStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
+	f.alerts = append(f.alerts, level+"|"+msg) // D-144：闸/哨兵断言面
+	return nil
+}
 
 // mtmFixture 两 MT 商 swap facts（bps_daily；annualized=mean×365/100）。
 // venueB swap_short +3bps/d → +10.95%/yr；venueA swap_long −1bps/d → −3.65%/yr。

@@ -5,25 +5,30 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 	"time"
 
 	"arb/internal/store/pgstore"
 )
 
-// cfdSkipCounts D-050 ②：发现段跳过原因计数（log 口径，cooldown=flap+data_lost 合并）。
+// cfdSkipCounts D-050 ②：发现段跳过原因计数（log 口径，cooldown=flap+data_lost 合并；
+// D-144 ③：uncoverable=簿结构性不可覆盖拒开数）。
 type cfdSkipCounts struct {
-	cooldown, stale, belowFloor, overBand int
+	cooldown, stale, belowFloor, overBand, uncoverable int
 }
 
 // openCfdDiscovery D-050 发现段：干净行（Note==""∧net∈[8,300]）全量按
 // (canonical, mt, cex, structure) 开纸面行——数量槽退役，只留质量闸+双冷却
 // （flap ReopenCooldown + D-042 data_lost）；blocked flag 逐行 log 不计数。
+// D-144 ③：簿结构性不可覆盖（CEX 无报价源/合约、MT 保留窗零 tick）→不开记因聚合 warn。
 // 计数+candidates 构造与开仓循环自 StepPaperCfdCarry 拆出（文件 ≤300 行）。
 func openCfdDiscovery(ctx context.Context, st PaperStore, rows []UniverseRow, activeStructKeys map[string]struct{},
-	flags map[string]pgstore.VenueSymbolFlag, view *assetClassView, now time.Time, opts PaperCfdOpts,
+	flags map[string]pgstore.VenueSymbolFlag, view *assetClassView, uni map[string]pgstore.CexUniverseRow,
+	now time.Time, opts PaperCfdOpts,
 	dataLost func(venueA, venueB, symbol string) bool) ([]string, cfdSkipCounts, error) {
 	opened := []string{}
 	var sk cfdSkipCounts
+	var blocked []string // D-144 ③：簿不可覆盖拒开留痕（聚合 warn 每轮至多一条）
 	type cfdCand struct {
 		venueCombo string
 		r          UniverseRow
@@ -72,6 +77,12 @@ func openCfdDiscovery(ctx context.Context, st PaperStore, rows []UniverseRow, ac
 			sk.cooldown++
 			continue
 		}
+		// D-144 ③：簿结构性不可覆盖→不开记因（测不了的仓不验证）。
+		if reason := bookUncoverableReason(ctx, st, uni, view, c.r.Canonical, c.r.MtVenue, c.r.CexVenue, now); reason != "" {
+			sk.uncoverable++
+			blocked = append(blocked, c.venueCombo+"|"+c.r.Canonical+"（"+reason+"）")
+			continue
+		}
 		if err := insertCfdPaper(ctx, st, c.r, c.r.MtVenue, c.r.CexVenue, view, now); err != nil {
 			if err == pgstore.ErrPaperExists {
 				continue
@@ -79,6 +90,11 @@ func openCfdDiscovery(ctx context.Context, st PaperStore, rows []UniverseRow, ac
 			return nil, sk, fmt.Errorf("cfd paper step: open %s: %w", c.venueCombo, err)
 		}
 		opened = append(opened, c.r.Canonical)
+	}
+	if len(blocked) > 0 {
+		if err := st.InsertAlert(ctx, nil, "warn", "[cfd 纸面发现] 簿结构性不可覆盖拒开（测不了的仓不验证）: "+strings.Join(blocked, ", ")); err != nil {
+			log.Printf("[cfd paper] discovery uncoverable alert: %v", err)
+		}
 	}
 	return opened, sk, nil
 }

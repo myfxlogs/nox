@@ -59,6 +59,7 @@ func TestD034_FundingMeanSaturdayOpen(t *testing.T) {
 	}
 	// ② 开仓：瞬时=0 行不误杀——net≥8 top-N 可开
 	s := d410Store(t)
+	d144BookCover(t, s, "XAU", "3001157", "okx") // D-144 ③：开仓须簿可覆盖
 	opened, _, err := StepPaperCfdCarry(ctx, s, res.Rows, now, d410Opts(), nil)
 	if err != nil {
 		t.Fatalf("step: %v", err)

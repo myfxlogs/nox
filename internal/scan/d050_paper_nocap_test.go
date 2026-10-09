@@ -31,6 +31,7 @@ func TestD050_StaleRowsNotOpen(t *testing.T) {
 		d374Row("D05SUS", "277842155", "binance", "long_cfd_short_perp", 30, "suspect"),
 		d374Row("D05STL", "277842155", "binance", "long_cfd_short_perp", 25, "stale"),
 	}
+	d144BookCover(t, s, "D05OK", "277842155", "binance") // D-144 ③
 	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
 	if err != nil {
 		t.Fatalf("step: %v", err)
@@ -51,6 +52,7 @@ func TestD050_DataLostCooldownDiscovery(t *testing.T) {
 	row := func() []UniverseRow {
 		return []UniverseRow{d374Row("D05DL", "277842155", "binance", "long_cfd_short_perp", 20, "")}
 	}
+	d144BookCover(t, s, "D05DL", "277842155", "binance") // D-144 ③
 	// keepAlive 保持 venue 非 silent（D-500），D05DL 本体缺席 → miss_streak 步进。
 	keepAlive := []UniverseRow{d374Row("D05KA", "277842155", "binance", "long_cfd_short_perp", 0, "suspect")}
 	missOut := func() { // 行缺席 3 轮 → data_lost 退出（D-474a S4 连缺阈值）
@@ -99,6 +101,7 @@ func TestD050_DiscoveryFlapCooldown(t *testing.T) {
 		t.Fatalf("seed exit row: %v", err)
 	}
 	rows := []UniverseRow{d374Row("D05FL", "277842155", "binance", "long_cfd_short_perp", 20, "")}
+	d144BookCover(t, s, "D05FL", "277842155", "binance") // D-144 ③
 	if opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil || len(opened) != 0 {
 		t.Fatalf("flap 冷却内应不开: opened=%v err=%v", opened, err)
 	}

@@ -51,6 +51,9 @@ func TestD050_AllCleanOpen_NoCap(t *testing.T) {
 	for i := 1; i <= 6; i++ {
 		rows = append(rows, d374Row(fmt.Sprintf("NC%d", i), "acct1", "gate", "long_cfd_short_perp", 10, ""))
 	}
+	for _, r := range rows {
+		d144BookCover(t, s, r.Canonical, r.MtVenue, r.CexVenue) // D-144 ③
+	}
 	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
 	if err != nil {
 		t.Fatalf("step: %v", err)
@@ -66,6 +69,9 @@ func TestD050_AllCleanOpen_NoCap(t *testing.T) {
 	rows2 := []UniverseRow{
 		d374Row("US30", "acct7", "gate", "long_cfd_short_perp", 10, ""),
 		d374Row("NC7", "acct1", "gate", "long_cfd_short_perp", 10, ""),
+	}
+	for _, r := range rows2 {
+		d144BookCover(t, s, r.Canonical, r.MtVenue, r.CexVenue) // D-144 ③
 	}
 	opened2, _, err := StepPaperCfdCarry(ctx, s, rows2, time.Now(), d410Opts(), nil)
 	if err != nil {
