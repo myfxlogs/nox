@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 
 	"arb/internal/notify"
 	"arb/internal/store/pgstore"
@@ -46,7 +45,13 @@ func checkAlerts(entrySpread, exitSpread, entryNet, fundingAnnual, fundingRate, 
 }
 
 func sendFeishuAlert(ctx context.Context, st *pgstore.Store, alerts []alertItem, rec *pgstore.XassetMonitor) {
-	appID, appSecret := os.Getenv("ARB_FEISHU_APP_ID"), os.Getenv("ARB_FEISHU_APP_SECRET")
+	// D-145：凭据只认 app_secrets（env 已退役，run.sh 置空——与 pushFatalFeishu 同轨）。
+	secrets, serr := st.LoadAppSecrets(ctx)
+	if serr != nil {
+		log.Printf("xasset-monitor: app_secrets 读取失败，告警跳过（%d 项）: %v", len(alerts), serr)
+		return
+	}
+	appID, appSecret := secrets["ARB_FEISHU_APP_ID"], secrets["ARB_FEISHU_APP_SECRET"]
 	fc := notify.NewFeishuClient(appID, appSecret)
 	if appID == "" || appSecret == "" || !fc.Enabled() {
 		log.Printf("xasset-monitor: 飞书未配置/未启用，告警跳过（%d 项）", len(alerts))

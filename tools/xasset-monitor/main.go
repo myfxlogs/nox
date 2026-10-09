@@ -14,16 +14,33 @@ import (
 	"math"
 	"os"
 
+	"arb/internal/httpx"
 	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
+
+// configureHttpxProxy D-145：httpx.Client 代理 CA+token 注入——唯一权威=
+// app_config ARB_BINANCE_PROXY_CA + app_secrets ARB_BINANCE_PROXY_TOKEN（env 读径封死；
+// 读败→空值注入降级运行，代理调用失败处自现错）。
+func configureHttpxProxy(ctx context.Context, st *pgstore.Store) {
+	var caPath, token string
+	if rows, err := st.LoadAppConfig(ctx); err == nil {
+		caPath = rows["ARB_BINANCE_PROXY_CA"]
+	}
+	if secrets, err := st.LoadAppSecrets(ctx); err == nil {
+		token = secrets["ARB_BINANCE_PROXY_TOKEN"]
+	}
+	httpx.Configure(caPath, token, nil)
+}
 
 func main() {
 	ctx := context.Background()
 	backfill := flag.Bool("backfill", false, "D-341 S5：价差史深回填（ticks×klines 5min 对齐，src=backfill）")
 	flag.Parse()
 	if *backfill {
-		if err := runBackfillMode(ctx); err != nil {
+		dsn := os.Getenv("DB_DSN")                          // D-145 引导件：连库前必需
+		exnessVenue := os.Getenv("ARB_XASSET_EXNESS_VENUE") // D-144 域：删除而非迁移（暂留 bootstrap 读）
+		if err := runBackfillMode(ctx, dsn, exnessVenue); err != nil {
 			log.Fatalf("xasset-monitor backfill: %v", err)
 		}
 		return
@@ -43,6 +60,7 @@ func run(ctx context.Context) (err error) {
 		return fmt.Errorf("connect pg: %w", err)
 	}
 	defer st.Close()
+	configureHttpxProxy(ctx, st) // D-145：代理 CA+token 注入（app_config/app_secrets 唯一权威）
 	// D-558 S2：named-return defer 单点捕获——启动/执行致命错统一进 reportFatal
 	// （alerts critical + app_secrets 飞书直推 + 30min 去重；pair skip 不进此通道）。
 	defer func() { reportFatal(ctx, st, err) }()

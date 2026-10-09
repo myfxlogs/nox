@@ -6,23 +6,12 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"arb/internal/notify"
 	"arb/internal/store/pgstore"
 )
-
-func envFloat(key string, def float64) float64 {
-	if v := os.Getenv(key); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			return f
-		}
-	}
-	return def
-}
 
 func launchPtr(t time.Time) *time.Time {
 	if t.IsZero() {
@@ -165,10 +154,9 @@ func pushAndBookkeep(ctx context.Context, st radarStore, send func(context.Conte
 	return nil
 }
 
-// sendRadarAlert 飞书批量推送（凭据/chat_id 缺失/发送失败=返回 error，调用侧不落状态）。
-func sendRadarAlert(ctx context.Context, st radarStore, lines []string) error {
-	appID := os.Getenv("ARB_FEISHU_APP_ID")
-	appSecret := os.Getenv("ARB_FEISHU_APP_SECRET")
+// sendRadarAlert 飞书批量推送（凭据由调用方从 app_secrets 注入——D-145 env 直读退役；
+// 缺失/发送失败=返回 error，调用侧不落状态）。
+func sendRadarAlert(ctx context.Context, st radarStore, appID, appSecret string, lines []string) error {
 	if appID == "" || appSecret == "" {
 		log.Printf("universe-radar: 飞书凭据未配置，告警跳过（%d 条）", len(lines))
 		return fmt.Errorf("feishu credentials not configured")

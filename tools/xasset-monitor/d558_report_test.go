@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 
@@ -30,11 +29,10 @@ func d558Store(t *testing.T) *pgstore.Store {
 	return s
 }
 
-// T1：env 置空 + app_config 行 → binanceProxyURL 回 DB 值且 os.Getenv 已被 overlay 置位。
+// T1（D-145 改锚）：app_config 行 → binanceProxyURL 回 DB 值（唯一权威，env 读径封死）。
 func TestD558_AppConfigOverlayWins(t *testing.T) {
 	s := d558Store(t)
 	ctx := context.Background()
-	t.Setenv("BINANCE_PROXY_URL", "")
 	if _, err := s.Pool().Exec(ctx,
 		`INSERT INTO app_config (key, value) VALUES ('BINANCE_PROXY_URL', 'https://db-proxy.example')`); err != nil {
 		t.Fatalf("seed app_config: %v", err)
@@ -43,22 +41,12 @@ func TestD558_AppConfigOverlayWins(t *testing.T) {
 	if err != nil || got != "https://db-proxy.example" {
 		t.Fatalf("want DB 值, got %q err=%v", got, err)
 	}
-	if v := os.Getenv("BINANCE_PROXY_URL"); v != "https://db-proxy.example" {
-		t.Fatalf("overlay 后 env 应置位 DB 值, got %q", v)
-	}
-	// DB>env 次序：env 有不同值时 DB 行覆盖。
-	t.Setenv("BINANCE_PROXY_URL", "https://env-proxy.example")
-	got, err = binanceProxyURL(ctx, s)
-	if err != nil || got != "https://db-proxy.example" {
-		t.Fatalf("DB 行应覆盖 env, got %q err=%v", got, err)
-	}
 }
 
-// T2：app_config 无行 + env 未设 → error 含 app_config；reportFatal 落 critical 行。
+// T2：app_config 无行 → error 含 app_config；reportFatal 落 critical 行。
 func TestD558_MissingSourceFatal(t *testing.T) {
 	s := d558Store(t)
 	ctx := context.Background()
-	t.Setenv("BINANCE_PROXY_URL", "")
 	got, err := binanceProxyURL(ctx, s)
 	if err == nil || got != "" {
 		t.Fatalf("双缺应报错, got %q err=%v", got, err)
