@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"time"
 
@@ -250,13 +249,16 @@ func (p *Pipeline) verifyResidualOrErr(ctx context.Context, posID int64, legs, a
 	return nil
 }
 
-// legTickWindow 可平性判定窗口（默认 30min，ARB_LEG_TICK_WINDOW 可调）。
-// 采样器 60s 节流按事件写入——冻结报价产生同 bid 行，DISTINCT 判据天然识别。
-func legTickWindow() time.Duration {
-	if v := os.Getenv("ARB_LEG_TICK_WINDOW"); v != "" {
-		if d, err := time.ParseDuration(v); err == nil && d > 0 {
-			return d
-		}
+// legWindow 可平性判定窗口（默认 30min；D-145 env 收口——装配层 SetLegTickWindow
+// 注入 cfg 值，本包不再直读 env）。
+var legWindow = 30 * time.Minute
+
+// SetLegTickWindow boot 注入判定窗（<=0 忽略；先于 pipeline 构造调用）。
+func SetLegTickWindow(d time.Duration) {
+	if d > 0 {
+		legWindow = d
 	}
-	return 30 * time.Minute
 }
+
+// legTickWindow 采样器 60s 节流按事件写入——冻结报价产生同 bid 行，DISTINCT 判据天然识别。
+func legTickWindow() time.Duration { return legWindow }

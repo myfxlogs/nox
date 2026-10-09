@@ -13,7 +13,6 @@ import (
 	"crypto/tls"
 	"log"
 	"net"
-	"os"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -62,10 +61,14 @@ var dialAnchor = func(addr string) error {
 	return conn.Close()
 }
 
-// egressAnchors 锚点集（env 覆盖，trim 空段；env 只含分隔符=空集→canary 停用显式报缺）。
-func egressAnchors() []string {
-	raw := os.Getenv(cfgEgressAnchors)
-	if raw == "" {
+// egressAnchors 锚点集（app_config 行覆盖，trim 空段；行只含分隔符=空集→canary
+// 停用显式报缺；行缺→内置默认。D-145 env 收口——store=PG 权威读）。
+func egressAnchors(ctx context.Context, d Deps) []string {
+	raw, ok, err := d.Store.AppConfigString(ctx, cfgEgressAnchors)
+	if err != nil {
+		log.Printf("[canary] %s 读取失败（按缺省锚点集跑）: %v", cfgEgressAnchors, err)
+	}
+	if !ok || raw == "" {
 		return defaultEgressAnchors
 	}
 	var out []string
@@ -93,7 +96,7 @@ func probeEgress(anchors []string) int {
 // canaryLoop 常驻：启动即拍 → 60s 定点拍（看门狗形态：timer 定点唤醒，拍内全量重测，
 // 不缓存上拍结果作现值）。
 func canaryLoop(ctx context.Context, d Deps) {
-	anchors := egressAnchors()
+	anchors := egressAnchors(ctx, d)
 	if len(anchors) == 0 {
 		log.Printf("[canary] %s 空——锚点集缺，出口 canary 停用（显式报缺）", cfgEgressAnchors)
 		return

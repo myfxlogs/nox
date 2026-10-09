@@ -153,7 +153,8 @@ func TestCEXAccount_OKXSimulated(t *testing.T) {
 // 带 X-Proxy-Token 头（静态代理防开放中继鉴权，D-055；D-364 v2 起 ticker 不再调用，
 // 仅签名 account 请求）。
 func TestCEXAccount_BinanceProxyToken(t *testing.T) {
-	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-123")
+	httpx.Configure("", "tok-123", nil)
+	defer httpx.Configure("", "", nil)
 	var gotHeaders []http.Header
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotHeaders = append(gotHeaders, r.Header.Clone())
@@ -257,7 +258,8 @@ func TestHttpxClientTrustsProxyCA(t *testing.T) {
 	if err := os.WriteFile(caFile, caPEM, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("ARB_BINANCE_PROXY_CA", caFile)
+	httpx.Configure(caFile, "", nil)
+	defer httpx.Configure("", "", nil)
 
 	resp, err := httpx.Client().Get(ts.URL)
 	if err != nil {

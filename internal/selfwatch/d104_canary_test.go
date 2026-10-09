@@ -150,19 +150,21 @@ func TestD104_CanaryPartialOK(t *testing.T) {
 	}
 }
 
-// TestD104_EgressAnchors env 覆盖解析：缺省三锚 / env 逗号分隔 trim / 全分隔符=空集停用形态。
+// TestD104_EgressAnchors（D-145 改锚：app_config 行覆盖解析）：行缺→三锚缺省 /
+// 逗号分隔 trim / 全分隔符=空集停用形态。
 func TestD104_EgressAnchors(t *testing.T) {
-	t.Setenv(cfgEgressAnchors, "")
-	if len(egressAnchors()) != 3 {
-		t.Fatalf("缺省应三锚: %v", egressAnchors())
+	ctx := context.Background()
+	d := d104Deps(&fakeStore{})
+	if len(egressAnchors(ctx, d)) != 3 {
+		t.Fatalf("缺省应三锚: %v", egressAnchors(ctx, d))
 	}
-	t.Setenv(cfgEgressAnchors, " x:443 , y:443,,")
-	got := egressAnchors()
+	st := &fakeStore{cfg: map[string]string{cfgEgressAnchors: " x:443 , y:443,,"}}
+	got := egressAnchors(ctx, d104Deps(st))
 	if len(got) != 2 || got[0] != "x:443" || got[1] != "y:443" {
-		t.Fatalf("env 覆盖应 trim 空段: %v", got)
+		t.Fatalf("行覆盖应 trim 空段: %v", got)
 	}
-	t.Setenv(cfgEgressAnchors, " , ,")
-	if len(egressAnchors()) != 0 {
-		t.Fatalf("全分隔符应空集: %v", egressAnchors())
+	st.cfg[cfgEgressAnchors] = " , ,"
+	if len(egressAnchors(ctx, d104Deps(st))) != 0 {
+		t.Fatalf("全分隔符应空集: %v", egressAnchors(ctx, d104Deps(st)))
 	}
 }

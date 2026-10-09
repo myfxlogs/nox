@@ -30,7 +30,7 @@ func main() {
 	if *posID <= 0 {
 		log.Fatal("-pos 必填（position ID）")
 	}
-	dsn := os.Getenv("ARB_PG_DSN")
+	dsn := os.Getenv("ARB_PG_DSN") // D-145 引导件：连库前必需
 	if dsn == "" {
 		log.Fatal("ARB_PG_DSN 未设置")
 	}

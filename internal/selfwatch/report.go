@@ -8,7 +8,6 @@ package selfwatch
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -127,10 +126,7 @@ func paperWindowStart(ctx context.Context, d Deps) (time.Time, bool, error) {
 	if err != nil {
 		return time.Time{}, false, fmt.Errorf("window start: %w", err)
 	}
-	if !ok {
-		v = os.Getenv(cfgPaperWindowStart)
-	}
-	if v == "" {
+	if !ok || v == "" {
 		return time.Time{}, false, nil
 	}
 	// 秒位可选（播种值 2026-10-03T01:59Z 无秒；RFC3339 全形兼容）。

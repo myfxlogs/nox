@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -113,10 +112,7 @@ func checkMacroCalendar(ctx context.Context, d Deps, now time.Time, warn func(st
 		log.Printf("[selfwatch] macro enabled read: %v", err)
 		return
 	}
-	if !ok {
-		v = os.Getenv("ARB_MACRO_ENABLED")
-	}
-	if v != "true" {
+	if !ok || v != "true" {
 		return
 	}
 	ts, has, err := d.Store.MacroEventMaxCreated(ctx)
