@@ -9,31 +9,24 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 
 	"arb/internal/alerttext"
-	"arb/internal/config"
 	"arb/internal/notify"
 	"arb/internal/store/pgstore"
 )
 
-// binanceProxyURL D-558 S1：BINANCE_PROXY_URL 与 core 同源——LoadAppConfig→
-// ApplyAppConfigEnvOverlay（DB 行覆盖 env 值）。LoadAppConfig 败且 env 非空→
-// warn 明示临时回退 env；双缺（app_config 无行+env 未设）→ error（含 app_config 字样）。
+// binanceProxyURL D-558 S1→D-145：BINANCE_PROXY_URL 唯一权威=app_config 行
+// （env 读径物理封死——allowlist 只减不增）；LoadAppConfig 败 → error 上抛，
+// 行缺 → error（含 app_config 字样，fail-closed 不跑无代理配置）。
 func binanceProxyURL(ctx context.Context, st *pgstore.Store) (string, error) {
 	rows, err := st.LoadAppConfig(ctx)
 	if err != nil {
-		if v := os.Getenv("BINANCE_PROXY_URL"); v != "" {
-			log.Printf("xasset-monitor: app_config 读取失败，临时回退 env BINANCE_PROXY_URL: %v", err)
-			return v, nil
-		}
-		return "", fmt.Errorf("app_config 读取失败且 env 无 BINANCE_PROXY_URL: %w", err)
+		return "", fmt.Errorf("app_config 读取失败: %w", err)
 	}
-	config.ApplyAppConfigEnvOverlay(rows)
-	if v := os.Getenv("BINANCE_PROXY_URL"); v != "" {
+	if v := rows["BINANCE_PROXY_URL"]; v != "" {
 		return v, nil
 	}
-	return "", fmt.Errorf("BINANCE_PROXY_URL 未配置（app_config 无行且 env 未设），监控簿断更=待入场组合判过期")
+	return "", fmt.Errorf("BINANCE_PROXY_URL 未配置（app_config 无行），监控簿断更=待入场组合判过期")
 }
 
 // reportFatal S2 单点捕获：fatal err → alerts critical 行 + app_secrets 飞书直推。

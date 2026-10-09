@@ -15,6 +15,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,24 +30,52 @@ func main() {
 	}
 }
 
+// radarParamF64 D-145：app_config 行 → 缺省（env 读径封死——allowlist 只减不增）。
+func radarParamF64(rows map[string]string, key string, def float64) float64 {
+	if f, err := strconv.ParseFloat(rows[key], 64); err == nil {
+		return f
+	}
+	return def
+}
+
+// configureHttpxProxy D-145：代理 CA+token 注入（app_config/app_secrets 唯一权威，
+// env 读径封死；读败→空值注入降级运行，代理调用失败处自现错）。
+func configureHttpxProxy(ctx context.Context, st *pgstore.Store) {
+	var caPath, token string
+	if rows, err := st.LoadAppConfig(ctx); err == nil {
+		caPath = rows["ARB_BINANCE_PROXY_CA"]
+	}
+	if secrets, err := st.LoadAppSecrets(ctx); err == nil {
+		token = secrets["ARB_BINANCE_PROXY_TOKEN"]
+	}
+	httpx.Configure(caPath, token, nil)
+}
+
 func run(ctx context.Context) error {
 	dsn := os.Getenv("DB_DSN")
 	if dsn == "" {
 		return fmt.Errorf("DB_DSN 未设置")
 	}
-	proxy := os.Getenv("BINANCE_PROXY_URL")
-	if proxy == "" {
-		return fmt.Errorf("BINANCE_PROXY_URL 未设置")
-	}
-	fundingMinPct := envFloat("RADAR_FUNDING_MIN_PCT", 15)
-	volMinUSD := envFloat("RADAR_VOL_MIN_USD", 5e6)
-	divPct := envFloat("RADAR_DIV_PCT", 20)
 
 	st, err := pgstore.New(ctx, dsn)
 	if err != nil {
 		return fmt.Errorf("connect pg: %w", err)
 	}
 	defer st.Close()
+	// D-145：业务配置唯一权威=app_config 行（env 读径封死）。
+	cfgRows, err := st.LoadAppConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("app_config 读取失败: %w", err)
+	}
+	proxy := cfgRows["BINANCE_PROXY_URL"]
+	if proxy == "" {
+		return fmt.Errorf("BINANCE_PROXY_URL 未配置（app_config 无行）")
+	}
+	fundingMinPct := radarParamF64(cfgRows, "RADAR_FUNDING_MIN_PCT", 15)
+	volMinUSD := radarParamF64(cfgRows, "RADAR_VOL_MIN_USD", 5e6)
+	divPct := radarParamF64(cfgRows, "RADAR_DIV_PCT", 20)
+
+	configureHttpxProxy(ctx, st)
 	hc := httpx.Client()
 	now := time.Now()
 
@@ -215,8 +244,16 @@ func run(ctx context.Context) error {
 		if len(lines) > 0 {
 			// D-389 R0-A3/R2 + D-392 S5：ApplyRadarDigestRun 失败=上抛终止本轮
 			// （不落成员态下轮重试，错误可见——读侧 fail-open + 写侧静默吞错=永久重推）。
+			// D-145：飞书凭据只认 app_secrets（env 已退役——与 xasset-monitor 同轨）；
+			// 读取失败=凭据空串→sendRadarAlert 返 error（调用侧不落状态，下轮重试）。
+			var feishuID, feishuSecret string
+			if secrets, serr := st.LoadAppSecrets(ctx); serr == nil {
+				feishuID, feishuSecret = secrets["ARB_FEISHU_APP_ID"], secrets["ARB_FEISHU_APP_SECRET"]
+			} else {
+				log.Printf("universe-radar: app_secrets 读取失败，本轮告警凭据空: %v", serr)
+			}
 			if err := pushAndBookkeep(ctx, st, func(c context.Context, l []string) error {
-				return sendRadarAlert(c, st, l)
+				return sendRadarAlert(c, st, feishuID, feishuSecret, l)
 			}, lines, cur, pending, touches, now); err != nil {
 				return err
 			}

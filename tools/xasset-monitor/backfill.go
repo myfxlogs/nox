@@ -12,7 +12,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"sort"
 	"time"
 
@@ -141,8 +140,7 @@ func RunBackfill(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyU
 }
 
 // runBackfillMode D-341 S5：三对逐对回填（fail-open 同 live 轨 9-16 裁定）。
-func runBackfillMode(ctx context.Context) (err error) {
-	dsn := os.Getenv("DB_DSN")
+func runBackfillMode(ctx context.Context, dsn string) (err error) {
 	if dsn == "" {
 		return fmt.Errorf("DB_DSN 未设置")
 	}
@@ -153,11 +151,12 @@ func runBackfillMode(ctx context.Context) (err error) {
 	defer st.Close()
 	// D-558 S2：与 run() 同款 named-return defer 单点捕获 fatal 上报。
 	defer func() { reportFatal(ctx, st, err) }()
-	// D-558 S1：端点同源——store→LoadAppConfig→ApplyAppConfigEnvOverlay（DB>env）。
+	// D-145：端点唯一权威=app_config 行（env 读径封死）。
 	proxyURL, err := binanceProxyURL(ctx, st)
 	if err != nil {
 		return err
 	}
+	configureHttpxProxy(ctx, st)
 	hc := httpx.Client()
 	since := time.Now().Add(-5 * 24 * time.Hour) // MT ticks 保留窗（诚实边界）
 	var firstErr error
