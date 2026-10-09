@@ -35,14 +35,13 @@ func (s *Service) GetPnlAnchor(ctx context.Context, req *connect.Request[v1.GetP
 	if today, err := s.store.RealizedPnlToday(ctx); err == nil {
 		resp.RealizedToday = today
 	}
+	// D-141：当前浮动换源=全平到手口径（Σ active 仓 close_now_net_usd + Σ 游离 broker 腿
+	// close_now_estimate_usd）。缺一仓/一腿净估 → available=false 全格「—」（fail-closed，
+	// 断流腿随报价缺/快照陈旧 NULL 自然出局——上轮「断流冻结值当现值」洞一并闭合）。
 	if s.bpm != nil {
-		bpos := s.bpm.Snapshot()
-		var fsum float64
-		for _, p := range bpos {
-			fsum += p.Pnl + p.Swap + p.Commission
-		}
+		fsum, n, complete := s.floatingCloseNowNet(ctx)
 		resp.FloatingNetUsd = fsum
-		resp.FloatingAvailable = len(bpos) > 0 || s.anyAccountOnline()
+		resp.FloatingAvailable = complete && (n > 0 || s.anyAccountOnline())
 	}
 	// D-123：真北行 30d 净年化——selfwatch/stage2 同式（net/30*365/CapitalBase）。
 	// CapitalBase 缺或查询败 → available=false（前端「—」，不冒充 0）。
