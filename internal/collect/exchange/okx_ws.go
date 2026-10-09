@@ -37,6 +37,9 @@ type OKXWebSocket struct {
 	catalog *okxInstCatalog
 	// OnInstrumentChange instruments 频道变更帧回调，nil=不通知。
 	OnInstrumentChange func(instID string)
+	// pulseFn D-155 方案A：活性脉冲打点口（qbus.Touch 接线；nil=不记录）。
+	// mark-price（SWAP）/index-tickers（spot uly）帧到即调——只证订阅活不写报价值。
+	pulseFn func(symbol, venueKey string)
 }
 
 // NewOKXWebSocket 创建 OKX WS 采集器（ARB_CEX_WS_BASE 置位→经 cex-proxy /okxws 前缀）。
@@ -124,7 +127,14 @@ func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms []string, subscri
 				// D-509 S4：funding-rate 公共频道（SWAP 实例）同订阅件，
 				// ping 期差集增量覆盖 watchlist 新增。
 				map[string]string{"channel": "funding-rate", "instId": perpID},
+				// D-155 方案A：mark-price=SWAP 活性脉冲源（前置实证门：XAU-USDT-SWAP
+				// 实测 ~10 帧/s 密推，簿面静止期照流——薄品种 est 夹层根治脉冲）。
+				map[string]string{"channel": "mark-price", "instId": perpID},
 			)
+		}
+		if spotID != "" {
+			// D-155 方案A④：spot 薄品种活性脉冲=index-tickers（同 instId uly 系）。
+			args = append(args, map[string]string{"channel": "index-tickers", "instId": spotID})
 		}
 	}
 	return args
@@ -150,6 +160,13 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 	// D-509 S4：funding-rate 帧分流（fundingRate/fundingTime/nextFundingTime 三字段原生）。
 	if msg.Arg.Channel == "funding-rate" {
 		o.handleFundingRate(ctx, msg)
+		return false
+	}
+	// D-155 方案A②：mark-price/index-tickers=活性脉冲帧——channel 判别处早返
+	// （高频帧不走全量解析），只 Touch 脉冲不写报价值；非业务帧=false（脉冲
+	// 证明的是本频道活，tickers 独死不被掩——dataIdle 杀仍归其咎）。
+	if msg.Arg.Channel == "mark-price" || msg.Arg.Channel == "index-tickers" {
+		o.handlePulse(msg)
 		return false
 	}
 	// D-566 包B S6-d：instruments 变更帧 → 逐 instId 失效规格缓存（事件主失效通道）。
@@ -203,6 +220,26 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 	return true
 }
 
+// handlePulse D-155：脉冲帧→pulseFn(canonical, venueKey)——mark-price 帧按
+// SWAP 归 okx:perp，index-tickers 帧归 okx:spot（订阅面已定档不混）。data[]
+// 逐项打点（聚合帧多项各刷各键）；pulseFn nil=静默跳过。
+func (o *OKXWebSocket) handlePulse(msg wsMsg) {
+	if o.pulseFn == nil {
+		return
+	}
+	venueType := "spot"
+	if msg.Arg.Channel == "mark-price" {
+		venueType = "perp"
+	}
+	for _, it := range msg.Data {
+		instID, _ := it["instId"].(string)
+		if instID == "" {
+			continue
+		}
+		o.pulseFn(bus.CexSymbolKey(instID), VenueOKX+":"+venueType)
+	}
+}
+
 func parseOKXTS(s string) (time.Time, error) {
 	var ms int64
 	fmt.Sscanf(s, "%d", &ms)
@@ -228,6 +265,9 @@ func (o *OKXWebSocket) syms() []string { return o.cfg.effectiveSymbols("okx") }
 func (o *OKXWebSocket) SetFactEmit(fn func(ctx context.Context, fs []fact.Fact) error) {
 	o.emitFacts = fn
 }
+
+// SetPulseFn 注入活性脉冲打点口（D-155 方案A；wiring 期先于 Run；nil 安全）。
+func (o *OKXWebSocket) SetPulseFn(fn func(symbol, venueKey string)) { o.pulseFn = fn }
 
 // handleInstruments D-566 包B S6-d：instruments 目录变更帧 → data[].instId 逐个
 // 回调由装配层接 exec.OKXSpecInvalidate（一次 log 收敛）；未知字段 WarnUnconsumed 同既有模式。

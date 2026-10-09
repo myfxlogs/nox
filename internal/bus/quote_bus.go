@@ -32,6 +32,10 @@ type QuoteBus struct {
 	// 语义：首见不算变化（无条目=从未变化）；同值心跳不更新；价格值变化才记 time.Now()。
 	// 与 latest 同锁（latestMu），Publish 内原子更新。
 	lastChange map[string]map[string]time.Time
+	// D-155 方案A：lastPulse 记录 (canonical, venueKey) 上次「活性脉冲」时刻——
+	// mark-price/index-tickers 帧到即刷（簿面静止期的订阅活证据，不写报价值）。
+	// 与 latest 同锁，Touch 内原子更新；eval 域零消费（quote.Time 语义不变）。
+	lastPulse map[string]map[string]time.Time
 }
 
 // New 创建 QuoteBus。
@@ -40,6 +44,7 @@ func New() *QuoteBus {
 		subscribers: make(map[string][]*quoteSub),
 		latest:      make(map[string]map[string]Quote),
 		lastChange:  make(map[string]map[string]time.Time),
+		lastPulse:   make(map[string]map[string]time.Time),
 	}
 }
 
@@ -168,6 +173,16 @@ func (b *QuoteBus) EvictVenue(venue string) int {
 			delete(b.lastChange, sym)
 		}
 	}
+	for sym, venues := range b.lastPulse { // D-155：脉冲记录随 venue 同驱逐
+		for vk := range venues {
+			if keydomain.BareOf(vk) == venue {
+				delete(venues, vk)
+			}
+		}
+		if len(venues) == 0 {
+			delete(b.lastPulse, sym)
+		}
+	}
 	return n
 }
 
@@ -195,6 +210,29 @@ func (b *QuoteBus) AllLatest() []Quote {
 		}
 	}
 	return out
+}
+
+// Touch D-155 方案A：活性脉冲打点（mark-price/index-tickers 帧到即调）——
+// 簿面静止时 tickers 帧稀疏，脉冲证明该键订阅仍活；只刷时刻不写报价值。
+func (b *QuoteBus) Touch(symbol, venueKey string) {
+	b.latestMu.Lock()
+	defer b.latestMu.Unlock()
+	if b.lastPulse[symbol] == nil {
+		b.lastPulse[symbol] = make(map[string]time.Time)
+	}
+	b.lastPulse[symbol][venueKey] = time.Now()
+}
+
+// PulseAt 返回 (canonical, venueKey) 上次活性脉冲时刻（ok=false=从未有脉冲）。
+func (b *QuoteBus) PulseAt(symbol, venueKey string) (time.Time, bool) {
+	b.latestMu.RLock()
+	defer b.latestMu.RUnlock()
+	if venues, found := b.lastPulse[symbol]; found {
+		if t, ok := venues[venueKey]; ok {
+			return t, true
+		}
+	}
+	return time.Time{}, false
 }
 
 // LastChangeAt 返回 (canonical, venueKey) 上次价格值变化的时刻（D-155 freeze guard）。
