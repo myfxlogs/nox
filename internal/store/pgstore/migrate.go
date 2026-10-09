@@ -178,6 +178,7 @@ var migrationFiles = []struct {
 	{182, migrations.BinanceEarnSeedSQL},               // D-130 R1：binance:earn 凭据复制补种 + binance:funding 行摘除（A 案）
 	{183, migrations.DropBinanceEarnSQL},               // D-133：binance earn 面整体摘除（counter-migration 收口 0182）
 	{184, migrations.DropCnfiRepoSQL},                  // D-139：CNFI/逆回购面 13 表幂等 DROP（已备份）
+	{185, migrations.FactsKindTsIdxSQL},                // D-152 fixup：facts(kind,ts) retention 候选寻址
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
