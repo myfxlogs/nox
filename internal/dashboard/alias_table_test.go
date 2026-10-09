@@ -65,6 +65,34 @@ func TestMatchCanonical(t *testing.T) {
 		{"XAUUSDm", "XAUUSD", 1},
 		{"AUDCADm", "AUDCAD", 1}, // Exness cent 交叉盘
 		{"UK100m", "UK100", 1},   // Exness cent 指数
+		// D-148 XM '#' 后缀命名变体（剥 # 后命中别名）
+		{"BTCUSD#", "BTCUSDT", 1},
+		{"ETHUSD#", "ETHUSDT", 1},
+		{"SOLUSD#", "SOLUSDT", 1},
+		{"GOLD#", "XAUUSD", 1},
+		{"SILVER#", "SILVER", 1},
+		{"XPTUSD#", "XPTUSD", 1},
+		{"US100Cash#", "NAS100", 1},
+		{"US500Cash#", "SPX500", 1},
+		{"US30Cash#", "US30", 1},
+		{"OILCash#", "WTI", 1},
+		{"BRENTCash#", "BRENT", 1},
+		{"EU50Cash#", "STOXX50", 1},
+		{"SpainCash#", "ES35", 1},
+		{"EURCAD#", "EURCAD", 1},
+		{"MATICUSD#", "MATICUSDT", 1},
+		{"ATOMUSD#", "ATOMUSDT", 1},
+		// XM 误配闸：到期期货/非 USD 变体/主题篮/周末金不命中
+		{"US30-DEC26", "", 0},
+		{"BRENT-DEC26", "", 0},
+		{"OIL-NOV26", "", 0},
+		{"GOLD24-7#", "", 0},
+		{"XAUEUR#", "", 0},
+		{"BTCEUR#", "", 0},
+		{"ETHBTC#", "", 0},
+		{"AI_INDX#", "", 0},
+		{"Altcoins_INDX#", "", 0},
+		{"GAUUSD#", "", 0},
 		// 大小写不敏感
 		{"eurusd", "EURUSD", 1},
 		{"gold", "XAUUSD", 1},
@@ -138,13 +166,17 @@ func TestTrimCentSuffix(t *testing.T) {
 	tests := []struct {
 		in, out string
 	}{
-		{"EURUSDm", "EURUSD"},     // MT5 cent 后缀
-		{"BTCUSDm", "BTCUSD"},     // 加密 cent
-		{"#UK100", "UK100"},       // Pepperstone spot 指数 # 前缀
-		{"#Japan225", "Japan225"}, // Pepperstone spot 指数
-		{"EURUSD", "EURUSD"},      // 无后缀/前缀
-		{"GOLD365", "GOLD365"},    // 365 不处理（改变品种身份）
-		{"GOLDEURO", "GOLDEURO"},  // EURO 不处理
+		{"EURUSDm", "EURUSD"},        // MT5 cent 后缀
+		{"BTCUSDm", "BTCUSD"},        // 加密 cent
+		{"#UK100", "UK100"},          // Pepperstone spot 指数 # 前缀
+		{"#Japan225", "Japan225"},    // Pepperstone spot 指数
+		{"BTCUSD#", "BTCUSD"},        // XM # 后缀（D-148）
+		{"US100Cash#", "US100Cash"},  // XM # 后缀保内文
+		{"EURUSDm#", "EURUSD"},       // # 与 m 复合后缀
+		{"EURUSD", "EURUSD"},         // 无后缀/前缀
+		{"GOLD365", "GOLD365"},       // 365 不处理（改变品种身份）
+		{"GOLDEURO", "GOLDEURO"},     // EURO 不处理
+		{"US30-DEC26", "US30-DEC26"}, // 到期期货不处理
 	}
 	for _, tt := range tests {
 		got := trimCentSuffix(tt.in)

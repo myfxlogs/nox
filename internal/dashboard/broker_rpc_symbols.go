@@ -157,13 +157,23 @@ func (s *Service) AutoMapBroker(ctx context.Context, req *connect.Request[v1.Aut
 	if venue == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("venue 不能为空"))
 	}
+	results, applied, skipped, err := s.autoMapVenue(ctx, venue)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&v1.AutoMapBrokerResponse{Results: results, Applied: int32(applied), Skipped: int32(skipped)}), nil
+}
+
+// autoMapVenue 单 venue 自动映射内核（D-148 抽出：RPC 壳 + AutoMapSweep 周期面共用）。
+// 幂等：已有映射跳过；只应用 auto（名字+合约匹配），conflict/multi_hit/trade_disabled/no_match 不自动应用。
+func (s *Service) autoMapVenue(ctx context.Context, venue string) (results []*v1.AutoMapBrokerResult, applied, skipped int, err error) {
 	groups, err := s.bm.BrokerSymbols(ctx, venue)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("拉取 %s 符号表失败: %w", venue, err))
+		return nil, 0, 0, connect.NewError(connect.CodeUnavailable, fmt.Errorf("拉取 %s 符号表失败: %w", venue, err))
 	}
 	all, err := s.store.ListSymbolMappings(ctx, "")
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, 0, 0, connect.NewError(connect.CodeInternal, err)
 	}
 	// 已有映射集合（本 venue）
 	venueMapped := make(map[string]bool)
@@ -195,8 +205,6 @@ func (s *Service) AutoMapBroker(ctx context.Context, req *connect.Request[v1.Aut
 		}
 	}
 
-	var results []*v1.AutoMapBrokerResult
-	applied, skipped := 0, 0
 	var newSyms []string // 待补订阅的符号
 
 	for _, g := range groups {
@@ -282,5 +290,5 @@ func (s *Service) AutoMapBroker(ctx context.Context, req *connect.Request[v1.Aut
 	}
 
 	log.Printf("[auto-map] %s: applied=%d skipped=%d", venue, applied, skipped)
-	return connect.NewResponse(&v1.AutoMapBrokerResponse{Results: results, Applied: int32(applied), Skipped: int32(skipped)}), nil
+	return results, applied, skipped, nil
 }

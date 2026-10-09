@@ -64,6 +64,43 @@ var canonicalAliases = map[string][]string{
 	"FILUSDT":  {"FILUSDT", "FILUSD", "FIL", "FILECOIN"},
 	"AAVEUSDT": {"AAVEUSDT", "AAVEUSD", "AAVE"},
 	"XLMUSDT":  {"XLMUSDT", "XLMUSD", "XLM", "STELLAR"},
+	// D-148：XM `XxxUSD#` 加密 CFD 族（剥 # 后命中 XXXUSD 变体）——同构三段式补齐
+	"1INCHUSDT": {"1INCHUSDT", "1INCHUSD", "1INCH"},
+	"ALGOUSDT":  {"ALGOUSDT", "ALGOUSD", "ALGO", "ALGORAND"},
+	"APEUSDT":   {"APEUSDT", "APEUSD", "APE", "APECOIN"},
+	"APTUSDT":   {"APTUSDT", "APTUSD", "APT", "APTOS"},
+	"ARBUSDT":   {"ARBUSDT", "ARBUSD", "ARB", "ARBITRUM"},
+	"AXSUSDT":   {"AXSUSDT", "AXSUSD", "AXS"},
+	"BATUSDT":   {"BATUSDT", "BATUSD", "BAT"},
+	"BCHUSDT":   {"BCHUSDT", "BCHUSD", "BCH", "BITCOINCASH"},
+	"BTGUSDT":   {"BTGUSDT", "BTGUSD", "BTG"},
+	"CHZUSDT":   {"CHZUSDT", "CHZUSD", "CHZ", "CHILIZ"},
+	"COMPUSDT":  {"COMPUSDT", "COMPUSD", "COMP", "COMPOUND"},
+	"CRVUSDT":   {"CRVUSDT", "CRVUSD", "CRV"},
+	"DASHUSDT":  {"DASHUSDT", "DASHUSD", "DASH"},
+	"EGLDUSDT":  {"EGLDUSDT", "EGLDUSD", "EGLD"},
+	"ENJUSDT":   {"ENJUSDT", "ENJUSD", "ENJ"},
+	"EOSUSDT":   {"EOSUSDT", "EOSUSD", "EOS"},
+	"ETCUSDT":   {"ETCUSDT", "ETCUSD", "ETC", "ETHEREUMCLASSIC"},
+	"FETUSDT":   {"FETUSDT", "FETUSD", "FET"},
+	"FLOWUSDT":  {"FLOWUSDT", "FLOWUSD", "FLOW"},
+	"GRTUSDT":   {"GRTUSDT", "GRTUSD", "GRT", "THEGRAPH"},
+	"ICPUSDT":   {"ICPUSDT", "ICPUSD", "ICP"},
+	"IMXUSDT":   {"IMXUSDT", "IMXUSD", "IMX"},
+	"LDOUSDT":   {"LDOUSDT", "LDOUSD", "LDO", "LIDO"},
+	"LRCUSDT":   {"LRCUSDT", "LRCUSD", "LRC", "LOOPRING"},
+	"MANAUSDT":  {"MANAUSDT", "MANAUSD", "MANA", "DECENTRALAND"},
+	"MATICUSDT": {"MATICUSDT", "MATICUSD", "MATIC", "POLYGON"},
+	"OPUSDT":    {"OPUSDT", "OPUSD", "OP", "OPTIMISM"},
+	"SANDUSDT":  {"SANDUSDT", "SANDUSD", "SAND"},
+	"SNXUSDT":   {"SNXUSDT", "SNXUSD", "SNX", "SYNTHETIX"},
+	"STORJUSDT": {"STORJUSDT", "STORJUSD", "STORJ"},
+	"STXUSDT":   {"STXUSDT", "STXUSD", "STX", "STACKS"},
+	"SUSHIUSDT": {"SUSHIUSDT", "SUSHIUSD", "SUSHI"},
+	"UMAUSDT":   {"UMAUSDT", "UMAUSD", "UMA"},
+	"XTZUSDT":   {"XTZUSDT", "XTZUSD", "XTZ", "TEZOS"},
+	"ZECUSDT":   {"ZECUSDT", "ZECUSD", "ZEC", "ZCASH"},
+	"ZRXUSDT":   {"ZRXUSDT", "ZRXUSD", "ZRX"},
 	// 贵金属（D-067 S1.4 扩 7 品种，Exness X-代码 ↔ 全名）
 	"XAUUSD": {"XAUUSD", "GOLD"},
 	"SILVER": {"XAGUSD", "SILVER"},
@@ -74,22 +111,23 @@ var canonicalAliases = map[string][]string{
 	"XPBUSD": {"XPBUSD", "LEAD"},
 	"XALUSD": {"XALUSD", "ALUMINIUM"},
 	"XNIUSD": {"XNIUSD", "NICKEL"},
-	// 能源
-	"BRENT": {"BRENT", "UKOIL", "XBRUSD"},
-	"WTI":   {"WTI", "USOIL", "XTIUSD"},
-	// 指数（D-067 S1.3 扩 10 品种，Pepperstone # 前缀由 trimCentSuffix 剥离）
-	"US30":    {"US30", "DJ30", "WALLST30"},
-	"NAS100":  {"NAS100", "US100", "USATECH", "NDX100", "NASDAQ100", "USTEC", "USNDAQ100"},
-	"SPX500":  {"SPX500", "US500", "USA500", "SP500", "USSPX500"},
-	"GER40":   {"GER40", "DAX", "DAX40", "DE40", "DE30", "GDAX", "GER30", "GERMANY40", "GERMANY30", "FDAX"},
-	"UK100":   {"UK100"},
-	"JP225":   {"JP225", "JAPAN", "JAPAN225"},
-	"AUS200":  {"AUS200"},
-	"HK50":    {"HK50", "HK-HSI", "HSI", "HONGKONG50"},
-	"FR40":    {"FR40", "F40", "FRANCE", "FRANCE40"},
-	"ES35":    {"ES35", "SPAIN", "SPAIN35"},
-	"STOXX50": {"STOXX50", "EURO50"},
-	"US2000":  {"US2000"},
+	// 能源（D-148：XM `*Cash#` 现货变体——OILCash=WTI spot、BRENTCash=BRENT spot）
+	"BRENT": {"BRENT", "UKOIL", "XBRUSD", "BRENTCASH"},
+	"WTI":   {"WTI", "USOIL", "XTIUSD", "OILCASH"},
+	// 指数（D-067 S1.3 扩 10 品种，Pepperstone # 前缀由 trimCentSuffix 剥离；
+	// D-148：XM `*Cash#` 现金指数变体——US100Cash=NAS100、US500Cash=SPX500 等）
+	"US30":    {"US30", "DJ30", "WALLST30", "US30CASH"},
+	"NAS100":  {"NAS100", "US100", "USATECH", "NDX100", "NASDAQ100", "USTEC", "USNDAQ100", "US100CASH"},
+	"SPX500":  {"SPX500", "US500", "USA500", "SP500", "USSPX500", "US500CASH"},
+	"GER40":   {"GER40", "DAX", "DAX40", "DE40", "DE30", "GDAX", "GER30", "GERMANY40", "GERMANY30", "FDAX", "GER40CASH"},
+	"UK100":   {"UK100", "UK100CASH"},
+	"JP225":   {"JP225", "JAPAN", "JAPAN225", "JP225CASH"},
+	"AUS200":  {"AUS200", "AUS200CASH"},
+	"HK50":    {"HK50", "HK-HSI", "HSI", "HONGKONG50", "HK50CASH"},
+	"FR40":    {"FR40", "F40", "FRANCE", "FRANCE40", "FRA40CASH"},
+	"ES35":    {"ES35", "SPAIN", "SPAIN35", "SPAINCASH"},
+	"STOXX50": {"STOXX50", "EURO50", "EU50CASH"},
+	"US2000":  {"US2000", "US2000CASH"},
 }
 
 // allCanonicals 返回 alias 表中全部 canonical（排序），供 ListCanonicals 等消费。
@@ -102,33 +140,7 @@ func allCanonicals() []string {
 	return out
 }
 
-// matchCanonical 用 alias 表匹配 broker symbol → canonical（D-067 修复：先经 Canonicalize 归一）。
-// 先精确匹配，再 trimCentSuffix 后匹配。返回 canonical + 是否命中。
-func matchCanonical(brokerSymbol string) (string, bool) {
-	up := upper(Canonicalize(brokerSymbol))
-	// 精确匹配
-	for canon, aliases := range canonicalAliases {
-		for _, al := range aliases {
-			if up == al {
-				return canon, true
-			}
-		}
-	}
-	// Cent 后缀 / # 前缀变体
-	upTrim := upper(Canonicalize(trimCentSuffix(brokerSymbol)))
-	if upTrim != up {
-		for canon, aliases := range canonicalAliases {
-			for _, al := range aliases {
-				if upTrim == al {
-					return canon, true
-				}
-			}
-		}
-	}
-	return "", false
-}
-
-// matchCanonicalDistinct 同 matchCanonical，但检测多命中（一个 symbol 匹配多个 canonical）。
+// matchCanonicalDistinct 用 alias 表匹配 broker symbol → canonical，检测多命中（一个 symbol 匹配多个 canonical）。
 // 返回 canonical + 命中数。hits>1 = multi_hit。
 func matchCanonicalDistinct(brokerSymbol string) (canon string, hits int) {
 	up := upper(Canonicalize(brokerSymbol))

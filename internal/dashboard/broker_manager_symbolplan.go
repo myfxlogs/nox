@@ -236,9 +236,11 @@ func classifySymbols(groups []SymbolGroup, idx canonicalIdx) []Suggestion {
 	return out
 }
 
-// trimCentSuffix 去 MT5 cent 账号符号后缀（EURUSDm → EURUSD）+ Pepperstone spot 指数 '#' 前缀（#UK100 → UK100）。
-// 只处理安全后缀/前缀（不改变品种身份）；'365'/'EURO' 等改变品种身份的不处理（合约门禁拦截）。
+// trimCentSuffix 去 MT5 cent 账号符号后缀（EURUSDm → EURUSD）+ Pepperstone spot 指数 '#' 前缀（#UK100 → UK100）
+// + XM '#' 后缀命名变体（BTCUSD# → BTCUSD / US100Cash# → US100Cash，D-148）。
+// 只处理安全后缀/前缀（不改变品种身份）；'365'/'EURO'/'-MMMYY' 到期期货等改变品种身份的不处理（合约门禁拦截）。
 func trimCentSuffix(s string) string {
+	s = strings.TrimSuffix(s, "#")
 	s = strings.TrimSuffix(s, "m")
 	s = strings.TrimPrefix(s, "#")
 	return s
