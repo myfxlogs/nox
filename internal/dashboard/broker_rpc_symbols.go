@@ -289,19 +289,20 @@ func (s *Service) autoMapVenue(ctx context.Context, venue string) (results []*v1
 		if fs, err := s.bm.SwapFacts(ctx); err == nil {
 			log.Printf("[auto-map] %s: %d facts 补轮", venue, len(fs))
 		}
-		// D-149：equiv 种子以 venue 全量已映射 canonical 为域（存量+本轮新增）——
-		// class 域后续长进也能在下次应用时补齐，幂等。
-		var mapped []string
-		for _, m := range all {
-			if m.Venue == venue {
-				mapped = append(mapped, m.Canonical)
-			}
+	}
+
+	// D-149：equiv 种子以 venue 全量已映射 canonical 为域（存量+本轮新增）——
+	// 幂等；挂 newSyms 闸外：class 域后续长进时无需新映射也能补种。
+	var mapped []string
+	for _, m := range all {
+		if m.Venue == venue {
+			mapped = append(mapped, m.Canonical)
 		}
-		if n, err := s.seedAssetEquivVenue(ctx, venue, append(mapped, newCanons...)); err != nil {
-			log.Printf("[auto-map] %s: equiv seed: %v", venue, err)
-		} else if n > 0 {
-			log.Printf("[auto-map] %s: equiv seed +%d", venue, n)
-		}
+	}
+	if n, err := s.seedAssetEquivVenue(ctx, venue, append(mapped, newCanons...)); err != nil {
+		log.Printf("[auto-map] %s: equiv seed: %v", venue, err)
+	} else if n > 0 {
+		log.Printf("[auto-map] %s: equiv seed +%d", venue, n)
 	}
 
 	log.Printf("[auto-map] %s: applied=%d skipped=%d", venue, applied, skipped)
