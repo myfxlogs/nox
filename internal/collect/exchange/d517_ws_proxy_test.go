@@ -31,7 +31,8 @@ func TestD517_WSViaProxy_FstreamRoutes(t *testing.T) {
 	}
 
 	// 置位 = 经 cex-proxy（base+proxyPath）。
-	t.Setenv("ARB_CEX_WS_BASE", "https://192.229.85.35:8443")
+	SetProxyEndpoints(ProxyEndpoints{CexWSBase: "https://192.229.85.35:8443"})
+	defer SetProxyEndpoints(ProxyEndpoints{})
 	for _, tc := range cases {
 		t.Run(tc.name+"/proxied", func(t *testing.T) {
 			got := wsViaProxy(tc.proxyPath, tc.native)

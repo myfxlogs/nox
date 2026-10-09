@@ -16,9 +16,8 @@ func TestFailoverRT_PrimaryDownFallsBack(t *testing.T) {
 		_, _ = w.Write([]byte("via-backup"))
 	}))
 	defer back.Close()
-	t.Setenv("BINANCE_PROXY_URL", "http://127.0.0.1:1") // 拒连=传输错
-	t.Setenv("BINANCE_PROXY_URL_BACKUP", back.URL)
-	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-fb")
+	Configure("", "tok-fb", [][2]string{{"http://127.0.0.1:1", back.URL}}) // 拒连=传输错
+	defer Configure("", "", nil)
 
 	resp, err := Client().Get("http://127.0.0.1:1/fapi/v1/x")
 	if err != nil {
@@ -42,9 +41,8 @@ func TestFailoverRT_NonIdempotentNoFallback(t *testing.T) {
 		backHits++
 	}))
 	defer back.Close()
-	t.Setenv("BINANCE_PROXY_URL", "http://127.0.0.1:1")
-	t.Setenv("BINANCE_PROXY_URL_BACKUP", back.URL)
-	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-fb")
+	Configure("", "tok-fb", [][2]string{{"http://127.0.0.1:1", back.URL}})
+	defer Configure("", "", nil)
 
 	for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
 		req, _ := http.NewRequest(m, "http://127.0.0.1:1/fapi/v1/order", nil)
@@ -64,9 +62,8 @@ func TestFailoverRT_OriginalURLUnchanged(t *testing.T) {
 		backHost = r.Host
 	}))
 	defer back.Close()
-	t.Setenv("BINANCE_PROXY_URL", "http://127.0.0.1:1")
-	t.Setenv("BINANCE_PROXY_URL_BACKUP", back.URL)
-	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-fb")
+	Configure("", "tok-fb", [][2]string{{"http://127.0.0.1:1", back.URL}})
+	defer Configure("", "", nil)
 
 	req, _ := http.NewRequest(http.MethodGet, "http://127.0.0.1:1/fapi/v1/x", nil)
 	resp, err := Client().Do(req)
@@ -89,9 +86,8 @@ func TestFailoverRT_GetBodyErrNoFallback(t *testing.T) {
 		backHits++
 	}))
 	defer back.Close()
-	t.Setenv("BINANCE_PROXY_URL", "http://127.0.0.1:1")
-	t.Setenv("BINANCE_PROXY_URL_BACKUP", back.URL)
-	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-fb")
+	Configure("", "tok-fb", [][2]string{{"http://127.0.0.1:1", back.URL}})
+	defer Configure("", "", nil)
 
 	req, _ := http.NewRequest(http.MethodGet, "http://127.0.0.1:1/x", strings.NewReader("b"))
 	req.GetBody = func() (io.ReadCloser, error) { return nil, io.ErrClosedPipe }
@@ -114,8 +110,8 @@ func TestFailoverRT_NoFallbackOn5xxOrForeignHost(t *testing.T) {
 		w.WriteHeader(500)
 	}))
 	defer primary.Close()
-	t.Setenv("BINANCE_PROXY_URL", primary.URL)
-	t.Setenv("BINANCE_PROXY_URL_BACKUP", back.URL)
+	Configure("", "tok", [][2]string{{primary.URL, back.URL}})
+	defer Configure("", "", nil)
 
 	resp, err := Client().Get(primary.URL + "/x")
 	if err != nil || resp.StatusCode != 500 {
@@ -132,7 +128,7 @@ func TestFailoverRT_NoFallbackOn5xxOrForeignHost(t *testing.T) {
 
 // BACKUP 空 → 不装 failoverRT（行为不变）。
 func TestFailoverRT_DisabledWhenBackupEmpty(t *testing.T) {
-	t.Setenv("BINANCE_PROXY_URL_BACKUP", "")
+	Configure("", "tok", nil)
 	if newFailoverRT(http.DefaultTransport) != nil {
 		t.Fatal("backup 空不应装 failoverRT")
 	}
@@ -147,12 +143,11 @@ func TestFailoverRT_HostTable(t *testing.T) {
 	}))
 	defer back.Close()
 	bu := strings.TrimPrefix(back.URL, "http://")
-	t.Setenv("BINANCE_PROXY_URL", "")
-	t.Setenv("BINANCE_PROXY_URL_BACKUP", "")
-	t.Setenv("ARB_OKX_PROXY_URL", "https://127.0.0.1:1")
-	t.Setenv("ARB_CEX_WS_BASE", "wss://127.0.0.1:2") // ws 基址 env（REST 走 http 口径匹配 host）
-	t.Setenv("ARB_CEX_WS_BASE_BACKUP", "http://"+bu)
-	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-fb")
+	Configure("", "tok-fb", [][2]string{
+		{"https://127.0.0.1:1", "http://" + bu}, // okx 代理对（REST 走 http 口径匹配 host）
+		{"wss://127.0.0.1:2", "http://" + bu},   // cex 基址对（ws scheme 归一 http 匹配）
+	})
+	defer Configure("", "", nil)
 
 	if resp, err := Client().Get("https://127.0.0.1:1/api/v5/account"); err != nil {
 		t.Fatalf("okx host 应回退成功: %v", err)

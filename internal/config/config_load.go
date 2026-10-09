@@ -3,8 +3,6 @@ package config
 // Load 从环境变量加载配置（D-261 S6 从 config.go 搬出，纯搬家）。
 
 import (
-	"os"
-
 	"time"
 )
 
@@ -143,8 +141,8 @@ func Load() *Config {
 		SwapArbComboLossWindowDays: envInt("ARB_SWAPARB_COMBO_LOSS_WINDOW_DAYS", 30),   // D-256-A S4
 		SwapArbRevivalBps:          envFloat("ARB_SWAPARB_REVIVAL_ALERT_BPS", 2.2),     // D-256-A S5
 		TrxEnergyRateFloorPct:      envFloat("ARB_TRX_ENERGY_RATE_FLOOR_PCT", 8.0),     // D-258 S2
-		FeishuAppID:                os.Getenv("ARB_FEISHU_APP_ID"),                     // D-264
-		FeishuAppSecret:            os.Getenv("ARB_FEISHU_APP_SECRET"),                 // D-264
+		FeishuAppID:                envStr("ARB_FEISHU_APP_ID", ""),                    // D-264（secrets overlay 注入通道同 AI_*）
+		FeishuAppSecret:            envStr("ARB_FEISHU_APP_SECRET", ""),                // D-264（同上）
 		FreezeGuard:                envDur("ARB_FREEZE_GUARD", 10*time.Minute),         // D-155 freeze guard 冻结腿预检窗口
 		Environment:                envStr("ARB_ENVIRONMENT", "demo"),                  // D-159 W1a I6：缺省 demo fail-safe
 		LiveTrade:                  envBool("ARB_LIVE_TRADE", false),                   // D-159 W6a S2：LIVE 人工开关默认 false
@@ -169,6 +167,8 @@ func Load() *Config {
 		// === D-274 事件驱动研判引擎 ===
 		JudgeBalanceHKD: envFloat("ARB_JUDGE_BALANCE_HKD", 0),
 		JudgeBalanceUSD: envFloat("ARB_JUDGE_BALANCE_USD", 0),
+		// === D-145 env 收口 PG：原 env 直读键字段族（config_envknobs.go）===
+		EnvKnobs: loadEnvKnobs(),
 	}
 }
 

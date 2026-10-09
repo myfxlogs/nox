@@ -14,7 +14,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -91,12 +90,12 @@ func NewBinanceMarketWS(cfg Config) *BinanceMarketWS {
 		publicURLs = []string{scheme + "://" + u.Host + "/public/ws"}
 		marketURLs = []string{scheme + "://" + u.Host + "/market/ws"}
 		spotURLs = []string{scheme + "://" + u.Host + "/spotws/ws"}
-		// cex-proxy 双端点 failover：BINANCE_PROXY_URL_BACKUP 置位→备用基址追加为第二候选
+		// cex-proxy 双端点 failover：备基址置位→备用基址追加为第二候选
 		//（同路径后缀映射；主端恢复后每连接尝试自主端起=自动回主）。
 		// D-519 D6：备端 scheme 与 normWSBase 同语义归一（https→wss/http→ws/ws·wss 原样——
 		// 内网明文备端 ws:// 不得被升 wss）。
 		proxyHosts[u.Host] = true
-		if b := normWSBase(os.Getenv("BINANCE_PROXY_URL_BACKUP")); b != "" {
+		if b := normWSBase(ep.BinanceProxyBackup); b != "" {
 			publicURLs = append(publicURLs, b+"/public/ws")
 			marketURLs = append(marketURLs, b+"/market/ws")
 			spotURLs = append(spotURLs, b+"/spotws/ws")
@@ -105,15 +104,15 @@ func NewBinanceMarketWS(cfg Config) *BinanceMarketWS {
 			}
 		}
 	}
-	// D-551 S1 逐流 env 覆盖：置位=env URL 前插首选候选，派生代理降候选#2；
+	// D-551 S1 逐流覆盖（D-145 注入）：置位=配置 URL 前插首选候选，派生代理降候选#2；
 	// 未置位=全量现行为零默认变更。
-	if v := strings.TrimSpace(os.Getenv("ARB_BINANCE_PERP_PUBLIC_WS_URL")); v != "" {
+	if v := strings.TrimSpace(ep.PerpPublicWSURL); v != "" {
 		publicURLs = append([]string{v}, publicURLs...)
 	}
-	if v := strings.TrimSpace(os.Getenv("ARB_BINANCE_PERP_MARKET_WS_URL")); v != "" {
+	if v := strings.TrimSpace(ep.PerpMarketWSURL); v != "" {
 		marketURLs = append([]string{v}, marketURLs...)
 	}
-	if v := strings.TrimSpace(os.Getenv("ARB_BINANCE_SPOT_WS_URL")); v != "" {
+	if v := strings.TrimSpace(ep.SpotWSURL); v != "" {
 		spotURLs = append([]string{v}, spotURLs...)
 	}
 	// D-551 S1 token 收敛：X-Proxy-Token 仅对代理 host 发出（币安原生端点空头）。
@@ -129,9 +128,6 @@ func NewBinanceMarketWS(cfg Config) *BinanceMarketWS {
 		return cs
 	}
 	spotInfoURL := cfg.BinanceSpotInfoURL
-	if spotInfoURL == "" {
-		spotInfoURL = os.Getenv("ARB_BINANCE_SPOT_INFO_URL")
-	}
 	if spotInfoURL == "" {
 		spotInfoURL = "https://data-api.binance.vision/api/v3/exchangeInfo"
 	}

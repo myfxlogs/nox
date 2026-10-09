@@ -178,25 +178,47 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_XASSET_MT_FIRST":                boolv(func(c *Config) *bool { return &c.XAssetMTFirst }), // D-084
 	"ARB_XASSET_QUOTE_MAX_AGE":           durv(func(c *Config) *time.Duration { return &c.XAssetQuoteMaxAge }),
 	"ARB_XASSET_TRACKING_MAX_BPS":        f64(func(c *Config) *float64 { return &c.XassetTrackingMaxBps }),
-}
-
-// appConfigEnvKeys 无 Config 字段的标量键（wire/httpx 等直读 os.Getenv）——
-// app_config 行 → os.Setenv 注入（须在 Load/消费点前调用）。值非密可进审计行。
-var appConfigEnvKeys = []string{
-	// D-106：binance WS 原生端点三键（D-551 引入 env 覆盖，collect/exchange 直读
-	// os.Getenv——收口 PG 唯一源=业主令 10-07 禁 .env，值经 ApplyAppConfigEnvOverlay 注入）。
-	"ARB_BINANCE_PERP_MARKET_WS_URL", "ARB_BINANCE_PERP_PUBLIC_WS_URL", "ARB_BINANCE_SPOT_WS_URL",
-	"ARB_CEX_SCAN_EARN_APR_MIN", "ARB_CEX_SCAN_FUNDING_APR_MIN", "ARB_CEX_SCAN_SPREAD_BPS",
-	"ARB_CEX_SYMBOLS", "ARB_CEX_WS_BASE", "ARB_CEX_WS_BASE_BACKUP",
-	"ARB_EGRESS_CANARY_ANCHORS", // D-104 锚点集同入 PG 唯一源（SG 部署锚点须换原生域）
-	"ARB_INTRA_BUDGET_USD", "ARB_INTRA_CONCURRENCY", "ARB_INTRA_DAILY_LOSS_PCT",
-	"ARB_INTRA_KILL", "ARB_INTRA_MAX_NOTIONAL_USD", "ARB_INTRA_SESSION_GATE",
-	"ARB_MT4_GATEWAY", "ARB_OKX_PROXY_URL",
-	"ARB_PAPER_AUTHORIZED_MAX_ACTIVE", "ARB_PAPER_AUTHORIZED_REOPEN_COOLDOWN_HOURS", "ARB_PAPER_WINDOW_START",
-	"ARB_PAPER_CEX_MIN_DEPTH_USD", "ARB_PAPER_CEX_MIN_FUNDING_PCT", // D-051②：CEX 纸面入口质量闸阈（热读）
-	"ARB_SYMDIG_MAX_TOKENS",
-	"BINANCE_PROXY_URL", "BINANCE_PROXY_URL_BACKUP",
-	"TRONSCAN_BASE", "TRX_GRPC_ENDPOINT", "TRX_RENTAL_PAYERS", "TRX_STAKE_ADDRESS",
+	// === D-145 env 收口 PG：原 env 直读键升 typed（app_config 唯一真相，seed-once 播种）===
+	"BINANCE_PROXY_URL":                          strv(func(c *Config) *string { return &c.BinanceProxyURL }),
+	"BINANCE_PROXY_URL_BACKUP":                   strv(func(c *Config) *string { return &c.BinanceProxyURLBackup }),
+	"ARB_OKX_PROXY_URL":                          strv(func(c *Config) *string { return &c.OKXProxyURL }),
+	"ARB_CEX_WS_BASE":                            strv(func(c *Config) *string { return &c.CexWSBase }),
+	"ARB_CEX_WS_BASE_BACKUP":                     strv(func(c *Config) *string { return &c.CexWSBaseBackup }),
+	"ARB_BINANCE_PERP_PUBLIC_WS_URL":             strv(func(c *Config) *string { return &c.BinancePerpPublicWSURL }),
+	"ARB_BINANCE_PERP_MARKET_WS_URL":             strv(func(c *Config) *string { return &c.BinancePerpMarketWSURL }),
+	"ARB_BINANCE_SPOT_WS_URL":                    strv(func(c *Config) *string { return &c.BinanceSpotWSURL }),
+	"ARB_BINANCE_PROXY_CA":                       strv(func(c *Config) *string { return &c.BinanceProxyCA }),
+	"ARB_MT4_GATEWAY":                            strv(func(c *Config) *string { return &c.MT4Gateway }),
+	"ARB_CEX_SYMBOLS":                            listv(func(c *Config) *[]string { return &c.CexSymbols }),
+	"TRX_STAKE_ADDRESS":                          strv(func(c *Config) *string { return &c.TrxStakeAddress }),
+	"TRX_RENTAL_PAYERS":                          strv(func(c *Config) *string { return &c.TrxRentalPayers }),
+	"TRX_GRPC_ENDPOINT":                          strv(func(c *Config) *string { return &c.TrxGrpcEndpoint }),
+	"TRONSCAN_BASE":                              strv(func(c *Config) *string { return &c.TronscanBase }),
+	"ARB_INTRA_BUDGET_USD":                       f64(func(c *Config) *float64 { return &c.IntraBudgetUSD }),
+	"ARB_INTRA_MAX_NOTIONAL_USD":                 f64(func(c *Config) *float64 { return &c.IntraMaxNotionalUSD }),
+	"ARB_INTRA_DAILY_LOSS_PCT":                   f64(func(c *Config) *float64 { return &c.IntraDailyLossPct }),
+	"ARB_INTRA_CONCURRENCY":                      intv(func(c *Config) *int { return &c.IntraConcurrency }),
+	"ARB_INTRA_SESSION_GATE":                     boolv(func(c *Config) *bool { return &c.IntraSessionGate }),
+	"ARB_INTRA_KILL":                             boolv(func(c *Config) *bool { return &c.IntraKill }),
+	"ARB_RESIDUAL_RETRY_WINDOW":                  durv(func(c *Config) *time.Duration { return &c.ResidualRetryWindow }),
+	"ARB_RESIDUAL_RETRY_CONSEC":                  intv(func(c *Config) *int { return &c.ResidualRetryConsec }),
+	"ARB_UNIVERSE_FUNDING_MAX_AGE":               durv(func(c *Config) *time.Duration { return &c.UniverseFundingMaxAge }),
+	"ARB_UNIVERSE_SWAP_MAX_AGE":                  durv(func(c *Config) *time.Duration { return &c.UniverseSwapMaxAge }),
+	"ARB_PAPER_AUTHORIZED_REOPEN_COOLDOWN_HOURS": f64(func(c *Config) *float64 { return &c.PaperAuthorizedReopenCooldownH }),
+	"ARB_PAPER_AUTHORIZED_MAX_ACTIVE":            intv(func(c *Config) *int { return &c.PaperAuthorizedMaxActive }),
+	"ARB_PAPER_CEX_MIN_DEPTH_USD":                f64(func(c *Config) *float64 { return &c.PaperCexMinDepthUSD }),
+	"ARB_PAPER_CEX_MIN_FUNDING_PCT":              f64(func(c *Config) *float64 { return &c.PaperCexMinFundingPct }),
+	"ARB_SYMDIG_ENABLED":                         boolv(func(c *Config) *bool { return &c.SymdigEnabled }),
+	"ARB_SYMDIG_MAX_TOKENS":                      intv(func(c *Config) *int { return &c.SymdigMaxTokens }),
+	"ARB_SLEEPMON_ENABLED":                       boolv(func(c *Config) *bool { return &c.SleepmonEnabled }),
+	"ARB_GATE_WS_MODE":                           strv(func(c *Config) *string { return &c.GateWSMode }),
+	"CMC_WS_DISABLE":                             boolv(func(c *Config) *bool { return &c.CmcWsDisabled }),
+	"ARB_DERIBIT_OPT_ENABLED":                    boolv(func(c *Config) *bool { return &c.DeribitOptEnabled }),
+	"ARB_OPT_PARITY_ALERT_BPS":                   f64(func(c *Config) *float64 { return &c.OptParityAlertBps }),
+	"ARB_LEG_TICK_WINDOW":                        durv(func(c *Config) *time.Duration { return &c.LegTickWindow }),
+	"ARB_EGRESS_CANARY_ANCHORS":                  strv(func(c *Config) *string { return &c.EgressCanaryAnchors }),
+	"ARB_PAPER_WINDOW_START":                     strv(func(c *Config) *string { return &c.PaperWindowStart }),
+	"ARB_ALLOW_EMPTY_AUTH":                       strv(func(c *Config) *string { return &c.AllowEmptyAuth }),
 }
 
 // parseCSV/parseSet/parseFloatMap 复刻 env helper 语义（空串→nil/空集；坏对跳过）。

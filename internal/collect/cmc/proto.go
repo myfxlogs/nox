@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -123,7 +122,13 @@ func first(fields []fld, n int) *fld {
 // 移出仓库：.env ARB_CMC_CREATE_TPL 注入（compose 透传），免疫未来凭据清洗。
 // 惰性每次读（包级 var 在 import 期求值，t.Setenv 测试注入会错过）；登录低频开销可忽略。
 // 空/非法时 fail-closed：buildCreateSession 返回 error 上抛，采集器停转非崩溃。
-func createTplHex() string { return os.Getenv("ARB_CMC_CREATE_TPL") }
+// D-145：env 直读退役——装配层 SetCreateTplHex 注入（app_secrets 通道密件）。
+var tplHex string
+
+// SetCreateTplHex boot 注入 createsession 模板（secret 供值，先于采集构造调用）。
+func SetCreateTplHex(v string) { tplHex = v }
+
+func createTplHex() string { return tplHex }
 
 const oldUUID = "73f87a3e-57b8-457b-9849-b1be0f37c179"
 

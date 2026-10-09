@@ -182,7 +182,7 @@ func (b *BinanceUserWS) dialFailover(ctx context.Context, wsURL string) (*websoc
 // backupWSURL wsURL host → BINANCE_PROXY_URL_BACKUP host（空/非法 → ""=无备用候选）。
 // D-519：host 换段收敛共享件 swapURLHost（gate 私有同法）。
 func (b *BinanceUserWS) backupWSURL(wsURL string) string {
-	return swapURLHost(wsURL, "BINANCE_PROXY_URL_BACKUP")
+	return swapURLHost(wsURL, ep.BinanceProxyBackup)
 }
 
 func (b *BinanceUserWS) runOnce(ctx context.Context) error {

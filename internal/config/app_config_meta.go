@@ -29,13 +29,12 @@ func AppConfigGroup(key string) string {
 	}
 }
 
-// AppConfigAllKeys 全白名单键（typed ∪ env-passthrough，排序）。envPass=true 的键无 Config 字段。
+// AppConfigAllKeys 全白名单键（typed，排序；D-145 死键核后 env-passthrough 轨退役）。
 func AppConfigAllKeys() []string {
-	out := make([]string, 0, len(appConfigKeys)+len(appConfigEnvKeys))
+	out := make([]string, 0, len(appConfigKeys))
 	for k := range appConfigKeys {
 		out = append(out, k)
 	}
-	out = append(out, appConfigEnvKeys...)
 	sort.Strings(out)
 	return out
 }
@@ -58,18 +57,13 @@ func AppConfigGroupLabel(group string) string {
 	}
 }
 
-// AppConfigKeyMeta 键元数据：typed 键返 (meta,false,true)；env-passthrough 返 ({"string",nil,nil},true,true)；未知 false。
-func AppConfigKeyMeta(key string) (AppCfgMeta, bool, bool) {
+// AppConfigKeyMeta 键元数据：白名单 typed 键返 (meta,true)；未知 false。
+func AppConfigKeyMeta(key string) (AppCfgMeta, bool) {
 	if m, ok := appConfigKeys[key]; ok {
 		m.Desc = appConfigDescs[key]
-		return m, false, true
+		return m, true
 	}
-	for _, k := range appConfigEnvKeys {
-		if k == key {
-			return AppCfgMeta{Typ: "string", Desc: appConfigDescs[key]}, true, true
-		}
-	}
-	return AppCfgMeta{}, false, false
+	return AppCfgMeta{}, false
 }
 
 // SnapshotAppConfigEnv 白名单键 env 快照（boot 期 overlay 注入前调用；0 值键不录）。

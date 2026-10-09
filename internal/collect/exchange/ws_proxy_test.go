@@ -1,6 +1,7 @@
 package exchange
 
 import (
+	"arb/internal/httpx"
 	"context"
 	"errors"
 	"net/http"
@@ -14,7 +15,8 @@ import (
 
 // ARB_CEX_WS_BASE 置位 → 三所端点改经 cex-proxy 前缀路径。
 func TestWSViaProxy_Proxied(t *testing.T) {
-	t.Setenv("ARB_CEX_WS_BASE", "wss://192.229.85.35:8443")
+	SetProxyEndpoints(ProxyEndpoints{CexWSBase: "wss://192.229.85.35:8443"})
+	defer SetProxyEndpoints(ProxyEndpoints{})
 	cases := map[string][2]string{
 		"wss://192.229.85.35:8443/okxws/ws/v5/public":  {"/okxws/ws/v5/public", okxPublicWSURL},
 		"wss://192.229.85.35:8443/okxws/ws/v5/private": {"/okxws/ws/v5/private", okxPrivateWSURL},
@@ -30,7 +32,8 @@ func TestWSViaProxy_Proxied(t *testing.T) {
 
 // ARB_CEX_WS_BASE 空 → 原样直连（默认行为不变）。
 func TestWSViaProxy_Direct(t *testing.T) {
-	t.Setenv("ARB_CEX_WS_BASE", "")
+	SetProxyEndpoints(ProxyEndpoints{})
+	defer SetProxyEndpoints(ProxyEndpoints{})
 	if got := wsViaProxy("/okxws/ws/v5/public", okxPublicWSURL); got != okxPublicWSURL {
 		t.Fatalf("direct mode rewrote url: %q", got)
 	}
@@ -41,7 +44,8 @@ func TestWSViaProxy_Direct(t *testing.T) {
 
 // https/http 入参归一 wss/ws（compose 与 REST 端点共用值形）。
 func TestCexWSBase_Normalize(t *testing.T) {
-	t.Setenv("ARB_CEX_WS_BASE", "https://192.229.85.35:8443/")
+	SetProxyEndpoints(ProxyEndpoints{CexWSBase: "https://192.229.85.35:8443/"})
+	defer SetProxyEndpoints(ProxyEndpoints{})
 	if got := cexWSBase(); got != "wss://192.229.85.35:8443" {
 		t.Fatalf("normalize failed: %q", got)
 	}
@@ -49,8 +53,9 @@ func TestCexWSBase_Normalize(t *testing.T) {
 
 // 构造器集成：置位后 wsURL/spotURL/futuresURL 指代理路径，dialer 带 token 头。
 func TestWSConstructors_Proxied(t *testing.T) {
-	t.Setenv("ARB_CEX_WS_BASE", "wss://192.229.85.35:8443")
-	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-x")
+	SetProxyEndpoints(ProxyEndpoints{CexWSBase: "wss://192.229.85.35:8443"})
+	httpx.Configure("", "tok-x", nil)
+	defer func() { SetProxyEndpoints(ProxyEndpoints{}); httpx.Configure("", "", nil) }()
 	o := NewOKXWebSocket(Config{})
 	if o.wsURLs[0] != "wss://192.229.85.35:8443/okxws/ws/v5/public" {
 		t.Fatalf("okx wsURL=%q", o.wsURLs[0])
@@ -70,7 +75,9 @@ func TestWSConstructors_Proxied(t *testing.T) {
 
 // 直连构造：URL 原生、header nil。
 func TestWSConstructors_Direct(t *testing.T) {
-	t.Setenv("ARB_CEX_WS_BASE", "")
+	SetProxyEndpoints(ProxyEndpoints{})
+	httpx.Configure("", "", nil)
+	defer func() { SetProxyEndpoints(ProxyEndpoints{}); httpx.Configure("", "", nil) }()
 	o := NewOKXWebSocket(Config{})
 	if o.wsURLs[0] != okxPublicWSURL || o.header != nil {
 		t.Fatalf("direct okx mutated: %q hdr=%v", o.wsURLs[0], o.header)
@@ -84,16 +91,15 @@ func TestWSConstructors_Direct(t *testing.T) {
 // 双基址有序候选：ARB_CEX_WS_BASE 主 + ARB_CEX_WS_BASE_BACKUP 备（主在前）；
 // 直连模式（双空）→ [native]。
 func TestWSViaProxyURLs_OrderedCandidates(t *testing.T) {
-	t.Setenv("ARB_CEX_WS_BASE", "wss://proxy-a:8443")
-	t.Setenv("ARB_CEX_WS_BASE_BACKUP", "https://proxy-b:8443/") // 归一 wss + 去尾斜
+	SetProxyEndpoints(ProxyEndpoints{CexWSBase: "wss://proxy-a:8443", CexWSBaseBackup: "https://proxy-b:8443/"})
+	defer SetProxyEndpoints(ProxyEndpoints{})
 	got := wsViaProxyURLs("/okxws/ws/v5/public", okxPublicWSURL)
 	want := []string{"wss://proxy-a:8443/okxws/ws/v5/public", "wss://proxy-b:8443/okxws/ws/v5/public"}
 	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("candidates=%v want %v", got, want)
 	}
 
-	t.Setenv("ARB_CEX_WS_BASE", "")
-	t.Setenv("ARB_CEX_WS_BASE_BACKUP", "")
+	SetProxyEndpoints(ProxyEndpoints{})
 	if got := wsViaProxyURLs("/okxws/x", okxPublicWSURL); len(got) != 1 || got[0] != okxPublicWSURL {
 		t.Fatalf("direct mode=%v", got)
 	}
@@ -101,9 +107,9 @@ func TestWSViaProxyURLs_OrderedCandidates(t *testing.T) {
 
 // 构造器双端点：主备两候选进 wsURLs，token 头仍在（两端点同为代理）。
 func TestWSConstructors_BackupCandidates(t *testing.T) {
-	t.Setenv("ARB_CEX_WS_BASE", "wss://proxy-a:8443")
-	t.Setenv("ARB_CEX_WS_BASE_BACKUP", "wss://proxy-b:8443")
-	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-x")
+	SetProxyEndpoints(ProxyEndpoints{CexWSBase: "wss://proxy-a:8443", CexWSBaseBackup: "wss://proxy-b:8443"})
+	httpx.Configure("", "tok-x", nil)
+	defer func() { SetProxyEndpoints(ProxyEndpoints{}); httpx.Configure("", "", nil) }()
 	o := NewOKXWebSocket(Config{})
 	if len(o.wsURLs) != 2 ||
 		o.wsURLs[1] != "wss://proxy-b:8443/okxws/ws/v5/public" {
@@ -129,7 +135,8 @@ func TestBinanceMarketWS_BackupCandidates(t *testing.T) {
 		}
 		return us
 	}
-	t.Setenv("BINANCE_PROXY_URL_BACKUP", "https://proxy-b:8443")
+	SetProxyEndpoints(ProxyEndpoints{BinanceProxyBackup: "https://proxy-b:8443"})
+	defer SetProxyEndpoints(ProxyEndpoints{})
 	b := NewBinanceMarketWS(Config{BinanceBaseURL: "https://proxy-a:8443/fapi"})
 	pub, mkt, spt := urls(b.publicCands), urls(b.marketCands), urls(b.spotCands)
 	if len(pub) != 2 || pub[1] != "wss://proxy-b:8443/public/ws" ||
@@ -137,13 +144,13 @@ func TestBinanceMarketWS_BackupCandidates(t *testing.T) {
 		len(spt) != 2 || spt[1] != "wss://proxy-b:8443/spotws/ws" {
 		t.Fatalf("public=%v market=%v spot=%v", pub, mkt, spt)
 	}
-	t.Setenv("BINANCE_PROXY_URL_BACKUP", "")
+	SetProxyEndpoints(ProxyEndpoints{})
 	b = NewBinanceMarketWS(Config{BinanceBaseURL: "https://proxy-a:8443/fapi"})
 	if len(b.publicCands) != 1 || len(b.marketCands) != 1 || len(b.spotCands) != 1 {
 		t.Fatalf("backup 空应单候选: %v %v %v", b.publicCands, b.marketCands, b.spotCands)
 	}
 	// D-519 A6（D6）：ws:// 明文备端不被升 wss（内网备端场景）。
-	t.Setenv("BINANCE_PROXY_URL_BACKUP", "ws://proxy-c:8080")
+	SetProxyEndpoints(ProxyEndpoints{BinanceProxyBackup: "ws://proxy-c:8080"})
 	b = NewBinanceMarketWS(Config{BinanceBaseURL: "https://proxy-a:8443/fapi"})
 	if b.publicCands[1].URL != "ws://proxy-c:8080/public/ws" {
 		t.Fatalf("ws:// 备端被错升 wss: %v", b.publicCands)
@@ -153,12 +160,13 @@ func TestBinanceMarketWS_BackupCandidates(t *testing.T) {
 // binance_user_ws backupWSURL：host 换备端、路径/key 不变；env 空/非法→无候选。
 func TestBinanceUserWS_BackupWSURL(t *testing.T) {
 	b := &BinanceUserWS{}
-	t.Setenv("BINANCE_PROXY_URL_BACKUP", "https://proxy-b:8443")
+	SetProxyEndpoints(ProxyEndpoints{BinanceProxyBackup: "https://proxy-b:8443"})
+	defer SetProxyEndpoints(ProxyEndpoints{})
 	got := b.backupWSURL("wss://proxy-a:8443/ws/abc123")
 	if got != "wss://proxy-b:8443/ws/abc123" {
 		t.Fatalf("backupWSURL=%q", got)
 	}
-	t.Setenv("BINANCE_PROXY_URL_BACKUP", "")
+	SetProxyEndpoints(ProxyEndpoints{})
 	if b.backupWSURL("wss://proxy-a:8443/ws/x") != "" {
 		t.Fatal("backup 空应无候选")
 	}
@@ -179,7 +187,8 @@ func TestGatePrivateWS_DialFailover(t *testing.T) {
 		return nil, errors.New("refused")
 	}
 
-	t.Setenv("ARB_CEX_WS_BASE_BACKUP", "wss://proxy-b:8443")
+	SetProxyEndpoints(ProxyEndpoints{CexWSBaseBackup: "wss://proxy-b:8443"})
+	defer SetProxyEndpoints(ProxyEndpoints{})
 	if err := g.runOnce(context.Background()); err == nil {
 		t.Fatal("双端全拒应上抛 dial err")
 	}
@@ -188,12 +197,12 @@ func TestGatePrivateWS_DialFailover(t *testing.T) {
 		t.Fatalf("tried=%v want [%s ws://proxy-b:8443/v4/ws/usdt]", tried, main)
 	}
 
-	// 备 env 空 → 单 dial。
-	t.Setenv("ARB_CEX_WS_BASE_BACKUP", "")
+	// 备端空 → 单 dial。
+	SetProxyEndpoints(ProxyEndpoints{})
 	tried = nil
 	_ = g.runOnce(context.Background())
 	if len(tried) != 1 {
-		t.Fatalf("备 env 空应单 dial, tried=%v", tried)
+		t.Fatalf("备端空应单 dial, tried=%v", tried)
 	}
 }
 

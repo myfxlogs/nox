@@ -117,45 +117,24 @@ func TestD515Overlay_TypedKeys(t *testing.T) {
 	}
 }
 
-// D-515 S4：passthrough env 注入（无字段标量）。
-func TestD515Overlay_EnvPassthrough(t *testing.T) {
-	t.Setenv("ARB_INTRA_BUDGET_USD", "")
-	ApplyAppConfigEnvOverlay(map[string]string{"ARB_INTRA_BUDGET_USD": "777"})
-	if os.Getenv("ARB_INTRA_BUDGET_USD") != "777" {
-		t.Fatal("passthrough inject failed")
-	}
-	// 非白名单 passthrough 键不注入。
-	ApplyAppConfigEnvOverlay(map[string]string{"ARB_NOT_A_KEY_X": "1"})
-	if os.Getenv("ARB_NOT_A_KEY_X") != "" {
-		t.Fatal("non-whitelist passthrough injected")
-	}
-}
-
-// TestD106Overlay_BinanceWSKeys D-106①：binance WS 原生端点三键入 env-passthrough
-// 白名单——app_config 行经 ApplyAppConfigEnvOverlay 注入 env（collect 侧 os.Getenv
-// 消费点不变，值权威=PG 唯一源，.env 退役）。
+// TestD106Overlay_BinanceWSKeys D-106① 升级锚：binance WS 原生端点三键 D-145 已升
+// typed——app_config 行经 ApplyAppConfigOverlay 直写 cfg 字段（PG 唯一源不变）。
 func TestD106Overlay_BinanceWSKeys(t *testing.T) {
-	t.Setenv("ARB_BINANCE_PERP_PUBLIC_WS_URL", "")
-	t.Setenv("ARB_BINANCE_PERP_MARKET_WS_URL", "")
-	t.Setenv("ARB_BINANCE_SPOT_WS_URL", "")
-	ApplyAppConfigEnvOverlay(map[string]string{
+	cfg := &Config{}
+	ApplyAppConfigOverlay(cfg, map[string]string{
 		"ARB_BINANCE_PERP_PUBLIC_WS_URL": "wss://fstream.binance.com/ws",
 		"ARB_BINANCE_PERP_MARKET_WS_URL": "wss://fstream.binance.com/ws",
 		"ARB_BINANCE_SPOT_WS_URL":        "wss://stream.binance.com:9443/ws",
 	})
-	for k, want := range map[string]string{
-		"ARB_BINANCE_PERP_PUBLIC_WS_URL": "wss://fstream.binance.com/ws",
-		"ARB_BINANCE_PERP_MARKET_WS_URL": "wss://fstream.binance.com/ws",
-		"ARB_BINANCE_SPOT_WS_URL":        "wss://stream.binance.com:9443/ws",
-	} {
-		if os.Getenv(k) != want {
-			t.Fatalf("%s overlay inject failed: %q", k, os.Getenv(k))
-		}
+	if cfg.BinancePerpPublicWSURL != "wss://fstream.binance.com/ws" ||
+		cfg.BinancePerpMarketWSURL != "wss://fstream.binance.com/ws" ||
+		cfg.BinanceSpotWSURL != "wss://stream.binance.com:9443/ws" {
+		t.Fatalf("binance WS 三键 typed overlay failed: %+v", cfg.EnvKnobs)
 	}
 }
 
-// env-passthrough 键走 ApplyAppConfigEnvOverlay，ApplyAppConfigOverlay 不应误报 not-whitelisted。
-// （回归：9-27 生产日志实证 ARB_CEX_SYMBOLS 等 passthrough 键每 boot 打 warn 噪音）。
+// D-145 死键核后：白名单 typed 键照常 set 零 warn，真未白名单键仍 warn。
+// （回归锚自 env-passthrough 时代沿用：9-27 生产日志实证 passthrough 键每 boot 打 warn 噪音）。
 func TestOverlay_EnvKeyNoFalseWarn(t *testing.T) {
 	var buf strings.Builder
 	old := log.Writer()
@@ -164,12 +143,12 @@ func TestOverlay_EnvKeyNoFalseWarn(t *testing.T) {
 
 	cfg := &Config{}
 	ApplyAppConfigOverlay(cfg, map[string]string{
-		"ARB_CEX_WS_BASE":  "wss://x", // env-passthrough 白名单键
-		"ARB_NOT_A_KEY_YZ": "1",       // 真未白名单键
+		"ARB_INTRA_BUDGET_USD": "500", // typed 白名单键
+		"ARB_NOT_A_KEY_YZ":     "1",   // 真未白名单键
 	})
 	out := buf.String()
-	if strings.Contains(out, "ARB_CEX_WS_BASE") && strings.Contains(out, "not whitelisted") {
-		t.Fatal("env-passthrough key false-warned as not whitelisted")
+	if strings.Contains(out, "key ARB_INTRA_BUDGET_USD not whitelisted") {
+		t.Fatal("whitelisted typed key false-warned as not whitelisted")
 	}
 	if !strings.Contains(out, "ARB_NOT_A_KEY_YZ") || !strings.Contains(out, "not whitelisted") {
 		t.Fatal("真未白名单键应仍打 warn")

@@ -140,7 +140,7 @@ func (g *GatePrivateWS) runOnce(ctx context.Context) error {
 	if err != nil && ctx.Err() == nil {
 		// D-519 D4：cex-proxy 双端点回退——主 URL 拨失败换 ARB_CEX_WS_BASE_BACKUP host
 		// 重试一次（path 不变，同 binance backupWSURL 模式；env 空=零行为变化）。
-		if alt := swapURLHost(g.WSURL(), "ARB_CEX_WS_BASE_BACKUP"); alt != "" {
+		if alt := swapURLHost(g.WSURL(), ep.CexWSBaseBackup); alt != "" {
 			log.Printf("[gate-ws] dial %s failed: %v（试备用端点 %s）", g.WSURL(), err, alt)
 			conn, err = g.dial(ctx, alt)
 		}

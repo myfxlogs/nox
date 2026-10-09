@@ -4,6 +4,7 @@
 package exchange
 
 import (
+	"arb/internal/httpx"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -41,9 +42,9 @@ func wsDataServer(t *testing.T, every time.Duration) (string, *atomic.Int64) {
 // TestD541_S0_DirectMode ARB_GATE_WS_MODE=direct：强制原生直连——urls=native、
 // 单候选零代理件（per-venue 止血，okx/binance 装配不动）。
 func TestD541_S0_DirectMode(t *testing.T) {
-	t.Setenv("ARB_CEX_WS_BASE", "wss://192.229.85.35:8443")
-	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-x")
-	t.Setenv("ARB_GATE_WS_MODE", "direct")
+	SetProxyEndpoints(ProxyEndpoints{CexWSBase: "wss://192.229.85.35:8443", GateWSMode: "direct"})
+	httpx.Configure("", "tok-x", nil)
+	defer func() { SetProxyEndpoints(ProxyEndpoints{}); httpx.Configure("", "", nil) }()
 	g := NewGateWebSocket(Config{})
 	if len(g.spotURLs) != 1 || g.spotURLs[0] != gateSpotWSURL ||
 		len(g.futuresURLs) != 1 || g.futuresURLs[0] != gateFuturesWSURL {
@@ -60,8 +61,9 @@ func TestD541_S0_DirectMode(t *testing.T) {
 
 // TestD541_S0_DefaultProxy 缺省 proxy=现行——urls 代理路由+proxied 置位。
 func TestD541_S0_DefaultProxy(t *testing.T) {
-	t.Setenv("ARB_CEX_WS_BASE", "wss://192.229.85.35:8443")
-	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-x")
+	SetProxyEndpoints(ProxyEndpoints{CexWSBase: "wss://192.229.85.35:8443"})
+	httpx.Configure("", "tok-x", nil)
+	defer func() { SetProxyEndpoints(ProxyEndpoints{}); httpx.Configure("", "", nil) }()
 	g := NewGateWebSocket(Config{})
 	if !g.proxied || g.spotURLs[0] != "wss://192.229.85.35:8443/gatespotws/ws/v4/" {
 		t.Fatalf("缺省应代理装配: proxied=%v urls=%v", g.proxied, g.spotURLs)
@@ -71,8 +73,9 @@ func TestD541_S0_DefaultProxy(t *testing.T) {
 // TestD541_A1_FallbackCandBare 候选装配：代理模式候选表尾=native 兜底位，
 // 裸 dialer+nil Header（X-Proxy-Token 不泄原生域——A1）。
 func TestD541_A1_FallbackCandBare(t *testing.T) {
-	t.Setenv("ARB_CEX_WS_BASE", "wss://192.229.85.35:8443")
-	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-x")
+	SetProxyEndpoints(ProxyEndpoints{CexWSBase: "wss://192.229.85.35:8443"})
+	httpx.Configure("", "tok-x", nil)
+	defer func() { SetProxyEndpoints(ProxyEndpoints{}); httpx.Configure("", "", nil) }()
 	g := NewGateWebSocket(Config{})
 	c := g.candidates(g.spotURLs, gateSpotWSURL)
 	if len(c) != 2 {

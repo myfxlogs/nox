@@ -8,8 +8,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"strconv"
 	"time"
 
 	"arb/internal/analyst"
@@ -48,12 +46,9 @@ func (d *Deps) fill() {
 	if d.Now == nil {
 		d.Now = func() time.Time { return time.Now().UTC() }
 	}
+	// D-145：env 直读退役——MaxTokens 由装配层 cfg 注入（<=0=缺省 8192）。
 	if d.MaxTokens <= 0 {
-		if n, err := strconv.Atoi(os.Getenv("ARB_SYMDIG_MAX_TOKENS")); err == nil && n > 0 {
-			d.MaxTokens = n
-		} else {
-			d.MaxTokens = 8192
-		}
+		d.MaxTokens = 8192
 	}
 	if d.Run == nil {
 		mt := d.MaxTokens

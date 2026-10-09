@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -18,9 +17,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// cexWSBase 读 ARB_CEX_WS_BASE 并归一 ws/wss scheme（空=直连模式）。
+// cexWSBase 注入基址归一 ws/wss scheme（空=直连模式）。
 func cexWSBase() string {
-	return normWSBase(os.Getenv("ARB_CEX_WS_BASE"))
+	return normWSBase(ep.CexWSBase)
 }
 
 func normWSBase(b string) string {
@@ -30,19 +29,19 @@ func normWSBase(b string) string {
 	return b
 }
 
-// cexWSBases 有序候选基址表：ARB_CEX_WS_BASE 主 + ARB_CEX_WS_BASE_BACKUP 备（可空）。
+// cexWSBases 有序候选基址表：注入主基址 + 备基址（可空）。
 // 空表=直连模式；dial 期 failover 逐序试拨（每连接尝试自主端起——主端恢复即自动回主）。
 func cexWSBases() []string {
 	var bases []string
-	for _, env := range []string{"ARB_CEX_WS_BASE", "ARB_CEX_WS_BASE_BACKUP"} {
-		if b := normWSBase(os.Getenv(env)); b != "" {
+	for _, raw := range []string{ep.CexWSBase, ep.CexWSBaseBackup} {
+		if b := normWSBase(raw); b != "" {
 			bases = append(bases, b)
 		}
 	}
 	// D-519 M4：主空+备置错配——候选 URL 会走无 token native dialer 必败；
-	// warn 一行不 fail（保留 env 自由度）。
-	if os.Getenv("ARB_CEX_WS_BASE") == "" && len(bases) > 0 {
-		log.Printf("[ws-proxy] warn: ARB_CEX_WS_BASE 空但 ARB_CEX_WS_BASE_BACKUP 置位——备端候选无 token 直连必败")
+	// warn 一行不 fail（保留配置自由度）。
+	if ep.CexWSBase == "" && len(bases) > 0 {
+		log.Printf("[ws-proxy] warn: cex ws 主基址空但备基址置位——备端候选无 token 直连必败")
 	}
 	return bases
 }
@@ -68,10 +67,10 @@ func wsViaProxyURLs(proxyPath, native string) []string {
 	return urls
 }
 
-// swapURLHost 把 raw URL 的 host 换成 backupEnv 指向基址的 host（scheme/path/query 不变）；
-// env 空/任一侧非法 → ""（=无备用候选，调用方零行为变化）。D-519 D4：gate 私有流复用。
-func swapURLHost(raw, backupEnv string) string {
-	back := strings.TrimSpace(os.Getenv(backupEnv))
+// swapURLHost 把 raw URL 的 host 换成 backupBase 的 host（scheme/path/query 不变）；
+// 基址空/任一侧非法 → ""（=无备用候选，调用方零行为变化）。D-519 D4：gate 私有流复用。
+func swapURLHost(raw, backupBase string) string {
+	back := strings.TrimSpace(backupBase)
 	if back == "" {
 		return ""
 	}
