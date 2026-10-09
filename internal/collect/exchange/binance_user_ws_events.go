@@ -169,6 +169,62 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 		return
 	}
 	now := b.now()
+	// D-142：先解 ΣUP/Σiw——B 行快照 equity=wb+ΣUP（与 REST totalMarginBalance 同口径）；
+	// 本帧无 P 行 → posCache 现存持仓 UP/IW 兜底（B/P 独立到达，勿以 0 覆盖真值）。
+	var upSum, iwSum float64
+	var orders []venue.Order
+	pFresh := len(acct.P) > 0
+	if pFresh {
+		orders = make([]venue.Order, 0, len(acct.P))
+		for _, p := range acct.P {
+			pa, perr := f64z(p.PA)
+			if perr != nil {
+				log.Printf("[binance-ws] drop field PA: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+				return
+			}
+			if pa == 0 {
+				// D-584 S4（b51a8c61 增收）：venue 平仓后推零量行——pa=0=该 symbol 无仓，
+				// 全量替换语义下不建仓即正确（照建=dashboard 幻影仓）；iw/up 不累加该条。
+				// D-015 ②（R1）：pa=0 行=该腿已平 → recon.Kick 叫醒对账（posSide 原样透传，不落库）。
+				if b.hooks.OnPositionClosed != nil {
+					b.hooks.OnPositionClosed(b.venueKey, p.S, p.PS)
+				}
+				continue
+			}
+			ep, perr := f64z(p.EP)
+			if perr != nil {
+				log.Printf("[binance-ws] drop field EP: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+				return
+			}
+			iw, perr := f64z(p.IW)
+			if perr != nil {
+				log.Printf("[binance-ws] drop field IW: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+				return
+			}
+			up, perr := f64z(p.UP)
+			if perr != nil {
+				log.Printf("[binance-ws] drop field UP: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+				return
+			}
+			side := "BUY"
+			if pa < 0 {
+				side, pa = "SELL", -pa
+			}
+			upSum += up
+			iwSum += iw
+			orders = append(orders, venue.Order{
+				Ticket: p.S, Symbol: p.S, Side: side, Volume: pa, OpenPrice: ep,
+				Profit: up, // D-477 S1 GAP-B1：up→Profit（REST 基线 cex_positions.go 以 symbol 作 Ticket）
+				Venue:  "binance", VenueKey: b.venueKey, PosSide: strings.ToLower(p.PS),
+				InitialMargin: iw, OpenedAt: now,
+			})
+		}
+	} else if poss, ok := b.posCache.get(b.venueKey, EventFreshTTL, now); ok {
+		for _, p := range poss {
+			upSum += p.Profit
+			iwSum += p.InitialMargin
+		}
+	}
 	wbUSDT := math.NaN()
 	// demo 流禁写快照——REST 写面 IsRealAccount 只收 real（返修 R1），持仓/订单缓存仍更新。
 	if !b.simulated {
@@ -176,15 +232,16 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 			if bal.A != "USDT" {
 				continue
 			}
-			eq, perr := f64z(bal.WB)
+			wb, perr := f64z(bal.WB)
 			if perr != nil {
 				log.Printf("[binance-ws] drop field WB: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
 				return
 			}
-			wbUSDT = eq
+			wbUSDT = wb
+			eq := wb + upSum // D-142：快照 equity=wb+ΣUP
 			row := pgstore.VenueAccountSnapshot{
 				Venue: "binance", VenueType: b.venueType,
-				BalanceRaw: eq, EquityRaw: eq,
+				BalanceRaw: wb, EquityRaw: eq,
 				Currency: "USDT", FetchedAt: now, Src: "binance_event",
 			}
 			if err := b.sink.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{row}); err != nil {
@@ -199,56 +256,10 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 	if b.hooks.OnIO != nil && (acct.M == "DEPOSIT" || acct.M == "WITHDRAW") {
 		b.hooks.OnIO()
 	}
-	if len(acct.P) == 0 {
-		b.balPut(wbUSDT, 0, now)
-		return
+	if pFresh {
+		b.posCache.PutPositions(b.venueKey, orders, now)
 	}
-	orders := make([]venue.Order, 0, len(acct.P))
-	iwSum := 0.0
-	for _, p := range acct.P {
-		pa, perr := f64z(p.PA)
-		if perr != nil {
-			log.Printf("[binance-ws] drop field PA: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
-			return
-		}
-		if pa == 0 {
-			// D-584 S4（b51a8c61 增收）：venue 平仓后推零量行——pa=0=该 symbol 无仓，
-			// 全量替换语义下不建仓即正确（照建=dashboard 幻影仓）；iwSum 不累加该条。
-			// D-015 ②（R1）：pa=0 行=该腿已平 → recon.Kick 叫醒对账（posSide 原样透传，不落库）。
-			if b.hooks.OnPositionClosed != nil {
-				b.hooks.OnPositionClosed(b.venueKey, p.S, p.PS)
-			}
-			continue
-		}
-		ep, perr := f64z(p.EP)
-		if perr != nil {
-			log.Printf("[binance-ws] drop field EP: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
-			return
-		}
-		iw, perr := f64z(p.IW)
-		if perr != nil {
-			log.Printf("[binance-ws] drop field IW: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
-			return
-		}
-		up, perr := f64z(p.UP)
-		if perr != nil {
-			log.Printf("[binance-ws] drop field UP: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
-			return
-		}
-		side := "BUY"
-		if pa < 0 {
-			side, pa = "SELL", -pa
-		}
-		iwSum += iw
-		orders = append(orders, venue.Order{
-			Ticket: p.S, Symbol: p.S, Side: side, Volume: pa, OpenPrice: ep,
-			Profit: up, // D-477 S1 GAP-B1：up→Profit（REST 基线 cex_positions.go 以 symbol 作 Ticket）
-			Venue:  "binance", VenueKey: b.venueKey, PosSide: strings.ToLower(p.PS),
-			InitialMargin: iw, OpenedAt: now,
-		})
-	}
-	b.posCache.PutPositions(b.venueKey, orders, now)
-	b.balPut(wbUSDT, iwSum, now)
+	b.balPut(wbUSDT, upSum, iwSum, now)
 	WarnUnconsumed("binance", "ACCOUNT_UPDATE", a, binanceAccountUpdateConsumed)
 }
 
