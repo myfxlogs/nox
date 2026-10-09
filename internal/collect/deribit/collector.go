@@ -7,8 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
-	"strconv"
 	"time"
 
 	"arb/internal/fact"
@@ -214,26 +212,4 @@ func (c *Collector) maybePurge(ctx context.Context) {
 	if n > 0 {
 		log.Printf("[deribit] purged %d opt_parity_dev facts older than %s", n, DefaultFactTTL)
 	}
-}
-
-// LoadAlertBpsFromEnv 从 env 读告警阈值（ARB_OPT_PARITY_ALERT_BPS，默认 15）。
-func LoadAlertBpsFromEnv() float64 {
-	v := os.Getenv("ARB_OPT_PARITY_ALERT_BPS")
-	if v == "" {
-		return DefaultAlertBps
-	}
-	f, err := strconv.ParseFloat(v, 64)
-	if err != nil || f <= 0 {
-		return DefaultAlertBps
-	}
-	return f
-}
-
-// EnabledFromEnv 从 env 读启用开关（ARB_DERIBIT_OPT_ENABLED，默认开）。
-func EnabledFromEnv() bool {
-	v := os.Getenv("ARB_DERIBIT_OPT_ENABLED")
-	if v == "" {
-		return true // 默认开
-	}
-	return v == "true" || v == "1" || v == "yes"
 }

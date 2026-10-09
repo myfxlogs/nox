@@ -14,14 +14,28 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// 运行期代理配置——D-145 env 收口：装配层 boot 时 Configure 注入（cfg/ secrets 供值），
+// 本包不再直读 env。未注入=零值=直连默认（OKX/Gate 公网场景语义不变）。
+var (
+	proxyCAPath   string
+	proxyToken    string
+	failoverPairs [][2]string // {主端基址, 备端基址} URL 对（D-519 D5 host 对表源）
+)
+
+// Configure 注入代理配置（caPath=自签 CA 路径，token=X-Proxy-Token，
+// pairs=REST failover 主备基址对）。boot 先于一切 Client/WSDialer 消费点调用。
+func Configure(caPath, token string, pairs [][2]string) {
+	proxyCAPath, proxyToken, failoverPairs = caPath, token, pairs
+}
+
 // Client 返回带 Binance 静态代理信任的 http.Client：
-//   - ARB_BINANCE_PROXY_CA 非空 → 在系统根证书上追加该自签 CA（代理 TLS 才能通过）
-//   - ARB_BINANCE_PROXY_TOKEN 非空 → 所有请求自动带 X-Proxy-Token（防开放中继鉴权）
+//   - proxyCAPath 非空 → 在系统根证书上追加该自签 CA（代理 TLS 才能通过）
+//   - proxyToken 非空 → 所有请求自动带 X-Proxy-Token（防开放中继鉴权）
 //
 // 两者都未配置时返回默认客户端（OKX/Gate 等直连场景）。
 func Client() *http.Client {
 	c := &http.Client{Timeout: 15 * time.Second}
-	caPath, tok := os.Getenv("ARB_BINANCE_PROXY_CA"), os.Getenv("ARB_BINANCE_PROXY_TOKEN")
+	caPath, tok := proxyCAPath, proxyToken
 	if caPath == "" && tok == "" {
 		return c
 	}
@@ -56,7 +70,7 @@ func Client() *http.Client {
 func WSDialer() (*websocket.Dialer, http.Header) {
 	d := &websocket.Dialer{HandshakeTimeout: 10 * time.Second}
 	header := http.Header{}
-	caPath, tok := os.Getenv("ARB_BINANCE_PROXY_CA"), os.Getenv("ARB_BINANCE_PROXY_TOKEN")
+	caPath, tok := proxyCAPath, proxyToken
 	if caPath != "" {
 		if pem, err := os.ReadFile(caPath); err == nil {
 			pool, err := x509.SystemCertPool()
@@ -119,19 +133,15 @@ func hostEnvURL(v string) *url.URL {
 
 func newFailoverRT(base http.RoundTripper) http.RoundTripper {
 	targets := map[string]failoverTarget{}
-	add := func(primEnv, backEnv string) {
-		bu := hostEnvURL(os.Getenv(backEnv))
-		pu := hostEnvURL(os.Getenv(primEnv))
+	for _, p := range failoverPairs {
+		bu, pu := hostEnvURL(p[1]), hostEnvURL(p[0])
 		if bu == nil || pu == nil {
-			return
+			continue
 		}
 		if _, ok := targets[pu.Host]; !ok {
 			targets[pu.Host] = failoverTarget{bu.Scheme, bu.Host}
 		}
 	}
-	add("BINANCE_PROXY_URL", "BINANCE_PROXY_URL_BACKUP")
-	add("ARB_CEX_WS_BASE", "ARB_CEX_WS_BASE_BACKUP")
-	add("ARB_OKX_PROXY_URL", "ARB_CEX_WS_BASE_BACKUP")
 	if len(targets) == 0 {
 		return nil
 	}

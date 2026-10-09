@@ -13,6 +13,7 @@ import (
 )
 
 // MasterKey ARB_MASTER_KEY 归一化 32B key（空 env → nil,false——fail-closed 由调用方判）。
+// D-145 引导件：app_secrets 解密钥放 PG=钥匙锁柜——必须留 env。
 func MasterKey() ([]byte, bool) {
 	k := os.Getenv("ARB_MASTER_KEY")
 	if k == "" {

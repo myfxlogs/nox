@@ -4,6 +4,7 @@
 package exchange
 
 import (
+	"arb/internal/httpx"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -169,7 +170,8 @@ func TestD511_NilHeaderNoToken(t *testing.T) {
 		conn.ReadMessage()
 	}))
 	t.Cleanup(srv.Close)
-	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-should-not-leak")
+	httpx.Configure("", "tok-should-not-leak", nil)
+	defer httpx.Configure("", "", nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	spec := wsRunnerSpec("ws"+strings.TrimPrefix(srv.URL, "http"), make(chan []byte, 8))

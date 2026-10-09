@@ -7,7 +7,6 @@ package config
 import (
 	"log"
 	"os"
-	"slices"
 	"sort"
 )
 
@@ -26,10 +25,7 @@ func ApplyAppConfigOverlay(cfg *Config, rows map[string]string) {
 	for _, k := range keys {
 		setter, ok := appConfigKeys[k]
 		if !ok {
-			// env-passthrough 键由 ApplyAppConfigEnvOverlay 处理，不算未白名单（防误报 warn）。
-			if !slices.Contains(appConfigEnvKeys, k) {
-				log.Printf("[config] app_config key %s not whitelisted, ignored", k)
-			}
+			log.Printf("[config] app_config key %s not whitelisted, ignored", k)
 			continue
 		}
 		v := rows[k]
@@ -59,27 +55,11 @@ func ApplyAppConfigOverlay(cfg *Config, rows map[string]string) {
 	}
 }
 
-// ApplyAppConfigEnvOverlay 无 Config 字段的标量键 env 注入（D-515 S4 passthrough）。
-// 只处理 appConfigEnvKeys 白名单；须在 env 直读消费点（wire_*）之前调用。
-func ApplyAppConfigEnvOverlay(rows map[string]string) {
-	for _, k := range appConfigEnvKeys {
-		v, ok := rows[k]
-		if !ok {
-			continue
-		}
-		if err := os.Setenv(k, v); err != nil {
-			log.Printf("[config] %s: setenv failed: %v", k, err)
-			continue
-		}
-		log.Printf("[config] %s=%s (source=app_config env)", k, v)
-	}
-}
-
-// AppConfigSeedKeys 播种键表=白名单 typed 键 + env passthrough 键（D-515 S4）。
+// AppConfigSeedKeys 播种键表=白名单 typed 键（D-515 S4；D-145 死键核后 env-passthrough 轨退役）。
 func AppConfigSeedKeys() []string {
-	keys := make([]string, 0, len(appConfigKeys)+len(appConfigEnvKeys))
+	keys := make([]string, 0, len(appConfigKeys))
 	for k := range appConfigKeys {
 		keys = append(keys, k)
 	}
-	return append(keys, appConfigEnvKeys...)
+	return keys
 }

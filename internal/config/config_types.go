@@ -276,4 +276,7 @@ type Config struct {
 	// === D-274 事件驱动研判引擎 ===
 	JudgeBalanceHKD float64 // sizing 双币余额 HKD（ARB_JUDGE_BALANCE_HKD；0=未配置 sizing 降级 qty=0）
 	JudgeBalanceUSD float64 // sizing 双币余额 USD（ARB_JUDGE_BALANCE_USD；0=同上）
+
+	// EnvKnobs D-145 env 收口 PG：原 env 直读键归一（config_envknobs.go 嵌入，promoted 访问不变）。
+	EnvKnobs
 }

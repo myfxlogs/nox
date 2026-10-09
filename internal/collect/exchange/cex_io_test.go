@@ -2,6 +2,7 @@
 package exchange
 
 import (
+	"arb/internal/httpx"
 	"context"
 	"fmt"
 	"net/http"
@@ -155,7 +156,8 @@ func TestFilterIOAccounts(t *testing.T) {
 // binance 请求带 X-Proxy-Token 头（httpx.Client() 注入；旧实现红=裸 DefaultClient 头缺失
 // =生产 x509 skip 复现）。
 func TestCexIOCollector_BinanceProxyToken(t *testing.T) {
-	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-364r4")
+	httpx.Configure("", "tok-364r4", nil)
+	defer httpx.Configure("", "", nil)
 	var gotToken []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotToken = append(gotToken, r.Header.Get("X-Proxy-Token"))

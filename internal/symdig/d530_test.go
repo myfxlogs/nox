@@ -122,19 +122,17 @@ func TestD530DoubleTruncatedError(t *testing.T) {
 	}
 }
 
-// MaxTokens 缺省/env 注入。
+// MaxTokens 缺省/装配注入（D-145：env 直读退役——cfg 字段注入，<=0 缺省 8192）。
 func TestD530MaxTokensDefault(t *testing.T) {
 	d := &Deps{}
-	t.Setenv("ARB_SYMDIG_MAX_TOKENS", "")
 	d.fill()
 	if d.MaxTokens != 8192 {
 		t.Fatalf("缺省 8192, got %d", d.MaxTokens)
 	}
-	t.Setenv("ARB_SYMDIG_MAX_TOKENS", "4096")
-	d2 := &Deps{}
+	d2 := &Deps{MaxTokens: 4096}
 	d2.fill()
 	if d2.MaxTokens != 4096 {
-		t.Fatalf("env 4096, got %d", d2.MaxTokens)
+		t.Fatalf("注入 4096, got %d", d2.MaxTokens)
 	}
 }
 

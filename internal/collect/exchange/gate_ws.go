@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -54,10 +53,10 @@ type GateWebSocket struct {
 }
 
 // NewGateWebSocket 创建 Gate WS 采集器（ARB_CEX_WS_BASE 置位→经 cex-proxy /gatespotws 与 /v4/ws 前缀）。
-// D-541 S0：ARB_GATE_WS_MODE=direct→强制原生直连（per-venue 止血开关，缺省 proxy=现行，
+// D-541 S0：GateWSMode=direct→强制原生直连（per-venue 止血开关，缺省 proxy=现行，
 // 切回=env 还原；不动 okx/binance 装配）。
 func NewGateWebSocket(cfg Config) *GateWebSocket {
-	direct := os.Getenv("ARB_GATE_WS_MODE") == "direct"
+	direct := ep.GateWSMode == "direct"
 	proxied := cexWSBase() != "" && !direct
 	d, h := wsDialer(proxied)
 	spotWL, futuresWL := newGatePairWhitelists(cfg)
