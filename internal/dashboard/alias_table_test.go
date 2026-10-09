@@ -82,6 +82,9 @@ func TestMatchCanonical(t *testing.T) {
 		{"EURCAD#", "EURCAD", 1},
 		{"MATICUSD#", "MATICUSDT", 1},
 		{"ATOMUSD#", "ATOMUSDT", 1},
+		{"LINKUSD#", "LINKUSDT", 1},
+		{"AVAXUSD#", "AVAXUSDT", 1},
+		{"DOGEUSD#", "DOGEUSDT", 1},
 		// XM 误配闸：到期期货/非 USD 变体/主题篮/周末金不命中
 		{"US30-DEC26", "", 0},
 		{"BRENT-DEC26", "", 0},
