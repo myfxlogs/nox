@@ -110,15 +110,33 @@ func (m *BrokerManager) CommissionBps(venue string) (float64, bool) {
 }
 
 // RemoveBroker 停止适配器并删除 DB 记录与符号映射。
+// D-150：删号级联——①open 真金仓在 venue 上拒绝删（孤儿仓位 fail-closed）；
+// ②qbus 驱逐该 venue 内存报价（不驱逐则 mt-health CEX 兜底径收幽灵 venue 永久 crit）；
+// ③采集/派生数据清（ticks/facts/equiv/universe/监控簿）+active 纸面退 venue_removed。
+// 保留：alerts/positions 等审计域。
 func (m *BrokerManager) RemoveBroker(ctx context.Context, venue string) error {
+	if n, err := m.store.CountVenueOpenPositions(ctx, venue); err != nil {
+		return fmt.Errorf("open positions guard: %w", err)
+	} else if n > 0 {
+		return fmt.Errorf("venue %s 仍有 %d 个活跃真金仓，先平仓再删号", venue, n)
+	}
 	m.stopAdapter(venue)
+	if m.qbus != nil {
+		if evicted := m.qbus.EvictVenue(venue); evicted > 0 {
+			log.Printf("[broker] %s qbus evicted %d quotes", venue, evicted)
+		}
+	}
+	purged, err := m.store.PurgeVenueData(ctx, venue)
+	if err != nil {
+		return fmt.Errorf("purge venue data: %w", err)
+	}
 	if err := m.store.DeleteVenueSymbolMappings(ctx, venue); err != nil {
 		return fmt.Errorf("delete symbol mappings: %w", err)
 	}
 	if err := m.store.DeleteBrokerAccount(ctx, venue); err != nil {
 		return fmt.Errorf("delete broker account: %w", err)
 	}
-	log.Printf("[broker] removed %s", venue)
+	log.Printf("[broker] removed %s (purged=%v)", venue, purged)
 	return nil
 }
 
