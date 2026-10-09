@@ -113,6 +113,8 @@ func (m *BrokerManager) CommissionBps(venue string) (float64, bool) {
 // D-150：删号级联——①open 真金仓在 venue 上拒绝删（孤儿仓位 fail-closed）；
 // ②qbus 驱逐该 venue 内存报价（不驱逐则 mt-health CEX 兜底径收幽灵 venue 永久 crit）；
 // ③采集/派生数据清（ticks/facts/equiv/universe/监控簿）+active 纸面退 venue_removed。
+// D-151：③劈两半——派生小表同步清（账号行删除前清完，保正确性），ticks/facts 批量行
+// 异步清（同步跑 RPC 卡 ~30s）；异步失败 warn 告警（残留=系统解决不了=推送域）。
 // 保留：alerts/positions 等审计域。
 func (m *BrokerManager) RemoveBroker(ctx context.Context, venue string) error {
 	if n, err := m.store.CountVenueOpenPositions(ctx, venue); err != nil {
@@ -126,7 +128,7 @@ func (m *BrokerManager) RemoveBroker(ctx context.Context, venue string) error {
 			log.Printf("[broker] %s qbus evicted %d quotes", venue, evicted)
 		}
 	}
-	purged, err := m.store.PurgeVenueData(ctx, venue)
+	purged, err := m.store.PurgeVenueDerived(ctx, venue)
 	if err != nil {
 		return fmt.Errorf("purge venue data: %w", err)
 	}
@@ -137,7 +139,32 @@ func (m *BrokerManager) RemoveBroker(ctx context.Context, venue string) error {
 		return fmt.Errorf("delete broker account: %w", err)
 	}
 	log.Printf("[broker] removed %s (purged=%v)", venue, purged)
+	m.purgeVenueBulkAsync(venue)
 	return nil
+}
+
+// purgeVenueBulkAsync D-151：账号行已删后后台清 ticks/facts 批量观测行。
+// 账号在窗内被重建 → 放弃（残行随新采集覆盖，强清会擦掉新数据）。
+func (m *BrokerManager) purgeVenueBulkAsync(venue string) {
+	safego.Go("broker-purge:"+venue, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		exists, err := m.store.BrokerAccountExists(ctx, venue)
+		if err == nil && exists {
+			log.Printf("[broker] %s re-added during purge window, bulk purge skipped", venue)
+			return
+		}
+		bulk, perr := m.store.PurgeVenueBulk(ctx, venue)
+		if perr != nil {
+			log.Printf("[broker] %s bulk purge failed: %v", venue, perr)
+			if aerr := m.store.InsertAlert(ctx, nil, "warn",
+				fmt.Sprintf("[broker] venue %s 删除后批量清理未完成（%v）——残留 ticks/facts 需人工核查", venue, perr)); aerr != nil {
+				log.Printf("[broker] %s purge alert: %v", venue, aerr)
+			}
+			return
+		}
+		log.Printf("[broker] %s bulk purge done %v", venue, bulk)
+	})
 }
 
 // DisableBroker 停用账号（D-033）：停止适配器 + status=stopped，保留 DB 行与符号映射（启用可恢复）。
