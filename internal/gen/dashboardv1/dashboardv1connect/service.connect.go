@@ -77,24 +77,6 @@ const (
 	// DashboardServiceBackfillSwapHistoryProcedure is the fully-qualified name of the
 	// DashboardService's BackfillSwapHistory RPC.
 	DashboardServiceBackfillSwapHistoryProcedure = "/arb.dashboard.v1.DashboardService/BackfillSwapHistory"
-	// DashboardServiceGetCNFIRadarSnapshotProcedure is the fully-qualified name of the
-	// DashboardService's GetCNFIRadarSnapshot RPC.
-	DashboardServiceGetCNFIRadarSnapshotProcedure = "/arb.dashboard.v1.DashboardService/GetCNFIRadarSnapshot"
-	// DashboardServiceGetCNFIProgressProcedure is the fully-qualified name of the DashboardService's
-	// GetCNFIProgress RPC.
-	DashboardServiceGetCNFIProgressProcedure = "/arb.dashboard.v1.DashboardService/GetCNFIProgress"
-	// DashboardServiceAddCNFIHoldingProcedure is the fully-qualified name of the DashboardService's
-	// AddCNFIHolding RPC.
-	DashboardServiceAddCNFIHoldingProcedure = "/arb.dashboard.v1.DashboardService/AddCNFIHolding"
-	// DashboardServiceAddCNFIActionProcedure is the fully-qualified name of the DashboardService's
-	// AddCNFIAction RPC.
-	DashboardServiceAddCNFIActionProcedure = "/arb.dashboard.v1.DashboardService/AddCNFIAction"
-	// DashboardServiceListCNFIActionsProcedure is the fully-qualified name of the DashboardService's
-	// ListCNFIActions RPC.
-	DashboardServiceListCNFIActionsProcedure = "/arb.dashboard.v1.DashboardService/ListCNFIActions"
-	// DashboardServiceListRepoOpsProcedure is the fully-qualified name of the DashboardService's
-	// ListRepoOps RPC.
-	DashboardServiceListRepoOpsProcedure = "/arb.dashboard.v1.DashboardService/ListRepoOps"
 	// DashboardServiceListPositionsProcedure is the fully-qualified name of the DashboardService's
 	// ListPositions RPC.
 	DashboardServiceListPositionsProcedure = "/arb.dashboard.v1.DashboardService/ListPositions"
@@ -137,9 +119,6 @@ const (
 	// DashboardServiceGetTrxYieldCurveProcedure is the fully-qualified name of the DashboardService's
 	// GetTrxYieldCurve RPC.
 	DashboardServiceGetTrxYieldCurveProcedure = "/arb.dashboard.v1.DashboardService/GetTrxYieldCurve"
-	// DashboardServiceGetRepoRateRadarProcedure is the fully-qualified name of the DashboardService's
-	// GetRepoRateRadar RPC.
-	DashboardServiceGetRepoRateRadarProcedure = "/arb.dashboard.v1.DashboardService/GetRepoRateRadar"
 	// DashboardServiceAddDailyIncomeProcedure is the fully-qualified name of the DashboardService's
 	// AddDailyIncome RPC.
 	DashboardServiceAddDailyIncomeProcedure = "/arb.dashboard.v1.DashboardService/AddDailyIncome"
@@ -277,30 +256,9 @@ const (
 	// DashboardServiceSetAiSettingsProcedure is the fully-qualified name of the DashboardService's
 	// SetAiSettings RPC.
 	DashboardServiceSetAiSettingsProcedure = "/arb.dashboard.v1.DashboardService/SetAiSettings"
-	// DashboardServiceGetRepoConfigProcedure is the fully-qualified name of the DashboardService's
-	// GetRepoConfig RPC.
-	DashboardServiceGetRepoConfigProcedure = "/arb.dashboard.v1.DashboardService/GetRepoConfig"
-	// DashboardServiceSetRepoConfigProcedure is the fully-qualified name of the DashboardService's
-	// SetRepoConfig RPC.
-	DashboardServiceSetRepoConfigProcedure = "/arb.dashboard.v1.DashboardService/SetRepoConfig"
 	// DashboardServiceGetCexScanSnapshotProcedure is the fully-qualified name of the DashboardService's
 	// GetCexScanSnapshot RPC.
 	DashboardServiceGetCexScanSnapshotProcedure = "/arb.dashboard.v1.DashboardService/GetCexScanSnapshot"
-	// DashboardServiceRecordRepoTradeProcedure is the fully-qualified name of the DashboardService's
-	// RecordRepoTrade RPC.
-	DashboardServiceRecordRepoTradeProcedure = "/arb.dashboard.v1.DashboardService/RecordRepoTrade"
-	// DashboardServiceListRepoTradesProcedure is the fully-qualified name of the DashboardService's
-	// ListRepoTrades RPC.
-	DashboardServiceListRepoTradesProcedure = "/arb.dashboard.v1.DashboardService/ListRepoTrades"
-	// DashboardServiceSettleRepoTradeProcedure is the fully-qualified name of the DashboardService's
-	// SettleRepoTrade RPC.
-	DashboardServiceSettleRepoTradeProcedure = "/arb.dashboard.v1.DashboardService/SettleRepoTrade"
-	// DashboardServiceDeleteRepoTradeProcedure is the fully-qualified name of the DashboardService's
-	// DeleteRepoTrade RPC.
-	DashboardServiceDeleteRepoTradeProcedure = "/arb.dashboard.v1.DashboardService/DeleteRepoTrade"
-	// DashboardServiceGetRepoStrategyValidationProcedure is the fully-qualified name of the
-	// DashboardService's GetRepoStrategyValidation RPC.
-	DashboardServiceGetRepoStrategyValidationProcedure = "/arb.dashboard.v1.DashboardService/GetRepoStrategyValidation"
 	// DashboardServiceListPriceAlertRulesProcedure is the fully-qualified name of the
 	// DashboardService's ListPriceAlertRules RPC.
 	DashboardServiceListPriceAlertRulesProcedure = "/arb.dashboard.v1.DashboardService/ListPriceAlertRules"
@@ -424,17 +382,6 @@ type DashboardServiceClient interface {
 	ExecuteOpportunity(context.Context, *connect.Request[dashboardv1.ExecuteOpportunityRequest]) (*connect.Response[dashboardv1.ExecuteOpportunityResponse], error)
 	ClosePosition(context.Context, *connect.Request[dashboardv1.ClosePositionRequest]) (*connect.Response[dashboardv1.ClosePositionResponse], error)
 	BackfillSwapHistory(context.Context, *connect.Request[dashboardv1.BackfillSwapHistoryRequest]) (*connect.Response[dashboardv1.BackfillSwapHistoryReply], error)
-	// CN-FI 固收雷达快照（D-226/D-237；只读快照，无流式——日频数据不接 streamUpdates）
-	GetCNFIRadarSnapshot(context.Context, *connect.Request[dashboardv1.GetCNFIRadarSnapshotRequest]) (*connect.Response[dashboardv1.GetCNFIRadarSnapshotResponse], error)
-	// CN-FI 四层进度（P3；比例+工具名，响应零金额字段——D-047：金额只在运行时 DB）
-	GetCNFIProgress(context.Context, *connect.Request[dashboardv1.GetCNFIProgressRequest]) (*connect.Response[dashboardv1.GetCNFIProgressResponse], error)
-	// CN-FI 手动持仓录入（P3；L2 人工确认铁律，系统永不下单）
-	AddCNFIHolding(context.Context, *connect.Request[dashboardv1.AddCNFIHoldingRequest]) (*connect.Response[dashboardv1.AddCNFIHoldingResponse], error)
-	// CN-FI 操作日志/投资笔记（D-242；金额=运行时个人数据，L2 人工）
-	AddCNFIAction(context.Context, *connect.Request[dashboardv1.AddCNFIActionRequest]) (*connect.Response[dashboardv1.AddCNFIActionResponse], error)
-	ListCNFIActions(context.Context, *connect.Request[dashboardv1.ListCNFIActionsRequest]) (*connect.Response[dashboardv1.ListCNFIActionsResponse], error)
-	// D-270：逆回购操作记录列表（周四操作闭环审计）
-	ListRepoOps(context.Context, *connect.Request[dashboardv1.ListRepoOpsRequest]) (*connect.Response[dashboardv1.ListRepoOpsResponse], error)
 	ListPositions(context.Context, *connect.Request[dashboardv1.ListPositionsRequest]) (*connect.Response[dashboardv1.ListPositionsResponse], error)
 	// Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
 	ListBrokerPositions(context.Context, *connect.Request[dashboardv1.ListBrokerPositionsRequest]) (*connect.Response[dashboardv1.ListBrokerPositionsResponse], error)
@@ -452,7 +399,6 @@ type DashboardServiceClient interface {
 	TrxAccountRefresh(context.Context, *connect.Request[dashboardv1.TrxAccountRefreshRequest]) (*connect.Response[dashboardv1.TrxAccountRefreshResponse], error)
 	GetTrxYieldRadar(context.Context, *connect.Request[dashboardv1.GetTrxYieldRadarRequest]) (*connect.Response[dashboardv1.GetTrxYieldRadarResponse], error)
 	GetTrxYieldCurve(context.Context, *connect.Request[dashboardv1.GetTrxYieldCurveRequest]) (*connect.Response[dashboardv1.GetTrxYieldCurveResponse], error)
-	GetRepoRateRadar(context.Context, *connect.Request[dashboardv1.GetRepoRateRadarRequest]) (*connect.Response[dashboardv1.GetRepoRateRadarResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[dashboardv1.AddDailyIncomeRequest]) (*connect.Response[dashboardv1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[dashboardv1.ListDailyIncomeRequest]) (*connect.Response[dashboardv1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -517,16 +463,8 @@ type DashboardServiceClient interface {
 	GetAiSettings(context.Context, *connect.Request[dashboardv1.GetAiSettingsRequest]) (*connect.Response[dashboardv1.GetAiSettingsResponse], error)
 	SetAiSettings(context.Context, *connect.Request[dashboardv1.SetAiSettingsRequest]) (*connect.Response[dashboardv1.SetAiSettingsResponse], error)
 	// D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
-	GetRepoConfig(context.Context, *connect.Request[dashboardv1.GetRepoConfigRequest]) (*connect.Response[dashboardv1.GetRepoConfigResponse], error)
-	SetRepoConfig(context.Context, *connect.Request[dashboardv1.SetRepoConfigRequest]) (*connect.Response[dashboardv1.SetRepoConfigResponse], error)
 	// D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
 	GetCexScanSnapshot(context.Context, *connect.Request[dashboardv1.GetCexScanSnapshotRequest]) (*connect.Response[dashboardv1.GetCexScanSnapshotResponse], error)
-	// D-272：逆回购操作记录+策略验证闭环
-	RecordRepoTrade(context.Context, *connect.Request[dashboardv1.RecordRepoTradeRequest]) (*connect.Response[dashboardv1.RecordRepoTradeResponse], error)
-	ListRepoTrades(context.Context, *connect.Request[dashboardv1.ListRepoTradesRequest]) (*connect.Response[dashboardv1.ListRepoTradesResponse], error)
-	SettleRepoTrade(context.Context, *connect.Request[dashboardv1.SettleRepoTradeRequest]) (*connect.Response[dashboardv1.SettleRepoTradeResponse], error)
-	DeleteRepoTrade(context.Context, *connect.Request[dashboardv1.DeleteRepoTradeRequest]) (*connect.Response[dashboardv1.DeleteRepoTradeResponse], error)
-	GetRepoStrategyValidation(context.Context, *connect.Request[dashboardv1.GetRepoStrategyValidationRequest]) (*connect.Response[dashboardv1.GetRepoStrategyValidationResponse], error)
 	// D-292：价格提醒规则前端管理（CRUD；引擎 30s 重载自动生效，无通知机制）
 	ListPriceAlertRules(context.Context, *connect.Request[dashboardv1.ListPriceAlertRulesRequest]) (*connect.Response[dashboardv1.ListPriceAlertRulesResponse], error)
 	CreatePriceAlertRule(context.Context, *connect.Request[dashboardv1.CreatePriceAlertRuleRequest]) (*connect.Response[dashboardv1.CreatePriceAlertRuleResponse], error)
@@ -682,42 +620,6 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("BackfillSwapHistory")),
 			connect.WithClientOptions(opts...),
 		),
-		getCNFIRadarSnapshot: connect.NewClient[dashboardv1.GetCNFIRadarSnapshotRequest, dashboardv1.GetCNFIRadarSnapshotResponse](
-			httpClient,
-			baseURL+DashboardServiceGetCNFIRadarSnapshotProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("GetCNFIRadarSnapshot")),
-			connect.WithClientOptions(opts...),
-		),
-		getCNFIProgress: connect.NewClient[dashboardv1.GetCNFIProgressRequest, dashboardv1.GetCNFIProgressResponse](
-			httpClient,
-			baseURL+DashboardServiceGetCNFIProgressProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("GetCNFIProgress")),
-			connect.WithClientOptions(opts...),
-		),
-		addCNFIHolding: connect.NewClient[dashboardv1.AddCNFIHoldingRequest, dashboardv1.AddCNFIHoldingResponse](
-			httpClient,
-			baseURL+DashboardServiceAddCNFIHoldingProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("AddCNFIHolding")),
-			connect.WithClientOptions(opts...),
-		),
-		addCNFIAction: connect.NewClient[dashboardv1.AddCNFIActionRequest, dashboardv1.AddCNFIActionResponse](
-			httpClient,
-			baseURL+DashboardServiceAddCNFIActionProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("AddCNFIAction")),
-			connect.WithClientOptions(opts...),
-		),
-		listCNFIActions: connect.NewClient[dashboardv1.ListCNFIActionsRequest, dashboardv1.ListCNFIActionsResponse](
-			httpClient,
-			baseURL+DashboardServiceListCNFIActionsProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("ListCNFIActions")),
-			connect.WithClientOptions(opts...),
-		),
-		listRepoOps: connect.NewClient[dashboardv1.ListRepoOpsRequest, dashboardv1.ListRepoOpsResponse](
-			httpClient,
-			baseURL+DashboardServiceListRepoOpsProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("ListRepoOps")),
-			connect.WithClientOptions(opts...),
-		),
 		listPositions: connect.NewClient[dashboardv1.ListPositionsRequest, dashboardv1.ListPositionsResponse](
 			httpClient,
 			baseURL+DashboardServiceListPositionsProcedure,
@@ -800,12 +702,6 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceGetTrxYieldCurveProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("GetTrxYieldCurve")),
-			connect.WithClientOptions(opts...),
-		),
-		getRepoRateRadar: connect.NewClient[dashboardv1.GetRepoRateRadarRequest, dashboardv1.GetRepoRateRadarResponse](
-			httpClient,
-			baseURL+DashboardServiceGetRepoRateRadarProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("GetRepoRateRadar")),
 			connect.WithClientOptions(opts...),
 		),
 		addDailyIncome: connect.NewClient[dashboardv1.AddDailyIncomeRequest, dashboardv1.AddDailyIncomeResponse](
@@ -1084,52 +980,10 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("SetAiSettings")),
 			connect.WithClientOptions(opts...),
 		),
-		getRepoConfig: connect.NewClient[dashboardv1.GetRepoConfigRequest, dashboardv1.GetRepoConfigResponse](
-			httpClient,
-			baseURL+DashboardServiceGetRepoConfigProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("GetRepoConfig")),
-			connect.WithClientOptions(opts...),
-		),
-		setRepoConfig: connect.NewClient[dashboardv1.SetRepoConfigRequest, dashboardv1.SetRepoConfigResponse](
-			httpClient,
-			baseURL+DashboardServiceSetRepoConfigProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("SetRepoConfig")),
-			connect.WithClientOptions(opts...),
-		),
 		getCexScanSnapshot: connect.NewClient[dashboardv1.GetCexScanSnapshotRequest, dashboardv1.GetCexScanSnapshotResponse](
 			httpClient,
 			baseURL+DashboardServiceGetCexScanSnapshotProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("GetCexScanSnapshot")),
-			connect.WithClientOptions(opts...),
-		),
-		recordRepoTrade: connect.NewClient[dashboardv1.RecordRepoTradeRequest, dashboardv1.RecordRepoTradeResponse](
-			httpClient,
-			baseURL+DashboardServiceRecordRepoTradeProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("RecordRepoTrade")),
-			connect.WithClientOptions(opts...),
-		),
-		listRepoTrades: connect.NewClient[dashboardv1.ListRepoTradesRequest, dashboardv1.ListRepoTradesResponse](
-			httpClient,
-			baseURL+DashboardServiceListRepoTradesProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("ListRepoTrades")),
-			connect.WithClientOptions(opts...),
-		),
-		settleRepoTrade: connect.NewClient[dashboardv1.SettleRepoTradeRequest, dashboardv1.SettleRepoTradeResponse](
-			httpClient,
-			baseURL+DashboardServiceSettleRepoTradeProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("SettleRepoTrade")),
-			connect.WithClientOptions(opts...),
-		),
-		deleteRepoTrade: connect.NewClient[dashboardv1.DeleteRepoTradeRequest, dashboardv1.DeleteRepoTradeResponse](
-			httpClient,
-			baseURL+DashboardServiceDeleteRepoTradeProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("DeleteRepoTrade")),
-			connect.WithClientOptions(opts...),
-		),
-		getRepoStrategyValidation: connect.NewClient[dashboardv1.GetRepoStrategyValidationRequest, dashboardv1.GetRepoStrategyValidationResponse](
-			httpClient,
-			baseURL+DashboardServiceGetRepoStrategyValidationProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("GetRepoStrategyValidation")),
 			connect.WithClientOptions(opts...),
 		),
 		listPriceAlertRules: connect.NewClient[dashboardv1.ListPriceAlertRulesRequest, dashboardv1.ListPriceAlertRulesResponse](
@@ -1350,12 +1204,6 @@ type dashboardServiceClient struct {
 	executeOpportunity           *connect.Client[dashboardv1.ExecuteOpportunityRequest, dashboardv1.ExecuteOpportunityResponse]
 	closePosition                *connect.Client[dashboardv1.ClosePositionRequest, dashboardv1.ClosePositionResponse]
 	backfillSwapHistory          *connect.Client[dashboardv1.BackfillSwapHistoryRequest, dashboardv1.BackfillSwapHistoryReply]
-	getCNFIRadarSnapshot         *connect.Client[dashboardv1.GetCNFIRadarSnapshotRequest, dashboardv1.GetCNFIRadarSnapshotResponse]
-	getCNFIProgress              *connect.Client[dashboardv1.GetCNFIProgressRequest, dashboardv1.GetCNFIProgressResponse]
-	addCNFIHolding               *connect.Client[dashboardv1.AddCNFIHoldingRequest, dashboardv1.AddCNFIHoldingResponse]
-	addCNFIAction                *connect.Client[dashboardv1.AddCNFIActionRequest, dashboardv1.AddCNFIActionResponse]
-	listCNFIActions              *connect.Client[dashboardv1.ListCNFIActionsRequest, dashboardv1.ListCNFIActionsResponse]
-	listRepoOps                  *connect.Client[dashboardv1.ListRepoOpsRequest, dashboardv1.ListRepoOpsResponse]
 	listPositions                *connect.Client[dashboardv1.ListPositionsRequest, dashboardv1.ListPositionsResponse]
 	listBrokerPositions          *connect.Client[dashboardv1.ListBrokerPositionsRequest, dashboardv1.ListBrokerPositionsResponse]
 	closeBrokerPosition          *connect.Client[dashboardv1.CloseBrokerPositionRequest, dashboardv1.CloseBrokerPositionResponse]
@@ -1370,7 +1218,6 @@ type dashboardServiceClient struct {
 	trxAccountRefresh            *connect.Client[dashboardv1.TrxAccountRefreshRequest, dashboardv1.TrxAccountRefreshResponse]
 	getTrxYieldRadar             *connect.Client[dashboardv1.GetTrxYieldRadarRequest, dashboardv1.GetTrxYieldRadarResponse]
 	getTrxYieldCurve             *connect.Client[dashboardv1.GetTrxYieldCurveRequest, dashboardv1.GetTrxYieldCurveResponse]
-	getRepoRateRadar             *connect.Client[dashboardv1.GetRepoRateRadarRequest, dashboardv1.GetRepoRateRadarResponse]
 	addDailyIncome               *connect.Client[dashboardv1.AddDailyIncomeRequest, dashboardv1.AddDailyIncomeResponse]
 	listDailyIncome              *connect.Client[dashboardv1.ListDailyIncomeRequest, dashboardv1.ListDailyIncomeResponse]
 	getPnlAnchor                 *connect.Client[dashboardv1.GetPnlAnchorRequest, dashboardv1.GetPnlAnchorResponse]
@@ -1417,14 +1264,7 @@ type dashboardServiceClient struct {
 	getReport                    *connect.Client[dashboardv1.GetReportRequest, dashboardv1.GetReportResponse]
 	getAiSettings                *connect.Client[dashboardv1.GetAiSettingsRequest, dashboardv1.GetAiSettingsResponse]
 	setAiSettings                *connect.Client[dashboardv1.SetAiSettingsRequest, dashboardv1.SetAiSettingsResponse]
-	getRepoConfig                *connect.Client[dashboardv1.GetRepoConfigRequest, dashboardv1.GetRepoConfigResponse]
-	setRepoConfig                *connect.Client[dashboardv1.SetRepoConfigRequest, dashboardv1.SetRepoConfigResponse]
 	getCexScanSnapshot           *connect.Client[dashboardv1.GetCexScanSnapshotRequest, dashboardv1.GetCexScanSnapshotResponse]
-	recordRepoTrade              *connect.Client[dashboardv1.RecordRepoTradeRequest, dashboardv1.RecordRepoTradeResponse]
-	listRepoTrades               *connect.Client[dashboardv1.ListRepoTradesRequest, dashboardv1.ListRepoTradesResponse]
-	settleRepoTrade              *connect.Client[dashboardv1.SettleRepoTradeRequest, dashboardv1.SettleRepoTradeResponse]
-	deleteRepoTrade              *connect.Client[dashboardv1.DeleteRepoTradeRequest, dashboardv1.DeleteRepoTradeResponse]
-	getRepoStrategyValidation    *connect.Client[dashboardv1.GetRepoStrategyValidationRequest, dashboardv1.GetRepoStrategyValidationResponse]
 	listPriceAlertRules          *connect.Client[dashboardv1.ListPriceAlertRulesRequest, dashboardv1.ListPriceAlertRulesResponse]
 	createPriceAlertRule         *connect.Client[dashboardv1.CreatePriceAlertRuleRequest, dashboardv1.CreatePriceAlertRuleResponse]
 	updatePriceAlertRule         *connect.Client[dashboardv1.UpdatePriceAlertRuleRequest, dashboardv1.UpdatePriceAlertRuleResponse]
@@ -1535,36 +1375,6 @@ func (c *dashboardServiceClient) BackfillSwapHistory(ctx context.Context, req *c
 	return c.backfillSwapHistory.CallUnary(ctx, req)
 }
 
-// GetCNFIRadarSnapshot calls arb.dashboard.v1.DashboardService.GetCNFIRadarSnapshot.
-func (c *dashboardServiceClient) GetCNFIRadarSnapshot(ctx context.Context, req *connect.Request[dashboardv1.GetCNFIRadarSnapshotRequest]) (*connect.Response[dashboardv1.GetCNFIRadarSnapshotResponse], error) {
-	return c.getCNFIRadarSnapshot.CallUnary(ctx, req)
-}
-
-// GetCNFIProgress calls arb.dashboard.v1.DashboardService.GetCNFIProgress.
-func (c *dashboardServiceClient) GetCNFIProgress(ctx context.Context, req *connect.Request[dashboardv1.GetCNFIProgressRequest]) (*connect.Response[dashboardv1.GetCNFIProgressResponse], error) {
-	return c.getCNFIProgress.CallUnary(ctx, req)
-}
-
-// AddCNFIHolding calls arb.dashboard.v1.DashboardService.AddCNFIHolding.
-func (c *dashboardServiceClient) AddCNFIHolding(ctx context.Context, req *connect.Request[dashboardv1.AddCNFIHoldingRequest]) (*connect.Response[dashboardv1.AddCNFIHoldingResponse], error) {
-	return c.addCNFIHolding.CallUnary(ctx, req)
-}
-
-// AddCNFIAction calls arb.dashboard.v1.DashboardService.AddCNFIAction.
-func (c *dashboardServiceClient) AddCNFIAction(ctx context.Context, req *connect.Request[dashboardv1.AddCNFIActionRequest]) (*connect.Response[dashboardv1.AddCNFIActionResponse], error) {
-	return c.addCNFIAction.CallUnary(ctx, req)
-}
-
-// ListCNFIActions calls arb.dashboard.v1.DashboardService.ListCNFIActions.
-func (c *dashboardServiceClient) ListCNFIActions(ctx context.Context, req *connect.Request[dashboardv1.ListCNFIActionsRequest]) (*connect.Response[dashboardv1.ListCNFIActionsResponse], error) {
-	return c.listCNFIActions.CallUnary(ctx, req)
-}
-
-// ListRepoOps calls arb.dashboard.v1.DashboardService.ListRepoOps.
-func (c *dashboardServiceClient) ListRepoOps(ctx context.Context, req *connect.Request[dashboardv1.ListRepoOpsRequest]) (*connect.Response[dashboardv1.ListRepoOpsResponse], error) {
-	return c.listRepoOps.CallUnary(ctx, req)
-}
-
 // ListPositions calls arb.dashboard.v1.DashboardService.ListPositions.
 func (c *dashboardServiceClient) ListPositions(ctx context.Context, req *connect.Request[dashboardv1.ListPositionsRequest]) (*connect.Response[dashboardv1.ListPositionsResponse], error) {
 	return c.listPositions.CallUnary(ctx, req)
@@ -1633,11 +1443,6 @@ func (c *dashboardServiceClient) GetTrxYieldRadar(ctx context.Context, req *conn
 // GetTrxYieldCurve calls arb.dashboard.v1.DashboardService.GetTrxYieldCurve.
 func (c *dashboardServiceClient) GetTrxYieldCurve(ctx context.Context, req *connect.Request[dashboardv1.GetTrxYieldCurveRequest]) (*connect.Response[dashboardv1.GetTrxYieldCurveResponse], error) {
 	return c.getTrxYieldCurve.CallUnary(ctx, req)
-}
-
-// GetRepoRateRadar calls arb.dashboard.v1.DashboardService.GetRepoRateRadar.
-func (c *dashboardServiceClient) GetRepoRateRadar(ctx context.Context, req *connect.Request[dashboardv1.GetRepoRateRadarRequest]) (*connect.Response[dashboardv1.GetRepoRateRadarResponse], error) {
-	return c.getRepoRateRadar.CallUnary(ctx, req)
 }
 
 // AddDailyIncome calls arb.dashboard.v1.DashboardService.AddDailyIncome.
@@ -1870,44 +1675,9 @@ func (c *dashboardServiceClient) SetAiSettings(ctx context.Context, req *connect
 	return c.setAiSettings.CallUnary(ctx, req)
 }
 
-// GetRepoConfig calls arb.dashboard.v1.DashboardService.GetRepoConfig.
-func (c *dashboardServiceClient) GetRepoConfig(ctx context.Context, req *connect.Request[dashboardv1.GetRepoConfigRequest]) (*connect.Response[dashboardv1.GetRepoConfigResponse], error) {
-	return c.getRepoConfig.CallUnary(ctx, req)
-}
-
-// SetRepoConfig calls arb.dashboard.v1.DashboardService.SetRepoConfig.
-func (c *dashboardServiceClient) SetRepoConfig(ctx context.Context, req *connect.Request[dashboardv1.SetRepoConfigRequest]) (*connect.Response[dashboardv1.SetRepoConfigResponse], error) {
-	return c.setRepoConfig.CallUnary(ctx, req)
-}
-
 // GetCexScanSnapshot calls arb.dashboard.v1.DashboardService.GetCexScanSnapshot.
 func (c *dashboardServiceClient) GetCexScanSnapshot(ctx context.Context, req *connect.Request[dashboardv1.GetCexScanSnapshotRequest]) (*connect.Response[dashboardv1.GetCexScanSnapshotResponse], error) {
 	return c.getCexScanSnapshot.CallUnary(ctx, req)
-}
-
-// RecordRepoTrade calls arb.dashboard.v1.DashboardService.RecordRepoTrade.
-func (c *dashboardServiceClient) RecordRepoTrade(ctx context.Context, req *connect.Request[dashboardv1.RecordRepoTradeRequest]) (*connect.Response[dashboardv1.RecordRepoTradeResponse], error) {
-	return c.recordRepoTrade.CallUnary(ctx, req)
-}
-
-// ListRepoTrades calls arb.dashboard.v1.DashboardService.ListRepoTrades.
-func (c *dashboardServiceClient) ListRepoTrades(ctx context.Context, req *connect.Request[dashboardv1.ListRepoTradesRequest]) (*connect.Response[dashboardv1.ListRepoTradesResponse], error) {
-	return c.listRepoTrades.CallUnary(ctx, req)
-}
-
-// SettleRepoTrade calls arb.dashboard.v1.DashboardService.SettleRepoTrade.
-func (c *dashboardServiceClient) SettleRepoTrade(ctx context.Context, req *connect.Request[dashboardv1.SettleRepoTradeRequest]) (*connect.Response[dashboardv1.SettleRepoTradeResponse], error) {
-	return c.settleRepoTrade.CallUnary(ctx, req)
-}
-
-// DeleteRepoTrade calls arb.dashboard.v1.DashboardService.DeleteRepoTrade.
-func (c *dashboardServiceClient) DeleteRepoTrade(ctx context.Context, req *connect.Request[dashboardv1.DeleteRepoTradeRequest]) (*connect.Response[dashboardv1.DeleteRepoTradeResponse], error) {
-	return c.deleteRepoTrade.CallUnary(ctx, req)
-}
-
-// GetRepoStrategyValidation calls arb.dashboard.v1.DashboardService.GetRepoStrategyValidation.
-func (c *dashboardServiceClient) GetRepoStrategyValidation(ctx context.Context, req *connect.Request[dashboardv1.GetRepoStrategyValidationRequest]) (*connect.Response[dashboardv1.GetRepoStrategyValidationResponse], error) {
-	return c.getRepoStrategyValidation.CallUnary(ctx, req)
 }
 
 // ListPriceAlertRules calls arb.dashboard.v1.DashboardService.ListPriceAlertRules.
@@ -2098,17 +1868,6 @@ type DashboardServiceHandler interface {
 	ExecuteOpportunity(context.Context, *connect.Request[dashboardv1.ExecuteOpportunityRequest]) (*connect.Response[dashboardv1.ExecuteOpportunityResponse], error)
 	ClosePosition(context.Context, *connect.Request[dashboardv1.ClosePositionRequest]) (*connect.Response[dashboardv1.ClosePositionResponse], error)
 	BackfillSwapHistory(context.Context, *connect.Request[dashboardv1.BackfillSwapHistoryRequest]) (*connect.Response[dashboardv1.BackfillSwapHistoryReply], error)
-	// CN-FI 固收雷达快照（D-226/D-237；只读快照，无流式——日频数据不接 streamUpdates）
-	GetCNFIRadarSnapshot(context.Context, *connect.Request[dashboardv1.GetCNFIRadarSnapshotRequest]) (*connect.Response[dashboardv1.GetCNFIRadarSnapshotResponse], error)
-	// CN-FI 四层进度（P3；比例+工具名，响应零金额字段——D-047：金额只在运行时 DB）
-	GetCNFIProgress(context.Context, *connect.Request[dashboardv1.GetCNFIProgressRequest]) (*connect.Response[dashboardv1.GetCNFIProgressResponse], error)
-	// CN-FI 手动持仓录入（P3；L2 人工确认铁律，系统永不下单）
-	AddCNFIHolding(context.Context, *connect.Request[dashboardv1.AddCNFIHoldingRequest]) (*connect.Response[dashboardv1.AddCNFIHoldingResponse], error)
-	// CN-FI 操作日志/投资笔记（D-242；金额=运行时个人数据，L2 人工）
-	AddCNFIAction(context.Context, *connect.Request[dashboardv1.AddCNFIActionRequest]) (*connect.Response[dashboardv1.AddCNFIActionResponse], error)
-	ListCNFIActions(context.Context, *connect.Request[dashboardv1.ListCNFIActionsRequest]) (*connect.Response[dashboardv1.ListCNFIActionsResponse], error)
-	// D-270：逆回购操作记录列表（周四操作闭环审计）
-	ListRepoOps(context.Context, *connect.Request[dashboardv1.ListRepoOpsRequest]) (*connect.Response[dashboardv1.ListRepoOpsResponse], error)
 	ListPositions(context.Context, *connect.Request[dashboardv1.ListPositionsRequest]) (*connect.Response[dashboardv1.ListPositionsResponse], error)
 	// Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
 	ListBrokerPositions(context.Context, *connect.Request[dashboardv1.ListBrokerPositionsRequest]) (*connect.Response[dashboardv1.ListBrokerPositionsResponse], error)
@@ -2126,7 +1885,6 @@ type DashboardServiceHandler interface {
 	TrxAccountRefresh(context.Context, *connect.Request[dashboardv1.TrxAccountRefreshRequest]) (*connect.Response[dashboardv1.TrxAccountRefreshResponse], error)
 	GetTrxYieldRadar(context.Context, *connect.Request[dashboardv1.GetTrxYieldRadarRequest]) (*connect.Response[dashboardv1.GetTrxYieldRadarResponse], error)
 	GetTrxYieldCurve(context.Context, *connect.Request[dashboardv1.GetTrxYieldCurveRequest]) (*connect.Response[dashboardv1.GetTrxYieldCurveResponse], error)
-	GetRepoRateRadar(context.Context, *connect.Request[dashboardv1.GetRepoRateRadarRequest]) (*connect.Response[dashboardv1.GetRepoRateRadarResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[dashboardv1.AddDailyIncomeRequest]) (*connect.Response[dashboardv1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[dashboardv1.ListDailyIncomeRequest]) (*connect.Response[dashboardv1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -2191,16 +1949,8 @@ type DashboardServiceHandler interface {
 	GetAiSettings(context.Context, *connect.Request[dashboardv1.GetAiSettingsRequest]) (*connect.Response[dashboardv1.GetAiSettingsResponse], error)
 	SetAiSettings(context.Context, *connect.Request[dashboardv1.SetAiSettingsRequest]) (*connect.Response[dashboardv1.SetAiSettingsResponse], error)
 	// D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
-	GetRepoConfig(context.Context, *connect.Request[dashboardv1.GetRepoConfigRequest]) (*connect.Response[dashboardv1.GetRepoConfigResponse], error)
-	SetRepoConfig(context.Context, *connect.Request[dashboardv1.SetRepoConfigRequest]) (*connect.Response[dashboardv1.SetRepoConfigResponse], error)
 	// D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
 	GetCexScanSnapshot(context.Context, *connect.Request[dashboardv1.GetCexScanSnapshotRequest]) (*connect.Response[dashboardv1.GetCexScanSnapshotResponse], error)
-	// D-272：逆回购操作记录+策略验证闭环
-	RecordRepoTrade(context.Context, *connect.Request[dashboardv1.RecordRepoTradeRequest]) (*connect.Response[dashboardv1.RecordRepoTradeResponse], error)
-	ListRepoTrades(context.Context, *connect.Request[dashboardv1.ListRepoTradesRequest]) (*connect.Response[dashboardv1.ListRepoTradesResponse], error)
-	SettleRepoTrade(context.Context, *connect.Request[dashboardv1.SettleRepoTradeRequest]) (*connect.Response[dashboardv1.SettleRepoTradeResponse], error)
-	DeleteRepoTrade(context.Context, *connect.Request[dashboardv1.DeleteRepoTradeRequest]) (*connect.Response[dashboardv1.DeleteRepoTradeResponse], error)
-	GetRepoStrategyValidation(context.Context, *connect.Request[dashboardv1.GetRepoStrategyValidationRequest]) (*connect.Response[dashboardv1.GetRepoStrategyValidationResponse], error)
 	// D-292：价格提醒规则前端管理（CRUD；引擎 30s 重载自动生效，无通知机制）
 	ListPriceAlertRules(context.Context, *connect.Request[dashboardv1.ListPriceAlertRulesRequest]) (*connect.Response[dashboardv1.ListPriceAlertRulesResponse], error)
 	CreatePriceAlertRule(context.Context, *connect.Request[dashboardv1.CreatePriceAlertRuleRequest]) (*connect.Response[dashboardv1.CreatePriceAlertRuleResponse], error)
@@ -2352,42 +2102,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("BackfillSwapHistory")),
 		connect.WithHandlerOptions(opts...),
 	)
-	dashboardServiceGetCNFIRadarSnapshotHandler := connect.NewUnaryHandler(
-		DashboardServiceGetCNFIRadarSnapshotProcedure,
-		svc.GetCNFIRadarSnapshot,
-		connect.WithSchema(dashboardServiceMethods.ByName("GetCNFIRadarSnapshot")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceGetCNFIProgressHandler := connect.NewUnaryHandler(
-		DashboardServiceGetCNFIProgressProcedure,
-		svc.GetCNFIProgress,
-		connect.WithSchema(dashboardServiceMethods.ByName("GetCNFIProgress")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceAddCNFIHoldingHandler := connect.NewUnaryHandler(
-		DashboardServiceAddCNFIHoldingProcedure,
-		svc.AddCNFIHolding,
-		connect.WithSchema(dashboardServiceMethods.ByName("AddCNFIHolding")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceAddCNFIActionHandler := connect.NewUnaryHandler(
-		DashboardServiceAddCNFIActionProcedure,
-		svc.AddCNFIAction,
-		connect.WithSchema(dashboardServiceMethods.ByName("AddCNFIAction")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceListCNFIActionsHandler := connect.NewUnaryHandler(
-		DashboardServiceListCNFIActionsProcedure,
-		svc.ListCNFIActions,
-		connect.WithSchema(dashboardServiceMethods.ByName("ListCNFIActions")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceListRepoOpsHandler := connect.NewUnaryHandler(
-		DashboardServiceListRepoOpsProcedure,
-		svc.ListRepoOps,
-		connect.WithSchema(dashboardServiceMethods.ByName("ListRepoOps")),
-		connect.WithHandlerOptions(opts...),
-	)
 	dashboardServiceListPositionsHandler := connect.NewUnaryHandler(
 		DashboardServiceListPositionsProcedure,
 		svc.ListPositions,
@@ -2470,12 +2184,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceGetTrxYieldCurveProcedure,
 		svc.GetTrxYieldCurve,
 		connect.WithSchema(dashboardServiceMethods.ByName("GetTrxYieldCurve")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceGetRepoRateRadarHandler := connect.NewUnaryHandler(
-		DashboardServiceGetRepoRateRadarProcedure,
-		svc.GetRepoRateRadar,
-		connect.WithSchema(dashboardServiceMethods.ByName("GetRepoRateRadar")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceAddDailyIncomeHandler := connect.NewUnaryHandler(
@@ -2754,52 +2462,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("SetAiSettings")),
 		connect.WithHandlerOptions(opts...),
 	)
-	dashboardServiceGetRepoConfigHandler := connect.NewUnaryHandler(
-		DashboardServiceGetRepoConfigProcedure,
-		svc.GetRepoConfig,
-		connect.WithSchema(dashboardServiceMethods.ByName("GetRepoConfig")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceSetRepoConfigHandler := connect.NewUnaryHandler(
-		DashboardServiceSetRepoConfigProcedure,
-		svc.SetRepoConfig,
-		connect.WithSchema(dashboardServiceMethods.ByName("SetRepoConfig")),
-		connect.WithHandlerOptions(opts...),
-	)
 	dashboardServiceGetCexScanSnapshotHandler := connect.NewUnaryHandler(
 		DashboardServiceGetCexScanSnapshotProcedure,
 		svc.GetCexScanSnapshot,
 		connect.WithSchema(dashboardServiceMethods.ByName("GetCexScanSnapshot")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceRecordRepoTradeHandler := connect.NewUnaryHandler(
-		DashboardServiceRecordRepoTradeProcedure,
-		svc.RecordRepoTrade,
-		connect.WithSchema(dashboardServiceMethods.ByName("RecordRepoTrade")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceListRepoTradesHandler := connect.NewUnaryHandler(
-		DashboardServiceListRepoTradesProcedure,
-		svc.ListRepoTrades,
-		connect.WithSchema(dashboardServiceMethods.ByName("ListRepoTrades")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceSettleRepoTradeHandler := connect.NewUnaryHandler(
-		DashboardServiceSettleRepoTradeProcedure,
-		svc.SettleRepoTrade,
-		connect.WithSchema(dashboardServiceMethods.ByName("SettleRepoTrade")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceDeleteRepoTradeHandler := connect.NewUnaryHandler(
-		DashboardServiceDeleteRepoTradeProcedure,
-		svc.DeleteRepoTrade,
-		connect.WithSchema(dashboardServiceMethods.ByName("DeleteRepoTrade")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceGetRepoStrategyValidationHandler := connect.NewUnaryHandler(
-		DashboardServiceGetRepoStrategyValidationProcedure,
-		svc.GetRepoStrategyValidation,
-		connect.WithSchema(dashboardServiceMethods.ByName("GetRepoStrategyValidation")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceListPriceAlertRulesHandler := connect.NewUnaryHandler(
@@ -3032,18 +2698,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceClosePositionHandler.ServeHTTP(w, r)
 		case DashboardServiceBackfillSwapHistoryProcedure:
 			dashboardServiceBackfillSwapHistoryHandler.ServeHTTP(w, r)
-		case DashboardServiceGetCNFIRadarSnapshotProcedure:
-			dashboardServiceGetCNFIRadarSnapshotHandler.ServeHTTP(w, r)
-		case DashboardServiceGetCNFIProgressProcedure:
-			dashboardServiceGetCNFIProgressHandler.ServeHTTP(w, r)
-		case DashboardServiceAddCNFIHoldingProcedure:
-			dashboardServiceAddCNFIHoldingHandler.ServeHTTP(w, r)
-		case DashboardServiceAddCNFIActionProcedure:
-			dashboardServiceAddCNFIActionHandler.ServeHTTP(w, r)
-		case DashboardServiceListCNFIActionsProcedure:
-			dashboardServiceListCNFIActionsHandler.ServeHTTP(w, r)
-		case DashboardServiceListRepoOpsProcedure:
-			dashboardServiceListRepoOpsHandler.ServeHTTP(w, r)
 		case DashboardServiceListPositionsProcedure:
 			dashboardServiceListPositionsHandler.ServeHTTP(w, r)
 		case DashboardServiceListBrokerPositionsProcedure:
@@ -3072,8 +2726,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetTrxYieldRadarHandler.ServeHTTP(w, r)
 		case DashboardServiceGetTrxYieldCurveProcedure:
 			dashboardServiceGetTrxYieldCurveHandler.ServeHTTP(w, r)
-		case DashboardServiceGetRepoRateRadarProcedure:
-			dashboardServiceGetRepoRateRadarHandler.ServeHTTP(w, r)
 		case DashboardServiceAddDailyIncomeProcedure:
 			dashboardServiceAddDailyIncomeHandler.ServeHTTP(w, r)
 		case DashboardServiceListDailyIncomeProcedure:
@@ -3166,22 +2818,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetAiSettingsHandler.ServeHTTP(w, r)
 		case DashboardServiceSetAiSettingsProcedure:
 			dashboardServiceSetAiSettingsHandler.ServeHTTP(w, r)
-		case DashboardServiceGetRepoConfigProcedure:
-			dashboardServiceGetRepoConfigHandler.ServeHTTP(w, r)
-		case DashboardServiceSetRepoConfigProcedure:
-			dashboardServiceSetRepoConfigHandler.ServeHTTP(w, r)
 		case DashboardServiceGetCexScanSnapshotProcedure:
 			dashboardServiceGetCexScanSnapshotHandler.ServeHTTP(w, r)
-		case DashboardServiceRecordRepoTradeProcedure:
-			dashboardServiceRecordRepoTradeHandler.ServeHTTP(w, r)
-		case DashboardServiceListRepoTradesProcedure:
-			dashboardServiceListRepoTradesHandler.ServeHTTP(w, r)
-		case DashboardServiceSettleRepoTradeProcedure:
-			dashboardServiceSettleRepoTradeHandler.ServeHTTP(w, r)
-		case DashboardServiceDeleteRepoTradeProcedure:
-			dashboardServiceDeleteRepoTradeHandler.ServeHTTP(w, r)
-		case DashboardServiceGetRepoStrategyValidationProcedure:
-			dashboardServiceGetRepoStrategyValidationHandler.ServeHTTP(w, r)
 		case DashboardServiceListPriceAlertRulesProcedure:
 			dashboardServiceListPriceAlertRulesHandler.ServeHTTP(w, r)
 		case DashboardServiceCreatePriceAlertRuleProcedure:
@@ -3317,30 +2955,6 @@ func (UnimplementedDashboardServiceHandler) BackfillSwapHistory(context.Context,
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.BackfillSwapHistory is not implemented"))
 }
 
-func (UnimplementedDashboardServiceHandler) GetCNFIRadarSnapshot(context.Context, *connect.Request[dashboardv1.GetCNFIRadarSnapshotRequest]) (*connect.Response[dashboardv1.GetCNFIRadarSnapshotResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCNFIRadarSnapshot is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) GetCNFIProgress(context.Context, *connect.Request[dashboardv1.GetCNFIProgressRequest]) (*connect.Response[dashboardv1.GetCNFIProgressResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCNFIProgress is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) AddCNFIHolding(context.Context, *connect.Request[dashboardv1.AddCNFIHoldingRequest]) (*connect.Response[dashboardv1.AddCNFIHoldingResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AddCNFIHolding is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) AddCNFIAction(context.Context, *connect.Request[dashboardv1.AddCNFIActionRequest]) (*connect.Response[dashboardv1.AddCNFIActionResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AddCNFIAction is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) ListCNFIActions(context.Context, *connect.Request[dashboardv1.ListCNFIActionsRequest]) (*connect.Response[dashboardv1.ListCNFIActionsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListCNFIActions is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) ListRepoOps(context.Context, *connect.Request[dashboardv1.ListRepoOpsRequest]) (*connect.Response[dashboardv1.ListRepoOpsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListRepoOps is not implemented"))
-}
-
 func (UnimplementedDashboardServiceHandler) ListPositions(context.Context, *connect.Request[dashboardv1.ListPositionsRequest]) (*connect.Response[dashboardv1.ListPositionsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPositions is not implemented"))
 }
@@ -3395,10 +3009,6 @@ func (UnimplementedDashboardServiceHandler) GetTrxYieldRadar(context.Context, *c
 
 func (UnimplementedDashboardServiceHandler) GetTrxYieldCurve(context.Context, *connect.Request[dashboardv1.GetTrxYieldCurveRequest]) (*connect.Response[dashboardv1.GetTrxYieldCurveResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetTrxYieldCurve is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) GetRepoRateRadar(context.Context, *connect.Request[dashboardv1.GetRepoRateRadarRequest]) (*connect.Response[dashboardv1.GetRepoRateRadarResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetRepoRateRadar is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AddDailyIncome(context.Context, *connect.Request[dashboardv1.AddDailyIncomeRequest]) (*connect.Response[dashboardv1.AddDailyIncomeResponse], error) {
@@ -3585,36 +3195,8 @@ func (UnimplementedDashboardServiceHandler) SetAiSettings(context.Context, *conn
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetAiSettings is not implemented"))
 }
 
-func (UnimplementedDashboardServiceHandler) GetRepoConfig(context.Context, *connect.Request[dashboardv1.GetRepoConfigRequest]) (*connect.Response[dashboardv1.GetRepoConfigResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetRepoConfig is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) SetRepoConfig(context.Context, *connect.Request[dashboardv1.SetRepoConfigRequest]) (*connect.Response[dashboardv1.SetRepoConfigResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetRepoConfig is not implemented"))
-}
-
 func (UnimplementedDashboardServiceHandler) GetCexScanSnapshot(context.Context, *connect.Request[dashboardv1.GetCexScanSnapshotRequest]) (*connect.Response[dashboardv1.GetCexScanSnapshotResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCexScanSnapshot is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) RecordRepoTrade(context.Context, *connect.Request[dashboardv1.RecordRepoTradeRequest]) (*connect.Response[dashboardv1.RecordRepoTradeResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.RecordRepoTrade is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) ListRepoTrades(context.Context, *connect.Request[dashboardv1.ListRepoTradesRequest]) (*connect.Response[dashboardv1.ListRepoTradesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListRepoTrades is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) SettleRepoTrade(context.Context, *connect.Request[dashboardv1.SettleRepoTradeRequest]) (*connect.Response[dashboardv1.SettleRepoTradeResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SettleRepoTrade is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) DeleteRepoTrade(context.Context, *connect.Request[dashboardv1.DeleteRepoTradeRequest]) (*connect.Response[dashboardv1.DeleteRepoTradeResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.DeleteRepoTrade is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) GetRepoStrategyValidation(context.Context, *connect.Request[dashboardv1.GetRepoStrategyValidationRequest]) (*connect.Response[dashboardv1.GetRepoStrategyValidationResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetRepoStrategyValidation is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListPriceAlertRules(context.Context, *connect.Request[dashboardv1.ListPriceAlertRulesRequest]) (*connect.Response[dashboardv1.ListPriceAlertRulesResponse], error) {

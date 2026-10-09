@@ -1,5 +1,5 @@
 // D-273 S3：earn APR 判断引擎测试——审计修复点逐项覆盖（P0-2 单位/P2-1 方向/P2-3 优先级/P3-4 看空/N3 ProductType）。
-// DB 依赖：RepoRate30dAvg 基准（fin_repo_rates）——经 testutil.TestDSN 门禁（禁生产 DSN）。
+// D-139：逆回购基准（fin_repo_rates）随 cnfi/repo 面摘除——稳定币判断仅剩跨所对比，测试去 DB 依赖纯内存。
 package cexscan
 
 import (
@@ -8,43 +8,19 @@ import (
 	"testing"
 
 	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
 )
 
-// judgeFixture 单用例输入：APR 行集 + 持仓 + 是否播种逆回购基准（204007 rate_pct=4.5 百分点）。
+// judgeFixture 单用例输入：APR 行集 + 持仓。
 type judgeFixture struct {
 	name        string
 	aprs        []pgstore.CexEarnAPR
 	holdings    map[string]map[string]float64
-	seedBench   bool
 	wantVerdict string   // 期望该行 verdict
 	wantReason  []string // 期望 reasons 包含的子串（逐个 Contains）
 }
 
 func TestEarnJudge(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
 	ctx := context.Background()
-	st, err := pgstore.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	defer st.Close()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
-	cleanup := func() {
-		_, _ = st.Pool().Exec(ctx, "DELETE FROM fin_repo_rates WHERE code='204007'")
-	}
-	cleanup()
-	t.Cleanup(cleanup)
-
-	bench := func(t *testing.T) {
-		t.Helper()
-		if _, err := st.Pool().Exec(ctx,
-			`INSERT INTO fin_repo_rates (code, name, rate_pct, trade_date) VALUES ('204007','GC007',4.5,current_date)`); err != nil {
-			t.Fatalf("seed fin_repo_rates: %v", err)
-		}
-	}
 
 	stable := func(venue, product string, apr float64) pgstore.CexEarnAPR {
 		return pgstore.CexEarnAPR{Venue: venue, Ccy: "USDT", ProductType: product, APR: apr}
@@ -55,17 +31,8 @@ func TestEarnJudge(t *testing.T) {
 
 	cases := []judgeFixture{
 		{
-			// P0-2 单位锚：earn APR 小数 0.045 vs 基准百分点 4.5（/100 后相等）→ 优于（写反则恒判不如）
-			name: "P0-2_单位_APR0.045_vs_基准4.5百分点_优于", aprs: []pgstore.CexEarnAPR{stable("okx", "flexible", 0.045)},
-			seedBench: true, wantVerdict: "opportunity", wantReason: []string{"优于逆回购", "flexible 不锁定"},
-		},
-		{
-			name: "P0-2_单位_APR0.035_vs_基准4.5百分点_不如", aprs: []pgstore.CexEarnAPR{stable("okx", "flexible", 0.035)},
-			seedBench: true, wantVerdict: "not_opportunity", wantReason: []string{"不如逆回购"},
-		},
-		{
-			name: "P2-3_无基准_无跨所_not_opportunity", aprs: []pgstore.CexEarnAPR{stable("okx", "flexible", 0.035)},
-			seedBench: false, wantVerdict: "not_opportunity",
+			name: "单所_无跨所_not_opportunity", aprs: []pgstore.CexEarnAPR{stable("okx", "flexible", 0.035)},
+			wantVerdict: "not_opportunity",
 		},
 		{
 			// P2-1：diff=abs(0.035-0.024)=0.011 > 0.005 → 投放候选
@@ -78,14 +45,9 @@ func TestEarnJudge(t *testing.T) {
 			wantVerdict: "opportunity", wantReason: []string{"跨所投放候选"},
 		},
 		{
-			// P2-3 优先级表：不如基准 + 跨所投放候选 → opportunity（跨所更优）
-			name: "P2-3_不如基准加投放候选_opportunity", aprs: []pgstore.CexEarnAPR{stable("okx", "flexible", 0.035), stable("binance", "flexible", 0.024)},
-			seedBench: true, wantVerdict: "opportunity", wantReason: []string{"不如逆回购", "跨所投放候选"},
-		},
-		{
-			// P2-3 优先级表：不如基准 + 跨所无意义 → not_opportunity
-			name: "P2-3_不如基准加无意义_not_opportunity", aprs: []pgstore.CexEarnAPR{stable("okx", "flexible", 0.035)},
-			seedBench: true, wantVerdict: "not_opportunity",
+			// 跨所 diff=0.004 ≤ 0.005 成本阈值 → not_opportunity
+			name: "P2-1_跨所_低于成本阈值_not_opportunity", aprs: []pgstore.CexEarnAPR{stable("okx", "flexible", 0.035), stable("binance", "flexible", 0.031)},
+			wantVerdict: "not_opportunity",
 		},
 		{
 			name: "代币_持有_正APR_opportunity", aprs: []pgstore.CexEarnAPR{token("okx", "DOGE", 0.05)},
@@ -120,11 +82,7 @@ func TestEarnJudge(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cleanup()
-			if tc.seedBench {
-				bench(t)
-			}
-			j := NewEarnJudge(st, tc.holdings)
+			j := NewEarnJudge(tc.holdings)
 			got, err := j.Judge(ctx, tc.aprs)
 			if err != nil {
 				t.Fatalf("Judge: %v", err)

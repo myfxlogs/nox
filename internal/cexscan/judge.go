@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 
 	"arb/internal/store/pgstore"
@@ -26,16 +25,14 @@ type EarnJudgment struct {
 
 // EarnJudge earn APR 判断引擎。
 type EarnJudge struct {
-	store            *pgstore.Store
 	holdings         map[string]map[string]float64 // venue → ccy → qty（buildHoldingsFromSnapshot 三条件过滤后提取）
 	transferCostPct  float64                       // 搬砖成本阈值（0.005=0.5% 一次性成本；保守启发式：假设资金停留 >6 个月，设计 §3.2）
 	bearishThreshold float64                       // 看空信号阈值（0.5=50%）；历史观察经验值，后续可配置（设计 §3.3）
 }
 
 // NewEarnJudge 构造判断引擎。holdings 从 AccountMonitor 快照提取（buildHoldingsFromSnapshot）。
-func NewEarnJudge(store *pgstore.Store, holdings map[string]map[string]float64) *EarnJudge {
+func NewEarnJudge(holdings map[string]map[string]float64) *EarnJudge {
 	return &EarnJudge{
-		store:            store,
 		holdings:         holdings,
 		transferCostPct:  0.005,
 		bearishThreshold: 0.5,
@@ -44,12 +41,8 @@ func NewEarnJudge(store *pgstore.Store, holdings map[string]map[string]float64) 
 
 // Judge 对一批 earn APR 输出判断结果。
 func (j *EarnJudge) Judge(ctx context.Context, aprs []pgstore.CexEarnAPR) ([]EarnJudgment, error) {
-	// 逆回购基准：rate_pct 单位=百分点（4.5 表示 4.5%），比较前 /100 转小数（P0-2；earn APR 是小数口径）。
-	benchmarkPct, hasBenchmark, err := j.store.RepoRate30dAvg(ctx, "204007")
-	if err != nil {
-		log.Printf("[cexscan] earn judge: repo benchmark: %v（降级为无基准）", err)
-	}
-	benchmarkDecimal := benchmarkPct / 100.0
+	// D-139：逆回购基准（GC007/repo_rates）随 cnfi/repo 面全摘除——
+	// 稳定币判断仅剩跨所对比路径（无基准降级形态即新常态）。
 
 	// 跨所索引：ccy → venue → APR（仅稳定币参与跨所对比）
 	crossVenueAPR := make(map[string]map[string]float64)
@@ -66,7 +59,7 @@ func (j *EarnJudge) Judge(ctx context.Context, aprs []pgstore.CexEarnAPR) ([]Ear
 	out := make([]EarnJudgment, 0, len(aprs))
 	for _, apr := range aprs {
 		if isStablecoin(apr.Ccy) {
-			out = append(out, j.judgeStable(apr, benchmarkDecimal, hasBenchmark, crossVenueAPR))
+			out = append(out, j.judgeStable(apr, crossVenueAPR))
 		} else {
 			out = append(out, j.judgeToken(apr))
 		}
@@ -74,21 +67,9 @@ func (j *EarnJudge) Judge(ctx context.Context, aprs []pgstore.CexEarnAPR) ([]Ear
 	return out, nil
 }
 
-// judgeStable 稳定币判断：基准对比 × 跨所对比，verdict 按设计 §3.2 优先级表合并。
-func (j *EarnJudge) judgeStable(apr pgstore.CexEarnAPR, benchmarkDecimal float64, hasBenchmark bool, crossVenueAPR map[string]map[string]float64) EarnJudgment {
+// judgeStable 稳定币判断：跨所对比（D-139：逆回购基准路径已摘），verdict 按设计 §3.2 优先级表合并。
+func (j *EarnJudge) judgeStable(apr pgstore.CexEarnAPR, crossVenueAPR map[string]map[string]float64) EarnJudgment {
 	out := EarnJudgment{Venue: apr.Venue, Ccy: apr.Ccy, ProductType: apr.ProductType, APR: apr.APR, Category: "stable"}
-
-	// 路径 A：基准对比（GC007 30d 均值）。比较用 >=：审计 P0-2 钦定测试锚「APR=0.045 vs 基准 4.5 百分点 → 优于」
-	// 只在持平含入时成立（0.045 == 4.5/100）；机会检测口径宁报不漏。严格 > 会使该锚恒判「不如」。
-	betterThanBenchmark := false
-	if hasBenchmark {
-		if apr.APR >= benchmarkDecimal {
-			betterThanBenchmark = true
-			out.Reasons = append(out.Reasons, fmt.Sprintf("优于逆回购 %.2f%%", benchmarkDecimal*100))
-		} else {
-			out.Reasons = append(out.Reasons, fmt.Sprintf("不如逆回购 %.2f%%", benchmarkDecimal*100))
-		}
-	}
 
 	// 路径 B：跨所对比——abs(diff) 不固定方向（P2-1），reason 标哪所高
 	crossCandidate := false
@@ -107,9 +88,9 @@ func (j *EarnJudge) judgeStable(apr pgstore.CexEarnAPR, benchmarkDecimal float64
 		}
 	}
 
-	// 优先级表（设计 §3.2）：优于→opportunity；不如/无基准+投放候选→opportunity；其余→not_opportunity。稳定币永不判 trap。
+	// 优先级表（设计 §3.2，D-139 基准路径摘后剩跨所）：投放候选→opportunity；其余→not_opportunity。稳定币永不判 trap。
 	switch {
-	case betterThanBenchmark, crossCandidate:
+	case crossCandidate:
 		out.Verdict = "opportunity"
 	default:
 		out.Verdict = "not_opportunity"

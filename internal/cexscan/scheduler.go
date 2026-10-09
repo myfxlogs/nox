@@ -151,9 +151,9 @@ func (s *Scanner) scanOnce(ctx context.Context) error {
 		}
 	}
 
-	// ④ earn APR 判断（D-273）：只依赖本币余额明细与逆回购基准，失败只记日志不阻断采集。
+	// ④ earn APR 判断（D-273）：只依赖本币余额明细，失败只记日志不阻断采集。
 	holdings := buildHoldingsFromSnapshot(s.accounts.Snapshot())
-	judge := NewEarnJudge(s.store, holdings)
+	judge := NewEarnJudge(holdings)
 	judgments, err := judge.Judge(ctx, earnAPRs)
 	if err != nil {
 		log.Printf("[cexscan] earn judge: %v", err)

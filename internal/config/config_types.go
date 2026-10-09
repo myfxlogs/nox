@@ -233,20 +233,6 @@ type Config struct {
 	// D-258 S2：TRX 能量租金率 floor 告警阈值（ARB_TRX_ENERGY_RATE_FLOOR_PCT，默认 8.0）。
 	// 7d 实测年化 < floor → warn 告警（D-191 §9 触发复核）；0=禁用。
 	TrxEnergyRateFloorPct float64
-	// D-266 S5：逆回购利率雷达告警阈值+采集间隔。
-	// RepoSpikeWarnPct GC007 > 此阈值 → warn（ARB_REPO_SPIKE_WARN_PCT，默认 3.0）；0=禁用。
-	// RepoSpikeCriticalPct GC007 > 此阈值 → critical（ARB_REPO_SPIKE_CRITICAL_PCT，默认 5.0）；0=禁用。
-	// RepoCollectInterval 采集间隔（ARB_REPO_COLLECT_INTERVAL，默认 5m）。
-	RepoSpikeWarnPct     float64
-	RepoSpikeCriticalPct float64
-	RepoCollectInterval  time.Duration
-	// D-270：周四操作提醒配置。
-	// RepoIdleCny 闲置 CNY 金额（ARB_REPO_IDLE_CNY，默认 0=禁用；个人数据 .env gitignored D-047）。
-	// RepoMinReturnCny 最小预期收益元（ARB_REPO_MIN_RETURN_CNY，默认 5）。
-	// RepoReminderHour 提醒时段北京时间小时（ARB_REPO_REMINDER_HOUR，默认 10）。
-	RepoIdleCny      float64
-	RepoMinReturnCny float64
-	RepoReminderHour int
 
 	// === 交易时段防线（D-155 freeze guard）===
 	// FreezeGuard 冻结腿预检窗口（ARB_FREEZE_GUARD，缺省 10m）。

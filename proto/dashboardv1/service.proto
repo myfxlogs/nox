@@ -14,7 +14,7 @@ import "dashboardv1/market.proto";
 import "dashboardv1/ops.proto";
 import "dashboardv1/position.proto";
 import "dashboardv1/stream.proto";
-import "dashboardv1/trx_cnfi.proto";
+import "dashboardv1/trx_cex.proto";
 import "dashboardv1/watchlist_analyst.proto";
 
 // DashboardService — Web 仪表盘 ConnectRPC 服务（架构设计 §8.2）。
@@ -48,17 +48,6 @@ service DashboardService {
   rpc ExecuteOpportunity(ExecuteOpportunityRequest) returns (ExecuteOpportunityResponse);
   rpc ClosePosition(ClosePositionRequest) returns (ClosePositionResponse);
   rpc BackfillSwapHistory(BackfillSwapHistoryRequest) returns (BackfillSwapHistoryReply); // D-181 S1：手动回溯 venue swap 历史→facts
-  // CN-FI 固收雷达快照（D-226/D-237；只读快照，无流式——日频数据不接 streamUpdates）
-  rpc GetCNFIRadarSnapshot(GetCNFIRadarSnapshotRequest) returns (GetCNFIRadarSnapshotResponse);
-  // CN-FI 四层进度（P3；比例+工具名，响应零金额字段——D-047：金额只在运行时 DB）
-  rpc GetCNFIProgress(GetCNFIProgressRequest) returns (GetCNFIProgressResponse);
-  // CN-FI 手动持仓录入（P3；L2 人工确认铁律，系统永不下单）
-  rpc AddCNFIHolding(AddCNFIHoldingRequest) returns (AddCNFIHoldingResponse);
-  // CN-FI 操作日志/投资笔记（D-242；金额=运行时个人数据，L2 人工）
-  rpc AddCNFIAction(AddCNFIActionRequest) returns (AddCNFIActionResponse);
-  rpc ListCNFIActions(ListCNFIActionsRequest) returns (ListCNFIActionsResponse);
-  // D-270：逆回购操作记录列表（周四操作闭环审计）
-  rpc ListRepoOps(ListRepoOpsRequest) returns (ListRepoOpsResponse);
   rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse);
 
   // Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
@@ -78,7 +67,6 @@ service DashboardService {
   rpc TrxAccountRefresh(TrxAccountRefreshRequest) returns (TrxAccountRefreshResponse);  // D-254：手动刷新按钮+on-open 双踢 trx_account+trx_apr，返回最新 fin_trx_account 全字段快照
   rpc GetTrxYieldRadar(GetTrxYieldRadarRequest) returns (GetTrxYieldRadarResponse);  // D-258 S3：收益率雷达（能量 7d/30d + 投票 APR + floor）
   rpc GetTrxYieldCurve(GetTrxYieldCurveRequest) returns (GetTrxYieldCurveResponse);  // D-278 S1：净收益率日曲线（三成分日序列+7d/30d 滚动年化+S4 敞口）
-  rpc GetRepoRateRadar(GetRepoRateRadarRequest) returns (GetRepoRateRadarResponse);  // D-266 S3：逆回购利率雷达（4 品种 + GC007 30d 均值 + OHLC + 窗口提醒）
   rpc AddDailyIncome(AddDailyIncomeRequest) returns (AddDailyIncomeResponse);
   rpc ListDailyIncome(ListDailyIncomeRequest) returns (ListDailyIncomeResponse);
 
@@ -156,16 +144,8 @@ service DashboardService {
   rpc GetAiSettings(GetAiSettingsRequest) returns (GetAiSettingsResponse);
   rpc SetAiSettings(SetAiSettingsRequest) returns (SetAiSettingsResponse);
   // D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
-  rpc GetRepoConfig(GetRepoConfigRequest) returns (GetRepoConfigResponse);
-  rpc SetRepoConfig(SetRepoConfigRequest) returns (SetRepoConfigResponse);
   // D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
   rpc GetCexScanSnapshot(GetCexScanSnapshotRequest) returns (GetCexScanSnapshotResponse);
-  // D-272：逆回购操作记录+策略验证闭环
-  rpc RecordRepoTrade(RecordRepoTradeRequest) returns (RecordRepoTradeResponse);
-  rpc ListRepoTrades(ListRepoTradesRequest) returns (ListRepoTradesResponse);
-  rpc SettleRepoTrade(SettleRepoTradeRequest) returns (SettleRepoTradeResponse);
-  rpc DeleteRepoTrade(DeleteRepoTradeRequest) returns (DeleteRepoTradeResponse);
-  rpc GetRepoStrategyValidation(GetRepoStrategyValidationRequest) returns (GetRepoStrategyValidationResponse);
   // D-292：价格提醒规则前端管理（CRUD；引擎 30s 重载自动生效，无通知机制）
   rpc ListPriceAlertRules(ListPriceAlertRulesRequest) returns (ListPriceAlertRulesResponse);
   rpc CreatePriceAlertRule(CreatePriceAlertRuleRequest) returns (CreatePriceAlertRuleResponse);

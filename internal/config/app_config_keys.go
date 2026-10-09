@@ -98,12 +98,6 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_PROBE_EVAL_DAYS":                 intv(func(c *Config) *int { return &c.ProbeEvalDays }),
 	"ARB_PROBE_MAX_NOTIONAL":              f64(func(c *Config) *float64 { return &c.ProbeMaxNotionalUSD }),
 	"ARB_PROBE_RPC_ENABLED":               boolv(func(c *Config) *bool { return &c.ProbeRPCEnabled }),
-	"ARB_REPO_COLLECT_INTERVAL":           durv(func(c *Config) *time.Duration { return &c.RepoCollectInterval }),
-	"ARB_REPO_IDLE_CNY":                   f64(func(c *Config) *float64 { return &c.RepoIdleCny }),
-	"ARB_REPO_MIN_RETURN_CNY":             f64(func(c *Config) *float64 { return &c.RepoMinReturnCny }),
-	"ARB_REPO_REMINDER_HOUR":              intv(func(c *Config) *int { return &c.RepoReminderHour }),
-	"ARB_REPO_SPIKE_CRITICAL_PCT":         f64(func(c *Config) *float64 { return &c.RepoSpikeCriticalPct }),
-	"ARB_REPO_SPIKE_WARN_PCT":             f64(func(c *Config) *float64 { return &c.RepoSpikeWarnPct }),
 	"ARB_RETRO_ENABLED": {"bool",
 		func(c *Config, v string) error {
 			b, err := strconv.ParseBool(v)

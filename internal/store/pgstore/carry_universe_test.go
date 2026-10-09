@@ -19,6 +19,8 @@ func carryUniverseTestStore(t *testing.T) *Store {
 }
 
 // TestReplaceCarryUniverse_NoteRoundTrip D-345：note 写入→SQL 回读一致（红=INSERT 列缺 note）。
+func ptrFloat(v float64) *float64 { return &v }
+
 func TestReplaceCarryUniverse_NoteRoundTrip(t *testing.T) {
 	s := carryUniverseTestStore(t)
 	ctx := context.Background()
