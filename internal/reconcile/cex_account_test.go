@@ -5,6 +5,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -58,16 +59,17 @@ func TestCEXAccount_Binance(t *testing.T) {
 	}
 }
 
-// TestCEXAccount_BinancePerp：合约账户权益 = /fapi/v2/account 的 totalWalletBalance（权威 USDT 权益）。
+// TestCEXAccount_BinancePerp：合约权益=totalMarginBalance（wb+UPL，D-142；wb≠mb 锚死取源）。
 // D-059 实施修正② 复核实测：demo key 对 demo-fapi.binance.com USDT-M 合约同 key 有效（-1109 已解），
 // perp 走 /fapi/v2/account 而非 spot 的 /api/v3/account。
+// 禁区锚：FreeMargin=availableBalance、buffer=marginBalance/maintMargin 不变。
 func TestCEXAccount_BinancePerp(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/fapi/v2/account" {
 			http.NotFound(w, r)
 			return
 		}
-		fmt.Fprint(w, `{"totalWalletBalance":"5000.00000000","totalUnrealizedProfit":"0.00000000","canTrade":true}`)
+		fmt.Fprint(w, `{"totalWalletBalance":"5000.00000000","totalMarginBalance":"5100.00000000","totalMaintMargin":"102.00000000","availableBalance":"4900.00000000","totalUnrealizedProfit":"100.00000000","canTrade":true}`)
 	}))
 	defer srv.Close()
 
@@ -76,8 +78,17 @@ func TestCEXAccount_BinancePerp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("binance perp account: %v", err)
 	}
-	if acct.Equity != 5000 {
-		t.Errorf("equity want 5000, got %v", acct.Equity)
+	if acct.Equity != 5100 {
+		t.Errorf("equity want 5100（totalMarginBalance=wb+UPL）, got %v", acct.Equity)
+	}
+	if acct.Balance != 5000 {
+		t.Errorf("balance want 5000（totalWalletBalance）, got %v", acct.Balance)
+	}
+	if acct.FreeMargin != 4900 {
+		t.Errorf("freeMargin want 4900（availableBalance 不变）, got %v", acct.FreeMargin)
+	}
+	if math.Abs(acct.BufferMultiple-50) > 1e-9 {
+		t.Errorf("buffer want 5100/102=50, got %v", acct.BufferMultiple)
 	}
 	if acct.VenueKey != "binance:perp" {
 		t.Errorf("venuekey want binance:perp, got %q", acct.VenueKey)
@@ -270,7 +281,7 @@ func TestCEXAccount_BinancePathNoDoublePrefix(t *testing.T) {
 		case "/api/v3/ticker/price":
 			fmt.Fprint(w, `{"price":"60000"}`)
 		case "/fapi/v2/account":
-			fmt.Fprint(w, `{"totalWalletBalance":"1234.5"}`)
+			fmt.Fprint(w, `{"totalWalletBalance":"1234.5","totalMarginBalance":"1234.5"}`)
 		default:
 			http.NotFound(w, r)
 		}
