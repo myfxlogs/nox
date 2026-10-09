@@ -270,8 +270,6 @@ type Service struct {
 	cmcEquityAlert *cmcEquityAlertMachine
 	// D-258 S3：TRX 能量租金率 floor 告警阈值（ARB_TRX_ENERGY_RATE_FLOOR_PCT，默认 8.0；0=禁用）。
 	trxFloorPct float64
-	// D-347：可注入时钟（repo 雷达「当日」OHLC 交易日计算；nil = time.Now 生产墙钟）。
-	nowFn func() time.Time
 	// D-348：财务总览聚合 15s TTL 缓存（整体响应缓存，无失效钩子；同 D-331 语义）。
 	financeMu       sync.Mutex
 	financeCached   *v1.GetFinanceOverviewResponse
