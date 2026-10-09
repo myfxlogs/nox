@@ -132,13 +132,17 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 	}
 
 	prompt := buildDailyPrompt(res.ScanDate, disp, newSyms, events, flagged)
+	runOnce := func() (analyst.LoopResult, string, error) {
+		var aiText strings.Builder
+		lr, err := deps.Run(ctx, deps.Client, deps.Tools, explorerToolSpecs(), dailySystemPrompt,
+			[]analyst.Message{analyst.TextContent("user", prompt)},
+			analyst.LoopCallbacks{OnDelta: func(t string) { aiText.WriteString(t) }})
+		return lr, aiText.String(), err
+	}
 	if !deps.Rate.Allow() {
 		return res, fmt.Errorf("explorer: rate limited")
 	}
-	var aiText strings.Builder
-	_, err = deps.Run(ctx, deps.Client, deps.Tools, explorerToolSpecs(), dailySystemPrompt,
-		[]analyst.Message{analyst.TextContent("user", prompt)},
-		analyst.LoopCallbacks{OnDelta: func(t string) { aiText.WriteString(t) }})
+	lr, aiText, err := runOnce()
 	if err != nil {
 		llmRes = "err"
 		deps.alert(ctx, "warn", "[探索] LLM 调用失败："+err.Error()) // D-048④：不得吞
@@ -146,13 +150,43 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 	}
 	llmRes = "ok"
 
-	batch, truncDrop, ok := parseBatch(aiText.String())
+	// D-143：parse fail → 同 prompt 补救一轮（上限两轮，Rate.Allow 每轮过闸不过即停）；
+	// StopReason 随轮次刷新供分型告警（symdig D-530/D-589 同型先例）。
+	batch, truncDrop, ok, kind := parseBatchDiag(aiText)
+	stop := lr.StopReason
+	if !ok {
+		if deps.Rate.Allow() {
+			log.Printf("[explorer] 提案块第1轮解析失败（kind=%s stop=%s）——同 prompt 进第2轮补救", kind, stop)
+			lr, aiText, err = runOnce()
+			if err != nil {
+				llmRes = "err"
+				deps.alert(ctx, "warn", "[探索] 提案块补救轮 LLM 调用失败："+err.Error())
+				return res, fmt.Errorf("analyst run: %w", err)
+			}
+			stop = lr.StopReason
+			batch, truncDrop, ok, kind = parseBatchDiag(aiText)
+			if ok {
+				log.Printf("[explorer] 第2轮补救成功")
+			}
+		} else {
+			log.Printf("[explorer] 提案块解析失败（kind=%s）但限流过闸拒——跳过第2轮补救", kind)
+		}
+	}
 	if !ok {
 		// 真截断（未闭合 fenced）/protojson 拒收=整批零落库（A6 截断用例锚面）；
 		// 批超限良性违例已改截断留前 10（D-078），不再走此整批拒分支。叙事不受影响仍记日志级。
 		parseRes = "fail"
 		res.Drop = maxBatchProposals + 1
-		deps.alert(ctx, "warn", "[探索] 提案块解析失败（截断/非法 JSON——整批零落库）") // D-048④：不得吞
+		level, why := "warn", kind
+		switch {
+		case stop == "max_tokens":
+			level, why = "error", "max_tokens 截断（输出超上限，fence 未闭合/JSON 不全）"
+		case kind == "no-fence":
+			why = "no-fence（输出缺/未闭合 explorer-proposals 块）"
+		default:
+			why = "unmarshal（protojson 拒收，sanitize 已试）"
+		}
+		deps.alert(ctx, level, "[探索] 提案块解析失败（"+why+"——两轮后整批零落库）") // D-048④：不得吞
 		return res, nil
 	}
 	parseRes = "ok"

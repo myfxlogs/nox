@@ -38,9 +38,17 @@ const maxDirectionRunes = 16
 // D-078：超上限由「整批拒收」（D-513/D-048 防滥发闸）改截断留前 10 条+log 警示——
 // 防滥发本义=防告警风暴，截断已足；良性超限（周一开盘 universe 候选增多）不应整批废。
 func parseBatch(aiText string) (*explorerv1.ProposalBatch, int, bool) {
+	b, t, ok, _ := parseBatchDiag(aiText)
+	return b, t, ok
+}
+
+// parseBatchDiag parseBatch + 失败分型（D-143：告警文案/补救轮观测消费）：
+// failKind ∈ "no-fence"（无/未闭合 fenced 块）|"unmarshal"（protojson 拒收，sanitize 已试）；
+// ok=true 时空串。
+func parseBatchDiag(aiText string) (*explorerv1.ProposalBatch, int, bool, string) {
 	m := proposalsFenceRe.FindStringSubmatch(aiText)
 	if m == nil {
-		return nil, 0, false
+		return nil, 0, false, "no-fence"
 	}
 	var b explorerv1.ProposalBatch
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(
@@ -50,11 +58,11 @@ func parseBatch(aiText string) (*explorerv1.ProposalBatch, int, bool) {
 		// 一次机械修正为限——不做多轮/模糊解析）。
 		fixed := sanitizeJSONTail(m[1])
 		if fixed == m[1] {
-			return nil, 0, false
+			return nil, 0, false, "unmarshal"
 		}
 		if err2 := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(
 			[]byte(fixed), &b); err2 != nil {
-			return nil, 0, false
+			return nil, 0, false, "unmarshal"
 		}
 		log.Printf("[explorer] parse sanitize 重试成功（尾部花括号修正）")
 	}
@@ -69,7 +77,7 @@ func parseBatch(aiText string) (*explorerv1.ProposalBatch, int, bool) {
 		log.Printf("[explorer] 探针提案批 %d 条超上限 %d——截断留前 %d 条（drop 记 %d）", n, maxBatchProposals, maxBatchProposals, n-maxBatchProposals)
 		b.ProbeProposals = b.ProbeProposals[:maxBatchProposals]
 	}
-	return &b, trunc, true
+	return &b, trunc, true, ""
 }
 
 // sanitizeJSONTail D-081 ①：模型 JSON 尾部机械瑕疵单次修正——只做两种机械动作：
