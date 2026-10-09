@@ -24,6 +24,11 @@ type AccountCollector struct {
 	// D-293 S2：领奖条件触发 hook——每轮采到 rewardNumSun 后调用（nil=未接线）。
 	// hook panic 由调用方 recover 包裹，不得拖垮采集主循环。
 	onAccountFetched func(ctx context.Context, rewardNumSun int64)
+	// D-137①：rewardNum 差分=维护期边界探测器（实证 12/12 次变化贴 00/06/12/18 UTC±90s）。
+	// delta 非零 → 回调（首轮不触发，前值未知）；零 delta 安静。
+	onRewardDelta func(ctx context.Context, rewardNumSun, delta int64)
+	lastReward    int64
+	hasLastReward bool
 }
 
 // NewAccountCollector 创建账户快照采集器。address 为 base58 监控地址。
@@ -44,6 +49,11 @@ func (c *AccountCollector) SetOnChange(fn func()) { c.onChange = fn }
 // 每轮采到 rewardNumSun 成功落库后调用（recover 包裹防拖垮采集主循环）。
 func (c *AccountCollector) SetOnAccountFetched(fn func(ctx context.Context, rewardNumSun int64)) {
 	c.onAccountFetched = fn
+}
+
+// SetOnRewardDelta D-137①：注入 rewardNum 差分回调（非零 delta → 维护期边界事件）。
+func (c *AccountCollector) SetOnRewardDelta(fn func(ctx context.Context, rewardNumSun, delta int64)) {
+	c.onRewardDelta = fn
 }
 
 // Kind 返回采集器标识。
@@ -151,6 +161,22 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 			c.onAccountFetched(ctx, rewardNum)
 		}()
 	}
+	// D-137①：rewardNum 差分非零 → 边界事件（首轮不触发）。
+	// D-295 回退前值使 delta=0 → 天然不触发，无需额外判真。
+	if c.onRewardDelta != nil {
+		delta := rewardNum - c.lastReward
+		if c.hasLastReward && delta != 0 {
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("[trx_account] onRewardDelta hook panic: %v", r)
+					}
+				}()
+				c.onRewardDelta(ctx, rewardNum, delta)
+			}()
+		}
+	}
+	c.lastReward, c.hasLastReward = rewardNum, true
 	// D-231 S5：指纹变化 → onChange（首轮不触发）。
 	// D-233 R5：allowance 入指纹——奖励结算步进即触发对冲卡刷新。
 	// D-295 S6：指纹加 rewardNum（待领取应计）——rewardNum 变化即推 hedgeRefresh 解冻页面；

@@ -88,6 +88,18 @@ func (s *Store) GetLastTrxVoteRebalance(ctx context.Context) (*TRXVoteRebalance,
 	return &r, nil
 }
 
+// LastRebalanceDecidedAt D-137：查最近一次评估的 decided_at（不限 status——评估即留痕）。
+// 无记录或查询失败 → 返回错误（调用方 ErrNoRows 判零值）。
+func (s *Store) LastRebalanceDecidedAt(ctx context.Context) (time.Time, error) {
+	var decidedAt time.Time
+	err := s.pool.QueryRow(ctx,
+		`SELECT decided_at FROM fin_trx_vote_rebalance ORDER BY decided_at DESC LIMIT 1`).Scan(&decidedAt)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return decidedAt, nil
+}
+
 // LastExecutedRebalanceAt D-293 S3：查最近一次 status='executed' 的 decided_at（防抖用）。
 // 无记录或查询失败 → 返回 zero time（不阻塞决策，保守放行）。
 func (s *Store) LastExecutedRebalanceAt(ctx context.Context) (time.Time, error) {

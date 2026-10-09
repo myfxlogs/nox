@@ -168,3 +168,57 @@ func TestAccountCollector_RewardChangeFiresOnChange(t *testing.T) {
 		t.Errorf("second Poll fired=%d, want 1 (rewardNum 变化触发 onChange；D-295 S6)", fired)
 	}
 }
+
+// TestAccountCollector_RewardDeltaBoundary D-137①：rewardNum 差分=维护期边界探测器。
+// 非零 delta → onRewardDelta 触发；零 delta（含首轮/持平/D-295 回退前值）→ 不触发。
+func TestAccountCollector_RewardDeltaBoundary(t *testing.T) {
+	st := newTestStore(t)
+	reward := int64(15000000)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/wallet/getaccount":
+			_, _ = w.Write([]byte(mockGetAccountJSON))
+		case "/wallet/getaccountresource":
+			_, _ = w.Write([]byte(mockGetResourceJSON))
+		default:
+			_, _ = w.Write([]byte(`{"rewardNum":` + strconv.FormatInt(reward, 10) + `}`))
+		}
+	}))
+	defer srv.Close()
+
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, func() string { return "" })
+	type evt struct{ reward, delta int64 }
+	var fired []evt
+	c.SetOnRewardDelta(func(_ context.Context, rewardNumSun, delta int64) {
+		fired = append(fired, evt{rewardNumSun, delta})
+	})
+
+	poll := func() {
+		if _, err := c.Poll(context.Background()); err != nil {
+			t.Fatalf("Poll: %v", err)
+		}
+	}
+
+	poll() // 首轮：无前值不触发
+	if len(fired) != 0 {
+		t.Fatalf("first Poll fired=%v, want 0（首轮前值未知）", fired)
+	}
+
+	poll() // 零 delta 不触发
+	if len(fired) != 0 {
+		t.Fatalf("zero delta fired=%v, want 0（边界静默窗不动作）", fired)
+	}
+
+	reward = 18000000 // 边界结算步进 → 非零 delta 触发
+	poll()
+	if len(fired) != 1 || fired[0].reward != 18000000 || fired[0].delta != 3000000 {
+		t.Fatalf("boundary delta fired=%v, want [{18000000,+3000000}]", fired)
+	}
+
+	reward = 0 // claim 后 reward 清零 → 负 delta 亦触发（自事件边界）
+	poll()
+	if len(fired) != 2 || fired[1].delta != -18000000 {
+		t.Fatalf("claim zero-reset fired=%v, want second evt delta=-18000000", fired)
+	}
+}
