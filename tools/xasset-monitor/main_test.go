@@ -70,7 +70,7 @@ func TestD335R1_NoTickSkipsPair(t *testing.T) {
 	s := d335r1Store(t)
 	d335r1SeedTick(t, s, "3001157", "XAUUSD", 4354, 4355)
 	d335r1StubFetches(t, 4360, 4361) // binance 金价形态
-	if err := runPairs(context.Background(), s, "3001157", derivedPairs()); err != nil {
+	if err := runPairs(context.Background(), s, derivedPairs()); err != nil {
 		t.Fatalf("runPairs: %v", err)
 	}
 	if n := d335r1Count(t, s, "BTCUSDT-BTC"); n != 0 {
@@ -89,7 +89,7 @@ func TestD335R1_BTCTickParity(t *testing.T) {
 	s := d335r1Store(t)
 	d335r1SeedTick(t, s, "3001157", "BTCUSDT", 100000, 100000)
 	d335r1StubFetches(t, 100049, 100050)
-	if err := runPairs(context.Background(), s, "3001157", derivedPairs()); err != nil {
+	if err := runPairs(context.Background(), s, derivedPairs()); err != nil {
 		t.Fatalf("runPairs: %v", err)
 	}
 	var esp float64
@@ -132,7 +132,7 @@ func TestD423_OkxVenueRow(t *testing.T) {
 		return 4360, 4361, 0.0001, 3, nil
 	}
 	t.Cleanup(func() { fetchOkxGoldFn = orig })
-	if err := runPairs(context.Background(), s, "3001157", derivedPairs()); err != nil {
+	if err := runPairs(context.Background(), s, derivedPairs()); err != nil {
 		t.Fatalf("runPairs: %v", err)
 	}
 	if !okxCalled {
@@ -180,7 +180,7 @@ func TestD335R1_EntrySpreadMagnitude(t *testing.T) {
 // {"okx:perp","BTC-USDT-SWAP","BTCUSDT-BTC","BTCUSDT"}——真钱组合#10 的 venue 簿
 // （pair 键与 binance BTC 行同款、cex_venue 不同=三元组隔离本意）。
 func TestD419_OkxBtcPairRow(t *testing.T) {
-	want := monitorPair{"okx:perp", "BTC-USDT-SWAP", "BTCUSDT-BTC", "BTCUSDT"}
+	want := monitorPair{"okx:perp", "BTC-USDT-SWAP", "BTCUSDT-BTC", "BTCUSDT", "3001157:mt5"}
 	found := false
 	for _, p := range derivedPairs() {
 		if p == want {

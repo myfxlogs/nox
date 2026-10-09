@@ -158,27 +158,22 @@ func runBackfillMode(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	exnessVenue := os.Getenv("ARB_XASSET_EXNESS_VENUE")
-	if exnessVenue == "" {
-		exnessVenue = "3001157"
-	}
 	hc := httpx.Client()
-	since := time.Now().Add(-5 * 24 * time.Hour) // Exness ticks 保留窗（诚实边界）
-	mtVenue := keydomain.Join(exnessVenue, "mt5")
+	since := time.Now().Add(-5 * 24 * time.Hour) // MT ticks 保留窗（诚实边界）
 	var firstErr error
-	combos, uni, err := loadDerivationInputs(ctx, st)
+	combos, uni, demand, accts, equiv, err := loadDerivationInputs(ctx, st)
 	if err != nil {
 		return fmt.Errorf("monitor pairs inputs: %w", err)
 	}
-	pairs, uncovered := deriveMonitorPairs(combos, uni)
+	pairs, uncovered := deriveMonitorPairs(combos, uni, demand, accts, equiv)
 	for _, u := range uncovered {
-		log.Printf("[monitor-pairs] warn: enabled 组合未被簿覆盖（一次性列名，B-008）: %s", u)
+		log.Printf("[monitor-pairs] warn: 组合未被簿覆盖（一次性列名，B-008/D-144）: %s", u)
 	}
 	for _, p := range pairs {
 		if p.cexVenue != "binance:perp" {
 			continue // D-423：回填源=binance klines，非 binance 簿（okx）不回填
 		}
-		if _, err := RunBackfill(ctx, st, hc, proxyURL, exnessVenue, p.sym, p.pair, p.exSym, p.cexVenue, mtVenue, since); err != nil {
+		if _, err := RunBackfill(ctx, st, hc, proxyURL, keydomain.BareOf(p.mtVenueKey), p.sym, p.pair, p.exSym, p.cexVenue, p.mtVenueKey, since); err != nil {
 			log.Printf("xasset-monitor backfill: pair=%s 失败: %v", p.pair, err)
 			if firstErr == nil {
 				firstErr = err

@@ -1,21 +1,29 @@
-// pairs.go D-423→D-472 S5：监控对清单派生（硬编码 9 行 vs xasset_allow_combos 14 行
+// pairs.go D-423→D-472 S5→D-144：监控对清单派生（硬编码 9 行 vs xasset_allow_combos
 // 双真相源漂移实证——okx XPT/XPD 簿缺席告警 9-25 实发——重写为白名单表派生）。
-// 派生键=消费端权威口径 paperCfdPairKey（internal/scan/paper_all_in.go）同公式镜像：
-// pair = cexLeg.canonical + "-" + bare(mtLeg.canonical)，bare=剥 "USDT" 优先 else "USD"
-// （"XPT"→"XPTUSDT-XPT"、"BTC"→"BTCUSDT-BTC"、"XAUUSD"→"XAUUSDT-XAU" 与簿行实值一致）。
-// 白名单加行≤5min（cron 轮重查表）簿覆盖自动跟上，零代码触碰。
+// D-144 覆盖域扩至上游验证域：派生源=enabled 白名单 ∪ active 纸面仓 ∪ fin_carry_universe
+// 达标行（cfd 结构 note=” net∈[8,300]，与 openCfdDiscovery 开仓域同口径）——授权域/
+// 发现域/在仓域三源并集，白名单缩编簿不塌（10-02→10-04 塌缩事故根修）。
+// mt_venue 集=ticks 在流 MT 账户动态枚举（ARB_XASSET_EXNESS_VENUE env 删除；各账户
+// 独立采样禁借用——XAUUSD 点差 3001157≈0.24 vs 15032313≈0.15-0.21 实锤失真）。
+// 派生键=消费端权威口径 scan.CfdBookSpecs/cfdPairCandidates 同源：
+// pair=cexCanonical+"-"+TrimSuffix(mtCanonical,"USD")，class 行经 asset_equiv 实解析。
+// 白名单加行/纸面开仓≤5min（cron 轮重查表）簿覆盖自动跟上，零代码触碰。
 package main
 
 import (
 	"arb/internal/keydomain"
+	"arb/internal/scan"
+	"arb/internal/store/pgstore"
 
+	"sort"
 	"strings"
 )
 
-// monitorPair D-335R1 S1 + D-423 venue 化：{cexVenue, sym, pair, exSym}——
-// cexVenue 路由 CEX 报价源（binance:perp=经 cex-proxy fapi；okx:perp=OKX 公开行情），
-// 行级 venue 三元组落库（pair,cex_venue,mt_venue），消费端按仓 venue 直查禁借用。
-type monitorPair struct{ cexVenue, sym, pair, exSym string }
+// monitorPair D-335R1 S1 + D-423 venue 化 + D-144 多账户：{cexVenue, sym, pair, exSym,
+// mtVenueKey}——cexVenue 路由 CEX 报价源（binance:perp=经 cex-proxy fapi；okx:perp=OKX
+// 公开行情），行级 venue 三元组落库（pair,cex_venue,mt_venue），消费端按仓 venue 直查
+// 禁借用；mtVenueKey=该对所属 MT 账户键（"15032313:mt5"），exSym=该账户 ticks 实查键。
+type monitorPair struct{ cexVenue, sym, pair, exSym, mtVenueKey string }
 
 // allowComboRow 派生入参：xasset_allow_combos enabled 行投影。
 type allowComboRow struct{ canonicalBuy, venueBuy, canonicalSell, venueSell string }
@@ -23,14 +31,26 @@ type allowComboRow struct{ canonicalBuy, venueBuy, canonicalSell, venueSell stri
 // universeRow 派生入参：fin_cex_universe（status='TRADING'）行投影。
 type universeRow struct{ venue, symbol, hedgeCanonical string }
 
+// cfdDemandRow D-144：簿需求行——fin_carry_universe 达标行 ∪ active 纸面仓
+// (canonical,mt,cex) 三元组（venue 皆裸名）。
+type cfdDemandRow struct{ canonical, mtVenue, cexVenue string }
+
+// mtAcct ticks 在流 MT 账户（10min 新鲜窗枚举；venue 裸账号+vtype+在流 symbol 集——
+// demand 簿对 exSym 只取该账户自身采样面，各账户独立禁借用）。
+type mtAcct struct {
+	venue, vtype string
+	syms         []string
+}
+
 // legacyPairs D-472 S5：跨资产簿常量保留（PAXG-XAU/XAUT-XAU=金属代币对 XAU 现货价，
 // 非消费端 paperCfdPairKey 口径=不可派生行，注释标 legacy；消费方未全审=保守保留）。
+// mtVenueKey 由派生按 venue 集展开（各账户独立采样）。
 var legacyPairs = []monitorPair{
-	{"binance:perp", "PAXGUSDT", "PAXG-XAU", "XAUUSD"},
-	{"binance:perp", "XAUTUSDT", "XAUT-XAU", "XAUUSD"},
+	{"binance:perp", "PAXGUSDT", "PAXG-XAU", "XAUUSD", ""},
+	{"binance:perp", "XAUTUSDT", "XAUT-XAU", "XAUUSD", ""},
 	// D-335/D-419 历史观察行（现行 9 行对拍中唯一无 enabled 组合源者；B-009 保守保留，
 	// 删行=决策席裁定）。
-	{"binance:perp", "BTCUSDT", "BTCUSDT-BTC", "BTCUSDT"},
+	{"binance:perp", "BTCUSDT", "BTCUSDT-BTC", "BTCUSDT", ""},
 }
 
 // nonDerivablePairs D-472 B-007：跨资产/非加密对显式排除集（fin_cex_universe 无合约行
@@ -40,11 +60,13 @@ var nonDerivablePairs = map[string]bool{
 	"CLUSDT|WTI": true, // D-330 demo 组合：原油期货 perp×WTI 现货
 }
 
-// deriveMonitorPairs D-472 S5：白名单派生（纯函数，可测）。
-// combos=enabled 行；uni=TRADING 行。返回 派生清单（∪legacy，三元组去重）+
-// 反向对账 uncovered 组合名（B-008：enabled 行未被 derived∪legacy 覆盖者——含双腿皆
-// CEX 的同所组合；nonDerivable 命名行除外——结构性已知不刷屏）。
-func deriveMonitorPairs(combos []allowComboRow, uni []universeRow) (pairs []monitorPair, uncovered []string) {
+// deriveMonitorPairs D-472 S5 白名单派生→D-144 三源并集（纯函数，可测）。
+// 输入：combos=enabled 行；uni=TRADING 行；demand=universe 达标行∪active 纸面仓
+// (canonical,mt,cex)；accts=ticks 在流 MT 账户；equiv=asset_equiv enabled 行。
+// 返回派生清单（∪legacy，含 mtVenueKey 去重）+反向对账 uncovered 组合名
+// （enabled/demand 行未被派生覆盖者；nonDerivable 命名行除外——结构性已知不刷屏）。
+func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdDemandRow,
+	accts []mtAcct, equiv []pgstore.AssetEquivEntry) (pairs []monitorPair, uncovered []string) {
 	byKey := map[string]string{} // venue|hc → symbol
 	symsByVenue := map[string]map[string]bool{}
 	for _, r := range uni {
@@ -85,13 +107,74 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow) (pairs []moni
 		return "", false
 	}
 
-	pairs = make([]monitorPair, 0, len(legacyPairs)+len(combos))
+	// D-144：mt venue 集——ticks 在流账户 ∪ enabled 组合 MT 腿（venue 键全集；
+	// demand 行 venue 各自绑定不入全集——其 pair 键含账户实解析 canonical 不外溢）。
+	acctType := map[string]string{} // bare → vtype
+	acctSyms := map[string][]string{}
+	for _, a := range accts {
+		acctType[a.venue] = a.vtype
+		acctSyms[a.venue] = a.syms
+	}
+	njk := func(s string) string {
+		if b := strings.TrimSuffix(s, "USDT"); b != s && b != "" {
+			return b
+		}
+		if b := strings.TrimSuffix(s, "USD"); b != s && b != "" {
+			return b
+		}
+		return s
+	}
+	// demandExSym demand 行 MT 腿 tick 查询键：账户在流 symbol NJK 命中 canonical
+	// 优先（本账户实采样面），退 spec.ExSym（等价类 canonical），最后 canonical 兜底。
+	demandExSym := func(mtBare, canonical, specExSym string) string {
+		for _, s := range acctSyms[mtBare] {
+			if njk(s) == njk(canonical) {
+				return s
+			}
+		}
+		if specExSym != "" {
+			return specExSym
+		}
+		return canonical
+	}
+	mtKeyFor := func(bare string) string {
+		if t, ok := acctType[bare]; ok {
+			return keydomain.Join(bare, t)
+		}
+		return keydomain.Join(bare, "mt5") // 与 scan.monitorVenueKeys 缺省口径一致
+	}
+	globalVenueKeys := map[string]bool{}
+	for _, a := range accts {
+		globalVenueKeys[keydomain.Join(a.venue, a.vtype)] = true
+	}
+	for _, c := range combos {
+		for _, v := range []string{c.venueBuy, c.venueSell} {
+			if isMT(v) {
+				globalVenueKeys[v] = true
+			}
+		}
+	}
+
+	pairs = make([]monitorPair, 0, len(legacyPairs)*len(globalVenueKeys)+len(combos))
 	seen := map[string]bool{}
-	for _, p := range legacyPairs {
-		k := p.cexVenue + "|" + p.pair + "|" + p.exSym
+	emit := func(p monitorPair) {
+		k := p.cexVenue + "|" + p.pair + "|" + p.exSym + "|" + p.mtVenueKey
 		if !seen[k] {
 			seen[k] = true
 			pairs = append(pairs, p)
+		}
+	}
+	// 确定性序：venue 键排序后展开（同输入同输出）。
+	venues := make([]string, 0, len(globalVenueKeys))
+	for v := range globalVenueKeys {
+		venues = append(venues, v)
+	}
+	sort.Strings(venues)
+	for _, lp := range legacyPairs {
+		for _, v := range venues {
+			p := lp
+			p.mtVenueKey = v
+			emit(p)
 		}
 	}
 	for _, c := range combos {
@@ -105,8 +188,6 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow) (pairs []moni
 			uncovered = append(uncovered, name+"（同所组合不管簿）")
 			continue
 		}
-		// mtVenue 不进派生输出：runPairs/backfill 的 MT 侧 venue=exnessVenue env 单一口径
-		// （工具现设计）；派生只取 exSym=mtLeg.canonical 供 tick 查询。
 		// 腿向关键：MT 腿的 venue 是 MT 域（:mt4/:mt5），CEX 腿 venue 才路由报价源——
 		// buy=MT 时 cex=卖侧（venueSell）、卖=MT 时 cex=买侧（venueBuy），禁错取 MT venue。
 		var mtCanon, cexCanon, cexVenue string
@@ -122,11 +203,27 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow) (pairs []moni
 			uncovered = append(uncovered, name+"（universe 无合约行，簿行缺失）")
 			continue
 		}
-		p := monitorPair{cexVenue: cexVenue, sym: sym, pair: cexCanon + "-" + bare, exSym: mtCanon}
-		k := p.cexVenue + "|" + p.pair + "|" + p.exSym
-		if !seen[k] {
-			seen[k] = true
-			pairs = append(pairs, p)
+		for _, v := range venues {
+			emit(monitorPair{cexVenue: cexVenue, sym: sym, pair: cexCanon + "-" + bare, exSym: mtCanon, mtVenueKey: v})
+		}
+	}
+	// D-144 上游域：universe 达标行∪active 纸面仓——按其自带 (mt,cex) 绑账户派生，
+	// pair 键经 scan.CfdBookSpecs 实解析（与 insertCfdPaper 候选键同源）。
+	for _, d := range demand {
+		name := d.mtVenue + "×" + d.cexVenue + "|" + d.canonical
+		cexBare := keydomain.BareOf(d.cexVenue)
+		emitted := false
+		for _, sp := range scan.CfdBookSpecs(equiv, d.canonical, cexBare, d.mtVenue) {
+			nat := scan.CexNativeSym(cexBare, sp.CexCanon)
+			if nat == "" || !symsByVenue[cexBare][nat] {
+				continue // cex 无报价源约定或无 TRADING 合约行
+			}
+			emit(monitorPair{cexVenue: keydomain.Join(cexBare, "perp"), sym: nat, pair: sp.Pair,
+				exSym: demandExSym(d.mtVenue, d.canonical, sp.ExSym), mtVenueKey: mtKeyFor(d.mtVenue)})
+			emitted = true
+		}
+		if !emitted {
+			uncovered = append(uncovered, name+"（簿结构性不可覆盖，簿行缺失）")
 		}
 	}
 	return pairs, uncovered

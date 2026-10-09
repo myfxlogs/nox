@@ -17,7 +17,7 @@ func TestGatePairKeys(t *testing.T) {
 	}
 	seen := map[string]string{}
 	// D-472 S5：清单改白名单派生后，本测改用生产形 fixture 派生（gate 三行语义不变）。
-	pairs, _ := deriveMonitorPairs(d472Combos(), d472Universe())
+	pairs, _ := deriveMonitorPairs(d472Combos(), d472Universe(), nil, nil, nil)
 	for _, p := range pairs {
 		if p.cexVenue == "gate:perp" {
 			seen[p.sym] = p.pair

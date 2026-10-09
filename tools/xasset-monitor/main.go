@@ -47,39 +47,34 @@ func run(ctx context.Context) (err error) {
 	// （alerts critical + app_secrets 飞书直推 + 30min 去重；pair skip 不进此通道）。
 	defer func() { reportFatal(ctx, st, err) }()
 
-	exnessVenue := os.Getenv("ARB_XASSET_EXNESS_VENUE")
-	if exnessVenue == "" {
-		exnessVenue = "3001157"
-	}
-
-	// D-472 S5：监控簿白名单派生（硬编码清单退役）——enabled combos × universe 现查。
-	combos, uni, err := loadDerivationInputs(ctx, st)
+	// D-472 S5→D-144：监控簿三源派生（白名单∪universe 达标行∪active 纸面仓）×
+	// ticks 在流 MT 账户动态枚举——ARB_XASSET_EXNESS_VENUE env 删除（钉死单账户
+	// 致跨账户借用失真/新 broker 零覆盖，实证见 STATE D-144 行）。
+	combos, uni, demand, accts, equiv, err := loadDerivationInputs(ctx, st)
 	if err != nil {
 		return fmt.Errorf("monitor pairs inputs: %w", err)
 	}
-	pairs, uncovered := deriveMonitorPairs(combos, uni)
+	pairs, uncovered := deriveMonitorPairs(combos, uni, demand, accts, equiv)
 	for _, u := range uncovered {
-		log.Printf("[monitor-pairs] warn: enabled 组合未被簿覆盖（一次性列名，B-008）: %s", u)
+		log.Printf("[monitor-pairs] warn: 组合未被簿覆盖（一次性列名，B-008/D-144）: %s", u)
 	}
-	return runPairs(ctx, st, exnessVenue, pairs)
+	return runPairs(ctx, st, pairs)
 }
 
 // runPairs S2：逐对取各自 exSym 报价（无新鲜 tick → 该对 skip+warn 逐对 fail-open，
-// 9-16 业主并存裁定）——禁止任何腿顶替。返回首个 pair 失败错误（skip 非失败）。
-// D-423：mtVenueKey=exnessVenue+:mt5（已带冒号原样）；按 cexVenue 路由报价源。
-func runPairs(ctx context.Context, st *pgstore.Store, exnessVenue string, pairs []monitorPair) error {
-	mtVenue := exnessVenue
-	if keydomain.Parse(mtVenue).Type == "" {
-		mtVenue = keydomain.Join(mtVenue, "mt5")
-	}
+// 9-16 业主并存裁定）——禁止任何腿顶替、禁止跨账户借用（D-144：各账户独立采样，
+// p.mtVenueKey 携带该对所属账户）。返回首个 pair 失败错误（skip 非失败）。
+// D-423：mt_venue 落库键=venue_key 形（"15032313:mt5"）；按 cexVenue 路由报价源。
+func runPairs(ctx context.Context, st *pgstore.Store, pairs []monitorPair) error {
 	var firstErr error
 	for _, p := range pairs {
-		exBid, exAsk, err := latestExnessTick(ctx, st.Pool(), exnessVenue, p.exSym)
+		mtBare := keydomain.BareOf(p.mtVenueKey)
+		exBid, exAsk, err := latestExnessTick(ctx, st.Pool(), mtBare, p.exSym)
 		if err != nil {
-			log.Printf("xasset-monitor: pair=%s skip (Exness 腿 %s 无新鲜 tick: %v)", p.pair, p.exSym, err)
+			log.Printf("xasset-monitor: pair=%s mt=%s skip (%s 腿 %s 无新鲜 tick: %v)", p.pair, p.mtVenueKey, mtBare, p.exSym, err)
 			continue // S2：逐对 skip，禁止顶替腿
 		}
-		if err := runPair(ctx, st, p, mtVenue, exBid, exAsk); err != nil {
+		if err := runPair(ctx, st, p, p.mtVenueKey, exBid, exAsk); err != nil {
 			log.Printf("xasset-monitor: pair=%s 失败: %v", p.pair, err)
 			if firstErr == nil {
 				firstErr = err
