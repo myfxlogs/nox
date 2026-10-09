@@ -252,3 +252,24 @@ func TestD043_ResolveGraduationClass(t *testing.T) {
 		t.Error("BRENT@okx 无注册 perp 腿应 fail-closed")
 	}
 }
+
+// TestD146_TypedVenueKeyResolvesEquiv D-146：monitorVenueKeys 产出的 typed 键
+// （"3001157:mt5"/"okx:perp"）查 equiv map 须与裸键同解析——簿行 venue 列存 typed 键
+// 而 equiv venue 列存裸名，读侧不归一则候选只剩 legacy 键、等价类品种簿覆盖变静默失能。
+func TestD146_TypedVenueKeyResolvesEquiv(t *testing.T) {
+	view := newAssetClassView(d043Equiv())
+	want := []string{"SILVERUSDT-SILVER", "XAGUSDT-SILVER"}
+	for _, mtV := range []string{"3001157", "3001157:mt5"} {
+		for _, cexV := range []string{"okx", "okx:perp"} {
+			got := view.cfdPairCandidates("SILVER", cexV, mtV)
+			if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+				t.Fatalf("cfdPairCandidates(SILVER,%s,%s)=%v want %v", cexV, mtV, got, want)
+			}
+		}
+	}
+	// 写侧 cfdBookSpecs 同径：typed 键也须解出 equiv spec。
+	specs := view.cfdBookSpecs("SILVER", "okx:perp", "3001157:mt5")
+	if len(specs) != 2 || specs[1].Pair != "XAGUSDT-SILVER" {
+		t.Fatalf("cfdBookSpecs typed: %+v", specs)
+	}
+}
