@@ -170,11 +170,8 @@ func runPair(ctx context.Context, st *pgstore.Store, p monitorPair, mtVenue stri
 	log.Printf("xasset-monitor: pair=%s entry_spread=%.2fbps entry_net=%.2fbps funding_annual=%.2f%% tracking_err=%.2fbps equiv_annual=%.2f%%",
 		rec.Pair, entrySpread, entryNet, fundingAnnualPct, trackingErr, equivAnnual)
 
-	// 告警判断（任一触发即推飞书）。
-	alerts := checkAlerts(entrySpread, exitSpread, entryNet, fundingAnnualPct, fundingRate, trackingErr, equivAnnual)
-	if len(alerts) > 0 {
-		sendFeishuAlert(ctx, st, alerts, rec)
-	}
+	// D-147：逐 tick 市场状态阈值推送摘除（业主令——常态读数非业主事件；
+	// 簿指标照常落库供面板/毕业链消费，fatal 故障走 pushFatalFeishu 保留）。
 	return nil
 }
 
