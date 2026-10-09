@@ -110,7 +110,7 @@ func (q *CEXAccountQuerier) accountBinancePerp(ctx context.Context) (*AccountInf
 	if err := json.Unmarshal(body, &acc); err != nil {
 		return nil, fmt.Errorf("binance perp account json: %w", err)
 	}
-	eq, perr := f64z(acc.TotalWalletBalance)
+	wb, perr := f64z(acc.TotalWalletBalance)
 	if perr != nil {
 		return nil, fmt.Errorf("parse %s=%q: %w", "acc.TotalWalletBalance", acc.TotalWalletBalance, perr)
 	}
@@ -133,13 +133,15 @@ func (q *CEXAccountQuerier) accountBinancePerp(ctx context.Context) (*AccountInf
 	}
 	// D-542：availableBalance 是 venue 权威可用（wb−占用保证金−冻结，含全仓）——
 	// 缺失/解析失败按 equity 回退（不猜负值）。
-	avail := eq
+	avail := mb
 	if ab, perr := f64z(acc.AvailableBalance); perr == nil && ab > 0 {
 		avail = ab
 	}
+	// D-142：equity=totalMarginBalance（钱包余额+未实现盈亏，与 WS wb+ΣUP 同口径）；
+	// Balance 保留 totalWalletBalance（权益−未实现盈亏的净额，展示域分列）。
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
-		Balance: eq, Equity: eq, FreeMargin: avail, Currency: "USDT",
+		Balance: wb, Equity: mb, FreeMargin: avail, Currency: "USDT",
 		Simulated: q.simulated, Website: q.website, BufferMultiple: buffer,
 	}, nil
 }

@@ -17,7 +17,7 @@ func TestFullInventory_BinancePerpWallet(t *testing.T) {
 	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
-		fmt.Fprint(w, `{"totalWalletBalance":"345.74"}`)
+		fmt.Fprint(w, `{"totalWalletBalance":"345.74","totalMarginBalance":"345.74"}`)
 	}))
 	defer srv.Close()
 

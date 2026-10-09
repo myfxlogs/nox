@@ -266,7 +266,7 @@ func TestD475b_Contract_Accounts(t *testing.T) {
 	if len(gsink.rows) != 1 || gsink.rows[0].EquityRaw != grest.Equity {
 		t.Fatalf("gate balances 对拍: %+v vs REST equity=%v", gsink.rows, grest.Equity)
 	}
-	// binance a.B wb vs accountBinancePerp totalWalletBalance。
+	// binance D-142：WS a.B wb+Σup vs REST totalMarginBalance——同口径对拍（777.7+2.3=780）。
 	binSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"totalWalletBalance":"777.7","totalMarginBalance":"780","totalMaintMargin":"100"}`))
 	}))
@@ -276,8 +276,8 @@ func TestD475b_Contract_Accounts(t *testing.T) {
 		t.Fatalf("binance account rest: %v", err)
 	}
 	bsink := &d475bSink{}
-	b := &BinanceUserWS{venueKey: "binance:perp", venueType: "perp", sink: bsink, now: d475bNow}
-	b.onAccountUpdate(ctx, json.RawMessage(`{"m":"ORDER","B":[{"a":"USDT","wb":"777.7"}],"P":[]}`))
+	b := &BinanceUserWS{venueKey: "binance:perp", venueType: "perp", sink: bsink, now: d475bNow, posCache: NewPositionEventCache(), balLedger: nil}
+	b.onAccountUpdate(ctx, json.RawMessage(`{"m":"ORDER","B":[{"a":"USDT","wb":"777.7"}],"P":[{"s":"TRXUSDT","pa":"16","ep":"0.334","iw":"5.3","ps":"BOTH","up":"2.3"}]}`))
 	if len(bsink.rows) != 1 || bsink.rows[0].EquityRaw != brest.Equity {
 		t.Fatalf("binance balances 对拍: %+v vs REST equity=%v", bsink.rows, brest.Equity)
 	}
