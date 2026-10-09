@@ -92,7 +92,8 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 	}
 	if newCount > 0 {
 		msg := fmt.Sprintf("[毕业链] %d 个纸面行验证达标待授权: %s", newCount, strings.Join(labels, ", "))
-		if err := st.InsertAlert(ctx, nil, "info", msg); err != nil {
+		// D-147：待授权=待业主决策事件——升 warn 级搭 alerts→feishu 扇出（info 级被推送闸过滤）。
+		if err := st.InsertAlert(ctx, nil, "warn", msg); err != nil {
 			return newCount, fmt.Errorf("graduation alert: %w", err)
 		}
 	}

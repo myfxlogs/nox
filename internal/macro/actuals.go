@@ -168,12 +168,12 @@ func sweepActuals(ctx context.Context, d Deps, seen map[int64]string, now time.T
 	}
 }
 
-// pushActual 推送一行：飞书 announce + alerts dedup（同文案 4h 防重；写失败只 log）。
+// pushActual 留痕一行：alerts dedup（同文案 4h 防重；写失败只 log）。
+// D-147：actuals 落值=系统风控输入非业主事件——info 留痕不直推。
 func pushActual(ctx context.Context, d Deps, e pgstore.MacroEvent, now time.Time) {
 	bj := e.EventTime.In(bjLoc).Format("01-02 15:04")
 	msg := fmt.Sprintf("[macro] %s %s %s：实际 %s（预期 %s / 前值 %s）",
 		bj, e.Currency, e.Name, e.Actual, dashIfEmpty(e.Forecast), dashIfEmpty(e.Previous))
-	announce(ctx, d, msg)
 	if err := d.Store.InsertAlertDedup(ctx, "info", msg, actualPushDedup); err != nil {
 		log.Printf("[macro:actuals] dedup alert: %v", err)
 	}

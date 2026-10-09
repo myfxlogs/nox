@@ -26,18 +26,12 @@ type Store interface {
 	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error                      // D-053 ②
 }
 
-// Notifier 推送面（*notify.FeishuClient 原生满足）。
-type Notifier interface {
-	SendText(ctx context.Context, chatID, text string) error
-}
-
-// Deps 调度依赖（Now 测试注入；ChatID=feishu_target 绑定推送目标）。
+// Deps 调度依赖（Now 测试注入）。
 // D-545 热读化：Enabled 改 getter——每班唤醒首判（ARB_MACRO_ENABLED 热闸：
 // false=当班跳过不杀 goroutine；nil=恒开）。D-120 删 FredKey（FRED 面清退）。
+// D-147：Notify/ChatID 摘除——推送收口业主域，财历/actuals 仅 alerts 留痕。
 type Deps struct {
 	Store   Store
-	Notify  Notifier
-	ChatID  string
 	Enabled func() bool
 	Now     func() time.Time
 }
@@ -136,27 +130,10 @@ func sendDailyReport(ctx context.Context, d Deps) {
 		log.Printf("[macro:calendar] daily report query: %v", err)
 		return
 	}
-	announce(ctx, d, RenderCalendarCN(events, d.Now()))
-}
-
-// announce 周报/日报推送（失败 log 不重试——下一节奏自愈）。
-func announce(ctx context.Context, d Deps, text string) {
-	if d.Notify == nil || d.ChatID == "" {
-		log.Printf("[macro] notify skipped (chat unbound): %s", firstLine(text))
-		return
+	// D-147 推送收口：财历日报=系统风控输入非业主事件——info 留痕不直推（同文案 4h 防重）。
+	if err := d.Store.InsertAlertDedup(ctx, "info", RenderCalendarCN(events, d.Now()), 4*time.Hour); err != nil {
+		log.Printf("[macro:calendar] daily report alert: %v", err)
 	}
-	if err := d.Notify.SendText(ctx, d.ChatID, text); err != nil {
-		log.Printf("[macro] send: %v", err)
-	}
-}
-
-func firstLine(s string) string {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			return s[:i]
-		}
-	}
-	return s
 }
 
 // sleepUntil ctx 感知睡眠（到点=true；取消=false）。var=测试注入点（同 fredURL 先例：
