@@ -256,3 +256,16 @@ func (t *feishuQueryTools) execTodayIncome(ctx context.Context, call analyst.Too
 	})
 	return analyst.ToolResult{ToolUseID: call.ID, Content: string(out)}, nil, nil
 }
+
+// extractText 从飞书 content JSON 提取 text 字段。
+// D-139：原 repo_reply.go 定义随 repo 面摘除，挪此（本文件唯一在用方）。
+func extractText(content string) (string, error) {
+	if content == "" {
+		return "", fmt.Errorf("empty content")
+	}
+	var m map[string]string
+	if err := json.Unmarshal([]byte(content), &m); err != nil {
+		return "", err
+	}
+	return m["text"], nil
+}

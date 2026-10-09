@@ -31,12 +31,16 @@ type PriceAlertStore interface {
 	UpdatePriceAlertLastAlert(ctx context.Context, id int64, at time.Time) error
 }
 
+// AlertFn 是告警注入面（main 装配 st.InsertAlert 包装，复用 D-264 飞书链路）。
+// D-139：原 repo_reminder.go 定义随该面摘除，挪此（price_alert 唯一在用方）。
+type AlertFn func(level, msg string)
+
 // PriceAlertService 价格提醒规则引擎。
 type PriceAlertService struct {
 	kickCh   <-chan struct{} // D-469b S5：nil 通道 select 阻塞安全=纯 ticker
 	bus      *bus.QuoteBus
 	store    PriceAlertStore
-	alertFn  AlertFn       // 复用 repo_reminder.go 的 AlertFn 类型（func(level, msg string)）
+	alertFn  AlertFn       // 告警注入（本文件定义，D-139 自 repo_reminder 挪入）
 	throttle time.Duration // 同规则节流间隔（默认 30 分钟）
 
 	mu        sync.Mutex
