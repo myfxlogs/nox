@@ -38,6 +38,20 @@ func (s *Store) ListAssetEquiv(ctx context.Context) ([]AssetEquivEntry, error) {
 	return out, rows.Err()
 }
 
+// InsertAssetEquivIfAbsent 插入一行等价类映射；冲突（同 class+canonical+venue）
+// 幂等跳过（含既有 disabled 行——不复活）。返回是否实际写入。
+func (s *Store) InsertAssetEquivIfAbsent(ctx context.Context, e *AssetEquivEntry) (bool, error) {
+	tag, err := s.pool.Exec(ctx,
+		`INSERT INTO asset_equiv (asset_class, canonical, venue_type, venue)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (asset_class, canonical, venue) DO NOTHING`,
+		e.AssetClass, e.Canonical, e.VenueType, e.Venue)
+	if err != nil {
+		return false, fmt.Errorf("insert asset_equiv: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
 // AssetEquivLister 可供 AssetEquivProvider 加载的最小接口（测试可 fake）。
 type AssetEquivLister interface {
 	ListAssetEquiv(ctx context.Context) ([]AssetEquivEntry, error)
