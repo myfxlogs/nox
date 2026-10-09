@@ -6,6 +6,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"arb/internal/keydomain"
 )
 
 // quoteSub D-249 S2：订阅条目（D-108 Topic 同款 close/send 竞态防护）。
@@ -135,6 +137,38 @@ func (b *QuoteBus) Snapshot(_ context.Context, symbols []string) map[string]map[
 		}
 	}
 	return result
+}
+
+// EvictVenue 驱逐某裸 venue 的全部最新报价与 lastChange 记录（D-150）——账号删除后
+// qbus 内存态不残留：否则 mt-health 的 CEX 兜底收录径（quoteAges \ broker_accounts）
+// 把已删账号当 CEX venue 持续监控，报价年龄单调涨→crit 告警每 30min 重发。
+// 返回驱逐的报价条数（观测用）。
+func (b *QuoteBus) EvictVenue(venue string) int {
+	b.latestMu.Lock()
+	defer b.latestMu.Unlock()
+	n := 0
+	for sym, venues := range b.latest {
+		for vk := range venues {
+			if keydomain.BareOf(vk) == venue {
+				delete(venues, vk)
+				n++
+			}
+		}
+		if len(venues) == 0 {
+			delete(b.latest, sym)
+		}
+	}
+	for sym, venues := range b.lastChange {
+		for vk := range venues {
+			if keydomain.BareOf(vk) == venue {
+				delete(venues, vk)
+			}
+		}
+		if len(venues) == 0 {
+			delete(b.lastChange, sym)
+		}
+	}
+	return n
 }
 
 // Latest 返回某 canonical symbol 某 venue 的最新报价。

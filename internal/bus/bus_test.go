@@ -90,3 +90,26 @@ func TestQuoteBusDrainThenReplace(t *testing.T) {
 		t.Fatalf("recv Bid = %v, want 2", q.Bid)
 	}
 }
+
+// TestD150_EvictVenue：删号后 qbus 驱逐该 venue 全部 latest/lastChange 条目
+// ——mt-health CEX 兜底径不再收幽灵 venue；其他 venue 行不动。
+func TestD150_EvictVenue(t *testing.T) {
+	b := New()
+	b.Publish(Quote{Symbol: "EURUSD", Venue: "62200001", VenueType: "mt5", Bid: 1.1, Ask: 1.2, Time: time.Now()})
+	b.Publish(Quote{Symbol: "EURUSD", Venue: "binance", VenueType: "perp", Bid: 1.1, Ask: 1.2, Time: time.Now()})
+	b.Publish(Quote{Symbol: "XAUUSD", Venue: "62200001", VenueType: "mt5", Bid: 2, Ask: 2.1, Time: time.Now()})
+	if n := b.EvictVenue("62200001"); n != 2 {
+		t.Fatalf("evicted = %d, want 2", n)
+	}
+	for _, q := range b.AllLatest() {
+		if q.Venue == "62200001" {
+			t.Fatalf("residual quote: %+v", q)
+		}
+	}
+	if _, ok := b.Latest("EURUSD", "binance:perp"); !ok {
+		t.Fatal("binance quote wrongly evicted")
+	}
+	if n := b.EvictVenue("62200001"); n != 0 {
+		t.Fatalf("re-evict = %d, want 0 (idempotent)", n)
+	}
+}
