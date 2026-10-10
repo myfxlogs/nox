@@ -58,8 +58,10 @@ type Deps struct {
 	// ResolveClient wire 注入（kbreport.ResolveClient 口径，每次触发重解析 DB 优先）；
 	// nil=直接用静态 Client 字段。
 	ResolveClient func(ctx context.Context) (*analyst.Client, error)
-	InboxPath     string // 空=DefaultInboxPath
-	ResearchDir   string // 空=DefaultResearchDir
+	// ProbeKick D-163：探针提案落库后唤醒机审（cmd/core 接 bus.Topic 非阻塞发布；nil=不踢）。
+	ProbeKick   func()
+	InboxPath   string // 空=DefaultInboxPath
+	ResearchDir string // 空=DefaultResearchDir
 }
 
 func (d *Deps) fill() {
