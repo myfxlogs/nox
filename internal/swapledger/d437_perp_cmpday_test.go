@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
 
@@ -181,4 +182,15 @@ func TestD437_T5_MultiWindowSum(t *testing.T) {
 	if len(st.incDays) != 1 || st.incDays[0] != yday {
 		t.Fatalf("income 应查昨日日和，got days=%v", st.incDays)
 	}
+}
+
+// D-161：SwapReconcileStore 接口补法（窗径桩——本测试走 notional 缺省回退路径不触达）。
+func (s *d437StubStore) FactsSince(context.Context, string, string, string, time.Time) ([]fact.Fact, error) {
+	return nil, nil
+}
+func (s *d437StubStore) GetOpportunity(context.Context, string) (*pgstore.Opportunity, error) {
+	return nil, nil
+}
+func (s *d437StubStore) ListSymbolMappings(context.Context, string) ([]pgstore.SymbolMapping, error) {
+	return nil, nil
 }

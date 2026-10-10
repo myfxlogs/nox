@@ -6,6 +6,7 @@
 package swapledger
 
 import (
+	"arb/internal/fact"
 	"arb/internal/keydomain"
 	"context"
 	"fmt"
@@ -29,14 +30,19 @@ type SwapReconcileStore interface {
 	LatestSwapSnapshot(ctx context.Context, posID int64, venue string) (pgstore.SwapSnapshot, error)
 	LatestSwapSnapshotBefore(ctx context.Context, posID int64, venue string, before time.Time) (pgstore.SwapSnapshot, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
+	// D-161 逐窗口径：funding/funding_interval 时序 + SELL 腿 canonical 三段链查询。
+	FactsSince(ctx context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error)
+	GetOpportunity(ctx context.Context, oppID string) (*pgstore.Opportunity, error)
+	ListSymbolMappings(ctx context.Context, venue string) ([]pgstore.SymbolMapping, error)
 }
 
 // SwapReconciler swap 对账器（D-110 P2）。
 type SwapReconciler struct {
 	store        SwapReconcileStore
-	deviationPct float64       // 偏差率阈值（%），默认 10.0
-	runTimeout   time.Duration // 单次超时
-	initialDelay time.Duration // 首轮延迟（=2h，晚于 swapledger 90s）
+	notional     NotionalResolver // D-161：窗径名义源（SetNotional 注入，nil=窗径不可用回退旧径）
+	deviationPct float64          // 偏差率阈值（%），默认 10.0
+	runTimeout   time.Duration    // 单次超时
+	initialDelay time.Duration    // 首轮延迟（=2h，晚于 swapledger 90s）
 }
 
 // NewSwapReconciler 创建 swap 对账器。
@@ -98,11 +104,23 @@ func (r *SwapReconciler) Run(ctx context.Context) (int, error) {
 	}
 
 	today := time.Now().UTC()
+	cmpDay := today.AddDate(0, 0, -1)
 	alerts := 0
+	// D-161：perp 腿跨仓分组收集——比对粒度统一 (venue,symbol,day)，
+	// 同 venue 同 symbol 多仓窗级求和 vs income 同粒度日和（仓级日频错配根修）。
+	perpGroups := map[perpGroupKey][]perpGroupLeg{}
 	for _, pos := range positions {
-		n, err := r.reconcilePosition(pctx, pos, today)
+		n, err := r.collectLegs(pctx, pos, today, perpGroups)
 		if err != nil {
 			log.Printf("[swap-reconcile] position %d: %v", pos.ID, err)
+			continue
+		}
+		alerts += n
+	}
+	for key, members := range perpGroups {
+		n, err := r.reconcilePerpGroup(pctx, key, members, cmpDay, today)
+		if err != nil {
+			log.Printf("[swap-reconcile] group %s/%s: %v", key.venue, key.symbol, err)
 			continue
 		}
 		alerts += n
@@ -114,40 +132,20 @@ func (r *SwapReconciler) Run(ctx context.Context) (int, error) {
 // D-159 W3a R5：原 position 级「当日未记→整笔跳过」改为 per-leg——该腿当日未记→跳过该腿
 // （不误告警语义不变），已记腿继续对账；不再让单腿缺失短路整仓对账。
 func (r *SwapReconciler) reconcilePosition(ctx context.Context, pos pgstore.Position, day time.Time) (int, error) {
-	legs, err := r.store.ListPositionLegs(ctx, pos.ID)
+	// D-161：测试/独立调用径——仓内分组即组（生产跨仓分组走 Run）。
+	perpGroups := map[perpGroupKey][]perpGroupLeg{}
+	alerts, err := r.collectLegs(ctx, pos, day, perpGroups)
 	if err != nil {
-		return 0, fmt.Errorf("list legs: %w", err)
+		return 0, err
 	}
-
-	alerts := 0
-	for _, leg := range legs {
-		if leg.Phase != "OPEN" {
-			continue
-		}
-		// per-leg 预检查：该腿比对日未记 → 跳过该腿（swapledger 未记，不误告警）
-		// D-314：kind per-leg 判定（XASSET_CARRY perp 腿=funding、MT 腿=swap）。
-		// D-437 S1：perp 腿比对日=昨日（income 多窗结算需完整日对平，日中部分窗对全日公式必误报）；
-		// MT 腿=当日不变（快照差天然含时长）。昨日无 cashflow（今日新开仓）→ 自然 skip 零特例。
-		cmpDay := day
-		if keydomain.IsType(leg.Venue, "perp") {
-			cmpDay = day.AddDate(0, 0, -1)
-		}
-		kind := cashflowKind(pos.Type, leg.Venue)
-		has, err := r.store.HasCashflowForLegDay(ctx, pos.ID, leg.LegNo, kind, cmpDay)
+	cmpDay := day.AddDate(0, 0, -1)
+	for key, members := range perpGroups {
+		n, err := r.reconcilePerpGroup(ctx, key, members, cmpDay, day)
 		if err != nil {
-			return 0, fmt.Errorf("check cashflow: %w", err)
-		}
-		if !has {
+			log.Printf("[swap-reconcile] group %s/%s: %v", key.venue, key.symbol, err)
 			continue
 		}
-		alerted, err := r.reconcileLegWithStore(ctx, pos, leg.Venue, leg.Symbol, cmpDay, day)
-		if err != nil {
-			log.Printf("[swap-reconcile] leg posID=%d venue=%s: %v", pos.ID, leg.Venue, err)
-			continue
-		}
-		if alerted {
-			alerts++
-		}
+		alerts += n
 	}
 	return alerts, nil
 }
