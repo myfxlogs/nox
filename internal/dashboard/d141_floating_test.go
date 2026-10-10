@@ -77,15 +77,15 @@ func TestD141_FloatingCloseNowNet(t *testing.T) {
 		t.Error("posB 净估缺 → complete 应 false（available=false 全格「—」）")
 	}
 
-	// 锚3：游离腿估不出（报价非 fresh）→ complete=false。
-	stale := &v1.BrokerPosition{
+	// 锚3：游离腿估不出（D-167 语义随迁——Fresh=false 有价照算；改无价行表达「估不出」）→ complete=false。
+	noPrice := &v1.BrokerPosition{
 		VenueKey: "binance:spot", Symbol: "SOLUSDT", Ticket: "sol-t", Side: "BUY",
-		Fresh: false, OpenPrice: 100, CurrentPrice: 110, Volume: 2,
+		OpenPrice: 100, CurrentPrice: 0, Volume: 2,
 		OpenedAt: timestamppb.New(time.Now().Add(-time.Hour)),
 	}
-	_, _, c3 := newSvc(stale).floatingCloseNowNet(ctx)
+	_, _, c3 := newSvc(noPrice).floatingCloseNowNet(ctx)
 	if c3 {
-		t.Error("游离腿 net 估缺 → complete 应 false")
+		t.Error("游离腿 net 估缺（现价=0）→ complete 应 false")
 	}
 
 	// 锚4：全 NULL→available=false 端端到端（GetPnlAnchor 下发语义）。
