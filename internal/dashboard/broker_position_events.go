@@ -225,10 +225,28 @@ func (m *BrokerPositionMonitor) reconcileVenueKeys(ctx context.Context, kick str
 		}
 	}
 	if !hit {
-		log.Printf("[broker-mon] kick %s: no matching querier (ignored)", kick)
+		m.requeueKickOnce(kick)
 		return
 	}
+	m.mu.Lock()
+	delete(m.kickRetried, kick) // D-164：命中清重排标记（后续 attach 分离仍享一次重排额度）
+	m.mu.Unlock()
 	m.collectSwapSnapshots(ctx)
+}
+
+// requeueKickOnce D-164：no-match kick 有界延迟重排——attach 竞态窗（Connect 内帧
+// 先达、m.attach 后注册 querier）首 miss 不丢，bpKickRetryDelay 后重入 pendingKick
+// 走同一 drain 径再查；仍 miss 才 warn+丢（真未知 venue 不无限重排）。
+func (m *BrokerPositionMonitor) requeueKickOnce(kick string) {
+	m.mu.Lock()
+	if _, tried := m.kickRetried[kick]; tried {
+		m.mu.Unlock()
+		log.Printf("[broker-mon] kick %s: no matching querier after retry (dropped)", kick)
+		return
+	}
+	m.kickRetried[kick] = struct{}{}
+	m.mu.Unlock()
+	time.AfterFunc(bpKickRetryDelay, func() { m.Kick(kick) })
 }
 
 // reconcileVenue 单 venue 权威回读（测试与内部直查用）。
