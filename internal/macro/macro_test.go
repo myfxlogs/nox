@@ -72,6 +72,15 @@ func TestD528_RenderCalendarCN(t *testing.T) {
 			t.Errorf("日报缺 %q；out=%s", want, out)
 		}
 	}
+	// D-169：分组头星期=真 Weekday（09-30 周三 / 10-01 周四），非字面恒显「周一」。
+	for _, want := range []string{"— 09-30 周三 —", "— 10-01 周四 —"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("日报星期头缺 %q；out=%s", want, out)
+		}
+	}
+	if strings.Contains(out, "09-30 周一") {
+		t.Errorf("星期字面透传 bug 再现: %s", out)
+	}
 	if strings.Contains(out, "Retail Sales") || strings.Contains(out, "窗口外事件") {
 		t.Errorf("过滤失败: %s", out)
 	}

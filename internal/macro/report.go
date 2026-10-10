@@ -21,6 +21,9 @@ var bjLoc = func() *time.Location {
 
 var importanceCN = map[string]string{"high": "高", "medium": "中", "low": "低", "holiday": "假期"}
 
+// weekdayCN 星期中文（D-169：Go 布局无中文星期 token，Format("周一")=字面透传恒显周一 bug）。
+var weekdayCN = [7]string{"周日", "周一", "周二", "周三", "周四", "周五", "周六"}
+
 // BJLoc 北京时区（notify 工具渲染共用）。
 func BJLoc() *time.Location { return bjLoc }
 
@@ -51,7 +54,7 @@ func RenderCalendarCN(events []pgstore.MacroEvent, now time.Time) string {
 	dayTag := ""
 	for _, e := range picked {
 		local := e.EventTime.In(bjLoc)
-		tag := local.Format("01-02 周一")
+		tag := local.Format("01-02 ") + weekdayCN[local.Weekday()]
 		if tag != dayTag {
 			dayTag = tag
 			fmt.Fprintf(&b, "\n— %s —", tag)
