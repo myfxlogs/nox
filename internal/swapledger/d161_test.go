@@ -30,8 +30,6 @@ type d161StubStore struct {
 	cfQueried bool // SumCashflowsForDay 被调=走了日频旧径
 }
 
-func d161Key(day time.Time) string { return day.Format("2006-01-02") }
-
 func (s *d161StubStore) ListOpenPositionsByType(context.Context, []string) ([]pgstore.Position, error) {
 	return nil, nil
 }
