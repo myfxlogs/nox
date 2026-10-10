@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"arb/internal/bus"
@@ -74,6 +75,9 @@ type GatePrivateWS struct {
 	writeMu sync.Mutex
 	// onReconnect D-004 P1#6：订阅就绪回调（断流后事件漏发补救→对账 kick）。nil 安全。
 	onReconnect func()
+	// sil D-166：per-channel 静默追踪（runOnce 期重立；atomic 跨连接竞写安全；
+	// nil=未起连接，touch 空转）。
+	sil atomic.Pointer[chanSilence]
 }
 
 // NewGatePrivateWS 创建采集器。baseURL 空→调用方跳过（不落默认直连：key 白名单语义要求显式走代理）。
@@ -156,6 +160,9 @@ func (g *GatePrivateWS) runOnce(ctx context.Context) error {
 	})
 	done := make(chan struct{})
 	defer close(done)
+	sil := newChanSilence() // D-166：本连接期 per-channel 静默记账
+	g.sil.Store(sil)
+	safego.Go("gate_private_ws:probe", func() { g.probeLoop(ctx, conn, done, sil) })
 	safego.GoLoop("gate_private_ws:ping", func() {
 		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()

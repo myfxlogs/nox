@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"arb/internal/bus"
@@ -80,6 +81,9 @@ type OKXPrivateWS struct {
 	ctValFor func(ctx context.Context, instID string) (float64, error)
 	// onReconnect D-004 P1#6：订阅就绪（断流后事件漏发补救→对账 kick）。nil 安全。
 	onReconnect func()
+	// writeMu D-166：gorilla conn 单写者契约——login/订阅/探针写与 ping goroutine
+	// 共用 conn，统一 writeMu 串行化（gate D-477 同型）。
+	writeMu sync.Mutex
 }
 
 // NewOKXPrivateWS 创建采集器（凭据=REST querier 同源 exchange_configs，不新增 secret 配置项）。
@@ -150,8 +154,11 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 
 	// login（SSOT §5 B.2：sign=base64(HMAC-SHA256(secret, ts+"GET"+"/users/self/verify"))）。
 	ts := okxPrivateLoginTs(time.Now())
+	o.writeMu.Lock()
 	_ = conn.SetWriteDeadline(time.Now().Add(wsWriteDeadline)) // D-587
-	if err := conn.WriteJSON(o.loginFrame(ts)); err != nil {
+	err = conn.WriteJSON(o.loginFrame(ts))
+	o.writeMu.Unlock()
+	if err != nil {
 		return fmt.Errorf("login write: %w", err)
 	}
 
@@ -164,17 +171,24 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 	stale := newStaleGuard()
 	done := make(chan struct{})
 	defer close(done)
+	probe := newSubProbe() // D-166：本连接期 per-channel pending→ack 探针记账
+	safego.Go("okx_private_ws:probe", func() { o.probeSubLoop(ctx, conn, done, probe) })
 	safego.GoLoop("okx_private_ws:ping", func() {
 		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
+				o.writeMu.Lock()
 				_ = conn.SetWriteDeadline(time.Now().Add(wsWriteDeadline)) // D-587
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				err := conn.WriteMessage(websocket.PingMessage, nil)
+				o.writeMu.Unlock()
+				if err != nil {
 					return
 				}
-				// 断流守卫：连接活（ping 通）但订阅面静默 → warn 单次冷却（REST 兜底仍在）。
+				// 聚合断流守卫（D-166 重标=兜底）：per-channel ack 探针为主判活，
+				// 本守卫只兜「全频道皆静默」聚合面（positions 持续帧喂饱会掩盖单频道死——
+				// 单频道判死归 subProbe ack 超时径）。
 				if stale.warnDue(time.Now(), okxPrivateStaleAfter, okxPrivateWarnCooldown) {
 					log.Printf("[okx-private-ws] no account push >%s（订阅死嫌疑；REST 兜底双轨仍在）", okxPrivateStaleAfter)
 				}
@@ -210,16 +224,20 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 			return fmt.Errorf("okx private event error: code=%s msg=%s", e.Code, e.Msg)
 		case "login":
 			log.Printf("[okx-private-ws] login ok (simulated=%v)", o.simulated)
+			o.writeMu.Lock()
 			_ = conn.SetWriteDeadline(time.Now().Add(wsWriteDeadline)) // D-587
-			if err := conn.WriteJSON(map[string]any{
+			err := conn.WriteJSON(map[string]any{
 				"op":   "subscribe",
 				"args": okxPrivateSubscribeArgs(),
-			}); err != nil {
+			})
+			o.writeMu.Unlock()
+			if err != nil {
 				return fmt.Errorf("subscribe: %w", err)
 			}
 		case "subscribe":
-			stale.touch(time.Now())                     // 订阅成功=断流基准点（OKX account channel 订阅即推首帧）
-			dephealth.Mark("okx:ws-private", true, nil) // D-579 R2：就绪点=订阅生效非裸 TCP
+			stale.touch(time.Now())                                 // 订阅成功=断流基准点（OKX account channel 订阅即推首帧）
+			probe.ack(okxAckKey(msg.Arg.Channel, msg.Arg.InstType)) // D-166：清 per-channel pending
+			dephealth.Mark("okx:ws-private", true, nil)             // D-579 R2：就绪点=订阅生效非裸 TCP
 			log.Printf("[okx-private-ws] subscribed %s", msg.Arg.Channel)
 			if o.onReconnect != nil {
 				o.onReconnect() // D-004 P1#6：重连成功→对账补漏 kick

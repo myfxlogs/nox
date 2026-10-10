@@ -43,6 +43,9 @@ func (g *GatePrivateWS) handleFrame(ctx context.Context, data []byte) error {
 		log.Printf("[gate-ws] subscribed %s", msg.Channel)
 		return nil
 	case "update":
+		if s := g.sil.Load(); s != nil {
+			s.touch(msg.Channel, g.now()) // D-166：per-channel 末帧打点
+		}
 	default:
 		return nil // ping/pong 控制帧与其他事件
 	}

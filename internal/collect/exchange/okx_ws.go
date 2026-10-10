@@ -252,8 +252,9 @@ func parseOKXTS(s string) (time.Time, error) {
 type wsMsg struct {
 	Event string `json:"event"`
 	Arg   struct {
-		Channel string `json:"channel"`
-		InstID  any    `json:"instId"`
+		Channel  string `json:"channel"`
+		InstID   any    `json:"instId"`
+		InstType string `json:"instType"` // D-166：私有流 subscribe ack 键分（orders SWAP/SPOT 各证）
 	} `json:"arg"`
 	Data []map[string]any `json:"data"`
 }
