@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"arb/internal/scan"
 	"arb/internal/store/pgstore"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -162,16 +164,20 @@ const goldStaleTicks = 120 * time.Second
 // readGoldTicks 读最新 perp tick（venue×symbol 隔离；venue_type='perp' 过滤——perp/spot 行混存）。
 func readGoldTicks(ctx context.Context, pool *pgxpool.Pool, venue, symbol string) (bid, ask float64, err error) {
 	var ts time.Time
+	// D-160：stale/无行 → *staleDataErr 类型化（上游分级簿面静止 vs 真断流）。
 	err = pool.QueryRow(ctx, `
 		SELECT bid, ask, ts FROM ticks
 		WHERE venue=$1 AND venue_type='perp' AND symbol=$2
 		ORDER BY ts DESC LIMIT 1
 	`, venue, symbol).Scan(&bid, &ask, &ts)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, 0, &staleDataErr{kind: "ticks", venue: venue, symbol: symbol}
+		}
 		return 0, 0, fmt.Errorf("ticks %s: %w", symbol, err)
 	}
 	if age := time.Since(ts); age > goldStaleTicks {
-		return 0, 0, fmt.Errorf("ticks %s stale age=%v > 120s", symbol, age.Round(time.Second))
+		return 0, 0, &staleDataErr{kind: "ticks", venue: venue, symbol: symbol, age: age}
 	}
 	return bid, ask, nil
 }
@@ -196,10 +202,13 @@ func readGoldFunding(ctx context.Context, pool *pgxpool.Pool, venue string, srcs
 		ORDER BY ts DESC LIMIT 1
 	`, venue, srcs, symbol).Scan(&annualPct, &fts)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, 0, &staleDataErr{kind: "funding", venue: venue, symbol: symbol}
+		}
 		return 0, 0, fmt.Errorf("facts funding %s: %w", symbol, err)
 	}
 	if age := time.Since(fts); age > 15*time.Minute {
-		return 0, 0, fmt.Errorf("facts funding %s stale age=%v > 15m", symbol, age.Round(time.Second))
+		return 0, 0, &staleDataErr{kind: "funding", venue: venue, symbol: symbol, age: age}
 	}
 	err = pool.QueryRow(ctx, `
 		SELECT value, ts FROM facts
@@ -207,12 +216,15 @@ func readGoldFunding(ctx context.Context, pool *pgxpool.Pool, venue string, srcs
 		ORDER BY ts DESC LIMIT 1
 	`, venue, symbol).Scan(&ivlSec, &its)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, 0, &staleDataErr{kind: "funding_interval", venue: venue, symbol: symbol}
+		}
 		return 0, 0, fmt.Errorf("facts funding_interval %s: %w", symbol, err)
 	}
 	// D-591 R1：interval=近静态元数据（gate 日轮+各所 boot/帧内写），守门按写源节奏定标 25h；
 	// funding rate 动态数据守门 15m 不动（stale-data-propagates-wrong-judgments 两边各安其位）。
 	if age := time.Since(its); age > goldStaleInterval {
-		return 0, 0, fmt.Errorf("facts funding_interval %s stale age=%v > 25h", symbol, age.Round(time.Second))
+		return 0, 0, &staleDataErr{kind: "funding_interval", venue: venue, symbol: symbol, age: age}
 	}
 	if ivlSec <= 0 {
 		return 0, 0, fmt.Errorf("facts funding_interval %s: invalid ivlSec=%v", symbol, ivlSec)

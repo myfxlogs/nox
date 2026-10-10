@@ -8,11 +8,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"math"
 	"os"
+	"strings"
 
 	"arb/internal/httpx"
 	"arb/internal/keydomain"
@@ -84,6 +86,7 @@ func run(ctx context.Context) (err error) {
 // D-423：mt_venue 落库键=venue_key 形（"15032313:mt5"）；按 cexVenue 路由报价源。
 func runPairs(ctx context.Context, st *pgstore.Store, pairs []monitorPair) error {
 	var firstErr error
+	var stills []string // D-160：簿面静止 pair 汇总（当轮至多一条 warn）
 	for _, p := range pairs {
 		mtBare := keydomain.BareOf(p.mtVenueKey)
 		exBid, exAsk, err := latestExnessTick(ctx, st.Pool(), mtBare, p.exSym)
@@ -92,9 +95,27 @@ func runPairs(ctx context.Context, st *pgstore.Store, pairs []monitorPair) error
 			continue // S2：逐对 skip，禁止顶替腿
 		}
 		if err := runPair(ctx, st, p, p.mtVenueKey, exBid, exAsk); err != nil {
+			// D-160：stale 命中二次判定——venue 活性锚成立=簿面静止降 warn
+			// （stale 价不落簿=D-591 指标纯洁不动）；锚死/超帽/无行=dead 走原链。
+			var sde *staleDataErr
+			if errors.As(err, &sde) && classifyStale(ctx, st.Pool(), sde) == "still" {
+				log.Printf("xasset-monitor: pair=%s 簿面静止（venue 活性锚成立，降 warn）: %v", p.pair, err)
+				stills = append(stills, fmt.Sprintf("%s %s", p.pair, sde))
+				continue
+			}
 			log.Printf("xasset-monitor: pair=%s 失败: %v", p.pair, err)
 			if firstErr == nil {
 				firstErr = err
+			}
+		}
+	}
+	// D-160④ 聚合语义：任一 dead→critical 照旧（firstErr→reportFatal）；
+	// 全 still→当轮至多一条 warn 汇总落行（30min 同键去重不刷屏、不推飞书）。
+	if firstErr == nil && len(stills) > 0 {
+		msg := "xasset-monitor 簿面静止（venue 活性锚成立）: " + strings.Join(stills, "; ")
+		if !hasRecentSameKeyAlert(ctx, st, "warn", msg) {
+			if aerr := st.InsertAlert(ctx, nil, "warn", msg); aerr != nil {
+				log.Printf("xasset-monitor: still warn 落库失败: %v", aerr)
 			}
 		}
 	}
