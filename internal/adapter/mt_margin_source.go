@@ -164,7 +164,7 @@ func (s *MarginFactSource) consumeStream(ctx context.Context, sink func(fact.Fac
 		// D-571 包A：帧内 Orders 逐仓载荷下沉（此前过即弃）——patch 语义，
 		// 帧外仓不动不删（缺仓只 REST 权威裁决），映射与 QueryOpenedOrders 同源。
 		if orders := resp.GetResult().GetOrders(); len(orders) > 0 {
-			s.publishPositions(orders)
+			s.publishPositions(ctx, orders)
 		}
 		// D-571 包B：ProfitUpdate 六字段帧下沉（此前过即弃 :171 注释自述）——
 		// OrderUpdateSummary 同字段帧已走 acctSink（mt_order_events.go:107），本帧补 ProfitUpdate 源。
@@ -177,7 +177,7 @@ func (s *MarginFactSource) consumeStream(ctx context.Context, sink func(fact.Fac
 
 // publishPositions D-571 包A：帧内 Orders → venue.Order（MT5OrdersToOrders 单一映射点）
 // → PositionsSink。recover 守卫同 order-events publish（sink panic 不拉崩流循环）。
-func (s *MarginFactSource) publishPositions(orders []*mt5pb.Order) {
+func (s *MarginFactSource) publishPositions(ctx context.Context, orders []*mt5pb.Order) {
 	if s.a.PositionsSink == nil {
 		return
 	}
@@ -187,7 +187,7 @@ func (s *MarginFactSource) publishPositions(orders []*mt5pb.Order) {
 		}
 	}()
 	vos := MT5OrdersToOrders(s.a.venue, orders)
-	s.a.ApplyLastQuote(vos)
+	s.a.ApplyLastQuote(ctx, vos)
 	s.a.PositionsSink(keydomain.Join(s.a.venue, "mt5"), vos)
 }
 

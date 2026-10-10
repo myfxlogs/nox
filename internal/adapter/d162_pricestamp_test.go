@@ -9,6 +9,7 @@ import (
 
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 	"arb/internal/bus"
+	"context"
 	"time"
 )
 
@@ -39,7 +40,7 @@ func TestD162R_TickClockAnchor(t *testing.T) {
 		{Ticket: 1, Symbol: "XAUUSDm", OrderType: mt5pb.OrderType_OrderType_Buy, Lots: 0.01, OpenPrice: 4180, ClosePrice: 4195.0},
 		{Ticket: 2, Symbol: "EURUSDm", OrderType: mt5pb.OrderType_OrderType_Buy, Lots: 0.1, OpenPrice: 1.08, ClosePrice: 1.09},
 	})
-	a.ApplyLastQuote(orders)
+	a.ApplyLastQuote(context.Background(), orders)
 
 	// hit：价=tick 中价、PriceAt=tick 真钟（≈20h 前 → quoteFresh 判 stale）
 	if !orders[0].PriceAt.Equal(tickTs) {
@@ -51,5 +52,29 @@ func TestD162R_TickClockAnchor(t *testing.T) {
 	// miss：保留 priceStamp now（无证据才帧时——营业中回读语义）
 	if orders[1].PriceAt.IsZero() || time.Since(orders[1].PriceAt) > time.Minute {
 		t.Fatalf("miss want PriceAt≈now, got %v", orders[1].PriceAt)
+	}
+}
+
+// TestD162R2_CompositeAnchor 复合钟（R2）：SetPriceAnchor 注入（lastQuote 空场景——
+// 重启+休市）→ ApplyLastQuote 锚持久末帧真钟判 stale；未注入=纯 lastQuote 单级。
+func TestD162R2_CompositeAnchor(t *testing.T) {
+	friTs := time.Now().Add(-24 * time.Hour) // 周五末 tick 持久帧
+	a := &MT5Adapter{venue: "v"}
+	// lastQuote 空（重启后）→ 复合钟兜底 ticks 持久末帧
+	a.SetPriceAnchor(func(_ context.Context, sym string) (float64, float64, time.Time, bool) {
+		if sym != "XAUUSDm" {
+			return 0, 0, time.Time{}, false
+		}
+		return 4194.85, 4195.11, friTs, true
+	})
+	orders := MT5OrdersToOrders("v", []*mt5pb.Order{
+		{Ticket: 1, Symbol: "XAUUSDm", OrderType: mt5pb.OrderType_OrderType_Buy, Lots: 0.01, OpenPrice: 4180, ClosePrice: 4195.0},
+	})
+	a.ApplyLastQuote(context.Background(), orders)
+	if !orders[0].PriceAt.Equal(friTs) {
+		t.Fatalf("composite want PriceAt=fri ts %v, got %v", friTs, orders[0].PriceAt)
+	}
+	if orders[0].CurrentPrice != 4194.98 {
+		t.Fatalf("composite want mid 4194.98, got %v", orders[0].CurrentPrice)
 	}
 }
