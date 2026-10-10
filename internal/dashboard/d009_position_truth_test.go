@@ -75,9 +75,10 @@ func TestD009_S2_DirectionPrice(t *testing.T) {
 	if sell.CurrentPrice != 100.5 {
 		t.Fatalf("SELL 仓平仓价应=ask 100.5, got %v", sell.CurrentPrice)
 	}
+	// D-162 ②：stale 价照填+price_at 真钟（休市末价诚实展示），fresh=false 如实。
 	stale := brokerPositionToProto(mk("BUY"), "X", bus.Quote{Bid: 1, Ask: 2, Time: now.Add(-time.Hour)}, true, true, nil, ttl, now, 0, nil, 0)
-	if stale.Fresh || stale.CurrentPrice != 0 || stale.PriceBid != 0 {
-		t.Fatalf("超龄报价应诚实空态, got %+v", stale)
+	if stale.Fresh || stale.CurrentPrice != 1 || stale.PriceBid != 1 || stale.PriceAt == nil {
+		t.Fatalf("超龄报价应 stale 照显（fresh=false+price_at）, got %+v", stale)
 	}
 }
 

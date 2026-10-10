@@ -275,14 +275,18 @@ func brokerPositionToProto(o venue.Order, canonical string, price bus.Quote, has
 		Margin:      margin,     // D-124：方案 C 分摊保证金（0=未知/CEX/无账户数据）
 		Sl:          o.StopLoss, // D-155：broker 端 SL 透传（MT5/MT4 Order.StopLoss；0=未设/CEX）
 	}
-	if hasPrice && quoteFreshForDisplay(qbus, price, freshTTL, now) { // D-155：脉冲续命分档
+	// D-162 ②：有价即照填（stale 价也填——休市末价比「—」诚实），Fresh 按
+	// quoteFreshForDisplay 如实判；price_at=报价 tick 真钟供前端标时点。
+	// est/退出闸等判定径吃 Fresh=false 天然不误用 stale 值（est.go:31 门控）。
+	if hasPrice {
 		// D-009 S2：现价=平仓方向价（BUY仓平吃 bid / SELL仓平吃 ask）；双值齐填。
 		pb.PriceBid, pb.PriceAsk = price.Bid, price.Ask
 		pb.CurrentPrice = price.Bid
 		if o.Side == "SELL" {
 			pb.CurrentPrice = price.Ask
 		}
-		pb.Fresh = true
+		pb.Fresh = quoteFreshForDisplay(qbus, price, freshTTL, now) // D-155：脉冲续命分档
+		pb.PriceAt = timestamppb.New(price.Time)
 	}
 	if !o.OpenedAt.IsZero() {
 		pb.OpenedAt = timestamppb.New(o.OpenedAt)
