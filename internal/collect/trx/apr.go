@@ -239,7 +239,13 @@ func (c *AprCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	return nil, nil
 }
 
-// StartWatchdog 数据新鲜度 watchdog（trx 同款最小版，>15min 无新行 → log stale）。
+// aprStaleThreshold D-157：stale 判定阈——failsafe Poll 1h×2+margin。
+// 事件驱动期（D-137 摘常驻轮询）15min 残值对 ~6h 边界节奏=常态误报（生产实证每分一条
+// 连续 2h+）；真死（tronscan 挂）与常态静默无法区分。入 sources 1h 兜底调度后，
+// 阈=failsafe+margin 使「stale」重新可判。
+const aprStaleThreshold = 150 * time.Minute
+
+// StartWatchdog 数据新鲜度 watchdog（D-157：>2.5h 无新行 → log stale；阈随 1h failsafe 调度）。
 func (c *AprCollector) StartWatchdog(ctx context.Context) {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
@@ -253,7 +259,7 @@ func (c *AprCollector) StartWatchdog(ctx context.Context) {
 			if apr, err := c.store.LastTRXVoteApr(ctx); err == nil {
 				last = apr.FetchedAt
 			}
-			if time.Since(last) > 15*time.Minute {
+			if time.Since(last) > aprStaleThreshold {
 				log.Printf("[trx_apr] stale warning: no vote apr update for %v", time.Since(last).Round(time.Second))
 			}
 		}
