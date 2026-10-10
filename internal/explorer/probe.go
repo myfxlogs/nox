@@ -117,5 +117,8 @@ func runProbeProposals(ctx context.Context, deps Deps, batch *explorerv1.Proposa
 			id, c.VenueKey, c.Canonical, c.Side, c.Qty, c.NotionalUSD, c.ExpectedCostUSD,
 			c.AutoCloseAt.In(BJTime).Format("01-02 15:04"), c.Falsify))
 	}
+	if inserted > 0 && deps.ProbeKick != nil {
+		deps.ProbeKick() // D-163：新提案唤醒机审（非阻塞发布，丢旧保新）
+	}
 	return inserted, dropped
 }
