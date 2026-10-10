@@ -92,6 +92,8 @@ type MT5Adapter struct {
 	// D-571C2 S1：lastQuote 帧内携价缓存（key=原生 brokerSym；consumeQuoteFrames 单写、
 	// publishPositions 读——跨 goroutine 故 sync.Map）；帧时戳即价时戳（一帧一价一钟）。
 	lastQuote sync.Map
+	// D-162R2：复合报价钟（lastQuote 优先→ticks 末帧兜底）；nil=纯 lastQuote。
+	priceAnchor TickAnchor
 
 	// D-432：OnQuote 零帧看门狗状态（zfMu 保护；consumeQuoteFrames 写帧时间，
 	// zeroframeWatchdog 读判定+stage-2 取消当前流）。episode=一次连续无真帧区间，

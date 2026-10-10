@@ -53,7 +53,7 @@ func TestD571C2_FrameCarriedPrice(t *testing.T) {
 	}
 	box := captureSink(a)
 	s := &MarginFactSource{a: a}
-	s.publishPositions([]*mt5pb.Order{
+	s.publishPositions(context.Background(), []*mt5pb.Order{
 		{Ticket: 1, Symbol: "XAUUSDm", OrderType: mt5pb.OrderType_OrderType_Buy, Lots: 0.1, OpenPrice: 1999.0, Profit: 1.1},
 		{Ticket: 2, Symbol: "EURUSDm", OrderType: mt5pb.OrderType_OrderType_Buy, Lots: 0.1, OpenPrice: 1.08, ClosePrice: 4001.0, Profit: 0.5}, // 无 lastQuote 仓：venue 原生 ClosePrice 现价（D-031 ①）
 	})
@@ -89,7 +89,7 @@ func TestD571C2_DualVariantIsolation(t *testing.T) {
 	}
 	box := captureSink(a)
 	s := &MarginFactSource{a: a}
-	s.publishPositions([]*mt5pb.Order{
+	s.publishPositions(context.Background(), []*mt5pb.Order{
 		{Ticket: 10, Symbol: "XAUUSDm", OrderType: mt5pb.OrderType_OrderType_Buy, Lots: 0.1, OpenPrice: 1999, Profit: 11},
 		{Ticket: 11, Symbol: "XAUUSD247m", OrderType: mt5pb.OrderType_OrderType_Buy, Lots: 0.1, OpenPrice: 2900, Profit: 100},
 	})

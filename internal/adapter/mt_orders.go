@@ -1,9 +1,11 @@
 package adapter
 
 import (
+	"context"
 	"strconv"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/keydomain"
 	"arb/internal/venue"
 
@@ -58,4 +60,56 @@ func priceStamp(price float64) time.Time {
 		return time.Now()
 	}
 	return time.Time{}
+}
+
+// LastQuote D-162R：品种报价钟查询口（lastQuote 帧内携价缓存读端）——
+// REST 回读路径锚 PriceAt 用（休市帧携价不得盖 now 标 fresh）。
+func (a *MT5Adapter) LastQuote(symbol string) (bus.Quote, bool) {
+	v, ok := a.lastQuote.Load(symbol)
+	if !ok {
+		return bus.Quote{}, false
+	}
+	q, ok := v.(bus.Quote)
+	return q, ok
+}
+
+// TickAnchor 品种报价钟函数型（D-162R）：原生 symbol → bid/ask/tick 真钟。
+// 裸值元组不引 bus（reconcile 方向禁 bus import——D-514 分层）。
+// R2 复合钟：lastQuote（内存帧携）优先 → miss 兜底 ticks 表持久末帧（setup 装配注入）。
+type TickAnchor func(ctx context.Context, symbol string) (bid, ask float64, ts time.Time, ok bool)
+
+// LastTickAnchor 报价钟锚（lastQuote 缓存读端——复合钟的第一级，单级用时=纯内存锚）。
+func (a *MT5Adapter) LastTickAnchor(_ context.Context, symbol string) (float64, float64, time.Time, bool) {
+	q, ok := a.LastQuote(symbol)
+	return q.Bid, q.Ask, q.Time, ok
+}
+
+// ApplyTickQuote D-162R：品种报价钟锚定（帧路径/REST 回读共享单点）——
+// Order.Symbol=原生 brokerSym 查 lastTick，命中且双价正 → 覆盖
+// CurrentPrice/PriceAt/PriceBid/PriceAsk（**PriceAt=tick 真钟**，禁另钟拼接；
+// 休市末 tick 时戳天然判 stale——帧携价不得盖 now 标 fresh）。
+// Bid/Ask 缺一非正=置零诚实，零命中=保留映射原值（priceStamp 语义）。
+func ApplyTickQuote(ctx context.Context, vos []venue.Order, lastTick TickAnchor) {
+	for i := range vos {
+		if bid, ask, ts, ok := lastTick(ctx, vos[i].Symbol); ok && bid > 0 && ask > 0 {
+			vos[i].CurrentPrice = (bid + ask) / 2
+			vos[i].PriceAt = ts
+			vos[i].PriceBid = bid // D-009 S2：帧携双价（同 tick 同钟）
+			vos[i].PriceAsk = ask
+		}
+	}
+}
+
+// SetPriceAnchor D-162R2：复合报价钟注入（lastQuote 优先→ticks 末帧兜底，setup
+// 装配点构造）；nil=纯 lastQuote 单级（测试/装配缺失照原义）。
+func (a *MT5Adapter) SetPriceAnchor(fn TickAnchor) { a.priceAnchor = fn }
+
+// ApplyLastQuote D-571C2 S1+D-162R：帧内携价锚定（复合钟——lastQuote miss 时
+// ticks 持久末帧兜底，重启+休市场景 PriceAt 仍锚周五 tick 真钟判 stale）。
+func (a *MT5Adapter) ApplyLastQuote(ctx context.Context, vos []venue.Order) {
+	anchor := a.priceAnchor
+	if anchor == nil {
+		anchor = a.LastTickAnchor
+	}
+	ApplyTickQuote(ctx, vos, anchor)
 }
