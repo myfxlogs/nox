@@ -275,5 +275,8 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		log.Printf("[reconcile] OK: %d local legs, %d venue orders, %d CEX 聚合键 all matched", len(localLegs), len(venueOrders), len(cexLocal))
 	}
 
+	// D-175：LEGGED 裸露延迟判定惰性复查（尾部——本 Run 内自愈的也看得到 CLOSED 终态）。
+	r.evalLeggedDeferrals(ctx)
+
 	return mismatches, nil
 }
