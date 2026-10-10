@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
 
@@ -136,4 +137,15 @@ func TestD349_MTLegSnapshotPathUnchanged(t *testing.T) {
 	if !alerted2 {
 		t.Fatal("MT 腿快照差 0 vs 公式 −0.55 应告警（快照差路径偏差分支保留）")
 	}
+}
+
+// D-161：SwapReconcileStore 接口补法（窗径桩——本测试走 notional 缺省回退路径不触达）。
+func (s *d349StubStore) FactsSince(context.Context, string, string, string, time.Time) ([]fact.Fact, error) {
+	return nil, nil
+}
+func (s *d349StubStore) GetOpportunity(context.Context, string) (*pgstore.Opportunity, error) {
+	return nil, nil
+}
+func (s *d349StubStore) ListSymbolMappings(context.Context, string) ([]pgstore.SymbolMapping, error) {
+	return nil, nil
 }
