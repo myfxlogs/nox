@@ -12,16 +12,22 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// d161StubStore 全接口桩——facts 时序/income/公式值/cashflow 幂等全可控。
+// d161Income income_events 桩行——时刻独立构造（复审返修：结算收入 ts=结算点+延迟，
+// 日和按时刻归窗，不做日级总键直接拍平）。
+type d161Income struct {
+	ts  time.Time
+	usd float64
+}
+
+// d161StubStore 全接口桩——facts 时序/income 事件/公式值/cashflow 幂等全可控。
 type d161StubStore struct {
-	legs       []pgstore.PositionLeg
-	formulaDay map[string]float64
-	incomeDay  map[string]float64
-	incomeRows map[string]int
-	facts      map[string][]fact.Fact // "funding" | "funding_interval"
-	factsErr   error
-	alerts     []string
-	cfQueried  bool // SumCashflowsForDay 被调=走了日频旧径
+	legs      []pgstore.PositionLeg
+	formula   float64 // SumCashflowsForDay 返回值（旧径）
+	income    []d161Income
+	facts     map[string][]fact.Fact // "funding" | "funding_interval"
+	factsErr  error
+	alerts    []string
+	cfQueried bool // SumCashflowsForDay 被调=走了日频旧径
 }
 
 func d161Key(day time.Time) string { return day.Format("2006-01-02") }
@@ -37,11 +43,20 @@ func (s *d161StubStore) HasCashflowForLegDay(context.Context, int64, int16, stri
 }
 func (s *d161StubStore) SumCashflowsForDay(context.Context, int64, string, string, time.Time) (float64, error) {
 	s.cfQueried = true
-	return 2.0, nil
+	return s.formula, nil
 }
 func (s *d161StubStore) SumIncomeForDay(_ context.Context, _, _ string, day time.Time) (float64, int, error) {
-	k := d161Key(day)
-	return s.incomeDay[k], s.incomeRows[k], nil
+	start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 0, 1)
+	var sum float64
+	var rows int
+	for _, e := range s.income {
+		if !e.ts.Before(start) && e.ts.Before(end) {
+			sum += e.usd
+			rows++
+		}
+	}
+	return sum, rows, nil
 }
 func (s *d161StubStore) LatestSwapSnapshot(context.Context, int64, string) (pgstore.SwapSnapshot, error) {
 	return pgstore.SwapSnapshot{}, errNoRows
@@ -70,6 +85,11 @@ func (n d161Notional) USDPerLotForLeg(string, string, string) (float64, bool) {
 	return n.perLot, n.perLot > 0
 }
 
+// d161IncomeAt 结算点后 4s 落行（生产形态：okx 收入 ts=结算点+秒级延迟）。
+func d161IncomeAt(settle time.Time, usd float64) d161Income {
+	return d161Income{ts: settle.Add(4 * time.Second), usd: usd}
+}
+
 func d161Leg() []pgstore.PositionLeg {
 	return []pgstore.PositionLeg{{LegNo: 1, Phase: "OPEN", Venue: "okx:perp", Symbol: "XAU-USDT-SWAP", Side: "SELL", Qty: 1}}
 }
@@ -86,24 +106,26 @@ func d161Facts(day time.Time) map[string][]fact.Fact {
 		return fact.Fact{Kind: "funding", Venue: "okx", Symbol: "XAUUSDT", Value: v, Ts: ts}
 	}
 	return map[string][]fact.Fact{
-		"funding":          {mk(d0.Add(-time.Hour), 2.0), mk(d0.Add(9*time.Hour), 0.5)},
+		"funding":          {mk(d0.Add(-time.Hour), 2.0), mk(d0.Add(8*time.Hour), 0.5)},
 		"funding_interval": {{Kind: "funding_interval", Venue: "okx", Symbol: "XAUUSDT", Value: 28800, Ts: d0.Add(-time.Hour)}},
 	}
 }
 
 // TestD161_CollapseDay_NoFalseAlert 主锚：#510 形态——首日率塌缩（2%→0.5%），
-// 逐窗期望=0.5×(2+0.5+0.5)%/365×10000≈0.274 对实收≈0.274 → 0 告警；
-// 红=日频点估计 2%→0.548 vs 0.274=50% critical。
+// 逐窗期望=Σ(2,0.5,0.5)%/365×8h/24h×10000≈0.274 对实收≈0.274 → 0 告警；
+// 红=日频点估计 2%→0.548 vs 0.274=50% critical。income 按结算时刻三事件构造。
 func TestD161_CollapseDay_NoFalseAlert(t *testing.T) {
 	yday := time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
 	today := yday.AddDate(0, 0, 1)
-	// 逐窗期望：(2+0.5+0.5)/100/365×(8/24)×10000 = 0.2740
-	exp := 3.0 / 100 / 365 / 3 * 10000
+	win := func(h int) float64 { return [3]float64{2.0, 0.5, 0.5}[h] / 100 / 365 / 3 * 10000 }
 	st := &d161StubStore{
-		legs:       d161Leg(),
-		incomeDay:  map[string]float64{d161Key(yday): exp},
-		incomeRows: map[string]int{d161Key(yday): 3},
-		facts:      d161Facts(yday),
+		legs: d161Leg(),
+		income: []d161Income{
+			d161IncomeAt(yday, win(0)),                   // S=00:00（前日 16-24 窗率 2%）
+			d161IncomeAt(yday.Add(8*time.Hour), win(1)),  // S=08:00（恰界 facts 0.5%）
+			d161IncomeAt(yday.Add(16*time.Hour), win(2)), // S=16:00
+		},
+		facts: d161Facts(yday),
 	}
 	r := NewSwapReconciler(st, 10.0)
 	r.SetNotional(d161Notional{10000})
@@ -125,10 +147,9 @@ func TestD161_TrueMismatch_StillCritical(t *testing.T) {
 	yday := time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
 	today := yday.AddDate(0, 0, 1)
 	st := &d161StubStore{
-		legs:       d161Leg(),
-		incomeDay:  map[string]float64{},
-		incomeRows: map[string]int{d161Key(yday): 1}, // 有行但金额 0=实收 0
-		facts:      d161Facts(yday),
+		legs:   d161Leg(),
+		income: []d161Income{d161IncomeAt(yday, 0)}, // 有行但金额 0=实收 0
+		facts:  d161Facts(yday),
 	}
 	r := NewSwapReconciler(st, 10.0)
 	r.SetNotional(d161Notional{10000})
@@ -199,18 +220,19 @@ func TestD161_ZeroFacts_Skip(t *testing.T) {
 
 // TestD161_SameDayOpen_WindowsOnlyHeld 日内开仓折窗：16:00 开仓 → 只计 24:00 窗
 // （前两窗 openedAt≥结算界不收——天然含 heldFrac）。
+// TestD161_SameDayOpen_WindowsOnlyHeld 日内开仓折窗：15:59 开仓 → 只计 S=16:00
+// 结算点（前两界 ≤openedAt 不收）；income 按该结算时刻独立构造。
 func TestD161_SameDayOpen_WindowsOnlyHeld(t *testing.T) {
 	yday := time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
 	today := yday.AddDate(0, 0, 1)
-	opened := yday.Add(16 * time.Hour)
+	opened := yday.Add(15*time.Hour + 59*time.Minute)
 	pos := d161Pos()
 	pos.OpenedAt = &opened
-	exp := 0.5 / 100 / 365 / 3 * 10000 // 仅末窗 rate 0.5%
+	exp := 0.5 / 100 / 365 / 3 * 10000 // 仅 S=16:00 窗 rate 0.5%
 	st := &d161StubStore{
-		legs:       d161Leg(),
-		incomeDay:  map[string]float64{d161Key(yday): exp},
-		incomeRows: map[string]int{d161Key(yday): 1},
-		facts:      d161Facts(yday),
+		legs:   d161Leg(),
+		income: []d161Income{d161IncomeAt(yday.Add(16*time.Hour), exp)},
+		facts:  d161Facts(yday),
 	}
 	r := NewSwapReconciler(st, 10.0)
 	r.SetNotional(d161Notional{10000})

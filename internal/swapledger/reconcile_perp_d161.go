@@ -1,13 +1,13 @@
-// reconcile_perp_windows.go —— D-161：perp 腿对账逐窗口径。
-// 病灶：SumCashflowsForDay 当日记账行=首轮 ledger 瞬时率×全日名义（HasCashflowForLegDay
-// 幂等首写定格）——率塌缩日 00:00 结算点采到塌缩前余温 → 点估计 vs 逐窗实收结构性
-// 误报 critical（#510 实证 1.6343 vs 0.7547=53.8%）。修法：期望侧改逐结算窗——
-// 窗生效率（facts 时序窗界前值）×窗持仓名义×窗长/365 求和，粒度统一 (venue,symbol,day)：
-// 期望侧=同 venue+symbol 全部 OPEN 仓窗级求和，实际侧=income_events 同粒度日和。
-// 降级链（组级原子——income 日和为账户级共享量，混算=错配）：interval 缺/无名义源/
-// 窗界空/任一腿 canonical·notional 不可解 → 全组回退日频旧径（fail-closed 不变）；
+// reconcile_perp_d161.go —— D-161：perp 腿对账逐结算点口径。
+// 病灶：SumCashflowsForDay 当日记账行=首轮 ledger 瞬时率×全日名义——率塌缩日点估计
+// vs 实收结构性误报（#510 实证 1.6343 vs 0.7547=53.8%）。修法：结算点列
+// {dayStart+k·ivl}（含首界，与 income ts 对齐——生产实证 okx 收入 ts=结算点+秒级
+// 延迟），每点生效率=facts 末条 ts≤S、窗长=ivl 定值，粒度统一 (venue,symbol,day)：
+// 期望=同 venue+symbol 全部 OPEN 仓窗级求和，实际=income_events 同粒度日和。
+// 降级链（组级原子——income 日和账户级共享，混算=错配）：interval 缺/无名义源/
+// 界空/任一腿 canonical·notional 不可解 → 全组回退日频旧径（fail-closed）；
 // funding facts 零覆盖 → skip。禁区：income_events=实收唯一真值不回写、D-349 未过窗
-// skip、D-437 heldFrac（窗级天然含——日内开仓只计开仓后窗）、阈值不抬。
+// skip、D-437 heldFrac（结算点≤开仓不收）、阈值不抬。
 package swapledger
 
 import (
@@ -23,8 +23,7 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// SetNotional 注入名义额解析（dashboard.Service.USDPerLotForLeg 实现；nil=窗径不可用
-// → 全量回退日频旧径，fail-closed 不猜名义）。
+// SetNotional 注入名义额解析（USDPerLotForLeg 实现；nil=全量回退日频旧径）。
 func (r *SwapReconciler) SetNotional(n NotionalResolver) { r.notional = n }
 
 // perpGroupKey 对账粒度键（venue 裸名 + 腿原生 symbol——income_events 同口径）。
@@ -36,20 +35,22 @@ type perpGroupLeg struct {
 	leg pgstore.PositionLeg
 }
 
-// settleBoundsOf 结算窗界（日零点起每 ivlSec 一结，界 ≤ 日末；ivlSec<=0 → nil）。
+// settleBoundsOf 结算点列 {dayStart+k·ivl}（含首界 dayStart——与 income ts 对齐：
+// income 落当日日和的结算点恰为 [dayStart,dayEnd) 内各界；生产实证 okx 收入 ts=
+// 结算点+秒级延迟）。dayEnd 非整除 ivl → nil 回退（窗界不齐整不猜）。
 func settleBoundsOf(dayStart, dayEnd time.Time, ivlSec int64) []time.Time {
-	if ivlSec <= 0 {
+	if ivlSec <= 0 || int64(dayEnd.Sub(dayStart)/time.Second)%ivlSec != 0 {
 		return nil
 	}
 	ivl := time.Duration(ivlSec) * time.Second
 	var out []time.Time
-	for e := dayStart.Add(ivl); !e.After(dayEnd); e = e.Add(ivl) {
+	for e := dayStart; e.Before(dayEnd); e = e.Add(ivl) {
 		out = append(out, e)
 	}
 	return out
 }
 
-// rateAt funding 时序（ts 升序）窗界前生效率=末条 ts<=t 值；无 → false。
+// rateAt funding 时序（ts 升序）结算点前值=末条 ts<=t 值；无 → false。
 func rateAt(facts []fact.Fact, t time.Time) (float64, bool) {
 	rate, ok := 0.0, false
 	for _, f := range facts {
@@ -61,31 +62,29 @@ func rateAt(facts []fact.Fact, t time.Time) (float64, bool) {
 	return rate, ok
 }
 
-// legWindowExpected 单腿逐窗期望和：Σ 窗生效率 × notional × 窗长/365（sign：BUY 付负、
-// SELL 收正，与 legSwapAmount 资金费符号同规）。返回 (期望值, 有率窗数, 总窗数)。
-// openedAt≥窗结算界 → 该窗不收（天然含 heldFrac：日内开仓只计开仓后窗）。
-func legWindowExpected(facts []fact.Fact, bounds []time.Time, openedAt *time.Time,
-	notional float64, side string, dayStart time.Time) (float64, int, int) {
+// legWindowExpected 单腿逐窗期望和：Σ 结算点率 × notional × ivl/365（sign 与
+// legSwapAmount 资金费符号同规）。返回 (期望值, 有率点数, 总点数)。
+func legWindowExpected(facts []fact.Fact, bounds []time.Time, ivl time.Duration,
+	openedAt *time.Time, notional float64, side string) (float64, int, int) {
 	sign := 1.0
 	if side == "BUY" {
 		sign = -1.0
 	}
 	var exp float64
 	covered := 0
-	prev := dayStart
+	// 每结算点 S（窗长 ivl 定值）：率=facts 末条 ts≤S（#510 实证 00:00 结 0.607=
+	// 率 16.16%(23:59 末条)×名义×8h/8760）。
+	ivlFrac := ivl.Seconds() / 86400
 	for _, e := range bounds {
 		rate, ok := rateAt(facts, e)
 		if !ok {
-			prev = e
 			continue
 		}
 		covered++
 		if openedAt != nil && !e.After(*openedAt) {
-			prev = e
-			continue // 结算点在开仓前——该窗无持仓不产收
+			continue // 结算点≤开仓时刻——该窗持仓不产收
 		}
-		exp += sign * decimalAmount(rate, 100, DaysPerYear, notional, e.Sub(prev).Seconds()/86400)
-		prev = e
+		exp += sign * decimalAmount(rate, 100, DaysPerYear, notional, ivlFrac)
 	}
 	return exp, covered, len(bounds)
 }
@@ -204,7 +203,8 @@ func (r *SwapReconciler) reconcilePerpGroup(ctx context.Context, key perpGroupKe
 	expect := 0.0
 	coveredTotal, uncoveredTotal := 0, 0
 	for _, c := range calcs {
-		exp, covered, total := legWindowExpected(c.series, bounds, c.m.pos.OpenedAt, c.notional, c.m.leg.Side, dayStart)
+		exp, covered, total := legWindowExpected(c.series, bounds, time.Duration(ivlSec)*time.Second,
+			c.m.pos.OpenedAt, c.notional, c.m.leg.Side)
 		expect += exp
 		coveredTotal += covered
 		uncoveredTotal += total - covered
