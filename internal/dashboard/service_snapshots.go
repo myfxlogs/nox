@@ -183,12 +183,20 @@ func (s *Service) AckAlert(ctx context.Context, req *connect.Request[v1.AckAlert
 	if err := s.store.AckAlert(ctx, req.Msg.GetId()); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	// D-168 ④：面板 ack 反查键同步 episode（失败仅日志——alerts 面已 ack 不回流错）。
+	if err := s.store.AckAlertEpisodeByAlertID(ctx, req.Msg.GetId()); err != nil {
+		log.Printf("[dashboard] episode sync ack: %v", err)
+	}
 	return connect.NewResponse(&v1.AckAlertResponse{}), nil
 }
 
 func (s *Service) AckAll(ctx context.Context, req *connect.Request[v1.AckAllRequest]) (*connect.Response[v1.AckAllResponse], error) {
 	if err := s.store.AckAll(ctx); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	// D-168 ④：面板 AckAll 同步全部 open episode。
+	if _, err := s.store.AckAllAlertEpisodes(ctx); err != nil {
+		log.Printf("[dashboard] episode sync ack-all: %v", err)
 	}
 	return connect.NewResponse(&v1.AckAllResponse{}), nil
 }
