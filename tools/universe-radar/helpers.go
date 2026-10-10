@@ -179,7 +179,7 @@ func sendRadarAlert(ctx context.Context, st radarStore, appID, appSecret string,
 	for _, l := range lines {
 		text += "• " + l + "\n"
 	}
-	if err := fc.SendText(ctx, chatID, text); err != nil {
+	if _, err := fc.SendText(ctx, chatID, text); err != nil {
 		return fmt.Errorf("feishu send: %w", err)
 	}
 	log.Printf("universe-radar: 飞书告警已推送（%d 条）", len(lines))
