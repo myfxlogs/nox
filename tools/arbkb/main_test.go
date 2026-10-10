@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -57,11 +58,14 @@ func TestIdempotent(t *testing.T) {
 	}
 	origEntriesDir := entriesDir
 	origIndexFile := indexFile
+	origSkillsFile := skillsIndexFile
 	entriesDir = dir
 	indexFile = idx
+	skillsIndexFile = filepath.Join(root, "skills.md")
 	defer func() {
 		entriesDir = origEntriesDir
 		indexFile = origIndexFile
+		skillsIndexFile = origSkillsFile
 	}()
 
 	if err := gen(); err != nil {
@@ -115,11 +119,14 @@ func TestGenCheckMismatch(t *testing.T) {
 	}
 	origEntriesDir := entriesDir
 	origIndexFile := indexFile
+	origSkillsFile := skillsIndexFile
 	entriesDir = dir
 	indexFile = idx
+	skillsIndexFile = filepath.Join(root, "skills.md")
 	defer func() {
 		entriesDir = origEntriesDir
 		indexFile = origIndexFile
+		skillsIndexFile = origSkillsFile
 	}()
 
 	if err := genCheck(); err == nil {
@@ -127,11 +134,40 @@ func TestGenCheckMismatch(t *testing.T) {
 	}
 }
 
+// TestD173_SkillsIndex 标签→清单正确归组 / 空标签跳过 / summary 转义（D-173 锚）。
+func TestD173_SkillsIndex(t *testing.T) {
+	entries := []*Entry{
+		{ID: "b-entry", Summary: "b|sum", Skills: []string{"生产取证"}},
+		{ID: "a-entry", Summary: "a sum", Skills: []string{"生产取证", "事实核验"}},
+		{ID: "no-skill", Summary: "ns", Skills: nil},
+		{ID: "empty-skill", Summary: "es", Skills: []string{"", "  "}},
+	}
+	out := string(renderSkillsIndex(entries))
+	if !strings.Contains(out, "## 生产取证") || !strings.Contains(out, "## 事实核验") {
+		t.Fatalf("标签节缺失:\n%s", out)
+	}
+	// 组内 ID 序 + 双标签条目归两组
+	if strings.Index(out, "| a-entry |") > strings.Index(out, "| b-entry |") {
+		t.Error("组内未按 ID 序")
+	}
+	if strings.Count(out, "| a-entry |") != 2 {
+		t.Error("双标签条目应归两组")
+	}
+	// 空标签/无标签条目不出行
+	if strings.Contains(out, "no-skill") || strings.Contains(out, "empty-skill") {
+		t.Error("空标签条目应跳过")
+	}
+	// summary 管道转义
+	if !strings.Contains(out, "b\\|sum") {
+		t.Error("summary 未转义 |")
+	}
+}
+
 // TestBudgetExceed 预算超限报错
 func TestBudgetExceed(t *testing.T) {
-	// 构造超 200 行的输出
+	// 构造超 maxLines(260) 行的输出
 	var entries []*Entry
-	for i := 0; i < 250; i++ {
+	for i := 0; i < 300; i++ {
 		entries = append(entries, &Entry{
 			ID:   "entry-" + string(rune('a'+i%26)) + string(rune('a'+i/26)),
 			Kind: "pitfall", Risk: "low", Status: "verified",

@@ -15,8 +15,9 @@ import (
 
 // 路径基准（定死，禁路径探测逻辑）
 var (
-	entriesDir = "../../docs/经验库/条目"
-	indexFile  = "../../docs/经验库/索引.md"
+	entriesDir      = "../../docs/经验库/条目"
+	indexFile       = "../../docs/经验库/索引.md"
+	skillsIndexFile = "../../docs/经验库/技能清单.md" // D-173：skills: 标签→关联条目清单（指针式，不复制条目内容）
 )
 
 const (
@@ -144,6 +145,41 @@ func render(entries []*Entry) []byte {
 	return buf.Bytes()
 }
 
+// renderSkillsIndex 按条目 skills: 标签生成「关联条目清单」（D-173）：
+// 每标签一节、ID+summary 表（指针式，条目仍唯一真相源不复制内容）；
+// 空标签条目跳过；标签按字典序、组内条目按 ID 序。
+func renderSkillsIndex(entries []*Entry) []byte {
+	groups := map[string][]*Entry{}
+	var tags []string
+	for _, e := range entries {
+		for _, s := range e.Skills {
+			s = strings.TrimSpace(s)
+			if s == "" {
+				continue
+			}
+			if _, ok := groups[s]; !ok {
+				tags = append(tags, s)
+			}
+			groups[s] = append(groups[s], e)
+		}
+	}
+	sort.Strings(tags)
+	var buf bytes.Buffer
+	buf.WriteString("# 技能关联条目清单（arbkb gen 生成，勿手编）\n\n")
+	buf.WriteString("> 按条目 frontmatter `skills:` 标签归组——清单是指针，条目全文见 docs/经验库/条目/<id>.md。\n\n")
+	for _, tag := range tags {
+		buf.WriteString("## " + sanitize(tag) + "\n\n")
+		buf.WriteString("| id | summary |\n|----|---------|\n")
+		es := groups[tag]
+		sort.Slice(es, func(i, j int) bool { return es[i].ID < es[j].ID })
+		for _, e := range es {
+			buf.WriteString(fmt.Sprintf("| %s | %s |\n", sanitize(e.ID), sanitize(e.Summary)))
+		}
+		buf.WriteByte('\n')
+	}
+	return buf.Bytes()
+}
+
 // loadEntries 扫描条目目录，解析所有 .md 文件的 frontmatter。
 func loadEntries(dir string) ([]*Entry, error) {
 	matches, err := filepath.Glob(filepath.Join(dir, "*.md"))
@@ -188,10 +224,18 @@ func gen() error {
 		return err
 	}
 	existing, err := os.ReadFile(indexFile)
-	if err == nil && bytes.Equal(existing, output) {
-		return nil // 幂等，不写
+	if err != nil || !bytes.Equal(existing, output) {
+		if err := os.WriteFile(indexFile, output, 0644); err != nil {
+			return err
+		}
 	}
-	return os.WriteFile(indexFile, output, 0644)
+	// D-173：技能清单同幂等写（独立于索引预算——清单规模随标签数上浮）。
+	skills := renderSkillsIndex(entries)
+	se, err := os.ReadFile(skillsIndexFile)
+	if err == nil && bytes.Equal(se, skills) {
+		return nil
+	}
+	return os.WriteFile(skillsIndexFile, skills, 0644)
 }
 
 // genCheck 只生成到内存与磁盘 diff，不一致 exit 1。
@@ -210,6 +254,15 @@ func genCheck() error {
 	}
 	if !bytes.Equal(existing, output) {
 		return fmt.Errorf("index out of date")
+	}
+	// D-173：技能清单同受 --check 校验。
+	skills := renderSkillsIndex(entries)
+	se, err := os.ReadFile(skillsIndexFile)
+	if err != nil {
+		return fmt.Errorf("skills index file missing: %w", err)
+	}
+	if !bytes.Equal(se, skills) {
+		return fmt.Errorf("skills index out of date")
 	}
 	return nil
 }
