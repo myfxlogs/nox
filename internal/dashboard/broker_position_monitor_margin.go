@@ -6,7 +6,11 @@
 // 规格与 imr 在 prepareVenueView（reconcile 时点）随 vs.cs 同批拉取——帧路径零 RPC。
 package dashboard
 
-import "context"
+import (
+	"context"
+
+	"arb/internal/bus"
+)
 
 // symMarginSpec venue 原生符号保证金规格（SymbolParams 派生，reconcile 时点缓存）。
 type symMarginSpec struct {
@@ -18,6 +22,12 @@ type symMarginSpec struct {
 // （裸 venue 键；nil=率径估算不可用→仅 InitialMargin 定额径可产出）。
 func (m *BrokerPositionMonitor) SetInitMarginRateFor(fn func(ctx context.Context, venue string) (rate float64, ok bool)) {
 	m.initMarginRateFor = fn
+}
+
+// SetStaleTickFallback D-162 c：ticks 末帧兜底读口注入（MT5 休市/重启后展示价用；
+// 仅展示径消费——Fresh 恒 stale，判定径不经此值）。
+func (m *BrokerPositionMonitor) SetStaleTickFallback(fn func(ctx context.Context, venueKey, symbol string) (bus.Quote, bool)) {
+	m.staleTickFor = fn
 }
 
 // estimateMargin 仓位级保证金估算（D-036 公式）：

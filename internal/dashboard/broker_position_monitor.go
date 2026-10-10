@@ -54,6 +54,10 @@ type BrokerPositionMonitor struct {
 	// D-036：init_margin_rate fact 读口（裸 venue 键，margin 率径估算输入）；
 	// nil=率径不可用（仅定额径可产出）——main 装配注入。
 	initMarginRateFor func(ctx context.Context, venue string) (float64, bool)
+	// D-162 c：MT5 展示面末价兜底——帧携价全缺（重启丢 lastQuote+REST ClosePrice=0）
+	// 时读 ticks 表持久化末帧（用途限展示、不喂判定径，decisions.md D-162 留裁）。
+	// nil=兜底不可用→照旧诚实空态。
+	staleTickFor func(ctx context.Context, venueKey, symbol string) (bus.Quote, bool)
 
 	cur    map[string]*v1.BrokerPosition // posKey → 已发布显示态（回放源+proto.Equal 去重）
 	dirty  map[string]struct{}           // 待发事件 posKey 集（flush 时按最新态裁决 upsert/remove）

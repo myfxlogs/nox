@@ -51,6 +51,13 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 			}
 			price = bus.Quote{Bid: bid, Ask: ask, Time: o.PriceAt}
 			hasPrice = true
+		} else if m.staleTickFor != nil {
+			// D-162 c：帧携价全缺（休市 ClosePrice=0 / 重启丢 lastQuote / REST 保留闸
+			// 无旧帧）→ ticks 表持久化末帧兜底——**展示专用**（Fresh 照常判 stale，
+			// est/判定径不经此值；D-004 例外=decisions.md D-162 用途限展示）。
+			if q, ok := m.staleTickFor(ctx, o.VenueKey, o.Symbol); ok {
+				price, hasPrice = q, true
+			}
 		}
 	} else if q, ok := m.qbus.LatestLeg(canonical, o.Symbol, o.VenueKey); ok {
 		// D-481：腿级查找走 LatestLeg——CEX 以原生 symbol 归一键优先（canonical 派生

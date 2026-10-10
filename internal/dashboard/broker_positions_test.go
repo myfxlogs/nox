@@ -81,7 +81,8 @@ func TestBrokerPositionToProto_NotArb(t *testing.T) {
 	}
 }
 
-// TestBrokerPositionToProto_StaleFrame（G3）：帧超陈旧 TTL → current_price=0、fresh=false（陈旧帧不冒充现价）。
+// TestBrokerPositionToProto_StaleFrame（D-162 修订）：帧超 TTL → 价字段照填+price_at
+// 真钟（休市末价诚实展示），fresh=false（stale 不冒充现价；est 等判定径吃 Fresh 门控不误用）。
 func TestBrokerPositionToProto_StaleFrame(t *testing.T) {
 	o := venue.Order{Venue: "v", VenueKey: "v:mt5", Ticket: "7", Symbol: "XAUUSD", Comment: "arb"}
 	ttl := 60 * time.Second
@@ -89,11 +90,23 @@ func TestBrokerPositionToProto_StaleFrame(t *testing.T) {
 	stale := bus.Quote{Symbol: "XAUUSD", Bid: 2000.0, Ask: 2000.2, Time: now.Add(-2 * ttl)}
 
 	pb := brokerPositionToProto(o, "XAUUSD", stale, true, true, nil, ttl, now, 0, nil, 0)
-	if pb.CurrentPrice != 0 {
-		t.Errorf("stale frame current_price want 0, got %v", pb.CurrentPrice)
+	if pb.CurrentPrice != 2000.0 { // BUY 仓平仓方向价=bid
+		t.Errorf("stale frame current_price want 2000（休市末价照显）, got %v", pb.CurrentPrice)
 	}
 	if pb.Fresh {
 		t.Errorf("stale frame fresh want false, got true")
+	}
+	if pb.PriceAt == nil || !pb.PriceAt.AsTime().Equal(stale.Time) {
+		t.Errorf("stale frame price_at want %v, got %v", stale.Time, pb.PriceAt)
+	}
+}
+
+// TestD162_NoPrice_StillEmpty：全无报价 → 照旧空态（current_price=0、price_at=nil）。
+func TestD162_NoPrice_StillEmpty(t *testing.T) {
+	o := venue.Order{Venue: "v", VenueKey: "v:mt5", Ticket: "9", Symbol: "XAUUSD", Comment: "arb"}
+	pb := brokerPositionToProto(o, "XAUUSD", bus.Quote{}, false, true, nil, time.Minute, time.Now(), 0, nil, 0)
+	if pb.CurrentPrice != 0 || pb.Fresh || pb.PriceAt != nil {
+		t.Errorf("no price want all-empty, got cp=%v fresh=%v at=%v", pb.CurrentPrice, pb.Fresh, pb.PriceAt)
 	}
 }
 
