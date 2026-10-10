@@ -3,7 +3,8 @@
 // 方向价=bp.CurrentPrice（S2 起已是平仓方向价：BUY仓=bid/SELL仓=ask，缺双值回退帧中价）。
 // cs/fx=USDPerLotForLeg 同族换算链（原生 cs 配原生价，fx=QuoteCcy→USDPer）；费率=
 // commissionResolver（MT=broker_accounts.commission_bps→calib；CEX=cex_taker_fee_bps→xasset 回退）。
-// 报价不 fresh / canonical 缺 / cs·fx·费率任一不可得 → nil 诚实空态（列标「估」不冒充 venue 字段）。
+// D-167：Fresh 不入门——净估本就是估，用最可得价（stale 帧携/持久末帧）照算；价在=可估。
+// 现价/开价/量为零 / canonical 缺 / cs·fx·费率任一不可得 → nil 诚实空态（列标「估」不冒充 venue 字段）。
 package dashboard
 
 import (
@@ -28,7 +29,8 @@ func (s *Service) annotateCloseEstimate(ctx context.Context, bps []*v1.BrokerPos
 
 // closeEstimateUSD 单行净估。返回 ok=false = 任一输入不可得（诚实缺省）。
 func (s *Service) closeEstimateUSD(ctx context.Context, bp *v1.BrokerPosition) (float64, bool) {
-	if bp == nil || !bp.Fresh || bp.CurrentPrice <= 0 || bp.OpenPrice <= 0 || bp.Volume <= 0 {
+	// D-167：!bp.Fresh 不拒——stale 价（休市帧携/ticks 末帧兜底）同样可估，「-」反而是假无数据。
+	if bp == nil || bp.CurrentPrice <= 0 || bp.OpenPrice <= 0 || bp.Volume <= 0 {
 		return 0, false
 	}
 	// cs：CEX 走 legContractSizeOf（perp=ctVal/spot=1）；MT 走原生 legContractSize

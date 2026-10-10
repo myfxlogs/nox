@@ -82,7 +82,7 @@ func TestBrokerPositionToProto_NotArb(t *testing.T) {
 }
 
 // TestBrokerPositionToProto_StaleFrame（D-162 修订）：帧超 TTL → 价字段照填+price_at
-// 真钟（休市末价诚实展示），fresh=false（stale 不冒充现价；est 等判定径吃 Fresh 门控不误用）。
+// 真钟（休市末价诚实展示），fresh=false（stale 不冒充现价；D-167 后 est 不吃 Fresh 门控——价在即算）。
 func TestBrokerPositionToProto_StaleFrame(t *testing.T) {
 	o := venue.Order{Venue: "v", VenueKey: "v:mt5", Ticket: "7", Symbol: "XAUUSD", Comment: "arb"}
 	ttl := 60 * time.Second

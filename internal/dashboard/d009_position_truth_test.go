@@ -106,11 +106,16 @@ func TestD009_S3_CloseEstimate(t *testing.T) {
 	if est2 >= 0 {
 		t.Fatalf("SELL 涨仓应亏, got %v", est2)
 	}
-	// 缺报价（Fresh=false）→ 诚实空态。
+	// D-167：Fresh=false 有价 → 价在即算照出数（stale 帧携/末帧可估）；无价才空态。
 	bp.Fresh = false
-	if _, ok := svc.closeEstimateUSD(context.Background(), bp); ok {
-		t.Fatal("报价不新鲜应空态")
+	if estStale, ok := svc.closeEstimateUSD(context.Background(), bp); !ok || estStale != est2 {
+		t.Fatalf("stale 行应照出数 est=%v ok=%v（want ≈%v）", estStale, ok, est2)
 	}
+	bp.CurrentPrice = 0
+	if _, ok := svc.closeEstimateUSD(context.Background(), bp); ok {
+		t.Fatal("现价=0 应空态")
+	}
+	bp.CurrentPrice = 110
 	// cs 解析缺失 → 空态不猜。
 	svc.legContractSize = func(string, string) (float64, bool) { return 0, false }
 	bp.Fresh = true
