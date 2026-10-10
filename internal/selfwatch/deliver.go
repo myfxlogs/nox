@@ -27,8 +27,9 @@ func (d Deps) deliver(ctx context.Context, tag, level, body string) {
 	if err := d.Store.InsertAlert(ctx, nil, level, body); err != nil {
 		log.Printf("[selfwatch] report alert insert: %v", err)
 	}
-	if level == "info" {
-		return // D-147：全绿自检报告不推送（业主域=异常/决策/资金变动，info 留痕即足）
+	if level == "info" && tag != "daily" && tag != "weekly" {
+		return // D-147：全绿自检报告不推送（业主域=异常/决策/资金变动，info 留痕即足）；
+		// D-168 ⑤：daily/weekly 按 tag 放行——D-147 保留清单本钦定 digest 日报要推。
 	}
 	if d.Notify == nil || !d.Notify.Enabled() || d.ChatID == nil {
 		return
@@ -41,7 +42,7 @@ func (d Deps) deliver(ctx context.Context, tag, level, body string) {
 	if chatID == "" {
 		return
 	}
-	if err := d.Notify.SendText(ctx, chatID, body); err != nil {
+	if _, err := d.Notify.SendText(ctx, chatID, body); err != nil {
 		log.Printf("[selfwatch] send %s: %v", tag, err)
 	}
 }

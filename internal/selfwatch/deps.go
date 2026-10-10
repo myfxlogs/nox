@@ -59,10 +59,10 @@ type Store interface {
 	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
 }
 
-// Notifier 推送面（*notify.FeishuClient 原生满足；nil=不推送）。
+// Notifier 推送面（*notify.FeishuClient 原生满足；nil=不推送）。D-168：SendText 返 message_id。
 type Notifier interface {
 	Enabled() bool
-	SendText(ctx context.Context, chatID, text string) error
+	SendText(ctx context.Context, chatID, text string) (string, error)
 }
 
 // Deps 自盯调度依赖。

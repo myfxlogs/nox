@@ -72,7 +72,7 @@ func emitStage1Ready(ctx context.Context, d Deps, ready bool) {
 			if chatID, cerr := d.ChatID(ctx); cerr != nil {
 				log.Printf("[selfwatch] stage1 ready chat id: %v", cerr)
 			} else if chatID != "" {
-				if serr := d.Notify.SendText(ctx, chatID, readyMsg); serr != nil {
+				if _, serr := d.Notify.SendText(ctx, chatID, readyMsg); serr != nil {
 					log.Printf("[selfwatch] stage1 ready push: %v", serr)
 				}
 			}

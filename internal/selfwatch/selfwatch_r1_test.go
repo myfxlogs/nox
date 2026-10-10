@@ -13,9 +13,9 @@ import (
 type fakeNotify struct{ sends []string }
 
 func (n *fakeNotify) Enabled() bool { return true }
-func (n *fakeNotify) SendText(_ context.Context, chatID, text string) error {
+func (n *fakeNotify) SendText(_ context.Context, chatID, text string) (string, error) {
 	n.sends = append(n.sends, chatID+"|"+text)
-	return nil
+	return "om_fake", nil
 }
 
 // R1①：全结构 0 active 行 → 组合证据「无窗内行」❌ → Stage 1 不就绪
