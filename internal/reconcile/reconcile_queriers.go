@@ -89,10 +89,18 @@ type MT5Querier struct {
 	token string
 	mt5   mt5pb.MT5Client
 	venue string
+	// D-162R：品种报价钟（adapter.LastTickAnchor）——REST 回读 ClosePrice=末收价>0
+	// 时 PriceAt 须锚 tick 真钟而非回读时刻，否则休市价被误判 fresh；nil=无锚照旧。
+	priceAnchor adapter.TickAnchor
 }
 
 func NewMT5Querier(venue, token string, mt5Client mt5pb.MT5Client) *MT5Querier {
 	return &MT5Querier{venue: venue, token: token, mt5: mt5Client}
+}
+
+// SetPriceAnchor D-162R：报价钟注入（setup 装配点接 adapter.LastQuote）。
+func (q *MT5Querier) SetPriceAnchor(fn adapter.TickAnchor) {
+	q.priceAnchor = fn
 }
 
 func (q *MT5Querier) VenueKey() string { return keydomain.Join(q.venue, "mt5") }
@@ -132,5 +140,9 @@ func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]venue.Order, erro
 	if e := resp.GetError(); e != nil {
 		return nil, fmt.Errorf("mt5 opened orders: %s", e.GetMessage())
 	}
-	return adapter.MT5OrdersToOrders(q.venue, resp.GetResult()), nil
+	out := adapter.MT5OrdersToOrders(q.venue, resp.GetResult())
+	if q.priceAnchor != nil {
+		adapter.ApplyTickQuote(ctx, out, q.priceAnchor) // D-162R：REST 回读锚 tick 真钟
+	}
+	return out, nil
 }
