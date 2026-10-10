@@ -78,7 +78,8 @@ func d047Svc(t *testing.T) (*Service, *pgstore.Store, *fakeProbeExec) {
 	// venue 白名单：tbinance:perp + 3001:mt5。
 	if _, err := st.Pool().Exec(ctx,
 		`INSERT INTO autotrade_allow_rules (kind, value, enabled, simulated)
-		 VALUES ('venue','tbinance:perp',true,false),('venue','3001:mt5',true,false)`); err != nil {
+		 VALUES ('venue','tbinance:perp',true,false),('venue','3001:mt5',true,false)
+		 ON CONFLICT DO NOTHING`); err != nil {
 		t.Fatalf("allow rules: %v", err)
 	}
 	fx := &fakeProbeExec{key: "tbinance:perp",

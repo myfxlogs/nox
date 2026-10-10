@@ -61,23 +61,34 @@ func (s *Service) ApproveProbe(ctx context.Context, req *connect.Request[v1.Appr
 	if err := validateProbeContractForOpen(p); err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
-	// CAS 占单：proposed→approved 只有一并发者成功。
-	ok, err := s.store.ProbeProposalApprove(ctx, p.ID, r.GetDecisionRef())
+	resp, err := s.approveProbeOpen(ctx, p, r.GetDecisionRef())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+// approveProbeOpen 批准执行核心（D-163 机审与 RPC 共用）：CAS proposed→approved →
+// 同一 D-047 OpenProbe 守卫链 → running+关联仓；OpenProbe 拒 → 回 proposed + warn。
+// 调用方须先过契约复读（validateProbeContractForOpen）。
+func (s *Service) approveProbeOpen(ctx context.Context, p *pgstore.ProbeProposal, ref string) (*v1.ApproveProbeResponse, error) {
+	// CAS 占单：proposed→approved 只有一并发者成功。
+	ok, err := s.store.ProbeProposalApprove(ctx, p.ID, ref)
+	if err != nil {
+		return nil, err
 	}
 	if !ok {
 		cur, gerr := s.store.ExplorerProbeProposalGet(ctx, p.ID)
 		if gerr == nil && cur != nil {
-			return connect.NewResponse(&v1.ApproveProbeResponse{
-				Status: cur.Status, Message: "并发审批已被另一调用占单（未重放执行）"}), nil
+			return &v1.ApproveProbeResponse{
+				Status: cur.Status, Message: "并发审批已被另一调用占单（未重放执行）"}, nil
 		}
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("CAS 后重读失败: %v", gerr))
+		return nil, fmt.Errorf("CAS 后重读失败: %v", gerr)
 	}
 	c := p.Contract
 	open, oerr := s.callOpenProbe(ctx, &v1.OpenProbeRequest{
 		VenueKey: c.VenueKey, Canonical: c.Canonical, Side: c.Side, Qty: c.Qty,
-		Purpose: c.Purpose, DecisionRef: r.GetDecisionRef(),
+		Purpose: c.Purpose, DecisionRef: ref,
 		AutoCloseAt: timestamppb.New(c.AutoCloseAt),
 	})
 	if oerr != nil || open == nil || open.GetStatus() == "FAILED" {
@@ -94,24 +105,24 @@ func (s *Service) ApproveProbe(ctx context.Context, req *connect.Request[v1.Appr
 		if err := s.store.InsertAlert(ctx, nil, "warn", msg); err != nil {
 			log.Printf("[probe] proposal #%d reject alert: %v", p.ID, err)
 		}
-		return connect.NewResponse(&v1.ApproveProbeResponse{Status: "PROPOSED", Message: msg}), nil
+		return &v1.ApproveProbeResponse{Status: "PROPOSED", Message: msg}, nil
 	}
 	posID := open.GetPositionId()
 	if posID <= 0 {
 		if _, rerr := s.store.ProbeProposalReset(ctx, p.ID); rerr != nil {
 			log.Printf("[probe] proposal #%d reset (no posID): %v", p.ID, rerr)
 		}
-		return connect.NewResponse(&v1.ApproveProbeResponse{
-			Status: "PROPOSED", Message: "OpenProbe 未返回仓 id（回 proposed）"}), nil
+		return &v1.ApproveProbeResponse{
+			Status: "PROPOSED", Message: "OpenProbe 未返回仓 id（回 proposed）"}, nil
 	}
 	if _, rerr := s.store.ProbeProposalRun(ctx, p.ID, posID); rerr != nil {
 		// 仓已开而提案态迁移失败——仓在跑，critical 待人工校（不回退：单已下）。
 		s.probeCritical(ctx, posID, fmt.Sprintf("提案 #%d approved→running 迁移失败（仓已开）: %v", p.ID, rerr))
-		return connect.NewResponse(&v1.ApproveProbeResponse{
-			Status: "RUNNING", Message: fmt.Sprintf("仓 #%d 已开但提案态迁移异常", posID), PositionId: posID}), nil
+		return &v1.ApproveProbeResponse{
+			Status: "RUNNING", Message: fmt.Sprintf("仓 #%d 已开但提案态迁移异常", posID), PositionId: posID}, nil
 	}
-	return connect.NewResponse(&v1.ApproveProbeResponse{
-		Status: "RUNNING", Message: fmt.Sprintf("提案 #%d 已批准开仓 pos=%d", p.ID, posID), PositionId: posID}), nil
+	return &v1.ApproveProbeResponse{
+		Status: "RUNNING", Message: fmt.Sprintf("提案 #%d 已批准开仓 pos=%d", p.ID, posID), PositionId: posID}, nil
 }
 
 // validateProbeContractForOpen 批准前契约复读（防手工插行/历史行绕过 explorer 校验层）。
