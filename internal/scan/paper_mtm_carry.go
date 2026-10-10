@@ -139,12 +139,12 @@ func mtmTickLegs(p mtmPair) (lv, ls, sv, ss string) {
 // wire 每轮 ListActiveFlags 一次传入，nil=无旗放行。
 func (sc *CarryUniverseScanner) StepPaperMtmCarry(ctx context.Context, st PaperStore,
 	entryStreak *EntryStreak, now time.Time, flags map[string]pgstore.VenueSymbolFlag) (opened []string, exited int, err error) {
-	longF, shortF, tmKnown, aliases, view, err := sc.loadMtSwapInputs(ctx)
+	longF, shortF, tmKnown, aliases, view, err := sc.loadMtSwapInputs(ctx, now)
 	if err != nil {
 		return nil, 0, fmt.Errorf("mtm paper step: %w", err)
 	}
 	var res ScanResult
-	longBook, shortBook := sc.collectMtSwaps(ctx, longF, shortF, tmKnown, map[string]bool{}, &res, aliases, sc.swapFreeAccounts(ctx), view)
+	longBook, shortBook := sc.collectMtSwaps(ctx, now, longF, shortF, tmKnown, map[string]bool{}, &res, aliases, sc.swapFreeAccounts(ctx), view)
 	active, err := st.ListActivePaperSpotCarry(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("mtm paper step: list active: %w", err)

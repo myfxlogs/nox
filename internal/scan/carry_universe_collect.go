@@ -26,7 +26,7 @@ type mtSwap struct {
 // collectMtSwaps D-451 S3：Run() 内两同构循环提取——long/short 只差 fact 列表、
 // 值谓词方向（long 收息=负值候选 / short 付息=负值排除）、kind（swap_long/swap_short）、
 // modeAllowed 方向参。filtered/res.Skipped 为副作用参数（语义随原版保留）。
-func (sc *CarryUniverseScanner) collectMtSwaps(ctx context.Context, long, short []fact.Fact,
+func (sc *CarryUniverseScanner) collectMtSwaps(ctx context.Context, now time.Time, long, short []fact.Fact,
 	tmKnown func(fact.Fact) (int64, bool), filtered map[string]bool, res *ScanResult,
 	aliases map[string]string, swapFree map[string]bool, view *assetClassView,
 ) (map[string]mtSwap, map[string]mtSwap) {
@@ -84,7 +84,7 @@ func (sc *CarryUniverseScanner) collectMtSwaps(ctx context.Context, long, short 
 			}
 			out[canonical+"|"+f.Venue] = mtSwap{
 				venue: f.Venue, canonical: canonical, rawCanon: rawCanon, symbol: f.Symbol, val: val, ts: f.Ts,
-				stale: sc.swapMaxAge > 0 && time.Since(f.Ts) > sc.swapMaxAge, // R1：swap 侧用 swap 闸（48h），修复误用 funding 闸
+				stale: sc.swapMaxAge > 0 && now.Sub(f.Ts) > sc.swapMaxAge, // R1：swap 侧用 swap 闸（48h）；D-158 轮钟非墙钟
 			}
 		}
 		return out

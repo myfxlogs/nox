@@ -165,7 +165,7 @@ func TestD028_SwapFreeCollectZeroesVal(t *testing.T) {
 			"swap_short|3001157|XAUUSDm": 0.5,
 		},
 	})
-	long, short := sc.collectMtSwaps(context.Background(),
+	long, short := sc.collectMtSwaps(context.Background(), time.Now(),
 		[]fact.Fact{{Kind: "swap_long", Venue: "3001157", Symbol: "XAUUSDm", Value: -1, Ts: time.Now()}},
 		[]fact.Fact{{Kind: "swap_short", Venue: "3001157", Symbol: "XAUUSDm", Value: 0.5, Ts: time.Now()}},
 		func(fact.Fact) (int64, bool) { return 0, false },
@@ -192,7 +192,7 @@ func TestD028_SwapFreeZeroFactRetained(t *testing.T) {
 		},
 	})
 	tmUnknown := func(fact.Fact) (int64, bool) { return 0, false }
-	long, _ := sc.collectMtSwaps(context.Background(),
+	long, _ := sc.collectMtSwaps(context.Background(), time.Now(),
 		[]fact.Fact{{Kind: "swap_long", Venue: "3001157", Symbol: "XAUUSDm", Value: 0, Ts: time.Now()}},
 		nil, tmUnknown, map[string]bool{}, &ScanResult{}, map[string]string{}, map[string]bool{}, nil) // R+D-043 签名适配：view=nil 兜底（mtClassOf nil-safe）
 	if v, ok := long["XAU|3001157"]; !ok {
@@ -201,7 +201,7 @@ func TestD028_SwapFreeZeroFactRetained(t *testing.T) {
 		t.Fatalf("免息腿 val want 0, got %v", v.val)
 	}
 	// 正值对照：收息异常剔除。
-	long2, _ := sc.collectMtSwaps(context.Background(),
+	long2, _ := sc.collectMtSwaps(context.Background(), time.Now(),
 		[]fact.Fact{{Kind: "swap_long", Venue: "3001157", Symbol: "XAUUSDm", Value: 1, Ts: time.Now()}},
 		nil, tmUnknown, map[string]bool{}, &ScanResult{}, map[string]string{}, map[string]bool{}, nil) // R+D-043 签名适配：view=nil 兜底（mtClassOf nil-safe）
 	if _, ok := long2["XAU|3001157"]; ok {

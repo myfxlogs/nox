@@ -13,7 +13,7 @@ import (
 
 // joinCfdLegs CEX funding × MT swap 双腿 join + 结构行生成（D-412 F2 全叉积：
 // 每 (canonical, mt_venue, cex_venue) 三元组两结构各行；去重取 canonical 键行）。
-func (sc *CarryUniverseScanner) joinCfdLegs(ctx context.Context, cexFunding []fact.Fact,
+func (sc *CarryUniverseScanner) joinCfdLegs(ctx context.Context, now time.Time, cexFunding []fact.Fact,
 	aliases map[string]string, view *assetClassView,
 	longByCanon, shortByCanon map[string]mtSwap, filteredCanonicals map[string]bool, res *ScanResult) {
 	type cexF struct {
@@ -31,7 +31,7 @@ func (sc *CarryUniverseScanner) joinCfdLegs(ctx context.Context, cexFunding []fa
 		mean, mts, mok := fact.FundingMeanAnnual(ctx, sc.store, f.Venue, f.Symbol, fact.FundingMeanWindow)
 		cf := cexF{
 			venue: f.Venue, canonical: canonical, sym: f.Symbol, val: mean, inst: f.Value,
-			stale: !mok || (sc.fundingMaxAge > 0 && time.Since(mts) > sc.fundingMaxAge),
+			stale: !mok || (sc.fundingMaxAge > 0 && now.Sub(mts) > sc.fundingMaxAge), // D-158：轮钟非墙钟
 		}
 		for _, k := range view.joinKeys(canonical, view.cexClassOf(f.Venue, cexFactSymbol(f.Symbol))) {
 			fundByKey[k] = append(fundByKey[k], cf)

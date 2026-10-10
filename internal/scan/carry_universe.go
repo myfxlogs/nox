@@ -108,8 +108,8 @@ const spotCarryMinAge = 48 * time.Hour
 
 // loadMtSwapInputs D-465：MT 侧输入装载共享（Run 与 StepPaperMtmCarry 同口径）——
 // swap facts + venue status 过滤 + tmKnown + 别名表（D-464：双侧同一别名口径）；
-// cex funding 侧由 Run 自载（mt×mt 不用）。
-func (sc *CarryUniverseScanner) loadMtSwapInputs(ctx context.Context) (longF, shortF []fact.Fact,
+// cex funding 侧由 Run 自载（mt×mt 不用）。D-158：龄期闸用轮钟 now 非墙钟（Step 传参钟可钉）。
+func (sc *CarryUniverseScanner) loadMtSwapInputs(ctx context.Context, now time.Time) (longF, shortF []fact.Fact,
 	tmKnown func(fact.Fact) (int64, bool), aliases map[string]string, view *assetClassView, err error) {
 	longF, err = sc.store.LatestFactsByKind(ctx, "swap_long")
 	if err != nil {
@@ -142,7 +142,7 @@ func (sc *CarryUniverseScanner) loadMtSwapInputs(ctx context.Context) (longF, sh
 		if !ok {
 			return 0, false
 		}
-		if sc.tradeModeTTL > 0 && time.Since(tf.Ts) > sc.tradeModeTTL {
+		if sc.tradeModeTTL > 0 && now.Sub(tf.Ts) > sc.tradeModeTTL { // D-158：轮钟非墙钟
 			return 0, false
 		}
 		return int64(tf.Value), true
@@ -167,7 +167,8 @@ func (sc *CarryUniverseScanner) loadMtSwapInputs(ctx context.Context) (longF, sh
 // Run 一轮扫描：facts 近 24h 双面→join→结构计算→排序。
 func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanResult, error) {
 	res := ScanResult{}
-	mtSwapLong, mtSwapShort, tmKnown, aliases, view, err := sc.loadMtSwapInputs(ctx)
+	now := time.Now() // D-158：轮钟——龄期闸统一相对本时刻（防墙钟漂移钉死 fixture/回放语义）
+	mtSwapLong, mtSwapShort, tmKnown, aliases, view, err := sc.loadMtSwapInputs(ctx, now)
 	if err != nil {
 		return res, err
 	}
@@ -180,14 +181,14 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 	filteredCanonicals := map[string]bool{} // D-382 S2：有 swap fact 进入过滤评估的 canonical 集
 	// MT swap facts D-412 F1/F2/F3：单位归一+venue 全保留+7d 窗口均值——收集逻辑
 	// 提取至 carry_universe_collect.go（D-451 S3 纯搬家，注释全文随块搬移见彼）。
-	longByCanon, shortByCanon := sc.collectMtSwaps(ctx, mtSwapLong, mtSwapShort, tmKnown, filteredCanonicals, &res, aliases, sc.swapFreeAccounts(ctx), view) // D-028 ④
+	longByCanon, shortByCanon := sc.collectMtSwaps(ctx, now, mtSwapLong, mtSwapShort, tmKnown, filteredCanonicals, &res, aliases, sc.swapFreeAccounts(ctx), view) // D-028 ④
 	// CEX funding：symbol→canonical（去 USDT）；F2 同款 venue 全保留（每 venue 一行，
 	// 不再 abs 取最优——cex argmax 会使授权组合在 funding 排名易主日假 warn+保底失明）。
 	// funding 符号定结构方向：>0=多 perp 付息→配空 CFD 收息；<0=反向。
 	// D-034：val=decisions 口径 facts 7d 滚动均值（fact.FundingMeanAnnual 共享单实现，
 	// 同 autotrade.fundingRateMeanForVenue）；inst=瞬时最新值仅留展示列。
 	// 窗内零样本/查询败 → stale=读口不可证新鲜（fail-closed 剔除排名，同 F4 语义）。
-	sc.joinCfdLegs(ctx, cexFunding, aliases, view, longByCanon, shortByCanon, filteredCanonicals, &res)
+	sc.joinCfdLegs(ctx, now, cexFunding, aliases, view, longByCanon, shortByCanon, filteredCanonicals, &res)
 	// D-350 阶段①：第三结构 spot_carry 段（D-382 S3 拆出 carry_universe_spot.go，纯搬移）。
 	sc.appendSpotCarryRows(ctx, &res)
 	sort.Slice(res.Rows, func(i, j int) bool { return res.Rows[i].NetAnnual > res.Rows[j].NetAnnual })
