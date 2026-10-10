@@ -23,3 +23,17 @@ func (s *Store) TicksPriceChanged(ctx context.Context, venue, symbol string, win
 	}
 	return n >= 2, n, nil
 }
+
+// VenueTickLatestAt D-170：venue 级活性证——ticks 表该 venue 最新帧时刻。
+// ok=false=该 venue 零行（无证据，不等同死——由调用方语义裁定）。
+func (s *Store) VenueTickLatestAt(ctx context.Context, venue string) (time.Time, bool, error) {
+	var t *time.Time
+	err := s.pool.QueryRow(ctx, `SELECT max(ts) FROM ticks WHERE venue = $1 OR venue_key = $1`, venue).Scan(&t)
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("venue tick latest %s: %w", venue, err)
+	}
+	if t == nil {
+		return time.Time{}, false, nil
+	}
+	return *t, true, nil
+}

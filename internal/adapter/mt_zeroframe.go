@@ -115,6 +115,10 @@ func (a *MT5Adapter) zfCheck() {
 		}
 	}
 	a.zfMu.Unlock()
+	// D-170：venue 级闭市闸——session 判闭市=静默预期不发警（表缺席/判定不了=照报不误赦）。
+	if alert != "" && a.ClosedCheck != nil && a.ClosedCheck() {
+		alert = ""
+	}
 	if alert != "" && a.AlertSink != nil {
 		a.AlertSink("warn", alert)
 	}

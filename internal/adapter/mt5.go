@@ -74,6 +74,10 @@ type MT5Adapter struct {
 	// AlertSink 断流分级告警下沉（D-104 P2 U2，MarginSink 同模式三点注入链）。nil = 未注入（no-op）。
 	AlertSink func(level, msg string)
 
+	// ClosedCheck D-170：zeroframe 告警前 venue 级闭市闸——true=session 表判闭市
+	// （静默=预期不发警）。nil=不判（测试构造保旧径）。stage-2 重连语义不动。
+	ClosedCheck func() bool
+
 	// OnReconnect 会话重连成功回调（D-004 P1#6：对账漏事件补救源——断流期 venue 侧
 	// 变化无事件可达，重连成功后须补一轮对账）。reconnectSession 成功路径调用，nil 安全；
 	// 首连不走此路径（Connect 直连）。回调须非阻塞（在 a.mu 持锁尾段调用）。
