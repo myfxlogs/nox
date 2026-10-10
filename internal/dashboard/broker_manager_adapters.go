@@ -32,6 +32,11 @@ func (m *BrokerManager) SetMarginReservePct(pct float64) { m.marginReservePct = 
 
 // startMT5 启动 MT5 适配器。
 func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) error {
+	// D-164 R5：attach-pending 置位——Connect 内帧源先达触发的 no-match kick 据此重排；
+	// defer 清位覆盖 attach 完成与所有错误返回径（不残留致永久重排）。
+	kickKey := keydomain.Join(a.Venue, "mt5")
+	m.setAttaching(kickKey)
+	defer m.clearAttaching(kickKey)
 	ad := adapter.NewMT5Adapter(a.Venue, a.Host, a.Server, int32(a.Port), a.User, a.Password)
 	// D-104 P2 U1：SetGateway 须在 Connect 前调（Connect dial 按序试 gateway+fallbacks）。
 	ad.SetGateway(m.MT5Gateway, m.MT5GatewayFallbacks)
@@ -266,7 +271,7 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	}
 	m.attach(a.Venue, r)
 	log.Printf("[broker] %s (MT5) ready", a.Venue)
-	m.kickAccountReady(keydomain.Join(a.Venue, "mt5")) // D-071 R1：margin 首采 kick 可早于 ready（见 sinks.go）
+	m.kickAccountReady(kickKey) // D-071 R1：margin 首采 kick 可早于 ready（见 sinks.go）
 	return nil
 }
 

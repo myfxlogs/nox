@@ -21,6 +21,7 @@ func NewBrokerManager(store *pgstore.Store, qbus *bus.QuoteBus, reg *exec.Regist
 		qbus:             qbus,
 		reg:              reg,
 		running:          make(map[string]*running),
+		attaching:        make(map[string]struct{}),
 		commission:       make(map[string]float64),
 		symbolGroupsTTL:  symbolsTTL,
 		primaryAlertCool: alertcool.New(30 * time.Minute),

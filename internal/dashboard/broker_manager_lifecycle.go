@@ -213,3 +213,30 @@ func (m *BrokerManager) EnableBroker(ctx context.Context, venue string) error {
 	log.Printf("[broker] enabled %s", venue)
 	return nil
 }
+
+// D-164 R5 attach-pending 集：startMT5 入口置位、defer 返回清位（含 Connect 失败径）——
+// no-match kick 据此区分竞态窗（延迟重排至 attach 完）与真未知 venue（立即 warn 丢）。
+func (m *BrokerManager) setAttaching(venueKey string) {
+	m.mu.Lock()
+	m.attaching[venueKey] = struct{}{}
+	m.mu.Unlock()
+}
+
+func (m *BrokerManager) clearAttaching(venueKey string) {
+	m.mu.Lock()
+	delete(m.attaching, venueKey)
+	m.mu.Unlock()
+}
+
+// isAttaching kick 键的 attach 是否进行中。键双形态同 queriers() 匹配规：
+// 完整键（"acct:mt5"）或 BareOf 命中。
+func (m *BrokerManager) isAttaching(venueKey string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for k := range m.attaching {
+		if k == venueKey || keydomain.BareOf(k) == venueKey {
+			return true
+		}
+	}
+	return false
+}

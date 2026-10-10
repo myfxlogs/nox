@@ -92,13 +92,14 @@ type BrokerManager struct {
 	qbus  *bus.QuoteBus
 	reg   *exec.Registry
 
-	mu      sync.Mutex
-	running map[string]*running // venue → running
-	static  []staticQuerier
-	cexQs   []venue.Querier                       // D-121：CEX perp 持仓查询器（动态刷新）
-	onQ     func([]venue.Querier)                 // querier 集合变更回调
-	onHQ    func([]reconcile.OrderHistoryQuerier) // D-416：历史查证器集合变更回调
-	bpm     *BrokerPositionMonitor                // D-121：CEX 平仓需查 bpm 快照获取 side/volume（注入，nil=未接线）
+	mu        sync.Mutex
+	running   map[string]*running // venue → running
+	attaching map[string]struct{} // D-164 R5：attach 进行中的 kick 键（startMT5 入口置位、返回清位）
+	static    []staticQuerier
+	cexQs     []venue.Querier                       // D-121：CEX perp 持仓查询器（动态刷新）
+	onQ       func([]venue.Querier)                 // querier 集合变更回调
+	onHQ      func([]reconcile.OrderHistoryQuerier) // D-416：历史查证器集合变更回调
+	bpm       *BrokerPositionMonitor                // D-121：CEX 平仓需查 bpm 快照获取 side/volume（注入，nil=未接线）
 
 	commMu     sync.Mutex
 	commission map[string]float64 // venue → 账号真实佣金（bps/腿，D-036）；缺省回退 config 默认
