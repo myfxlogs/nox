@@ -148,6 +148,7 @@ message BrokerPosition {
   google.protobuf.Timestamp probe_auto_close_at = 32;  // D-047：探针到期自动平仓时刻（positions.auto_close_at 透传）；nil=非探针/未关联
   google.protobuf.Timestamp as_of = 33;            // D-094：本行数据的事件时戳（MT=OnOrderProfit 帧到达时刻；CEX=权威回读时刻）透传——前端展示数据新鲜度，断流陈旧可观测；nil=未知
   bool is_sample = 34;                             // D-094：孤儿/收息样本行（position_id=0 未关联系统仓，如手动收息 0.002 XAUUSDT）——Σ 统计条排除，行本身仍显示
+  google.protobuf.Timestamp price_at = 35;         // D-162：现价时刻（报价 tick 真钟；fresh=false 时=stale 价时点——前端标「休市/陈旧」）；nil=无报价
 }
 
 message ListBrokerPositionsRequest {

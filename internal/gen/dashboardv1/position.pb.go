@@ -979,6 +979,7 @@ type BrokerPosition struct {
 	ProbeAutoCloseAt            *timestamppb.Timestamp `protobuf:"bytes,32,opt,name=probe_auto_close_at,json=probeAutoCloseAt,proto3" json:"probe_auto_close_at,omitempty"`                                   // D-047：探针到期自动平仓时刻（positions.auto_close_at 透传）；nil=非探针/未关联
 	AsOf                        *timestamppb.Timestamp `protobuf:"bytes,33,opt,name=as_of,json=asOf,proto3" json:"as_of,omitempty"`                                                                           // D-094：本行数据的事件时戳（MT=OnOrderProfit 帧到达时刻；CEX=权威回读时刻）透传——前端展示数据新鲜度，断流陈旧可观测；nil=未知
 	IsSample                    bool                   `protobuf:"varint,34,opt,name=is_sample,json=isSample,proto3" json:"is_sample,omitempty"`                                                              // D-094：孤儿/收息样本行（position_id=0 未关联系统仓，如手动收息 0.002 XAUUSDT）——Σ 统计条排除，行本身仍显示
+	PriceAt                     *timestamppb.Timestamp `protobuf:"bytes,35,opt,name=price_at,json=priceAt,proto3" json:"price_at,omitempty"`                                                                  // D-162：现价时刻（报价 tick 真钟；fresh=false 时=stale 价时点——前端标「休市/陈旧」）；nil=无报价
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -1249,6 +1250,13 @@ func (x *BrokerPosition) GetIsSample() bool {
 		return x.IsSample
 	}
 	return false
+}
+
+func (x *BrokerPosition) GetPriceAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PriceAt
+	}
+	return nil
 }
 
 type ListBrokerPositionsRequest struct {
@@ -3212,7 +3220,8 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\"g\n" +
 	"\x15ListPositionsResponse\x128\n" +
 	"\tpositions\x18\x01 \x03(\v2\x1a.arb.dashboard.v1.PositionR\tpositions\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\"\xcf\t\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"\x86\n" +
+	"\n" +
 	"\x0eBrokerPosition\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1b\n" +
 	"\tvenue_key\x18\x02 \x01(\tR\bvenueKey\x12\x16\n" +
@@ -3252,7 +3261,8 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x12probe_decision_ref\x18\x1f \x01(\tR\x10probeDecisionRef\x12I\n" +
 	"\x13probe_auto_close_at\x18  \x01(\v2\x1a.google.protobuf.TimestampR\x10probeAutoCloseAt\x12/\n" +
 	"\x05as_of\x18! \x01(\v2\x1a.google.protobuf.TimestampR\x04asOf\x12\x1b\n" +
-	"\tis_sample\x18\" \x01(\bR\bisSampleB\x19\n" +
+	"\tis_sample\x18\" \x01(\bR\bisSample\x125\n" +
+	"\bprice_at\x18# \x01(\v2\x1a.google.protobuf.TimestampR\apriceAtB\x19\n" +
 	"\x17_close_now_estimate_usd\"6\n" +
 	"\x1aListBrokerPositionsRequest\x12\x18\n" +
 	"\arefresh\x18\x01 \x01(\bR\arefresh\"\xc7\x01\n" +
@@ -3480,29 +3490,30 @@ var file_dashboardv1_position_proto_depIdxs = []int32{
 	37, // 7: arb.dashboard.v1.BrokerPosition.swap_charge_at:type_name -> google.protobuf.Timestamp
 	37, // 8: arb.dashboard.v1.BrokerPosition.probe_auto_close_at:type_name -> google.protobuf.Timestamp
 	37, // 9: arb.dashboard.v1.BrokerPosition.as_of:type_name -> google.protobuf.Timestamp
-	10, // 10: arb.dashboard.v1.ListBrokerPositionsResponse.positions:type_name -> arb.dashboard.v1.BrokerPosition
-	13, // 11: arb.dashboard.v1.CloseBrokerPositionsRequest.items:type_name -> arb.dashboard.v1.CloseBrokerPositionRequest
-	14, // 12: arb.dashboard.v1.CloseBrokerPositionsResponse.results:type_name -> arb.dashboard.v1.CloseBrokerPositionResponse
-	37, // 13: arb.dashboard.v1.OpenProbeRequest.auto_close_at:type_name -> google.protobuf.Timestamp
-	37, // 14: arb.dashboard.v1.ProbePosition.auto_close_at:type_name -> google.protobuf.Timestamp
-	37, // 15: arb.dashboard.v1.ProbePosition.opened_at:type_name -> google.protobuf.Timestamp
-	37, // 16: arb.dashboard.v1.ProbePosition.closed_at:type_name -> google.protobuf.Timestamp
-	19, // 17: arb.dashboard.v1.ListProbesResponse.probes:type_name -> arb.dashboard.v1.ProbePosition
-	26, // 18: arb.dashboard.v1.HedgeLegSpot.stake:type_name -> arb.dashboard.v1.HedgeStake
-	37, // 19: arb.dashboard.v1.HedgeLegSpot.vote_apr_ts:type_name -> google.protobuf.Timestamp
-	37, // 20: arb.dashboard.v1.HedgeAccounts.updated_at:type_name -> google.protobuf.Timestamp
-	27, // 21: arb.dashboard.v1.HedgeStructure.leg_spot:type_name -> arb.dashboard.v1.HedgeLegSpot
-	28, // 22: arb.dashboard.v1.HedgeStructure.leg_short:type_name -> arb.dashboard.v1.HedgeLegShort
-	29, // 23: arb.dashboard.v1.HedgeStructure.carry:type_name -> arb.dashboard.v1.HedgeCarry
-	30, // 24: arb.dashboard.v1.HedgeStructure.accts:type_name -> arb.dashboard.v1.HedgeAccounts
-	31, // 25: arb.dashboard.v1.GetHedgeStructureResponse.structure:type_name -> arb.dashboard.v1.HedgeStructure
-	37, // 26: arb.dashboard.v1.HedgeFlowItem.ts:type_name -> google.protobuf.Timestamp
-	34, // 27: arb.dashboard.v1.ListHedgeFlowResponse.txs:type_name -> arb.dashboard.v1.HedgeFlowItem
-	28, // [28:28] is the sub-list for method output_type
-	28, // [28:28] is the sub-list for method input_type
-	28, // [28:28] is the sub-list for extension type_name
-	28, // [28:28] is the sub-list for extension extendee
-	0,  // [0:28] is the sub-list for field type_name
+	37, // 10: arb.dashboard.v1.BrokerPosition.price_at:type_name -> google.protobuf.Timestamp
+	10, // 11: arb.dashboard.v1.ListBrokerPositionsResponse.positions:type_name -> arb.dashboard.v1.BrokerPosition
+	13, // 12: arb.dashboard.v1.CloseBrokerPositionsRequest.items:type_name -> arb.dashboard.v1.CloseBrokerPositionRequest
+	14, // 13: arb.dashboard.v1.CloseBrokerPositionsResponse.results:type_name -> arb.dashboard.v1.CloseBrokerPositionResponse
+	37, // 14: arb.dashboard.v1.OpenProbeRequest.auto_close_at:type_name -> google.protobuf.Timestamp
+	37, // 15: arb.dashboard.v1.ProbePosition.auto_close_at:type_name -> google.protobuf.Timestamp
+	37, // 16: arb.dashboard.v1.ProbePosition.opened_at:type_name -> google.protobuf.Timestamp
+	37, // 17: arb.dashboard.v1.ProbePosition.closed_at:type_name -> google.protobuf.Timestamp
+	19, // 18: arb.dashboard.v1.ListProbesResponse.probes:type_name -> arb.dashboard.v1.ProbePosition
+	26, // 19: arb.dashboard.v1.HedgeLegSpot.stake:type_name -> arb.dashboard.v1.HedgeStake
+	37, // 20: arb.dashboard.v1.HedgeLegSpot.vote_apr_ts:type_name -> google.protobuf.Timestamp
+	37, // 21: arb.dashboard.v1.HedgeAccounts.updated_at:type_name -> google.protobuf.Timestamp
+	27, // 22: arb.dashboard.v1.HedgeStructure.leg_spot:type_name -> arb.dashboard.v1.HedgeLegSpot
+	28, // 23: arb.dashboard.v1.HedgeStructure.leg_short:type_name -> arb.dashboard.v1.HedgeLegShort
+	29, // 24: arb.dashboard.v1.HedgeStructure.carry:type_name -> arb.dashboard.v1.HedgeCarry
+	30, // 25: arb.dashboard.v1.HedgeStructure.accts:type_name -> arb.dashboard.v1.HedgeAccounts
+	31, // 26: arb.dashboard.v1.GetHedgeStructureResponse.structure:type_name -> arb.dashboard.v1.HedgeStructure
+	37, // 27: arb.dashboard.v1.HedgeFlowItem.ts:type_name -> google.protobuf.Timestamp
+	34, // 28: arb.dashboard.v1.ListHedgeFlowResponse.txs:type_name -> arb.dashboard.v1.HedgeFlowItem
+	29, // [29:29] is the sub-list for method output_type
+	29, // [29:29] is the sub-list for method input_type
+	29, // [29:29] is the sub-list for extension type_name
+	29, // [29:29] is the sub-list for extension extendee
+	0,  // [0:29] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_position_proto_init() }
