@@ -26,14 +26,23 @@ type Store interface {
 	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error                      // D-053 ②
 }
 
+// Notifier 推送面（*notify.FeishuClient 原生满足；nil=不推送）。
+type Notifier interface {
+	Enabled() bool
+	SendText(ctx context.Context, chatID, text string) (string, error)
+}
+
 // Deps 调度依赖（Now 测试注入）。
 // D-545 热读化：Enabled 改 getter——每班唤醒首判（ARB_MACRO_ENABLED 热闸：
 // false=当班跳过不杀 goroutine；nil=恒开）。D-120 删 FredKey（FRED 面清退）。
 // D-147：Notify/ChatID 摘除——推送收口业主域，财历/actuals 仅 alerts 留痕。
+// D-168 ⑤：Notify/ChatID 恢复——日历日报按票面恢复直推（actuals 仍 info 留痕不推）。
 type Deps struct {
 	Store   Store
 	Enabled func() bool
 	Now     func() time.Time
+	Notify  Notifier                                  // D-168：nil=不推
+	ChatID  func(ctx context.Context) (string, error) // D-168：nil=不推
 }
 
 // enabled 当班闸（nil=恒开保持旧语义；false=当班跳过）。
@@ -130,9 +139,25 @@ func sendDailyReport(ctx context.Context, d Deps) {
 		log.Printf("[macro:calendar] daily report query: %v", err)
 		return
 	}
-	// D-147 推送收口：财历日报=系统风控输入非业主事件——info 留痕不直推（同文案 4h 防重）。
-	if err := d.Store.InsertAlertDedup(ctx, "info", RenderCalendarCN(events, d.Now()), 4*time.Hour); err != nil {
+	// D-168 ⑤：日历日报恢复直推（D-147 保留清单本钦定 digest 要推）；alerts info
+	// 留痕保留（面板可见）。actuals 径仍 InsertAlertDedup(info) 不推。
+	body := RenderCalendarCN(events, d.Now())
+	if err := d.Store.InsertAlertDedup(ctx, "info", body, 4*time.Hour); err != nil {
 		log.Printf("[macro:calendar] daily report alert: %v", err)
+	}
+	if d.Notify == nil || !d.Notify.Enabled() || d.ChatID == nil {
+		return
+	}
+	chatID, err := d.ChatID(ctx)
+	if err != nil {
+		log.Printf("[macro:calendar] chat id: %v", err)
+		return
+	}
+	if chatID == "" {
+		return
+	}
+	if _, err := d.Notify.SendText(ctx, chatID, body); err != nil {
+		log.Printf("[macro:calendar] daily report push: %v", err)
 	}
 }
 
