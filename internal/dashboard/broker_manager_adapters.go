@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"arb/internal/adapter"
 	"arb/internal/exec"
@@ -175,6 +176,21 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	mt5Exe.SetMarginReservePct(m.marginReservePct)
 	m.reg.Register(mt5Exe)
 	q := reconcile.NewMT5Querier(a.Venue, ad.Token(), ad.MT5Client())
+	// D-162R4：DB 驱动径同款复合报价钟（symMap=broker→canonical 已算出复用）——
+	// 帧径（ad.SetPriceAnchor）+REST 径（q.SetPriceAnchor）同注，重启+休市锚持久末帧。
+	anchor := adapter.CompositeTickAnchor(ad.LastTickAnchor,
+		func(ctx context.Context, sym string) (float64, float64, time.Time, bool) {
+			if m.store == nil {
+				return 0, 0, time.Time{}, false
+			}
+			t, ok, err := m.store.LatestTick(ctx, a.Venue, "mt5", sym)
+			if err != nil || !ok {
+				return 0, 0, time.Time{}, false
+			}
+			return t.Bid, t.Ask, t.Ts, true
+		}, symMap)
+	ad.SetPriceAnchor(anchor)
+	q.SetPriceAnchor(anchor)
 
 	r := &running{
 		stop:           func() { cancel(); ad.Stop() },
