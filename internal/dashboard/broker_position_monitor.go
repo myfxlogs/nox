@@ -69,6 +69,10 @@ type BrokerPositionMonitor struct {
 	// kick：事件触发按 venue 权威回读（pendingKick 集合去重 + kickSig cap1 信号）。
 	pendingKick map[string]struct{}
 	kickSig     chan struct{}
+	// D-164：no-match kick 有界延迟重排——attach 竞态窗（ad.Connect 内帧先达、m.attach
+	// 后注册 querier）首 miss 不丢：AfterFunc 一次重排，再 miss 才 warn+丢（真未知 venue
+	// 不无限重排）。hit 时清标记；标记常驻只挡重复重排不挡新 kick 命中。
+	kickRetried map[string]struct{}
 
 	// D-110 P2：swap 快照采集（REST 重读后锁外执行）。
 	swapSnapStore    SwapSnapshotStore
@@ -96,6 +100,10 @@ type BrokerPositionMonitor struct {
 // bpFlushDelay 逐仓事件尾沿合批窗口（AfterFunc 有界单次，非周期定时器）。
 // 包级 var 便于测试缩短；同 posKey 窗口内多次脏化只发最新态（合并语义）。
 var bpFlushDelay = 200 * time.Millisecond
+
+// bpKickRetryDelay D-164：no-match kick 重排延迟（attach 竞态窗典型 ~1s，10s 宽裕）。
+// 包级 var 便于测试缩短；单次 AfterFunc 非周期。
+var bpKickRetryDelay = 10 * time.Second
 
 // SetCEXFundingRate D-337R3 S1：注入 CEX 腿年化费率源（构造必选第 8 参之外的同 commit 接线面）。
 func (m *BrokerPositionMonitor) SetCEXFundingRate(fundingRate func(ctx context.Context, venue, symbol string) (float64, bool)) {
@@ -135,6 +143,7 @@ func NewBrokerPositionMonitor(bm *BrokerManager, qbus *bus.QuoteBus, freshTTL ti
 		streamOnline:  make(map[string]bool),
 		pendingKick:   make(map[string]struct{}),
 		kickSig:       make(chan struct{}, 1),
+		kickRetried:   make(map[string]struct{}),
 	}
 }
 
