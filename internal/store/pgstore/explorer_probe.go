@@ -86,6 +86,35 @@ func (s *Store) ExplorerProbeProposalByPosition(ctx context.Context, posID int64
 		FROM explorer_proposals WHERE probe_position_id=$1 AND scan_kind='probe'`, posID))
 }
 
+// ExplorerProbeProposalList 按状态列探针提案（scan_kind='probe'，id 升序——先提先审）。
+func (s *Store) ExplorerProbeProposalList(ctx context.Context, status string) ([]*ProbeProposal, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, scan_date, canonical, status, probe, COALESCE(decision_ref,''),
+		       probe_position_id, COALESCE(gate_note,'')
+		FROM explorer_proposals WHERE scan_kind='probe' AND status=$1 ORDER BY id`, status)
+	if err != nil {
+		return nil, fmt.Errorf("list probe proposals: %w", err)
+	}
+	defer rows.Close()
+	var out []*ProbeProposal
+	for rows.Next() {
+		p, err := s.scanProbeProposal(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// ProbeProposalGateNote 记 gate_note（不改状态——机审判据留痕/模糊件幂等键用）。
+func (s *Store) ProbeProposalGateNote(ctx context.Context, id int64, note string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE explorer_proposals SET gate_note=$2, updated_at=now()
+		WHERE id=$1 AND scan_kind='probe'`, id, note)
+	return err
+}
+
 func (s *Store) scanProbeProposal(row pgx.Row) (*ProbeProposal, error) {
 	var p ProbeProposal
 	var raw []byte

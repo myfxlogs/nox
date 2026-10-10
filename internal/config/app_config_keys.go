@@ -96,7 +96,9 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_POSITION_EVAL_SEC":               intv(func(c *Config) *int { return &c.PositionEvalSec }),
 	"ARB_PROBE_ENABLED":                   boolv(func(c *Config) *bool { return &c.ProbeEnabled }),
 	"ARB_PROBE_EVAL_DAYS":                 intv(func(c *Config) *int { return &c.ProbeEvalDays }),
+	"ARB_PROBE_MAX_COST":                  f64(func(c *Config) *float64 { return &c.ProbeMaxCostUSD }),
 	"ARB_PROBE_MAX_NOTIONAL":              f64(func(c *Config) *float64 { return &c.ProbeMaxNotionalUSD }),
+	"ARB_PROBE_MAX_OPEN":                  intv(func(c *Config) *int { return &c.ProbeMaxOpen }),
 	"ARB_PROBE_RPC_ENABLED":               boolv(func(c *Config) *bool { return &c.ProbeRPCEnabled }),
 	"ARB_RETRO_ENABLED": {"bool",
 		func(c *Config, v string) error {
