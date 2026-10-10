@@ -38,7 +38,7 @@ func TestD162R_RestPriceAnchor(t *testing.T) {
 		t.Fatalf("no-anchor want PriceAt≈now, got %v", orders[0].PriceAt)
 	}
 
-	q.SetPriceAnchor(func(symbol string) (float64, float64, time.Time, bool) {
+	q.SetPriceAnchor(func(_ context.Context, symbol string) (float64, float64, time.Time, bool) {
 		return 4194.85, 4195.11, tickTs, true
 	})
 	orders, err = q.QueryOpenedOrders(context.Background())

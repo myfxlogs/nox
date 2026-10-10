@@ -142,7 +142,7 @@ func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]venue.Order, erro
 	}
 	out := adapter.MT5OrdersToOrders(q.venue, resp.GetResult())
 	if q.priceAnchor != nil {
-		adapter.ApplyTickQuote(out, q.priceAnchor) // D-162R：REST 回读锚 tick 真钟
+		adapter.ApplyTickQuote(ctx, out, q.priceAnchor) // D-162R：REST 回读锚 tick 真钟
 	}
 	return out, nil
 }
