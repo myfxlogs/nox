@@ -17,10 +17,12 @@ type TargetStore interface {
 	FeishuTarget(ctx context.Context) (chatID, openID string, err error)
 }
 
-// ReplyEvent 是飞书回复事件的提取结构（D-270）。
+// ReplyEvent 是飞书回复事件的提取结构（D-270）。ParentID D-168：引用回复父消息
+// message_id（episode push_msg_id 对位单集 ack）。
 type ReplyEvent struct {
 	EventID      string
 	MessageID    string
+	ParentID     string
 	ChatID       string
 	SenderOpenID string
 	MessageType  string
@@ -49,6 +51,7 @@ type feishuEvent struct {
 		Message struct {
 			ChatID      string `json:"chat_id"`
 			MessageID   string `json:"message_id"`   // D-270：审计
+			ParentID    string `json:"parent_id"`    // D-168：引用回复父消息 id
 			MessageType string `json:"message_type"` // D-270："text" 等
 			Content     string `json:"content"`      // D-270：JSON 编码内容
 		} `json:"message"`
@@ -98,6 +101,7 @@ func FeishuWebhookHandler(store TargetStore, verifyToken string, feishu *FeishuC
 				replyEv := ReplyEvent{
 					EventID:      ev.Header.EventID,
 					MessageID:    ev.Event.Message.MessageID,
+					ParentID:     ev.Event.Message.ParentID,
 					ChatID:       ev.Event.Message.ChatID,
 					SenderOpenID: ev.Event.Sender.SenderID.OpenID,
 					MessageType:  ev.Event.Message.MessageType,
@@ -108,7 +112,7 @@ func FeishuWebhookHandler(store TargetStore, verifyToken string, feishu *FeishuC
 					log.Printf("[feishu] reply handler: %v", err)
 				} else if replyText != "" && feishu != nil && feishu.Enabled() {
 					// 通过 SendText API 发回复（HTTP response 仍返回 {"code":0} ACK）。
-					if err := feishu.SendText(r.Context(), chatID, replyText); err != nil {
+					if _, err := feishu.SendText(r.Context(), chatID, replyText); err != nil {
 						log.Printf("[feishu] send reply: %v", err)
 					}
 				}

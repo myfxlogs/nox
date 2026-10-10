@@ -104,5 +104,17 @@ func (a *PgStoreQueryAdapter) MacroEventsBetween(ctx context.Context, from, to t
 	return a.Store.MacroEventsBetween(ctx, from, to)
 }
 
+// D-168 ④：ack 拦截面直通。
+func (a *PgStoreQueryAdapter) AckAllAlertEpisodes(ctx context.Context) (int, error) {
+	return a.Store.AckAllAlertEpisodes(ctx)
+}
+func (a *PgStoreQueryAdapter) AckAlertEpisodeByPushMsg(ctx context.Context, msgID string) (string, bool, error) {
+	return a.Store.AckAlertEpisodeByPushMsg(ctx, msgID)
+}
+func (a *PgStoreQueryAdapter) AckUnackedAlertsByKey(ctx context.Context, key string) (int, error) {
+	return a.Store.AckUnackedAlertsByKey(ctx, key)
+}
+func (a *PgStoreQueryAdapter) AckAll(ctx context.Context) error { return a.Store.AckAll(ctx) }
+
 // compile-time: *PgStoreQueryAdapter 实现 FeishuQueryStore 接口。
 var _ FeishuQueryStore = (*PgStoreQueryAdapter)(nil)

@@ -39,10 +39,10 @@ func TestFeishuClientTokenAndSend(t *testing.T) {
 		t.Fatal("enabled = false")
 	}
 	ctx := context.Background()
-	if err := c.SendText(ctx, "oc_1", "【warn】测试"); err != nil {
+	if _, err := c.SendText(ctx, "oc_1", "【warn】测试"); err != nil {
 		t.Fatalf("SendText: %v", err)
 	}
-	if err := c.SendText(ctx, "oc_1", "again"); err != nil {
+	if _, err := c.SendText(ctx, "oc_1", "again"); err != nil {
 		t.Fatalf("SendText cached: %v", err)
 	}
 	if tokenCalls != 1 {
@@ -52,7 +52,7 @@ func TestFeishuClientTokenAndSend(t *testing.T) {
 		t.Errorf("send calls = %d, want 2", sendCalls)
 	}
 	// 空 chat_id → 明确错误
-	if err := c.SendText(ctx, "", "x"); err == nil {
+	if _, err := c.SendText(ctx, "", "x"); err == nil {
 		t.Error("empty chat_id: want error")
 	}
 	// 禁用态

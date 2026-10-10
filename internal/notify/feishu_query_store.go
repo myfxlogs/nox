@@ -22,6 +22,11 @@ type FeishuQueryStore interface {
 	SumTRXTxVoteClaimAll(ctx context.Context) (float64, error)
 	// D-528 S6：宏观两工具数据面（返回 pgstore 行类型，零复制）。
 	MacroEventsBetween(ctx context.Context, from, to time.Time) ([]pgstore.MacroEvent, error)
+	// D-168 ④：ack 拦截面——episode + alerts.acked 同步。
+	AckAllAlertEpisodes(ctx context.Context) (int, error)
+	AckAlertEpisodeByPushMsg(ctx context.Context, msgID string) (key string, ok bool, err error)
+	AckUnackedAlertsByKey(ctx context.Context, key string) (int, error)
+	AckAll(ctx context.Context) error
 }
 
 // TRXAccountSummary TRX 账户快照（notify 包本地，sun→TRX 已换算）。

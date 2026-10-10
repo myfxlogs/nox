@@ -29,6 +29,13 @@ type fakeQueryStore struct {
 	cmcPos         CMCPositionSummary
 	today          [3]float64
 	macroEvents    []pgstore.MacroEvent // D-528
+	// D-168 ack 字段
+	epsAckN      int
+	epByMsg      map[string]string
+	alertAckN    int
+	ackAllCalled bool
+	ackByKeySeen string
+	alertAckAll  bool
 }
 
 func (s *fakeQueryStore) FeishuTarget(context.Context) (string, string, error) {
@@ -51,6 +58,24 @@ func (s *fakeQueryStore) SumTodayIncome(context.Context) (float64, float64, floa
 }
 func (s *fakeQueryStore) SumTRXTxRentalAll(context.Context) (float64, error)    { return 0, nil }
 func (s *fakeQueryStore) SumTRXTxVoteClaimAll(context.Context) (float64, error) { return 0, nil }
+
+// D-168 ack 拦截 fake 面。
+func (s *fakeQueryStore) AckAllAlertEpisodes(context.Context) (int, error) {
+	s.ackAllCalled = true
+	return s.epsAckN, nil
+}
+func (s *fakeQueryStore) AckAlertEpisodeByPushMsg(_ context.Context, msgID string) (string, bool, error) {
+	k, ok := s.epByMsg[msgID]
+	return k, ok, nil
+}
+func (s *fakeQueryStore) AckUnackedAlertsByKey(_ context.Context, key string) (int, error) {
+	s.ackByKeySeen = key
+	return s.alertAckN, nil
+}
+func (s *fakeQueryStore) AckAll(context.Context) error {
+	s.alertAckAll = true
+	return nil
+}
 
 type fakeAISettings struct{ enabled bool }
 
@@ -81,7 +106,7 @@ func feishuMockServer(t *testing.T) (*httptest.Server, chan string) {
 			case msgCh <- c.Text:
 			default:
 			}
-			w.Write([]byte(`{"code":0}`))
+			w.Write([]byte(`{"code":0,"data":{"message_id":"om_test_1"}}`))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)

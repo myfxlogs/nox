@@ -92,6 +92,12 @@ func (h *FeishuQueryHandler) HandleReply(ctx context.Context, ev ReplyEvent) (st
 	if text == "" {
 		return "请输入查询内容", nil
 	}
+	// D-168 ④：ack 裸词在 LLM 前拦截——「收到/知道了/ack」。
+	// 带 parent_id=引用回复 → 只 ack 该集；裸发 → ack 全部 open episode。
+	// alerts.acked 同步清铃铛；非 ack 词走原 LLM 径不动。
+	if isAckWord(text) {
+		return h.handleAck(ctx, ev)
+	}
 	if h.rateLim != nil && !h.rateLim.Allow() {
 		return "已达每小时查询上限，请稍后重试", nil
 	}
@@ -125,6 +131,41 @@ func (h *FeishuQueryHandler) HandleReply(ctx context.Context, ev ReplyEvent) (st
 		h.feishu.SendText(context.Background(), chatID, reply)
 	})
 	return "", nil
+}
+
+// isAckWord D-168：裸词 ack 判定（仅整词匹配防误拦查询句）。
+func isAckWord(text string) bool {
+	switch text {
+	case "收到", "知道了", "ack", "ACK", "Ack", "OK", "ok":
+		return true
+	}
+	return false
+}
+
+// handleAck ack 指令执行（同步返回回执，webhook 发 SendText）。
+func (h *FeishuQueryHandler) handleAck(ctx context.Context, ev ReplyEvent) (string, error) {
+	if ev.ParentID != "" {
+		key, ok, err := h.store.AckAlertEpisodeByPushMsg(ctx, ev.ParentID)
+		if err != nil {
+			return "系统错误：确认失败", fmt.Errorf("ack episode by push msg: %w", err)
+		}
+		if !ok {
+			return "未找到对应告警集（或已确认）", nil
+		}
+		n, err := h.store.AckUnackedAlertsByKey(ctx, key)
+		if err != nil {
+			return "已确认该告警集（alerts 同步失败）", fmt.Errorf("ack alerts by key: %w", err)
+		}
+		return fmt.Sprintf("已确认该告警集（同步 %d 条告警）", n), nil
+	}
+	n, err := h.store.AckAllAlertEpisodes(ctx)
+	if err != nil {
+		return "系统错误：确认失败", fmt.Errorf("ack all episodes: %w", err)
+	}
+	if err := h.store.AckAll(ctx); err != nil {
+		return "已确认 episode（alerts 同步失败）", fmt.Errorf("ack all alerts: %w", err)
+	}
+	return fmt.Sprintf("已确认 %d 条告警", n), nil
 }
 
 // resolveClient 读 ai_settings（DB 优先→env 回落）构造临时 analyst.Client。
