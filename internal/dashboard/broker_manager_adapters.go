@@ -10,6 +10,7 @@ import (
 	"arb/internal/exec"
 	"arb/internal/fact"
 	"arb/internal/keydomain"
+	"arb/internal/marketstate"
 	"arb/internal/reconcile"
 	"arb/internal/safego"
 	"arb/internal/store/pgstore"
@@ -53,6 +54,13 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	ad.AlertSink = m.AlertSink
 	// D-004 P1#6：dispatch 晚绑定（同 D-581 三 sink）——SetReconKick 晚接自生效。
 	ad.OnReconnect = m.dispatchReconKick
+	// D-170：zeroframe venue 级闭市闸（session 表判，表缺席→不拦照报）。
+	ad.ClosedCheck = func() bool {
+		cctx, ccancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer ccancel()
+		closed, known := marketstate.VenueAllClosed(cctx, m.store, a.Venue, time.Now())
+		return known && closed
+	}
 	if err := ad.Connect(ctx); err != nil {
 		return fmt.Errorf("mt5 connect: %w", err)
 	}

@@ -50,8 +50,8 @@ func (m *MTHealthMonitor) attachAges(venueSet, connectedSet, attached map[string
 // maybeAttachWarn attaching 超时的 warn 兜底告警——仅 healthy→warn 转换插一条
 // （warn 持续不重发；attached 后由正常分类接管）。周末静默窗语义同 maybeAlert
 // （转换被吞可接受：超时重见会随新一轮 attaching 评估再报）。
-func (m *MTHealthMonitor) maybeAttachWarn(ctx context.Context, display string, prev, cur mtHealthMetric) {
-	if cur != metricWarn || prev == cur || isMTWeekendQuietWindow(m.nowTime()) {
+func (m *MTHealthMonitor) maybeAttachWarn(ctx context.Context, display, bare string, prev, cur mtHealthMetric) {
+	if cur != metricWarn || prev == cur || m.quietNow(ctx, bare) {
 		return
 	}
 	msg := "MT5 数据监控：" + display + " attach 超时 " + mtHealthAttachTimeout.String() +

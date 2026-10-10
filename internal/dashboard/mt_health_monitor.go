@@ -222,15 +222,15 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 		}
 		prev := prevStates[v]
 		if _, isAttaching := attachAges[v]; isAttaching {
-			m.maybeAttachWarn(ctx, display, prev.quote, newState.quote) // D-085：仅 →warn 转换一条
+			m.maybeAttachWarn(ctx, display, v, prev.quote, newState.quote) // D-085：仅 →warn 转换一条
 			continue
 		}
-		m.maybeAlert(ctx, display, "quote", prev.quote, newState.quote, qa)
+		m.maybeAlert(ctx, display, v, "quote", prev.quote, newState.quote, qa)
 		if isMT {
-			m.maybeAlert(ctx, display, "swap", prev.swap, newState.swap, swapAges[v])
+			m.maybeAlert(ctx, display, v, "swap", prev.swap, newState.swap, swapAges[v])
 		}
 		if isMT5 {
-			m.maybeAlert(ctx, display, "margin", prev.margin, newState.margin, marginAges[v])
+			m.maybeAlert(ctx, display, v, "margin", prev.margin, newState.margin, marginAges[v])
 		}
 	}
 

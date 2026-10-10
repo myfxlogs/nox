@@ -1,8 +1,11 @@
 package dashboard
 
 import (
+	"context"
 	"testing"
 	"time"
+
+	"arb/internal/fact"
 )
 
 // D-136 修复②：isMTWeekendQuietWindow MT 周末休市静默窗（Fri 20:55 UTC → Sun 22:10 UTC）。
@@ -37,5 +40,32 @@ func TestIsMTWeekendQuietWindow(t *testing.T) {
 				t.Fatalf("isMTWeekendQuietWindow(%s)=%v, want %v", c.t.Format("Mon 15:04 MST"), got, c.want)
 			}
 		})
+	}
+}
+
+// D-170：quietNow 三层——①表缺席回退粗窗（周六=quiet）；②session 闭市判=quiet；
+// ③session 判开市=不 quiet（粗窗静默语义被 session 真值覆盖，周六开市品种不误杀）。
+func TestD170_QuietNowSessionGate(t *testing.T) {
+	sat := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC) // Saturday
+	store := newFakeHealthStore()
+	mon := &MTHealthMonitor{store: store, now: func() time.Time { return sat }}
+	ctx := context.Background()
+	// ① 表缺席 → 回退粗窗：周六=quiet。
+	if !mon.quietNow(ctx, "vA") {
+		t.Fatal("表缺席+周六应 quiet（粗窗兜底）")
+	}
+	// ② session 判闭（全周日窗）→ quiet。
+	store.facts[fact.KindTradeSession] = []fact.Fact{
+		{Venue: "vA", Symbol: "XAU", Value: 0}, // wday=0(Sun) 全天窗
+	}
+	if !mon.quietNow(ctx, "vA") {
+		t.Fatal("session 全周日窗应 quiet")
+	}
+	// ③ session 判开市（周六全天窗）→ 不 quiet。
+	store.facts[fact.KindTradeSession] = []fact.Fact{
+		{Venue: "vA", Symbol: "XAU", Value: float64(6 * 1e8)}, // wday=6(Sat) 全天窗
+	}
+	if mon.quietNow(ctx, "vA") {
+		t.Fatal("session 周六开市不应 quiet（粗窗不再拦）")
 	}
 }

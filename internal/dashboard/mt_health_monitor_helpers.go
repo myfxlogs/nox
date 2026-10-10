@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"arb/internal/keydomain"
+	"arb/internal/marketstate"
 )
 
 // classifyAge 按阈值分类三态。age<=0（无数据）→ crit（从未采集=异常）。
@@ -55,6 +56,19 @@ func isMTWeekendQuietWindow(t time.Time) bool {
 	default:
 		return false
 	}
+}
+
+// quietNow D-170：休市静默判改 session 表（venue 任一订阅符号开市窗=非静默，
+// 品种级 session/券商假日天然覆盖；替代 Fri20:55→Sun22:10 粗窗）。
+// 表缺席（该 venue 无 trade_session 行）→ 回退粗窗兜底保旧行为（fail-closed：无证据不误赦）。
+// bare=裸 venue 键（display 别名不可查表）。
+func (m *MTHealthMonitor) quietNow(ctx context.Context, bare string) bool {
+	if m.store != nil {
+		if closed, known := marketstate.VenueAllClosed(ctx, m.store, bare, m.nowTime()); known {
+			return closed
+		}
+	}
+	return isMTWeekendQuietWindow(m.nowTime())
 }
 
 // nowTime 返回当前时钟（可注入，nil→time.Now，D-136 修复②）。

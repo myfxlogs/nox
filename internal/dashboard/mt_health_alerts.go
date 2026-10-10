@@ -12,9 +12,10 @@ import (
 const critRealertInterval = 30 * time.Minute
 
 // maybeAlert 状态转换时插告警（healthy→warn/crit；stale→healthy 插 info recovered）；持续同态不重复插（防洪水），crit >30min 重发一条（R-c3）；D-136：周末休市静默窗内告警静默，状态机照常运转。
-func (m *MTHealthMonitor) maybeAlert(ctx context.Context, venue, metric string, prev, cur mtHealthMetric, age time.Duration) {
-	if isMTWeekendQuietWindow(m.nowTime()) {
-		return // 周末休市静默窗
+// bare D-170：quietNow 查 session 表用裸 venue 键（venue/display 参为别名展示串）。
+func (m *MTHealthMonitor) maybeAlert(ctx context.Context, venue, bare, metric string, prev, cur mtHealthMetric, age time.Duration) {
+	if m.quietNow(ctx, bare) {
+		return // 休市静默（D-170：session 表判，表缺席回退粗窗）
 	}
 	if prev == cur {
 		// R-c3：持续 crit 超过去重窗口 → 重发一条（warn/healthy 维持纯转换语义不变）。

@@ -20,9 +20,9 @@ func TestD573_A1_MTHealthCN(t *testing.T) {
 	mon.now = func() time.Time { return wedUTC } // 非周末防静默窗
 	ctx := context.Background()
 
-	mon.maybeAlert(ctx, "okx", "quote", metricHealthy, metricWarn, 5*time.Minute)
-	mon.maybeAlert(ctx, "okx", "quote", metricWarn, metricCrit, 30*time.Minute)
-	mon.maybeAlert(ctx, "okx", "quote", metricCrit, metricHealthy, 30*time.Minute)
+	mon.maybeAlert(ctx, "okx", "okx", "quote", metricHealthy, metricWarn, 5*time.Minute)
+	mon.maybeAlert(ctx, "okx", "okx", "quote", metricWarn, metricCrit, 30*time.Minute)
+	mon.maybeAlert(ctx, "okx", "okx", "quote", metricCrit, metricHealthy, 30*time.Minute)
 
 	a := store.snapshot()
 	if len(a) != 3 {
