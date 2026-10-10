@@ -76,6 +76,12 @@ type Config struct {
 	// ProbeRPCEnabled D-047 R1②：OpenProbe RPC 总开关（ARB_PROBE_RPC_ENABLED，缺省 false）。
 	// false → RPC 第一守卫即拒（探针通道默认关，决策席显式开启才可用）。
 	ProbeRPCEnabled bool
+	// ProbeMaxCostUSD D-163：机审 expected_cost 上限（ARB_PROBE_MAX_COST，缺省 100 USD）。
+	// 提案声明成本超此 → 机审硬伤拒。
+	ProbeMaxCostUSD float64
+	// ProbeMaxOpen D-163：机审放行前在途 OPEN PROBE 上限（ARB_PROBE_MAX_OPEN，缺省 2，
+	// 与 OpenProbe 守卫⑥ probeMaxInFlight 同值口径）。
+	ProbeMaxOpen int
 	// PerpFundMinHold PERP_FUNDING 持有下限（ARB_PERPFUNDING_MIN_HOLD，缺省 8h）——D-133 T1。
 	// 退出判定 floor：now − opened_at < MinHold → 不平仓（至少活过一个结算窗，收益源先参与）。
 	// 0 = 不限（近似旧行为但仍有 debounce）。
