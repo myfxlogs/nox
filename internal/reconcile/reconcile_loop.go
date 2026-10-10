@@ -144,6 +144,10 @@ func (r *Reconciler) nextBoundary(ctx context.Context) (time.Time, bool) {
 			mark(p.ClosingStartedAt.Add(closingTierWarnAfter))
 		}
 	}
+	// D-175：LEGGED 裸露延迟判定到期点（逾期需宣判 critical，不能等 kick 兜底）。
+	if t, ok := r.leggedDeferralBoundary(ctx); ok {
+		mark(t)
+	}
 	if next.IsZero() {
 		return time.Time{}, false
 	}

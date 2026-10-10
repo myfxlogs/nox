@@ -72,10 +72,10 @@ func (p *Pipeline) finalizeOpenPostLegs(ctx context.Context, posID int64, legs [
 				}
 			}
 		} else {
-			// critical 告警
-			if err := p.store.InsertAlert(ctx, nil, "critical",
-				fmt.Sprintf("持仓 #%d 单腿成交裸露：%d/%d 腿已成交", posID, filled, len(legs))); err != nil {
-				log.Printf("[exec] pos %d alert write: %v", posID, err)
+			// D-175：含 MT 腿混合组合走独立平仓链（实测秒级自愈）——不即时 critical，
+			// 登记延迟判定由 reconcile.Run 惰性复查：CLOSED→info、逾期仍裸→critical。
+			if err := p.store.DeferLeggedAlert(ctx, posID, filled, len(legs)); err != nil {
+				log.Printf("[exec] pos %d legged defer write: %v", posID, err)
 			}
 		}
 	}
