@@ -23,6 +23,7 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/keydomain"
+	"arb/internal/marketstate"
 	"arb/internal/store/pgstore"
 )
 
@@ -82,8 +83,20 @@ func LegActionable(ctx context.Context, st legActionableStore, prober TradeModeP
 		return false, fmt.Sprintf("%s@%s tick query: %v", tickSymbol, tickVenue, err)
 	}
 	if !changed {
-		return false, fmt.Sprintf("%s@%s 窗口 %s 内 bid 无变化(n=%d)：休市/断流/冻结报价",
-			tickSymbol, tickVenue, window, n)
+		why := "休市/断流/冻结报价"
+		// D-170：MT 腿过 marketstate 归因裁决（fail-closed 行为零动，只换归因文案——
+		// 复盘语料可区分 休市/venue死/券商禁交易/券商冻结/独苗独死）。st 非全 Deps
+		// 实现（测试替身）→ 保泛化文案。
+		if !bus.IsCexVenueKey(venueKey) {
+			if d, ok := st.(marketstate.Deps); ok {
+				r := marketstate.ClassifyLegSilence(ctx, d, tickVenue, tickSymbol, time.Now())
+				if r.Verdict != marketstate.Unknown && r.Verdict != marketstate.NotApplicable {
+					why = string(r.Verdict) + "：" + r.Detail
+				}
+			}
+		}
+		return false, fmt.Sprintf("%s@%s 窗口 %s 内 bid 无变化(n=%d)：%s",
+			tickSymbol, tickVenue, window, n, why)
 	}
 	return true, ""
 }

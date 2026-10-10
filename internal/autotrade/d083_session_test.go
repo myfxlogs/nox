@@ -46,7 +46,7 @@ func TestD083_SessionTableGhostWindowsDropped(t *testing.T) {
 	}
 	// 计数行本身不入窗（若入窗会解码成 wday=0 start=0 end=8 伪窗，长度断言已兜；再钉值域）。
 	for _, w := range tbl["3001157|XPTUSD"] {
-		if w.wday != 1 || w.startMin != 480 || w.endMin != 600 {
+		if w.Wday != 1 || w.StartMin != 480 || w.EndMin != 600 {
 			t.Fatalf("窗解码异常（疑似 #n 行混入）: %+v", w)
 		}
 	}
@@ -55,34 +55,34 @@ func TestD083_SessionTableGhostWindowsDropped(t *testing.T) {
 // TestD083_InSessionFullDayWindow (c)：start=end=0 全天窗——当天任意分钟在市；
 // 普通窗/跨午夜窗回归不变。
 func TestD083_InSessionFullDayWindow(t *testing.T) {
-	full := sessionWindow{wday: 1, startMin: 0, endMin: 0} // 周一 00:00-24:00（247m 形态）
+	full := sessionWindow{Wday: 1, StartMin: 0, EndMin: 0} // 周一 00:00-24:00（247m 形态）
 	mon := time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)    // 周一
-	if !full.inSession(mon.Add(13*time.Hour + 37*time.Minute)) {
+	if !full.InSession(mon.Add(13*time.Hour + 37*time.Minute)) {
 		t.Fatal("全天窗周一 13:37 应在市")
 	}
-	if !full.inSession(mon.Add(23*time.Hour + 59*time.Minute)) {
+	if !full.InSession(mon.Add(23*time.Hour + 59*time.Minute)) {
 		t.Fatal("全天窗周一 23:59 应在市")
 	}
-	if full.inSession(mon.AddDate(0, 0, 1)) {
+	if full.InSession(mon.AddDate(0, 0, 1)) {
 		t.Fatal("全天窗周二 00:00 不应在市")
 	}
 	// 普通窗回归：周五 08:00-20:00。
-	n := sessionWindow{wday: 5, startMin: 480, endMin: 1200}
-	if !n.inSession(time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)) {
+	n := sessionWindow{Wday: 5, StartMin: 480, EndMin: 1200}
+	if !n.InSession(time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)) {
 		t.Fatal("普通窗周五 12:00 应在市")
 	}
-	if n.inSession(time.Date(2026, 10, 2, 21, 0, 0, 0, time.UTC)) {
+	if n.InSession(time.Date(2026, 10, 2, 21, 0, 0, 0, time.UTC)) {
 		t.Fatal("普通窗周五 21:00 不应在市")
 	}
 	// 跨午夜窗回归：周日 07:00→周一 05:00。
-	wrap := sessionWindow{wday: 0, startMin: 420, endMin: 300}
-	if !wrap.inSession(time.Date(2026, 10, 4, 8, 0, 0, 0, time.UTC)) {
+	wrap := sessionWindow{Wday: 0, StartMin: 420, EndMin: 300}
+	if !wrap.InSession(time.Date(2026, 10, 4, 8, 0, 0, 0, time.UTC)) {
 		t.Fatal("跨午夜窗周日 08:00（尾段）应在市")
 	}
-	if !wrap.inSession(time.Date(2026, 10, 5, 4, 0, 0, 0, time.UTC)) {
+	if !wrap.InSession(time.Date(2026, 10, 5, 4, 0, 0, 0, time.UTC)) {
 		t.Fatal("跨午夜窗周一 04:00（次日头段）应在市")
 	}
-	if wrap.inSession(time.Date(2026, 10, 5, 6, 0, 0, 0, time.UTC)) {
+	if wrap.InSession(time.Date(2026, 10, 5, 6, 0, 0, 0, time.UTC)) {
 		t.Fatal("跨午夜窗周一 06:00（超 end）不应在市")
 	}
 }
