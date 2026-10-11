@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"arb/internal/bus"
+	"arb/internal/dephealth"
 	"arb/internal/store/pgstore"
 )
 
@@ -35,10 +37,17 @@ func (e *Executor) spotPrice(ctx context.Context, symbol string) (float64, error
 	return strconv.ParseFloat(r.Price, 64)
 }
 
-// freeBalance 实时余额读（/v3/account 签名端点；free+locked；测试注 BalanceFn）。
+// freeBalance 实时余额读（D-192：私有流资产级活缓存主源，闸=dephealth 流连接
+// 存活标非事件新旧；死流/无值→REST /v3/account 兜底；边界=现货域，earn 仍 R6 读；
+// free+locked；测试注 BalanceFn/StreamFn）。
 func (e *Executor) freeBalance(ctx context.Context, asset string) (float64, error) {
 	if e.BalanceFn != nil {
 		return e.BalanceFn(ctx, asset)
+	}
+	if e.streamAlive() {
+		if v, ok := e.streamBal(asset); ok {
+			return v, nil
+		}
 	}
 	q := fmt.Sprintf("timestamp=%d&recvWindow=5000", e.Now().UnixMilli())
 	url := fmt.Sprintf("%s/v3/account?%s&signature=%s",
@@ -204,4 +213,21 @@ func (e *Executor) redeemFlexible(ctx context.Context, productID string, amount 
 		return fmt.Errorf("redeem HTTP %d: %s", resp.StatusCode, string(b))
 	}
 	return nil
+}
+
+// streamAlive 流连接存活闸（binance spot 用户流 dephealth 键；测试注 StreamFn 绕开）。
+func (e *Executor) streamAlive() bool {
+	if e.StreamFn != nil {
+		return e.StreamFn()
+	}
+	return !dephealth.Degraded("binance:ws-spot-user")
+}
+
+// streamBal 流缓存读（bus.SpotAssets；资产无值→false→REST 兜底）。
+func (e *Executor) streamBal(asset string) (float64, bool) {
+	b, ok := bus.SpotAssets.Get("binance:spot", asset)
+	if !ok {
+		return 0, false
+	}
+	return b.Free + b.Locked, true
 }
