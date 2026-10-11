@@ -132,14 +132,11 @@ func (s *Service) probeGateVerdict(ctx context.Context, p *pgstore.ProbeProposal
 			return fmt.Sprintf("在途探针 %d ≥ 上限 %d", active, maxOpen), "", ""
 		}
 	}
-	// ③ premise 回放：basis 分端，逐端判。任一硬伤 → 拒；任一歧义（无硬伤）→ 留决。
+	// ③ premise 回放：结构化 premises 逐条判（D-176——散文 basis 不再解析，
+	// 「段」字段落标签被当 canonical 吞吃的假歧义同源修）。任一硬伤 → 拒；任一歧义 → 留决。
 	var rejects, ambis, notes []string
-	for _, seg := range strings.FieldsFunc(c.Basis, func(r rune) bool { return r == '；' || r == ';' }) {
-		seg = strings.TrimSpace(seg)
-		if seg == "" {
-			continue
-		}
-		r, a, n := s.probePremiseSeg(ctx, p, seg)
+	for _, prem := range c.Premises {
+		r, a, n := s.probePremiseSeg(ctx, p, prem)
 		switch {
 		case r != "":
 			rejects = append(rejects, r)
