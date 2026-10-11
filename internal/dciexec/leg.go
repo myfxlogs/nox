@@ -3,6 +3,8 @@ package dciexec
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,8 +76,9 @@ func StrikeBound(spot, ratio float64) float64 { return spot * ratio }
 // SubscribeBody 申购参数构造（D-191-R10①：venue 要 id|orderId|depositAmount|
 // autoCompoundPlan——原 projectId/lots 参数名错代 HTTP 400 -1102；签名=HMAC(query) 同径）。
 func (e *Executor) SubscribeBody(productRef, orderRef string, lots float64, at time.Time) (query, url string) {
-	q := fmt.Sprintf("id=%s&orderId=%s&depositAmount=%.8f&autoCompoundPlan=NONE&timestamp=%d&recvWindow=5000",
-		productRef, orderRef, lots, at.UnixMilli())
+	// depositAmount 按 purchase_decimal floor 后值原样发（-1=去尾零，dec0→"541"）。
+	q := fmt.Sprintf("id=%s&orderId=%s&depositAmount=%s&autoCompoundPlan=NONE&timestamp=%d&recvWindow=5000",
+		productRef, orderRef, strconv.FormatFloat(lots, 'f', -1, 64), at.UnixMilli())
 	return q, fmt.Sprintf("%s/v1/dci/product/subscribe?%s&signature=%s",
 		strings.TrimRight(e.Sapi, "/"), q, sign(e.BnSec, q))
 }
@@ -128,4 +131,18 @@ func venueErrKind(err error) string {
 		}
 	}
 	return "runtime"
+}
+
+// floorTo depositAmount 向 purchase_decimal 截位（R11：floor 不 round——多交禁、
+// 界外如实败不补不截）。
+func floorTo(v float64, dec int) float64 {
+	m := math.Pow10(dec)
+	return math.Floor(v*m) / m
+}
+
+func amtTxt(v *float64) string {
+	if v == nil {
+		return "n/a"
+	}
+	return strconv.FormatFloat(*v, 'f', -1, 64)
 }

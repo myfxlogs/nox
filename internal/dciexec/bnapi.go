@@ -139,6 +139,9 @@ func (e *Executor) gap(ctx context.Context, l leg, kind, subject, format string,
 	if err := e.Store.RequestConditionGap(ctx, id); err != nil {
 		return err
 	}
+	if kind == "runtime" {
+		return fmt.Errorf("%s", text) // D-196③：runtime 文案自带「系统侧病灶」前缀无双套
+	}
 	return fmt.Errorf("条件缺口：%s", text)
 }
 

@@ -30,6 +30,7 @@ type Store interface {
 	ListCapabilityConstraints(ctx context.Context) ([]pgstore.CapabilityConstraint, error)
 	ListDCIQuotes(ctx context.Context, venue, underlying, optType, investCcy string, maxTenorDays int, strikeBound float64) ([]pgstore.CexDCIQuote, error)
 	CreateDCIOrder(ctx context.Context, o *pgstore.DCIOrder) (int64, bool, error)
+	RecentDCIOrderByProposal(ctx context.Context, proposalID int64, window time.Duration) (int64, error)
 	FinishDCIOrder(ctx context.Context, id int64, status, response string) error
 	InsertPersonalPosition(ctx context.Context, asset, kind, priceSymbol, note string, qty *float64, openedAt *time.Time) (int64, error)
 	OutstandingDCIQty(ctx context.Context, venue, investCcy string) (float64, error)
@@ -112,6 +113,12 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	legs, ok := execTemplates[p.TemplateID]
 	if !ok {
 		return "", fmt.Errorf("提案#%d 模板 %s 未接执行轨（提案可批执行面未接线）", id, p.TemplateID)
+	}
+	// R11② 执行租约：同 proposal_id 120s 内有单即拒（双击/重发防双成交）。
+	if oid, err := e.Store.RecentDCIOrderByProposal(ctx, id, 120*time.Second); err != nil {
+		return "", err
+	} else if oid > 0 {
+		return "", fmt.Errorf("提案#%d 刚执行过（订单#%d）拒单", id, oid)
 	}
 	if e.BnKey == "" {
 		return "", e.gap(ctx, callLeg, "credential", "binance:spot",
@@ -336,6 +343,9 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 		if qs[i].OrderRef == "" {
 			continue // R10③：order_ref 缺行跳次档（申购 orderId 参源）
 		}
+		if qs[i].PurchaseDecimal == nil {
+			continue // R11：decimal 缺行跳次档（floor 位未知=不可发参）
+		}
 		q = &qs[i]
 		break
 	}
@@ -347,19 +357,28 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 		return "", e.gap(ctx, l, "runtime", "dual_quote",
 			"%s腿无达标档在售（spot %.0f，strike 界 %s）", l.name, spot, l.boundText(bound))
 	}
+	// R11：depositAmount floor 至 purchase_decimal；界外 fail-closed 如实败
+	// （不补不截——补到 min=多交、截到 max=少投，皆改提案语义）。
+	deposit := floorTo(qty, *q.PurchaseDecimal)
+	if (q.MinAmount != nil && deposit < *q.MinAmount) ||
+		(q.MaxAmount != nil && deposit > *q.MaxAmount) {
+		return "", e.gap(ctx, l, "runtime", "dual_quote",
+			"系统侧病灶：%s腿 depositAmount %v 界外（qty %.8f floor 至 dec%d；档 min %v max %v——不补不截如实败）",
+			l.name, deposit, qty, *q.PurchaseDecimal, amtTxt(q.MinAmount), amtTxt(q.MaxAmount))
+	}
 	now := e.Now()
-	reqID := fmt.Sprintf("dci|%s|%s|%s|%.8f", l.name, q.ProductRef, delivDay(q), qty)
+	reqID := fmt.Sprintf("dci|%s|%s|%s|%.8f", l.name, q.ProductRef, delivDay(q), deposit)
 	oid, created, err := e.Store.CreateDCIOrder(ctx, &pgstore.DCIOrder{
 		RequestID: reqID, Venue: "binance", TemplateID: l.tmpl,
 		ProductRef: q.ProductRef, Underlying: "BTC", OptType: l.optType, Strike: q.Strike,
-		InvestCcy: q.InvestCcy, Qty: qty, TenorDays: q.TenorDays, ProposalID: propID})
+		InvestCcy: q.InvestCcy, Qty: deposit, TenorDays: q.TenorDays, ProposalID: propID})
 	if err != nil {
 		return "", err
 	}
 	if !created {
 		return fmt.Sprintf("%s腿已受理（request_id 防重）", l.name), nil
 	}
-	body, err := e.post(ctx, q.ProductRef, q.OrderRef, qty, now)
+	body, err := e.post(ctx, q.ProductRef, q.OrderRef, deposit, now)
 	if err != nil {
 		e.finish(ctx, oid, "failed", err.Error())
 		if venueErrKind(err) == "permission" {

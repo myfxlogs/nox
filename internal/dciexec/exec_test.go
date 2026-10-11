@@ -38,6 +38,7 @@ type fakeStore struct {
 }
 
 func f64(v float64) *float64 { return &v }
+func idec(v int) *int        { return &v }
 
 func newFake() *fakeStore {
 	share := 0.34
@@ -53,10 +54,12 @@ func newFake() *fakeStore {
 		quotes: []pgstore.CexDCIQuote{
 			{Venue: "binance", Underlying: "BTC", InvestCcy: "BTC",
 				Strike: f64(120000), OptType: "CALL", TenorDays: &tenor, APY: 0.08,
-				ProductRef: "CALLP", OrderRef: "OC1", DeliveryTs: &deliv},
+				ProductRef: "CALLP", OrderRef: "OC1", DeliveryTs: &deliv,
+				PurchaseDecimal: idec(4), MinAmount: f64(0.0001), MaxAmount: f64(100)},
 			{Venue: "binance", Underlying: "BTC", InvestCcy: "USDT",
 				Strike: f64(80000), OptType: "PUT", TenorDays: &tenor, APY: 0.09,
-				ProductRef: "PUTP", OrderRef: "OP1", DeliveryTs: &deliv},
+				ProductRef: "PUTP", OrderRef: "OP1", DeliveryTs: &deliv,
+				PurchaseDecimal: idec(0), MinAmount: f64(1), MaxAmount: f64(1e6)},
 		},
 		orders:    map[string]*pgstore.DCIOrder{},
 		proposals: map[int64]*pgstore.Proposal{},
@@ -165,6 +168,17 @@ func (f *fakeStore) OpenConditionGap(_ context.Context, g *pgstore.ConditionGap)
 	return int64(len(f.gaps)), nil
 }
 func (f *fakeStore) RequestConditionGap(context.Context, int64) error { return nil }
+
+// RecentDCIOrderByProposal R11 租约：同 proposal 最新单 id（fake 窗不评=恒内）。
+func (f *fakeStore) RecentDCIOrderByProposal(_ context.Context, propID int64, _ time.Duration) (int64, error) {
+	var best int64
+	for _, o := range f.orders {
+		if o.ProposalID != nil && *o.ProposalID == propID && o.ID > best {
+			best = o.ID
+		}
+	}
+	return best, nil
+}
 func (f *fakeStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
 	f.alerts = append(f.alerts, level+": "+msg)
 	return nil
@@ -620,7 +634,7 @@ func TestD191R8_DeepPutSelectable(t *testing.T) {
 	fs.quotes = append(fs.quotes, pgstore.CexDCIQuote{
 		Venue: "binance", Underlying: "BTC", InvestCcy: "USDT",
 		Strike: f64(105000), OptType: "PUT", TenorDays: &tenor, APY: 0.50,
-		ProductRef: "NEARP", OrderRef: "ON1"})
+		ProductRef: "NEARP", OrderRef: "ON1", PurchaseDecimal: idec(4)})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
@@ -680,7 +694,7 @@ func TestD191R10_OrderRefSkip(t *testing.T) {
 	fs.quotes = append(fs.quotes, pgstore.CexDCIQuote{
 		Venue: "binance", Underlying: "BTC", InvestCcy: "USDT",
 		Strike: f64(70000), OptType: "PUT", TenorDays: &tenor, APY: 0.05,
-		ProductRef: "PUTP2", OrderRef: "OP2"}) // 次档有 orderRef→跳此成交
+		ProductRef: "PUTP2", OrderRef: "OP2", PurchaseDecimal: idec(0)}) // 次档有 orderRef→跳此成交
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
@@ -779,5 +793,64 @@ func TestD196R1_SpotErrClass(t *testing.T) {
 		if found != want.kind {
 			t.Fatalf("%s: dual_quote kind=%q want %q gaps=%+v", want.name, found, want.kind, fs.gaps)
 		}
+	}
+}
+
+// TestD191R11_AmountBoundLease：①floor dec 格式对拍；②界外 runtime 如实败；
+// ③120s 租约二发零 venue 调用；④runtime err 无双前缀。
+func TestD191R11_AmountBoundLease(t *testing.T) {
+	e := &Executor{BnKey: "k", BnSec: "s", Sapi: "https://x.test", Now: time.Now}
+	at := time.UnixMilli(1700000000000)
+	q, _ := e.SubscribeBody("P1", "O1", 541.0, at)
+	if !strings.Contains(q, "depositAmount=541&") { // dec0 floor→"541" 非 "541.00000000"
+		t.Fatalf("depositAmount 格式错: %s", q)
+	}
+	if floorTo(0.0748, 4) != 0.0748 || floorTo(0.07489, 4) != 0.0748 {
+		t.Fatal("floorTo 错")
+	}
+	// 界外：PUT 档 max=10 < deposit 3400 → runtime 界外缺口+零 POST。
+	fs := newFake()
+	*fs.quotes[1].MaxAmount = 10
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		fmt.Fprint(w, `{"orderId":1}`)
+	}))
+	defer srv.Close()
+	ex := execR3(fs, srv.URL, srv.Client(), map[string]float64{"USDT": 10000})
+	_, err := ex.GoProposal(context.Background(), fs.addProposal("dci_buy_low"))
+	if err == nil || !strings.Contains(err.Error(), "界外") {
+		t.Fatalf("界外应 runtime 如实败: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("界外档禁发单, calls=%d", calls)
+	}
+	if strings.Count(err.Error(), "系统侧病灶") != 1 {
+		t.Fatalf("runtime 文案双前缀: %v", err)
+	}
+	// 租约：首发成交→120s 内二发零 venue 调用拒「刚执行过（订单#M）」。
+	fs2 := newFake()
+	calls2 := 0
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls2++
+		fmt.Fprint(w, `{"orderId":9}`)
+	}))
+	defer srv2.Close()
+	ex2 := execR3(fs2, srv2.URL, srv2.Client(), map[string]float64{"USDT": 10000})
+	pid := fs2.addProposal("dci_buy_low")
+	if _, err := ex2.GoProposal(context.Background(), pid); err != nil {
+		t.Fatal(err)
+	}
+	if calls2 != 1 {
+		t.Fatalf("首发应成交, calls=%d", calls2)
+	}
+	// 提案回 proposed 模拟重复口令（executed 态机另挡——租约防的是状态缝双击）。
+	fs2.proposals[pid].Status = "proposed"
+	_, err = ex2.GoProposal(context.Background(), pid)
+	if err == nil || !strings.Contains(err.Error(), "刚执行过（订单#1）") {
+		t.Fatalf("租约应拒单: %v", err)
+	}
+	if calls2 != 1 {
+		t.Fatalf("窗内二发应零 venue 调用, calls=%d", calls2)
 	}
 }
