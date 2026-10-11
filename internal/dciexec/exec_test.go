@@ -47,6 +47,8 @@ func newFake() *fakeStore {
 		cons: []pgstore.CapabilityConstraint{
 			{Subject: "custody_share", Qualifier: "max", ValueNum: &share},
 			{Subject: "custody_redeemable", Qualifier: "always", ValueNum: f64(90)},
+			{Subject: "dci_call_otm_bound", Qualifier: "min", ValueNum: f64(1.10)},
+			{Subject: "dci_put_otm_bound", Qualifier: "max", ValueNum: f64(1.00)}, // R9 PUT 1.00 贴现货
 		},
 		quotes: []pgstore.CexDCIQuote{
 			{Venue: "binance", Underlying: "BTC", InvestCcy: "BTC",
@@ -231,7 +233,9 @@ func TestD191R3_TenorCapFromConstraint(t *testing.T) {
 	}
 	for _, c := range cases {
 		fs := newFake()
-		fs.cons = c.cons
+		fs.cons = append(c.cons,
+			pgstore.CapabilityConstraint{Subject: "dci_call_otm_bound", ValueNum: f64(1.10)},
+			pgstore.CapabilityConstraint{Subject: "dci_put_otm_bound", ValueNum: f64(1.00)})
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, `{"orderId":1}`)
 		}))
@@ -276,10 +280,10 @@ func TestD191R3_StrikeGate(t *testing.T) {
 			t.Fatalf("buy_low 提案不应评估 CALL 档: %+v", g)
 		}
 	}
-	// 反转：PUT strike 高于 93000 界→两腿皆无档。
+	// 反转：PUT strike 高于 100000 界（R9=1.00 贴现货）→两腿皆无档。
 	fs2 := newFake()
 	fs2.quotes[0].Strike = f64(105000)
-	fs2.quotes[1].Strike = f64(95000)
+	fs2.quotes[1].Strike = f64(101000)
 	e2 := execR3(fs2, srv.URL, srv.Client(), map[string]float64{"BTC": 0.06, "USDT": 5000})
 	if _, err := e2.GoWheel(context.Background()); err != nil { // 双腿无档全 gap 面用 wheel 径
 		t.Fatal(err)
@@ -609,10 +613,10 @@ func TestD192_StreamBalanceGate(t *testing.T) {
 func TestD191R8_DeepPutSelectable(t *testing.T) {
 	fs := newFake()
 	tenor := 7
-	// 追加高 apy 近平值 PUT（strike 95000>93000 界——序错时 apy 先截后滤恒空病灶面）。
+	// 追加高 apy 近平值 PUT（strike 105000>100000 界——R9 PUT 界=1.00 贴现货）。
 	fs.quotes = append(fs.quotes, pgstore.CexDCIQuote{
 		Venue: "binance", Underlying: "BTC", InvestCcy: "USDT",
-		Strike: f64(95000), OptType: "PUT", TenorDays: &tenor, APY: 0.50,
+		Strike: f64(105000), OptType: "PUT", TenorDays: &tenor, APY: 0.50,
 		ProductRef: "NEARP"})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"orderId":1}`)
@@ -629,5 +633,38 @@ func TestD191R8_DeepPutSelectable(t *testing.T) {
 	}
 	if o == nil || o.ProductRef != "PUTP" {
 		t.Fatalf("深档应选得中: %+v", o)
+	}
+}
+
+// TestD191R9_BoundFromConstraint：OTM 界读约束表——界行缺→constraint 缺口拒单
+// （同 custody_share 例，不回退字面量兜底）。
+func TestD191R9_BoundFromConstraint(t *testing.T) {
+	fs := newFake()
+	// 摘 PUT 界行→PUT 腿缺口拒、CALL 腿正常（CALL 界仍在）。
+	var cons []pgstore.CapabilityConstraint
+	for _, c := range fs.cons {
+		if c.Subject != "dci_put_otm_bound" {
+			cons = append(cons, c)
+		}
+	}
+	fs.cons = cons
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"orderId":1}`)
+	}))
+	defer srv.Close()
+	e := execR3(fs, srv.URL, srv.Client(), map[string]float64{"USDT": 10000})
+	pid := fs.addProposal("dci_buy_low")
+	_, err := e.GoProposal(context.Background(), pid)
+	if err == nil {
+		t.Fatal("缺界应拒单")
+	}
+	found := false
+	for _, g := range fs.gaps {
+		if g.Subject == "dci_put_otm_bound" && g.Kind == "constraint" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("缺界未落 constraint 缺口: %+v", fs.gaps)
 	}
 }

@@ -133,8 +133,16 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	}
 	var msgs []string
 	var succeeded bool
+	cb, pb := OTMBoundRatios(cons)
 	for _, l := range legs {
-		msg, err := e.tryLeg(ctx, l, *share, tenorCap, spot, &p.ID)
+		ratio := l.ratioOf(cb, pb)
+		if ratio == nil { // R9：界值行缺=constraint 缺口拒单（同 custody_share 例）
+			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.name,
+				e.gap(ctx, l, "constraint", l.boundSubject(),
+					"请喂约束 %s（%s腿 OTM 闸界比率）", l.boundSubject(), l.name)))
+			continue
+		}
+		msg, err := e.tryLeg(ctx, l, *share, tenorCap, spot*(*ratio), spot, &p.ID)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.name, err))
 			continue
@@ -189,8 +197,16 @@ func (e *Executor) GoWheel(ctx context.Context) (string, error) {
 			"binance BTC 现货价读取失败：%v", err)
 	}
 	var msgs []string
+	cb, pb := OTMBoundRatios(cons)
 	for _, l := range []leg{callLeg, putLeg} {
-		msg, err := e.tryLeg(ctx, l, *share, tenorCap, spot, nil)
+		ratio := l.ratioOf(cb, pb)
+		if ratio == nil {
+			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.name,
+				e.gap(ctx, l, "constraint", l.boundSubject(),
+					"请喂约束 %s（%s腿 OTM 闸界比率）", l.boundSubject(), l.name)))
+			continue
+		}
+		msg, err := e.tryLeg(ctx, l, *share, tenorCap, spot*(*ratio), spot, nil)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.name, err))
 			continue
@@ -257,7 +273,7 @@ func (e *Executor) redeemShortfall(ctx context.Context, asset string, need float
 
 // tryLeg 单腿：池余额×share→qty、spot 不足→活期赎回缺口→重读、候选档 strike 闸
 // →最优、幂等→签名 POST→回执（R6 前置 redeem 步）。
-func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap int, spot float64, propID *int64) (string, error) {
+func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap int, bound, spot float64, propID *int64) (string, error) {
 	bal, err := e.poolBalance(ctx, l.qtyCcy)
 	if err != nil {
 		return "", e.gap(ctx, l, "permission", "earn_position",
@@ -288,20 +304,20 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 				"%s 现货可动不足（池算 qty %.6f、赎回后现货 %.6f）", l.qtyCcy, qty, spotFree)
 		}
 	}
-	qs, err := e.Store.ListDCIQuotes(ctx, "binance", "BTC", l.optType, l.investCcy, tenorCap, StrikeBound(l.optType, spot))
+	qs, err := e.Store.ListDCIQuotes(ctx, "binance", "BTC", l.optType, l.investCcy, tenorCap, bound)
 	if err != nil {
 		return "", err
 	}
 	var q *pgstore.CexDCIQuote
 	for i := range qs {
-		if l.strikePass(&qs[i], spot) {
+		if l.strikePass(&qs[i], bound) {
 			q = &qs[i]
 			break
 		}
 	}
 	if q == nil {
 		return "", e.gap(ctx, l, "permission", "dual_quote",
-			"%s腿无达标档在售（spot %.0f，strike 界 %s）", l.name, spot, l.boundText(spot))
+			"%s腿无达标档在售（spot %.0f，strike 界 %s）", l.name, spot, l.boundText(bound))
 	}
 	now := e.Now()
 	reqID := fmt.Sprintf("dci|%s|%s|%s|%.8f", l.name, q.ProductRef, delivDay(q), qty)
