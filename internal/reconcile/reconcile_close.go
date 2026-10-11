@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"arb/internal/exec"
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 	"arb/internal/venue"
 )
@@ -57,10 +58,12 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	}
 	// D-385 S1：CEX venue 集合——CEX perp 持仓是聚合仓位（无 ticket/comment），逐单 key
 	// 匹配结构性不存在 → CEX 腿不进 localLegs/nonOpenLegKeys，累计 venue+symbol+side 聚合量对拍。
-	cexVenues := make(map[string]bool)
+	// D-202①②：类型断言废（装饰层穿透失效=全瘫根因）——键域解析判 CEX 通道；
+	// 腿分类用裸 venue 集（leg.Venue="okx" R1 裸端点，MT 账户号不撞）。
+	cexBare := make(map[string]bool)
 	for _, q := range r.snapshot() {
-		if _, ok := q.(*CEXPositionQuerier); ok {
-			cexVenues[q.VenueKey()] = true
+		if keydomain.IsCexKey(q.VenueKey()) {
+			cexBare[keydomain.BareOf(q.VenueKey())] = true
 		}
 	}
 	cexLocal := make(map[string]float64)    // venueKey:symbol:side → 本地聚合量
@@ -87,7 +90,7 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		}
 		for _, leg := range legs {
 			if leg.OrderID != "" && leg.Phase == "OPEN" {
-				if cexVenues[leg.Venue] {
+				if cexBare[keydomain.BareOf(leg.Venue)] {
 					aggLeg(&leg, p.ID)
 					continue
 				}
@@ -112,7 +115,7 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 			log.Printf("[reconcile] query venue %s: %v（本轮跳过）", q.VenueKey(), err)
 			continue
 		}
-		isCEX := cexVenues[q.VenueKey()]
+		isCEX := keydomain.IsCexKey(q.VenueKey())
 		if isCEX {
 			cexReadOK[q.VenueKey()] = true
 		}
@@ -150,7 +153,7 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		}
 		for _, leg := range legs {
 			if leg.OrderID != "" && leg.Phase == "OPEN" {
-				if cexVenues[leg.Venue] {
+				if cexBare[keydomain.BareOf(leg.Venue)] {
 					aggLeg(&leg, p.ID) // D-385 S1：非 OPEN 态仓的 CEX 腿同入聚合（真实在仓敞口）
 					continue
 				}

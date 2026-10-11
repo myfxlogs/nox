@@ -7,6 +7,7 @@
 package reconcile
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"log"
@@ -16,10 +17,11 @@ import (
 	"time"
 )
 
-// cexAggKey 聚合键单点收口（R0-B2）：position_legs.venue 与 querier VenueKey 同形
-// （"okx:perp"）靠约定不靠类型——改 venue 口径时两侧必须同步，否则聚合对拍静默全失配。
+// cexAggKey 聚合键单点收口（R0-B2）：D-202③ 双侧归一 BareOf(v)——leg.Venue 存裸端点
+// （"okx"，R1）而 querier VenueKey 是复合键（"okx:perp"），同 namespace 才可对拍；
+// 两侧不同形=聚合静默全失配（本票实证病灶）。
 func cexAggKey(venue, symbol, side string) string {
-	return venue + ":" + symbol + ":" + side
+	return keydomain.BareOf(venue) + ":" + symbol + ":" + side
 }
 
 // cexAggTol 聚合量容差：0.5% 相对容差盖 lotSz/张数取整尘（不藏真分叉）；
@@ -58,11 +60,11 @@ func (r *Reconciler) reconcileCEXAggregate(ctx context.Context, cexLocal, cexVen
 	}
 	sort.Strings(sorted)
 
-	// readOK 前缀扫（D-401 自审计钉死）：agg key 首冒号切出的 venue（"okx"）只是 venueKey
-	// （"okx:perp"）前缀，禁止拿解析值直查——对每个 key 扫 cexReadOK 键做 HasPrefix(k, vk+":")。
+	// readOK 前缀扫（D-401 自审计钉死）：D-202 双侧归一 BareOf——agg key venue 段是裸端点
+	// （"okx"），cexReadOK 键是复合 venueKey（"okx:perp"），同 namespace 经 keydomain 归一对拍。
 	readOK := func(k string) bool {
 		for vk := range cexReadOK {
-			if strings.HasPrefix(k, vk+":") {
+			if keydomain.BareOf(vk) == keydomain.BareOf(k) {
 				return true
 			}
 		}
