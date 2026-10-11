@@ -3,8 +3,11 @@ package pgstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // DCIOrder 申购单（request_id 幂等键防重发）。
@@ -64,7 +67,8 @@ func (s *Store) FinishDCIOrder(ctx context.Context, id int64, status, response s
 func (s *Store) ListDCIQuotes(ctx context.Context, venue, underlying, optType, investCcy string, maxTenorDays int, strikeBound float64) ([]CexDCIQuote, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, venue, underlying, invest_ccy, strike, opt_type, delivery_ts,
-		       tenor_days, apy, product_ref, ts, order_ref
+		       tenor_days, apy, product_ref, ts, order_ref,
+		       min_amount, max_amount, purchase_decimal
 		FROM fin_cex_dci_quote
 		WHERE venue=$1 AND underlying=$2 AND opt_type=$3
 		  AND ($4='' OR invest_ccy=$4)
@@ -82,7 +86,8 @@ func (s *Store) ListDCIQuotes(ctx context.Context, venue, underlying, optType, i
 	for rows.Next() {
 		var q CexDCIQuote
 		if err := rows.Scan(&q.ID, &q.Venue, &q.Underlying, &q.InvestCcy, &q.Strike,
-			&q.OptType, &q.DeliveryTs, &q.TenorDays, &q.APY, &q.ProductRef, &q.Ts, &q.OrderRef); err != nil {
+			&q.OptType, &q.DeliveryTs, &q.TenorDays, &q.APY, &q.ProductRef, &q.Ts, &q.OrderRef,
+			&q.MinAmount, &q.MaxAmount, &q.PurchaseDecimal); err != nil {
 			return nil, err
 		}
 		out = append(out, q)
@@ -113,4 +118,18 @@ func (s *Store) OutstandingDCIQty(ctx context.Context, venue, investCcy string) 
 		  AND created_at + COALESCE(tenor_days,0) * interval '1 day' > now()`,
 		venue, investCcy).Scan(&q)
 	return q, err
+}
+
+// RecentDCIOrderByProposal D-191-R11② 执行租约：同 proposal_id window 内最新
+// 订单 id（无=0）——双击/重发防双成交（窗按库钟算）。
+func (s *Store) RecentDCIOrderByProposal(ctx context.Context, proposalID int64, window time.Duration) (int64, error) {
+	var id int64
+	err := s.pool.QueryRow(ctx, `
+		SELECT id FROM fin_dci_order
+		WHERE proposal_id=$1 AND created_at > now() - $2::interval
+		ORDER BY id DESC LIMIT 1`, proposalID, window.String()).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	return id, err
 }

@@ -190,6 +190,7 @@ var migrationFiles = []struct {
 	{195, migrations.GapResolveNoteSQL},                // D-193②：缺口收口备注列
 	{196, migrations.OTMBoundSQL},                      // D-191-R9：%OTM 闸界入约束表
 	{197, migrations.DCIOrderRefSQL},                   // D-191-R10：报价行 order_ref 补列
+	{198, migrations.DCIAmountBoundSQL},                // D-191-R11：报价行 min/max/decimal 三字段
 	{188, migrations.OppTemplateSQL},                   // D-185：机会模板册（fin_opp_template+cond）
 }
 

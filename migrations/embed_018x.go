@@ -50,3 +50,6 @@ var OTMBoundSQL string // D-191-R9：%OTM 闸界入约束表
 
 //go:embed 0197_dci_order_ref.sql
 var DCIOrderRefSQL string // D-191-R10：报价行 order_ref 补列
+
+//go:embed 0198_dci_amount_bound.sql
+var DCIAmountBoundSQL string // D-191-R11：报价行 min/max/decimal 三字段

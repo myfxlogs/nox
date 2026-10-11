@@ -126,6 +126,10 @@ func parseBinanceDCI(body []byte, now time.Time) ([]pgstore.CexDCIQuote, error) 
 		CanPurchase    bool        `json:"canPurchase"`
 		InstrumentName string      `json:"instrumentName"`
 		OrderID        json.Number `json:"orderId"`
+		// D-191-R11：申购量界三字段（venue SDK 键名实拍校）。
+		MinAmount       json.Number `json:"minAmount"`
+		MaxAmount       json.Number `json:"maxAmount"`
+		PurchaseDecimal json.Number `json:"purchaseDecimal"`
 	}
 	var raw struct {
 		Data []bRow `json:"data"`
@@ -162,6 +166,17 @@ func parseBinanceDCI(body []byte, now time.Time) ([]pgstore.CexDCIQuote, error) 
 			InvestCcy: d.InvestCoin, OptType: strings.ToUpper(d.OptionType), APY: apy,
 			ProductRef: firstNonEmpty(d.ID, d.InstrumentName),
 			OrderRef:   d.OrderID.String()} // D-191-R10②：orderId 解析入库（申购发参源）
+		// D-191-R11：申购量界三字段入库（decimal 缺行执行期跳次档）。
+		if pd, err := d.PurchaseDecimal.Int64(); err == nil {
+			pdv := int(pd)
+			row.PurchaseDecimal = &pdv
+		}
+		if v, err := d.MinAmount.Float64(); err == nil {
+			row.MinAmount = &v
+		}
+		if v, err := d.MaxAmount.Float64(); err == nil {
+			row.MaxAmount = &v
+		}
 		if v, err := d.StrikePrice.Float64(); err == nil {
 			row.Strike = &v
 		}
