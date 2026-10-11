@@ -21,3 +21,6 @@ var ElimEvidenceSeedSQL string // D-180：统计证据阈值 app_config 播种�
 
 //go:embed 0187_cex_dci_quote.sql
 var CexDCIQuoteSQL string // D-183：三所 DCI/双币产品报价表
+
+//go:embed 0188_opp_template.sql
+var OppTemplateSQL string // D-185：机会模板册（fin_opp_template+cond 子表，首批 9 族）
