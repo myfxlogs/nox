@@ -201,6 +201,12 @@ func (s *Service) OpenProbe(ctx context.Context, req *connect.Request[v1.OpenPro
 			return s.probeReject(ctx, r, fmt.Sprintf("venue 敞口查询失败: %v", xerr))
 		}
 		eq, _, asOf, eqOK := s.AccountEquityUSDAt(r.GetVenueKey())
+		// D-178：缺/超龄先定向回读复判一次（同 idle_funds 同径）——静默 venue
+		// asOf 冻结≠真不可达；仍缺/超龄才按原径拒。
+		if !eqOK || now.Sub(asOf) > probeEquitySnapshotMaxAge {
+			s.RefreshAccountEquity(ctx, r.GetVenueKey())
+			eq, _, asOf, eqOK = s.AccountEquityUSDAt(r.GetVenueKey())
+		}
 		if !eqOK {
 			return s.probeReject(ctx, r, fmt.Sprintf("%s 权益快照缺", r.GetVenueKey()))
 		}

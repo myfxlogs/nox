@@ -98,12 +98,20 @@ func (s *Service) replayIdleFunds(ctx context.Context, p *pgstore.ProbeProposal,
 	legType := keydomain.Parse(p.Contract.VenueKey).Type
 	cands := []string{keydomain.Join(venue, legType), keydomain.Join(venue, "perp"), keydomain.Join(venue, "spot"), venue}
 	seen := map[string]bool{}
+	refreshed := false
 	for _, vk := range cands {
 		if seen[vk] {
 			continue
 		}
 		seen[vk] = true
 		eq, _, asOf, ok := s.AccountEquityUSDAt(vk)
+		// D-178：缺/超龄先定向回读复判一次（pollVenueKeys 按需径，非循环重试）——
+		// 静默 venue（gate 无私流帧→零 kick）asOf 冻结≠真不可达，直拒=结构性半盲。
+		if (!ok || time.Since(asOf) > probeEquitySnapshotMaxAge) && !refreshed {
+			refreshed = true
+			s.RefreshAccountEquity(ctx, vk)
+			eq, _, asOf, ok = s.AccountEquityUSDAt(vk)
+		}
 		if !ok {
 			continue
 		}
