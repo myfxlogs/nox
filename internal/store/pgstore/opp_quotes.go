@@ -8,7 +8,7 @@ import "context"
 func (s *Store) MaxDCIAPY(ctx context.Context, underlying string) (float64, bool, error) {
 	var v float64
 	err := s.pool.QueryRow(ctx, `
-		SELECT max(apy) FROM fin_cex_dci_quote
+		SELECT COALESCE(max(apy),0) FROM fin_cex_dci_quote
 		WHERE ts > now() - interval '30 days' AND ($1='' OR underlying=$1)`,
 		underlying).Scan(&v)
 	if err != nil {
@@ -21,7 +21,7 @@ func (s *Store) MaxDCIAPY(ctx context.Context, underlying string) (float64, bool
 func (s *Store) MaxEarnAPR(ctx context.Context) (float64, bool, error) {
 	var v float64
 	err := s.pool.QueryRow(ctx, `
-		SELECT max(apr) FROM fin_cex_earn_apr
+		SELECT COALESCE(max(apr),0) FROM fin_cex_earn_apr
 		WHERE ts > now() - interval '30 days'`).Scan(&v)
 	if err != nil {
 		return 0, false, err
