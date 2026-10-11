@@ -3,11 +3,18 @@ package pgstore
 import (
 	"context"
 	"testing"
+
+	"arb/migrations"
 )
 
 // TestD180_AppConfigSeed：迁移 186 播种键热读（ARB_ELIM_ZSIGMA/ARB_RETRO_DEP_Z）。
 func TestD180_AppConfigSeed(t *testing.T) {
 	s := sharedTestStore(t)
+	ctx := context.Background()
+	// 先重放播种（同进程其他测试可能 TRUNCATE app_config——迁移幂等可重入）
+	if _, err := s.Pool().Exec(ctx, migrations.ElimEvidenceSeedSQL); err != nil {
+		t.Fatalf("seed replay: %v", err)
+	}
 	for _, k := range []string{"ARB_ELIM_ZSIGMA", "ARB_RETRO_DEP_Z"} {
 		v, ok, err := s.AppConfigFloat(context.Background(), k)
 		if err != nil || !ok || v != 2.0 {
