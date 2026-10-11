@@ -15,32 +15,29 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// probePremiseSeg 单段 premise 判定。返回三态恰一非空。
-func (s *Service) probePremiseSeg(ctx context.Context, p *pgstore.ProbeProposal, seg string) (reject, ambiguous, note string) {
-	head := strings.TrimRight(strings.Fields(seg)[0], ":：")
-	switch head {
+// probePremiseSeg 单条 premise 判定（D-176 结构化入参——散文 basis 降级纯人读）。
+// 返回三态恰一非空。
+func (s *Service) probePremiseSeg(ctx context.Context, p *pgstore.ProbeProposal, prem pgstore.ProbePremise) (reject, ambiguous, note string) {
+	switch prem.Kind {
 	case "term_dispersion":
-		return s.replayTermDispersion(ctx, p, seg)
+		return s.replayTermDispersion(ctx, p, prem)
 	case "idle_funds":
-		return s.replayIdleFunds(ctx, p, seg)
+		return s.replayIdleFunds(ctx, p, prem)
 	default:
-		return "", fmt.Sprintf("未知 premise 前缀 %q", head), ""
+		return "", fmt.Sprintf("未知 premise kind %q", prem.Kind), ""
 	}
 }
 
 // replayTermDispersion 跨 venue funding 离散度回放：鲜 facts 重算 min/max，
 // 贡献腿陈旧/鲜腿<2/离散塌缩 → 硬伤拒（前提化石不可证，不拿真金试）。
-func (s *Service) replayTermDispersion(ctx context.Context, p *pgstore.ProbeProposal, seg string) (reject, ambiguous, note string) {
+// premise.canonical ≠ 契约 canonical → 歧义（前提绑错对象，人裁）。
+func (s *Service) replayTermDispersion(ctx context.Context, p *pgstore.ProbeProposal, prem pgstore.ProbePremise) (reject, ambiguous, note string) {
 	canonical := p.Contract.Canonical
-	for _, tok := range strings.Fields(seg) {
-		tok = strings.Trim(tok, ":：，,[]")
-		if tok == "" || tok == "term_dispersion" || tok == "funding" ||
-			strings.Contains(tok, "=") || strings.Contains(tok, "..") || strings.Contains(tok, "×") {
-			continue
-		}
-		if !strings.EqualFold(tok, canonical) {
-			return "", fmt.Sprintf("premise canonical %q ≠ 契约 %q", tok, canonical), ""
-		}
+	if prem.Canonical == "" {
+		return "", "term_dispersion 缺 canonical 绑定", ""
+	}
+	if !strings.EqualFold(prem.Canonical, canonical) {
+		return "", fmt.Sprintf("premise canonical %q ≠ 契约 %q", prem.Canonical, canonical), ""
 	}
 	facts, err := s.store.LatestFacts(ctx, "funding", "", canonical)
 	if err != nil {
@@ -92,21 +89,11 @@ func (s *Service) replayTermDispersion(ctx context.Context, p *pgstore.ProbeProp
 
 // replayIdleFunds 闲置资金佐证：venue 权益快照（acctMon）佐证本金可付 expected_cost。
 // 快照缺/venue 键解不出=歧义（不猜）；快照在且 eq<cost=硬伤。
-func (s *Service) replayIdleFunds(ctx context.Context, p *pgstore.ProbeProposal, seg string) (reject, ambiguous, note string) {
-	var venue string
-	freeClaim := -1.0
-	for _, tok := range strings.Fields(seg) {
-		tok = strings.Trim(tok, ":：，,")
-		switch {
-		case tok == "" || tok == "idle_funds" || strings.HasPrefix(tok, "idle="):
-		case strings.HasPrefix(tok, "free="):
-			fmt.Sscanf(strings.TrimPrefix(tok, "free="), "%g", &freeClaim)
-		case venue == "":
-			venue = tok
-		}
-	}
+func (s *Service) replayIdleFunds(ctx context.Context, p *pgstore.ProbeProposal, prem pgstore.ProbePremise) (reject, ambiguous, note string) {
+	venue := prem.Venue
+	freeClaim := prem.FreeUSD
 	if venue == "" {
-		return "", fmt.Sprintf("idle_funds 段无可解 venue: %q", seg), ""
+		return "", "idle_funds 缺 venue 绑定", ""
 	}
 	legType := keydomain.Parse(p.Contract.VenueKey).Type
 	cands := []string{keydomain.Join(venue, legType), keydomain.Join(venue, "perp"), keydomain.Join(venue, "spot"), venue}

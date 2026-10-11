@@ -50,12 +50,12 @@ func d163Funding(t *testing.T, st *pgstore.Store, venue string, value float64, t
 	}
 }
 
-func d163Proposal(t *testing.T, st *pgstore.Store, basis string) int64 {
+func d163Proposal(t *testing.T, st *pgstore.Store, basis string, premises ...pgstore.ProbePremise) int64 {
 	t.Helper()
 	id, ok, err := st.ExplorerProbeProposalInsert(context.Background(), pgstore.ProbeContract{
 		Purpose: "p", Falsify: "1>0", VenueKey: "tbinance:perp", Canonical: "CAPUSDT",
 		Side: "BUY", Qty: 1, NotionalUSD: 100, ExpectedCostUSD: 5,
-		AutoCloseAt: time.Now().Add(2 * time.Hour), Basis: basis,
+		AutoCloseAt: time.Now().Add(2 * time.Hour), Basis: basis, Premises: premises,
 	}, time.Now())
 	if err != nil || !ok || id <= 0 {
 		t.Fatalf("insert proposal: id=%d ok=%v err=%v", id, ok, err)
@@ -80,7 +80,7 @@ func TestD163_FossilPremise_Rejected(t *testing.T) {
 	d163Funding(t, st, "tbinance", 10, now)
 	d163Funding(t, st, "okx", 137, now)
 	d163Funding(t, st, "gate", 55.407, now.Add(-13*24*time.Hour))
-	pid := d163Proposal(t, st, "term_dispersion: CAPUSDT funding min=55.407 max=127.097 delta=+58.0736")
+	pid := d163Proposal(t, st, "term_dispersion: CAPUSDT funding min=55.407 max=127.097 delta=+58.0736", pgstore.ProbePremise{Kind: "term_dispersion", Canonical: "CAPUSDT"})
 	calls := 0
 	svc.probeOpener = func(context.Context, *v1.OpenProbeRequest) (*v1.OpenProbeResponse, error) {
 		calls++
@@ -102,7 +102,7 @@ func TestD163_Green_AutoApproved(t *testing.T) {
 	now := time.Now()
 	d163Funding(t, st, "tbinance", -5, now)
 	d163Funding(t, st, "okx", 137, now)
-	pid := d163Proposal(t, st, "term_dispersion CAPUSDT funding min=-5 max=137")
+	pid := d163Proposal(t, st, "term_dispersion CAPUSDT funding min=-5 max=137", pgstore.ProbePremise{Kind: "term_dispersion", Canonical: "CAPUSDT"})
 	var ref string
 	svc.probeOpener = func(_ context.Context, r *v1.OpenProbeRequest) (*v1.OpenProbeResponse, error) {
 		ref = r.GetDecisionRef()
@@ -122,7 +122,7 @@ func TestD163_Green_AutoApproved(t *testing.T) {
 func TestD163_UnknownBasis_StaysProposed(t *testing.T) {
 	svc, st := d163Svc(t)
 	d163Funding(t, st, "tbinance", 1, time.Now())
-	pid := d163Proposal(t, st, "mystery_signal: CAPUSDT x=1")
+	pid := d163Proposal(t, st, "mystery_signal: CAPUSDT x=1", pgstore.ProbePremise{Kind: "mystery_signal"})
 	svc.adjudicateProbes(context.Background())
 	status, note := d163State(t, st, pid)
 	if status != "proposed" || !strings.Contains(note, "歧义") {
@@ -155,6 +155,7 @@ func TestD163_ContractViolation_Rejected(t *testing.T) {
 		Purpose: "p", Falsify: "1>0", VenueKey: "tbinance:perp", Canonical: "CAPUSDT",
 		Side: "BUY", Qty: 1, NotionalUSD: 100, ExpectedCostUSD: 5,
 		AutoCloseAt: time.Now().Add(-time.Hour), Basis: "term_dispersion CAPUSDT funding min=1 max=2",
+		Premises: []pgstore.ProbePremise{{Kind: "term_dispersion", Canonical: "CAPUSDT"}},
 	}, time.Now())
 	if err != nil || !ok {
 		t.Fatalf("insert: ok=%v err=%v", ok, err)
@@ -183,6 +184,7 @@ func TestD163_CapViolation_Rejected(t *testing.T) {
 		Purpose: "p", Falsify: "1>0", VenueKey: "tbinance:perp", Canonical: "CAPUSDT",
 		Side: "BUY", Qty: 1, NotionalUSD: 100, ExpectedCostUSD: 500,
 		AutoCloseAt: now.Add(time.Hour), Basis: "term_dispersion CAPUSDT funding min=1 max=2",
+		Premises: []pgstore.ProbePremise{{Kind: "term_dispersion", Canonical: "CAPUSDT"}},
 	}, now)
 	if err != nil || !ok {
 		t.Fatalf("insert: %v", err)
@@ -200,6 +202,7 @@ func TestD163_CapViolation_Rejected(t *testing.T) {
 		Purpose: "p", Falsify: "1>0", VenueKey: "tbinance:perp", Canonical: "ETHUSDT",
 		Side: "BUY", Qty: 1, NotionalUSD: 100, ExpectedCostUSD: 5,
 		AutoCloseAt: now.Add(time.Hour), Basis: "term_dispersion ETHUSDT funding min=1 max=2",
+		Premises: []pgstore.ProbePremise{{Kind: "term_dispersion", Canonical: "ETHUSDT"}},
 	}, now)
 	if err2 != nil || !ok2 {
 		t.Fatalf("insert2: ok=%v err=%v", ok2, err2)
@@ -221,7 +224,7 @@ func TestD163_LegNotTrading_Rejected(t *testing.T) {
 		`UPDATE fin_cex_universe SET status='SUSPENDED' WHERE venue='tbinance'`); err != nil {
 		t.Fatal(err)
 	}
-	pid := d163Proposal(t, st, "term_dispersion CAPUSDT funding min=1 max=2")
+	pid := d163Proposal(t, st, "term_dispersion CAPUSDT funding min=1 max=2", pgstore.ProbePremise{Kind: "term_dispersion", Canonical: "CAPUSDT"})
 	svc.adjudicateProbes(context.Background())
 	if s, note := d163State(t, st, pid); s != "rejected" || !strings.Contains(note, "TRADING") {
 		t.Fatalf("status=%s note=%q", s, note)
@@ -232,7 +235,7 @@ func TestD163_LegNotTrading_Rejected(t *testing.T) {
 func TestD163_MasterGateOff_NoAdjudication(t *testing.T) {
 	svc, st := d163Svc(t)
 	svc.acv.running.ProbeRPCEnabled = false
-	pid := d163Proposal(t, st, "term_dispersion CAPUSDT funding min=1 max=2")
+	pid := d163Proposal(t, st, "term_dispersion CAPUSDT funding min=1 max=2", pgstore.ProbePremise{Kind: "term_dispersion", Canonical: "CAPUSDT"})
 	svc.adjudicateProbes(context.Background())
 	if s, note := d163State(t, st, pid); s != "proposed" || note != "" {
 		t.Fatalf("status=%s note=%q", s, note)

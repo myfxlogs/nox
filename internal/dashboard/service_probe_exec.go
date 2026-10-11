@@ -155,3 +155,49 @@ func splitOppID(oppID string) string {
 	}
 	return rest
 }
+
+// ListProbeProposals D-176①：探针提案待审读面（scan_kind='probe'）。
+// 默认仅 proposed（待审卡）；include_decided=全态（审计对拍）。
+func (s *Service) ListProbeProposals(ctx context.Context, req *connect.Request[v1.ListProbeProposalsRequest]) (*connect.Response[v1.ListProbeProposalsResponse], error) {
+	status := "proposed"
+	if req.Msg.GetIncludeDecided() {
+		status = ""
+	}
+	var rows []*pgstore.ProbeProposal
+	var err error
+	if status == "" {
+		for _, st := range []string{"proposed", "approved", "rejected", "running", "closed"} {
+			part, perr := s.store.ExplorerProbeProposalList(ctx, st)
+			if perr != nil {
+				err = perr
+				break
+			}
+			rows = append(rows, part...)
+		}
+	} else {
+		rows, err = s.store.ExplorerProbeProposalList(ctx, status)
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	out := &v1.ListProbeProposalsResponse{Proposals: make([]*v1.ProbeProposalCard, 0, len(rows))}
+	for _, p := range rows {
+		c := p.Contract
+		out.Proposals = append(out.Proposals, &v1.ProbeProposalCard{
+			ProposalId:      p.ID,
+			Purpose:         c.Purpose,
+			Falsify:         c.Falsify,
+			VenueKey:        c.VenueKey,
+			Canonical:       c.Canonical,
+			Side:            c.Side,
+			Qty:             c.Qty,
+			NotionalUsd:     c.NotionalUSD,
+			ExpectedCostUsd: c.ExpectedCostUSD,
+			AutoCloseAt:     timestamppb.New(c.AutoCloseAt),
+			Basis:           c.Basis,
+			GateNote:        p.GateNote,
+			ProposedAt:      timestamppb.New(p.ScanDate),
+		})
+	}
+	return connect.NewResponse(out), nil
+}
