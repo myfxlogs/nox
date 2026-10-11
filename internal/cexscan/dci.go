@@ -70,10 +70,13 @@ func (c *EarnCollector) collectBinanceDCIWithBase(ctx context.Context, base stri
 	}
 	var out []pgstore.CexDCIQuote
 	for _, u := range dciUnderlyings {
-		for _, inv := range []string{u, "USDT"} {
+		// 象限对：(exercised,invest) —— (u,u)/(u,USDT) 买低面 + (USDT,u) 卖高面
+		// （D-191 R2：covered-call=持币卖 CALL，exercisedCoin=USDT&investCoin=underlying）。
+		for _, pair := range [][2]string{{u, u}, {u, "USDT"}, {"USDT", u}} {
+			exercised, inv := pair[0], pair[1]
 			for _, opt := range []string{"CALL", "PUT"} {
 				ms := time.Now().UnixMilli()
-				query := fmt.Sprintf("exercisedCoin=%s&optionType=%s&investCoin=%s&timestamp=%d&recvWindow=5000", u, opt, inv, ms)
+				query := fmt.Sprintf("exercisedCoin=%s&optionType=%s&investCoin=%s&timestamp=%d&recvWindow=5000", exercised, opt, inv, ms)
 				url := fmt.Sprintf("%s/v1/dci/product/list?%s&signature=%s", base, query, binanceSign(c.bnSecret, query))
 				req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 				if err != nil {
@@ -138,7 +141,13 @@ func parseBinanceDCI(body []byte, now time.Time) ([]pgstore.CexDCIQuote, error) 
 	want := map[string]bool{"BTC": true, "ETH": true}
 	var out []pgstore.CexDCIQuote
 	for _, d := range rows {
-		if !want[d.ExerciseCoin] {
+		// 卖高象限行 exercisedCoin=USDT&investCoin=BTC——双币任一腿命中即留，
+		// underlying 取币腿（D-191 R2；两过滤键任一非稳币腿）。
+		under := d.ExerciseCoin
+		if !want[under] {
+			under = d.InvestCoin
+		}
+		if !want[under] {
 			continue
 		}
 		apy, err := d.APR.Float64()
@@ -146,7 +155,7 @@ func parseBinanceDCI(body []byte, now time.Time) ([]pgstore.CexDCIQuote, error) 
 			log.Printf("[cexscan] binance dci apr parse %q: %v", d.APR.String(), err)
 			continue
 		}
-		row := pgstore.CexDCIQuote{Venue: "binance", Underlying: d.ExerciseCoin,
+		row := pgstore.CexDCIQuote{Venue: "binance", Underlying: under,
 			InvestCcy: d.InvestCoin, OptType: strings.ToUpper(d.OptionType), APY: apy,
 			ProductRef: firstNonEmpty(d.ID, d.InstrumentName)}
 		if v, err := d.StrikePrice.Float64(); err == nil {
