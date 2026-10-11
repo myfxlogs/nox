@@ -51,6 +51,10 @@ func (d *settleDeps) AggregateStrategyStatsByEnvironmentFamily(ctx context.Conte
 func (d *settleDeps) DisableStrategy(ctx context.Context, strategy, reason string) error {
 	return d.store.DisableStrategy(ctx, strategy, reason)
 }
+
+func (d *settleDeps) AppConfigFloat(ctx context.Context, key string) (float64, bool, error) {
+	return d.store.AppConfigFloat(ctx, key)
+}
 func (d *settleDeps) InsertAlert(ctx context.Context, ruleID *int64, level, message string) error {
 	return d.store.InsertAlert(ctx, ruleID, level, message)
 }

@@ -83,6 +83,10 @@ func (d *StoreDeps) DisableStrategy(ctx context.Context, strategy, reason string
 	return d.store.DisableStrategy(ctx, strategy, reason)
 }
 
+func (d *StoreDeps) AppConfigFloat(ctx context.Context, key string) (float64, bool, error) {
+	return d.store.AppConfigFloat(ctx, key)
+}
+
 func (d *StoreDeps) InsertAlert(ctx context.Context, ruleID *int64, level, message string) error {
 	return d.store.InsertAlert(ctx, ruleID, level, message)
 }

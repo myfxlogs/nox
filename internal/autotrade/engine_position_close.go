@@ -98,6 +98,7 @@ func (e *Engine) runStartupElimination(ctx context.Context) {
 			Disabled:    stat.Disabled,
 		})
 		if disable {
+			reason += e.elimEvidenceSuffix(ctx, agg.Total, winRate)
 			// D-256-A R1：族内全禁——禁用族内全部策略（CARRY/SWAPARB 同族），
 			// 避免复活场景下 CARRY 触发淘汰后 SWAPARB 存活至重启/自身结算。
 			for _, fam := range famStrategies {
