@@ -185,3 +185,14 @@ func (s *Store) OutstandingDCIProduct(ctx context.Context, productRef, optType s
 		productRef, optType).Scan(&ok)
 	return ok, err
 }
+
+// DCIOrderLegCount D-198 返修②：同 proposal_id 该腿（opt_type+invest_ccy）
+// fin_dci_order 行数——request_id 尝试序号 n=行数+1。
+func (s *Store) DCIOrderLegCount(ctx context.Context, proposalID int64, optType, investCcy string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM fin_dci_order
+		WHERE proposal_id=$1 AND opt_type=$2 AND invest_ccy=$3`,
+		proposalID, optType, investCcy).Scan(&n)
+	return n, err
+}
