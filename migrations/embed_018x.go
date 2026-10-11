@@ -38,3 +38,6 @@ var DCIOrderSQL string // D-191：DCI 申购执行轨幂等账本（request_id U
 var EmployeeRegistrySQL string // D-190：员工花名册（daemon 编制+心跳+生死）
 //go:embed 0188_opp_template.sql
 var OppTemplateSQL string // D-185：机会模板册（fin_opp_template+cond 子表，首批 9 族）
+
+//go:embed 0194_proposal.sql
+var ProposalSQL string // D-189：提案实体化 fin_proposal+fin_dci_order.proposal_id 回链

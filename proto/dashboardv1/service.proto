@@ -6,6 +6,7 @@ option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
 
 import "dashboardv1/app_config.proto";
 import "dashboardv1/employee.proto";
+import "dashboardv1/proposal.proto";
 import "dashboardv1/app_secrets.proto";
 import "dashboardv1/account.proto";
 import "dashboardv1/alerting_events.proto";
@@ -211,6 +212,10 @@ service DashboardService {
 
   // D-190：员工花名册看板（daemon 编制实况：在职/死亡/任务中）。
   rpc ListEmployees(ListEmployeesRequest) returns (ListEmployeesResponse);
+
+  // D-189：提案执行台——提案实体行实况+业主拒批回执（执行=飞书 go 口令径）。
+  rpc ListProposals(ListProposalsRequest) returns (ListProposalsResponse);
+  rpc AckProposal(AckProposalRequest) returns (AckProposalResponse);
 
   // D-545：app_secrets 密钥管理面（值永不回传；Update 空值=删行+热更同步）。
   rpc ListAppSecrets(ListAppSecretsRequest) returns (ListAppSecretsResponse);

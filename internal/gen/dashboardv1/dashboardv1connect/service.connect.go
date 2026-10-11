@@ -358,6 +358,12 @@ const (
 	// DashboardServiceListEmployeesProcedure is the fully-qualified name of the DashboardService's
 	// ListEmployees RPC.
 	DashboardServiceListEmployeesProcedure = "/arb.dashboard.v1.DashboardService/ListEmployees"
+	// DashboardServiceListProposalsProcedure is the fully-qualified name of the DashboardService's
+	// ListProposals RPC.
+	DashboardServiceListProposalsProcedure = "/arb.dashboard.v1.DashboardService/ListProposals"
+	// DashboardServiceAckProposalProcedure is the fully-qualified name of the DashboardService's
+	// AckProposal RPC.
+	DashboardServiceAckProposalProcedure = "/arb.dashboard.v1.DashboardService/AckProposal"
 	// DashboardServiceListAppSecretsProcedure is the fully-qualified name of the DashboardService's
 	// ListAppSecrets RPC.
 	DashboardServiceListAppSecretsProcedure = "/arb.dashboard.v1.DashboardService/ListAppSecrets"
@@ -523,6 +529,9 @@ type DashboardServiceClient interface {
 	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
 	// D-190：员工花名册看板（daemon 编制实况：在职/死亡/任务中）。
 	ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error)
+	// D-189：提案执行台——提案实体行实况+业主拒批回执（执行=飞书 go 口令径）。
+	ListProposals(context.Context, *connect.Request[dashboardv1.ListProposalsRequest]) (*connect.Response[dashboardv1.ListProposalsResponse], error)
+	AckProposal(context.Context, *connect.Request[dashboardv1.AckProposalRequest]) (*connect.Response[dashboardv1.AckProposalResponse], error)
 	// D-545：app_secrets 密钥管理面（值永不回传；Update 空值=删行+热更同步）。
 	ListAppSecrets(context.Context, *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error)
 	UpdateAppSecret(context.Context, *connect.Request[dashboardv1.UpdateAppSecretRequest]) (*connect.Response[dashboardv1.UpdateAppSecretResponse], error)
@@ -1193,6 +1202,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("ListEmployees")),
 			connect.WithClientOptions(opts...),
 		),
+		listProposals: connect.NewClient[dashboardv1.ListProposalsRequest, dashboardv1.ListProposalsResponse](
+			httpClient,
+			baseURL+DashboardServiceListProposalsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListProposals")),
+			connect.WithClientOptions(opts...),
+		),
+		ackProposal: connect.NewClient[dashboardv1.AckProposalRequest, dashboardv1.AckProposalResponse](
+			httpClient,
+			baseURL+DashboardServiceAckProposalProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("AckProposal")),
+			connect.WithClientOptions(opts...),
+		),
 		listAppSecrets: connect.NewClient[dashboardv1.ListAppSecretsRequest, dashboardv1.ListAppSecretsResponse](
 			httpClient,
 			baseURL+DashboardServiceListAppSecretsProcedure,
@@ -1319,6 +1340,8 @@ type dashboardServiceClient struct {
 	updateAppConfig              *connect.Client[dashboardv1.UpdateAppConfigRequest, dashboardv1.UpdateAppConfigResponse]
 	selfRestart                  *connect.Client[dashboardv1.SelfRestartRequest, dashboardv1.SelfRestartResponse]
 	listEmployees                *connect.Client[dashboardv1.ListEmployeesRequest, dashboardv1.ListEmployeesResponse]
+	listProposals                *connect.Client[dashboardv1.ListProposalsRequest, dashboardv1.ListProposalsResponse]
+	ackProposal                  *connect.Client[dashboardv1.AckProposalRequest, dashboardv1.AckProposalResponse]
 	listAppSecrets               *connect.Client[dashboardv1.ListAppSecretsRequest, dashboardv1.ListAppSecretsResponse]
 	updateAppSecret              *connect.Client[dashboardv1.UpdateAppSecretRequest, dashboardv1.UpdateAppSecretResponse]
 }
@@ -1869,6 +1892,16 @@ func (c *dashboardServiceClient) ListEmployees(ctx context.Context, req *connect
 	return c.listEmployees.CallUnary(ctx, req)
 }
 
+// ListProposals calls arb.dashboard.v1.DashboardService.ListProposals.
+func (c *dashboardServiceClient) ListProposals(ctx context.Context, req *connect.Request[dashboardv1.ListProposalsRequest]) (*connect.Response[dashboardv1.ListProposalsResponse], error) {
+	return c.listProposals.CallUnary(ctx, req)
+}
+
+// AckProposal calls arb.dashboard.v1.DashboardService.AckProposal.
+func (c *dashboardServiceClient) AckProposal(ctx context.Context, req *connect.Request[dashboardv1.AckProposalRequest]) (*connect.Response[dashboardv1.AckProposalResponse], error) {
+	return c.ackProposal.CallUnary(ctx, req)
+}
+
 // ListAppSecrets calls arb.dashboard.v1.DashboardService.ListAppSecrets.
 func (c *dashboardServiceClient) ListAppSecrets(ctx context.Context, req *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error) {
 	return c.listAppSecrets.CallUnary(ctx, req)
@@ -2036,6 +2069,9 @@ type DashboardServiceHandler interface {
 	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
 	// D-190：员工花名册看板（daemon 编制实况：在职/死亡/任务中）。
 	ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error)
+	// D-189：提案执行台——提案实体行实况+业主拒批回执（执行=飞书 go 口令径）。
+	ListProposals(context.Context, *connect.Request[dashboardv1.ListProposalsRequest]) (*connect.Response[dashboardv1.ListProposalsResponse], error)
+	AckProposal(context.Context, *connect.Request[dashboardv1.AckProposalRequest]) (*connect.Response[dashboardv1.AckProposalResponse], error)
 	// D-545：app_secrets 密钥管理面（值永不回传；Update 空值=删行+热更同步）。
 	ListAppSecrets(context.Context, *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error)
 	UpdateAppSecret(context.Context, *connect.Request[dashboardv1.UpdateAppSecretRequest]) (*connect.Response[dashboardv1.UpdateAppSecretResponse], error)
@@ -2702,6 +2738,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("ListEmployees")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListProposalsHandler := connect.NewUnaryHandler(
+		DashboardServiceListProposalsProcedure,
+		svc.ListProposals,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListProposals")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceAckProposalHandler := connect.NewUnaryHandler(
+		DashboardServiceAckProposalProcedure,
+		svc.AckProposal,
+		connect.WithSchema(dashboardServiceMethods.ByName("AckProposal")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceListAppSecretsHandler := connect.NewUnaryHandler(
 		DashboardServiceListAppSecretsProcedure,
 		svc.ListAppSecrets,
@@ -2934,6 +2982,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceSelfRestartHandler.ServeHTTP(w, r)
 		case DashboardServiceListEmployeesProcedure:
 			dashboardServiceListEmployeesHandler.ServeHTTP(w, r)
+		case DashboardServiceListProposalsProcedure:
+			dashboardServiceListProposalsHandler.ServeHTTP(w, r)
+		case DashboardServiceAckProposalProcedure:
+			dashboardServiceAckProposalHandler.ServeHTTP(w, r)
 		case DashboardServiceListAppSecretsProcedure:
 			dashboardServiceListAppSecretsHandler.ServeHTTP(w, r)
 		case DashboardServiceUpdateAppSecretProcedure:
@@ -3381,6 +3433,14 @@ func (UnimplementedDashboardServiceHandler) SelfRestart(context.Context, *connec
 
 func (UnimplementedDashboardServiceHandler) ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListEmployees is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListProposals(context.Context, *connect.Request[dashboardv1.ListProposalsRequest]) (*connect.Response[dashboardv1.ListProposalsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListProposals is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) AckProposal(context.Context, *connect.Request[dashboardv1.AckProposalRequest]) (*connect.Response[dashboardv1.AckProposalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AckProposal is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListAppSecrets(context.Context, *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error) {

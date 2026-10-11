@@ -22,6 +22,7 @@ type DCIOrder struct {
 	TenorDays  *int
 	Status     string
 	Response   string
+	ProposalID *int64 // D-189：提案→订单回链（NULL=非提案触发）
 }
 
 // CreateDCIOrder 登记 pending 单（request_id 冲突=已受理→created=false 防重）。
@@ -30,12 +31,12 @@ func (s *Store) CreateDCIOrder(ctx context.Context, o *DCIOrder) (int64, bool, e
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO fin_dci_order
 		  (request_id, venue, template_id, product_ref, underlying, opt_type,
-		   strike, invest_ccy, qty, tenor_days)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		   strike, invest_ccy, qty, tenor_days, proposal_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		ON CONFLICT (request_id) DO NOTHING
 		RETURNING id`,
 		o.RequestID, o.Venue, o.TemplateID, o.ProductRef, o.Underlying, o.OptType,
-		o.Strike, o.InvestCcy, o.Qty, o.TenorDays).Scan(&id)
+		o.Strike, o.InvestCcy, o.Qty, o.TenorDays, o.ProposalID).Scan(&id)
 	if err != nil {
 		return 0, false, nil // 冲突=幂等命中，非错
 	}
