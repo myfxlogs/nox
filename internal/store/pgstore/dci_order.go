@@ -57,8 +57,11 @@ func (s *Store) FinishDCIOrder(ctx context.Context, id int64, status, response s
 	return nil
 }
 
-// BestDCIQuote 报价面选档：venue×underlying×opt_type、tenor≤上限、apy 最优最新。
-func (s *Store) ListDCIQuotes(ctx context.Context, venue, underlying, optType, investCcy string, maxTenorDays int) ([]CexDCIQuote, error) {
+// ListDCIQuotes 报价面选档（D-191-R8 序错修：strike 界+6h 时效窗下推 SQL，
+// apy DESC LIMIT 作用于达标集——原 LIMIT50 先截断残集滤恒空+旧帧竞争）。
+// strikeBound>0 时按 optType 方向过滤（PUT→strike≤bound、CALL→strike≥bound，
+// strike 缺=不达标）；=0 不带界。
+func (s *Store) ListDCIQuotes(ctx context.Context, venue, underlying, optType, investCcy string, maxTenorDays int, strikeBound float64) ([]CexDCIQuote, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, venue, underlying, invest_ccy, strike, opt_type, delivery_ts,
 		       tenor_days, apy, product_ref, ts
@@ -66,8 +69,11 @@ func (s *Store) ListDCIQuotes(ctx context.Context, venue, underlying, optType, i
 		WHERE venue=$1 AND underlying=$2 AND opt_type=$3
 		  AND ($4='' OR invest_ccy=$4)
 		  AND (tenor_days IS NULL OR tenor_days <= $5)
+		  AND ($6 <= 0 OR (strike IS NOT NULL AND
+		       (($3='PUT' AND strike <= $6) OR ($3<>'PUT' AND strike >= $6))))
+		  AND ts > now() - interval '6 hours'
 		ORDER BY apy DESC, ts DESC LIMIT 50`,
-		venue, underlying, optType, investCcy, maxTenorDays)
+		venue, underlying, optType, investCcy, maxTenorDays, strikeBound)
 	if err != nil {
 		return nil, err
 	}

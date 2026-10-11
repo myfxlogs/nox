@@ -42,14 +42,14 @@ func TestD191_DCIOrderStore(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	qs, err := s.ListDCIQuotes(ctx, "binance", "BTC", "CALL", "", 14)
+	qs, err := s.ListDCIQuotes(ctx, "binance", "BTC", "CALL", "", 14, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(qs) != 2 || qs[0].ProductRef != "d191hi" {
 		t.Fatalf("应回 tenor≤14 CALL 档 apy 降序: %+v", qs)
 	}
-	qs2, err := s.ListDCIQuotes(ctx, "binance", "BTC", "PUT", "USDT", 90)
+	qs2, err := s.ListDCIQuotes(ctx, "binance", "BTC", "PUT", "USDT", 90, 0)
 	if err != nil || len(qs2) != 0 {
 		t.Fatalf("PUT/USDT 无档应空回: %v %+v", err, qs2)
 	}
@@ -85,3 +85,42 @@ func TestD191_DCIOrderStore(t *testing.T) {
 }
 
 func intp(i int) *int { return &i }
+
+// TestD191R8_StrikeBoundAndFresh：strike 界+6h 时效窗下推 SQL——
+// 高 apy 近档被界滤、深档选得中；ts>6h 旧帧不参与。
+func TestD191R8_StrikeBoundAndFresh(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+	s5, s7 := 95000.0, 70000.0
+	td := 7
+	rows := []CexDCIQuote{
+		{Venue: "binance", Underlying: "BTC", InvestCcy: "USDT", OptType: "PUT",
+			Strike: &s5, TenorDays: &td, APY: 0.50, ProductRef: "r8near"}, // 高apy但 95000>bound 界滤
+		{Venue: "binance", Underlying: "BTC", InvestCcy: "USDT", OptType: "PUT",
+			Strike: &s7, TenorDays: &td, APY: 0.08, ProductRef: "r8deep"}, // 深档达标选得中
+	}
+	for i := range rows {
+		if err := s.InsertCexDCIQuote(ctx, &rows[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 旧帧（ts>6h）不参与：直插 ts 倒拨 7h。
+	if _, err := s.Pool().Exec(ctx, `
+		INSERT INTO fin_cex_dci_quote (venue, underlying, invest_ccy, strike, opt_type,
+			tenor_days, apy, product_ref, ts)
+		VALUES ('binance','BTC','USDT',60000,'PUT',7,0.99,'r8stale', now()-interval '7 hours')`); err != nil {
+		t.Fatal(err)
+	}
+	qs, err := s.ListDCIQuotes(ctx, "binance", "BTC", "PUT", "USDT", 90, 80000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range qs {
+		if q.ProductRef == "r8near" || q.ProductRef == "r8stale" {
+			t.Fatalf("界滤/旧帧漏网: %+v", q)
+		}
+	}
+	if len(qs) == 0 || qs[0].ProductRef != "r8deep" {
+		t.Fatalf("深档应选得中: %+v", qs)
+	}
+}
