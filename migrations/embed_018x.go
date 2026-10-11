@@ -21,3 +21,9 @@ var ElimEvidenceSeedSQL string // D-180：统计证据阈值 app_config 播种�
 
 //go:embed 0187_cex_dci_quote.sql
 var CexDCIQuoteSQL string // D-183：三所 DCI/双币产品报价表
+
+//go:embed 0189_capability_constraint.sql
+var CapabilityConstraintSQL string // D-186②：能力约束表（scope 四枚举+nullable position_id）
+
+//go:embed 0190_condition_gap.sql
+var ConditionGapSQL string // D-186③：条件缺口表（open→requested→fulfilled/waived 态机）
