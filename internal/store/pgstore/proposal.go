@@ -6,6 +6,7 @@ package pgstore
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -133,6 +134,30 @@ func (s *Store) ExpireProposalsExcept(ctx context.Context, liveTemplates []strin
 		args = append(args, liveTemplates)
 	}
 	res, err := s.pool.Exec(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	return int(res.RowsAffected()), nil
+}
+
+// DormantPairs D-204①：休眠轨机器可读集——subject 'dormant:<tmpl>@<venue>' 前缀匹配
+// +value_num=1 生效 → "tmpl@venue" 键集（生产种子 id=10 已在账；零=非休眠）。
+func DormantPairs(cons []CapabilityConstraint) map[string]bool {
+	out := map[string]bool{}
+	for _, c := range cons {
+		if c.ValueNum != nil && *c.ValueNum == 1 && strings.HasPrefix(c.Subject, "dormant:") {
+			out[strings.TrimPrefix(c.Subject, "dormant:")] = true
+		}
+	}
+	return out
+}
+
+// DeferProposalsByPair D-204②：存量 proposed 行翻 deferred（休眠轨挂起——
+// declined=人拒/expired=失配过期语义皆错；CAS 仅 proposed 态动）。
+func (s *Store) DeferProposalsByPair(ctx context.Context, template, venue string) (int, error) {
+	res, err := s.pool.Exec(ctx, `
+		UPDATE fin_proposal SET status='deferred', decided_at=now()
+		WHERE status='proposed' AND template_id=$1 AND venue=$2`, template, venue)
 	if err != nil {
 		return 0, err
 	}

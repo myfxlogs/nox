@@ -191,6 +191,7 @@ var migrationFiles = []struct {
 	{196, migrations.OTMBoundSQL},                      // D-191-R9：%OTM 闸界入约束表
 	{197, migrations.DCIOrderRefSQL},                   // D-191-R10：报价行 order_ref 补列
 	{198, migrations.DCIAmountBoundSQL},                // D-191-R11：报价行 min/max/decimal 三字段
+	{199, migrations.DormantDeferredSQL},               // D-204：deferred 态+休眠轨种子
 	{188, migrations.OppTemplateSQL},                   // D-185：机会模板册（fin_opp_template+cond）
 }
 

@@ -53,3 +53,6 @@ var DCIOrderRefSQL string // D-191-R10：报价行 order_ref 补列
 
 //go:embed 0198_dci_amount_bound.sql
 var DCIAmountBoundSQL string // D-191-R11：报价行 min/max/decimal 三字段
+
+//go:embed 0199_dormant_deferred.sql
+var DormantDeferredSQL string // D-204：deferred 态+休眠轨种子
