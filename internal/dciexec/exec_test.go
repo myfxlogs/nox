@@ -413,3 +413,27 @@ func TestD191R4_OutstandingBackfill(t *testing.T) {
 		t.Fatal("零漂移不应修正/告警")
 	}
 }
+
+// TestD191R5_LargeAccountJSON：/v3/account 大 JSON（>8KB）读径不截断（R5 锚）。
+func TestD191R5_LargeAccountJSON(t *testing.T) {
+	// 构造 >8KB balances 响应：大量噪声资产+末位 BTC。
+	var sb strings.Builder
+	sb.WriteString(`{"balances":[`)
+	for i := 0; i < 300; i++ {
+		fmt.Fprintf(&sb, `{"asset":"DUST%03d","free":"0","locked":"0"},`, i)
+	}
+	sb.WriteString(`{"asset":"BTC","free":"0.5","locked":"0"}]}`)
+	if sb.Len() < 8192 {
+		t.Fatalf("锚料应 >8KB: %d", sb.Len())
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, sb.String())
+	}))
+	defer srv.Close()
+	e := &Executor{Store: newFake(), BnKey: "k", BnSec: "s",
+		APIBase: srv.URL + "/api", Client: srv.Client(), Now: time.Now}
+	bal, err := e.freeBalance(context.Background(), "BTC")
+	if err != nil || bal != 0.5 {
+		t.Fatalf("大 JSON 应解析出末位 BTC=0.5: %v %v", bal, err)
+	}
+}

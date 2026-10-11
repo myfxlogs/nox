@@ -80,7 +80,7 @@ func (e *Executor) get(ctx context.Context, url string, signed bool) ([]byte, er
 		return nil, err
 	}
 	defer resp.Body.Close()
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // R5：/v3/account 大 JSON 防截断（post 侧 4096 保留）
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(b))
 	}
