@@ -33,5 +33,8 @@ var CapabilityPermissionSQL string // D-188②：权限探测面（venue×permis
 
 //go:embed 0192_dci_order.sql
 var DCIOrderSQL string // D-191：DCI 申购执行轨幂等账本（request_id UNIQUE）
+
+//go:embed 0193_employee_registry.sql
+var EmployeeRegistrySQL string // D-190：员工花名册（daemon 编制+心跳+生死）
 //go:embed 0188_opp_template.sql
 var OppTemplateSQL string // D-185：机会模板册（fin_opp_template+cond 子表，首批 9 族）

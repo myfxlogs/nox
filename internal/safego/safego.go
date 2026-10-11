@@ -31,6 +31,37 @@ func SetOnPanic(fn func(name string, recovered any, willRestart bool)) {
 	OnPanic.Store(&f)
 }
 
+// OnBeat/OnExit 心跳与退出钩（D-190 员工花名册：beat=协程节拍心跳、
+// exit=fn 退出事件；装配侧接 PG upsert；nil=仅无操作）。atomic 同 OnPanic 域。
+var OnBeat atomic.Pointer[func(name string)]
+var OnExit atomic.Pointer[func(name string)]
+
+// SetOnBeat/SetOnExit 装配钩子（boot 期单次调用）。
+func SetOnBeat(fn func(name string)) { storeHook(&OnBeat, fn) }
+func SetOnExit(fn func(name string)) { storeHook(&OnExit, fn) }
+
+func storeHook(slot *atomic.Pointer[func(string)], fn func(string)) {
+	if fn == nil {
+		slot.Store(nil)
+		return
+	}
+	f := fn
+	slot.Store(&f)
+}
+
+// Beat 心跳：Go/GoLoop 在 fn 启动时自动打一次；长驻内循环可显式 Beat(name)
+// 挂自身节拍刷新（零新 goroutine——D-190 语义）。
+func Beat(name string) { fireHook(&OnBeat, name) }
+
+func fireHook(slot *atomic.Pointer[func(string)], name string) {
+	fn := slot.Load()
+	if fn == nil {
+		return
+	}
+	defer func() { _ = recover() }()
+	(*fn)(name)
+}
+
 func fireOnPanic(name string, r any, willRestart bool) {
 	fn := OnPanic.Load()
 	if fn == nil {
@@ -45,6 +76,8 @@ func fireOnPanic(name string, r any, willRestart bool) {
 // 保持本形态——重启语义不安全者禁转 GoLoop）。
 func Go(name string, fn func()) {
 	go func() {
+		Beat(name)
+		defer fireHook(&OnExit, name)
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("[safego:%s] panic recovered: %v\n%s", name, r, debug.Stack())
@@ -65,6 +98,7 @@ func GoLoop(name string, fn func()) {
 		lastPanic := time.Time{}
 		for {
 			var stack []byte
+			Beat(name)
 			panicked := func() (r any) {
 				defer func() {
 					if p := recover(); p != nil {
@@ -76,6 +110,7 @@ func GoLoop(name string, fn func()) {
 				return nil
 			}()
 			if panicked == nil {
+				fireHook(&OnExit, name)
 				return
 			}
 			log.Printf("[safego:%s] panic recovered, restarting: %v\n%s", name, panicked, stack)
