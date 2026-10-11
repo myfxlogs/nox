@@ -24,9 +24,9 @@ var goodProbeBatch = "摘要。\n```explorer-proposals\n" +
 	`{"narrative":"n","proposals":[],"probe_proposals":[` +
 	`{"purpose":"验证 UKOIL swap 实收","falsify":"24h |swap| > 0.01 USD","venue_key":"3001:mt5",` +
 	`"canonical":"ETHUSDT","side":"BUY","qty":0.5,"notional_usd":300,"expected_cost_usd":1.2,` +
-	`"auto_close_at":"2999-01-01T00:00:00Z","basis":"term_dispersion"},` +
+	`"auto_close_at":"2999-01-01T00:00:00Z","basis":"term_dispersion","premises":[{"kind":"term_dispersion","canonical":"ETHUSDT"}]},` +
 	`{"purpose":"缺 falsify 的坏行","venue_key":"3001:mt5","canonical":"ETHUSDT","side":"BUY",` +
-	`"qty":0.5,"notional_usd":300,"expected_cost_usd":1.2,"auto_close_at":"2999-01-01T00:00:00Z","basis":"x"}` +
+	`"qty":0.5,"notional_usd":300,"expected_cost_usd":1.2,"auto_close_at":"2999-01-01T00:00:00Z","basis":"x","premises":[{"kind":"idle_funds","venue":"3001"}]}` +
 	`]}` + "\n```\n"
 
 // TestD048_ProbeContractFields 契约缺任一字段拒（逐一断言拒因非空）。
@@ -52,18 +52,20 @@ func TestD048_ProbeContractFields(t *testing.T) {
 	}
 	f64 := func(v float64) *float64 { return &v }
 	cases := map[string]*explorerv1.ProbeProposal{
-		"purpose":     mutate(good, func(p *explorerv1.ProbeProposal) { p.Purpose = "" }),
-		"falsify无数字":  mutate(good, func(p *explorerv1.ProbeProposal) { p.Falsify = "看 swap 收不收" }),
-		"venue_key":   mutate(good, func(p *explorerv1.ProbeProposal) { p.VenueKey = "" }),
-		"canonical集外": mutate(good, func(p *explorerv1.ProbeProposal) { p.Canonical = "UNKNOWN" }),
-		"side":        mutate(good, func(p *explorerv1.ProbeProposal) { p.Side = "LONG" }),
-		"qty":         mutate(good, func(p *explorerv1.ProbeProposal) { p.Qty = f64(0) }),
-		"qty缺":        mutate(good, func(p *explorerv1.ProbeProposal) { p.Qty = nil }),
-		"notional零":   mutate(good, func(p *explorerv1.ProbeProposal) { p.NotionalUsd = f64(0) }),
-		"notional超":   mutate(good, func(p *explorerv1.ProbeProposal) { p.NotionalUsd = f64(2000) }),
-		"cost缺":       mutate(good, func(p *explorerv1.ProbeProposal) { p.ExpectedCostUsd = nil }),
-		"close过去":     mutate(good, func(p *explorerv1.ProbeProposal) { p.AutoCloseAt = timestamppb.New(now.Add(-time.Hour)) }),
-		"basis":       mutate(good, func(p *explorerv1.ProbeProposal) { p.Basis = "" }),
+		"purpose":      mutate(good, func(p *explorerv1.ProbeProposal) { p.Purpose = "" }),
+		"falsify无数字":   mutate(good, func(p *explorerv1.ProbeProposal) { p.Falsify = "看 swap 收不收" }),
+		"venue_key":    mutate(good, func(p *explorerv1.ProbeProposal) { p.VenueKey = "" }),
+		"canonical集外":  mutate(good, func(p *explorerv1.ProbeProposal) { p.Canonical = "UNKNOWN" }),
+		"side":         mutate(good, func(p *explorerv1.ProbeProposal) { p.Side = "LONG" }),
+		"qty":          mutate(good, func(p *explorerv1.ProbeProposal) { p.Qty = f64(0) }),
+		"qty缺":         mutate(good, func(p *explorerv1.ProbeProposal) { p.Qty = nil }),
+		"notional零":    mutate(good, func(p *explorerv1.ProbeProposal) { p.NotionalUsd = f64(0) }),
+		"notional超":    mutate(good, func(p *explorerv1.ProbeProposal) { p.NotionalUsd = f64(2000) }),
+		"cost缺":        mutate(good, func(p *explorerv1.ProbeProposal) { p.ExpectedCostUsd = nil }),
+		"close过去":      mutate(good, func(p *explorerv1.ProbeProposal) { p.AutoCloseAt = timestamppb.New(now.Add(-time.Hour)) }),
+		"basis":        mutate(good, func(p *explorerv1.ProbeProposal) { p.Basis = "" }),
+		"premises缺":    mutate(good, func(p *explorerv1.ProbeProposal) { p.Premises = nil }),
+		"premise缺kind": mutate(good, func(p *explorerv1.ProbeProposal) { p.Premises[0].Kind = "" }),
 	}
 	for name, p := range cases {
 		if c, why := validateProbeContract(p, known, 1000, true, now); c != nil || why == "" {
