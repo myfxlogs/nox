@@ -13,7 +13,8 @@ type LedgerView struct {
 	CapitalBy   map[string]float64       // 非稳币桶按 ccy 直挂
 	Holdings    map[string]float64       // asset → qty
 	Constraints map[string]ConstraintVal // subject → 已喂约束（qualifier+value）
-	Permissions map[string]bool          // endpoint 权限标签（fin_capability_permission 探测面）
+	Permissions map[string]bool          // endpoint 权限标签（present 探测面）
+	PermStates  map[string]string        // D-193②：permission 三态原样（present|absent|unknown——收口哨用）
 }
 
 // ConstraintVal 约束限值（qualifier=max/min 时 Value 参与数值比较）。
@@ -83,6 +84,26 @@ func EvalCond(l LedgerView, c Cond) bool {
 		return true
 	}
 	return false // 未知 kind=不满足 fail-closed
+}
+
+// EvalCondTri D-193② 三态求值（缺口自动收口哨用）："ok"|"miss"|"unknown"——
+// permission kind 行缺（探针未就绪）或 state=unknown（传输层败）→unknown 不收不复开；
+// 其余 kind=账本断言面确定性二态。
+func EvalCondTri(l LedgerView, c Cond) string {
+	if c.Kind == "permission" {
+		switch l.PermStates[c.Subject] {
+		case "present":
+			return "ok"
+		case "absent":
+			return "miss"
+		default: // 行缺/unknown=探针面未就绪——判不了
+			return "unknown"
+		}
+	}
+	if EvalCond(l, c) {
+		return "ok"
+	}
+	return "miss"
 }
 
 // Match 全模板裁决：可提案者按净 APR 降序（nil 报价殿后）；
