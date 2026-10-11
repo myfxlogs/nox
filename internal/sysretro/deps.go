@@ -26,6 +26,8 @@ type Store interface {
 	RetroWeeklyStats(ctx context.Context, since, until time.Time) (*pgstore.RetroWeekly, error)
 	// DepthFacts D-578：cex_depth_sampler 窗内采样行（三所深度章节）。
 	DepthFacts(ctx context.Context, since, until time.Time) ([]pgstore.DepthFact, error)
+	// AppConfigFloat D-180：统计证据阈值热读（Zσ/转折点标注线，种子径 app_config）。
+	AppConfigFloat(ctx context.Context, key string) (float64, bool, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 }
 

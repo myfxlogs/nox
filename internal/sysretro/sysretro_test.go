@@ -34,6 +34,10 @@ func (f *fakeRetroStore) RetroWeeklyStats(context.Context, time.Time, time.Time)
 func (f *fakeRetroStore) DepthFacts(context.Context, time.Time, time.Time) ([]pgstore.DepthFact, error) {
 	return f.depth, nil
 }
+func (f *fakeRetroStore) AppConfigFloat(context.Context, string) (float64, bool, error) {
+	return 0, false, nil
+}
+
 func (f *fakeRetroStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -265,5 +269,27 @@ func TestD181_HprText(t *testing.T) {
 	row.HprN = 2
 	if got := hprText(row); got != "hpr_bps=25.00(2/3)" {
 		t.Fatalf("hpr bps 渲染错, got %q", got)
+	}
+}
+
+// TestD180_StrategyEvidence：影子裁决三态+转折点标注（<30 证据不足/分歧/依赖异常）。
+func TestD180_StrategyEvidence(t *testing.T) {
+	row := pgstore.RetroStrategyRow{Strategy: "S", Trades: 10, WinRate: 0.5}
+	out := strategyEvidence(row, []float64{1, -1}, 2, 2)
+	if !strings.Contains(out, "证据不足") || !strings.Contains(out, "序列不足") {
+		t.Fatalf("<30 降级标注缺: %q", out)
+	}
+	// 高胜率存活+下界>30%→与现行存活一致无分歧；DISABLED+下界高→分歧。
+	row = pgstore.RetroStrategyRow{Strategy: "S", Trades: 50, WinRate: 0.60, Disabled: true}
+	out = strategyEvidence(row, nil, 2, 2)
+	if !strings.Contains(out, "存活（下界") || !strings.Contains(out, "⚠分歧") {
+		t.Fatalf("已禁但下界存活应标分歧: %q", out)
+	}
+	// 低胜率未禁→置信界支持判死→分歧；交替序列→异类生异类标注。
+	row = pgstore.RetroStrategyRow{Strategy: "S", Trades: 50, WinRate: 0.10}
+	alt := []float64{1, -1, 1, -1, 1, -1, 1, -1, 1, -1}
+	out = strategyEvidence(row, alt, 2, 2)
+	if !strings.Contains(out, "支持判死") || !strings.Contains(out, "⚠分歧") {
+		t.Fatalf("低胜率未禁应支持判死+分歧: %q", out)
 	}
 }

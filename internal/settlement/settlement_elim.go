@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 
+	"arb/internal/mmm"
 	"arb/internal/store/pgstore"
 )
 
@@ -49,6 +50,7 @@ func runElimination(ctx context.Context, deps Deps, p *pgstore.Position, elim El
 	}
 	disable, reason := elim(agg.Total, winRate, agg.AvgPnl, agg.MedianPnl, stat.Disabled)
 	if disable {
+		reason += elimEvidenceSuffix(ctx, deps, agg.Total, winRate)
 		// D-256-A R1：族内全禁——family 非 nil 时禁用族内全部策略（CARRY/SWAPARB 同族），
 		// 避免复活场景下 CARRY 触发淘汰后 SWAPARB 存活至重启/自身结算（D-256 循环亏漏洞残留）。
 		famStrategies := []string{p.Type}
@@ -63,4 +65,14 @@ func runElimination(ctx context.Context, deps Deps, p *pgstore.Position, elim El
 		log.Printf("[settlement] STRATEGY DISABLED family=%v: %s", famStrategies, reason)
 		_ = deps.InsertAlert(ctx, nil, "warn", fmt.Sprintf("[策略淘汰] %v: %s", famStrategies, reason))
 	}
+}
+
+// elimEvidenceSuffix D-180 S①：判死 reason 追加 B.12 证据字段（与 autotrade 同式）。
+// Zσ 走 app_config ARB_ELIM_ZSIGMA 热读（默认 2）；Deps 不实现/读败回落默认。
+func elimEvidenceSuffix(ctx context.Context, deps Deps, total int, winRate float64) string {
+	z := 2.0
+	if v, ok, err := deps.AppConfigFloat(ctx, "ARB_ELIM_ZSIGMA"); err == nil && ok && v > 0 {
+		z = v
+	}
+	return mmm.ElimEvidence(total, winRate, 0.30, z)
 }

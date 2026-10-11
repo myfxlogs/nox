@@ -979,3 +979,8 @@ func (f *fakeDeps) LatestPaperByLegs(ctx context.Context, canonical string, legV
 	}
 	return nil, nil
 }
+
+// AppConfigFloat D-180：测试桩（缺省=键不存在→Zσ 回落默认 2）。
+func (f *fakeDeps) AppConfigFloat(context.Context, string) (float64, bool, error) {
+	return 0, false, nil
+}

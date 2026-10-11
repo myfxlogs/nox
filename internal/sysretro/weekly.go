@@ -49,7 +49,14 @@ func GenerateWeekly(ctx context.Context, deps Deps) (string, error) {
 	if err != nil {
 		kbDelta = fmt.Sprintf("(kb scan err: %v)", err)
 	}
-	statsBlock := renderWeeklyStats(w, kbDelta)
+	zSigma, zLim := 2.0, 2.0
+	if v, ok, cerr := deps.Store.AppConfigFloat(ctx, "ARB_ELIM_ZSIGMA"); cerr == nil && ok && v > 0 {
+		zSigma = v
+	}
+	if v, ok, cerr := deps.Store.AppConfigFloat(ctx, "ARB_RETRO_DEP_Z"); cerr == nil && ok && v > 0 {
+		zLim = v
+	}
+	statsBlock := renderWeeklyStats(w, kbDelta, zSigma, zLim)
 	// D-578 S2：三所深度章节（读败=注记降级不炸周报）。
 	if dr, derr := deps.Store.DepthFacts(ctx, since, now); derr != nil {
 		statsBlock += "== 三所深度（近7日）==\n(读取失败: " + derr.Error() + ")\n"
@@ -68,7 +75,7 @@ func GenerateWeekly(ctx context.Context, deps Deps) (string, error) {
 	}
 
 	date := now.Format("2006-01-02")
-	report := assembleWeekly(date, deps.Client.Model, w, kbDelta, aiText.String())
+	report := assembleWeekly(date, deps.Client.Model, w, kbDelta, aiText.String(), zSigma, zLim)
 	path, err := writeReport(deps.ReportDir, "sysretro-weekly-"+date+".md", report)
 	if err != nil {
 		return "", err
@@ -148,7 +155,7 @@ func kbDelta(entriesDir string, since, now time.Time) (string, error) {
 }
 
 // renderWeeklyStats §1-4 统计快照块。
-func renderWeeklyStats(w *pgstore.RetroWeekly, kb string) string {
+func renderWeeklyStats(w *pgstore.RetroWeekly, kb string, zSigma, zLim float64) string {
 	var b strings.Builder
 	b.WriteString("== 平仓分组（type）==\n")
 	for _, g := range w.Groups {
@@ -179,7 +186,7 @@ func renderWeeklyStats(w *pgstore.RetroWeekly, kb string) string {
 		if s.Disabled {
 			dis = " DISABLED(" + s.Reason + ")"
 		}
-		fmt.Fprintf(&b, "%s: trades=%d win_rate=%.2f pnl=$%.4f %s%s\n", s.Strategy, s.Trades, s.WinRate, s.TotalPnl, hprText(s), dis)
+		fmt.Fprintf(&b, "%s: trades=%d win_rate=%.2f pnl=$%.4f %s%s\n%s", s.Strategy, s.Trades, s.WinRate, s.TotalPnl, hprText(s), dis, strategyEvidence(s, w.DepSeq[s.Strategy], zSigma, zLim))
 	}
 	b.WriteString("== 告警聚类（warn/critical top10）==\n")
 	for _, c := range w.AlertCluster {
@@ -191,7 +198,7 @@ func renderWeeklyStats(w *pgstore.RetroWeekly, kb string) string {
 }
 
 // assembleWeekly 五节契约拼装：Go 表 fenced + AI 叙事（按节标题抽取，缺节回退尾部整段）。
-func assembleWeekly(date, model string, w *pgstore.RetroWeekly, kb, aiText string) string {
+func assembleWeekly(date, model string, w *pgstore.RetroWeekly, kb, aiText string, zSigma, zLim float64) string {
 	aiSections := splitAISections(aiText)
 	var b strings.Builder
 	fmt.Fprintf(&b, "# 系统周复盘 %s\n\n> 数字=Go 确定性计算；叙事=AI 生成（%s）未经独立复审；§改进建议已入收件箱待分诊。\n\n", date, model)
@@ -200,7 +207,7 @@ func assembleWeekly(date, model string, w *pgstore.RetroWeekly, kb, aiText strin
 	}
 	writeSection("交易成败归因", weeklyTradeTable(w))
 	writeSection("纸面交易复盘", weeklyPaperTable(w))
-	writeSection("策略生死状", weeklyStrategyTable(w))
+	writeSection("策略生死状", weeklyStrategyTable(w, zSigma, zLim))
 	writeSection("踩坑与经验", kb+alertClusterTable(w))
 	// §5：AI 全文中的建议节（含 fenced 块原文）。
 	sugg := strings.TrimSpace(aiSections["改进建议"])
@@ -269,18 +276,6 @@ func hprText(s pgstore.RetroStrategyRow) string {
 		return "hpr_bps=口径缺"
 	}
 	return fmt.Sprintf("hpr_bps=%.2f(%d/%d)", *s.HprAvg*1e4, s.HprN, s.HprAll)
-}
-
-func weeklyStrategyTable(w *pgstore.RetroWeekly) string {
-	var b strings.Builder
-	for _, s := range w.Strategies {
-		dis := ""
-		if s.Disabled {
-			dis = " DISABLED(" + s.Reason + ")"
-		}
-		fmt.Fprintf(&b, "%s trades=%d win_rate=%.2f pnl=$%.4f %s%s\n", s.Strategy, s.Trades, s.WinRate, s.TotalPnl, hprText(s), dis)
-	}
-	return b.String()
 }
 
 func alertClusterTable(w *pgstore.RetroWeekly) string {
