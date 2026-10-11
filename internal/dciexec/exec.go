@@ -68,6 +68,16 @@ var execTemplates = map[string][]leg{
 	"dci_buy_low":                {putLeg},
 }
 
+// ExecTemplateVenues 可执行提案模板→执行 venue（D-193① venue 悬空自检数据源；
+// 本 executor=binance 单所写径——venue 集从腿面衍生非手抄）。
+func ExecTemplateVenues() map[string]string {
+	out := make(map[string]string, len(execTemplates))
+	for t := range execTemplates {
+		out[t] = "binance"
+	}
+	return out
+}
+
 // Go 裸口令主径：最新 pending 可执行提案→GoProposal 绑 id 执行（D-189③）。
 func (e *Executor) Go(ctx context.Context) (string, error) {
 	var tmpls []string
