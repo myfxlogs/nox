@@ -131,6 +131,15 @@ func (s *Scanner) scanOnce(ctx context.Context) error {
 		}
 	}
 
+	// D-183 ②b 三所 DCI/双币报价采集 → 入库（单所失败在 CollectDCI 内隔离，
+	// 本段只做入库——写败单行 log 不拖垮后续扫描段）。
+	for i, q := range s.earn.CollectDCI(ctx) {
+		qq := q
+		if err := s.store.InsertCexDCIQuote(ctx, &qq); err != nil {
+			log.Printf("[cexscan] insert dci quote %s/%s[%d]: %v", q.Venue, q.Underlying, i, err)
+		}
+	}
+
 	// ③ 跨所价差 → 入库（okxSpotBase=D-011 S2 OKX 腿直连传输层错误的 cex-proxy 回落通道）
 	spreads, err := CalcSpreads(ctx, s.client, s.bnAPIURL, s.okxSpotBase, s.symbols)
 	if err != nil {

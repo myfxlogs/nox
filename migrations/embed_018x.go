@@ -15,3 +15,6 @@ var DropCnfiRepoSQL string // D-139：CNFI/逆回购面 13 表幂等 DROP（生�
 
 //go:embed 0185_facts_kind_ts_idx.sql
 var FactsKindTsIdxSQL string // D-152 fixup：facts(kind,ts)——retention 超窗候选范围寻址
+
+//go:embed 0187_cex_dci_quote.sql
+var CexDCIQuoteSQL string // D-183：三所 DCI/双币产品报价表
