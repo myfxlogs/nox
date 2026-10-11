@@ -53,6 +53,8 @@ type RetroClosedCase struct {
 }
 
 // RetroStrategyRow 周报§3 strategy_stats 行。
+// HPR 三列（D-181）：per-trade 资本效率口径——avg(net_realized_usd/notional_usd)，
+// 名义本金为资本占用代理（positions 无保证金列）；HprAvg=nil 或 HprN=0 → 口径缺。
 type RetroStrategyRow struct {
 	Strategy string
 	Trades   int
@@ -60,6 +62,9 @@ type RetroStrategyRow struct {
 	TotalPnl float64
 	Disabled bool
 	Reason   string
+	HprAvg   *float64 // 平均每笔 HPR 比率（纯证据字段，不入淘汰判定）
+	HprN     int      // notional 可得行数
+	HprAll   int      // 聚合总行数
 }
 
 // RetroAlertCluster 周报§4 告警聚类行（按 message 首词聚类）。
@@ -238,20 +243,11 @@ func (s *Store) RetroWeeklyStats(ctx context.Context, since, until time.Time) (*
 		since, until).Scan(&w.PaperIntraN, &w.PaperSpotN); err != nil {
 		return nil, err
 	}
-	srows, err := s.pool.Query(ctx, `
-		SELECT strategy, total_trades, win_rate, total_pnl, disabled, disabled_reason
-		FROM strategy_stats ORDER BY total_pnl`)
+	srows, err := s.retroStrategyRows(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer srows.Close()
-	for srows.Next() {
-		var r RetroStrategyRow
-		if err := srows.Scan(&r.Strategy, &r.Trades, &r.WinRate, &r.TotalPnl, &r.Disabled, &r.Reason); err != nil {
-			return nil, err
-		}
-		w.Strategies = append(w.Strategies, r)
-	}
+	w.Strategies = srows
 	if err := s.scanDist(ctx, &w.EvalDist, `
 		SELECT decision, count(*) FROM position_evals
 		WHERE evaluated_at >= $1 AND evaluated_at < $2 GROUP BY decision`, since, until); err != nil {
