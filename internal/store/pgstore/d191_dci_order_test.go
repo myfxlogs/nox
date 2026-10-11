@@ -49,6 +49,8 @@ func TestD191_DCIOrderStore(t *testing.T) {
 	if len(qs) != 2 || qs[0].ProductRef != "d191hi" {
 		t.Fatalf("应回 tenor≤14 CALL 档 apy 降序: %+v", qs)
 	}
+	// 共享测试库残行（r8/r13 跨轮残留）先清再对空回锚。
+	s.pool.Exec(ctx, `DELETE FROM fin_cex_dci_quote WHERE opt_type='PUT'`)
 	qs2, err := s.ListDCIQuotes(ctx, "binance", "BTC", "PUT", "USDT", 90, 0)
 	if err != nil || len(qs2) != 0 {
 		t.Fatalf("PUT/USDT 无档应空回: %v %+v", err, qs2)

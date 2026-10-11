@@ -127,15 +127,61 @@ func (s *Store) OutstandingDCIQty(ctx context.Context, venue, investCcy string) 
 }
 
 // RecentDCIOrderByProposal D-191-R11② 执行租约：同 proposal_id window 内最新
-// 订单 id（无=0）——双击/重发防双成交（窗按库钟算）。
+// **非 failed** 订单 id（无=0）——双击/重发防双成交；failed 终态不阻 D-198 续执
+// （败单无仓位，阻它=禁重试，票面语义=在飞行/已成交行才挡）。
 func (s *Store) RecentDCIOrderByProposal(ctx context.Context, proposalID int64, window time.Duration) (int64, error) {
 	var id int64
 	err := s.pool.QueryRow(ctx, `
 		SELECT id FROM fin_dci_order
-		WHERE proposal_id=$1 AND created_at > now() - $2::interval
+		WHERE proposal_id=$1 AND status<>'failed'
+		  AND created_at > now() - $2::interval
 		ORDER BY id DESC LIMIT 1`, proposalID, window.String()).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, nil
 	}
 	return id, err
+}
+
+// FailedProposalOrder 断点续执候选行（提案+最新败单档向）。
+type FailedProposalOrder struct {
+	ProposalID int64
+	ProductRef string
+	OptType    string
+}
+
+// ListFailedProposalOrders D-198：proposed 提案中最新单为 failed 终态者——
+// pending/submitted 飞行行与无单提案天然不入集；每提案最新一单按 max(id)。
+func (s *Store) ListFailedProposalOrders(ctx context.Context) ([]FailedProposalOrder, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT o.proposal_id, o.product_ref, o.opt_type
+		FROM fin_dci_order o
+		JOIN fin_proposal p ON p.id=o.proposal_id AND p.status='proposed'
+		WHERE o.status='failed'
+		  AND o.id=(SELECT max(id) FROM fin_dci_order WHERE proposal_id=p.id)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []FailedProposalOrder
+	for rows.Next() {
+		var r FailedProposalOrder
+		if err := rows.Scan(&r.ProposalID, &r.ProductRef, &r.OptType); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// OutstandingDCIProduct D-198 续执复验：同 product_ref+腿向 filled 未到期锁仓存在否——
+// venue 实收但本地记 failed 的错位场景零重购判据。
+func (s *Store) OutstandingDCIProduct(ctx context.Context, productRef, optType string) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM fin_dci_order
+			WHERE product_ref=$1 AND opt_type=$2 AND status='filled'
+			  AND created_at + COALESCE(tenor_days,0) * interval '1 day' > now())`,
+		productRef, optType).Scan(&ok)
+	return ok, err
 }

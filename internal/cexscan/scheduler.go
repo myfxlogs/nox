@@ -137,6 +137,9 @@ func (s *Scanner) scanOnce(ctx context.Context) error {
 		}
 	}
 
+	// D-198：首个 DCI 采集拍入库毕→续执信号（提案断点续执等此）。
+	bus.MarkDCIBootDone()
+
 	// D-188② 权限面落库（吃同轮采集错误面零重调，dual_order/earn_subscribe）。
 	s.RecordPermissions(ctx, earnErrs, dciErrs)
 	// D-193③：首轮权限面落毕→boot 信号（oppmatch 首扫等此消竞态假缺口）。
