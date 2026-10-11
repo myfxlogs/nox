@@ -36,6 +36,12 @@ type fakeQueryStore struct {
 	ackAllCalled bool
 	ackByKeySeen string
 	alertAckAll  bool
+	// D-201 字段
+	runPositions []pgstore.Position
+	runPersonal  []pgstore.PersonalPosition
+	finSummary   FeishuFinanceSummary
+	dciOrders    []pgstore.DCIOrder
+	roDSN        string
 }
 
 func (s *fakeQueryStore) FeishuTarget(context.Context) (string, string, error) {
@@ -58,6 +64,21 @@ func (s *fakeQueryStore) SumTodayIncome(context.Context) (float64, float64, floa
 }
 func (s *fakeQueryStore) SumTRXTxRentalAll(context.Context) (float64, error)    { return 0, nil }
 func (s *fakeQueryStore) SumTRXTxVoteClaimAll(context.Context) (float64, error) { return 0, nil }
+
+// D-201 fake 面。
+func (s *fakeQueryStore) StrategiesRunning(context.Context) ([]pgstore.Position, []pgstore.PersonalPosition, error) {
+	return s.runPositions, s.runPersonal, nil
+}
+func (s *fakeQueryStore) FinanceSummary(context.Context) (FeishuFinanceSummary, error) {
+	return s.finSummary, nil
+}
+func (s *fakeQueryStore) ListDCIOrders(_ context.Context, limit int) ([]pgstore.DCIOrder, error) {
+	if limit > 0 && len(s.dciOrders) > limit {
+		return s.dciOrders[:limit], nil
+	}
+	return s.dciOrders, nil
+}
+func (s *fakeQueryStore) AIReadOnlyDSN(context.Context) (string, error) { return s.roDSN, nil }
 
 // D-168 ack 拦截 fake 面。
 func (s *fakeQueryStore) AckAllAlertEpisodes(context.Context) (int, error) {
