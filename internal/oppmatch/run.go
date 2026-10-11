@@ -135,7 +135,23 @@ func RunOnce(ctx context.Context, st *pgstore.Store) (int, int, error) {
 	}
 	propN, gapN := 0, 0
 	var liveTmpls []string // 当轮达标模板集（过期判定并入扫描拍——零新定时器）
+	// D-204②：休眠轨集（约束表 subject 'dormant:<tmpl>@<venue>' value_num=1）——
+	// 命中跳过 CreateProposal+存量 proposed 翻 deferred；读败不阻扫描（集空降级）。
+	dormant := map[string]bool{}
+	if cons, cerr := st.ListCapabilityConstraints(ctx); cerr == nil {
+		dormant = pgstore.DormantPairs(cons)
+	}
 	for _, r := range Match(in, view) {
+		if dormant[r.TemplateID+"@binance"] {
+			if n, derr := st.DeferProposalsByPair(ctx, r.TemplateID, "binance"); derr == nil && n > 0 {
+				log.Printf("[oppmatch] 休眠轨 %s@binance 翻 deferred %d 行", r.TemplateID, n)
+			}
+			if err := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
+				"休眠轨（D-191R7）%s@binance 达标但跳过提案", r.TemplateID)); err != nil {
+				log.Printf("[oppmatch] dormant alert %s: %v", r.TemplateID, err)
+			}
+			continue // 零新提案（info 级=台账留痕零推送）
+		}
 		if len(r.Missing) == 0 {
 			propN++
 			liveTmpls = append(liveTmpls, r.TemplateID)

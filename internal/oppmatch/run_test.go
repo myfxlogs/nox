@@ -198,3 +198,47 @@ func TestD193_EvalCondTri(t *testing.T) {
 		t.Fatal("确定性二态错")
 	}
 }
+
+// TestD204_DormantTrack：休眠轨锚——dormant 约束行在账→扫描零新提案+存量 proposed 翻 deferred。
+// （迁移 0199 种子 covered_call@binance 休眠行随 boot 落库——真账口径锚。）
+func TestD204_DormantTrack(t *testing.T) {
+	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	st, err := pgstore.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx, `DELETE FROM fin_proposal; DELETE FROM alerts`); err != nil {
+		t.Fatal(err)
+	}
+	// 存量 proposed 行（休眠轨）→应翻 deferred。
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_proposal
+		(template_id, exec_track, venue, params, expected_apr, status)
+		VALUES ('dci_sell_high_covered_call','dci','binance','{}',0.1,'proposed')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := RunOnce(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	var st_ string
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT status FROM fin_proposal WHERE template_id='dci_sell_high_covered_call'`).Scan(&st_); err != nil {
+		t.Fatal(err)
+	}
+	if st_ != "deferred" {
+		t.Fatalf("休眠轨存量行未翻 deferred：%s", st_)
+	}
+	// 休眠轨零新提案（同模板仅 1 行——种子行使该模板在休眠集）。
+	var n int
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM fin_proposal WHERE template_id='dci_sell_high_covered_call'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("休眠轨产新提案：%d 行", n)
+	}
+}
