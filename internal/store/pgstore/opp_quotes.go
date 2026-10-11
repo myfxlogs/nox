@@ -28,3 +28,15 @@ func (s *Store) MaxEarnAPR(ctx context.Context) (float64, bool, error) {
 	}
 	return v, v > 0, nil
 }
+
+// MaxFactValue 近 7d 某 facts kind 最大值（报价面兜底；kind 白名单口径由调用方定）。
+func (s *Store) MaxFactValue(ctx context.Context, kind string) (float64, bool, error) {
+	var v float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(max(value),0) FROM facts
+		WHERE kind=$1 AND ts > now() - interval '7 days'`, kind).Scan(&v)
+	if err != nil {
+		return 0, false, err
+	}
+	return v, v > 0, nil
+}

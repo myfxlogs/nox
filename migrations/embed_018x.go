@@ -27,5 +27,8 @@ var CapabilityConstraintSQL string // D-186②：能力约束表（scope 四枚�
 
 //go:embed 0190_condition_gap.sql
 var ConditionGapSQL string // D-186③：条件缺口表（open→requested→fulfilled/waived 态机）
+
+//go:embed 0191_capability_permission.sql
+var CapabilityPermissionSQL string // D-188②：权限探测面（venue×permission×state 探活记录）
 //go:embed 0188_opp_template.sql
 var OppTemplateSQL string // D-185：机会模板册（fin_opp_template+cond 子表，首批 9 族）

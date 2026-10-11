@@ -16,6 +16,15 @@ type CapabilityLedger struct {
 	Holdings    []CapabilityHolding    `json:"holdings"`
 	Constraints []CapabilityConstraint `json:"constraints"`
 	Gaps        []ConditionGap         `json:"gaps"`
+	Permissions []CapabilityPermission `json:"permissions"`
+}
+
+// CapabilityPermission 权限探测行（fin_capability_permission，只读探活结果）。
+type CapabilityPermission struct {
+	Venue      string `json:"venue"`
+	Permission string `json:"permission"`
+	State      string `json:"state"`
+	ProbedAt   string `json:"probed_at"`
 }
 
 // VenueCredentialCap 凭据存在面（零明文：只记 venue+能力标签）。
@@ -141,5 +150,33 @@ func (s *Store) ListCapabilityLedger(ctx context.Context) (*CapabilityLedger, er
 		return nil, err
 	}
 	l.Gaps = gaps
-	return l, nil
+	prows, err := s.pool.Query(ctx, `
+		SELECT venue, permission, state, probed_at::text
+		FROM fin_capability_permission ORDER BY venue, permission`)
+	if err != nil {
+		return nil, fmt.Errorf("ledger permissions: %w", err)
+	}
+	defer prows.Close()
+	for prows.Next() {
+		var p CapabilityPermission
+		if err := prows.Scan(&p.Venue, &p.Permission, &p.State, &p.ProbedAt); err != nil {
+			return nil, err
+		}
+		l.Permissions = append(l.Permissions, p)
+	}
+	return l, prows.Err()
+}
+
+// UpsertCapabilityPermission 探测结果写入（UNIQUE(venue,permission) 幂等刷新 probed_at）。
+func (s *Store) UpsertCapabilityPermission(ctx context.Context, venue, permission, state, note string) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO fin_capability_permission (venue, permission, state, note)
+		VALUES ($1,$2,$3,$4)
+		ON CONFLICT (venue, permission) DO UPDATE SET
+		  state=EXCLUDED.state, note=EXCLUDED.note, probed_at=now()`,
+		venue, permission, state, note)
+	if err != nil {
+		return fmt.Errorf("upsert capability permission: %w", err)
+	}
+	return nil
 }
