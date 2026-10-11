@@ -115,8 +115,10 @@ type ProbeProposal struct {
 	ExpectedCostUsd *float64 `protobuf:"fixed64,8,opt,name=expected_cost_usd,json=expectedCostUsd,proto3,oneof" json:"expected_cost_usd,omitempty"`
 	// auto_close_at 退出条件（到期自动平仓时刻；须在触发时未来）。
 	AutoCloseAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=auto_close_at,json=autoCloseAt,proto3" json:"auto_close_at,omitempty"`
-	// basis 数据依据（引用输入段字段名/事实键）。
-	Basis         string `protobuf:"bytes,10,opt,name=basis,proto3" json:"basis,omitempty"`
+	// basis 数据依据（引用输入段字段名/事实键——D-176 起降级纯人读展示，机审不解析散文）。
+	Basis string `protobuf:"bytes,10,opt,name=basis,proto3" json:"basis,omitempty"`
+	// premises D-176：结构化前提数组（机审唯一判据源；≥1 条必填）。
+	Premises      []*Premise `protobuf:"bytes,11,rep,name=premises,proto3" json:"premises,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -221,6 +223,86 @@ func (x *ProbeProposal) GetBasis() string {
 	return ""
 }
 
+func (x *ProbeProposal) GetPremises() []*Premise {
+	if x != nil {
+		return x.Premises
+	}
+	return nil
+}
+
+// Premise D-176：机审可回放的结构化前提（散文 basis 被当结构化数据解析的假歧义同源修）。
+type Premise struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// kind 前提种类（term_dispersion / idle_funds / …；未知 kind 机审判歧义留决）。
+	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	// venue term_dispersion 无关；idle_funds=权益快照 venue 键段（裸 venue 名，机审补 leg_type）。
+	Venue string `protobuf:"bytes,2,opt,name=venue,proto3" json:"venue,omitempty"`
+	// canonical 前提绑定符号（term_dispersion 必填；idle_funds 可空）。
+	Canonical string `protobuf:"bytes,3,opt,name=canonical,proto3" json:"canonical,omitempty"`
+	// free_usd idle_funds 声称闲置额（USD；term_dispersion 忽略）。
+	FreeUsd       float64 `protobuf:"fixed64,4,opt,name=free_usd,json=freeUsd,proto3" json:"free_usd,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Premise) Reset() {
+	*x = Premise{}
+	mi := &file_arb_explorer_v1_explorer_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Premise) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Premise) ProtoMessage() {}
+
+func (x *Premise) ProtoReflect() protoreflect.Message {
+	mi := &file_arb_explorer_v1_explorer_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Premise.ProtoReflect.Descriptor instead.
+func (*Premise) Descriptor() ([]byte, []int) {
+	return file_arb_explorer_v1_explorer_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *Premise) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *Premise) GetVenue() string {
+	if x != nil {
+		return x.Venue
+	}
+	return ""
+}
+
+func (x *Premise) GetCanonical() string {
+	if x != nil {
+		return x.Canonical
+	}
+	return ""
+}
+
+func (x *Premise) GetFreeUsd() float64 {
+	if x != nil {
+		return x.FreeUsd
+	}
+	return 0
+}
+
 // Proposal 单条提案（与 explorer_proposals 表列对齐；D-513 设计稿 §4）。
 type Proposal struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -242,7 +324,7 @@ type Proposal struct {
 
 func (x *Proposal) Reset() {
 	*x = Proposal{}
-	mi := &file_arb_explorer_v1_explorer_proto_msgTypes[2]
+	mi := &file_arb_explorer_v1_explorer_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -254,7 +336,7 @@ func (x *Proposal) String() string {
 func (*Proposal) ProtoMessage() {}
 
 func (x *Proposal) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_explorer_v1_explorer_proto_msgTypes[2]
+	mi := &file_arb_explorer_v1_explorer_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -267,7 +349,7 @@ func (x *Proposal) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Proposal.ProtoReflect.Descriptor instead.
 func (*Proposal) Descriptor() ([]byte, []int) {
-	return file_arb_explorer_v1_explorer_proto_rawDescGZIP(), []int{2}
+	return file_arb_explorer_v1_explorer_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Proposal) GetCanonical() string {
@@ -320,7 +402,7 @@ const file_arb_explorer_v1_explorer_proto_rawDesc = "" +
 	"\rProposalBatch\x12\x1c\n" +
 	"\tnarrative\x18\x01 \x01(\tR\tnarrative\x127\n" +
 	"\tproposals\x18\x02 \x03(\v2\x19.arb.explorer.v1.ProposalR\tproposals\x12G\n" +
-	"\x0fprobe_proposals\x18\x03 \x03(\v2\x1e.arb.explorer.v1.ProbeProposalR\x0eprobeProposals\"\x87\x03\n" +
+	"\x0fprobe_proposals\x18\x03 \x03(\v2\x1e.arb.explorer.v1.ProbeProposalR\x0eprobeProposals\"\xbd\x03\n" +
 	"\rProbeProposal\x12\x18\n" +
 	"\apurpose\x18\x01 \x01(\tR\apurpose\x12\x18\n" +
 	"\afalsify\x18\x02 \x01(\tR\afalsify\x12\x1b\n" +
@@ -332,10 +414,16 @@ const file_arb_explorer_v1_explorer_proto_rawDesc = "" +
 	"\x11expected_cost_usd\x18\b \x01(\x01H\x02R\x0fexpectedCostUsd\x88\x01\x01\x12>\n" +
 	"\rauto_close_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vautoCloseAt\x12\x14\n" +
 	"\x05basis\x18\n" +
-	" \x01(\tR\x05basisB\x06\n" +
+	" \x01(\tR\x05basis\x124\n" +
+	"\bpremises\x18\v \x03(\v2\x18.arb.explorer.v1.PremiseR\bpremisesB\x06\n" +
 	"\x04_qtyB\x0f\n" +
 	"\r_notional_usdB\x14\n" +
-	"\x12_expected_cost_usd\"\xce\x01\n" +
+	"\x12_expected_cost_usd\"l\n" +
+	"\aPremise\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x14\n" +
+	"\x05venue\x18\x02 \x01(\tR\x05venue\x12\x1c\n" +
+	"\tcanonical\x18\x03 \x01(\tR\tcanonical\x12\x19\n" +
+	"\bfree_usd\x18\x04 \x01(\x01R\afreeUsd\"\xce\x01\n" +
 	"\bProposal\x12\x1c\n" +
 	"\tcanonical\x18\x01 \x01(\tR\tcanonical\x12\x1b\n" +
 	"\tbest_pair\x18\x02 \x01(\tR\bbestPair\x12\x1c\n" +
@@ -356,24 +444,26 @@ func file_arb_explorer_v1_explorer_proto_rawDescGZIP() []byte {
 	return file_arb_explorer_v1_explorer_proto_rawDescData
 }
 
-var file_arb_explorer_v1_explorer_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_arb_explorer_v1_explorer_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_arb_explorer_v1_explorer_proto_goTypes = []any{
 	(*ProposalBatch)(nil),         // 0: arb.explorer.v1.ProposalBatch
 	(*ProbeProposal)(nil),         // 1: arb.explorer.v1.ProbeProposal
-	(*Proposal)(nil),              // 2: arb.explorer.v1.Proposal
-	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
-	(*structpb.Struct)(nil),       // 4: google.protobuf.Struct
+	(*Premise)(nil),               // 2: arb.explorer.v1.Premise
+	(*Proposal)(nil),              // 3: arb.explorer.v1.Proposal
+	(*timestamppb.Timestamp)(nil), // 4: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),       // 5: google.protobuf.Struct
 }
 var file_arb_explorer_v1_explorer_proto_depIdxs = []int32{
-	2, // 0: arb.explorer.v1.ProposalBatch.proposals:type_name -> arb.explorer.v1.Proposal
+	3, // 0: arb.explorer.v1.ProposalBatch.proposals:type_name -> arb.explorer.v1.Proposal
 	1, // 1: arb.explorer.v1.ProposalBatch.probe_proposals:type_name -> arb.explorer.v1.ProbeProposal
-	3, // 2: arb.explorer.v1.ProbeProposal.auto_close_at:type_name -> google.protobuf.Timestamp
-	4, // 3: arb.explorer.v1.Proposal.evidence:type_name -> google.protobuf.Struct
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	4, // 2: arb.explorer.v1.ProbeProposal.auto_close_at:type_name -> google.protobuf.Timestamp
+	2, // 3: arb.explorer.v1.ProbeProposal.premises:type_name -> arb.explorer.v1.Premise
+	5, // 4: arb.explorer.v1.Proposal.evidence:type_name -> google.protobuf.Struct
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_arb_explorer_v1_explorer_proto_init() }
@@ -388,7 +478,7 @@ func file_arb_explorer_v1_explorer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arb_explorer_v1_explorer_proto_rawDesc), len(file_arb_explorer_v1_explorer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

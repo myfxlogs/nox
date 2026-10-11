@@ -238,6 +238,30 @@ message RejectProbeResponse {
   string message = 2;
 }
 
+// === D-176①：探针提案待审读面（前端待审卡 + 飞书口令同一判据） ===
+
+message ProbeProposalCard {
+  int64 proposal_id = 1;          // explorer_proposals.id
+  string purpose = 2;             // 契约九字段（D-048①）
+  string falsify = 3;
+  string venue_key = 4;
+  string canonical = 5;
+  string side = 6;
+  double qty = 7;
+  double notional_usd = 8;
+  double expected_cost_usd = 9;
+  google.protobuf.Timestamp auto_close_at = 10;
+  string basis = 11;              // 人读散文（机审不解析）
+  string gate_note = 12;          // 机审注记（歧义/判据留痕）
+  google.protobuf.Timestamp proposed_at = 13; // 提案时刻（scan_date）
+}
+message ListProbeProposalsRequest {
+  bool include_decided = 1;       // false=仅 proposed 待审（默认）；true=全态含已裁定
+}
+message ListProbeProposalsResponse {
+  repeated ProbeProposalCard proposals = 1;
+}
+
 // === PersonalPosition 三 message（D-046 渲染面）D-063 退役拆除——D-212 退役渲染面后
 // 全链零读者；TRX 现役数据面走 pgstore.personal_positions 表（service_trx 保留）。名号留档不复用。
 
