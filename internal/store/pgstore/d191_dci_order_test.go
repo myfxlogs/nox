@@ -42,12 +42,16 @@ func TestD191_DCIOrderStore(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	q, err := s.BestDCIQuote(ctx, "binance", "BTC", "CALL", "", 14)
+	qs, err := s.ListDCIQuotes(ctx, "binance", "BTC", "CALL", "", 14)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if q.ProductRef != "d191hi" {
-		t.Fatalf("应选 tenor≤14 且 apy 最优档: %s", q.ProductRef)
+	if len(qs) != 2 || qs[0].ProductRef != "d191hi" {
+		t.Fatalf("应回 tenor≤14 CALL 档 apy 降序: %+v", qs)
+	}
+	qs2, err := s.ListDCIQuotes(ctx, "binance", "BTC", "PUT", "USDT", 90)
+	if err != nil || len(qs2) != 0 {
+		t.Fatalf("PUT/USDT 无档应空回: %v %+v", err, qs2)
 	}
 	// 回执入账。
 	qty := 0.018

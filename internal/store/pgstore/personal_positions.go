@@ -65,3 +65,11 @@ func (s *Store) ListPersonalPositions(ctx context.Context, status string, limit,
 func (s *Store) ListOpenPersonalPositions(ctx context.Context) ([]PersonalPosition, error) {
 	return s.ListPersonalPositions(ctx, "OPEN", 200, 0)
 }
+
+// UpdatePersonalPositionQtyNote D-191 R3：托管池对账份额行 qty+note 自动修正。
+func (s *Store) UpdatePersonalPositionQtyNote(ctx context.Context, id int64, qty float64, note string) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE personal_positions SET qty=$2, note=$3, updated_at=now() WHERE id=$1`,
+		id, qty, note)
+	return err
+}
