@@ -105,25 +105,31 @@ func (c *EarnCollector) collectBinanceDCI(ctx context.Context) ([]pgstore.CexDCI
 
 // parseBinanceDCI sapi dci/product/list 响应→行（exerciseCoin=underlying；apy 小数原样）。
 func parseBinanceDCI(body []byte, now time.Time) ([]pgstore.CexDCIQuote, error) {
+	type bRow struct {
+		ID             string      `json:"id"`
+		ExerciseCoin   string      `json:"exerciseCoin"`
+		InvestCoin     string      `json:"investCoin"`
+		StrikePrice    json.Number `json:"strikePrice"`
+		DeliveryDate   json.Number `json:"deliveryDate"`
+		APY            json.Number `json:"apy"`
+		OptionType     string      `json:"optionType"`
+		CanPurchase    bool        `json:"canPurchase"`
+		InstrumentName string      `json:"instrumentName"`
+	}
 	var raw struct {
-		Data []struct {
-			ID             string      `json:"id"`
-			ExerciseCoin   string      `json:"exerciseCoin"`
-			InvestCoin     string      `json:"investCoin"`
-			StrikePrice    json.Number `json:"strikePrice"`
-			DeliveryDate   json.Number `json:"deliveryDate"`
-			APY            json.Number `json:"apy"`
-			OptionType     string      `json:"optionType"`
-			CanPurchase    bool        `json:"canPurchase"`
-			InstrumentName string      `json:"instrumentName"`
-		} `json:"data"`
+		Data []bRow `json:"data"`
+		List []bRow `json:"list"` // 实拍实证：продукты под ключом list（{"total":N,"list":[...]}）
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("binance dci decode: %w", err)
 	}
+	rows := raw.Data
+	if len(rows) == 0 {
+		rows = raw.List
+	}
 	want := map[string]bool{"BTC": true, "ETH": true}
 	var out []pgstore.CexDCIQuote
-	for _, d := range raw.Data {
+	for _, d := range rows {
 		if !want[d.ExerciseCoin] {
 			continue
 		}
