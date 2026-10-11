@@ -53,10 +53,10 @@ func newFake() *fakeStore {
 		quotes: []pgstore.CexDCIQuote{
 			{Venue: "binance", Underlying: "BTC", InvestCcy: "BTC",
 				Strike: f64(120000), OptType: "CALL", TenorDays: &tenor, APY: 0.08,
-				ProductRef: "CALLP", DeliveryTs: &deliv},
+				ProductRef: "CALLP", OrderRef: "OC1", DeliveryTs: &deliv},
 			{Venue: "binance", Underlying: "BTC", InvestCcy: "USDT",
 				Strike: f64(80000), OptType: "PUT", TenorDays: &tenor, APY: 0.09,
-				ProductRef: "PUTP", DeliveryTs: &deliv},
+				ProductRef: "PUTP", OrderRef: "OP1", DeliveryTs: &deliv},
 		},
 		orders:    map[string]*pgstore.DCIOrder{},
 		proposals: map[int64]*pgstore.Proposal{},
@@ -186,9 +186,12 @@ func execR3(fs *fakeStore, url string, cli *http.Client, bals map[string]float64
 func TestD191_SignQuery(t *testing.T) {
 	e := &Executor{BnKey: "k", BnSec: "s", Sapi: "https://x.test", Now: time.Now}
 	at := time.UnixMilli(1700000000000)
-	q, url := e.SubscribeBody("PROJ1", 0.018, at)
-	if !strings.Contains(q, "projectId=PROJ1") || !strings.Contains(q, "lots=0.018") {
-		t.Fatalf("query 字段缺: %s", q)
+	q, url := e.SubscribeBody("PROJ1", "ORD1", 0.018, at)
+	// R10①：venue 参数面四参对拍（原 projectId/lots 错代）。
+	for _, want := range []string{"id=PROJ1", "orderId=ORD1", "depositAmount=0.018", "autoCompoundPlan=NONE"} {
+		if !strings.Contains(q, want) {
+			t.Fatalf("query 字段缺 %s: %s", want, q)
+		}
 	}
 	mac := hmac.New(sha256.New, []byte("s"))
 	mac.Write([]byte(q))
@@ -439,7 +442,7 @@ func TestD191R4_URLJoin(t *testing.T) {
 	if err != nil || bal != 0.11 { // free+locked=0.1+0.01
 		t.Fatalf("freeBalance: %v %v", bal, err)
 	}
-	if _, err := e.post(context.Background(), "P1", 0.01, time.Now()); err != nil {
+	if _, err := e.post(context.Background(), "P1", "O1", 0.01, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"/api/v3/ticker/price", "/api/v3/account", "/sapi/v1/dci/product/subscribe"}
@@ -617,7 +620,7 @@ func TestD191R8_DeepPutSelectable(t *testing.T) {
 	fs.quotes = append(fs.quotes, pgstore.CexDCIQuote{
 		Venue: "binance", Underlying: "BTC", InvestCcy: "USDT",
 		Strike: f64(105000), OptType: "PUT", TenorDays: &tenor, APY: 0.50,
-		ProductRef: "NEARP"})
+		ProductRef: "NEARP", OrderRef: "ON1"})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
@@ -666,5 +669,47 @@ func TestD191R9_BoundFromConstraint(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("缺界未落 constraint 缺口: %+v", fs.gaps)
+	}
+}
+
+// TestD191R10_OrderRefSkip：order_ref 缺行跳次档、全缺→「无可申购参数档」缺口。
+func TestD191R10_OrderRefSkip(t *testing.T) {
+	fs := newFake()
+	fs.quotes[1].OrderRef = "" // PUTP 缺 order_ref
+	tenor := 7
+	fs.quotes = append(fs.quotes, pgstore.CexDCIQuote{
+		Venue: "binance", Underlying: "BTC", InvestCcy: "USDT",
+		Strike: f64(70000), OptType: "PUT", TenorDays: &tenor, APY: 0.05,
+		ProductRef: "PUTP2", OrderRef: "OP2"}) // 次档有 orderRef→跳此成交
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"orderId":1}`)
+	}))
+	defer srv.Close()
+	e := execR3(fs, srv.URL, srv.Client(), map[string]float64{"USDT": 10000})
+	pid := fs.addProposal("dci_buy_low")
+	if _, err := e.GoProposal(context.Background(), pid); err != nil {
+		t.Fatal(err)
+	}
+	var o *pgstore.DCIOrder
+	for _, oo := range fs.orders {
+		o = oo
+	}
+	if o == nil || o.ProductRef != "PUTP2" {
+		t.Fatalf("order_ref 缺行应跳次档: %+v", o)
+	}
+	// 全缺→「无可申购参数档」如实报。
+	fs2 := newFake()
+	for i := range fs2.quotes {
+		fs2.quotes[i].OrderRef = ""
+	}
+	e2 := execR3(fs2, srv.URL, srv.Client(), map[string]float64{"USDT": 10000})
+	pid2 := fs2.addProposal("dci_buy_low")
+	_, err := e2.GoProposal(context.Background(), pid2)
+	if err == nil || !strings.Contains(err.Error(), "无可申购参数档") {
+		t.Fatalf("全缺应报无可申购参数档: %v gaps=%+v", err, fs2.gaps)
+	}
+	// msgs 内嵌 err：venue 原文拒绝体随回执直发。
+	if !strings.Contains(err.Error(), "PUT腿") {
+		t.Fatalf("err 未内嵌腿因 msgs: %v", err)
 	}
 }

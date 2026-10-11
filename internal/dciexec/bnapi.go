@@ -96,8 +96,8 @@ func (e *Executor) get(ctx context.Context, url string, signed bool) ([]byte, er
 	return b, nil
 }
 
-func (e *Executor) post(ctx context.Context, projectID string, lots float64, at time.Time) (string, error) {
-	_, url := e.SubscribeBody(projectID, lots, at)
+func (e *Executor) post(ctx context.Context, productRef, orderRef string, lots float64, at time.Time) (string, error) {
+	_, url := e.SubscribeBody(productRef, orderRef, lots, at)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	if err != nil {
 		return "", err

@@ -151,7 +151,9 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 		msgs = append(msgs, msg)
 	}
 	if !succeeded {
-		return strings.Join(msgs, "；"), fmt.Errorf("提案#%d 无腿执行成功", id)
+		// R10④：失败因内嵌 err——venue 原文拒绝体随回执直发不藏。
+		return strings.Join(msgs, "；"),
+			fmt.Errorf("提案#%d 无腿执行成功：%s", id, strings.Join(msgs, "；"))
 	}
 	if err := e.Store.SetProposalStatus(ctx, id, "executed"); err != nil {
 		return "", fmt.Errorf("提案态机推进: %w", err)
@@ -309,13 +311,23 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 		return "", err
 	}
 	var q *pgstore.CexDCIQuote
+	var sawStrikeOK bool
 	for i := range qs {
-		if l.strikePass(&qs[i], bound) {
-			q = &qs[i]
-			break
+		if !l.strikePass(&qs[i], bound) {
+			continue
 		}
+		sawStrikeOK = true
+		if qs[i].OrderRef == "" {
+			continue // R10③：order_ref 缺行跳次档（申购 orderId 参源）
+		}
+		q = &qs[i]
+		break
 	}
 	if q == nil {
+		if sawStrikeOK {
+			return "", e.gap(ctx, l, "permission", "dual_quote",
+				"%s腿无可申购参数档（达标档 order_ref 全缺——采集面未落 orderId）", l.name)
+		}
 		return "", e.gap(ctx, l, "permission", "dual_quote",
 			"%s腿无达标档在售（spot %.0f，strike 界 %s）", l.name, spot, l.boundText(bound))
 	}
@@ -331,7 +343,7 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 	if !created {
 		return fmt.Sprintf("%s腿已受理（request_id 防重）", l.name), nil
 	}
-	body, err := e.post(ctx, q.ProductRef, qty, now)
+	body, err := e.post(ctx, q.ProductRef, q.OrderRef, qty, now)
 	if err != nil {
 		e.finish(ctx, oid, "failed", err.Error())
 		return "", e.gap(ctx, l, "permission", "dual_order",

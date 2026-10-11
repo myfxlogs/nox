@@ -71,10 +71,11 @@ func (l leg) strikePass(q *pgstore.CexDCIQuote, bound float64) bool {
 // StrikeBound %OTM 闸界=spot×约束比率（R8 SQL 下推源；R9 比率由约束表供）。
 func StrikeBound(spot, ratio float64) float64 { return spot * ratio }
 
-// SubscribeBody 申购参数构造（projectId+lots+时间戳；签名=HMAC(query)）。
-func (e *Executor) SubscribeBody(projectID string, lots float64, at time.Time) (query, url string) {
-	q := fmt.Sprintf("projectId=%s&lots=%.8f&timestamp=%d&recvWindow=5000",
-		projectID, lots, at.UnixMilli())
+// SubscribeBody 申购参数构造（D-191-R10①：venue 要 id|orderId|depositAmount|
+// autoCompoundPlan——原 projectId/lots 参数名错代 HTTP 400 -1102；签名=HMAC(query) 同径）。
+func (e *Executor) SubscribeBody(productRef, orderRef string, lots float64, at time.Time) (query, url string) {
+	q := fmt.Sprintf("id=%s&orderId=%s&depositAmount=%.8f&autoCompoundPlan=NONE&timestamp=%d&recvWindow=5000",
+		productRef, orderRef, lots, at.UnixMilli())
 	return q, fmt.Sprintf("%s/v1/dci/product/subscribe?%s&signature=%s",
 		strings.TrimRight(e.Sapi, "/"), q, sign(e.BnSec, q))
 }
