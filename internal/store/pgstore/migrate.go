@@ -183,6 +183,7 @@ var migrationFiles = []struct {
 	{187, migrations.CexDCIQuoteSQL},                   // D-183：三所 DCI/双币产品报价表
 	{189, migrations.CapabilityConstraintSQL},          // D-186②：能力约束表 fin_capability_constraint
 	{190, migrations.ConditionGapSQL},                  // D-186③：条件缺口表 fin_condition_gap
+	{188, migrations.OppTemplateSQL},                   // D-185：机会模板册（fin_opp_template+cond）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
