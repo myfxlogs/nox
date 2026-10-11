@@ -43,6 +43,7 @@ type Store interface {
 	RequestConditionGap(ctx context.Context, id int64) error
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	// D-189：提案绑定面。
+	ListProposals(ctx context.Context, status string, limit int) ([]pgstore.Proposal, error)
 	LatestPendingProposal(ctx context.Context, templates []string) (*pgstore.Proposal, error)
 	GetProposal(ctx context.Context, id int64) (*pgstore.Proposal, error)
 	SetProposalStatus(ctx context.Context, id int64, status string) error
@@ -93,6 +94,12 @@ func (e *Executor) Go(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// D-204③：裸 go 跳休眠提案取次席。
+	if p != nil {
+		if p, err = e.skipDormant(ctx, p, tmpls); err != nil {
+			return "", err
+		}
+	}
 	if p == nil {
 		return "", fmt.Errorf("无可执行 pending 提案（fin_proposal 空——待 oppmatch 扫描产出）")
 	}
@@ -117,6 +124,10 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	legs, ok := execTemplates[p.TemplateID]
 	if !ok {
 		return "", fmt.Errorf("提案#%d 模板 %s 未接执行轨（提案可批执行面未接线）", id, p.TemplateID)
+	}
+	// D-204③：休眠轨拒单带因（非市况文案）——约束读败放行（不扩闸）。
+	if dormant, derr := e.dormantPairs(ctx); derr == nil && dormant[p.TemplateID+"@"+p.Venue] {
+		return "", fmt.Errorf("休眠轨（D-191R7）%s@%s（拒单）", p.TemplateID, p.Venue)
 	}
 	// R11② 执行租约：同 proposal_id 120s 内有单即拒（双击/重发防双成交）。
 	if oid, err := e.Store.RecentDCIOrderByProposal(ctx, id, 120*time.Second); err != nil {

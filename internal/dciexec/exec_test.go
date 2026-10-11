@@ -159,6 +159,15 @@ func (f *fakeStore) addProposal(tmpl string) int64 {
 	return f.nextProp
 }
 
+func (f *fakeStore) ListProposals(_ context.Context, status string, limit int) ([]pgstore.Proposal, error) {
+	var out []pgstore.Proposal
+	for i := f.nextProp; i >= 1 && len(out) < limit; i-- {
+		if p, ok := f.proposals[i]; ok && (status == "" || p.Status == status) {
+			out = append(out, *p)
+		}
+	}
+	return out, nil
+}
 func (f *fakeStore) LatestPendingProposal(_ context.Context, tmpls []string) (*pgstore.Proposal, error) {
 	var best *pgstore.Proposal
 	for _, p := range f.proposals {
