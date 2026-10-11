@@ -188,6 +188,7 @@ var migrationFiles = []struct {
 	{193, migrations.EmployeeRegistrySQL},              // D-190：员工花名册 fin_employee_registry
 	{194, migrations.ProposalSQL},                      // D-189：提案实体化 fin_proposal+dci_order 回链
 	{195, migrations.GapResolveNoteSQL},                // D-193②：缺口收口备注列
+	{196, migrations.OTMBoundSQL},                      // D-191-R9：%OTM 闸界入约束表
 	{188, migrations.OppTemplateSQL},                   // D-185：机会模板册（fin_opp_template+cond）
 }
 

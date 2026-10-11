@@ -44,3 +44,6 @@ var ProposalSQL string // D-189：提案实体化 fin_proposal+fin_dci_order.pro
 
 //go:embed 0195_gap_resolve_note.sql
 var GapResolveNoteSQL string // D-193②：缺口收口备注列
+
+//go:embed 0196_otm_bound.sql
+var OTMBoundSQL string // D-191-R9：%OTM 闸界入约束表
