@@ -185,7 +185,13 @@ func (e *Executor) earnPositions(ctx context.Context, asset string) ([]EarnPosit
 			if amt == "" {
 				amt = row.Amount
 			}
-			f, _ := strconv.ParseFloat(amt, 64)
+			if amt == "" {
+				continue
+			}
+			f, perr := strconv.ParseFloat(amt, 64)
+			if perr != nil {
+				return nil, fmt.Errorf("%s %s 持仓金额解析败 %q: %w", seg.path, asset, amt, perr)
+			}
 			if f > 0 {
 				out = append(out, EarnPosition{ProductID: row.ProductID, Amount: f, Locked: seg.locked})
 			}
@@ -195,9 +201,9 @@ func (e *Executor) earnPositions(ctx context.Context, asset string) ([]EarnPosit
 }
 
 // redeemFlexible 活期赎回步：POST /v1/simple-earn/flexible/redeem（签名；
-// type=FAST 赎至现货——R6 申购前置「spot 不足→赎回缺口→重读」）。
+// D-203②c：撤 type=FAST——官方参数表无此参（lending 家族残留）。
 func (e *Executor) redeemFlexible(ctx context.Context, productID string, amount float64) error {
-	q := fmt.Sprintf("productId=%s&amount=%.8f&type=FAST&timestamp=%d&recvWindow=5000",
+	q := fmt.Sprintf("productId=%s&amount=%.8f&timestamp=%d&recvWindow=5000",
 		productID, amount, e.Now().UnixMilli())
 	url := fmt.Sprintf("%s/v1/simple-earn/flexible/redeem?%s&signature=%s",
 		strings.TrimRight(e.Sapi, "/"), q, sign(e.BnSec, q))
