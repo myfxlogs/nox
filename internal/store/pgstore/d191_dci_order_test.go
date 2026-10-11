@@ -14,7 +14,7 @@ func TestD191_DCIOrderStore(t *testing.T) {
 	strike, tenor := 100000.0, 7
 	deliv := time.Now().AddDate(0, 0, 7)
 	o := &DCIOrder{RequestID: "d191test|a", Venue: "binance", ProductRef: "P1",
-		Underlying: "BTC", OptType: "C", Strike: &strike, InvestCcy: "BTC", Qty: 0.018, TenorDays: &tenor}
+		Underlying: "BTC", OptType: "CALL", Strike: &strike, InvestCcy: "BTC", Qty: 0.018, TenorDays: &tenor}
 	id, created, err := s.CreateDCIOrder(ctx, o)
 	if err != nil || !created {
 		t.Fatalf("首登应 created: %v %v", id, err)
@@ -28,11 +28,11 @@ func TestD191_DCIOrderStore(t *testing.T) {
 	// 报价选档：插两档，apy 优者中、tenor 超限者出。
 	s.pool.Exec(ctx, `DELETE FROM fin_cex_dci_quote WHERE product_ref LIKE 'd191%'`)
 	for _, r := range []CexDCIQuote{
-		{Venue: "binance", Underlying: "BTC", InvestCcy: "BTC", OptType: "C",
+		{Venue: "binance", Underlying: "BTC", InvestCcy: "BTC", OptType: "CALL",
 			Strike: &strike, TenorDays: &tenor, APY: 0.05, ProductRef: "d191low", DeliveryTs: &deliv},
-		{Venue: "binance", Underlying: "BTC", InvestCcy: "BTC", OptType: "C",
+		{Venue: "binance", Underlying: "BTC", InvestCcy: "BTC", OptType: "CALL",
 			Strike: &strike, TenorDays: &tenor, APY: 0.09, ProductRef: "d191hi", DeliveryTs: &deliv},
-		{Venue: "binance", Underlying: "BTC", InvestCcy: "BTC", OptType: "C",
+		{Venue: "binance", Underlying: "BTC", InvestCcy: "BTC", OptType: "CALL",
 			Strike: &strike, APY: 0.99, ProductRef: "d191long", DeliveryTs: &deliv, TenorDays: intp(20)},
 		{Venue: "binance", Underlying: "BTC", InvestCcy: "BTC", OptType: "P",
 			Strike: &strike, TenorDays: &tenor, APY: 0.99, ProductRef: "d191put", DeliveryTs: &deliv},
@@ -42,7 +42,7 @@ func TestD191_DCIOrderStore(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	q, err := s.BestDCIQuote(ctx, "binance", "BTC", "C", 14)
+	q, err := s.BestDCIQuote(ctx, "binance", "BTC", "CALL", "", 14)
 	if err != nil {
 		t.Fatal(err)
 	}

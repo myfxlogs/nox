@@ -57,16 +57,17 @@ func (s *Store) FinishDCIOrder(ctx context.Context, id int64, status, response s
 }
 
 // BestDCIQuote 报价面选档：venue×underlying×opt_type、tenor≤上限、apy 最优最新。
-func (s *Store) BestDCIQuote(ctx context.Context, venue, underlying, optType string, maxTenorDays int) (*CexDCIQuote, error) {
+func (s *Store) BestDCIQuote(ctx context.Context, venue, underlying, optType, investCcy string, maxTenorDays int) (*CexDCIQuote, error) {
 	var q CexDCIQuote
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, venue, underlying, invest_ccy, strike, opt_type, delivery_ts,
 		       tenor_days, apy, product_ref, ts
 		FROM fin_cex_dci_quote
 		WHERE venue=$1 AND underlying=$2 AND opt_type=$3
-		  AND (tenor_days IS NULL OR tenor_days <= $4)
+		  AND ($4='' OR invest_ccy=$4)
+		  AND (tenor_days IS NULL OR tenor_days <= $5)
 		ORDER BY apy DESC, ts DESC LIMIT 1`,
-		venue, underlying, optType, maxTenorDays).
+		venue, underlying, optType, investCcy, maxTenorDays).
 		Scan(&q.ID, &q.Venue, &q.Underlying, &q.InvestCcy, &q.Strike, &q.OptType,
 			&q.DeliveryTs, &q.TenorDays, &q.APY, &q.ProductRef, &q.Ts)
 	if err != nil {
