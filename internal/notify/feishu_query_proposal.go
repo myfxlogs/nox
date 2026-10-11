@@ -26,7 +26,7 @@ func isProposalCmd(text string) bool {
 
 // handleProposalCmd pending 提案逐行回执（proposed 态、id 序、限 10）：
 // #id|模板|venue|params键值压缩（异构 schema 按行实际键取值禁固定假设）|apr；
-// 空集如实报无；尾附「go N 批准·不go N 拒」提示。
+// 空集如实报无；尾附「go N 批准·拒 N 驳回」提示（不go N 兼容保留）。
 func (h *FeishuQueryHandler) handleProposalCmd(ctx context.Context) (string, error) {
 	if h.propLister == nil {
 		return "提案清单面未接线（propLister 未装配）", nil
@@ -47,7 +47,7 @@ func (h *FeishuQueryHandler) handleProposalCmd(ctx context.Context) (string, err
 		}
 		fmt.Fprintf(&b, "#%d %s|%s|%s|%s\n", p.ID, p.TemplateID, p.Venue, paramsDigest(p.Params), apr)
 	}
-	b.WriteString("——回「go N」批准提案 · 「不go N」拒批")
+	b.WriteString("——回「go N」批准提案 · 「拒 N」驳回")
 	return strings.TrimRight(b.String(), "\n"), nil
 }
 

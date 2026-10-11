@@ -19,10 +19,12 @@ type DCIGoRunner interface {
 // SetDCIGoRunner 装配「go」口令后端（nil=未接线→回执「未接线」）。
 func (h *FeishuQueryHandler) SetDCIGoRunner(r DCIGoRunner) { h.dciGo = r }
 
-// parseGoCmd 口令形（D-189③三态）：
+// parseGoCmd 口令形（D-189③三态+D-195 拒批正名）：
 //
-//	「go」=裸词最新 pending；「go N」=指定提案；「不go N」=declined。
+//	「go」=裸词最新 pending；「go N」=指定提案；
+//	「不go N」/「拒 N」/「驳回 N」=declined（不go 兼容保留；拒批别名同径）。
 //
+// 「拒绝」系与 #形不收——防吞探针域（probe 批准/拒绝#N 在更前解析）。
 // 返回 id=0 表裸 go；ok=false 表非口令。
 func parseGoCmd(text string) (id int64, decline bool, ok bool) {
 	t := strings.TrimSpace(text)
@@ -30,15 +32,27 @@ func parseGoCmd(text string) (id int64, decline bool, ok bool) {
 		return 0, false, true
 	}
 	rest := t
-	if strings.HasPrefix(rest, "不") {
+	var numPart string
+	switch {
+	case strings.HasPrefix(rest, "不"):
 		decline = true
 		rest = strings.TrimSpace(strings.TrimPrefix(rest, "不"))
-	}
-	if len(rest) <= 2 || !strings.EqualFold(rest[:2], "go") {
-		return 0, false, false
+		if len(rest) <= 2 || !strings.EqualFold(rest[:2], "go") {
+			return 0, false, false
+		}
+		numPart = strings.TrimSpace(rest[2:])
+	case strings.HasPrefix(rest, "驳回"):
+		decline, numPart = true, strings.TrimSpace(rest[len("驳回"):])
+	case strings.HasPrefix(rest, "拒") && !strings.HasPrefix(rest, "拒绝"):
+		decline, numPart = true, strings.TrimSpace(rest[len("拒"):])
+	default:
+		if len(rest) <= 2 || !strings.EqualFold(rest[:2], "go") {
+			return 0, false, false
+		}
+		numPart = strings.TrimSpace(rest[2:])
 	}
 	var n int64
-	if _, err := fmt.Sscanf(strings.TrimSpace(rest[2:]), "%d", &n); err != nil || n <= 0 {
+	if _, err := fmt.Sscanf(numPart, "%d", &n); err != nil || n <= 0 {
 		return 0, false, false
 	}
 	return n, decline, true

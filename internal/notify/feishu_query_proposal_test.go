@@ -44,7 +44,7 @@ func TestD194_ProposalCmd(t *testing.T) {
 	if !strings.Contains(msg, "#3 dci_buy_low|binance|") ||
 		!strings.Contains(msg, "product_ref=PUTP") || !strings.Contains(msg, "strike=82000") ||
 		!strings.Contains(msg, "#5 earn_apr_lending|binance|无快照") ||
-		!strings.Contains(msg, "go N") || !strings.Contains(msg, "不go N") {
+		!strings.Contains(msg, "go N") || !strings.Contains(msg, "拒 N") {
 		t.Fatalf("回执形错: %q", msg)
 	}
 }

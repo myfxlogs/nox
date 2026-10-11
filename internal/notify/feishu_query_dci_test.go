@@ -32,7 +32,9 @@ func TestD191_GoCmd(t *testing.T) {
 	}{
 		{"go", 0, false, true}, {"  GO ", 0, false, true},
 		{"go 12", 12, false, true}, {"go5", 5, false, true},
-		{"不go 7", 7, true, true},
+		{"不go 7", 7, true, true}, {"不go7", 7, true, true},
+		{"拒 7", 7, true, true}, {"驳回 7", 7, true, true}, {"拒7", 7, true, true},
+		{"拒绝#7", 0, false, false}, {"拒绝 7", 0, false, false}, {"拒", 0, false, false},
 		{"go ahead", 0, false, false}, {"gogo", 0, false, false},
 		{"不go", 0, false, false}, {"go -3", 0, false, false},
 	} {
