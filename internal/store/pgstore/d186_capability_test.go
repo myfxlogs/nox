@@ -3,6 +3,7 @@ package pgstore
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // TestD186_ConstraintCRUD：约束行增删查+种子托管约束落账本。
@@ -132,12 +133,37 @@ func TestD186_ConditionGap(t *testing.T) {
 		t.Fatal(err)
 	}
 	gaps, _ = s.ListConditionGaps(ctx, "fulfilled")
+	found = false
 	for _, gg := range gaps {
 		if gg.ID == id {
-			return
+			found = true
 		}
 	}
-	t.Fatal("fulfilled 态缺")
+	if !found {
+		t.Fatal("fulfilled 态缺")
+	}
+	// D-196②：fulfilled 行条件再失→RequestConditionGap 复推闸命中
+	// （撞 fulfilled 键不再零推；resolved_at/resolve_note 清）。
+	if err := s.RequestConditionGap(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	var st string
+	if err := s.pool.QueryRow(ctx,
+		`SELECT status FROM fin_condition_gap WHERE id=$1`, id).Scan(&st); err != nil {
+		t.Fatal(err)
+	}
+	if st != "requested" {
+		t.Fatalf("fulfilled→requested 复推闸未中: %s", st)
+	}
+	// 复推 alert 走 D-592 warn 同键窗抑制（防抖设计语义——态机翻转才是真锚）。
+	var ra *time.Time
+	if err := s.pool.QueryRow(ctx,
+		`SELECT requested_at FROM fin_condition_gap WHERE id=$1`, id).Scan(&ra); err != nil {
+		t.Fatal(err)
+	}
+	if ra == nil {
+		t.Fatal("复推 requested_at 未刷新")
+	}
 }
 
 // TestD186_LedgerAggregate：聚合视图正确性——凭据只记有无零明文、桶/持仓/约束/缺口齐面。

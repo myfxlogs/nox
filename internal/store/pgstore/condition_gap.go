@@ -62,10 +62,13 @@ func (s *Store) ListConditionGaps(ctx context.Context, status string) ([]Conditi
 
 // RequestConditionGap 缺口→飞书请求：status→requested+requested_at，
 // InsertAlert warn 承载推送（D-168 episode 闸按文案键去重防抖——同缺口再推不炸屏）。
+// D-196②：复推闸 open→requested 扩为 open|fulfilled→requested——fulfilled 行
+// 条件再失后同 key 缺口撞 fulfilled 键也能复推（与 D-193 reopen 语义对齐）。
 func (s *Store) RequestConditionGap(ctx context.Context, id int64) error {
 	tag, err := s.pool.Exec(ctx, `
-		UPDATE fin_condition_gap SET status='requested', requested_at=now()
-		WHERE id=$1 AND status='open'`, id)
+		UPDATE fin_condition_gap SET status='requested', requested_at=now(),
+		       resolved_at=NULL, resolve_note=NULL
+		WHERE id=$1 AND status IN ('open','fulfilled')`, id)
 	if err != nil {
 		return fmt.Errorf("request condition gap: %w", err)
 	}
@@ -79,8 +82,12 @@ func (s *Store) RequestConditionGap(ctx context.Context, id int64) error {
 		Scan(&g.TemplateID, &g.Kind, &g.Subject, &g.RequestText); err != nil {
 		return err
 	}
+	prefix := "条件缺口"
+	if g.Kind == "runtime" {
+		prefix = "系统侧病灶" // D-196①：runtime 行照常推但前缀非「请」
+	}
 	return s.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
-		"条件缺口 %s %s:%s —— %s", g.TemplateID, g.Kind, g.Subject, g.RequestText))
+		"%s %s %s:%s —— %s", prefix, g.TemplateID, g.Kind, g.Subject, g.RequestText))
 }
 
 // FulfillConditionGap D-193② 自动收口：open/requested→fulfilled+resolve_note
@@ -111,8 +118,12 @@ func (s *Store) ReopenConditionGap(ctx context.Context, id int64) error {
 		Scan(&g.TemplateID, &g.Kind, &g.Subject, &g.RequestText); err != nil {
 		return err
 	}
+	prefix := "条件缺口"
+	if g.Kind == "runtime" {
+		prefix = "系统侧病灶" // D-196①：runtime 行照常推但前缀非「请」
+	}
 	return s.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
-		"条件缺口 %s %s:%s —— %s", g.TemplateID, g.Kind, g.Subject, g.RequestText))
+		"%s %s %s:%s —— %s", prefix, g.TemplateID, g.Kind, g.Subject, g.RequestText))
 }
 
 // ResolveConditionGap 收口（fulfilled=业主已喂条件 / waived=放弃该机会线）。
