@@ -15,13 +15,15 @@ func TestD183_ParseBinanceDCI(t *testing.T) {
 	body := []byte(`{"total":3,"list":[
 		{"id":"74151","exercisedCoin":"BTC","investCoin":"USDT","strikePrice":"70000","settleDate":1760227200000,"apr":"0.4567","optionType":"PUT","canPurchase":true},
 		{"id":"74152","exercisedCoin":"DOGE","investCoin":"USDT","strikePrice":"0.2","settleDate":1760227200000,"apr":"0.9","optionType":"PUT"},
-		{"id":"74153","exercisedCoin":"BTC","investCoin":"USDT","strikePrice":"80000","duration":7,"apr":"0.31","optionType":"PUT"}]}`)
+		{"id":"74153","exercisedCoin":"BTC","investCoin":"USDT","strikePrice":"80000","duration":7,"apr":"0.31","optionType":"PUT","orderId":"8888","canPurchase":true},
+		{"id":"74154","exercisedCoin":"BTC","investCoin":"USDT","strikePrice":"90000","apr":"0.5","optionType":"PUT","canPurchase":false}]}`)
+	// D-191-R10⑤：canPurchase=false 行滤；③orderId→order_ref 入库。
 	rows, err := parseBinanceDCI(body, time.UnixMilli(1760054400000)) // 交割前 2d/7d
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(rows) != 2 {
-		t.Fatalf("应只留 BTC 行（DOGE 滤出）, got %d", len(rows))
+		t.Fatalf("应只留 BTC+canPurchase 行（DOGE/74154 滤出）, got %d", len(rows))
 	}
 	r := rows[0]
 	if r.Venue != "binance" || r.Underlying != "BTC" || r.InvestCcy != "USDT" || r.OptType != "PUT" {
@@ -38,6 +40,9 @@ func TestD183_ParseBinanceDCI(t *testing.T) {
 	}
 	if rows[1].TenorDays == nil || *rows[1].TenorDays != 7 {
 		t.Fatalf("duration 回退 tenor 错: %+v", rows[1].TenorDays)
+	}
+	if rows[1].OrderRef != "8888" {
+		t.Fatalf("order_ref 落库错: %q", rows[1].OrderRef)
 	}
 }
 

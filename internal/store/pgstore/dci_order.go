@@ -64,7 +64,7 @@ func (s *Store) FinishDCIOrder(ctx context.Context, id int64, status, response s
 func (s *Store) ListDCIQuotes(ctx context.Context, venue, underlying, optType, investCcy string, maxTenorDays int, strikeBound float64) ([]CexDCIQuote, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, venue, underlying, invest_ccy, strike, opt_type, delivery_ts,
-		       tenor_days, apy, product_ref, ts
+		       tenor_days, apy, product_ref, ts, order_ref
 		FROM fin_cex_dci_quote
 		WHERE venue=$1 AND underlying=$2 AND opt_type=$3
 		  AND ($4='' OR invest_ccy=$4)
@@ -82,7 +82,7 @@ func (s *Store) ListDCIQuotes(ctx context.Context, venue, underlying, optType, i
 	for rows.Next() {
 		var q CexDCIQuote
 		if err := rows.Scan(&q.ID, &q.Venue, &q.Underlying, &q.InvestCcy, &q.Strike,
-			&q.OptType, &q.DeliveryTs, &q.TenorDays, &q.APY, &q.ProductRef, &q.Ts); err != nil {
+			&q.OptType, &q.DeliveryTs, &q.TenorDays, &q.APY, &q.ProductRef, &q.Ts, &q.OrderRef); err != nil {
 			return nil, err
 		}
 		out = append(out, q)

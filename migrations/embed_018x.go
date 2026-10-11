@@ -47,3 +47,6 @@ var GapResolveNoteSQL string // D-193②：缺口收口备注列
 
 //go:embed 0196_otm_bound.sql
 var OTMBoundSQL string // D-191-R9：%OTM 闸界入约束表
+
+//go:embed 0197_dci_order_ref.sql
+var DCIOrderRefSQL string // D-191-R10：报价行 order_ref 补列

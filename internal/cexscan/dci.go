@@ -141,7 +141,10 @@ func parseBinanceDCI(body []byte, now time.Time) ([]pgstore.CexDCIQuote, error) 
 	want := map[string]bool{"BTC": true, "ETH": true}
 	var out []pgstore.CexDCIQuote
 	for _, d := range rows {
-		// 卖高象限行 exercisedCoin=USDT&investCoin=BTC——双币任一腿命中即留，
+		if !d.CanPurchase {
+			continue // D-191-R10⑤：不可售档不入候选
+		}
+		// 卖高象限行 exercisedCoin=USDT&investCoin=BTC——双币任一腿命中即留,
 		// underlying 取币腿（D-191 R2；两过滤键任一非稳币腿）。
 		under := d.ExerciseCoin
 		if !want[under] {
@@ -157,7 +160,8 @@ func parseBinanceDCI(body []byte, now time.Time) ([]pgstore.CexDCIQuote, error) 
 		}
 		row := pgstore.CexDCIQuote{Venue: "binance", Underlying: under,
 			InvestCcy: d.InvestCoin, OptType: strings.ToUpper(d.OptionType), APY: apy,
-			ProductRef: firstNonEmpty(d.ID, d.InstrumentName)}
+			ProductRef: firstNonEmpty(d.ID, d.InstrumentName),
+			OrderRef:   d.OrderID.String()} // D-191-R10②：orderId 解析入库（申购发参源）
 		if v, err := d.StrikePrice.Float64(); err == nil {
 			row.Strike = &v
 		}

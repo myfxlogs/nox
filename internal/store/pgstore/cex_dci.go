@@ -19,16 +19,17 @@ type CexDCIQuote struct {
 	TenorDays  *int
 	APY        float64
 	ProductRef string
+	OrderRef   string // D-191-R10：申购 orderId 参（采集面解析入库；缺行=不可申购参数）
 	Ts         time.Time
 }
 
 // InsertCexDCIQuote 插入 DCI 报价行，回填 id+ts。
 func (s *Store) InsertCexDCIQuote(ctx context.Context, r *CexDCIQuote) error {
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO fin_cex_dci_quote (venue, underlying, invest_ccy, strike, opt_type, delivery_ts, tenor_days, apy, product_ref)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO fin_cex_dci_quote (venue, underlying, invest_ccy, strike, opt_type, delivery_ts, tenor_days, apy, product_ref, order_ref)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, ts`,
-		r.Venue, r.Underlying, r.InvestCcy, r.Strike, r.OptType, r.DeliveryTs, r.TenorDays, r.APY, r.ProductRef,
+		r.Venue, r.Underlying, r.InvestCcy, r.Strike, r.OptType, r.DeliveryTs, r.TenorDays, r.APY, r.ProductRef, r.OrderRef,
 	).Scan(&r.ID, &r.Ts)
 	if err != nil {
 		return fmt.Errorf("insert cex dci quote: %w", err)
