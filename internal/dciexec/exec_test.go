@@ -1082,6 +1082,16 @@ func TestD198_Resume(t *testing.T) {
 	if posts != 1 {
 		t.Fatalf("续执应下单一次, posts=%d", posts)
 	}
+	// D-199：成交+续执回执 warn 级（info 滤噪闸会拦——回执必达飞书）。
+	var warnHit int
+	for _, a := range fs.alerts {
+		if strings.HasPrefix(a, "warn:") && (strings.Contains(a, "申购成交") || strings.Contains(a, "断点续执")) {
+			warnHit++
+		}
+	}
+	if warnHit < 2 {
+		t.Fatalf("成交+续执回执应 warn 级必达: %+v", fs.alerts)
+	}
 	// 返修②：败单行存在下续执真发 venue——reqID 尾尝试序 |2 不再 ON CONFLICT 吞。
 	var newReq string
 	for rid := range fs.orders {

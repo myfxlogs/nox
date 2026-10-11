@@ -424,7 +424,9 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 		note, &qty, &opened); err != nil {
 		return "", fmt.Errorf("回执入账: %w", err)
 	}
-	if err := e.Store.InsertAlert(ctx, nil, "info", fmt.Sprintf(
+	// D-199：成交终局回执升 warn——info 级被 feishu 滤噪闸拦截不推，
+	// go/续执成交与败因回执必达飞书（级闸与 gap 推送径不动）。
+	if err := e.Store.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
 		"DCI %s 申购成交：%.6f %s strike %.0f apy %.4g（单号 %s）",
 		l.name, qty, l.qtyCcy, strike, q.APY, reqID)); err != nil {
 		return "", err

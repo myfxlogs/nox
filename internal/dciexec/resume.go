@@ -38,7 +38,7 @@ func (e *Executor) ResumeFailedProposals(ctx context.Context) (int, error) {
 			if serr := e.Store.SetProposalStatus(ctx, r.ProposalID, "executed"); serr != nil {
 				return resumed, serr
 			}
-			_ = e.Store.InsertAlert(ctx, nil, "info", fmt.Sprintf(
+			_ = e.Store.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
 				"提案#%d 断点续执：%s %s 已锁仓在期→executed 零重购", r.ProposalID, r.ProductRef, r.OptType))
 			continue
 		}
@@ -49,7 +49,8 @@ func (e *Executor) ResumeFailedProposals(ctx context.Context) (int, error) {
 			continue
 		}
 		resumed++
-		_ = e.Store.InsertAlert(ctx, nil, "info", fmt.Sprintf(
+		// D-199：续执成交回执升 warn 必达（info 级滤噪闸会拦）。
+		_ = e.Store.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
 			"提案#%d 断点续执：%s", r.ProposalID, msg))
 	}
 	return resumed, nil
