@@ -22,6 +22,8 @@ type fakeStore struct {
 	cons      []pgstore.CapabilityConstraint
 	quotes    []pgstore.CexDCIQuote // ListDCIQuotes 原样回（opt/invest 过滤在 fake 内做）
 	orders    map[string]*pgstore.DCIOrder
+	listErr   error
+	outErr    error
 	gaps      []pgstore.ConditionGap
 	posRows   int
 	alerts    []string
@@ -186,11 +188,51 @@ func (f *fakeStore) OpenConditionGap(_ context.Context, g *pgstore.ConditionGap)
 }
 func (f *fakeStore) RequestConditionGap(context.Context, int64) error { return nil }
 
+// ListFailedProposalOrders / OutstandingDCIProduct D-198 锚具。
+func (f *fakeStore) ListFailedProposalOrders(context.Context) ([]pgstore.FailedProposalOrder, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	var out []pgstore.FailedProposalOrder
+	for _, o := range f.orders {
+		if o.ProposalID == nil || o.Status != "failed" {
+			continue
+		}
+		// 最新单判：同 proposal 更大 id 存在则跳过
+		newer := false
+		for _, o2 := range f.orders {
+			if o2.ProposalID != nil && *o2.ProposalID == *o.ProposalID && o2.ID > o.ID {
+				newer = true
+			}
+		}
+		if newer {
+			continue
+		}
+		if p := f.proposals[*o.ProposalID]; p != nil && p.Status == "proposed" {
+			out = append(out, pgstore.FailedProposalOrder{
+				ProposalID: *o.ProposalID, ProductRef: o.ProductRef, OptType: o.OptType})
+		}
+	}
+	return out, nil
+}
+func (f *fakeStore) OutstandingDCIProduct(_ context.Context, productRef, optType string) (bool, error) {
+	if f.outErr != nil {
+		return false, f.outErr
+	}
+	for _, o := range f.orders {
+		if o.ProductRef == productRef && o.OptType == optType && o.Status == "filled" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // RecentDCIOrderByProposal R11 租约：同 proposal 最新单 id（fake 窗不评=恒内）。
 func (f *fakeStore) RecentDCIOrderByProposal(_ context.Context, propID int64, _ time.Duration) (int64, error) {
 	var best int64
 	for _, o := range f.orders {
-		if o.ProposalID != nil && *o.ProposalID == propID && o.ID > best {
+		if o.ProposalID != nil && *o.ProposalID == propID &&
+			o.Status != "failed" && o.ID > best {
 			best = o.ID
 		}
 	}
@@ -995,5 +1037,79 @@ func TestD191R14_OrderRefRefresh(t *testing.T) {
 	}
 	if posts3 != 2 {
 		t.Fatalf("refresh 类只重提一次, posts=%d", posts3)
+	}
+}
+
+// TestD198_Resume：断点续执五锚——failed 提案续执/无单提案不触发/executed 不触发/
+// 已锁仓标 executed 零重购/outstanding 读败跳过+runtime gap。
+func TestD198_Resume(t *testing.T) {
+	mkFailed := func(fs *fakeStore, pid int64, id int64) {
+		fs.orders[fmt.Sprintf("req%d", id)] = &pgstore.DCIOrder{
+			ID: id, ProposalID: &pid, ProductRef: "PUTP", OptType: "PUT", Status: "failed"}
+	}
+	// ①failed 提案 boot 续执→走 GoProposal 同径成交。
+	fs := newFake()
+	posts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
+		posts++
+		fmt.Fprint(w, `{"orderId":1}`)
+	}))
+	defer srv.Close()
+	e := execR3(fs, srv.URL, srv.Client(), map[string]float64{"USDT": 10000})
+	pid := fs.addProposal("dci_buy_low")
+	mkFailed(fs, pid, 1)
+	n, err := e.ResumeFailedProposals(context.Background())
+	if err != nil || n != 1 {
+		t.Fatalf("续执: n=%d err=%v", n, err)
+	}
+	if posts != 1 {
+		t.Fatalf("续执应下单一次, posts=%d", posts)
+	}
+	// ②无订单 proposed 提案不触发。
+	fs2 := newFake()
+	fs2.addProposal("dci_buy_low")
+	if n, _ := execR3(fs2, srv.URL, srv.Client(), nil).ResumeFailedProposals(context.Background()); n != 0 {
+		t.Fatalf("无单提案不应触发: %d", n)
+	}
+	// ③executed 提案不触发。
+	fs3 := newFake()
+	pid3 := fs3.addProposal("dci_buy_low")
+	fs3.proposals[pid3].Status = "executed"
+	mkFailed(fs3, pid3, 9)
+	if n, _ := execR3(fs3, srv.URL, srv.Client(), nil).ResumeFailedProposals(context.Background()); n != 0 {
+		t.Fatalf("executed 提案不应触发: %d", n)
+	}
+	// ④同档已锁仓→executed 零重购。
+	fs4 := newFake()
+	pid4 := fs4.addProposal("dci_buy_low")
+	mkFailed(fs4, pid4, 1)
+	fs4.orders["reqF"] = &pgstore.DCIOrder{ID: 2, ProductRef: "PUTP", OptType: "PUT", Status: "filled"} // venue 实收错位行（非本提案）
+	e4 := execR3(fs4, srv.URL, srv.Client(), map[string]float64{"USDT": 10000})
+	if n, err := e4.ResumeFailedProposals(context.Background()); err != nil || n != 0 {
+		t.Fatalf("已锁仓不应续执: n=%d err=%v", n, err)
+	}
+	if fs4.proposals[pid4].Status != "executed" {
+		t.Fatalf("已锁仓应标 executed: %s", fs4.proposals[pid4].Status)
+	}
+	// ⑤outstanding 读败→跳过+runtime gap 不重发。
+	fs5 := newFake()
+	pid5 := fs5.addProposal("dci_buy_low")
+	mkFailed(fs5, pid5, 1)
+	fs5.outErr = fmt.Errorf("db down")
+	e5 := execR3(fs5, srv.URL, srv.Client(), map[string]float64{"USDT": 10000})
+	if n, _ := e5.ResumeFailedProposals(context.Background()); n != 0 {
+		t.Fatalf("读败应跳过: %d", n)
+	}
+	found := false
+	for _, g := range fs5.gaps {
+		if g.Kind == "runtime" && strings.Contains(g.RequestText, "读败") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("读败应落 runtime gap: %+v", fs5.gaps)
 	}
 }

@@ -31,6 +31,8 @@ type Store interface {
 	ListDCIQuotes(ctx context.Context, venue, underlying, optType, investCcy string, maxTenorDays int, strikeBound float64) ([]pgstore.CexDCIQuote, error)
 	CreateDCIOrder(ctx context.Context, o *pgstore.DCIOrder) (int64, bool, error)
 	RecentDCIOrderByProposal(ctx context.Context, proposalID int64, window time.Duration) (int64, error)
+	ListFailedProposalOrders(ctx context.Context) ([]pgstore.FailedProposalOrder, error)
+	OutstandingDCIProduct(ctx context.Context, productRef, optType string) (bool, error)
 	FinishDCIOrder(ctx context.Context, id int64, status, response string) error
 	InsertPersonalPosition(ctx context.Context, asset, kind, priceSymbol, note string, qty *float64, openedAt *time.Time) (int64, error)
 	OutstandingDCIQty(ctx context.Context, venue, investCcy string) (float64, error)
