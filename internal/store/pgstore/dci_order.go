@@ -62,20 +62,26 @@ func (s *Store) FinishDCIOrder(ctx context.Context, id int64, status, response s
 
 // ListDCIQuotes 报价面选档（D-191-R8 序错修：strike 界+6h 时效窗下推 SQL，
 // apy DESC LIMIT 作用于达标集——原 LIMIT50 先截断残集滤恒空+旧帧竞争）。
+// D-191-R13 候选集去重：内层 DISTINCT ON (product_ref) 每品取最新帧（ts DESC），
+// 外层再 apy DESC——同品旧版行零竞争、NULL 字段旧帧不挤档；ts 窗不收。
 // strikeBound>0 时按 optType 方向过滤（PUT→strike≤bound、CALL→strike≥bound，
 // strike 缺=不达标）；=0 不带界。
 func (s *Store) ListDCIQuotes(ctx context.Context, venue, underlying, optType, investCcy string, maxTenorDays int, strikeBound float64) ([]CexDCIQuote, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, venue, underlying, invest_ccy, strike, opt_type, delivery_ts,
-		       tenor_days, apy, product_ref, ts, order_ref,
-		       min_amount, max_amount, purchase_decimal
-		FROM fin_cex_dci_quote
-		WHERE venue=$1 AND underlying=$2 AND opt_type=$3
-		  AND ($4='' OR invest_ccy=$4)
-		  AND (tenor_days IS NULL OR tenor_days <= $5)
-		  AND ($6 <= 0 OR (strike IS NOT NULL AND
-		       (($3='PUT' AND strike <= $6) OR ($3<>'PUT' AND strike >= $6))))
-		  AND ts > now() - interval '6 hours'
+		SELECT * FROM (
+			SELECT DISTINCT ON (product_ref)
+			       id, venue, underlying, invest_ccy, strike, opt_type, delivery_ts,
+			       tenor_days, apy, product_ref, ts, order_ref,
+			       min_amount, max_amount, purchase_decimal
+			FROM fin_cex_dci_quote
+			WHERE venue=$1 AND underlying=$2 AND opt_type=$3
+			  AND ($4='' OR invest_ccy=$4)
+			  AND (tenor_days IS NULL OR tenor_days <= $5)
+			  AND ($6 <= 0 OR (strike IS NOT NULL AND
+			       (($3='PUT' AND strike <= $6) OR ($3<>'PUT' AND strike >= $6))))
+			  AND ts > now() - interval '6 hours'
+			ORDER BY product_ref, ts DESC
+		) latest
 		ORDER BY apy DESC, ts DESC LIMIT 50`,
 		venue, underlying, optType, investCcy, maxTenorDays, strikeBound)
 	if err != nil {

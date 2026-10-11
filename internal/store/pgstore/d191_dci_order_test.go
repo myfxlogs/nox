@@ -124,3 +124,38 @@ func TestD191R8_StrikeBoundAndFresh(t *testing.T) {
 		t.Fatalf("深档应选得中: %+v", qs)
 	}
 }
+
+// TestD191R13_DedupLatest：同 product_ref 多版本入窗只最新帧进候选——
+// 旧版 NULL 行（order_ref 缺）不挤档，老版本高 apy 不抢选。
+func TestD191R13_DedupLatest(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `
+		DELETE FROM fin_cex_dci_quote WHERE product_ref LIKE 'r13%'`); err != nil {
+		t.Fatal(err)
+	}
+	// r13dup 旧版（order_ref/min 缺、apy 高）+新版（字段齐、apy 低）同窗。
+	if _, err := s.Pool().Exec(ctx, `
+		INSERT INTO fin_cex_dci_quote (venue, underlying, invest_ccy, strike, opt_type,
+			tenor_days, apy, product_ref, order_ref, min_amount, ts) VALUES
+		('binance','BTC','USDT',70000,'PUT',7,0.99,'r13dup','',NULL, now()-interval '5 minutes'),
+		('binance','BTC','USDT',70000,'PUT',7,0.05,'r13dup','ORD13',10, now())`); err != nil {
+		t.Fatal(err)
+	}
+	qs, err := s.ListDCIQuotes(ctx, "binance", "BTC", "PUT", "USDT", 90, 80000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, q := range qs {
+		if q.ProductRef == "r13dup" {
+			n++
+			if q.OrderRef != "ORD13" || q.APY != 0.05 {
+				t.Fatalf("应取最新帧: %+v", q)
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("同品应只一帧进候选, got %d", n)
+	}
+}
