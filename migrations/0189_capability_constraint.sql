@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS fin_capability_constraint (
   id          bigserial PRIMARY KEY,
   scope       text NOT NULL CHECK (scope IN ('position','bucket','venue','global')),
-  position_id bigint REFERENCES positions(id) ON DELETE SET NULL,  -- scope=position 才填
+  position_id bigint REFERENCES personal_positions(id) ON DELETE SET NULL,  -- scope=position 挂个人持仓（非交易仓）
   subject     text NOT NULL,            -- custody_share / custody_redeemable / redeem_sla / settlement / reserve_pct / risk_limit
   qualifier   text NOT NULL DEFAULT '', -- max / min / always / same_day / current_price
   value_num   double precision,         -- 数值界（份额 0.34 / 百分比 30）；纯定性约束 NULL
