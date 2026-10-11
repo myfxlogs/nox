@@ -45,7 +45,11 @@ func (h *FeishuQueryHandler) handleProposalCmd(ctx context.Context) (string, err
 		if p.ExpectedAPR != nil {
 			apr = fmt.Sprintf("apy=%.4g", *p.ExpectedAPR)
 		}
-		fmt.Fprintf(&b, "#%d %s|%s|%s|%s\n", p.ID, p.TemplateID, p.Venue, paramsDigest(p.Params), apr)
+		mark := ""
+		if p.ExecTrack == "auto" || p.ExecTrack == "semi" {
+			mark = "（无执行轨）" // D-204④：无执行轨模板展示面标注不实批
+		}
+		fmt.Fprintf(&b, "#%d %s|%s|%s|%s%s\n", p.ID, p.TemplateID, p.Venue, paramsDigest(p.Params), apr, mark)
 	}
 	b.WriteString("——回「go N」批准提案 · 「拒 N」驳回")
 	return strings.TrimRight(b.String(), "\n"), nil
