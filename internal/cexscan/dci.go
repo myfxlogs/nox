@@ -24,24 +24,30 @@ import (
 var dciUnderlyings = []string{"BTC", "ETH"}
 
 // CollectDCI 合并三所 DCI 报价，单所失败 log warn 继续（不拖垮整轮）。
-func (c *EarnCollector) CollectDCI(ctx context.Context) []pgstore.CexDCIQuote {
+// 回传 per-venue 错误面——D-188② 权限探活复用同批端点结果写 fin_capability_permission
+// （禁重调：scanOnce 每轮已调过，重调=API 翻倍撞 429）。
+func (c *EarnCollector) CollectDCI(ctx context.Context) ([]pgstore.CexDCIQuote, map[string]error) {
 	var out []pgstore.CexDCIQuote
+	errs := map[string]error{}
 	if rows, err := c.collectBinanceDCI(ctx); err != nil {
+		errs["binance"] = err
 		log.Printf("[cexscan] binance dci collect: %v", err)
 	} else {
 		out = append(out, rows...)
 	}
 	if rows, err := c.collectOKXDCI(ctx); err != nil {
+		errs["okx"] = err
 		log.Printf("[cexscan] okx dci collect: %v", err)
 	} else {
 		out = append(out, rows...)
 	}
 	if rows, err := c.collectGateDCI(ctx); err != nil {
+		errs["gate"] = err
 		log.Printf("[cexscan] gate dci collect: %v", err)
 	} else {
 		out = append(out, rows...)
 	}
-	return out
+	return out, errs
 }
 
 // tenorOf 交割时点→剩余天数（≥1 天取整，0/负=当日记 0）。

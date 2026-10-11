@@ -120,28 +120,25 @@ func (s *Scanner) hydrateAccountSnapshots(ctx context.Context) error {
 func (s *Scanner) scanOnce(ctx context.Context) error {
 
 	// ② 理财 APR 采集 → 入库
-	earnAPRs, err := s.earn.Collect(ctx)
-	if err != nil {
-		log.Printf("[cexscan] earn collect: %v", err)
-	} else {
-		for i := range earnAPRs {
-			if err := s.store.InsertCexEarnAPR(ctx, &earnAPRs[i]); err != nil {
-				log.Printf("[cexscan] insert earn apr %s/%s: %v", earnAPRs[i].Venue, earnAPRs[i].Ccy, err)
-			}
+	earnAPRs, earnErrs := s.earn.Collect(ctx)
+	for i := range earnAPRs {
+		if err := s.store.InsertCexEarnAPR(ctx, &earnAPRs[i]); err != nil {
+			log.Printf("[cexscan] insert earn apr %s/%s: %v", earnAPRs[i].Venue, earnAPRs[i].Ccy, err)
 		}
 	}
 
 	// D-183 ②b 三所 DCI/双币报价采集 → 入库（单所失败在 CollectDCI 内隔离，
 	// 本段只做入库——写败单行 log 不拖垮后续扫描段）。
-	for i, q := range s.earn.CollectDCI(ctx) {
+	dciRows, dciErrs := s.earn.CollectDCI(ctx)
+	for i, q := range dciRows {
 		qq := q
 		if err := s.store.InsertCexDCIQuote(ctx, &qq); err != nil {
 			log.Printf("[cexscan] insert dci quote %s/%s[%d]: %v", q.Venue, q.Underlying, i, err)
 		}
 	}
 
-	// D-188② 权限探活（只读端点；dual_order/earn_subscribe 写 fin_capability_permission）。
-	s.ProbePermissions(ctx)
+	// D-188② 权限面落库（吃同轮采集错误面零重调，dual_order/earn_subscribe）。
+	s.RecordPermissions(ctx, earnErrs, dciErrs)
 
 	// ③ 跨所价差 → 入库（okxSpotBase=D-011 S2 OKX 腿直连传输层错误的 cex-proxy 回落通道）
 	spreads, err := CalcSpreads(ctx, s.client, s.bnAPIURL, s.okxSpotBase, s.symbols)

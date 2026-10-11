@@ -193,17 +193,20 @@ func (c *EarnCollector) CollectBinance(ctx context.Context) ([]pgstore.CexEarnAP
 }
 
 // Collect 合并 OKX+Binance，忽略单所错误（log warn 继续）。
-func (c *EarnCollector) Collect(ctx context.Context) ([]pgstore.CexEarnAPR, error) {
+func (c *EarnCollector) Collect(ctx context.Context) ([]pgstore.CexEarnAPR, map[string]error) {
 	var out []pgstore.CexEarnAPR
+	errs := map[string]error{}
 	if aprs, err := c.CollectOKX(ctx); err != nil {
+		errs["okx"] = err
 		log.Printf("[cexscan] okx earn collect: %v", err)
 	} else {
 		out = append(out, aprs...)
 	}
 	if aprs, err := c.CollectBinance(ctx); err != nil {
+		errs["binance"] = err
 		log.Printf("[cexscan] binance earn collect: %v", err)
 	} else {
 		out = append(out, aprs...)
 	}
-	return out, nil
+	return out, errs
 }

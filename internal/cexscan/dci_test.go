@@ -90,8 +90,11 @@ func TestD183_CollectIsolation(t *testing.T) {
 	gateDualURL0 := gateDualURL
 	gateDualURL = "http://127.0.0.1:1/none" // 强制 gate 失败
 	defer func() { gateDualURL = gateDualURL0 }()
-	out := c.CollectDCI(context.Background())
+	out, errs := c.CollectDCI(context.Background())
 	if len(out) != 0 {
 		t.Fatalf("全败应空集不 panic, got %d", len(out))
+	}
+	if len(errs) != 3 {
+		t.Fatalf("三所错误面应齐, got %v", errs)
 	}
 }

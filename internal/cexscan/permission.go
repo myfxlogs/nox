@@ -1,6 +1,6 @@
-// permission.go —— D-188②：权限探测面。各所能力端点低频只读探活
-// （复用已实证可达的只读端点，零下单零写径）：200→present、4xx→absent、传输层→unknown。
-// 探测节奏与 cexscan 轮同频（scanOnce 挂点），结果写 fin_capability_permission。
+// permission.go —— D-188②：权限探测面落库（零 HTTP——吃 Collect/CollectDCI 同轮
+// per-venue 错误面写 fin_capability_permission；票面返修①：禁重调端点防 API 翻倍 429）。
+// 三态：无错→present、HTTP 4xx→absent、传输层/凭据缺→unknown。
 package cexscan
 
 import (
@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// permState 探测结果三态。
+// permState 错误面→探测态。
 func permState(err error) (string, string) {
 	if err == nil {
 		return "present", ""
@@ -21,30 +21,29 @@ func permState(err error) (string, string) {
 	return "unknown", note
 }
 
-// ProbePermissions 权限探活（EarnCollector 凭据/客户端复用）：
-// dual_order=各所 DCI 产品列表只读端点；earn_subscribe=earn 采集端点。
-// 只写探测结果表——凭据行读面零动。
-func (s *Scanner) ProbePermissions(ctx context.Context) {
-	c := s.earn
-	probe := func(venue, perm string, err error) {
+// RecordPermissions 采集错误面→权限行（dual_order=DCI 端点、earn_subscribe=earn 端点；
+// venue 行未调=凭据缺无该 venue 键→不造行——凭据缺口已由 credential 条件面承载）。
+func (s *Scanner) RecordPermissions(ctx context.Context, earnErrs, dciErrs map[string]error) {
+	rec := func(venue, perm string, err error) {
 		state, note := permState(err)
 		if uerr := s.store.UpsertCapabilityPermission(ctx, venue, perm, state, note); uerr != nil {
-			log.Printf("[cexscan] perm upsert %s/%s: %v", venue, perm, uerr) // 不拖垮采集轮
+			log.Printf("[cexscan] perm upsert %s/%s: %v", venue, perm, uerr)
 		}
 	}
-	if c.bnKey != "" {
-		_, err := c.collectBinanceDCI(ctx)
-		probe("binance", "dual_order", err)
-		_, err = c.CollectBinance(ctx)
-		probe("binance", "earn_subscribe", err)
+	for v, err := range dciErrs {
+		rec(v, "dual_order", err)
 	}
-	if c.okxKey != "" {
-		_, err := c.collectOKXDCI(ctx)
-		probe("okx", "dual_order", err)
-		_, err = c.CollectOKX(ctx)
-		probe("okx", "earn_subscribe", err)
+	for _, v := range []string{"binance", "okx", "gate"} { // 成功 venue 无 errs 键→补 present
+		if _, bad := dciErrs[v]; !bad {
+			rec(v, "dual_order", nil)
+		}
 	}
-	// gate dual 公开端点（D-183 实拍 200）——凭据非前置条件。
-	_, gerr := c.collectGateDCI(ctx)
-	probe("gate", "dual_order", gerr)
+	for v, err := range earnErrs {
+		rec(v, "earn_subscribe", err)
+	}
+	for _, v := range []string{"binance", "okx"} { // gate 无 earn 采集端点不补
+		if _, bad := earnErrs[v]; !bad {
+			rec(v, "earn_subscribe", nil)
+		}
+	}
 }
