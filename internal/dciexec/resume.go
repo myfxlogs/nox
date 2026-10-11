@@ -18,11 +18,21 @@ func (e *Executor) ResumeFailedProposals(ctx context.Context) (int, error) {
 	}
 	resumed := 0
 	for _, r := range rows {
-		has, herr := e.Store.OutstandingDCIProduct(ctx, r.ProductRef, r.OptType)
+		// 返修①：venue 侧持仓读为主（venue 实收本地记 failed 的错位只此径能兜），
+		// 本地 filled 检查降为补充；venue 读败→跳过+runtime gap 不重发。
+		has, herr := e.venueDCIHolding(ctx, r.ProductRef, r.OptType)
 		if herr != nil {
 			_ = e.gap(ctx, callLeg, "runtime", "dual_quote",
-				"系统侧病灶：提案#%d 续执前 outstanding 读败（%v）——跳过不重发", r.ProposalID, herr)
+				"系统侧病灶：提案#%d 续执前 venue 持仓读败（%v）——跳过不重发", r.ProposalID, herr)
 			continue
+		}
+		if !has {
+			var lerr error
+			if has, lerr = e.Store.OutstandingDCIProduct(ctx, r.ProductRef, r.OptType); lerr != nil {
+				_ = e.gap(ctx, callLeg, "runtime", "dual_quote",
+					"系统侧病灶：提案#%d 续执前本地 outstanding 读败（%v）——跳过不重发", r.ProposalID, lerr)
+				continue
+			}
 		}
 		if has {
 			if serr := e.Store.SetProposalStatus(ctx, r.ProposalID, "executed"); serr != nil {

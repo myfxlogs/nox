@@ -33,6 +33,7 @@ type Store interface {
 	RecentDCIOrderByProposal(ctx context.Context, proposalID int64, window time.Duration) (int64, error)
 	ListFailedProposalOrders(ctx context.Context) ([]pgstore.FailedProposalOrder, error)
 	OutstandingDCIProduct(ctx context.Context, productRef, optType string) (bool, error)
+	DCIOrderLegCount(ctx context.Context, proposalID int64, optType, investCcy string) (int, error)
 	FinishDCIOrder(ctx context.Context, id int64, status, response string) error
 	InsertPersonalPosition(ctx context.Context, asset, kind, priceSymbol, note string, qty *float64, openedAt *time.Time) (int64, error)
 	OutstandingDCIQty(ctx context.Context, venue, investCcy string) (float64, error)
@@ -61,7 +62,8 @@ type Executor struct {
 	BalanceFn func(ctx context.Context, asset string) (float64, error) // 现货 free+locked
 	EarnFn    func(ctx context.Context, asset string) ([]EarnPosition, error)
 	RedeemFn  func(ctx context.Context, productID string, amount float64) error
-	StreamFn  func() bool // 流存活闸（nil=dephealth 实读）
+	StreamFn  func() bool                                                         // 流存活闸（nil=dephealth 实读）
+	HoldingFn func(ctx context.Context, productRef, optType string) (bool, error) // venue 持仓读（D-198 返修①；nil=实 GET）
 }
 
 // execTemplates 可执行提案模板→腿映射（D-189：提案模板=腿子集；
@@ -368,7 +370,15 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 			l.name, deposit, qty, decOf(*q.MinAmount), amtTxt(q.MinAmount), amtTxt(q.MaxAmount))
 	}
 	now := e.Now()
-	reqID := fmt.Sprintf("dci|%s|%s|%s|%.8f", l.name, q.ProductRef, delivDay(q), deposit)
+	// D-198 返修②：reqID 尾加尝试序号 n（同 proposal_id 该腿订单行数+1）——
+	// 败单行不再 ON CONFLICT 吞续执、二次 go 同市况不再假「已受理」。
+	attempt := 1
+	if propID != nil {
+		if c, cerr := e.Store.DCIOrderLegCount(ctx, *propID, l.optType, l.investCcy); cerr == nil {
+			attempt = c + 1
+		}
+	}
+	reqID := fmt.Sprintf("dci|%s|%s|%s|%.8f|%d", l.name, q.ProductRef, delivDay(q), deposit, attempt)
 	oid, created, err := e.Store.CreateDCIOrder(ctx, &pgstore.DCIOrder{
 		RequestID: reqID, Venue: "binance", TemplateID: l.tmpl,
 		ProductRef: q.ProductRef, Underlying: "BTC", OptType: l.optType, Strike: q.Strike,

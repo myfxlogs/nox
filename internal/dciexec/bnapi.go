@@ -288,3 +288,53 @@ func (e *Executor) refreshOrderRef(ctx context.Context, l leg, productRef string
 func isRefreshErr(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "refresh")
 }
+
+// venueDCIHolding D-198 返修①：venue 侧持仓读径——签名 GET
+// /v1/dci/product/positions，HOLDING 过滤+product_ref+opt_type 匹配
+// （键名以 venue 实拍/SDK 为准；读败=err 由调用方跳过+runtime gap 不重发）。
+func (e *Executor) venueDCIHolding(ctx context.Context, productRef, optType string) (bool, error) {
+	if e.HoldingFn != nil {
+		return e.HoldingFn(ctx, productRef, optType)
+	}
+	q := fmt.Sprintf("timestamp=%d&recvWindow=5000", e.Now().UnixMilli())
+	url := fmt.Sprintf("%s/v1/dci/product/positions?%s&signature=%s",
+		strings.TrimRight(e.Sapi, "/"), q, sign(e.BnSec, q))
+	b, err := e.get(ctx, url, true)
+	if err != nil {
+		return false, err
+	}
+	type pos struct {
+		ID             string `json:"id"`
+		InstrumentName string `json:"instrumentName"`
+		ProductRef     string `json:"productRef"`
+		OptionType     string `json:"optionType"`
+		Status         string `json:"status"`
+	}
+	var raw struct {
+		Data []pos `json:"data"`
+		List []pos `json:"list"`
+		Rows []pos `json:"rows"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return false, fmt.Errorf("dci positions decode: %w", err)
+	}
+	rows := raw.Data
+	if len(rows) == 0 {
+		rows = raw.List
+	}
+	if len(rows) == 0 {
+		rows = raw.Rows
+	}
+	for _, p := range rows {
+		if p.Status != "HOLDING" {
+			continue
+		}
+		if p.OptionType != "" && p.OptionType != optType {
+			continue
+		}
+		if p.ID == productRef || p.InstrumentName == productRef || p.ProductRef == productRef {
+			return true, nil
+		}
+	}
+	return false, nil
+}

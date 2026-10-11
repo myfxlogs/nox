@@ -47,10 +47,15 @@ const dciListJSON = `{"list":[
 	{"id":"NEARP","orderId":8833,"canPurchase":true},
 	{"id":"PUTP2","orderId":8844,"canPurchase":true}]}`
 
-// dciListOK product/list GET 分流句柄（handler 首行挂）。
+// dciListOK product/list+positions GET 分流句柄（handler 首行挂；
+// positions 默认空仓——venue 持仓场景在各锚内自覆写）。
 func dciListOK(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "product/list") {
 		fmt.Fprint(w, dciListJSON)
+		return true
+	}
+	if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "product/positions") {
+		fmt.Fprint(w, `{"data":[]}`)
 		return true
 	}
 	return false
@@ -187,6 +192,15 @@ func (f *fakeStore) OpenConditionGap(_ context.Context, g *pgstore.ConditionGap)
 	return int64(len(f.gaps)), nil
 }
 func (f *fakeStore) RequestConditionGap(context.Context, int64) error { return nil }
+func (f *fakeStore) DCIOrderLegCount(_ context.Context, propID int64, opt, inv string) (int, error) {
+	n := 0
+	for _, o := range f.orders {
+		if o.ProposalID != nil && *o.ProposalID == propID && o.OptType == opt && o.InvestCcy == inv {
+			n++
+		}
+	}
+	return n, nil
+}
 
 // ListFailedProposalOrders / OutstandingDCIProduct D-198 锚具。
 func (f *fakeStore) ListFailedProposalOrders(context.Context) ([]pgstore.FailedProposalOrder, error) {
@@ -1045,7 +1059,7 @@ func TestD191R14_OrderRefRefresh(t *testing.T) {
 func TestD198_Resume(t *testing.T) {
 	mkFailed := func(fs *fakeStore, pid int64, id int64) {
 		fs.orders[fmt.Sprintf("req%d", id)] = &pgstore.DCIOrder{
-			ID: id, ProposalID: &pid, ProductRef: "PUTP", OptType: "PUT", Status: "failed"}
+			ID: id, ProposalID: &pid, ProductRef: "PUTP", OptType: "PUT", InvestCcy: "USDT", Status: "failed"}
 	}
 	// ①failed 提案 boot 续执→走 GoProposal 同径成交。
 	fs := newFake()
@@ -1068,6 +1082,20 @@ func TestD198_Resume(t *testing.T) {
 	if posts != 1 {
 		t.Fatalf("续执应下单一次, posts=%d", posts)
 	}
+	// 返修②：败单行存在下续执真发 venue——reqID 尾尝试序 |2 不再 ON CONFLICT 吞。
+	var newReq string
+	for rid := range fs.orders {
+		if rid != "req1" {
+			newReq = rid
+		}
+	}
+	if !strings.HasSuffix(newReq, "|2") {
+		t.Fatalf("reqID 应带尝试序 |2: %q", newReq)
+	}
+	// 撞 n 并发仍 dedup：同 reqID 二登→created=false。
+	if _, dup, _ := fs.CreateDCIOrder(context.Background(), &pgstore.DCIOrder{RequestID: newReq}); dup {
+		t.Fatal("同 reqID 重登应 dedup")
+	}
 	// ②无订单 proposed 提案不触发。
 	fs2 := newFake()
 	fs2.addProposal("dci_buy_low")
@@ -1082,26 +1110,63 @@ func TestD198_Resume(t *testing.T) {
 	if n, _ := execR3(fs3, srv.URL, srv.Client(), nil).ResumeFailedProposals(context.Background()); n != 0 {
 		t.Fatalf("executed 提案不应触发: %d", n)
 	}
-	// ④同档已锁仓→executed 零重购。
+	// ④venue 持仓存在→executed 零重购（venue 侧读径主，本地 filled 降为补充）。
 	fs4 := newFake()
 	pid4 := fs4.addProposal("dci_buy_low")
 	mkFailed(fs4, pid4, 1)
-	fs4.orders["reqF"] = &pgstore.DCIOrder{ID: 2, ProductRef: "PUTP", OptType: "PUT", Status: "filled"} // venue 实收错位行（非本提案）
-	e4 := execR3(fs4, srv.URL, srv.Client(), map[string]float64{"USDT": 10000})
+	posts4 := 0
+	srv4 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "product/positions") {
+			fmt.Fprint(w, `{"data":[{"id":"PUTP","optionType":"PUT","status":"HOLDING"}]}`)
+			return
+		}
+		if dciListOK(w, r) {
+			return
+		}
+		posts4++
+	}))
+	defer srv4.Close()
+	e4 := execR3(fs4, srv4.URL, srv4.Client(), map[string]float64{"USDT": 10000})
 	if n, err := e4.ResumeFailedProposals(context.Background()); err != nil || n != 0 {
 		t.Fatalf("已锁仓不应续执: n=%d err=%v", n, err)
 	}
 	if fs4.proposals[pid4].Status != "executed" {
 		t.Fatalf("已锁仓应标 executed: %s", fs4.proposals[pid4].Status)
 	}
-	// ⑤outstanding 读败→跳过+runtime gap 不重发。
+	if posts4 != 0 {
+		t.Fatalf("已锁仓零重购, posts=%d", posts4)
+	}
+	// ④b 本地 filled 补充（venue 空仓+本地 filled 行→同标 executed）。
+	fs4b := newFake()
+	pid4b := fs4b.addProposal("dci_buy_low")
+	mkFailed(fs4b, pid4b, 1)
+	fs4b.orders["reqF"] = &pgstore.DCIOrder{ID: 2, ProductRef: "PUTP", OptType: "PUT", Status: "filled"}
+	if n, _ := execR3(fs4b, srv.URL, srv.Client(), nil).ResumeFailedProposals(context.Background()); n != 0 ||
+		fs4b.proposals[pid4b].Status != "executed" {
+		t.Fatalf("本地 filled 补充应标 executed: n=%d st=%s", n, fs4b.proposals[pid4b].Status)
+	}
+	// ⑤venue 持仓读败→跳过+runtime gap 不重发。
 	fs5 := newFake()
 	pid5 := fs5.addProposal("dci_buy_low")
 	mkFailed(fs5, pid5, 1)
-	fs5.outErr = fmt.Errorf("db down")
-	e5 := execR3(fs5, srv.URL, srv.Client(), map[string]float64{"USDT": 10000})
+	posts5 := 0
+	srv5 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "product/positions") {
+			w.WriteHeader(500)
+			return
+		}
+		if dciListOK(w, r) {
+			return
+		}
+		posts5++
+	}))
+	defer srv5.Close()
+	e5 := execR3(fs5, srv5.URL, srv5.Client(), map[string]float64{"USDT": 10000})
 	if n, _ := e5.ResumeFailedProposals(context.Background()); n != 0 {
 		t.Fatalf("读败应跳过: %d", n)
+	}
+	if posts5 != 0 {
+		t.Fatalf("读败不重发, posts=%d", posts5)
 	}
 	found := false
 	for _, g := range fs5.gaps {
