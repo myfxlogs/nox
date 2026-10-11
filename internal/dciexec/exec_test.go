@@ -751,3 +751,33 @@ func TestD196_VenueErrKind(t *testing.T) {
 	}
 	t.Fatalf("dual_order gap 未落: %+v", fs.gaps)
 }
+
+// TestD196R1_SpotErrClass：spotPrice 读败分面——HTTP 400→runtime 不落
+// permission（复审退修：GoProposal/GoWheel 两处漏面照 tryLeg 同款收）。
+func TestD196R1_SpotErrClass(t *testing.T) {
+	for _, want := range []struct {
+		name string
+		err  error
+		kind string
+	}{
+		{"400→runtime", fmt.Errorf("ticker HTTP 400: {\"code\":-1100}"), "runtime"},
+		{"403→permission", fmt.Errorf("ticker HTTP 403: forbidden"), "permission"},
+	} {
+		fs := newFake()
+		e := execR3(fs, "", nil, map[string]float64{"BTC": 0.2, "USDT": 0})
+		e.PriceFn = func(ctx context.Context, symbol string) (float64, error) { return 0, want.err }
+		pid := fs.addProposal("dci_buy_low")
+		if _, err := e.GoProposal(context.Background(), pid); err == nil {
+			t.Fatalf("%s: GoProposal 应返错", want.name)
+		}
+		found := ""
+		for _, g := range fs.gaps {
+			if g.Subject == "dual_quote" {
+				found = g.Kind
+			}
+		}
+		if found != want.kind {
+			t.Fatalf("%s: dual_quote kind=%q want %q gaps=%+v", want.name, found, want.kind, fs.gaps)
+		}
+	}
+}

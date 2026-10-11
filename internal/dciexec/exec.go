@@ -128,8 +128,12 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	}
 	spot, err := e.spotPrice(ctx, "BTCUSDT")
 	if err != nil {
-		return "", e.gap(ctx, callLeg, "permission", "dual_quote",
-			"binance BTC 现货价读取失败：%v", err)
+		if venueErrKind(err) == "permission" {
+			return "", e.gap(ctx, callLeg, "permission", "dual_quote",
+				"binance BTC 现货价读取失败：%v", err)
+		}
+		return "", e.gap(ctx, callLeg, "runtime", "dual_quote",
+			"系统侧病灶：BTC 现货价读取失败：%v", err)
 	}
 	var msgs []string
 	var succeeded bool
@@ -195,8 +199,12 @@ func (e *Executor) GoWheel(ctx context.Context) (string, error) {
 	// 现货执行时实时读（strike %OTM 闸源）。
 	spot, err := e.spotPrice(ctx, "BTCUSDT")
 	if err != nil {
-		return "", e.gap(ctx, callLeg, "permission", "dual_quote",
-			"binance BTC 现货价读取失败：%v", err)
+		if venueErrKind(err) == "permission" {
+			return "", e.gap(ctx, callLeg, "permission", "dual_quote",
+				"binance BTC 现货价读取失败：%v", err)
+		}
+		return "", e.gap(ctx, callLeg, "runtime", "dual_quote",
+			"系统侧病灶：BTC 现货价读取失败：%v", err)
 	}
 	var msgs []string
 	cb, pb := OTMBoundRatios(cons)
