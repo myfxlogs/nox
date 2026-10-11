@@ -11,10 +11,11 @@ import (
 )
 
 func TestD183_ParseBinanceDCI(t *testing.T) {
-	body := []byte(`{"data":[
-		{"id":"74151","exerciseCoin":"BTC","investCoin":"USDT","strikePrice":"70000","deliveryDate":"1760227200000","apy":"0.4567","optionType":"CALL","canPurchase":true},
-		{"id":"74152","exerciseCoin":"DOGE","investCoin":"USDT","strikePrice":"0.2","deliveryDate":"1760227200000","apy":"0.9","optionType":"PUT"},
-		{"id":"74153","exerciseCoin":"BTC","investCoin":"BTC","strikePrice":"80000","deliveryDate":"1760486400000","apy":"0.31","optionType":"PUT"}]}`)
+	// 实拍实证schema：{"total":N,"list":[{exercisedCoin,apr,settleDate,duration,...}]}
+	body := []byte(`{"total":3,"list":[
+		{"id":"74151","exercisedCoin":"BTC","investCoin":"USDT","strikePrice":"70000","settleDate":1760227200000,"apr":"0.4567","optionType":"PUT","canPurchase":true},
+		{"id":"74152","exercisedCoin":"DOGE","investCoin":"USDT","strikePrice":"0.2","settleDate":1760227200000,"apr":"0.9","optionType":"PUT"},
+		{"id":"74153","exercisedCoin":"BTC","investCoin":"USDT","strikePrice":"80000","duration":7,"apr":"0.31","optionType":"PUT"}]}`)
 	rows, err := parseBinanceDCI(body, time.UnixMilli(1760054400000)) // 交割前 2d/7d
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +24,7 @@ func TestD183_ParseBinanceDCI(t *testing.T) {
 		t.Fatalf("应只留 BTC 行（DOGE 滤出）, got %d", len(rows))
 	}
 	r := rows[0]
-	if r.Venue != "binance" || r.Underlying != "BTC" || r.InvestCcy != "USDT" || r.OptType != "CALL" {
+	if r.Venue != "binance" || r.Underlying != "BTC" || r.InvestCcy != "USDT" || r.OptType != "PUT" {
 		t.Fatalf("字段映射错: %+v", r)
 	}
 	if r.Strike == nil || *r.Strike != 70000 {
@@ -33,7 +34,10 @@ func TestD183_ParseBinanceDCI(t *testing.T) {
 		t.Fatalf("tenor 错: %+v", r.TenorDays)
 	}
 	if r.APY != 0.4567 {
-		t.Fatalf("apy 错: %v", r.APY)
+		t.Fatalf("apr 错: %v", r.APY)
+	}
+	if rows[1].TenorDays == nil || *rows[1].TenorDays != 7 {
+		t.Fatalf("duration 回退 tenor 错: %+v", rows[1].TenorDays)
 	}
 }
 
@@ -48,7 +52,7 @@ func TestD183_ParseOKXDCI(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("行数错: %d", len(rows))
 	}
-	if rows[0].OptType != "C" || rows[0].Underlying != "BTC" || *rows[0].Strike != 72000 || *rows[0].TenorDays != 2 {
+	if rows[0].OptType != "CALL" || rows[0].Underlying != "BTC" || *rows[0].Strike != 72000 || *rows[0].TenorDays != 2 {
 		t.Fatalf("行0 映射错: %+v", rows[0])
 	}
 	if rows[1].DeliveryTs != nil || *rows[1].TenorDays != 7 || *rows[1].Strike != 73000 {

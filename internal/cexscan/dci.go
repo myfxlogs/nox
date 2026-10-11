@@ -107,14 +107,16 @@ func (c *EarnCollector) collectBinanceDCI(ctx context.Context) ([]pgstore.CexDCI
 func parseBinanceDCI(body []byte, now time.Time) ([]pgstore.CexDCIQuote, error) {
 	type bRow struct {
 		ID             string      `json:"id"`
-		ExerciseCoin   string      `json:"exerciseCoin"`
+		ExerciseCoin   string      `json:"exercisedCoin"` // 实拍实证：exercisedCoin（不是 exerciseCoin）
 		InvestCoin     string      `json:"investCoin"`
 		StrikePrice    json.Number `json:"strikePrice"`
-		DeliveryDate   json.Number `json:"deliveryDate"`
-		APY            json.Number `json:"apy"`
+		SettleDate     json.Number `json:"settleDate"`
+		Duration       json.Number `json:"duration"` // 天数直给
+		APR            json.Number `json:"apr"`      // 实拍实证：apr（不是 apy），%口径原样
 		OptionType     string      `json:"optionType"`
 		CanPurchase    bool        `json:"canPurchase"`
 		InstrumentName string      `json:"instrumentName"`
+		OrderID        json.Number `json:"orderId"`
 	}
 	var raw struct {
 		Data []bRow `json:"data"`
@@ -133,9 +135,9 @@ func parseBinanceDCI(body []byte, now time.Time) ([]pgstore.CexDCIQuote, error) 
 		if !want[d.ExerciseCoin] {
 			continue
 		}
-		apy, err := d.APY.Float64()
+		apy, err := d.APR.Float64()
 		if err != nil {
-			log.Printf("[cexscan] binance dci apy parse %q: %v", d.APY.String(), err)
+			log.Printf("[cexscan] binance dci apr parse %q: %v", d.APR.String(), err)
 			continue
 		}
 		row := pgstore.CexDCIQuote{Venue: "binance", Underlying: d.ExerciseCoin,
@@ -144,10 +146,13 @@ func parseBinanceDCI(body []byte, now time.Time) ([]pgstore.CexDCIQuote, error) 
 		if v, err := d.StrikePrice.Float64(); err == nil {
 			row.Strike = &v
 		}
-		if ms, err := d.DeliveryDate.Int64(); err == nil {
+		if ms, err := d.SettleDate.Int64(); err == nil && ms > 0 {
 			ts := time.UnixMilli(ms)
 			td := tenorOf(ts, now)
 			row.DeliveryTs, row.TenorDays = &ts, &td
+		} else if days, err := d.Duration.Int64(); err == nil {
+			td := int(days)
+			row.TenorDays = &td
 		}
 		out = append(out, row)
 	}
