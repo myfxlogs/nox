@@ -15,3 +15,6 @@ var DropCnfiRepoSQL string // D-139：CNFI/逆回购面 13 表幂等 DROP（生�
 
 //go:embed 0185_facts_kind_ts_idx.sql
 var FactsKindTsIdxSQL string // D-152 fixup：facts(kind,ts)——retention 超窗候选范围寻址
+
+//go:embed 0186_elim_evidence_seed.sql
+var ElimEvidenceSeedSQL string // D-180：统计证据阈值 app_config 播种（Zσ/转折点标注线）

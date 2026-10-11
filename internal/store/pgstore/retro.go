@@ -87,6 +87,9 @@ type RetroWeekly struct {
 	Strategies   []RetroStrategyRow
 	AlertCluster []RetroAlertCluster
 	EvalDist     map[string]int
+	// DepSeq D-180：每策略按 settled_at 序的净 PNL 符号序列（转折点检验输入，
+	// 与 AggregateStrategyStats 同排除口径；纯证据字段）。
+	DepSeq map[string][]float64
 }
 
 // RetroDailyStats 日报数据面。
@@ -268,23 +271,10 @@ func (s *Store) RetroWeeklyStats(ctx context.Context, since, until time.Time) (*
 		}
 		w.AlertCluster = append(w.AlertCluster, c)
 	}
-	return w, nil
-}
-
-// scanDist 通用 key-count 分布扫描。
-func (s *Store) scanDist(ctx context.Context, dst *map[string]int, sql string, args ...any) error {
-	rows, err := s.pool.Query(ctx, sql, args...)
+	depSeq, err := s.retroStrategySequences(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var k string
-		var n int
-		if err := rows.Scan(&k, &n); err != nil {
-			return err
-		}
-		(*dst)[k] = n
-	}
-	return rows.Err()
+	w.DepSeq = depSeq
+	return w, nil
 }
