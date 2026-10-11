@@ -38,6 +38,10 @@ type Store interface {
 	OpenConditionGap(ctx context.Context, g *pgstore.ConditionGap) (int64, error)
 	RequestConditionGap(ctx context.Context, id int64) error
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
+	// D-189：提案绑定面。
+	LatestPendingProposal(ctx context.Context, templates []string) (*pgstore.Proposal, error)
+	GetProposal(ctx context.Context, id int64) (*pgstore.Proposal, error)
+	SetProposalStatus(ctx context.Context, id int64, status string) error
 }
 
 // Executor binance DCI 申购执行器（凭据由装配侧从 exchange_configs 注入）。
@@ -57,9 +61,104 @@ type Executor struct {
 	StreamFn  func() bool // 流存活闸（nil=dephealth 实读）
 }
 
-// Go 轮式申购主径（业主口令「go」→双腿各试：CALL 持币卖高 + PUT 持U买低；
-// 一腿成败不阻他腿；约束/报价/幂等三段闸同 R2）。
+// execTemplates 可执行提案模板→腿映射（D-189：提案模板=腿子集；
+// 其余模板提案可批不执行「模板未接执行轨」）。
+var execTemplates = map[string][]leg{
+	"dci_sell_high_covered_call": {callLeg},
+	"dci_buy_low":                {putLeg},
+}
+
+// Go 裸口令主径：最新 pending 可执行提案→GoProposal 绑 id 执行（D-189③）。
 func (e *Executor) Go(ctx context.Context) (string, error) {
+	var tmpls []string
+	for t := range execTemplates {
+		tmpls = append(tmpls, t)
+	}
+	p, err := e.Store.LatestPendingProposal(ctx, tmpls)
+	if err != nil {
+		return "", err
+	}
+	if p == nil {
+		return "", fmt.Errorf("无可执行 pending 提案（fin_proposal 空——待 oppmatch 扫描产出）")
+	}
+	msg, err := e.GoProposal(ctx, p.ID)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("提案#%d %s：%s", p.ID, p.TemplateID, msg), nil
+}
+
+// GoProposal 指定提案执行（「go N」口令/RPC 同径）：态机闸（proposed 才执行，
+// expired/declined 拒单带因）+模板→腿子集+订单回链 proposal_id；
+// strike/qty 实时闸复验保留——提案 params 快照是审计锚非钉价。
+func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
+	p, err := e.Store.GetProposal(ctx, id)
+	if err != nil {
+		return "", fmt.Errorf("提案#%d 查询败: %w", id, err)
+	}
+	if p.Status != "proposed" {
+		return "", fmt.Errorf("提案#%d 已 %s（拒单）", id, p.Status)
+	}
+	legs, ok := execTemplates[p.TemplateID]
+	if !ok {
+		return "", fmt.Errorf("提案#%d 模板 %s 未接执行轨（提案可批执行面未接线）", id, p.TemplateID)
+	}
+	if e.BnKey == "" {
+		return "", e.gap(ctx, callLeg, "credential", "binance:spot",
+			"请配置 binance 凭据（DCI 申购写径）")
+	}
+	cons, err := e.Store.ListCapabilityConstraints(ctx)
+	if err != nil {
+		return "", err
+	}
+	share, tenorCap := tenorCapOf(cons)
+	if share == nil {
+		return "", e.gap(ctx, callLeg, "constraint", "custody_share",
+			"请喂约束 custody_share（托管可动份额上限）")
+	}
+	spot, err := e.spotPrice(ctx, "BTCUSDT")
+	if err != nil {
+		return "", e.gap(ctx, callLeg, "permission", "dual_quote",
+			"binance BTC 现货价读取失败：%v", err)
+	}
+	var msgs []string
+	var succeeded bool
+	for _, l := range legs {
+		msg, err := e.tryLeg(ctx, l, *share, tenorCap, spot, &p.ID)
+		if err != nil {
+			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.name, err))
+			continue
+		}
+		succeeded = true
+		msgs = append(msgs, msg)
+	}
+	if !succeeded {
+		return strings.Join(msgs, "；"), fmt.Errorf("提案#%d 无腿执行成功", id)
+	}
+	if err := e.Store.SetProposalStatus(ctx, id, "executed"); err != nil {
+		return "", fmt.Errorf("提案态机推进: %w", err)
+	}
+	return strings.Join(msgs, "；"), nil
+}
+
+// DeclineProposal 「不go N」→declined（业主拒批态机推进）。
+func (e *Executor) DeclineProposal(ctx context.Context, id int64) (string, error) {
+	p, err := e.Store.GetProposal(ctx, id)
+	if err != nil {
+		return "", fmt.Errorf("提案#%d 查询败: %w", id, err)
+	}
+	if p.Status != "proposed" {
+		return fmt.Sprintf("提案#%d 已 %s", id, p.Status), nil
+	}
+	if err := e.Store.SetProposalStatus(ctx, id, "declined"); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("提案#%d 已 decline", id), nil
+}
+
+// GoWheel 轮式双腿（旧 Go 全腿径保留为内部径——D-191 R3 wheel 语义；
+// 提案绑定径=GoProposal，无提案场景此径不再口令可达）。
+func (e *Executor) GoWheel(ctx context.Context) (string, error) {
 	if e.BnKey == "" {
 		return "", e.gap(ctx, callLeg, "credential", "binance:spot",
 			"请配置 binance 凭据（DCI 申购写径）")
@@ -81,7 +180,7 @@ func (e *Executor) Go(ctx context.Context) (string, error) {
 	}
 	var msgs []string
 	for _, l := range []leg{callLeg, putLeg} {
-		msg, err := e.tryLeg(ctx, l, *share, tenorCap, spot)
+		msg, err := e.tryLeg(ctx, l, *share, tenorCap, spot, nil)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.name, err))
 			continue
@@ -148,7 +247,7 @@ func (e *Executor) redeemShortfall(ctx context.Context, asset string, need float
 
 // tryLeg 单腿：池余额×share→qty、spot 不足→活期赎回缺口→重读、候选档 strike 闸
 // →最优、幂等→签名 POST→回执（R6 前置 redeem 步）。
-func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap int, spot float64) (string, error) {
+func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap int, spot float64, propID *int64) (string, error) {
 	bal, err := e.poolBalance(ctx, l.qtyCcy)
 	if err != nil {
 		return "", e.gap(ctx, l, "permission", "earn_position",
@@ -199,7 +298,7 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 	oid, created, err := e.Store.CreateDCIOrder(ctx, &pgstore.DCIOrder{
 		RequestID: reqID, Venue: "binance", TemplateID: l.tmpl,
 		ProductRef: q.ProductRef, Underlying: "BTC", OptType: l.optType, Strike: q.Strike,
-		InvestCcy: q.InvestCcy, Qty: qty, TenorDays: q.TenorDays})
+		InvestCcy: q.InvestCcy, Qty: qty, TenorDays: q.TenorDays, ProposalID: propID})
 	if err != nil {
 		return "", err
 	}

@@ -33,6 +33,8 @@ type fakeStore struct {
 	nextID      int64
 	maxTenor    []int // 捕获每次 ListDCIQuotes 的 cap
 	outstanding float64
+	proposals   map[int64]*pgstore.Proposal
+	nextProp    int64
 }
 
 func f64(v float64) *float64 { return &v }
@@ -54,7 +56,8 @@ func newFake() *fakeStore {
 				Strike: f64(80000), OptType: "PUT", TenorDays: &tenor, APY: 0.09,
 				ProductRef: "PUTP", DeliveryTs: &deliv},
 		},
-		orders: map[string]*pgstore.DCIOrder{},
+		orders:    map[string]*pgstore.DCIOrder{},
+		proposals: map[int64]*pgstore.Proposal{},
 	}
 }
 
@@ -107,6 +110,44 @@ func (f *fakeStore) UpdatePersonalPositionQtyNote(_ context.Context, id int64, q
 	}{id, qty, note})
 	return nil
 }
+
+// addProposal 测试播种提案（返 id）。
+func (f *fakeStore) addProposal(tmpl string) int64 {
+	f.nextProp++
+	f.proposals[f.nextProp] = &pgstore.Proposal{
+		ID: f.nextProp, TemplateID: tmpl, ExecTrack: "auto",
+		Venue: "binance", Status: "proposed"}
+	return f.nextProp
+}
+
+func (f *fakeStore) LatestPendingProposal(_ context.Context, tmpls []string) (*pgstore.Proposal, error) {
+	var best *pgstore.Proposal
+	for _, p := range f.proposals {
+		if p.Status != "proposed" {
+			continue
+		}
+		for _, t := range tmpls {
+			if p.TemplateID == t && (best == nil || p.ID > best.ID) {
+				best = p
+			}
+		}
+	}
+	return best, nil
+}
+func (f *fakeStore) GetProposal(_ context.Context, id int64) (*pgstore.Proposal, error) {
+	p, ok := f.proposals[id]
+	if !ok {
+		return nil, fmt.Errorf("proposal %d not found", id)
+	}
+	return p, nil
+}
+func (f *fakeStore) SetProposalStatus(_ context.Context, id int64, st string) error {
+	if p, ok := f.proposals[id]; ok {
+		p.Status = st
+	}
+	return nil
+}
+
 func (f *fakeStore) OpenConditionGap(_ context.Context, g *pgstore.ConditionGap) (int64, error) {
 	f.gaps = append(f.gaps, *g)
 	return int64(len(f.gaps)), nil
@@ -151,7 +192,8 @@ func TestD191_ConstraintBound(t *testing.T) {
 	fs := newFake()
 	fs.cons = fs.cons[1:]
 	e := execR3(fs, "http://x", nil, map[string]float64{"BTC": 0.06})
-	_, err := e.Go(context.Background())
+	pid := fs.addProposal("dci_sell_high_covered_call")
+	_, err := e.GoProposal(context.Background(), pid)
 	if err == nil || !strings.Contains(err.Error(), "custody_share") {
 		t.Fatalf("缺 share 约束应拒单: %v", err)
 	}
@@ -184,7 +226,8 @@ func TestD191R3_TenorCapFromConstraint(t *testing.T) {
 			fmt.Fprint(w, `{"orderId":1}`)
 		}))
 		e := execR3(fs, srv.URL, srv.Client(), map[string]float64{"BTC": 0.06})
-		if _, err := e.Go(context.Background()); err != nil {
+		pid := fs.addProposal("dci_sell_high_covered_call")
+		if _, err := e.GoProposal(context.Background(), pid); err != nil {
 			t.Fatal(err)
 		}
 		srv.Close()
@@ -206,28 +249,29 @@ func TestD191R3_StrikeGate(t *testing.T) {
 	}))
 	defer srv.Close()
 	e := execR3(fs, srv.URL, srv.Client(), map[string]float64{"BTC": 0.06, "USDT": 5000})
-	msg, err := e.Go(context.Background())
+	pid := fs.addProposal("dci_buy_low")
+	msg, err := e.GoProposal(context.Background(), pid)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if calls != 1 { // 仅 PUT 腿 POST
 		t.Fatalf("CALL 档应被 OTM 闸滤出: calls=%d", calls)
 	}
-	foundCallGap := false
-	for _, g := range fs.gaps {
-		if strings.Contains(g.RequestText, "CALL腿无达标档") {
-			foundCallGap = true
-		}
-	}
-	if !foundCallGap || !strings.Contains(msg, "PUT腿申购已提交") {
+	if !strings.Contains(msg, "PUT腿申购已提交") {
 		t.Fatalf("闸面错: gaps=%+v msg=%s", fs.gaps, msg)
+	}
+	// 提案腿域=PUT：CALL 档不经评估（D-189 提案腿子集语义）。
+	for _, g := range fs.gaps {
+		if strings.Contains(g.RequestText, "CALL腿") {
+			t.Fatalf("buy_low 提案不应评估 CALL 档: %+v", g)
+		}
 	}
 	// 反转：PUT strike 高于 93000 界→两腿皆无档。
 	fs2 := newFake()
 	fs2.quotes[0].Strike = f64(105000)
 	fs2.quotes[1].Strike = f64(95000)
 	e2 := execR3(fs2, srv.URL, srv.Client(), map[string]float64{"BTC": 0.06, "USDT": 5000})
-	if _, err := e2.Go(context.Background()); err != nil {
+	if _, err := e2.GoWheel(context.Background()); err != nil { // 双腿无档全 gap 面用 wheel 径
 		t.Fatal(err)
 	}
 	if len(fs2.gaps) != 2 || len(fs2.orders) != 0 {
@@ -243,7 +287,7 @@ func TestD191R3_QtyBalanceShare(t *testing.T) {
 	}))
 	defer srv.Close()
 	e := execR3(fs, srv.URL, srv.Client(), map[string]float64{"BTC": 0.2, "USDT": 10000})
-	if _, err := e.Go(context.Background()); err != nil {
+	if _, err := e.GoWheel(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	var callO, putO *pgstore.DCIOrder
@@ -272,10 +316,10 @@ func TestD191_Idempotent(t *testing.T) {
 	}))
 	defer srv.Close()
 	e := execR3(fs, srv.URL, srv.Client(), map[string]float64{"BTC": 0.2, "USDT": 10000})
-	if _, err := e.Go(context.Background()); err != nil {
+	if _, err := e.GoWheel(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	msg, err := e.Go(context.Background())
+	msg, err := e.GoWheel(context.Background())
 	if err != nil || !strings.Contains(msg, "防重") {
 		t.Fatalf("二次应防重回执: %v %v", msg, err)
 	}
@@ -295,8 +339,8 @@ func TestD191_FailToGap(t *testing.T) {
 	defer srv.Close()
 	e := execR3(fs, srv.URL, srv.Client(), map[string]float64{"BTC": 0.2, "USDT": 0})
 	// USDT=0→PUT 腿跳过，仅 CALL 腿失败
-	if _, err := e.Go(context.Background()); err != nil {
-		t.Fatal(err) // Go 双腿汇总不返 err（腿级失败入消息）
+	if _, err := e.GoWheel(context.Background()); err != nil {
+		t.Fatal(err) // GoWheel 双腿汇总不返 err（腿级失败入消息）
 	}
 	if calls != 1 {
 		t.Fatalf("单次尝试不重试, got %d", calls)
@@ -469,7 +513,8 @@ func TestD191R6_PoolEarnAndRedeem(t *testing.T) {
 			spotBals["BTC"] += amt // 赎回到账现货长
 			return nil
 		}}
-	if _, err := e.Go(context.Background()); err != nil {
+	pid := fs.addProposal("dci_sell_high_covered_call")
+	if _, err := e.GoProposal(context.Background(), pid); err != nil {
 		t.Fatal(err)
 	}
 	// 池=0.22×0.34=0.0748，现货 0.02<qty→赎回缺口 0.0548。
