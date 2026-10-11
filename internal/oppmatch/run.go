@@ -246,6 +246,9 @@ func reconcileGaps(ctx context.Context, st *pgstore.Store, in []Template, view L
 		if g.Status == "waived" {
 			continue // 业主放弃线不动
 		}
+		if g.Kind == "runtime" {
+			continue // D-196③：执行器运行期缺口豁免收口/复开（非模板条件 key）
+		}
 		key := g.TemplateID + "|" + g.Kind + "|" + g.Subject
 		c, ok := condByKey[key]
 		if !ok {

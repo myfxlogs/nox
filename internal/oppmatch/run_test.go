@@ -137,6 +137,7 @@ func TestD193_Sentinel(t *testing.T) {
 	gStale := mkGap("t193_ok", "credential", "gone:x", "requested") // →fulfilled+需求已变更
 	gMiss := mkGap("t193_miss", "holding", "ZZZ", "fulfilled")      // →requested 复开
 	gUnk := mkGap("t193_unk", "permission", "probe_x", "requested") // →unknown 不收
+	gRT := mkGap("t193_ok", "runtime", "dual_order", "requested")   // D-196③→豁免零动
 	if _, _, err := RunOnce(ctx, st); err != nil {
 		t.Fatal(err)
 	}
@@ -161,6 +162,9 @@ func TestD193_Sentinel(t *testing.T) {
 	}
 	if stt, _ := stOf(gUnk); stt != "requested" {
 		t.Fatalf("unknown 态不收不复开: %s", stt)
+	}
+	if stt, nn := stOf(gRT); stt != "requested" || nn != nil {
+		t.Fatalf("runtime 行应豁免收口/复开: %s %v", stt, nn)
 	}
 	// venue 悬空：dci_buy_low 声明 gate:dual vs executor=binance→warn 行；
 	// 未接执行轨模板（option_spread 等）不报。
