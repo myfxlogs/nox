@@ -1,6 +1,7 @@
-// exec.go —— D-191：DCI 申购执行轨（covered-call 首用例，binance SAPI 写径）。
-// 触发=业主「go」口令（飞书拦截/RPC 同径）；有界硬线=份额≤custody_share 约束+
-// 期限≤14d（custody_redeemable 消费）+strike 档取报价面最优档；
+// exec.go —— D-191 R3：轮式 DCI 执行轨（binance SAPI 写径，covered-call+cash-put 双向）。
+// 触发=业主「go」口令；strike 规则化 %OTM 闸（CALL≥spot×1.10/PUT≤spot×0.93，
+// spot=执行时实时读）；期限上限=custody_redeemable.value_num；qty=币安实时余额
+// ×custody_share（禁读 personal_positions 静态行）；无达标档→gap 如实报不降级凑单；
 // 幂等=fin_dci_order.request_id UNIQUE 单次尝试不重试；失败→fin_condition_gap 请求。
 package dciexec
 
@@ -10,8 +11,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -22,11 +21,12 @@ import (
 // Store 执行面依赖（*pgstore.Store 实现；测试走 fake）。
 type Store interface {
 	ListCapabilityConstraints(ctx context.Context) ([]pgstore.CapabilityConstraint, error)
-	ListCapabilityLedger(ctx context.Context) (*pgstore.CapabilityLedger, error)
-	BestDCIQuote(ctx context.Context, venue, underlying, optType, investCcy string, maxTenorDays int) (*pgstore.CexDCIQuote, error)
+	ListDCIQuotes(ctx context.Context, venue, underlying, optType, investCcy string, maxTenorDays int) ([]pgstore.CexDCIQuote, error)
 	CreateDCIOrder(ctx context.Context, o *pgstore.DCIOrder) (int64, bool, error)
 	FinishDCIOrder(ctx context.Context, id int64, status, response string) error
 	InsertPersonalPosition(ctx context.Context, asset, kind, priceSymbol, note string, qty *float64, openedAt *time.Time) (int64, error)
+	ListOpenPersonalPositions(ctx context.Context) ([]pgstore.PersonalPosition, error)
+	UpdatePersonalPositionQtyNote(ctx context.Context, id int64, qty float64, note string) error
 	OpenConditionGap(ctx context.Context, g *pgstore.ConditionGap) (int64, error)
 	RequestConditionGap(ctx context.Context, id int64) error
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
@@ -34,13 +34,39 @@ type Store interface {
 
 // Executor binance DCI 申购执行器（凭据由装配侧从 exchange_configs 注入）。
 type Executor struct {
-	Store  Store
-	BnKey  string
-	BnSec  string
-	Base   string // sapi base（代理/直连由装配决议）
-	Client *http.Client
-	Now    func() time.Time // 测试可覆
+	Store   Store
+	BnKey   string
+	BnSec   string
+	Sapi    string // sapi base（申购写径）
+	APIBase string // api base（余额/现货读径）
+	Client  *http.Client
+	Now     func() time.Time // 测试可覆
+	// 测试注入面（nil=真实 HTTP 实现）：
+	PriceFn   func(ctx context.Context, symbol string) (float64, error)
+	BalanceFn func(ctx context.Context, asset string) (float64, error)
 }
+
+// %OTM 闸（票面钦定：卖高 CALL≥×1.10、买低 PUT≤×0.93）。
+const (
+	otmCallRatio = 1.10
+	otmPutRatio  = 0.93
+)
+
+// leg 腿参数（CALL=持币卖高 covered-call；PUT=持 USDT 买低 cash-put）。
+type leg struct {
+	name      string // CALL|PUT（order 账口径）
+	optType   string
+	investCcy string // 投入币（CALL=BTC、PUT=USDT）
+	qtyCcy    string // 余额读径资产
+	tmpl      string
+}
+
+var (
+	callLeg = leg{name: "CALL", optType: "CALL", investCcy: "BTC", qtyCcy: "BTC",
+		tmpl: "dci_sell_high_covered_call"}
+	putLeg = leg{name: "PUT", optType: "PUT", investCcy: "USDT", qtyCcy: "USDT",
+		tmpl: "dci_buy_low"}
+)
 
 // sign HMAC-SHA256 hex（binance sapi 同法，包内独立实现 P3 不适用）。
 func sign(secret, query string) string {
@@ -49,149 +75,146 @@ func sign(secret, query string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+// strikePass %OTM 闸：CALL→strike≥spot×1.10、PUT→strike≤spot×0.93（strike 缺=不达标）。
+func (l leg) strikePass(q *pgstore.CexDCIQuote, spot float64) bool {
+	if q.Strike == nil {
+		return false
+	}
+	if l.optType == "CALL" {
+		return *q.Strike >= spot*otmCallRatio
+	}
+	return *q.Strike <= spot*otmPutRatio
+}
+
 // SubscribeBody 申购参数构造（projectId+lots+时间戳；签名=HMAC(query)）。
 func (e *Executor) SubscribeBody(projectID string, lots float64, at time.Time) (query, url string) {
 	q := fmt.Sprintf("projectId=%s&lots=%.8f&timestamp=%d&recvWindow=5000",
 		projectID, lots, at.UnixMilli())
 	return q, fmt.Sprintf("%s/sapi/v1/dci/product/subscribe?%s&signature=%s",
-		strings.TrimRight(e.Base, "/"), q, sign(e.BnSec, q))
+		strings.TrimRight(e.Sapi, "/"), q, sign(e.BnSec, q))
 }
 
-// Go covered-call 申购主径（业主口令「go」→本径；约束/报价/幂等三段闸）。
+// tenorCapOf 期限上限=custody_redeemable.value_num（票面钦定读 90；行在无数值→14）。
+func tenorCapOf(cons []pgstore.CapabilityConstraint) (share *float64, cap int) {
+	cap = 30 // 无 redeemable 约束=非托管语义，保守中间档
+	for _, c := range cons {
+		switch c.Subject {
+		case "custody_share":
+			share = c.ValueNum
+		case "custody_redeemable":
+			cap = 14
+			if c.ValueNum != nil {
+				cap = int(*c.ValueNum)
+			}
+		}
+	}
+	return share, cap
+}
+
+// Go 轮式申购主径（业主口令「go」→双腿各试：CALL 持币卖高 + PUT 持U买低；
+// 一腿成败不阻他腿；约束/报价/幂等三段闸同 R2）。
 func (e *Executor) Go(ctx context.Context) (string, error) {
 	if e.BnKey == "" {
-		return "", e.gap(ctx, "请配置 binance 凭据（DCI 申购写径）", "credential", "binance:spot")
+		return "", e.gap(ctx, callLeg, "credential", "binance:spot",
+			"请配置 binance 凭据（DCI 申购写径）")
 	}
-	// ① 约束界：custody_share 必在（缺失=约束未喂→缺口），redeemable→14d 上限。
-	var share *float64
-	var redeem bool
 	cons, err := e.Store.ListCapabilityConstraints(ctx)
 	if err != nil {
 		return "", err
 	}
-	for _, c := range cons {
-		if c.Subject == "custody_share" {
-			share = c.ValueNum
-		}
-		if c.Subject == "custody_redeemable" {
-			redeem = true
-		}
-	}
+	share, tenorCap := tenorCapOf(cons)
 	if share == nil {
-		return "", e.gap(ctx, "请喂约束 custody_share（托管可动份额上限）", "constraint", "custody_share")
+		return "", e.gap(ctx, callLeg, "constraint", "custody_share",
+			"请喂约束 custody_share（托管可动份额上限）")
 	}
-	tenorCap := 30
-	if redeem { // 随时赎约束→期限硬线 14d（票面钦定）
-		tenorCap = 14
+	// 现货执行时实时读（strike %OTM 闸源）。
+	spot, err := e.spotPrice(ctx, "BTCUSDT")
+	if err != nil {
+		return "", e.gap(ctx, callLeg, "permission", "dual_quote",
+			"binance BTC 现货价读取失败：%v", err)
 	}
-	// ② 报价档：binance BTC 卖高（opt_type=CALL+invest_ccy=BTC 持币卖高）、≤tenorCap、apy 最优。
-	q, err := e.Store.BestDCIQuote(ctx, "binance", "BTC", "CALL", "BTC", tenorCap)
-	if err != nil || q == nil {
-		return "", e.gap(ctx, "binance BTC 卖高报价缺（tenor≤%dd）", "permission", "dual_quote", tenorCap)
+	var msgs []string
+	for _, l := range []leg{callLeg, putLeg} {
+		msg, err := e.tryLeg(ctx, l, *share, tenorCap, spot)
+		if err != nil {
+			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.name, err))
+			continue
+		}
+		msgs = append(msgs, msg)
 	}
-	// ③ 数量：BTC 持仓×份额上限（有界硬线）。
-	led, err := e.Store.ListCapabilityLedger(ctx)
+	return strings.Join(msgs, "；"), nil
+}
+
+// tryLeg 单腿：余额×share→qty、候选档 strike 闸→最优、幂等→签名 POST→回执。
+func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap int, spot float64) (string, error) {
+	bal, err := e.freeBalance(ctx, l.qtyCcy)
+	if err != nil {
+		return "", fmt.Errorf("%s 余额读败：%w", l.qtyCcy, err)
+	}
+	qty := bal * share
+	if qty <= 0 {
+		return fmt.Sprintf("%s腿跳过（%s 可动=0）", l.name, l.qtyCcy), nil
+	}
+	qs, err := e.Store.ListDCIQuotes(ctx, "binance", "BTC", l.optType, l.investCcy, tenorCap)
 	if err != nil {
 		return "", err
 	}
-	var held float64
-	for _, h := range led.Holdings {
-		if h.Asset == "BTC" {
-			held += h.Qty
+	var q *pgstore.CexDCIQuote
+	for i := range qs {
+		if l.strikePass(&qs[i], spot) {
+			q = &qs[i]
+			break
 		}
 	}
-	// qty=held 直取——持仓行即业主份额（R2 修：held×share 双重折扣病灶，
-	// personal_positions qty 已是托管可动份额行；share 界仍作在册闸）。
-	qty := held
-	if qty <= 0 {
-		return "", e.gap(ctx, "BTC 托管可动份额=0（持仓 %.4f）", "holding", "BTC", held)
+	if q == nil {
+		return "", e.gap(ctx, l, "permission", "dual_quote",
+			"%s腿无达标档在售（spot %.0f，strike 界 %s）", l.name, spot, l.boundText(spot))
 	}
-	// ④ 幂等登记（request_id 防重：同 product×delivery×qty 不重发）。
 	now := e.Now()
-	reqID := fmt.Sprintf("dci|%s|%s|%.8f", q.ProductRef,
-		delivDay(q), qty)
+	reqID := fmt.Sprintf("dci|%s|%s|%s|%.8f", l.name, q.ProductRef, delivDay(q), qty)
 	oid, created, err := e.Store.CreateDCIOrder(ctx, &pgstore.DCIOrder{
-		RequestID: reqID, Venue: "binance", TemplateID: "dci_sell_high_covered_call",
-		ProductRef: q.ProductRef, Underlying: "BTC", OptType: "CALL", Strike: q.Strike,
+		RequestID: reqID, Venue: "binance", TemplateID: l.tmpl,
+		ProductRef: q.ProductRef, Underlying: "BTC", OptType: l.optType, Strike: q.Strike,
 		InvestCcy: q.InvestCcy, Qty: qty, TenorDays: q.TenorDays})
 	if err != nil {
 		return "", err
 	}
 	if !created {
-		return "DCI 申购已受理（request_id 防重，无重发）", nil
+		return fmt.Sprintf("%s腿已受理（request_id 防重）", l.name), nil
 	}
-	// ⑤ 签名 POST（单次尝试不重试；败→failed+gap 请求）。
 	body, err := e.post(ctx, q.ProductRef, qty, now)
 	if err != nil {
 		e.finish(ctx, oid, "failed", err.Error())
-		return "", e.gap(ctx, "请开通 binance 赚币/双币申购权限（下单失败：%v）", "permission", "dual_order")
+		return "", e.gap(ctx, l, "permission", "dual_order",
+			"请开通 binance 赚币/双币申购权限（%s腿下单失败：%v）", l.name, err)
 	}
 	e.finish(ctx, oid, "filled", body)
-	// ⑥ 回执入账：personal_positions 行+income 锚 note。
-	posQty := qty
 	strike := 0.0
 	if q.Strike != nil {
 		strike = *q.Strike
 	}
-	note := fmt.Sprintf("DCI covered-call 申购回执：binance %s strike %.0f tenor %dd qty %.6f（单号 %s）",
-		q.ProductRef, strike, tenor(q), qty, reqID)
+	note := fmt.Sprintf("DCI %s 申购回执：binance %s strike %.0f tenor %dd qty %.6f %s（单号 %s）",
+		l.name, q.ProductRef, strike, tenor(q), qty, l.qtyCcy, reqID)
 	opened := now
-	if _, err := e.Store.InsertPersonalPosition(ctx, "BTC", "other", "BTCUSDT",
-		note, &posQty, &opened); err != nil {
+	asset := l.qtyCcy
+	if _, err := e.Store.InsertPersonalPosition(ctx, asset, "other", asset+"USDT",
+		note, &qty, &opened); err != nil {
 		return "", fmt.Errorf("回执入账: %w", err)
 	}
-	if err := e.Store.InsertAlert(ctx, nil, "info",
-		fmt.Sprintf("DCI 申购成交：BTC %.6f strike %.0f apy %.4g（单号 %s）", qty, strike, q.APY, reqID)); err != nil {
+	if err := e.Store.InsertAlert(ctx, nil, "info", fmt.Sprintf(
+		"DCI %s 申购成交：%.6f %s strike %.0f apy %.4g（单号 %s）",
+		l.name, qty, l.qtyCcy, strike, q.APY, reqID)); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("申购已提交并回执入账：BTC %.6f strike %.0f（%.4g 原生口径）", qty, strike, q.APY), nil
+	return fmt.Sprintf("%s腿申购已提交并入账：%.6f %s strike %.0f（%.4g 原生口径）",
+		l.name, qty, l.qtyCcy, strike, q.APY), nil
 }
 
-func (e *Executor) post(ctx context.Context, projectID string, lots float64, at time.Time) (string, error) {
-	_, url := e.SubscribeBody(projectID, lots, at)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
-	if err != nil {
-		return "", err
+func (l leg) boundText(spot float64) string {
+	if l.optType == "CALL" {
+		return fmt.Sprintf("≥%.0f", spot*otmCallRatio)
 	}
-	req.Header.Set("X-MBX-APIKEY", e.BnKey)
-	resp, err := e.client().Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	if resp.StatusCode/100 != 2 {
-		return "", fmt.Errorf("subscribe HTTP %d: %s", resp.StatusCode, string(b))
-	}
-	return string(b), nil
-}
-
-func (e *Executor) client() *http.Client {
-	if e.Client != nil {
-		return e.Client
-	}
-	return http.DefaultClient
-}
-
-func (e *Executor) finish(ctx context.Context, id int64, st, resp string) {
-	if err := e.Store.FinishDCIOrder(ctx, id, st, resp); err != nil {
-		log.Printf("[dciexec] finish order %d: %v", id, err)
-	}
-}
-
-// gap 缺口落+请求（D-186 通道复用；err 回执即缺口文案）。
-func (e *Executor) gap(ctx context.Context, format, kind, subject string, args ...any) error {
-	text := fmt.Sprintf(format, args...)
-	id, err := e.Store.OpenConditionGap(ctx, &pgstore.ConditionGap{
-		TemplateID: "dci_sell_high_covered_call", Kind: kind, Subject: subject,
-		RequestText: text})
-	if err != nil {
-		return err
-	}
-	if err := e.Store.RequestConditionGap(ctx, id); err != nil {
-		return err
-	}
-	return fmt.Errorf("条件缺口：%s", text)
+	return fmt.Sprintf("≤%.0f", spot*otmPutRatio)
 }
 
 func delivDay(q *pgstore.CexDCIQuote) string {
