@@ -132,3 +132,76 @@ func (e *Executor) gap(ctx context.Context, l leg, kind, subject, format string,
 	}
 	return fmt.Errorf("条件缺口：%s", text)
 }
+
+// EarnPosition 赚币子账持仓行（flexible/locked position 读径归并）。
+type EarnPosition struct {
+	ProductID string
+	Amount    float64
+	Locked    bool // locked=定期（不可 FAST 赎回）
+}
+
+// earnPositions 赚币子账持仓读：GET /v1/simple-earn/{flexible,locked}/position
+// （签名；rows[].totalAmount|amount 归并——R6 池口径 spot+earn）。
+func (e *Executor) earnPositions(ctx context.Context, asset string) ([]EarnPosition, error) {
+	var out []EarnPosition
+	for _, seg := range []struct {
+		path   string
+		locked bool
+	}{
+		{"/v1/simple-earn/flexible/position", false},
+		{"/v1/simple-earn/locked/position", true},
+	} {
+		q := fmt.Sprintf("asset=%s&timestamp=%d&recvWindow=5000", asset, e.Now().UnixMilli())
+		url := fmt.Sprintf("%s%s?%s&signature=%s",
+			strings.TrimRight(e.Sapi, "/"), seg.path, q, sign(e.BnSec, q))
+		b, err := e.get(ctx, url, true)
+		if err != nil {
+			return nil, err
+		}
+		var r struct {
+			Rows []struct {
+				ProductID   string `json:"productId"`
+				TotalAmount string `json:"totalAmount"`
+				Amount      string `json:"amount"`
+			} `json:"rows"`
+		}
+		if err := json.Unmarshal(b, &r); err != nil {
+			return nil, err
+		}
+		for _, row := range r.Rows {
+			amt := row.TotalAmount
+			if amt == "" {
+				amt = row.Amount
+			}
+			f, _ := strconv.ParseFloat(amt, 64)
+			if f > 0 {
+				out = append(out, EarnPosition{ProductID: row.ProductID, Amount: f, Locked: seg.locked})
+			}
+		}
+	}
+	return out, nil
+}
+
+// redeemFlexible 活期赎回步：POST /v1/simple-earn/flexible/redeem（签名；
+// type=FAST 赎至现货——R6 申购前置「spot 不足→赎回缺口→重读」）。
+func (e *Executor) redeemFlexible(ctx context.Context, productID string, amount float64) error {
+	q := fmt.Sprintf("productId=%s&amount=%.8f&type=FAST&timestamp=%d&recvWindow=5000",
+		productID, amount, e.Now().UnixMilli())
+	url := fmt.Sprintf("%s/v1/simple-earn/flexible/redeem?%s&signature=%s",
+		strings.TrimRight(e.Sapi, "/"), q, sign(e.BnSec, q))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-MBX-APIKEY", e.BnKey)
+	resp, err := e.client().Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("redeem HTTP %d: %s", resp.StatusCode, string(b))
+	}
+	return nil
+}

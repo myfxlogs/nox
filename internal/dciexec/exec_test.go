@@ -122,7 +122,10 @@ func execR3(fs *fakeStore, url string, cli *http.Client, bals map[string]float64
 		PriceFn: func(context.Context, string) (float64, error) { return 100000, nil },
 		BalanceFn: func(_ context.Context, a string) (float64, error) {
 			return bals[a], nil
-		}}
+		},
+		EarnFn:   func(context.Context, string) ([]EarnPosition, error) { return nil, nil },
+		RedeemFn: func(context.Context, string, float64) error { return nil },
+	}
 }
 
 // TestD191_SignQuery：签名串构造对拍——query 字段齐+HMAC 可验。
@@ -435,5 +438,78 @@ func TestD191R5_LargeAccountJSON(t *testing.T) {
 	bal, err := e.freeBalance(context.Background(), "BTC")
 	if err != nil || bal != 0.5 {
 		t.Fatalf("大 JSON 应解析出末位 BTC=0.5: %v %v", bal, err)
+	}
+}
+
+// TestD191R6_PoolEarnAndRedeem：池=现货+赚币子账；现货不足→前置赎回缺口→重读下单。
+func TestD191R6_PoolEarnAndRedeem(t *testing.T) {
+	fs := newFake()
+	var redeems []float64
+	spotBals := map[string]float64{"BTC": 0.02}
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "subscribe") {
+			calls++
+		}
+		fmt.Fprint(w, `{"orderId":1}`)
+	}))
+	defer srv.Close()
+	e := &Executor{Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
+		Client: srv.Client(), Now: time.Now,
+		PriceFn: func(context.Context, string) (float64, error) { return 100000, nil },
+		BalanceFn: func(_ context.Context, a string) (float64, error) {
+			return spotBals[a], nil // 现货只 0.02 起
+		},
+		EarnFn: func(_ context.Context, a string) ([]EarnPosition, error) {
+			return []EarnPosition{{ProductID: "EP1", Amount: 0.2}}, nil // 赚币 0.2
+		},
+		RedeemFn: func(_ context.Context, _ string, amt float64) error {
+			redeems = append(redeems, amt)
+			spotBals["BTC"] += amt // 赎回到账现货长
+			return nil
+		}}
+	if _, err := e.Go(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// 池=0.22×0.34=0.0748，现货 0.02<qty→赎回缺口 0.0548。
+	if len(redeems) < 1 || math.Abs(redeems[0]-(0.22*0.34-0.02)) > 1e-9 {
+		t.Fatalf("CALL 腿赎回缺口错: %v", redeems)
+	}
+	var o *pgstore.DCIOrder
+	for _, oo := range fs.orders {
+		if oo.OptType == "CALL" {
+			o = oo
+		}
+	}
+	if o == nil || math.Abs(o.Qty-0.22*0.34) > 1e-9 {
+		t.Fatalf("qty 应按池=现货+赚币: %+v", o)
+	}
+	_ = calls
+}
+
+// TestD191R6_BlindGate：live≈0&ledger>0→gap 禁缩账（盲源不缩份额行）。
+func TestD191R6_BlindGate(t *testing.T) {
+	fs := newFake()
+	poolQty := 0.05
+	fs.positions = []pgstore.PersonalPosition{
+		{ID: 7, Asset: "BTC", Kind: "other", Status: "OPEN", Qty: &poolQty},
+	}
+	// 余额读 0→盲源闸触发（禁缩账）。
+	e := execR3(fs, "http://x", nil, map[string]float64{"BTC": 0})
+	_, _, _, err := e.ReconcilePoolOnce(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "盲读") {
+		t.Fatalf("盲源闸应 gap: %v", err)
+	}
+	if len(fs.updates) != 0 {
+		t.Fatal("盲源禁缩账——不应有修正写")
+	}
+	found := false
+	for _, g := range fs.gaps {
+		if g.Subject == "earn_position" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("earn_position gap 未落: %+v", fs.gaps)
 	}
 }

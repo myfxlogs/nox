@@ -20,7 +20,7 @@ const (
 )
 
 // ReconcilePoolOnce 日对账单轮：返回账/实/漂移是否超阈（告警+自动修正已内联）。
-// 实=余额(free+locked)×share + 未到期 DCI 申购在外 qty×share（R4 回填）。
+// 实=（现货 free+locked+赚币子账）×share + 未到期 DCI 申购在外 qty×share（R4/R6）。
 func (e *Executor) ReconcilePoolOnce(ctx context.Context) (ledger, live float64, drifted bool, err error) {
 	cons, err := e.Store.ListCapabilityConstraints(ctx)
 	if err != nil {
@@ -30,9 +30,9 @@ func (e *Executor) ReconcilePoolOnce(ctx context.Context) (ledger, live float64,
 	if share == nil {
 		return 0, 0, false, fmt.Errorf("custody_share 约束缺（托管池对账不可行）")
 	}
-	live, err = e.freeBalance(ctx, "BTC")
+	live, err = e.poolBalance(ctx, "BTC") // 现货+赚币子账（R6 池口径）
 	if err != nil {
-		return 0, 0, false, fmt.Errorf("BTC 实时余额读败: %w", err)
+		return 0, 0, false, fmt.Errorf("BTC 池余额读败（盲源禁缩账）: %w", err)
 	}
 	live *= *share
 	// outstanding 回填：filled 未到期申购锁定币离现货账，加回池实有（R4）。
@@ -69,6 +69,12 @@ func (e *Executor) ReconcilePoolOnce(ctx context.Context) (ledger, live float64,
 	ledger = poolQty
 	if row == nil {
 		return ledger, live, false, fmt.Errorf("托管池份额行缺（无 BTC other OPEN 持仓行）")
+	}
+	// 盲源闸：实有≈0 但账>0=余额面盲读疑（earn/spot 权限或子账未覆盖），
+	// 禁缩账——缺口请求业主核查而非自动清零（R6）。
+	if live < reconcileDriftAbs && ledger > reconcileDriftAbs {
+		return ledger, live, false, e.gap(ctx, callLeg, "permission", "earn_position",
+			"托管池实有≈0 但账 %.8f——余额面盲读疑（赚币权限/子账覆盖），禁缩账请核查", ledger)
 	}
 	diff := math.Abs(live - ledger)
 	base := math.Max(math.Abs(ledger), 1e-9)

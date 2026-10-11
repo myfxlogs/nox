@@ -44,7 +44,9 @@ type Executor struct {
 	Now     func() time.Time // 测试可覆
 	// 测试注入面（nil=真实 HTTP 实现）：
 	PriceFn   func(ctx context.Context, symbol string) (float64, error)
-	BalanceFn func(ctx context.Context, asset string) (float64, error)
+	BalanceFn func(ctx context.Context, asset string) (float64, error) // 现货 free+locked
+	EarnFn    func(ctx context.Context, asset string) ([]EarnPosition, error)
+	RedeemFn  func(ctx context.Context, productID string, amount float64) error
 }
 
 // %OTM 闸（票面钦定：卖高 CALL≥×1.10、买低 PUT≤×0.93）。
@@ -146,15 +148,93 @@ func (e *Executor) Go(ctx context.Context) (string, error) {
 	return strings.Join(msgs, "；"), nil
 }
 
-// tryLeg 单腿：余额×share→qty、候选档 strike 闸→最优、幂等→签名 POST→回执。
-func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap int, spot float64) (string, error) {
-	bal, err := e.freeBalance(ctx, l.qtyCcy)
+// poolBalance 托管池余额=现货(free+locked)+赚币子账持仓（R6 池口径；
+// outstanding DCI 锁仓在对账侧回填，下单 qty 不含——在外单不再复投）。
+func (e *Executor) poolBalance(ctx context.Context, asset string) (float64, error) {
+	bal, err := e.freeBalance(ctx, asset)
 	if err != nil {
-		return "", fmt.Errorf("%s 余额读败：%w", l.qtyCcy, err)
+		return 0, err
+	}
+	eps, err := e.earnPositionsOf(ctx, asset)
+	if err != nil {
+		return 0, err
+	}
+	for _, p := range eps {
+		bal += p.Amount
+	}
+	return bal, nil
+}
+
+func (e *Executor) earnPositionsOf(ctx context.Context, asset string) ([]EarnPosition, error) {
+	if e.EarnFn != nil {
+		return e.EarnFn(ctx, asset)
+	}
+	return e.earnPositions(ctx, asset)
+}
+
+func (e *Executor) redeem(ctx context.Context, productID string, amount float64) error {
+	if e.RedeemFn != nil {
+		return e.RedeemFn(ctx, productID, amount)
+	}
+	return e.redeemFlexible(ctx, productID, amount)
+}
+
+// redeemShortfall 活期赎回缺口：逐 flexible 持仓赎至凑齐 need（locked 定期不赎——
+// 强制赎回罚息面禁动）；返回实赎量。
+func (e *Executor) redeemShortfall(ctx context.Context, asset string, need float64) (float64, error) {
+	eps, err := e.earnPositionsOf(ctx, asset)
+	if err != nil {
+		return 0, err
+	}
+	var done float64
+	for _, p := range eps {
+		if p.Locked || need-done <= 0 {
+			continue
+		}
+		amt := p.Amount
+		if amt > need-done {
+			amt = need - done
+		}
+		if err := e.redeem(ctx, p.ProductID, amt); err != nil {
+			return done, err
+		}
+		done += amt
+	}
+	return done, nil
+}
+
+// tryLeg 单腿：池余额×share→qty、spot 不足→活期赎回缺口→重读、候选档 strike 闸
+// →最优、幂等→签名 POST→回执（R6 前置 redeem 步）。
+func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap int, spot float64) (string, error) {
+	bal, err := e.poolBalance(ctx, l.qtyCcy)
+	if err != nil {
+		return "", e.gap(ctx, l, "permission", "earn_position",
+			"请开通 binance 赚币子账查询权限（%s 池余额读败：%v）", l.qtyCcy, err)
 	}
 	qty := bal * share
 	if qty <= 0 {
 		return fmt.Sprintf("%s腿跳过（%s 可动=0）", l.name, l.qtyCcy), nil
+	}
+	// 前置赎回步：现货可动不足→赚币活期赎回缺口→重读现货（单次步零重试）。
+	spotFree, err := e.freeBalance(ctx, l.qtyCcy)
+	if err != nil {
+		return "", fmt.Errorf("%s 现货余额读败：%w", l.qtyCcy, err)
+	}
+	if spotFree < qty {
+		redeemed, rerr := e.redeemShortfall(ctx, l.qtyCcy, qty-spotFree)
+		if rerr != nil {
+			return "", e.gap(ctx, l, "permission", "earn_redeem",
+				"请开通 binance 赚币活期赎回权限（%s 赎回败：%v）", l.qtyCcy, rerr)
+		}
+		if redeemed > 0 {
+			if spotFree, err = e.freeBalance(ctx, l.qtyCcy); err != nil {
+				return "", fmt.Errorf("%s 赎回后现货重读败：%w", l.qtyCcy, err)
+			}
+		}
+		if spotFree < qty {
+			return "", e.gap(ctx, l, "holding", l.qtyCcy,
+				"%s 现货可动不足（池算 qty %.6f、赎回后现货 %.6f）", l.qtyCcy, qty, spotFree)
+		}
 	}
 	qs, err := e.Store.ListDCIQuotes(ctx, "binance", "BTC", l.optType, l.investCcy, tenorCap)
 	if err != nil {
