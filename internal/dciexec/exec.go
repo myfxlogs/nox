@@ -23,7 +23,7 @@ import (
 type Store interface {
 	ListCapabilityConstraints(ctx context.Context) ([]pgstore.CapabilityConstraint, error)
 	ListCapabilityLedger(ctx context.Context) (*pgstore.CapabilityLedger, error)
-	BestDCIQuote(ctx context.Context, venue, underlying, optType string, maxTenorDays int) (*pgstore.CexDCIQuote, error)
+	BestDCIQuote(ctx context.Context, venue, underlying, optType, investCcy string, maxTenorDays int) (*pgstore.CexDCIQuote, error)
 	CreateDCIOrder(ctx context.Context, o *pgstore.DCIOrder) (int64, bool, error)
 	FinishDCIOrder(ctx context.Context, id int64, status, response string) error
 	InsertPersonalPosition(ctx context.Context, asset, kind, priceSymbol, note string, qty *float64, openedAt *time.Time) (int64, error)
@@ -84,8 +84,8 @@ func (e *Executor) Go(ctx context.Context) (string, error) {
 	if redeem { // 随时赎约束→期限硬线 14d（票面钦定）
 		tenorCap = 14
 	}
-	// ② 报价档：binance BTC 卖高（opt_type=C）、≤tenorCap、apy 最优。
-	q, err := e.Store.BestDCIQuote(ctx, "binance", "BTC", "C", tenorCap)
+	// ② 报价档：binance BTC 卖高（opt_type=CALL+invest_ccy=BTC 持币卖高）、≤tenorCap、apy 最优。
+	q, err := e.Store.BestDCIQuote(ctx, "binance", "BTC", "CALL", "BTC", tenorCap)
 	if err != nil || q == nil {
 		return "", e.gap(ctx, "binance BTC 卖高报价缺（tenor≤%dd）", "permission", "dual_quote", tenorCap)
 	}
@@ -100,9 +100,11 @@ func (e *Executor) Go(ctx context.Context) (string, error) {
 			held += h.Qty
 		}
 	}
-	qty := held * *share
+	// qty=held 直取——持仓行即业主份额（R2 修：held×share 双重折扣病灶，
+	// personal_positions qty 已是托管可动份额行；share 界仍作在册闸）。
+	qty := held
 	if qty <= 0 {
-		return "", e.gap(ctx, "BTC 托管可动份额=0（持仓 %.4f×share %.2f）", "holding", "BTC", held, *share)
+		return "", e.gap(ctx, "BTC 托管可动份额=0（持仓 %.4f）", "holding", "BTC", held)
 	}
 	// ④ 幂等登记（request_id 防重：同 product×delivery×qty 不重发）。
 	now := e.Now()
@@ -110,7 +112,7 @@ func (e *Executor) Go(ctx context.Context) (string, error) {
 		delivDay(q), qty)
 	oid, created, err := e.Store.CreateDCIOrder(ctx, &pgstore.DCIOrder{
 		RequestID: reqID, Venue: "binance", TemplateID: "dci_sell_high_covered_call",
-		ProductRef: q.ProductRef, Underlying: "BTC", OptType: "C", Strike: q.Strike,
+		ProductRef: q.ProductRef, Underlying: "BTC", OptType: "CALL", Strike: q.Strike,
 		InvestCcy: q.InvestCcy, Qty: qty, TenorDays: q.TenorDays})
 	if err != nil {
 		return "", err

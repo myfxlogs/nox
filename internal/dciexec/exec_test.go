@@ -50,7 +50,7 @@ func (f *fakeStore) ListCapabilityConstraints(context.Context) ([]pgstore.Capabi
 func (f *fakeStore) ListCapabilityLedger(context.Context) (*pgstore.CapabilityLedger, error) {
 	return &pgstore.CapabilityLedger{Holdings: f.holdings}, nil
 }
-func (f *fakeStore) BestDCIQuote(context.Context, string, string, string, int) (*pgstore.CexDCIQuote, error) {
+func (f *fakeStore) BestDCIQuote(context.Context, string, string, string, string, int) (*pgstore.CexDCIQuote, error) {
 	return f.quote, nil
 }
 func (f *fakeStore) CreateDCIOrder(_ context.Context, o *pgstore.DCIOrder) (int64, bool, error) {
@@ -151,9 +151,9 @@ type captureStore struct {
 	maxTenor *int
 }
 
-func (c *captureStore) BestDCIQuote(ctx context.Context, v, u, o string, m int) (*pgstore.CexDCIQuote, error) {
+func (c *captureStore) BestDCIQuote(ctx context.Context, v, u, o, i string, m int) (*pgstore.CexDCIQuote, error) {
 	*c.maxTenor = m
-	return c.fakeStore.BestDCIQuote(ctx, v, u, o, m)
+	return c.fakeStore.BestDCIQuote(ctx, v, u, o, i, m)
 }
 
 // TestD191_Idempotent：同参二次 go→request_id 防重无重发（POST 恰一次）。
@@ -200,9 +200,9 @@ func TestD191_Receipt(t *testing.T) {
 	if fs.posRows != 1 || fs.alerts != 1 {
 		t.Fatalf("回执面缺: pos=%d alert=%d", fs.posRows, fs.alerts)
 	}
-	// qty=持仓0.06×share0.34=0.0204
-	if o.Qty < 0.02 || o.Qty > 0.021 {
-		t.Fatalf("qty 口径错: %v", o.Qty)
+	// qty=held 直取（0.06=业主份额行，R2 修双重折扣）
+	if o.Qty != 0.06 {
+		t.Fatalf("qty=held 口径错: %v", o.Qty)
 	}
 	_ = msg
 }
