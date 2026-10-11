@@ -283,7 +283,13 @@ func proposalParams(ctx context.Context, st *pgstore.Store, r Result) map[string
 		opt, inv = "PUT", "USDT"
 	}
 	if opt != "" {
-		if qs, err := st.ListDCIQuotes(ctx, "binance", "BTC", opt, inv, 90); err == nil && len(qs) > 0 {
+		// D-191-R8：快照同界——bound=现货参照×%OTM 闸（无参照→无界降级，
+		// 快照=审计锚非钉价，执行时实时闸复验不变）。
+		var bound float64
+		if spot, err := st.LatestSpreadSpotRef(ctx, "BTC"); err == nil && spot > 0 {
+			bound = dciexec.StrikeBound(opt, spot)
+		}
+		if qs, err := st.ListDCIQuotes(ctx, "binance", "BTC", opt, inv, 90, bound); err == nil && len(qs) > 0 {
 			p["product_ref"] = qs[0].ProductRef
 			if qs[0].Strike != nil {
 				p["strike"] = *qs[0].Strike
