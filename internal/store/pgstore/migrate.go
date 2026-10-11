@@ -181,6 +181,7 @@ var migrationFiles = []struct {
 	{185, migrations.FactsKindTsIdxSQL},                // D-152 fixup：facts(kind,ts) retention 候选寻址
 	{186, migrations.ElimEvidenceSeedSQL},              // D-180：统计证据阈值 app_config 播种
 	{187, migrations.CexDCIQuoteSQL},                   // D-183：三所 DCI/双币产品报价表
+	{188, migrations.OppTemplateSQL},                   // D-185：机会模板册（fin_opp_template+cond）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
