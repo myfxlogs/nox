@@ -140,6 +140,16 @@ func floorTo(v float64, dec int) float64 {
 	return math.Floor(v*m) / m
 }
 
+// decOf D-191-R12：depositAmount floor 位数真源=该档 min_amount 小数位
+// （FormatFloat 'f' -1 实际小数位；purchase_decimal 不作发参源只留采集档）。
+func decOf(v float64) int {
+	s := strconv.FormatFloat(v, 'f', -1, 64)
+	if i := strings.IndexByte(s, '.'); i >= 0 {
+		return len(s) - i - 1
+	}
+	return 0
+}
+
 func amtTxt(v *float64) string {
 	if v == nil {
 		return "n/a"

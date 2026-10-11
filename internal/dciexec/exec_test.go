@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -689,12 +690,13 @@ func TestD191R9_BoundFromConstraint(t *testing.T) {
 // TestD191R10_OrderRefSkip：order_ref 缺行跳次档、全缺→「无可申购参数档」缺口。
 func TestD191R10_OrderRefSkip(t *testing.T) {
 	fs := newFake()
-	fs.quotes[1].OrderRef = "" // PUTP 缺 order_ref
+	fs.quotes[1].OrderRef = ""   // PUTP 缺 order_ref
+	fs.quotes[1].MinAmount = nil // +缺 min_amount（R12 跳档谓词换锚）
 	tenor := 7
 	fs.quotes = append(fs.quotes, pgstore.CexDCIQuote{
 		Venue: "binance", Underlying: "BTC", InvestCcy: "USDT",
 		Strike: f64(70000), OptType: "PUT", TenorDays: &tenor, APY: 0.05,
-		ProductRef: "PUTP2", OrderRef: "OP2", PurchaseDecimal: idec(0)}) // 次档有 orderRef→跳此成交
+		ProductRef: "PUTP2", OrderRef: "OP2", PurchaseDecimal: idec(0), MinAmount: f64(1)}) // 次档有 orderRef→跳此成交
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
@@ -807,6 +809,14 @@ func TestD191R11_AmountBoundLease(t *testing.T) {
 	}
 	if floorTo(0.0748, 4) != 0.0748 || floorTo(0.07489, 4) != 0.0748 {
 		t.Fatal("floorTo 错")
+	}
+	// R12：floor 位真源=min_amount 小数位（USDT min=10→dec0、BTC min=0.0001→dec4）。
+	if decOf(10) != 0 || decOf(0.0001) != 4 {
+		t.Fatalf("decOf 错: %d %d", decOf(10), decOf(0.0001))
+	}
+	dep := floorTo(541.9, decOf(10))
+	if strconv.FormatFloat(dep, 'f', -1, 64) != "541" {
+		t.Fatalf("min10→应发 541: %v", dep)
 	}
 	// 界外：PUT 档 max=10 < deposit 3400 → runtime 界外缺口+零 POST。
 	fs := newFake()

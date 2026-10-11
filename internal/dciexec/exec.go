@@ -343,8 +343,8 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 		if qs[i].OrderRef == "" {
 			continue // R10③：order_ref 缺行跳次档（申购 orderId 参源）
 		}
-		if qs[i].PurchaseDecimal == nil {
-			continue // R11：decimal 缺行跳次档（floor 位未知=不可发参）
+		if qs[i].MinAmount == nil {
+			continue // R12：min_amount 缺行跳次档（floor 位真源缺=不可发参）
 		}
 		q = &qs[i]
 		break
@@ -352,19 +352,18 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 	if q == nil {
 		if sawStrikeOK {
 			return "", e.gap(ctx, l, "runtime", "dual_quote",
-				"系统侧病灶：%s腿无可申购参数档（达标档 order_ref 全缺——采集面未落 orderId）", l.name)
+				"系统侧病灶：%s腿无可申购参数档（达标档缺 order_ref/min_amount——采集面未落）", l.name)
 		}
 		return "", e.gap(ctx, l, "runtime", "dual_quote",
 			"%s腿无达标档在售（spot %.0f，strike 界 %s）", l.name, spot, l.boundText(bound))
 	}
-	// R11：depositAmount floor 至 purchase_decimal；界外 fail-closed 如实败
-	// （不补不截——补到 min=多交、截到 max=少投，皆改提案语义）。
-	deposit := floorTo(qty, *q.PurchaseDecimal)
-	if (q.MinAmount != nil && deposit < *q.MinAmount) ||
-		(q.MaxAmount != nil && deposit > *q.MaxAmount) {
+	// R11/R12：depositAmount floor 至 min_amount 小数位；界外 fail-closed
+	// 如实败（不补不截——补到 min=多交、截到 max=少投，皆改提案语义）。
+	deposit := floorTo(qty, decOf(*q.MinAmount))
+	if deposit < *q.MinAmount || (q.MaxAmount != nil && deposit > *q.MaxAmount) {
 		return "", e.gap(ctx, l, "runtime", "dual_quote",
 			"系统侧病灶：%s腿 depositAmount %v 界外（qty %.8f floor 至 dec%d；档 min %v max %v——不补不截如实败）",
-			l.name, deposit, qty, *q.PurchaseDecimal, amtTxt(q.MinAmount), amtTxt(q.MaxAmount))
+			l.name, deposit, qty, decOf(*q.MinAmount), amtTxt(q.MinAmount), amtTxt(q.MaxAmount))
 	}
 	now := e.Now()
 	reqID := fmt.Sprintf("dci|%s|%s|%s|%.8f", l.name, q.ProductRef, delivDay(q), deposit)
