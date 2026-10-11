@@ -18,3 +18,6 @@ var FactsKindTsIdxSQL string // D-152 fixup：facts(kind,ts)——retention 超�
 
 //go:embed 0186_elim_evidence_seed.sql
 var ElimEvidenceSeedSQL string // D-180：统计证据阈值 app_config 播种（Zσ/转折点标注线）
+
+//go:embed 0187_cex_dci_quote.sql
+var CexDCIQuoteSQL string // D-183：三所 DCI/双币产品报价表
