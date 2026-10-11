@@ -54,6 +54,8 @@ type FeishuQueryHandler struct {
 	probeDecide ProbeDecider
 	// dciGo D-191②：DCI 申购执行回调（nil=未装配→口令回「未接线」）。
 	dciGo DCIGoRunner
+	// propLister D-194：「提案」口令→pending 提案清单（nil=未装配）。
+	propLister ProposalLister
 }
 
 // NewFeishuQueryHandler 创建飞书查询处理器。
@@ -121,6 +123,10 @@ func (h *FeishuQueryHandler) HandleReply(ctx context.Context, ev ReplyEvent) (st
 	// D-191②：执行口令「go」——业主一句触发 DCI 申购（幂等 request_id 防重）。
 	if gid, gdec, ok := parseGoCmd(text); ok {
 		return h.handleGoCmd(ctx, gid, gdec)
+	}
+	// D-194：「提案」整词→pending 提案清单（LLM 前拦截；长句含提案落 LLM）。
+	if isProposalCmd(text) {
+		return h.handleProposalCmd(ctx)
 	}
 	if h.rateLim != nil && !h.rateLim.Allow() {
 		return "已达每小时查询上限，请稍后重试", nil
