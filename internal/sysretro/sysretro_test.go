@@ -250,3 +250,20 @@ func mustRead(t *testing.T, path string) []byte {
 	}
 	return b
 }
+
+// TestD181_HprText：资本效率列渲染——nil/零覆盖→口径缺；比值→bps+覆盖度。
+func TestD181_HprText(t *testing.T) {
+	zero := pgstore.RetroStrategyRow{}
+	if got := hprText(zero); got != "hpr_bps=口径缺" {
+		t.Fatalf("nil hpr → 口径缺, got %q", got)
+	}
+	v := 0.0025
+	row := pgstore.RetroStrategyRow{HprAvg: &v, HprN: 0, HprAll: 3}
+	if got := hprText(row); got != "hpr_bps=口径缺" {
+		t.Fatalf("零覆盖 → 口径缺, got %q", got)
+	}
+	row.HprN = 2
+	if got := hprText(row); got != "hpr_bps=25.00(2/3)" {
+		t.Fatalf("hpr bps 渲染错, got %q", got)
+	}
+}

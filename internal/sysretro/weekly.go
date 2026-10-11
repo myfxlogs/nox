@@ -179,7 +179,7 @@ func renderWeeklyStats(w *pgstore.RetroWeekly, kb string) string {
 		if s.Disabled {
 			dis = " DISABLED(" + s.Reason + ")"
 		}
-		fmt.Fprintf(&b, "%s: trades=%d win_rate=%.2f pnl=$%.4f%s\n", s.Strategy, s.Trades, s.WinRate, s.TotalPnl, dis)
+		fmt.Fprintf(&b, "%s: trades=%d win_rate=%.2f pnl=$%.4f %s%s\n", s.Strategy, s.Trades, s.WinRate, s.TotalPnl, hprText(s), dis)
 	}
 	b.WriteString("== 告警聚类（warn/critical top10）==\n")
 	for _, c := range w.AlertCluster {
@@ -263,6 +263,14 @@ func weeklyPaperTable(w *pgstore.RetroWeekly) string {
 		w.PaperSpotN, joinDist(w.PaperSpot), w.PaperIntraN, joinDist(w.PaperIntra))
 }
 
+// hprText D-181 资本效率列：per-trade avg(net/notional) 转 bps；口径缺如实标。
+func hprText(s pgstore.RetroStrategyRow) string {
+	if s.HprAvg == nil || s.HprN == 0 {
+		return "hpr_bps=口径缺"
+	}
+	return fmt.Sprintf("hpr_bps=%.2f(%d/%d)", *s.HprAvg*1e4, s.HprN, s.HprAll)
+}
+
 func weeklyStrategyTable(w *pgstore.RetroWeekly) string {
 	var b strings.Builder
 	for _, s := range w.Strategies {
@@ -270,7 +278,7 @@ func weeklyStrategyTable(w *pgstore.RetroWeekly) string {
 		if s.Disabled {
 			dis = " DISABLED(" + s.Reason + ")"
 		}
-		fmt.Fprintf(&b, "%s trades=%d win_rate=%.2f pnl=$%.4f%s\n", s.Strategy, s.Trades, s.WinRate, s.TotalPnl, dis)
+		fmt.Fprintf(&b, "%s trades=%d win_rate=%.2f pnl=$%.4f %s%s\n", s.Strategy, s.Trades, s.WinRate, s.TotalPnl, hprText(s), dis)
 	}
 	return b.String()
 }
