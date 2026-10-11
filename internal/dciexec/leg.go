@@ -42,6 +42,15 @@ func (l leg) strikePass(q *pgstore.CexDCIQuote, spot float64) bool {
 	return *q.Strike <= spot*otmPutRatio
 }
 
+// StrikeBound %OTM 闸界（D-191-R8：SQL 下推源——CALL→spot×1.10、PUT→spot×0.93；
+// oppmatch 提案快照同径取真实达标集）。
+func StrikeBound(optType string, spot float64) float64 {
+	if optType == "CALL" {
+		return spot * otmCallRatio
+	}
+	return spot * otmPutRatio
+}
+
 // SubscribeBody 申购参数构造（projectId+lots+时间戳；签名=HMAC(query)）。
 func (e *Executor) SubscribeBody(projectID string, lots float64, at time.Time) (query, url string) {
 	q := fmt.Sprintf("projectId=%s&lots=%.8f&timestamp=%d&recvWindow=5000",

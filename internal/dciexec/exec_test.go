@@ -64,13 +64,23 @@ func newFake() *fakeStore {
 func (f *fakeStore) ListCapabilityConstraints(context.Context) ([]pgstore.CapabilityConstraint, error) {
 	return f.cons, nil
 }
-func (f *fakeStore) ListDCIQuotes(_ context.Context, v, u, opt, inv string, m int) ([]pgstore.CexDCIQuote, error) {
+func (f *fakeStore) ListDCIQuotes(_ context.Context, v, u, opt, inv string, m int, bound float64) ([]pgstore.CexDCIQuote, error) {
 	f.maxTenor = append(f.maxTenor, m)
 	var out []pgstore.CexDCIQuote
 	for _, q := range f.quotes {
-		if q.Venue == v && q.Underlying == u && q.OptType == opt && q.InvestCcy == inv {
-			out = append(out, q)
+		if q.Venue != v || q.Underlying != u || q.OptType != opt || q.InvestCcy != inv {
+			continue
 		}
+		// R8：fake 同语义界过滤（PUT≤bound/CALL≥bound，bound>0 时 strike 缺=不达标）。
+		if bound > 0 {
+			if q.Strike == nil {
+				continue
+			}
+			if (opt == "PUT" && *q.Strike > bound) || (opt != "PUT" && *q.Strike < bound) {
+				continue
+			}
+		}
+		out = append(out, q)
 	}
 	return out, nil
 }
@@ -591,5 +601,33 @@ func TestD192_StreamBalanceGate(t *testing.T) {
 	e.StreamFn = func() bool { return false }
 	if v, err := e.freeBalance(context.Background(), "BTC"); err != nil || v != 0.5 {
 		t.Fatalf("死流应 REST=0.5: %v %v", v, err)
+	}
+}
+
+// TestD191R8_DeepPutSelectable：高 apy 近平值档被界滤、深档选得中（序错修后
+// ListDCIQuotes 收到腿闸界——fake 同语义过滤，PUTP strike 80000 中标）。
+func TestD191R8_DeepPutSelectable(t *testing.T) {
+	fs := newFake()
+	tenor := 7
+	// 追加高 apy 近平值 PUT（strike 95000>93000 界——序错时 apy 先截后滤恒空病灶面）。
+	fs.quotes = append(fs.quotes, pgstore.CexDCIQuote{
+		Venue: "binance", Underlying: "BTC", InvestCcy: "USDT",
+		Strike: f64(95000), OptType: "PUT", TenorDays: &tenor, APY: 0.50,
+		ProductRef: "NEARP"})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"orderId":1}`)
+	}))
+	defer srv.Close()
+	e := execR3(fs, srv.URL, srv.Client(), map[string]float64{"USDT": 10000})
+	pid := fs.addProposal("dci_buy_low")
+	if _, err := e.GoProposal(context.Background(), pid); err != nil {
+		t.Fatal(err)
+	}
+	var o *pgstore.DCIOrder
+	for _, oo := range fs.orders {
+		o = oo
+	}
+	if o == nil || o.ProductRef != "PUTP" {
+		t.Fatalf("深档应选得中: %+v", o)
 	}
 }
