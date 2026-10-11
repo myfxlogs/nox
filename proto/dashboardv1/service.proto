@@ -58,6 +58,7 @@ service DashboardService {
   rpc ListProbes(ListProbesRequest) returns (ListProbesResponse);
   rpc ApproveProbe(ApproveProbeRequest) returns (ApproveProbeResponse); // D-048②：批准探针提案→OpenProbe
   rpc RejectProbe(RejectProbeRequest) returns (RejectProbeResponse);    // D-048②：拒绝探针提案
+  rpc ListProbeProposals(ListProbeProposalsRequest) returns (ListProbeProposalsResponse); // D-176①：待审提案读面
   rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
 
   // 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）

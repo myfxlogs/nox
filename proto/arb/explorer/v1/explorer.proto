@@ -43,8 +43,22 @@ message ProbeProposal {
   optional double expected_cost_usd = 8;
   // auto_close_at 退出条件（到期自动平仓时刻；须在触发时未来）。
   google.protobuf.Timestamp auto_close_at = 9;
-  // basis 数据依据（引用输入段字段名/事实键）。
+  // basis 数据依据（引用输入段字段名/事实键——D-176 起降级纯人读展示，机审不解析散文）。
   string basis = 10;
+  // premises D-176：结构化前提数组（机审唯一判据源；≥1 条必填）。
+  repeated Premise premises = 11;
+}
+
+// Premise D-176：机审可回放的结构化前提（散文 basis 被当结构化数据解析的假歧义同源修）。
+message Premise {
+  // kind 前提种类（term_dispersion / idle_funds / …；未知 kind 机审判歧义留决）。
+  string kind = 1;
+  // venue term_dispersion 无关；idle_funds=权益快照 venue 键段（裸 venue 名，机审补 leg_type）。
+  string venue = 2;
+  // canonical 前提绑定符号（term_dispersion 必填；idle_funds 可空）。
+  string canonical = 3;
+  // free_usd idle_funds 声称闲置额（USD；term_dispersion 忽略）。
+  double free_usd = 4;
 }
 
 // Proposal 单条提案（与 explorer_proposals 表列对齐；D-513 设计稿 §4）。

@@ -101,6 +101,9 @@ const (
 	// DashboardServiceRejectProbeProcedure is the fully-qualified name of the DashboardService's
 	// RejectProbe RPC.
 	DashboardServiceRejectProbeProcedure = "/arb.dashboard.v1.DashboardService/RejectProbe"
+	// DashboardServiceListProbeProposalsProcedure is the fully-qualified name of the DashboardService's
+	// ListProbeProposals RPC.
+	DashboardServiceListProbeProposalsProcedure = "/arb.dashboard.v1.DashboardService/ListProbeProposals"
 	// DashboardServiceListAccountsProcedure is the fully-qualified name of the DashboardService's
 	// ListAccounts RPC.
 	DashboardServiceListAccountsProcedure = "/arb.dashboard.v1.DashboardService/ListAccounts"
@@ -391,6 +394,7 @@ type DashboardServiceClient interface {
 	ListProbes(context.Context, *connect.Request[dashboardv1.ListProbesRequest]) (*connect.Response[dashboardv1.ListProbesResponse], error)
 	ApproveProbe(context.Context, *connect.Request[dashboardv1.ApproveProbeRequest]) (*connect.Response[dashboardv1.ApproveProbeResponse], error)
 	RejectProbe(context.Context, *connect.Request[dashboardv1.RejectProbeRequest]) (*connect.Response[dashboardv1.RejectProbeResponse], error)
+	ListProbeProposals(context.Context, *connect.Request[dashboardv1.ListProbeProposalsRequest]) (*connect.Response[dashboardv1.ListProbeProposalsResponse], error)
 	ListAccounts(context.Context, *connect.Request[dashboardv1.ListAccountsRequest]) (*connect.Response[dashboardv1.ListAccountsResponse], error)
 	// 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
 	// D-063：ListPersonalPositions RPC 随 personal 渲染面退役拆除（D-212 后零读者；表保留 TRX 域自用）。
@@ -666,6 +670,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceRejectProbeProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("RejectProbe")),
+			connect.WithClientOptions(opts...),
+		),
+		listProbeProposals: connect.NewClient[dashboardv1.ListProbeProposalsRequest, dashboardv1.ListProbeProposalsResponse](
+			httpClient,
+			baseURL+DashboardServiceListProbeProposalsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListProbeProposals")),
 			connect.WithClientOptions(opts...),
 		),
 		listAccounts: connect.NewClient[dashboardv1.ListAccountsRequest, dashboardv1.ListAccountsResponse](
@@ -1212,6 +1222,7 @@ type dashboardServiceClient struct {
 	listProbes                   *connect.Client[dashboardv1.ListProbesRequest, dashboardv1.ListProbesResponse]
 	approveProbe                 *connect.Client[dashboardv1.ApproveProbeRequest, dashboardv1.ApproveProbeResponse]
 	rejectProbe                  *connect.Client[dashboardv1.RejectProbeRequest, dashboardv1.RejectProbeResponse]
+	listProbeProposals           *connect.Client[dashboardv1.ListProbeProposalsRequest, dashboardv1.ListProbeProposalsResponse]
 	listAccounts                 *connect.Client[dashboardv1.ListAccountsRequest, dashboardv1.ListAccountsResponse]
 	getHedgeStructure            *connect.Client[dashboardv1.GetHedgeStructureRequest, dashboardv1.GetHedgeStructureResponse]
 	listHedgeFlow                *connect.Client[dashboardv1.ListHedgeFlowRequest, dashboardv1.ListHedgeFlowResponse]
@@ -1413,6 +1424,11 @@ func (c *dashboardServiceClient) ApproveProbe(ctx context.Context, req *connect.
 // RejectProbe calls arb.dashboard.v1.DashboardService.RejectProbe.
 func (c *dashboardServiceClient) RejectProbe(ctx context.Context, req *connect.Request[dashboardv1.RejectProbeRequest]) (*connect.Response[dashboardv1.RejectProbeResponse], error) {
 	return c.rejectProbe.CallUnary(ctx, req)
+}
+
+// ListProbeProposals calls arb.dashboard.v1.DashboardService.ListProbeProposals.
+func (c *dashboardServiceClient) ListProbeProposals(ctx context.Context, req *connect.Request[dashboardv1.ListProbeProposalsRequest]) (*connect.Response[dashboardv1.ListProbeProposalsResponse], error) {
+	return c.listProbeProposals.CallUnary(ctx, req)
 }
 
 // ListAccounts calls arb.dashboard.v1.DashboardService.ListAccounts.
@@ -1877,6 +1893,7 @@ type DashboardServiceHandler interface {
 	ListProbes(context.Context, *connect.Request[dashboardv1.ListProbesRequest]) (*connect.Response[dashboardv1.ListProbesResponse], error)
 	ApproveProbe(context.Context, *connect.Request[dashboardv1.ApproveProbeRequest]) (*connect.Response[dashboardv1.ApproveProbeResponse], error)
 	RejectProbe(context.Context, *connect.Request[dashboardv1.RejectProbeRequest]) (*connect.Response[dashboardv1.RejectProbeResponse], error)
+	ListProbeProposals(context.Context, *connect.Request[dashboardv1.ListProbeProposalsRequest]) (*connect.Response[dashboardv1.ListProbeProposalsResponse], error)
 	ListAccounts(context.Context, *connect.Request[dashboardv1.ListAccountsRequest]) (*connect.Response[dashboardv1.ListAccountsResponse], error)
 	// 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
 	// D-063：ListPersonalPositions RPC 随 personal 渲染面退役拆除（D-212 后零读者；表保留 TRX 域自用）。
@@ -2148,6 +2165,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceRejectProbeProcedure,
 		svc.RejectProbe,
 		connect.WithSchema(dashboardServiceMethods.ByName("RejectProbe")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceListProbeProposalsHandler := connect.NewUnaryHandler(
+		DashboardServiceListProbeProposalsProcedure,
+		svc.ListProbeProposals,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListProbeProposals")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceListAccountsHandler := connect.NewUnaryHandler(
@@ -2714,6 +2737,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceApproveProbeHandler.ServeHTTP(w, r)
 		case DashboardServiceRejectProbeProcedure:
 			dashboardServiceRejectProbeHandler.ServeHTTP(w, r)
+		case DashboardServiceListProbeProposalsProcedure:
+			dashboardServiceListProbeProposalsHandler.ServeHTTP(w, r)
 		case DashboardServiceListAccountsProcedure:
 			dashboardServiceListAccountsHandler.ServeHTTP(w, r)
 		case DashboardServiceGetHedgeStructureProcedure:
@@ -2985,6 +3010,10 @@ func (UnimplementedDashboardServiceHandler) ApproveProbe(context.Context, *conne
 
 func (UnimplementedDashboardServiceHandler) RejectProbe(context.Context, *connect.Request[dashboardv1.RejectProbeRequest]) (*connect.Response[dashboardv1.RejectProbeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.RejectProbe is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListProbeProposals(context.Context, *connect.Request[dashboardv1.ListProbeProposalsRequest]) (*connect.Response[dashboardv1.ListProbeProposalsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListProbeProposals is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListAccounts(context.Context, *connect.Request[dashboardv1.ListAccountsRequest]) (*connect.Response[dashboardv1.ListAccountsResponse], error) {

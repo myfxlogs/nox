@@ -30,6 +30,16 @@ type ProbeContract struct {
 	ExpectedCostUSD float64   `json:"expected_cost_usd"`
 	AutoCloseAt     time.Time `json:"auto_close_at"`
 	Basis           string    `json:"basis"`
+	// Premises D-176：结构化前提（机审唯一判据源；omitempty——旧行零值=无机审判据）。
+	Premises []ProbePremise `json:"premises,omitempty"`
+}
+
+// ProbePremise 结构化前提一条（kind 决定使用哪些类型字段，与 proto Premise 对齐）。
+type ProbePremise struct {
+	Kind      string  `json:"kind"`
+	Venue     string  `json:"venue,omitempty"`
+	Canonical string  `json:"canonical,omitempty"`
+	FreeUSD   float64 `json:"free_usd,omitempty"`
 }
 
 // ProbeProposal explorer_proposals 探针行（审批/报告读面）。

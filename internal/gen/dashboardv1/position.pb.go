@@ -2151,6 +2151,234 @@ func (x *RejectProbeResponse) GetMessage() string {
 	return ""
 }
 
+type ProbeProposalCard struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ProposalId      int64                  `protobuf:"varint,1,opt,name=proposal_id,json=proposalId,proto3" json:"proposal_id,omitempty"` // explorer_proposals.id
+	Purpose         string                 `protobuf:"bytes,2,opt,name=purpose,proto3" json:"purpose,omitempty"`                          // 契约九字段（D-048①）
+	Falsify         string                 `protobuf:"bytes,3,opt,name=falsify,proto3" json:"falsify,omitempty"`
+	VenueKey        string                 `protobuf:"bytes,4,opt,name=venue_key,json=venueKey,proto3" json:"venue_key,omitempty"`
+	Canonical       string                 `protobuf:"bytes,5,opt,name=canonical,proto3" json:"canonical,omitempty"`
+	Side            string                 `protobuf:"bytes,6,opt,name=side,proto3" json:"side,omitempty"`
+	Qty             float64                `protobuf:"fixed64,7,opt,name=qty,proto3" json:"qty,omitempty"`
+	NotionalUsd     float64                `protobuf:"fixed64,8,opt,name=notional_usd,json=notionalUsd,proto3" json:"notional_usd,omitempty"`
+	ExpectedCostUsd float64                `protobuf:"fixed64,9,opt,name=expected_cost_usd,json=expectedCostUsd,proto3" json:"expected_cost_usd,omitempty"`
+	AutoCloseAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=auto_close_at,json=autoCloseAt,proto3" json:"auto_close_at,omitempty"`
+	Basis           string                 `protobuf:"bytes,11,opt,name=basis,proto3" json:"basis,omitempty"`                             // 人读散文（机审不解析）
+	GateNote        string                 `protobuf:"bytes,12,opt,name=gate_note,json=gateNote,proto3" json:"gate_note,omitempty"`       // 机审注记（歧义/判据留痕）
+	ProposedAt      *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=proposed_at,json=proposedAt,proto3" json:"proposed_at,omitempty"` // 提案时刻（scan_date）
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ProbeProposalCard) Reset() {
+	*x = ProbeProposalCard{}
+	mi := &file_dashboardv1_position_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbeProposalCard) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbeProposalCard) ProtoMessage() {}
+
+func (x *ProbeProposalCard) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_position_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbeProposalCard.ProtoReflect.Descriptor instead.
+func (*ProbeProposalCard) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ProbeProposalCard) GetProposalId() int64 {
+	if x != nil {
+		return x.ProposalId
+	}
+	return 0
+}
+
+func (x *ProbeProposalCard) GetPurpose() string {
+	if x != nil {
+		return x.Purpose
+	}
+	return ""
+}
+
+func (x *ProbeProposalCard) GetFalsify() string {
+	if x != nil {
+		return x.Falsify
+	}
+	return ""
+}
+
+func (x *ProbeProposalCard) GetVenueKey() string {
+	if x != nil {
+		return x.VenueKey
+	}
+	return ""
+}
+
+func (x *ProbeProposalCard) GetCanonical() string {
+	if x != nil {
+		return x.Canonical
+	}
+	return ""
+}
+
+func (x *ProbeProposalCard) GetSide() string {
+	if x != nil {
+		return x.Side
+	}
+	return ""
+}
+
+func (x *ProbeProposalCard) GetQty() float64 {
+	if x != nil {
+		return x.Qty
+	}
+	return 0
+}
+
+func (x *ProbeProposalCard) GetNotionalUsd() float64 {
+	if x != nil {
+		return x.NotionalUsd
+	}
+	return 0
+}
+
+func (x *ProbeProposalCard) GetExpectedCostUsd() float64 {
+	if x != nil {
+		return x.ExpectedCostUsd
+	}
+	return 0
+}
+
+func (x *ProbeProposalCard) GetAutoCloseAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.AutoCloseAt
+	}
+	return nil
+}
+
+func (x *ProbeProposalCard) GetBasis() string {
+	if x != nil {
+		return x.Basis
+	}
+	return ""
+}
+
+func (x *ProbeProposalCard) GetGateNote() string {
+	if x != nil {
+		return x.GateNote
+	}
+	return ""
+}
+
+func (x *ProbeProposalCard) GetProposedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ProposedAt
+	}
+	return nil
+}
+
+type ListProbeProposalsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	IncludeDecided bool                   `protobuf:"varint,1,opt,name=include_decided,json=includeDecided,proto3" json:"include_decided,omitempty"` // false=仅 proposed 待审（默认）；true=全态含已裁定
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ListProbeProposalsRequest) Reset() {
+	*x = ListProbeProposalsRequest{}
+	mi := &file_dashboardv1_position_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListProbeProposalsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListProbeProposalsRequest) ProtoMessage() {}
+
+func (x *ListProbeProposalsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_position_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListProbeProposalsRequest.ProtoReflect.Descriptor instead.
+func (*ListProbeProposalsRequest) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *ListProbeProposalsRequest) GetIncludeDecided() bool {
+	if x != nil {
+		return x.IncludeDecided
+	}
+	return false
+}
+
+type ListProbeProposalsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Proposals     []*ProbeProposalCard   `protobuf:"bytes,1,rep,name=proposals,proto3" json:"proposals,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListProbeProposalsResponse) Reset() {
+	*x = ListProbeProposalsResponse{}
+	mi := &file_dashboardv1_position_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListProbeProposalsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListProbeProposalsResponse) ProtoMessage() {}
+
+func (x *ListProbeProposalsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_position_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListProbeProposalsResponse.ProtoReflect.Descriptor instead.
+func (*ListProbeProposalsResponse) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *ListProbeProposalsResponse) GetProposals() []*ProbeProposalCard {
+	if x != nil {
+		return x.Proposals
+	}
+	return nil
+}
+
 type HedgeStake struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Energy        float64                `protobuf:"fixed64,1,opt,name=energy,proto3" json:"energy,omitempty"`       // 能量质押（TRX，fin_trx_account.energy_delegated ÷ 1e6）
@@ -2161,7 +2389,7 @@ type HedgeStake struct {
 
 func (x *HedgeStake) Reset() {
 	*x = HedgeStake{}
-	mi := &file_dashboardv1_position_proto_msgTypes[26]
+	mi := &file_dashboardv1_position_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2173,7 +2401,7 @@ func (x *HedgeStake) String() string {
 func (*HedgeStake) ProtoMessage() {}
 
 func (x *HedgeStake) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_position_proto_msgTypes[26]
+	mi := &file_dashboardv1_position_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2186,7 +2414,7 @@ func (x *HedgeStake) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HedgeStake.ProtoReflect.Descriptor instead.
 func (*HedgeStake) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_position_proto_rawDescGZIP(), []int{26}
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *HedgeStake) GetEnergy() float64 {
@@ -2222,7 +2450,7 @@ type HedgeLegSpot struct {
 
 func (x *HedgeLegSpot) Reset() {
 	*x = HedgeLegSpot{}
-	mi := &file_dashboardv1_position_proto_msgTypes[27]
+	mi := &file_dashboardv1_position_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2234,7 +2462,7 @@ func (x *HedgeLegSpot) String() string {
 func (*HedgeLegSpot) ProtoMessage() {}
 
 func (x *HedgeLegSpot) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_position_proto_msgTypes[27]
+	mi := &file_dashboardv1_position_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2247,7 +2475,7 @@ func (x *HedgeLegSpot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HedgeLegSpot.ProtoReflect.Descriptor instead.
 func (*HedgeLegSpot) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_position_proto_rawDescGZIP(), []int{27}
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *HedgeLegSpot) GetLabel() string {
@@ -2335,7 +2563,7 @@ type HedgeLegShort struct {
 
 func (x *HedgeLegShort) Reset() {
 	*x = HedgeLegShort{}
-	mi := &file_dashboardv1_position_proto_msgTypes[28]
+	mi := &file_dashboardv1_position_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2347,7 +2575,7 @@ func (x *HedgeLegShort) String() string {
 func (*HedgeLegShort) ProtoMessage() {}
 
 func (x *HedgeLegShort) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_position_proto_msgTypes[28]
+	mi := &file_dashboardv1_position_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2360,7 +2588,7 @@ func (x *HedgeLegShort) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HedgeLegShort.ProtoReflect.Descriptor instead.
 func (*HedgeLegShort) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_position_proto_rawDescGZIP(), []int{28}
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *HedgeLegShort) GetLabel() string {
@@ -2429,7 +2657,7 @@ type HedgeCarry struct {
 
 func (x *HedgeCarry) Reset() {
 	*x = HedgeCarry{}
-	mi := &file_dashboardv1_position_proto_msgTypes[29]
+	mi := &file_dashboardv1_position_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2441,7 +2669,7 @@ func (x *HedgeCarry) String() string {
 func (*HedgeCarry) ProtoMessage() {}
 
 func (x *HedgeCarry) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_position_proto_msgTypes[29]
+	mi := &file_dashboardv1_position_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2454,7 +2682,7 @@ func (x *HedgeCarry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HedgeCarry.ProtoReflect.Descriptor instead.
 func (*HedgeCarry) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_position_proto_rawDescGZIP(), []int{29}
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *HedgeCarry) GetTrxRental_7DTrx() float64 {
@@ -2543,7 +2771,7 @@ type HedgeAccounts struct {
 
 func (x *HedgeAccounts) Reset() {
 	*x = HedgeAccounts{}
-	mi := &file_dashboardv1_position_proto_msgTypes[30]
+	mi := &file_dashboardv1_position_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2555,7 +2783,7 @@ func (x *HedgeAccounts) String() string {
 func (*HedgeAccounts) ProtoMessage() {}
 
 func (x *HedgeAccounts) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_position_proto_msgTypes[30]
+	mi := &file_dashboardv1_position_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2568,7 +2796,7 @@ func (x *HedgeAccounts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HedgeAccounts.ProtoReflect.Descriptor instead.
 func (*HedgeAccounts) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_position_proto_rawDescGZIP(), []int{30}
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *HedgeAccounts) GetTrxBalance() float64 {
@@ -2692,7 +2920,7 @@ type HedgeStructure struct {
 
 func (x *HedgeStructure) Reset() {
 	*x = HedgeStructure{}
-	mi := &file_dashboardv1_position_proto_msgTypes[31]
+	mi := &file_dashboardv1_position_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2704,7 +2932,7 @@ func (x *HedgeStructure) String() string {
 func (*HedgeStructure) ProtoMessage() {}
 
 func (x *HedgeStructure) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_position_proto_msgTypes[31]
+	mi := &file_dashboardv1_position_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2717,7 +2945,7 @@ func (x *HedgeStructure) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HedgeStructure.ProtoReflect.Descriptor instead.
 func (*HedgeStructure) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_position_proto_rawDescGZIP(), []int{31}
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *HedgeStructure) GetBaselinePrice() float64 {
@@ -2833,7 +3061,7 @@ type GetHedgeStructureRequest struct {
 
 func (x *GetHedgeStructureRequest) Reset() {
 	*x = GetHedgeStructureRequest{}
-	mi := &file_dashboardv1_position_proto_msgTypes[32]
+	mi := &file_dashboardv1_position_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2845,7 +3073,7 @@ func (x *GetHedgeStructureRequest) String() string {
 func (*GetHedgeStructureRequest) ProtoMessage() {}
 
 func (x *GetHedgeStructureRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_position_proto_msgTypes[32]
+	mi := &file_dashboardv1_position_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2858,7 +3086,7 @@ func (x *GetHedgeStructureRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHedgeStructureRequest.ProtoReflect.Descriptor instead.
 func (*GetHedgeStructureRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_position_proto_rawDescGZIP(), []int{32}
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{35}
 }
 
 type GetHedgeStructureResponse struct {
@@ -2870,7 +3098,7 @@ type GetHedgeStructureResponse struct {
 
 func (x *GetHedgeStructureResponse) Reset() {
 	*x = GetHedgeStructureResponse{}
-	mi := &file_dashboardv1_position_proto_msgTypes[33]
+	mi := &file_dashboardv1_position_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2882,7 +3110,7 @@ func (x *GetHedgeStructureResponse) String() string {
 func (*GetHedgeStructureResponse) ProtoMessage() {}
 
 func (x *GetHedgeStructureResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_position_proto_msgTypes[33]
+	mi := &file_dashboardv1_position_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2895,7 +3123,7 @@ func (x *GetHedgeStructureResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHedgeStructureResponse.ProtoReflect.Descriptor instead.
 func (*GetHedgeStructureResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_position_proto_rawDescGZIP(), []int{33}
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *GetHedgeStructureResponse) GetStructure() *HedgeStructure {
@@ -2920,7 +3148,7 @@ type HedgeFlowItem struct {
 
 func (x *HedgeFlowItem) Reset() {
 	*x = HedgeFlowItem{}
-	mi := &file_dashboardv1_position_proto_msgTypes[34]
+	mi := &file_dashboardv1_position_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2932,7 +3160,7 @@ func (x *HedgeFlowItem) String() string {
 func (*HedgeFlowItem) ProtoMessage() {}
 
 func (x *HedgeFlowItem) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_position_proto_msgTypes[34]
+	mi := &file_dashboardv1_position_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2945,7 +3173,7 @@ func (x *HedgeFlowItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HedgeFlowItem.ProtoReflect.Descriptor instead.
 func (*HedgeFlowItem) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_position_proto_rawDescGZIP(), []int{34}
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *HedgeFlowItem) GetSource() string {
@@ -3008,7 +3236,7 @@ type ListHedgeFlowRequest struct {
 
 func (x *ListHedgeFlowRequest) Reset() {
 	*x = ListHedgeFlowRequest{}
-	mi := &file_dashboardv1_position_proto_msgTypes[35]
+	mi := &file_dashboardv1_position_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3020,7 +3248,7 @@ func (x *ListHedgeFlowRequest) String() string {
 func (*ListHedgeFlowRequest) ProtoMessage() {}
 
 func (x *ListHedgeFlowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_position_proto_msgTypes[35]
+	mi := &file_dashboardv1_position_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3033,7 +3261,7 @@ func (x *ListHedgeFlowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListHedgeFlowRequest.ProtoReflect.Descriptor instead.
 func (*ListHedgeFlowRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_position_proto_rawDescGZIP(), []int{35}
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ListHedgeFlowRequest) GetSourceFilter() string {
@@ -3066,7 +3294,7 @@ type ListHedgeFlowResponse struct {
 
 func (x *ListHedgeFlowResponse) Reset() {
 	*x = ListHedgeFlowResponse{}
-	mi := &file_dashboardv1_position_proto_msgTypes[36]
+	mi := &file_dashboardv1_position_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3078,7 +3306,7 @@ func (x *ListHedgeFlowResponse) String() string {
 func (*ListHedgeFlowResponse) ProtoMessage() {}
 
 func (x *ListHedgeFlowResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_position_proto_msgTypes[36]
+	mi := &file_dashboardv1_position_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3091,7 +3319,7 @@ func (x *ListHedgeFlowResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListHedgeFlowResponse.ProtoReflect.Descriptor instead.
 func (*ListHedgeFlowResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_position_proto_rawDescGZIP(), []int{36}
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ListHedgeFlowResponse) GetTxs() []*HedgeFlowItem {
@@ -3331,7 +3559,28 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"G\n" +
 	"\x13RejectProbeResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"B\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xc8\x03\n" +
+	"\x11ProbeProposalCard\x12\x1f\n" +
+	"\vproposal_id\x18\x01 \x01(\x03R\n" +
+	"proposalId\x12\x18\n" +
+	"\apurpose\x18\x02 \x01(\tR\apurpose\x12\x18\n" +
+	"\afalsify\x18\x03 \x01(\tR\afalsify\x12\x1b\n" +
+	"\tvenue_key\x18\x04 \x01(\tR\bvenueKey\x12\x1c\n" +
+	"\tcanonical\x18\x05 \x01(\tR\tcanonical\x12\x12\n" +
+	"\x04side\x18\x06 \x01(\tR\x04side\x12\x10\n" +
+	"\x03qty\x18\a \x01(\x01R\x03qty\x12!\n" +
+	"\fnotional_usd\x18\b \x01(\x01R\vnotionalUsd\x12*\n" +
+	"\x11expected_cost_usd\x18\t \x01(\x01R\x0fexpectedCostUsd\x12>\n" +
+	"\rauto_close_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\vautoCloseAt\x12\x14\n" +
+	"\x05basis\x18\v \x01(\tR\x05basis\x12\x1b\n" +
+	"\tgate_note\x18\f \x01(\tR\bgateNote\x12;\n" +
+	"\vproposed_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"proposedAt\"D\n" +
+	"\x19ListProbeProposalsRequest\x12'\n" +
+	"\x0finclude_decided\x18\x01 \x01(\bR\x0eincludeDecided\"_\n" +
+	"\x1aListProbeProposalsResponse\x12A\n" +
+	"\tproposals\x18\x01 \x03(\v2#.arb.dashboard.v1.ProbeProposalCardR\tproposals\"B\n" +
 	"\n" +
 	"HedgeStake\x12\x16\n" +
 	"\x06energy\x18\x01 \x01(\x01R\x06energy\x12\x1c\n" +
@@ -3438,7 +3687,7 @@ func file_dashboardv1_position_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_position_proto_rawDescData
 }
 
-var file_dashboardv1_position_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
+var file_dashboardv1_position_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
 var file_dashboardv1_position_proto_goTypes = []any{
 	(*PositionLeg)(nil),                  // 0: arb.dashboard.v1.PositionLeg
 	(*Position)(nil),                     // 1: arb.dashboard.v1.Position
@@ -3466,54 +3715,60 @@ var file_dashboardv1_position_proto_goTypes = []any{
 	(*ApproveProbeResponse)(nil),         // 23: arb.dashboard.v1.ApproveProbeResponse
 	(*RejectProbeRequest)(nil),           // 24: arb.dashboard.v1.RejectProbeRequest
 	(*RejectProbeResponse)(nil),          // 25: arb.dashboard.v1.RejectProbeResponse
-	(*HedgeStake)(nil),                   // 26: arb.dashboard.v1.HedgeStake
-	(*HedgeLegSpot)(nil),                 // 27: arb.dashboard.v1.HedgeLegSpot
-	(*HedgeLegShort)(nil),                // 28: arb.dashboard.v1.HedgeLegShort
-	(*HedgeCarry)(nil),                   // 29: arb.dashboard.v1.HedgeCarry
-	(*HedgeAccounts)(nil),                // 30: arb.dashboard.v1.HedgeAccounts
-	(*HedgeStructure)(nil),               // 31: arb.dashboard.v1.HedgeStructure
-	(*GetHedgeStructureRequest)(nil),     // 32: arb.dashboard.v1.GetHedgeStructureRequest
-	(*GetHedgeStructureResponse)(nil),    // 33: arb.dashboard.v1.GetHedgeStructureResponse
-	(*HedgeFlowItem)(nil),                // 34: arb.dashboard.v1.HedgeFlowItem
-	(*ListHedgeFlowRequest)(nil),         // 35: arb.dashboard.v1.ListHedgeFlowRequest
-	(*ListHedgeFlowResponse)(nil),        // 36: arb.dashboard.v1.ListHedgeFlowResponse
-	(*timestamppb.Timestamp)(nil),        // 37: google.protobuf.Timestamp
+	(*ProbeProposalCard)(nil),            // 26: arb.dashboard.v1.ProbeProposalCard
+	(*ListProbeProposalsRequest)(nil),    // 27: arb.dashboard.v1.ListProbeProposalsRequest
+	(*ListProbeProposalsResponse)(nil),   // 28: arb.dashboard.v1.ListProbeProposalsResponse
+	(*HedgeStake)(nil),                   // 29: arb.dashboard.v1.HedgeStake
+	(*HedgeLegSpot)(nil),                 // 30: arb.dashboard.v1.HedgeLegSpot
+	(*HedgeLegShort)(nil),                // 31: arb.dashboard.v1.HedgeLegShort
+	(*HedgeCarry)(nil),                   // 32: arb.dashboard.v1.HedgeCarry
+	(*HedgeAccounts)(nil),                // 33: arb.dashboard.v1.HedgeAccounts
+	(*HedgeStructure)(nil),               // 34: arb.dashboard.v1.HedgeStructure
+	(*GetHedgeStructureRequest)(nil),     // 35: arb.dashboard.v1.GetHedgeStructureRequest
+	(*GetHedgeStructureResponse)(nil),    // 36: arb.dashboard.v1.GetHedgeStructureResponse
+	(*HedgeFlowItem)(nil),                // 37: arb.dashboard.v1.HedgeFlowItem
+	(*ListHedgeFlowRequest)(nil),         // 38: arb.dashboard.v1.ListHedgeFlowRequest
+	(*ListHedgeFlowResponse)(nil),        // 39: arb.dashboard.v1.ListHedgeFlowResponse
+	(*timestamppb.Timestamp)(nil),        // 40: google.protobuf.Timestamp
 }
 var file_dashboardv1_position_proto_depIdxs = []int32{
-	37, // 0: arb.dashboard.v1.PositionLeg.ts:type_name -> google.protobuf.Timestamp
-	37, // 1: arb.dashboard.v1.Position.opened_at:type_name -> google.protobuf.Timestamp
-	37, // 2: arb.dashboard.v1.Position.closed_at:type_name -> google.protobuf.Timestamp
+	40, // 0: arb.dashboard.v1.PositionLeg.ts:type_name -> google.protobuf.Timestamp
+	40, // 1: arb.dashboard.v1.Position.opened_at:type_name -> google.protobuf.Timestamp
+	40, // 2: arb.dashboard.v1.Position.closed_at:type_name -> google.protobuf.Timestamp
 	0,  // 3: arb.dashboard.v1.Position.legs:type_name -> arb.dashboard.v1.PositionLeg
-	37, // 4: arb.dashboard.v1.Position.auto_close_at:type_name -> google.protobuf.Timestamp
+	40, // 4: arb.dashboard.v1.Position.auto_close_at:type_name -> google.protobuf.Timestamp
 	1,  // 5: arb.dashboard.v1.ListPositionsResponse.positions:type_name -> arb.dashboard.v1.Position
-	37, // 6: arb.dashboard.v1.BrokerPosition.opened_at:type_name -> google.protobuf.Timestamp
-	37, // 7: arb.dashboard.v1.BrokerPosition.swap_charge_at:type_name -> google.protobuf.Timestamp
-	37, // 8: arb.dashboard.v1.BrokerPosition.probe_auto_close_at:type_name -> google.protobuf.Timestamp
-	37, // 9: arb.dashboard.v1.BrokerPosition.as_of:type_name -> google.protobuf.Timestamp
-	37, // 10: arb.dashboard.v1.BrokerPosition.price_at:type_name -> google.protobuf.Timestamp
+	40, // 6: arb.dashboard.v1.BrokerPosition.opened_at:type_name -> google.protobuf.Timestamp
+	40, // 7: arb.dashboard.v1.BrokerPosition.swap_charge_at:type_name -> google.protobuf.Timestamp
+	40, // 8: arb.dashboard.v1.BrokerPosition.probe_auto_close_at:type_name -> google.protobuf.Timestamp
+	40, // 9: arb.dashboard.v1.BrokerPosition.as_of:type_name -> google.protobuf.Timestamp
+	40, // 10: arb.dashboard.v1.BrokerPosition.price_at:type_name -> google.protobuf.Timestamp
 	10, // 11: arb.dashboard.v1.ListBrokerPositionsResponse.positions:type_name -> arb.dashboard.v1.BrokerPosition
 	13, // 12: arb.dashboard.v1.CloseBrokerPositionsRequest.items:type_name -> arb.dashboard.v1.CloseBrokerPositionRequest
 	14, // 13: arb.dashboard.v1.CloseBrokerPositionsResponse.results:type_name -> arb.dashboard.v1.CloseBrokerPositionResponse
-	37, // 14: arb.dashboard.v1.OpenProbeRequest.auto_close_at:type_name -> google.protobuf.Timestamp
-	37, // 15: arb.dashboard.v1.ProbePosition.auto_close_at:type_name -> google.protobuf.Timestamp
-	37, // 16: arb.dashboard.v1.ProbePosition.opened_at:type_name -> google.protobuf.Timestamp
-	37, // 17: arb.dashboard.v1.ProbePosition.closed_at:type_name -> google.protobuf.Timestamp
+	40, // 14: arb.dashboard.v1.OpenProbeRequest.auto_close_at:type_name -> google.protobuf.Timestamp
+	40, // 15: arb.dashboard.v1.ProbePosition.auto_close_at:type_name -> google.protobuf.Timestamp
+	40, // 16: arb.dashboard.v1.ProbePosition.opened_at:type_name -> google.protobuf.Timestamp
+	40, // 17: arb.dashboard.v1.ProbePosition.closed_at:type_name -> google.protobuf.Timestamp
 	19, // 18: arb.dashboard.v1.ListProbesResponse.probes:type_name -> arb.dashboard.v1.ProbePosition
-	26, // 19: arb.dashboard.v1.HedgeLegSpot.stake:type_name -> arb.dashboard.v1.HedgeStake
-	37, // 20: arb.dashboard.v1.HedgeLegSpot.vote_apr_ts:type_name -> google.protobuf.Timestamp
-	37, // 21: arb.dashboard.v1.HedgeAccounts.updated_at:type_name -> google.protobuf.Timestamp
-	27, // 22: arb.dashboard.v1.HedgeStructure.leg_spot:type_name -> arb.dashboard.v1.HedgeLegSpot
-	28, // 23: arb.dashboard.v1.HedgeStructure.leg_short:type_name -> arb.dashboard.v1.HedgeLegShort
-	29, // 24: arb.dashboard.v1.HedgeStructure.carry:type_name -> arb.dashboard.v1.HedgeCarry
-	30, // 25: arb.dashboard.v1.HedgeStructure.accts:type_name -> arb.dashboard.v1.HedgeAccounts
-	31, // 26: arb.dashboard.v1.GetHedgeStructureResponse.structure:type_name -> arb.dashboard.v1.HedgeStructure
-	37, // 27: arb.dashboard.v1.HedgeFlowItem.ts:type_name -> google.protobuf.Timestamp
-	34, // 28: arb.dashboard.v1.ListHedgeFlowResponse.txs:type_name -> arb.dashboard.v1.HedgeFlowItem
-	29, // [29:29] is the sub-list for method output_type
-	29, // [29:29] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	40, // 19: arb.dashboard.v1.ProbeProposalCard.auto_close_at:type_name -> google.protobuf.Timestamp
+	40, // 20: arb.dashboard.v1.ProbeProposalCard.proposed_at:type_name -> google.protobuf.Timestamp
+	26, // 21: arb.dashboard.v1.ListProbeProposalsResponse.proposals:type_name -> arb.dashboard.v1.ProbeProposalCard
+	29, // 22: arb.dashboard.v1.HedgeLegSpot.stake:type_name -> arb.dashboard.v1.HedgeStake
+	40, // 23: arb.dashboard.v1.HedgeLegSpot.vote_apr_ts:type_name -> google.protobuf.Timestamp
+	40, // 24: arb.dashboard.v1.HedgeAccounts.updated_at:type_name -> google.protobuf.Timestamp
+	30, // 25: arb.dashboard.v1.HedgeStructure.leg_spot:type_name -> arb.dashboard.v1.HedgeLegSpot
+	31, // 26: arb.dashboard.v1.HedgeStructure.leg_short:type_name -> arb.dashboard.v1.HedgeLegShort
+	32, // 27: arb.dashboard.v1.HedgeStructure.carry:type_name -> arb.dashboard.v1.HedgeCarry
+	33, // 28: arb.dashboard.v1.HedgeStructure.accts:type_name -> arb.dashboard.v1.HedgeAccounts
+	34, // 29: arb.dashboard.v1.GetHedgeStructureResponse.structure:type_name -> arb.dashboard.v1.HedgeStructure
+	40, // 30: arb.dashboard.v1.HedgeFlowItem.ts:type_name -> google.protobuf.Timestamp
+	37, // 31: arb.dashboard.v1.ListHedgeFlowResponse.txs:type_name -> arb.dashboard.v1.HedgeFlowItem
+	32, // [32:32] is the sub-list for method output_type
+	32, // [32:32] is the sub-list for method input_type
+	32, // [32:32] is the sub-list for extension type_name
+	32, // [32:32] is the sub-list for extension extendee
+	0,  // [0:32] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_position_proto_init() }
@@ -3532,7 +3787,7 @@ func file_dashboardv1_position_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_position_proto_rawDesc), len(file_dashboardv1_position_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   37,
+			NumMessages:   40,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
