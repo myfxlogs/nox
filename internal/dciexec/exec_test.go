@@ -29,8 +29,9 @@ type fakeStore struct {
 		qty  float64
 		note string
 	}
-	nextID   int64
-	maxTenor []int // 捕获每次 ListDCIQuotes 的 cap
+	nextID      int64
+	maxTenor    []int // 捕获每次 ListDCIQuotes 的 cap
+	outstanding float64
 }
 
 func f64(v float64) *float64 { return &v }
@@ -91,6 +92,9 @@ func (f *fakeStore) InsertPersonalPosition(context.Context, string, string, stri
 	f.posRows++
 	return 1, nil
 }
+func (f *fakeStore) OutstandingDCIQty(context.Context, string, string) (float64, error) {
+	return f.outstanding, nil
+}
 func (f *fakeStore) ListOpenPersonalPositions(context.Context) ([]pgstore.PersonalPosition, error) {
 	return f.positions, nil
 }
@@ -133,8 +137,8 @@ func TestD191_SignQuery(t *testing.T) {
 	mac.Write([]byte(q))
 	want := hex.EncodeToString(mac.Sum(nil))
 	if !strings.Contains(url, "signature="+want) ||
-		!strings.HasPrefix(url, "https://x.test/sapi/v1/dci/product/subscribe?") {
-		t.Fatalf("签名/端点错: %s", url)
+		!strings.HasPrefix(url, "https://x.test/v1/dci/product/subscribe?") {
+		t.Fatalf("签名/端点错（base 含 /sapi 段从 /vN 起拼）: %s", url)
 	}
 }
 
@@ -344,5 +348,68 @@ func TestD191R3_ReconcilePool(t *testing.T) {
 	}
 	if len(fs2.updates)+len(fs2.alerts) != 0 {
 		t.Fatal("无漂移不应修正/告警")
+	}
+}
+
+// TestD191R4_URLJoin：base 含 /api|/sapi 段尾，路径从 /vN 起拼——
+// 三端点 URL 无双段 404（R4 退回注对拍锚）。
+func TestD191R4_URLJoin(t *testing.T) {
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		switch {
+		case strings.Contains(r.URL.Path, "ticker/price"):
+			fmt.Fprint(w, `{"symbol":"BTCUSDT","price":"100000.0"}`)
+		case strings.Contains(r.URL.Path, "/account"):
+			fmt.Fprint(w, `{"balances":[{"asset":"BTC","free":"0.1","locked":"0.01"}]}`)
+		default:
+			fmt.Fprint(w, `{"orderId":1}`)
+		}
+	}))
+	defer srv.Close()
+	e := &Executor{Store: newFake(), BnKey: "k", BnSec: "s",
+		Sapi: srv.URL + "/sapi", APIBase: srv.URL + "/api",
+		Client: srv.Client(), Now: time.Now}
+	if _, err := e.spotPrice(context.Background(), "BTCUSDT"); err != nil {
+		t.Fatal(err)
+	}
+	bal, err := e.freeBalance(context.Background(), "BTC")
+	if err != nil || bal != 0.11 { // free+locked=0.1+0.01
+		t.Fatalf("freeBalance: %v %v", bal, err)
+	}
+	if _, err := e.post(context.Background(), "P1", 0.01, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"/api/v3/ticker/price", "/api/v3/account", "/sapi/v1/dci/product/subscribe"}
+	if len(paths) != 3 {
+		t.Fatalf("paths=%v", paths)
+	}
+	for i, w := range want {
+		if paths[i] != w {
+			t.Fatalf("URL 段错 #%d: got %s want %s", i, paths[i], w)
+		}
+	}
+}
+
+// TestD191R4_OutstandingBackfill：未到期 filled 申购 qty 回填池实有——
+// 账 0.05 vs 现货 0.04×share+在外 0.06×share=实 0.034→仍漂移但 live 含在外口径。
+func TestD191R4_OutstandingBackfill(t *testing.T) {
+	fs := newFake()
+	poolQty := 0.034
+	fs.positions = []pgstore.PersonalPosition{
+		{ID: 7, Asset: "BTC", Kind: "other", Status: "OPEN", Qty: &poolQty},
+	}
+	fs.outstanding = 0.06 // 在外申购 qty
+	// 余额 0.04×0.34 + 在外 0.06×0.34 = 0.034 = 账 → 零漂移。
+	e := execR3(fs, "http://x", nil, map[string]float64{"BTC": 0.04})
+	ledger, live, drift, err := e.ReconcilePoolOnce(context.Background())
+	if err != nil || drift {
+		t.Fatalf("回填后应零漂移: %v drift=%v", err, drift)
+	}
+	if math.Abs(live-(0.04+0.06)*0.34) > 1e-9 || math.Abs(ledger-0.034) > 1e-9 {
+		t.Fatalf("账/实错: %.6f %.6f", ledger, live)
+	}
+	if len(fs.updates)+len(fs.alerts) != 0 {
+		t.Fatal("零漂移不应修正/告警")
 	}
 }

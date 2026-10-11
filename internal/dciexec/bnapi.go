@@ -15,12 +15,12 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// spotPrice 实时现货读（api/v3/ticker/price 公开端点；测试注 PriceFn）。
+// spotPrice 实时现货读（/v3/ticker/price 公开端点；base 含 /api 段从 /vN 起拼——earn.go 约定；测试注 PriceFn）。
 func (e *Executor) spotPrice(ctx context.Context, symbol string) (float64, error) {
 	if e.PriceFn != nil {
 		return e.PriceFn(ctx, symbol)
 	}
-	url := fmt.Sprintf("%s/api/v3/ticker/price?symbol=%s",
+	url := fmt.Sprintf("%s/v3/ticker/price?symbol=%s",
 		strings.TrimRight(e.APIBase, "/"), symbol)
 	b, err := e.get(ctx, url, false)
 	if err != nil {
@@ -35,13 +35,13 @@ func (e *Executor) spotPrice(ctx context.Context, symbol string) (float64, error
 	return strconv.ParseFloat(r.Price, 64)
 }
 
-// freeBalance 实时余额读（api/v3/account 签名端点；测试注 BalanceFn）。
+// freeBalance 实时余额读（/v3/account 签名端点；free+locked；测试注 BalanceFn）。
 func (e *Executor) freeBalance(ctx context.Context, asset string) (float64, error) {
 	if e.BalanceFn != nil {
 		return e.BalanceFn(ctx, asset)
 	}
 	q := fmt.Sprintf("timestamp=%d&recvWindow=5000", e.Now().UnixMilli())
-	url := fmt.Sprintf("%s/api/v3/account?%s&signature=%s",
+	url := fmt.Sprintf("%s/v3/account?%s&signature=%s",
 		strings.TrimRight(e.APIBase, "/"), q, sign(e.BnSec, q))
 	b, err := e.get(ctx, url, true)
 	if err != nil {

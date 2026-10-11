@@ -20,6 +20,7 @@ const (
 )
 
 // ReconcilePoolOnce 日对账单轮：返回账/实/漂移是否超阈（告警+自动修正已内联）。
+// 实=余额(free+locked)×share + 未到期 DCI 申购在外 qty×share（R4 回填）。
 func (e *Executor) ReconcilePoolOnce(ctx context.Context) (ledger, live float64, drifted bool, err error) {
 	cons, err := e.Store.ListCapabilityConstraints(ctx)
 	if err != nil {
@@ -34,6 +35,12 @@ func (e *Executor) ReconcilePoolOnce(ctx context.Context) (ledger, live float64,
 		return 0, 0, false, fmt.Errorf("BTC 实时余额读败: %w", err)
 	}
 	live *= *share
+	// outstanding 回填：filled 未到期申购锁定币离现货账，加回池实有（R4）。
+	if out, err := e.Store.OutstandingDCIQty(ctx, "binance", "BTC"); err != nil {
+		return 0, 0, false, fmt.Errorf("outstanding DCI 读败: %w", err)
+	} else {
+		live += out * *share
+	}
 	poss, err := e.Store.ListOpenPersonalPositions(ctx)
 	if err != nil {
 		return 0, 0, false, err

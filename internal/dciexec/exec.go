@@ -25,6 +25,7 @@ type Store interface {
 	CreateDCIOrder(ctx context.Context, o *pgstore.DCIOrder) (int64, bool, error)
 	FinishDCIOrder(ctx context.Context, id int64, status, response string) error
 	InsertPersonalPosition(ctx context.Context, asset, kind, priceSymbol, note string, qty *float64, openedAt *time.Time) (int64, error)
+	OutstandingDCIQty(ctx context.Context, venue, investCcy string) (float64, error)
 	ListOpenPersonalPositions(ctx context.Context) ([]pgstore.PersonalPosition, error)
 	UpdatePersonalPositionQtyNote(ctx context.Context, id int64, qty float64, note string) error
 	OpenConditionGap(ctx context.Context, g *pgstore.ConditionGap) (int64, error)
@@ -90,7 +91,7 @@ func (l leg) strikePass(q *pgstore.CexDCIQuote, spot float64) bool {
 func (e *Executor) SubscribeBody(projectID string, lots float64, at time.Time) (query, url string) {
 	q := fmt.Sprintf("projectId=%s&lots=%.8f&timestamp=%d&recvWindow=5000",
 		projectID, lots, at.UnixMilli())
-	return q, fmt.Sprintf("%s/sapi/v1/dci/product/subscribe?%s&signature=%s",
+	return q, fmt.Sprintf("%s/v1/dci/product/subscribe?%s&signature=%s",
 		strings.TrimRight(e.Sapi, "/"), q, sign(e.BnSec, q))
 }
 
