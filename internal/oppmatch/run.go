@@ -283,11 +283,20 @@ func proposalParams(ctx context.Context, st *pgstore.Store, r Result) map[string
 		opt, inv = "PUT", "USDT"
 	}
 	if opt != "" {
-		// D-191-R8：快照同界——bound=现货参照×%OTM 闸（无参照→无界降级，
-		// 快照=审计锚非钉价，执行时实时闸复验不变）。
+		// D-191-R8/R9：快照同界——bound=现货参照×约束表 OTM 界（无参照/界行缺
+		// →无界快照降级；快照=审计锚非钉价，执行时实时闸复验不变）。
 		var bound float64
 		if spot, err := st.LatestSpreadSpotRef(ctx, "BTC"); err == nil && spot > 0 {
-			bound = dciexec.StrikeBound(opt, spot)
+			if cons, err := st.ListCapabilityConstraints(ctx); err == nil {
+				cb, pb := dciexec.OTMBoundRatios(cons)
+				ratio := cb
+				if opt == "PUT" {
+					ratio = pb
+				}
+				if ratio != nil {
+					bound = dciexec.StrikeBound(spot, *ratio)
+				}
+			}
 		}
 		if qs, err := st.ListDCIQuotes(ctx, "binance", "BTC", opt, inv, 90, bound); err == nil && len(qs) > 0 {
 			p["product_ref"] = qs[0].ProductRef
