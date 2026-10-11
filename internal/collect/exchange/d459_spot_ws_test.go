@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"arb/internal/bus"
 )
 
 // wsapiFakeServer 起 ws-api 假服务端：对 start 回 listenKey、ping/stop 回空 result，
@@ -132,6 +134,13 @@ func TestBinanceSpotWsapiE2E(t *testing.T) {
 	}
 	if rows := snaps.snapshot(); len(rows) != 1 || rows[0].EquityRaw != 850 || rows[0].VenueType != "spot" {
 		t.Fatalf("snapshot wrong: %+v", rows)
+	}
+	// D-192：全资产落活缓存——BTC 行同帧入资产级面（USDT 池聚合径不变）。
+	if ab, ok := bus.SpotAssets.Get("binance:spot", "BTC"); !ok || ab.Free != 1 {
+		t.Fatalf("asset ledger BTC wrong: %+v", ab)
+	}
+	if ab, ok := bus.SpotAssets.Get("binance:spot", "USDT"); !ok || ab.Free != 800 || ab.Locked != 50 {
+		t.Fatalf("asset ledger USDT wrong: %+v", ab)
 	}
 	// 4) 续租 ping：params={apiKey,listenKey} 两参（实证形制）。
 	deadline = time.Now().Add(2 * time.Second)

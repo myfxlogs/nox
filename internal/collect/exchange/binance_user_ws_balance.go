@@ -3,6 +3,7 @@
 package exchange
 
 import (
+	"arb/internal/bus"
 	"context"
 	"encoding/json"
 	"log"
@@ -44,6 +45,12 @@ func (b *BinanceUserWS) onSpotAccountPosition(ctx context.Context, data []byte) 
 	if b.simulated {
 		return
 	}
+	// D-192：全资产落活缓存（现货域边界——dciexec 余额读流主源）。
+	var rows []struct{ A, F, L string }
+	for _, bal := range acct.B {
+		rows = append(rows, struct{ A, F, L string }{bal.A, bal.F, bal.L})
+	}
+	bus.SpotAssets.PutAll(b.balPoolKey(), rows, b.now())
 	for _, bal := range acct.B {
 		if bal.A != "USDT" {
 			continue
