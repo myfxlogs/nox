@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/store/pgstore"
 )
 
@@ -511,5 +512,39 @@ func TestD191R6_BlindGate(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("earn_position gap 未落: %+v", fs.gaps)
+	}
+}
+
+// TestD192_StreamBalanceGate：freeBalance 读流——流存活+资产有值→流值；
+// 死流/资产无值→REST 兜底（闸=连接存活标非事件新旧；边界=现货域）。
+func TestD192_StreamBalanceGate(t *testing.T) {
+	bus.SpotAssets.Put("binance:spot", "BTC", 0.3, 0.02, time.Now())
+	defer func() { // 清面防串测
+		bus.SpotAssets = bus.NewAssetLedger()
+	}()
+	restCalls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		restCalls++
+		fmt.Fprint(w, `{"balances":[{"asset":"BTC","free":"0.5","locked":"0"}]}`)
+	}))
+	defer srv.Close()
+	// 存活+有值→流值 0.32，REST 零调。
+	e := &Executor{Store: newFake(), BnKey: "k", BnSec: "s",
+		APIBase: srv.URL + "/api", Client: srv.Client(), Now: time.Now,
+		StreamFn: func() bool { return true }}
+	if v, err := e.freeBalance(context.Background(), "BTC"); err != nil || v != 0.32 {
+		t.Fatalf("流值应 0.32: %v %v", v, err)
+	}
+	if restCalls != 0 {
+		t.Fatalf("活流不应走 REST: %d", restCalls)
+	}
+	// 流存活但资产无值→REST 兜底。
+	if v, err := e.freeBalance(context.Background(), "ETH"); err != nil || v != 0 {
+		t.Fatalf("ETH 无值应 REST 兜底（REST 无该行→0）: %v %v", v, err)
+	}
+	// 死流→REST 兜底。
+	e.StreamFn = func() bool { return false }
+	if v, err := e.freeBalance(context.Background(), "BTC"); err != nil || v != 0.5 {
+		t.Fatalf("死流应 REST=0.5: %v %v", v, err)
 	}
 }

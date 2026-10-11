@@ -54,6 +54,7 @@ type Executor struct {
 	BalanceFn func(ctx context.Context, asset string) (float64, error) // 现货 free+locked
 	EarnFn    func(ctx context.Context, asset string) ([]EarnPosition, error)
 	RedeemFn  func(ctx context.Context, productID string, amount float64) error
+	StreamFn  func() bool // 流存活闸（nil=dephealth 实读）
 }
 
 // Go 轮式申购主径（业主口令「go」→双腿各试：CALL 持币卖高 + PUT 持U买低；
