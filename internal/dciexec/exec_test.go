@@ -369,14 +369,14 @@ func TestD191_FailToGap(t *testing.T) {
 	if o.Status != "failed" {
 		t.Fatalf("order 应 failed: %s", o.Status)
 	}
-	found := false
+	found := ""
 	for _, g := range fs.gaps {
 		if g.Subject == "dual_order" {
-			found = true
+			found = g.Kind
 		}
 	}
-	if !found {
-		t.Fatal("权限缺口未落")
+	if found != "permission" { // D-196④：HTTP 403→permission 缺口（真业主请求）
+		t.Fatalf("403 应落 permission 缺口: %q gaps=%+v", found, fs.gaps)
 	}
 }
 
@@ -569,11 +569,11 @@ func TestD191R6_BlindGate(t *testing.T) {
 	found := false
 	for _, g := range fs.gaps {
 		if g.Subject == "earn_position" {
-			found = true
+			found = g.Kind == "runtime" // D-196①：盲源闸=系统侧病灶
 		}
 	}
 	if !found {
-		t.Fatalf("earn_position gap 未落: %+v", fs.gaps)
+		t.Fatalf("earn_position runtime gap 未落: %+v", fs.gaps)
 	}
 }
 
@@ -712,4 +712,42 @@ func TestD191R10_OrderRefSkip(t *testing.T) {
 	if !strings.Contains(err.Error(), "PUT腿") {
 		t.Fatalf("err 未内嵌腿因 msgs: %v", err)
 	}
+}
+
+// TestD196_VenueErrKind：venue 败因分类——400/参数→runtime、401/403/权限码→permission。
+func TestD196_VenueErrKind(t *testing.T) {
+	cases := []struct {
+		body string
+		want string
+	}{
+		{"subscribe HTTP 400: {\"code\":-1102,\"msg\":\"Mandatory parameter 'id' was not sent\"}", "runtime"},
+		{"subscribe HTTP 403: {\"code\":-2015,\"msg\":\"Invalid API-key\"}", "permission"},
+		{"subscribe HTTP 401: {}", "permission"},
+		{"dial tcp: connection refused", "runtime"},
+	}
+	for _, c := range cases {
+		if got := venueErrKind(fmt.Errorf("%s", c.body)); got != c.want {
+			t.Fatalf("%q → %s want %s", c.body, got, c.want)
+		}
+	}
+	// 全链：400 拒参→runtime 缺口「系统侧病灶」非「请」。
+	fs := newFake()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		fmt.Fprint(w, `{"code":-1102,"msg":"Mandatory parameter was not sent"}`)
+	}))
+	defer srv.Close()
+	e := execR3(fs, srv.URL, srv.Client(), map[string]float64{"BTC": 0.2, "USDT": 0})
+	if _, err := e.GoWheel(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, g := range fs.gaps {
+		if g.Subject == "dual_order" {
+			if g.Kind != "runtime" || !strings.Contains(g.RequestText, "系统侧病灶") {
+				t.Fatalf("400 应落 runtime 病灶缺口: %+v", g)
+			}
+			return
+		}
+	}
+	t.Fatalf("dual_order gap 未落: %+v", fs.gaps)
 }

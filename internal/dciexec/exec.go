@@ -278,8 +278,12 @@ func (e *Executor) redeemShortfall(ctx context.Context, asset string, need float
 func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap int, bound, spot float64, propID *int64) (string, error) {
 	bal, err := e.poolBalance(ctx, l.qtyCcy)
 	if err != nil {
-		return "", e.gap(ctx, l, "permission", "earn_position",
-			"请开通 binance 赚币子账查询权限（%s 池余额读败：%v）", l.qtyCcy, err)
+		if venueErrKind(err) == "permission" {
+			return "", e.gap(ctx, l, "permission", "earn_position",
+				"请开通 binance 赚币子账查询权限（%s 池余额读败：%v）", l.qtyCcy, err)
+		}
+		return "", e.gap(ctx, l, "runtime", "earn_position",
+			"系统侧病灶：%s 池余额读败：%v", l.qtyCcy, err)
 	}
 	qty := bal * share
 	if qty <= 0 {
@@ -293,8 +297,12 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 	if spotFree < qty {
 		redeemed, rerr := e.redeemShortfall(ctx, l.qtyCcy, qty-spotFree)
 		if rerr != nil {
-			return "", e.gap(ctx, l, "permission", "earn_redeem",
-				"请开通 binance 赚币活期赎回权限（%s 赎回败：%v）", l.qtyCcy, rerr)
+			if venueErrKind(rerr) == "permission" {
+				return "", e.gap(ctx, l, "permission", "earn_redeem",
+					"请开通 binance 赚币活期赎回权限（%s 赎回败：%v）", l.qtyCcy, rerr)
+			}
+			return "", e.gap(ctx, l, "runtime", "earn_redeem",
+				"系统侧病灶：%s 活期赎回败：%v", l.qtyCcy, rerr)
 		}
 		if redeemed > 0 {
 			if spotFree, err = e.freeBalance(ctx, l.qtyCcy); err != nil {
@@ -325,10 +333,10 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 	}
 	if q == nil {
 		if sawStrikeOK {
-			return "", e.gap(ctx, l, "permission", "dual_quote",
-				"%s腿无可申购参数档（达标档 order_ref 全缺——采集面未落 orderId）", l.name)
+			return "", e.gap(ctx, l, "runtime", "dual_quote",
+				"系统侧病灶：%s腿无可申购参数档（达标档 order_ref 全缺——采集面未落 orderId）", l.name)
 		}
-		return "", e.gap(ctx, l, "permission", "dual_quote",
+		return "", e.gap(ctx, l, "runtime", "dual_quote",
 			"%s腿无达标档在售（spot %.0f，strike 界 %s）", l.name, spot, l.boundText(bound))
 	}
 	now := e.Now()
@@ -346,8 +354,12 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 	body, err := e.post(ctx, q.ProductRef, q.OrderRef, qty, now)
 	if err != nil {
 		e.finish(ctx, oid, "failed", err.Error())
-		return "", e.gap(ctx, l, "permission", "dual_order",
-			"请开通 binance 赚币/双币申购权限（%s腿下单失败：%v）", l.name, err)
+		if venueErrKind(err) == "permission" {
+			return "", e.gap(ctx, l, "permission", "dual_order",
+				"请开通 binance 赚币/双币申购权限（%s腿下单失败：%v）", l.name, err)
+		}
+		return "", e.gap(ctx, l, "runtime", "dual_order",
+			"系统侧病灶：venue 拒单（%s腿：%v）", l.name, err)
 	}
 	e.finish(ctx, oid, "filled", body)
 	strike := 0.0

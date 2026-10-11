@@ -117,3 +117,15 @@ func tenor(q *pgstore.CexDCIQuote) int {
 	}
 	return 0
 }
+
+// venueErrKind venue 败因分类（D-196④）：HTTP 401/403/权限码→permission（真业主
+// 请求「请开通权限」）；400/参数/产品态→runtime（我方参数/产品病灶=「系统侧病灶」）。
+func venueErrKind(err error) string {
+	s := err.Error()
+	for _, k := range []string{"HTTP 401", "HTTP 403", "-2014", "-2015", "permissions", "Permission"} {
+		if strings.Contains(s, k) {
+			return "permission"
+		}
+	}
+	return "runtime"
+}

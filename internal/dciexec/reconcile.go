@@ -73,8 +73,8 @@ func (e *Executor) ReconcilePoolOnce(ctx context.Context) (ledger, live float64,
 	// 盲源闸：实有≈0 但账>0=余额面盲读疑（earn/spot 权限或子账未覆盖），
 	// 禁缩账——缺口请求业主核查而非自动清零（R6）。
 	if live < reconcileDriftAbs && ledger > reconcileDriftAbs {
-		return ledger, live, false, e.gap(ctx, callLeg, "permission", "earn_position",
-			"托管池实有≈0 但账 %.8f——余额面盲读疑（赚币权限/子账覆盖），禁缩账请核查", ledger)
+		return ledger, live, false, e.gap(ctx, callLeg, "runtime", "earn_position",
+			"系统侧病灶：托管池实有≈0 但账 %.8f——余额面盲读疑（赚币权限/子账覆盖），禁缩账", ledger)
 	}
 	diff := math.Abs(live - ledger)
 	base := math.Max(math.Abs(ledger), 1e-9)
