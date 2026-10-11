@@ -119,8 +119,8 @@ func (h *FeishuQueryHandler) HandleReply(ctx context.Context, ev ReplyEvent) (st
 		return h.handleProbeCmd(ctx, cmd)
 	}
 	// D-191②：执行口令「go」——业主一句触发 DCI 申购（幂等 request_id 防重）。
-	if isGoCmd(text) {
-		return h.handleGoCmd(ctx)
+	if gid, gdec, ok := parseGoCmd(text); ok {
+		return h.handleGoCmd(ctx, gid, gdec)
 	}
 	if h.rateLim != nil && !h.rateLim.Allow() {
 		return "已达每小时查询上限，请稍后重试", nil
