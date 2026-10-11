@@ -82,7 +82,7 @@ func Match(ts []Template, l LedgerView) []Result {
 			return mi
 		}
 		if out[i].APR == nil || out[j].APR == nil {
-			return out[j].APR != nil
+			return out[i].APR != nil
 		}
 		return *out[i].APR > *out[j].APR
 	})
