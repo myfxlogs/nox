@@ -26,6 +26,8 @@ type DCIOrder struct {
 	Status     string
 	Response   string
 	ProposalID *int64 // D-189：提案→订单回链（NULL=非提案触发）
+	CreatedAt  time.Time
+	ResolvedAt *time.Time
 }
 
 // CreateDCIOrder 登记 pending 单（request_id 冲突=已受理→created=false 防重）。
@@ -195,4 +197,31 @@ func (s *Store) DCIOrderLegCount(ctx context.Context, proposalID int64, optType,
 		WHERE proposal_id=$1 AND opt_type=$2 AND invest_ccy=$3`,
 		proposalID, optType, investCcy).Scan(&n)
 	return n, err
+}
+
+// ListDCIOrders D-200②：订单近 N 单看板读面（id DESC；response 后端截≤300 字符）。
+func (s *Store) ListDCIOrders(ctx context.Context, limit int) ([]DCIOrder, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 20
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, request_id, venue, template_id, product_ref, underlying, opt_type,
+		       strike, invest_ccy, qty, tenor_days, status,
+		       left(response, 300), proposal_id, created_at, resolved_at
+		FROM fin_dci_order ORDER BY id DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DCIOrder
+	for rows.Next() {
+		var o DCIOrder
+		if err := rows.Scan(&o.ID, &o.RequestID, &o.Venue, &o.TemplateID, &o.ProductRef,
+			&o.Underlying, &o.OptType, &o.Strike, &o.InvestCcy, &o.Qty, &o.TenorDays,
+			&o.Status, &o.Response, &o.ProposalID, &o.CreatedAt, &o.ResolvedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
 }
