@@ -78,6 +78,22 @@ func validateProbeContract(p *explorerv1.ProbeProposal, known map[string]bool, m
 		return nil, "auto_close_at 不在未来"
 	case c.Basis == "":
 		return nil, "缺 basis（数据依据）"
+	case len(p.GetPremises()) == 0:
+		return nil, "缺 premises（结构化前提——D-176 机审唯一判据源，散文 basis 不再解析）"
+	}
+	for _, prem := range p.GetPremises() {
+		if prem.GetKind() == "" {
+			return nil, "premise 缺 kind"
+		}
+	}
+	c.Premises = make([]pgstore.ProbePremise, 0, len(p.GetPremises()))
+	for _, prem := range p.GetPremises() {
+		c.Premises = append(c.Premises, pgstore.ProbePremise{
+			Kind:      strings.TrimSpace(prem.GetKind()),
+			Venue:     strings.TrimSpace(prem.GetVenue()),
+			Canonical: strings.TrimSpace(prem.GetCanonical()),
+			FreeUSD:   prem.GetFreeUsd(),
+		})
 	}
 	c.Qty = p.GetQty()
 	c.NotionalUSD = p.GetNotionalUsd()

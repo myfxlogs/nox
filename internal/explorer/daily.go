@@ -32,7 +32,7 @@ const dailySystemPrompt = `你是 ARB 套利系统的探矿员（只读研究员
 提案 ≤10 条；canonical 必须来自输入段出现过的键；anchor 必须等于所据数字所在段名。
 canonical 必须是交易品种符号（如 ONEUSDT/XAUUSD）；账户/资金池描述（如 "idle 3001157"）不是 canonical——填了会被行级校验整行拒收。
 probe_proposals 可省略——仅当某假设需小额单腿实测证伪时给出，契约全字段必填：
-{"purpose":"目的","falsify":"可量化证伪标准（须含数字阈值）","venue_key":"venue:type","canonical":"输入段出现过的键","side":"BUY|SELL","qty":数值>0,"notional_usd":数值>0且≤配置键ARB_PROBE_MAX_NOTIONAL,"expected_cost_usd":数值≥0,"auto_close_at":"RFC3339 未来时刻","basis":"数据依据（引用段名/事实键）"}。缺一即废该行。`
+{"purpose":"目的","falsify":"可量化证伪标准（须含数字阈值）","venue_key":"venue:type","canonical":"输入段出现过的键","side":"BUY|SELL","qty":数值>0,"notional_usd":数值>0且≤配置键ARB_PROBE_MAX_NOTIONAL,"expected_cost_usd":数值≥0,"auto_close_at":"RFC3339 未来时刻","basis":"数据依据（人读散文，机审不解析）","premises":[{"kind":"term_dispersion|idle_funds","canonical":"品种键（term_dispersion 必填）","venue":"裸 venue 名（idle_funds 必填）","free_usd":数值（idle_funds 可填）"}]}。缺一即废该行；premises 是机审唯一判据，禁把前提写进 basis 散文冒充。`
 
 // stateKeyWatchlist explorer_state 快照键（②新符号/上市 diff 源）。
 const stateKeyWatchlist = "watchlist_snapshot"
