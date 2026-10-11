@@ -18,6 +18,13 @@ import (
 	"arb/internal/store/pgstore"
 )
 
+// sign HMAC-SHA256 hex（binance sapi 同法，包内独立实现 P3 不适用）。
+func sign(secret, query string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(query))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
 // Store 执行面依赖（*pgstore.Store 实现；测试走 fake）。
 type Store interface {
 	ListCapabilityConstraints(ctx context.Context) ([]pgstore.CapabilityConstraint, error)
@@ -47,71 +54,6 @@ type Executor struct {
 	BalanceFn func(ctx context.Context, asset string) (float64, error) // 现货 free+locked
 	EarnFn    func(ctx context.Context, asset string) ([]EarnPosition, error)
 	RedeemFn  func(ctx context.Context, productID string, amount float64) error
-}
-
-// %OTM 闸（票面钦定：卖高 CALL≥×1.10、买低 PUT≤×0.93）。
-const (
-	otmCallRatio = 1.10
-	otmPutRatio  = 0.93
-)
-
-// leg 腿参数（CALL=持币卖高 covered-call；PUT=持 USDT 买低 cash-put）。
-type leg struct {
-	name      string // CALL|PUT（order 账口径）
-	optType   string
-	investCcy string // 投入币（CALL=BTC、PUT=USDT）
-	qtyCcy    string // 余额读径资产
-	tmpl      string
-}
-
-var (
-	callLeg = leg{name: "CALL", optType: "CALL", investCcy: "BTC", qtyCcy: "BTC",
-		tmpl: "dci_sell_high_covered_call"}
-	putLeg = leg{name: "PUT", optType: "PUT", investCcy: "USDT", qtyCcy: "USDT",
-		tmpl: "dci_buy_low"}
-)
-
-// sign HMAC-SHA256 hex（binance sapi 同法，包内独立实现 P3 不适用）。
-func sign(secret, query string) string {
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(query))
-	return hex.EncodeToString(mac.Sum(nil))
-}
-
-// strikePass %OTM 闸：CALL→strike≥spot×1.10、PUT→strike≤spot×0.93（strike 缺=不达标）。
-func (l leg) strikePass(q *pgstore.CexDCIQuote, spot float64) bool {
-	if q.Strike == nil {
-		return false
-	}
-	if l.optType == "CALL" {
-		return *q.Strike >= spot*otmCallRatio
-	}
-	return *q.Strike <= spot*otmPutRatio
-}
-
-// SubscribeBody 申购参数构造（projectId+lots+时间戳；签名=HMAC(query)）。
-func (e *Executor) SubscribeBody(projectID string, lots float64, at time.Time) (query, url string) {
-	q := fmt.Sprintf("projectId=%s&lots=%.8f&timestamp=%d&recvWindow=5000",
-		projectID, lots, at.UnixMilli())
-	return q, fmt.Sprintf("%s/v1/dci/product/subscribe?%s&signature=%s",
-		strings.TrimRight(e.Sapi, "/"), q, sign(e.BnSec, q))
-}
-
-// tenorCapOf 期限上限=custody_redeemable.value_num（票面钦定读 90；行在无数值→14）。
-func tenorCapOf(cons []pgstore.CapabilityConstraint) (share *float64, cap int) {
-	cap = 30 // 无 redeemable 约束=非托管语义，保守中间档
-	for _, c := range cons {
-		switch c.Subject {
-		case "custody_share":
-			share = c.ValueNum
-		case "custody_redeemable":
-			cap = 14
-			if c.ValueNum != nil {
-				cap = int(*c.ValueNum)
-			}
-		}
-	}
-	return share, cap
 }
 
 // Go 轮式申购主径（业主口令「go」→双腿各试：CALL 持币卖高 + PUT 持U买低；
@@ -289,25 +231,4 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 	}
 	return fmt.Sprintf("%s腿申购已提交并入账：%.6f %s strike %.0f（%.4g 原生口径）",
 		l.name, qty, l.qtyCcy, strike, q.APY), nil
-}
-
-func (l leg) boundText(spot float64) string {
-	if l.optType == "CALL" {
-		return fmt.Sprintf("≥%.0f", spot*otmCallRatio)
-	}
-	return fmt.Sprintf("≤%.0f", spot*otmPutRatio)
-}
-
-func delivDay(q *pgstore.CexDCIQuote) string {
-	if q.DeliveryTs != nil {
-		return q.DeliveryTs.UTC().Format("20060102")
-	}
-	return "na"
-}
-
-func tenor(q *pgstore.CexDCIQuote) int {
-	if q.TenorDays != nil {
-		return *q.TenorDays
-	}
-	return 0
 }
