@@ -126,10 +126,13 @@ func (s *Store) SetProposalStatus(ctx context.Context, id int64, status string) 
 // ExpireProposalsExcept 过期并入扫描拍：当轮不再达标的 pending 提案→expired
 // （事件驱动零新定时器；just-executed/declined 行不动）。
 func (s *Store) ExpireProposalsExcept(ctx context.Context, liveTemplates []string) (int, error) {
-	res, err := s.pool.Exec(ctx, `
-		UPDATE fin_proposal SET status='expired', decided_at=now()
-		WHERE status='proposed' AND NOT (template_id = ANY($1))`,
-		liveTemplates)
+	q := `UPDATE fin_proposal SET status='expired', decided_at=now() WHERE status='proposed'`
+	args := []any{}
+	if len(liveTemplates) > 0 { // 空集=全过期；ANY(NULL) 谓词恒 NULL 会零行更新
+		q += ` AND NOT (template_id = ANY($1))`
+		args = append(args, liveTemplates)
+	}
+	res, err := s.pool.Exec(ctx, q, args...)
 	if err != nil {
 		return 0, err
 	}

@@ -41,3 +41,6 @@ var OppTemplateSQL string // D-185：机会模板册（fin_opp_template+cond 子
 
 //go:embed 0194_proposal.sql
 var ProposalSQL string // D-189：提案实体化 fin_proposal+fin_dci_order.proposal_id 回链
+
+//go:embed 0195_gap_resolve_note.sql
+var GapResolveNoteSQL string // D-193②：缺口收口备注列

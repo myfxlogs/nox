@@ -139,6 +139,8 @@ func (s *Scanner) scanOnce(ctx context.Context) error {
 
 	// D-188② 权限面落库（吃同轮采集错误面零重调，dual_order/earn_subscribe）。
 	s.RecordPermissions(ctx, earnErrs, dciErrs)
+	// D-193③：首轮权限面落毕→boot 信号（oppmatch 首扫等此消竞态假缺口）。
+	bus.MarkPermProbeBootDone()
 
 	// ③ 跨所价差 → 入库（okxSpotBase=D-011 S2 OKX 腿直连传输层错误的 cex-proxy 回落通道）
 	spreads, err := CalcSpreads(ctx, s.client, s.bnAPIURL, s.okxSpotBase, s.symbols)

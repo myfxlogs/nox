@@ -83,6 +83,38 @@ func (s *Store) RequestConditionGap(ctx context.Context, id int64) error {
 		"条件缺口 %s %s:%s —— %s", g.TemplateID, g.Kind, g.Subject, g.RequestText))
 }
 
+// FulfillConditionGap D-193② 自动收口：open/requested→fulfilled+resolve_note
+// （条件满足自动收口 / 「需求已变更」收口——条件行被删场景）。
+func (s *Store) FulfillConditionGap(ctx context.Context, id int64, note string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE fin_condition_gap SET status='fulfilled', resolved_at=now(), resolve_note=$2
+		WHERE id=$1 AND status IN ('open','requested')`, id, note)
+	return err
+}
+
+// ReopenConditionGap D-193② 反向跳变：fulfilled 行条件再失→回 requested
+// （同 key 复用不插新行；告警再推走 D-168 episode 闸防抖照旧）。
+func (s *Store) ReopenConditionGap(ctx context.Context, id int64) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE fin_condition_gap SET status='requested', requested_at=now(), resolved_at=NULL
+		WHERE id=$1 AND status='fulfilled'`, id)
+	if err != nil {
+		return fmt.Errorf("reopen condition gap: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil
+	}
+	var g ConditionGap
+	if err := s.pool.QueryRow(ctx, `
+		SELECT template_id, kind, subject, request_text
+		FROM fin_condition_gap WHERE id=$1`, id).
+		Scan(&g.TemplateID, &g.Kind, &g.Subject, &g.RequestText); err != nil {
+		return err
+	}
+	return s.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
+		"条件缺口 %s %s:%s —— %s", g.TemplateID, g.Kind, g.Subject, g.RequestText))
+}
+
 // ResolveConditionGap 收口（fulfilled=业主已喂条件 / waived=放弃该机会线）。
 func (s *Store) ResolveConditionGap(ctx context.Context, id int64, fulfilled bool) error {
 	st := "waived"

@@ -3,7 +3,9 @@ package pgstore
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"arb/internal/testutil"
 )
@@ -69,14 +71,14 @@ func TestD189_ProposalLifecycle(t *testing.T) {
 	if got.Status != "expired" || got.DecidedAt == nil {
 		t.Fatalf("expired 态缺: %+v", got)
 	}
-	// ⑥二扫幂等零重扫（已定行不复写）。
-	if n, err := st.ExpireProposalsExcept(ctx, nil); err != nil || n != 0 {
+	// ⑥二扫幂等零重扫（live 集不变→已定行不复写、buy_low 仍在集不动）。
+	if n, err := st.ExpireProposalsExcept(ctx, []string{"dci_buy_low"}); err != nil || n != 0 {
 		t.Fatalf("二轮 expire 应 0: %d %v", n, err)
 	}
 	// ⑦订单回链 proposal_id。
 	td := 7
 	oid, _, err := st.CreateDCIOrder(ctx, &DCIOrder{
-		RequestID: "t189", Venue: "binance", ProductRef: "P1",
+		RequestID: fmt.Sprintf("t189|%d", time.Now().UnixNano()), Venue: "binance", ProductRef: "P1",
 		OptType: "PUT", InvestCcy: "USDT", Qty: 1, TenorDays: &td,
 		ProposalID: &idB})
 	if err != nil || oid <= 0 {
