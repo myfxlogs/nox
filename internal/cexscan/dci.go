@@ -83,6 +83,11 @@ func (c *EarnCollector) collectBinanceDCIWithBase(ctx context.Context, base stri
 				if resp.StatusCode != 200 {
 					return nil, fmt.Errorf("binance dci %s/%s/%s HTTP %d: %s", u, inv, opt, resp.StatusCode, string(body))
 				}
+				if len(body) < 400 {
+					log.Printf("[cexscan] binance dci %s/%s/%s body: %s", u, inv, opt, string(body))
+				} else {
+					log.Printf("[cexscan] binance dci %s/%s/%s body head: %.400s", u, inv, opt, string(body))
+				}
 				rows, err := parseBinanceDCI(body, time.Now())
 				if err != nil {
 					return nil, fmt.Errorf("binance dci %s/%s/%s: %w", u, inv, opt, err)
