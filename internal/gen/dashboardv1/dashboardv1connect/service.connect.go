@@ -355,6 +355,9 @@ const (
 	// DashboardServiceSelfRestartProcedure is the fully-qualified name of the DashboardService's
 	// SelfRestart RPC.
 	DashboardServiceSelfRestartProcedure = "/arb.dashboard.v1.DashboardService/SelfRestart"
+	// DashboardServiceListEmployeesProcedure is the fully-qualified name of the DashboardService's
+	// ListEmployees RPC.
+	DashboardServiceListEmployeesProcedure = "/arb.dashboard.v1.DashboardService/ListEmployees"
 	// DashboardServiceListAppSecretsProcedure is the fully-qualified name of the DashboardService's
 	// ListAppSecrets RPC.
 	DashboardServiceListAppSecretsProcedure = "/arb.dashboard.v1.DashboardService/ListAppSecrets"
@@ -518,6 +521,8 @@ type DashboardServiceClient interface {
 	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
 	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
 	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
+	// D-190：员工花名册看板（daemon 编制实况：在职/死亡/任务中）。
+	ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error)
 	// D-545：app_secrets 密钥管理面（值永不回传；Update 空值=删行+热更同步）。
 	ListAppSecrets(context.Context, *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error)
 	UpdateAppSecret(context.Context, *connect.Request[dashboardv1.UpdateAppSecretRequest]) (*connect.Response[dashboardv1.UpdateAppSecretResponse], error)
@@ -1182,6 +1187,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("SelfRestart")),
 			connect.WithClientOptions(opts...),
 		),
+		listEmployees: connect.NewClient[dashboardv1.ListEmployeesRequest, dashboardv1.ListEmployeesResponse](
+			httpClient,
+			baseURL+DashboardServiceListEmployeesProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListEmployees")),
+			connect.WithClientOptions(opts...),
+		),
 		listAppSecrets: connect.NewClient[dashboardv1.ListAppSecretsRequest, dashboardv1.ListAppSecretsResponse](
 			httpClient,
 			baseURL+DashboardServiceListAppSecretsProcedure,
@@ -1307,6 +1318,7 @@ type dashboardServiceClient struct {
 	listAppConfig                *connect.Client[dashboardv1.ListAppConfigRequest, dashboardv1.ListAppConfigResponse]
 	updateAppConfig              *connect.Client[dashboardv1.UpdateAppConfigRequest, dashboardv1.UpdateAppConfigResponse]
 	selfRestart                  *connect.Client[dashboardv1.SelfRestartRequest, dashboardv1.SelfRestartResponse]
+	listEmployees                *connect.Client[dashboardv1.ListEmployeesRequest, dashboardv1.ListEmployeesResponse]
 	listAppSecrets               *connect.Client[dashboardv1.ListAppSecretsRequest, dashboardv1.ListAppSecretsResponse]
 	updateAppSecret              *connect.Client[dashboardv1.UpdateAppSecretRequest, dashboardv1.UpdateAppSecretResponse]
 }
@@ -1852,6 +1864,11 @@ func (c *dashboardServiceClient) SelfRestart(ctx context.Context, req *connect.R
 	return c.selfRestart.CallUnary(ctx, req)
 }
 
+// ListEmployees calls arb.dashboard.v1.DashboardService.ListEmployees.
+func (c *dashboardServiceClient) ListEmployees(ctx context.Context, req *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error) {
+	return c.listEmployees.CallUnary(ctx, req)
+}
+
 // ListAppSecrets calls arb.dashboard.v1.DashboardService.ListAppSecrets.
 func (c *dashboardServiceClient) ListAppSecrets(ctx context.Context, req *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error) {
 	return c.listAppSecrets.CallUnary(ctx, req)
@@ -2017,6 +2034,8 @@ type DashboardServiceHandler interface {
 	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
 	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
 	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
+	// D-190：员工花名册看板（daemon 编制实况：在职/死亡/任务中）。
+	ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error)
 	// D-545：app_secrets 密钥管理面（值永不回传；Update 空值=删行+热更同步）。
 	ListAppSecrets(context.Context, *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error)
 	UpdateAppSecret(context.Context, *connect.Request[dashboardv1.UpdateAppSecretRequest]) (*connect.Response[dashboardv1.UpdateAppSecretResponse], error)
@@ -2677,6 +2696,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("SelfRestart")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListEmployeesHandler := connect.NewUnaryHandler(
+		DashboardServiceListEmployeesProcedure,
+		svc.ListEmployees,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListEmployees")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceListAppSecretsHandler := connect.NewUnaryHandler(
 		DashboardServiceListAppSecretsProcedure,
 		svc.ListAppSecrets,
@@ -2907,6 +2932,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceUpdateAppConfigHandler.ServeHTTP(w, r)
 		case DashboardServiceSelfRestartProcedure:
 			dashboardServiceSelfRestartHandler.ServeHTTP(w, r)
+		case DashboardServiceListEmployeesProcedure:
+			dashboardServiceListEmployeesHandler.ServeHTTP(w, r)
 		case DashboardServiceListAppSecretsProcedure:
 			dashboardServiceListAppSecretsHandler.ServeHTTP(w, r)
 		case DashboardServiceUpdateAppSecretProcedure:
@@ -3350,6 +3377,10 @@ func (UnimplementedDashboardServiceHandler) UpdateAppConfig(context.Context, *co
 
 func (UnimplementedDashboardServiceHandler) SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SelfRestart is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListEmployees is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListAppSecrets(context.Context, *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error) {

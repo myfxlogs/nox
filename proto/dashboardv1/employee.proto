@@ -1,0 +1,25 @@
+syntax = "proto3";
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+// D-190：员工花名册看板 RPC（编制实况=在职/死亡/任务中）。
+message Employee {
+  string name = 1;
+  string role = 2;
+  string dept = 3;
+  string assembly = 4;
+  int32 cadence_sec = 5;
+  bool running = 6;
+  int32 exits = 7;
+  string task = 8;
+  int64 beat_ts = 9;   // unix ts，0=未心跳
+  bool enabled = 10;
+  string status = 11;  // 在职|滞跳|死亡|停用（后端算定）
+}
+
+message ListEmployeesRequest {}
+message ListEmployeesResponse {
+  repeated Employee employees = 1;
+  int64 now_ts = 2;
+}

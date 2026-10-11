@@ -185,6 +185,7 @@ var migrationFiles = []struct {
 	{190, migrations.ConditionGapSQL},                  // D-186③：条件缺口表 fin_condition_gap
 	{191, migrations.CapabilityPermissionSQL},          // D-188②：权限探测面 fin_capability_permission
 	{192, migrations.DCIOrderSQL},                      // D-191：DCI 申购幂等账本 fin_dci_order
+	{193, migrations.EmployeeRegistrySQL},              // D-190：员工花名册 fin_employee_registry
 	{188, migrations.OppTemplateSQL},                   // D-185：机会模板册（fin_opp_template+cond）
 }
 
