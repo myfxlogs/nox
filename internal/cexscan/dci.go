@@ -56,35 +56,38 @@ func tenorOf(delivery time.Time, now time.Time) int {
 // ---------- Binance：GET {bnSapiURL}/v1/dci/product/list（签名） ----------
 
 // collectBinanceDCIWithBase 可注入 base 的实现（测试用）。
-// exercisedCoin 为必传参数组（-1102 实拍实证），按 underlying 逐发（BTC+ETH）。
+// 实拍实证参数面（-1102 两轮报错）：exercisedCoin + investCoin|optionType 组——
+// 按 underlying×invest(自生+USDT) 逐发取全产品矩阵（BTC/ETH 各两调）。
 func (c *EarnCollector) collectBinanceDCIWithBase(ctx context.Context, base string) ([]pgstore.CexDCIQuote, error) {
 	if c.bnKey == "" {
 		return nil, fmt.Errorf("binance key not configured")
 	}
 	var out []pgstore.CexDCIQuote
 	for _, u := range dciUnderlyings {
-		ms := time.Now().UnixMilli()
-		query := fmt.Sprintf("exercisedCoin=%s&timestamp=%d&recvWindow=5000", u, ms)
-		url := fmt.Sprintf("%s/v1/dci/product/list?%s&signature=%s", base, query, binanceSign(c.bnSecret, query))
-		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-		if err != nil {
-			return nil, err
+		for _, inv := range []string{u, "USDT"} {
+			ms := time.Now().UnixMilli()
+			query := fmt.Sprintf("exercisedCoin=%s&investCoin=%s&timestamp=%d&recvWindow=5000", u, inv, ms)
+			url := fmt.Sprintf("%s/v1/dci/product/list?%s&signature=%s", base, query, binanceSign(c.bnSecret, query))
+			req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+			if err != nil {
+				return nil, err
+			}
+			req.Header.Set("X-MBX-APIKEY", c.bnKey)
+			resp, err := c.client.Do(req)
+			if err != nil {
+				return nil, fmt.Errorf("binance dci %s/%s request: %w", u, inv, err)
+			}
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode != 200 {
+				return nil, fmt.Errorf("binance dci %s/%s HTTP %d: %s", u, inv, resp.StatusCode, string(body))
+			}
+			rows, err := parseBinanceDCI(body, time.Now())
+			if err != nil {
+				return nil, fmt.Errorf("binance dci %s/%s: %w", u, inv, err)
+			}
+			out = append(out, rows...)
 		}
-		req.Header.Set("X-MBX-APIKEY", c.bnKey)
-		resp, err := c.client.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("binance dci %s request: %w", u, err)
-		}
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if resp.StatusCode != 200 {
-			return nil, fmt.Errorf("binance dci %s HTTP %d: %s", u, resp.StatusCode, string(body))
-		}
-		rows, err := parseBinanceDCI(body, time.Now())
-		if err != nil {
-			return nil, fmt.Errorf("binance dci %s: %w", u, err)
-		}
-		out = append(out, rows...)
 	}
 	return out, nil
 }
@@ -186,15 +189,36 @@ func (c *EarnCollector) collectOKXDCI(ctx context.Context) ([]pgstore.CexDCIQuot
 // strike/apy/expTime 键按常见形取，无键行跳过不猜）。
 func parseOKXDCI(body []byte, baseCcy, optType string, now time.Time) ([]pgstore.CexDCIQuote, error) {
 	var raw struct {
-		Code json.Number                  `json:"code"` // 实拍实证：该端点 code 是数字非字符串
-		Msg  string                       `json:"msg"`
-		Data []map[string]json.RawMessage `json:"data"` // RawMessage 宽容取——该端点已破「全字符串」例
+		Code json.Number     `json:"code"` // 实拍实证：该端点 code 是数字非字符串
+		Msg  string          `json:"msg"`
+		Data json.RawMessage `json:"data"` // 实拍实证：data 非数组（对象嵌套），两形解构
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("okx dci decode: %w", err)
 	}
 	if raw.Code.String() != "0" {
 		return nil, fmt.Errorf("okx dci code %s: %s", raw.Code.String(), raw.Msg)
+	}
+	var rawData []map[string]json.RawMessage
+	if err := json.Unmarshal(raw.Data, &rawData); err != nil {
+		// data 对象形：常见嵌套键逐一试，命中键名+首行键集 log 留证据（字段实拍校）。
+		var obj map[string]json.RawMessage
+		if err2 := json.Unmarshal(raw.Data, &obj); err2 != nil {
+			return nil, fmt.Errorf("okx dci data shape: %w", err)
+		}
+		for _, k := range []string{"products", "items", "list", "data", "records"} {
+			if rm, ok := obj[k]; ok && json.Unmarshal(rm, &rawData) == nil {
+				log.Printf("[cexscan] okx dci data 对象形键=%s rows=%d", k, len(rawData))
+				break
+			}
+		}
+	}
+	if len(rawData) > 0 {
+		keys := make([]string, 0, len(rawData[0]))
+		for k := range rawData[0] {
+			keys = append(keys, k)
+		}
+		log.Printf("[cexscan] okx dci row keys: %v", keys)
 	}
 	pick := func(m map[string]json.RawMessage, keys ...string) string {
 		for _, k := range keys {
@@ -214,7 +238,7 @@ func parseOKXDCI(body []byte, baseCcy, optType string, now time.Time) ([]pgstore
 		return ""
 	}
 	var out []pgstore.CexDCIQuote
-	for _, d := range raw.Data {
+	for _, d := range rawData {
 		apyStr := pick(d, "apy", "estApy", "rate")
 		apy, err := strconv.ParseFloat(apyStr, 64)
 		if err != nil {
