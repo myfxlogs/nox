@@ -132,15 +132,31 @@ func RunOnce(ctx context.Context, st *pgstore.Store) (int, int, error) {
 		gapByKey[g.TemplateID+"|"+g.Kind+"|"+g.Subject] = g.Status
 	}
 	propN, gapN := 0, 0
+	var liveTmpls []string // 当轮达标模板集（过期判定并入扫描拍——零新定时器）
 	for _, r := range Match(in, view) {
 		if len(r.Missing) == 0 {
 			propN++
+			liveTmpls = append(liveTmpls, r.TemplateID)
 			apr := "报价缺"
 			if r.APR != nil {
 				apr = fmt.Sprintf("apy=%.4g（venue原生口径）", *r.APR)
 			}
+			// D-189①②：提案实体化——行即稳定 id（同模板 pending 复用），
+			// params=快照审计锚（执行时实时闸复验，非钉价）。
+			pid, created, err := st.CreateProposal(ctx, &pgstore.Proposal{
+				TemplateID: r.TemplateID, ExecTrack: r.ExecTrack, Venue: "binance",
+				Params:      proposalParams(ctx, st, r),
+				ExpectedAPR: r.APR})
+			if err != nil {
+				log.Printf("[oppmatch] proposal row %s: %v", r.TemplateID, err)
+				continue
+			}
+			tag := "提案#"
+			if !created {
+				tag = "提案#（在册）"
+			}
 			if err := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
-				"机会提案#%d %s（轨=%s，%s）", propN, r.TemplateID, r.ExecTrack, apr)); err != nil {
+				"机会%s%d %s（轨=%s，%s）", tag, pid, r.TemplateID, r.ExecTrack, apr)); err != nil {
 				log.Printf("[oppmatch] proposal alert %s: %v", r.TemplateID, err)
 			}
 			continue
@@ -164,7 +180,41 @@ func RunOnce(ctx context.Context, st *pgstore.Store) (int, int, error) {
 			gapN++
 		}
 	}
+	// D-189⑤：过期并入扫描拍——当轮不再达标的 pending 提案→expired。
+	if n, err := st.ExpireProposalsExcept(ctx, liveTmpls); err != nil {
+		log.Printf("[oppmatch] expire proposals: %v", err)
+	} else if n > 0 {
+		log.Printf("[oppmatch] expired %d stale proposals", n)
+	}
 	log.Printf("[oppmatch] scan done: %d templates, %d proposals, %d new gap requests",
 		len(in), propN, gapN)
 	return propN, gapN, nil
+}
+
+// proposalParams 提案快照参数（审计锚非钉价）：dci 模板补最优档 product/strike/tenor
+// 快照；其余仅 apr——执行时实时闸复验为准（禁区：禁按提案时 strike 硬执行）。
+func proposalParams(ctx context.Context, st *pgstore.Store, r Result) map[string]any {
+	p := map[string]any{}
+	if r.APR != nil {
+		p["apr"] = *r.APR
+	}
+	var opt, inv string
+	switch r.TemplateID {
+	case "dci_sell_high_covered_call":
+		opt, inv = "CALL", "BTC"
+	case "dci_buy_low":
+		opt, inv = "PUT", "USDT"
+	}
+	if opt != "" {
+		if qs, err := st.ListDCIQuotes(ctx, "binance", "BTC", opt, inv, 90); err == nil && len(qs) > 0 {
+			p["product_ref"] = qs[0].ProductRef
+			if qs[0].Strike != nil {
+				p["strike"] = *qs[0].Strike
+			}
+			if qs[0].TenorDays != nil {
+				p["tenor_days"] = *qs[0].TenorDays
+			}
+		}
+	}
+	return p
 }
