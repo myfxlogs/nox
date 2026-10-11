@@ -56,37 +56,39 @@ func tenorOf(delivery time.Time, now time.Time) int {
 // ---------- Binance：GET {bnSapiURL}/v1/dci/product/list（签名） ----------
 
 // collectBinanceDCIWithBase 可注入 base 的实现（测试用）。
-// 实拍实证参数面（-1102 三轮报错）：exercisedCoin+optionType 全必传——
-// underlying×CALL/PUT 四调，invest 面靠响应全量（行级 investCoin 字段随带）。
+// 实拍实证参数面（-1102 三轮逐参报错）：exercisedCoin+optionType+investCoin 全必传——
+// underlying×{underlying,USDT}×{CALL,PUT} 8 调，空组合回空表。
 func (c *EarnCollector) collectBinanceDCIWithBase(ctx context.Context, base string) ([]pgstore.CexDCIQuote, error) {
 	if c.bnKey == "" {
 		return nil, fmt.Errorf("binance key not configured")
 	}
 	var out []pgstore.CexDCIQuote
 	for _, u := range dciUnderlyings {
-		for _, opt := range []string{"CALL", "PUT"} {
-			ms := time.Now().UnixMilli()
-			query := fmt.Sprintf("exercisedCoin=%s&optionType=%s&timestamp=%d&recvWindow=5000", u, opt, ms)
-			url := fmt.Sprintf("%s/v1/dci/product/list?%s&signature=%s", base, query, binanceSign(c.bnSecret, query))
-			req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-			if err != nil {
-				return nil, err
+		for _, inv := range []string{u, "USDT"} {
+			for _, opt := range []string{"CALL", "PUT"} {
+				ms := time.Now().UnixMilli()
+				query := fmt.Sprintf("exercisedCoin=%s&optionType=%s&investCoin=%s&timestamp=%d&recvWindow=5000", u, opt, inv, ms)
+				url := fmt.Sprintf("%s/v1/dci/product/list?%s&signature=%s", base, query, binanceSign(c.bnSecret, query))
+				req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set("X-MBX-APIKEY", c.bnKey)
+				resp, err := c.client.Do(req)
+				if err != nil {
+					return nil, fmt.Errorf("binance dci %s/%s/%s request: %w", u, inv, opt, err)
+				}
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				if resp.StatusCode != 200 {
+					return nil, fmt.Errorf("binance dci %s/%s/%s HTTP %d: %s", u, inv, opt, resp.StatusCode, string(body))
+				}
+				rows, err := parseBinanceDCI(body, time.Now())
+				if err != nil {
+					return nil, fmt.Errorf("binance dci %s/%s/%s: %w", u, inv, opt, err)
+				}
+				out = append(out, rows...)
 			}
-			req.Header.Set("X-MBX-APIKEY", c.bnKey)
-			resp, err := c.client.Do(req)
-			if err != nil {
-				return nil, fmt.Errorf("binance dci %s/%s request: %w", u, opt, err)
-			}
-			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if resp.StatusCode != 200 {
-				return nil, fmt.Errorf("binance dci %s/%s HTTP %d: %s", u, opt, resp.StatusCode, string(body))
-			}
-			rows, err := parseBinanceDCI(body, time.Now())
-			if err != nil {
-				return nil, fmt.Errorf("binance dci %s/%s: %w", u, opt, err)
-			}
-			out = append(out, rows...)
 		}
 	}
 	return out, nil
@@ -171,7 +173,7 @@ func (c *EarnCollector) collectOKXDCI(ctx context.Context) ([]pgstore.CexDCIQuot
 	for i, base := range dciUnderlyings {
 		for j, opt := range []string{"C", "P"} {
 			if i+j > 0 {
-				time.Sleep(300 * time.Millisecond) // 实拍实证：四调连发触发 429，单组合节流
+				time.Sleep(1200 * time.Millisecond) // 实拍实证：连发触发 429（300ms 不够，3-4调死）
 			}
 			path := fmt.Sprintf("/api/v5/finance/sfp/dcd/products?baseCcy=%s&quoteCcy=USDT&optType=%s", base, opt)
 			body, err := okxFetch(ctx, c.client, c.okxBase, path, c.okxSignPath(path))
