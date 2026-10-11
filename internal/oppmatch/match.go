@@ -8,12 +8,18 @@ import "sort"
 
 // LedgerView 账本求值投影（由 pgstore.CapabilityLedger 折算；stable 资金并口）。
 type LedgerView struct {
-	Credentials map[string]bool    // venue 及 "venue:type" 双键
-	CapitalUSD  float64            // 稳定币桶合计（USD/USDT/USDC 归并）
-	CapitalBy   map[string]float64 // 非稳币桶按 ccy 直挂
-	Holdings    map[string]float64 // asset → qty
-	Constraints map[string]bool    // subject → 已喂约束
-	Permissions map[string]bool    // endpoint 权限标签（暂无数据源→空即缺）
+	Credentials map[string]bool          // venue、"venue:type"、"type:<venue_type>" 三键
+	CapitalUSD  float64                  // 稳定币桶合计（USD/USDT/USDC 归并）
+	CapitalBy   map[string]float64       // 非稳币桶按 ccy 直挂
+	Holdings    map[string]float64       // asset → qty
+	Constraints map[string]ConstraintVal // subject → 已喂约束（qualifier+value）
+	Permissions map[string]bool          // endpoint 权限标签（fin_capability_permission 探测面）
+}
+
+// ConstraintVal 约束限值（qualifier=max/min 时 Value 参与数值比较）。
+type ConstraintVal struct {
+	Qualifier string
+	Value     *float64
 }
 
 // Cond 模板条件行（与 fin_opp_template_cond 同构）。
@@ -46,7 +52,9 @@ var stableCcy = map[string]bool{"USD": true, "USDT": true, "USDC": true}
 func EvalCond(l LedgerView, c Cond) bool {
 	switch c.Kind {
 	case "credential":
-		return l.Credentials[c.Subject]
+		// 三级命中：venue → venue:type → type:<venue_type>（D-188①——
+		// subject="mt5"/"option"/"futures" 是 venue_type 级凭据，任一所行命中即算在）。
+		return l.Credentials[c.Subject] || l.Credentials["type:"+c.Subject]
 	case "capital":
 		if stableCcy[c.Subject] {
 			return c.MinVal != nil && l.CapitalUSD >= *c.MinVal
@@ -57,7 +65,22 @@ func EvalCond(l LedgerView, c Cond) bool {
 	case "permission":
 		return l.Permissions[c.Subject]
 	case "constraint":
-		return l.Constraints[c.Subject]
+		// subject 存在即已喂；cond 带 MinVal 且约束有数值限→数值比较
+		// （qualifier=max→约束值≤cond 界、min→约束值≥cond 界）。
+		cv, ok := l.Constraints[c.Subject]
+		if !ok {
+			return false
+		}
+		if c.MinVal == nil || cv.Value == nil {
+			return true
+		}
+		switch cv.Qualifier {
+		case "max":
+			return *cv.Value <= *c.MinVal
+		case "min":
+			return *cv.Value >= *c.MinVal
+		}
+		return true
 	}
 	return false // 未知 kind=不满足 fail-closed
 }

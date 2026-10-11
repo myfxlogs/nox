@@ -40,13 +40,14 @@ func val(p *float64) float64 {
 func ledgerView(l *pgstore.CapabilityLedger) LedgerView {
 	v := LedgerView{
 		Credentials: map[string]bool{}, CapitalBy: map[string]float64{},
-		Holdings: map[string]float64{}, Constraints: map[string]bool{},
+		Holdings: map[string]float64{}, Constraints: map[string]ConstraintVal{},
 		Permissions: map[string]bool{},
 	}
 	for _, c := range l.Credentials {
 		v.Credentials[c.Venue] = true
 		if c.VenueType != "" {
 			v.Credentials[c.Venue+":"+c.VenueType] = true
+			v.Credentials["type:"+c.VenueType] = true // type 级（mt5/futures/option）
 		}
 	}
 	for _, b := range l.Buckets {
@@ -61,7 +62,12 @@ func ledgerView(l *pgstore.CapabilityLedger) LedgerView {
 		v.Holdings[strings.ToUpper(h.Asset)] += h.Qty
 	}
 	for _, c := range l.Constraints {
-		v.Constraints[c.Subject] = true
+		v.Constraints[c.Subject] = ConstraintVal{Qualifier: c.Qualifier, Value: c.ValueNum}
+	}
+	for _, p := range l.Permissions {
+		if p.State == "present" {
+			v.Permissions[p.Permission] = true
+		}
 	}
 	return v
 }
@@ -72,10 +78,12 @@ func quoteFor(ctx context.Context, st *pgstore.Store, tid string) (*float64, err
 	var ok bool
 	var err error
 	switch {
-	case strings.HasPrefix(tid, "dci_"):
-		f, ok, err = st.MaxDCIAPY(ctx, "")
+	case strings.HasPrefix(tid, "dci_") || tid == "option_spread":
+		f, ok, err = st.MaxDCIAPY(ctx, "") // option_spread 暂代报价（DCI 同族衍生品面）
 	case tid == "earn_apr_lending" || tid == "cash_mgmt":
 		f, ok, err = st.MaxEarnAPR(ctx)
+	case tid == "funding_carry":
+		f, ok, err = st.MaxFactValue(ctx, "funding") // facts 永续 funding（pct_annualized）
 	}
 	if err != nil {
 		return nil, err
@@ -115,13 +123,21 @@ func RunOnce(ctx context.Context, st *pgstore.Store) (int, int, error) {
 		}
 		in = append(in, tp)
 	}
+	allGaps, err := st.ListConditionGaps(ctx, "")
+	if err != nil {
+		return 0, 0, err
+	}
+	gapByKey := map[string]string{} // template|kind|subject → status（预取消 N+1）
+	for _, g := range allGaps {
+		gapByKey[g.TemplateID+"|"+g.Kind+"|"+g.Subject] = g.Status
+	}
 	propN, gapN := 0, 0
 	for _, r := range Match(in, view) {
 		if len(r.Missing) == 0 {
 			propN++
 			apr := "报价缺"
 			if r.APR != nil {
-				apr = fmt.Sprintf("净APR≈%.1f%%", *r.APR*100)
+				apr = fmt.Sprintf("apy=%.4g（venue原生口径）", *r.APR)
 			}
 			if err := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
 				"机会提案#%d %s（轨=%s，%s）", propN, r.TemplateID, r.ExecTrack, apr)); err != nil {
@@ -130,24 +146,22 @@ func RunOnce(ctx context.Context, st *pgstore.Store) (int, int, error) {
 			continue
 		}
 		for _, c := range r.Missing {
+			key := r.TemplateID + "|" + c.Kind + "|" + c.Subject
+			st_, seen := gapByKey[key]
+			if seen && st_ != "open" { // requested/fulfilled/waived 行零重推
+				continue
+			}
 			id, err := st.OpenConditionGap(ctx, &pgstore.ConditionGap{
 				TemplateID: r.TemplateID, Kind: c.Kind, Subject: c.Subject,
 				Qualifier: c.Qualifier, RequestText: gapText(r.TemplateID, c)})
 			if err != nil {
 				return propN, gapN, err
 			}
-			gaps, err := st.ListConditionGaps(ctx, "open")
-			if err != nil {
+			if err := st.RequestConditionGap(ctx, id); err != nil {
 				return propN, gapN, err
 			}
-			for _, g := range gaps {
-				if g.ID == id {
-					if err := st.RequestConditionGap(ctx, id); err != nil {
-						return propN, gapN, err
-					}
-					gapN++
-				}
-			}
+			gapByKey[key] = "requested"
+			gapN++
 		}
 	}
 	log.Printf("[oppmatch] scan done: %d templates, %d proposals, %d new gap requests",

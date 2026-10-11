@@ -8,7 +8,10 @@ var testLedger = LedgerView{
 	Credentials: map[string]bool{"okx:perp": true, "gate:perp": true},
 	CapitalUSD:  10000,
 	Holdings:    map[string]float64{"BTC": 0.05},
-	Constraints: map[string]bool{"custody_share": true, "custody_redeemable": true},
+	Constraints: map[string]ConstraintVal{
+		"custody_share":      {Qualifier: "max", Value: f(0.34)},
+		"custody_redeemable": {Qualifier: "always"},
+	},
 	Permissions: map[string]bool{"dual_order": true},
 }
 
@@ -77,5 +80,57 @@ func TestD187_MissingNotSilent(t *testing.T) {
 	res := Match(ts, testLedger)
 	if len(res[0].Missing) != 1 {
 		t.Fatal("未知 kind 应判缺口 fail-closed")
+	}
+}
+
+// TestD188_CredTypeLevel：subject=venue_type 级凭据（mt5/futures/option）type:<vt> 键命中——
+// 假缺口清零锚（生产实证 cfd_swap_carry「请补 mt5 凭据」但 broker_accounts 有 5 个 mt5）。
+func TestD188_CredTypeLevel(t *testing.T) {
+	l := LedgerView{
+		Credentials: map[string]bool{"type:mt5": true, "type:perp": true},
+		Constraints: map[string]ConstraintVal{}, Permissions: map[string]bool{},
+		CapitalBy: map[string]float64{}, Holdings: map[string]float64{},
+	}
+	if !EvalCond(l, Cond{Kind: "credential", Subject: "mt5"}) {
+		t.Fatal("type:mt5 级凭据应命中")
+	}
+	if EvalCond(l, Cond{Kind: "credential", Subject: "option"}) {
+		t.Fatal("option type 凭据无应缺口")
+	}
+}
+
+// TestD188_ConstraintCompare：constraint 限值数值比较（max/min+value_num）。
+func TestD188_ConstraintCompare(t *testing.T) {
+	l := LedgerView{Constraints: map[string]ConstraintVal{
+		"cex_exposure_pct": {Qualifier: "max", Value: f(35)},
+		"reserve_pct":      {Qualifier: "min", Value: f(30)},
+	}, Credentials: map[string]bool{}, CapitalBy: map[string]float64{},
+		Holdings: map[string]float64{}, Permissions: map[string]bool{}}
+	// max 比较：约束值 ≤ cond 界=满足。
+	if !EvalCond(l, Cond{Kind: "constraint", Subject: "cex_exposure_pct", Qualifier: "max", MinVal: f(40)}) {
+		t.Fatal("max 约束 35≤40 应满足")
+	}
+	if EvalCond(l, Cond{Kind: "constraint", Subject: "cex_exposure_pct", Qualifier: "max", MinVal: f(30)}) {
+		t.Fatal("max 约束 35>30 应缺口（约束不够严）")
+	}
+	if !EvalCond(l, Cond{Kind: "constraint", Subject: "reserve_pct", Qualifier: "min", MinVal: f(25)}) {
+		t.Fatal("min 约束 30≥25 应满足")
+	}
+	// 无数值约束只验存在。
+	if !EvalCond(l, Cond{Kind: "constraint", Subject: "cex_exposure_pct"}) {
+		t.Fatal("无 MinVal 应只验存在")
+	}
+}
+
+// TestD188_PermissionEval：探测面 present→permission 条件可求值。
+func TestD188_PermissionEval(t *testing.T) {
+	l := LedgerView{Permissions: map[string]bool{"dual_order": true},
+		Credentials: map[string]bool{}, Constraints: map[string]ConstraintVal{},
+		CapitalBy: map[string]float64{}, Holdings: map[string]float64{}}
+	if !EvalCond(l, Cond{Kind: "permission", Subject: "dual_order"}) {
+		t.Fatal("探测 present 权限应满足")
+	}
+	if EvalCond(l, Cond{Kind: "permission", Subject: "earn_subscribe"}) {
+		t.Fatal("未探得 earn_subscribe 应缺口")
 	}
 }
