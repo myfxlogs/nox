@@ -53,6 +53,28 @@ func TestD191_DCIOrderStore(t *testing.T) {
 	if err != nil || len(qs2) != 0 {
 		t.Fatalf("PUT/USDT 无档应空回: %v %+v", err, qs2)
 	}
+	// outstanding：filled 未到期计入、failed/已到期不计（R4 回填口径）。
+	for _, oo := range []DCIOrder{
+		{RequestID: "d191test|out1", Venue: "binance", ProductRef: "P2",
+			Underlying: "BTC", OptType: "CALL", InvestCcy: "BTC", Qty: 0.02, TenorDays: &tenor},
+		{RequestID: "d191test|out2", Venue: "binance", ProductRef: "P3",
+			Underlying: "BTC", OptType: "PUT", InvestCcy: "USDT", Qty: 500, TenorDays: &tenor},
+	} {
+		o2 := oo
+		oid, _, err := s.CreateDCIOrder(ctx, &o2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.FinishDCIOrder(ctx, oid, "filled", "{}"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := s.OutstandingDCIQty(ctx, "binance", "BTC")
+	if err != nil || out < 0.038 { // d191test|a(0.018 filled)+out1(0.02)=0.038；out2 USDT 不计
+		t.Fatalf("outstanding BTC 回填错: %v %.4f", err, out)
+	}
+	s.pool.Exec(ctx, `DELETE FROM fin_dci_order WHERE request_id LIKE 'd191test%'`)
+
 	// 回执入账。
 	qty := 0.018
 	pid, err := s.InsertPersonalPosition(ctx, "BTC", "other", "BTCUSDT", "d191 回执", &qty, nil)

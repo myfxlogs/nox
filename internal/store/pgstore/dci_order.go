@@ -95,3 +95,15 @@ func (s *Store) InsertPersonalPosition(ctx context.Context, asset, kind, priceSy
 	}
 	return id, nil
 }
+
+// OutstandingDCIQty D-191 R4：未到期 DCI 申购在外 qty（filled 且 created+tenor>now，
+// 锁定币离现货账——托管池对账实有侧回填，防假漂移）。
+func (s *Store) OutstandingDCIQty(ctx context.Context, venue, investCcy string) (float64, error) {
+	var q float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(qty),0) FROM fin_dci_order
+		WHERE venue=$1 AND invest_ccy=$2 AND status='filled'
+		  AND created_at + COALESCE(tenor_days,0) * interval '1 day' > now()`,
+		venue, investCcy).Scan(&q)
+	return q, err
+}
