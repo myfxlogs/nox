@@ -118,3 +118,87 @@ func (a *PgStoreQueryAdapter) AckAll(ctx context.Context) error { return a.Store
 
 // compile-time: *PgStoreQueryAdapter 实现 FeishuQueryStore 接口。
 var _ FeishuQueryStore = (*PgStoreQueryAdapter)(nil)
+
+// StrategiesRunning D-201①：OPEN 双腿仓位（type=策略族）+OPEN 个人持仓。
+func (a *PgStoreQueryAdapter) StrategiesRunning(ctx context.Context) ([]pgstore.Position, []pgstore.PersonalPosition, error) {
+	poss, err := a.Store.ListPositions(ctx, "OPEN", 200, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	pers, err := a.Store.ListPersonalPositions(ctx, "OPEN", 200, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	return poss, pers, nil
+}
+
+// FinanceSummary D-201①：托管池 BTC 份额+position_daily_income 今日/累计+在期 DCI。
+func (a *PgStoreQueryAdapter) FinanceSummary(ctx context.Context) (FeishuFinanceSummary, error) {
+	var s FeishuFinanceSummary
+	pers, err := a.Store.ListPersonalPositions(ctx, "OPEN", 200, 0)
+	if err != nil {
+		return s, err
+	}
+	for i := range pers {
+		if pers[i].Asset == "BTC" && pers[i].Qty != nil {
+			s.CustodyBTCQty += *pers[i].Qty
+		}
+	}
+	s.TodayEnergyTRX, s.TodayVotingTRX, s.TodayInterestUSD, err = a.SumTodayIncome(ctx)
+	if err != nil {
+		return s, err
+	}
+	_, _, s.TotalInterestUSD, err = a.Store.SumDailyIncomeByRange(ctx, nil, nil)
+	if err != nil {
+		return s, err
+	}
+	if s.IncomeDays, err = a.Store.CountDailyIncomeByRange(ctx, nil, nil); err != nil {
+		return s, err
+	}
+	days, err := a.Store.ListDailyIncome(ctx, nil, nil, 10000, 0)
+	if err != nil {
+		return s, err
+	}
+	var pnl float64
+	var hasPnl bool
+	for i := range days {
+		if days[i].PnlUSD != nil {
+			pnl += *days[i].PnlUSD
+			hasPnl = true
+		}
+	}
+	if hasPnl {
+		s.TotalPnlUSD = &pnl
+	}
+	orders, err := a.Store.ListDCIOrders(ctx, 200)
+	if err != nil {
+		return s, err
+	}
+	now := time.Now()
+	for i := range orders {
+		o := &orders[i]
+		if o.Status != "filled" {
+			continue
+		}
+		if o.TenorDays != nil && !o.CreatedAt.AddDate(0, 0, *o.TenorDays).After(now) {
+			continue // 已到期
+		}
+		s.OpenDCI = append(s.OpenDCI, *o)
+	}
+	return s, nil
+}
+
+// ListDCIOrders D-201①：近 N 单（id DESC；response 已 SQL 截≤300 字符）。
+func (a *PgStoreQueryAdapter) ListDCIOrders(ctx context.Context, limit int) ([]pgstore.DCIOrder, error) {
+	return a.Store.ListDCIOrders(ctx, limit)
+}
+
+// AIReadOnlyDSN D-201②：app_secrets ARB_AI_PG_DSN 热读（轮换未重启即探真值，
+// 同 wire_selfwatch probeAnalystRO 口径）。空=未配置→工具如实报。
+func (a *PgStoreQueryAdapter) AIReadOnlyDSN(ctx context.Context) (string, error) {
+	secrets, err := a.Store.LoadAppSecrets(ctx)
+	if err != nil {
+		return "", err
+	}
+	return secrets["ARB_AI_PG_DSN"], nil
+}

@@ -22,6 +22,11 @@ type FeishuQueryStore interface {
 	SumTRXTxVoteClaimAll(ctx context.Context) (float64, error)
 	// D-528 S6：宏观两工具数据面（返回 pgstore 行类型，零复制）。
 	MacroEventsBetween(ctx context.Context, from, to time.Time) ([]pgstore.MacroEvent, error)
+	// D-201：飞书 NLQ 三读法（策略在跑/财务摘要/近期订单）+ RO 只读串热读。
+	StrategiesRunning(ctx context.Context) ([]pgstore.Position, []pgstore.PersonalPosition, error)
+	FinanceSummary(ctx context.Context) (FeishuFinanceSummary, error)
+	ListDCIOrders(ctx context.Context, limit int) ([]pgstore.DCIOrder, error)
+	AIReadOnlyDSN(ctx context.Context) (string, error)
 	// D-168 ④：ack 拦截面——episode + alerts.acked 同步。
 	AckAllAlertEpisodes(ctx context.Context) (int, error)
 	AckAlertEpisodeByPushMsg(ctx context.Context, msgID string) (key string, ok bool, err error)
@@ -59,4 +64,17 @@ type CMCPositionSummary struct {
 	EntryPrice    float64
 	UnrealisedPnL float64
 	FetchedAt     time.Time
+}
+
+// FeishuFinanceSummary D-201：财务摘要（托管池 BTC 份额+今日/累计收益+在期 DCI）。
+// 无字段如实报——零值字段渲染层标注「未记账」不命名 pnl 防 LLM 幻觉。
+type FeishuFinanceSummary struct {
+	CustodyBTCQty    float64 // personal_positions OPEN 的 BTC 行 qty 合计（托管池表象）
+	TodayEnergyTRX   float64
+	TodayVotingTRX   float64
+	TodayInterestUSD float64
+	TotalInterestUSD float64 // position_daily_income 累计 interest_usd
+	TotalPnlUSD      *float64
+	IncomeDays       int                // 记账天数
+	OpenDCI          []pgstore.DCIOrder // filled 且未到期（tenor 缺=计入如实报）
 }

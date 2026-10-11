@@ -143,7 +143,7 @@ func (h *FeishuQueryHandler) HandleReply(ctx context.Context, ev ReplyEvent) (st
 		tools := &feishuQueryTools{store: h.store}
 		msgs := []analyst.Message{analyst.TextContent("user", text)}
 		var replyText strings.Builder
-		_, err = analyst.RunWithSpecs(queryCtx, client, tools, feishuQueryToolSpecs(), feishuQuerySystemPrompt, msgs, analyst.LoopCallbacks{
+		_, err = analyst.RunWithSpecs(queryCtx, client, tools, append(feishuQueryToolSpecs(), fundToolSpecs()...), feishuQuerySystemPrompt, msgs, analyst.LoopCallbacks{
 			OnDelta: func(s string) { replyText.WriteString(s) },
 		})
 		if err != nil {
@@ -212,8 +212,8 @@ type feishuQueryTools struct {
 }
 
 func (t *feishuQueryTools) Names() []string {
-	return []string{"query_trx_price", "query_trx_account", "query_cmc_position", "query_today_income",
-		"query_macro_events"}
+	return append([]string{"query_trx_price", "query_trx_account", "query_cmc_position", "query_today_income",
+		"query_macro_events"}, fundToolNames...)
 }
 
 func (t *feishuQueryTools) Execute(ctx context.Context, call analyst.ToolCall) (analyst.ToolResult, []analyst.Citation, error) {
@@ -229,7 +229,7 @@ func (t *feishuQueryTools) Execute(ctx context.Context, call analyst.ToolCall) (
 	case "query_macro_events":
 		return t.execMacroEvents(ctx, call)
 	default:
-		return analyst.ToolResult{ToolUseID: call.ID, Content: "未知工具: " + call.Name, IsError: true}, nil, nil
+		return t.execFund(ctx, call)
 	}
 }
 
