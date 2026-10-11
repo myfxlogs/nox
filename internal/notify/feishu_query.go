@@ -49,6 +49,9 @@ type FeishuQueryHandler struct {
 	rateLim      *analyst.RateLimiter
 	now          func() time.Time
 	queryTimeout time.Duration // 默认 25s，测试可覆盖
+	// probeDecide D-176②：探针提案批准/拒绝回调（nil=未装配→口令回「未接线」）。
+	// 两表面（飞书口令/前端按钮）同路由同一 RPC 语义。
+	probeDecide ProbeDecider
 }
 
 // NewFeishuQueryHandler 创建飞书查询处理器。
@@ -65,6 +68,16 @@ func NewFeishuQueryHandler(store FeishuQueryStore, aiSettings AISettingsReader, 
 		queryTimeout: 25 * time.Second,
 	}
 }
+
+// ProbeDecider D-176②：探针提案裁定局——装配侧注入 dashboard.Service 的
+// ApproveProbe/RejectProbe 等价物（notify 不 import dashboard/gen 防环）。
+type ProbeDecider interface {
+	ApproveProbe(ctx context.Context, proposalID int64, decisionRef string) (status, message string, positionID int64, err error)
+	RejectProbe(ctx context.Context, proposalID int64, reason string) (status, message string, err error)
+}
+
+// SetProbeDecider 装配「批准#N/拒绝#N」口令后端（webhook 装配方晚绑定）。
+func (h *FeishuQueryHandler) SetProbeDecider(d ProbeDecider) { h.probeDecide = d }
 
 // HandleReply 处理飞书自然语言查询。异步调 LLM，立即返回 ""（webhook 不阻塞 ACK）。
 func (h *FeishuQueryHandler) HandleReply(ctx context.Context, ev ReplyEvent) (string, error) {
@@ -97,6 +110,11 @@ func (h *FeishuQueryHandler) HandleReply(ctx context.Context, ev ReplyEvent) (st
 	// alerts.acked 同步清铃铛；非 ack 词走原 LLM 径不动。
 	if isAckWord(text) {
 		return h.handleAck(ctx, ev)
+	}
+	// D-176②：探针审批口令——「批准#N [D-xxx]」「拒绝#N [理由]」在 LLM 前拦截，
+	// 路由与前端按钮同一 RPC 语义+幂等应答。
+	if cmd, ok := parseProbeCmd(text); ok {
+		return h.handleProbeCmd(ctx, cmd)
 	}
 	if h.rateLim != nil && !h.rateLim.Allow() {
 		return "已达每小时查询上限，请稍后重试", nil
