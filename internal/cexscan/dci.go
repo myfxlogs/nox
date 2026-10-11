@@ -56,17 +56,17 @@ func tenorOf(delivery time.Time, now time.Time) int {
 // ---------- Binance：GET {bnSapiURL}/v1/dci/product/list（签名） ----------
 
 // collectBinanceDCIWithBase 可注入 base 的实现（测试用）。
-// 实拍实证参数面（-1102 两轮报错）：exercisedCoin + investCoin|optionType 组——
-// 按 underlying×invest(自生+USDT) 逐发取全产品矩阵（BTC/ETH 各两调）。
+// 实拍实证参数面（-1102 三轮报错）：exercisedCoin+optionType 全必传——
+// underlying×CALL/PUT 四调，invest 面靠响应全量（行级 investCoin 字段随带）。
 func (c *EarnCollector) collectBinanceDCIWithBase(ctx context.Context, base string) ([]pgstore.CexDCIQuote, error) {
 	if c.bnKey == "" {
 		return nil, fmt.Errorf("binance key not configured")
 	}
 	var out []pgstore.CexDCIQuote
 	for _, u := range dciUnderlyings {
-		for _, inv := range []string{u, "USDT"} {
+		for _, opt := range []string{"CALL", "PUT"} {
 			ms := time.Now().UnixMilli()
-			query := fmt.Sprintf("exercisedCoin=%s&investCoin=%s&timestamp=%d&recvWindow=5000", u, inv, ms)
+			query := fmt.Sprintf("exercisedCoin=%s&optionType=%s&timestamp=%d&recvWindow=5000", u, opt, ms)
 			url := fmt.Sprintf("%s/v1/dci/product/list?%s&signature=%s", base, query, binanceSign(c.bnSecret, query))
 			req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 			if err != nil {
@@ -75,16 +75,16 @@ func (c *EarnCollector) collectBinanceDCIWithBase(ctx context.Context, base stri
 			req.Header.Set("X-MBX-APIKEY", c.bnKey)
 			resp, err := c.client.Do(req)
 			if err != nil {
-				return nil, fmt.Errorf("binance dci %s/%s request: %w", u, inv, err)
+				return nil, fmt.Errorf("binance dci %s/%s request: %w", u, opt, err)
 			}
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			if resp.StatusCode != 200 {
-				return nil, fmt.Errorf("binance dci %s/%s HTTP %d: %s", u, inv, resp.StatusCode, string(body))
+				return nil, fmt.Errorf("binance dci %s/%s HTTP %d: %s", u, opt, resp.StatusCode, string(body))
 			}
 			rows, err := parseBinanceDCI(body, time.Now())
 			if err != nil {
-				return nil, fmt.Errorf("binance dci %s/%s: %w", u, inv, err)
+				return nil, fmt.Errorf("binance dci %s/%s: %w", u, opt, err)
 			}
 			out = append(out, rows...)
 		}
@@ -168,16 +168,21 @@ func (c *EarnCollector) collectOKXDCI(ctx context.Context) ([]pgstore.CexDCIQuot
 		return nil, fmt.Errorf("okx key not configured")
 	}
 	var out []pgstore.CexDCIQuote
-	for _, base := range dciUnderlyings {
-		for _, opt := range []string{"C", "P"} {
+	for i, base := range dciUnderlyings {
+		for j, opt := range []string{"C", "P"} {
+			if i+j > 0 {
+				time.Sleep(300 * time.Millisecond) // 实拍实证：四调连发触发 429，单组合节流
+			}
 			path := fmt.Sprintf("/api/v5/finance/sfp/dcd/products?baseCcy=%s&quoteCcy=USDT&optType=%s", base, opt)
 			body, err := okxFetch(ctx, c.client, c.okxBase, path, c.okxSignPath(path))
 			if err != nil {
-				return nil, fmt.Errorf("okx dci %s/%s: %w", base, opt, err)
+				log.Printf("[cexscan] okx dci %s/%s: %v（单组合隔离续）", base, opt, err)
+				continue
 			}
 			rows, err := parseOKXDCI(body, base, opt, time.Now())
 			if err != nil {
-				return nil, err
+				log.Printf("[cexscan] okx dci %s/%s parse: %v（单组合隔离续）", base, opt, err)
+				continue
 			}
 			out = append(out, rows...)
 		}
@@ -237,16 +242,17 @@ func parseOKXDCI(body []byte, baseCcy, optType string, now time.Time) ([]pgstore
 		}
 		return ""
 	}
+	optFull := map[string]string{"C": "CALL", "P": "PUT"}[optType]
 	var out []pgstore.CexDCIQuote
 	for _, d := range rawData {
-		apyStr := pick(d, "apy", "estApy", "rate")
+		apyStr := pick(d, "annualizedYield", "apy", "estApy", "rate", "absYield") // 实拍实证：真名 annualizedYield
 		apy, err := strconv.ParseFloat(apyStr, 64)
 		if err != nil {
 			continue
 		}
-		row := pgstore.CexDCIQuote{Venue: "okx", Underlying: baseCcy, OptType: optType,
-			InvestCcy: firstNonEmpty(pick(d, "investCcy", "quoteCcy"), "USDT"), APY: apy,
-			ProductRef: pick(d, "id", "instId", "productId")}
+		row := pgstore.CexDCIQuote{Venue: "okx", Underlying: baseCcy, OptType: optFull,
+			InvestCcy: firstNonEmpty(pick(d, "investCcy", "quoteCcy", "notionalCcy"), "USDT"), APY: apy,
+			ProductRef: pick(d, "productId", "id", "instId")}
 		if v, err := strconv.ParseFloat(pick(d, "strike", "strikePx"), 64); err == nil {
 			row.Strike = &v
 		}
