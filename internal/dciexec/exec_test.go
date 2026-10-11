@@ -38,6 +38,22 @@ type fakeStore struct {
 	nextProp    int64
 }
 
+// dciListJSON R14 重取产品面测试具——全候选品 canPurchase+orderId 齐帧。
+const dciListJSON = `{"list":[
+	{"id":"CALLP","orderId":8811,"canPurchase":true},
+	{"id":"PUTP","orderId":8822,"canPurchase":true},
+	{"id":"NEARP","orderId":8833,"canPurchase":true},
+	{"id":"PUTP2","orderId":8844,"canPurchase":true}]}`
+
+// dciListOK product/list GET 分流句柄（handler 首行挂）。
+func dciListOK(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "product/list") {
+		fmt.Fprint(w, dciListJSON)
+		return true
+	}
+	return false
+}
+
 func f64(v float64) *float64 { return &v }
 func idec(v int) *int        { return &v }
 
@@ -255,6 +271,9 @@ func TestD191R3_TenorCapFromConstraint(t *testing.T) {
 			pgstore.CapabilityConstraint{Subject: "dci_call_otm_bound", ValueNum: f64(1.10)},
 			pgstore.CapabilityConstraint{Subject: "dci_put_otm_bound", ValueNum: f64(1.00)})
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if dciListOK(w, r) {
+				return
+			}
 			fmt.Fprint(w, `{"orderId":1}`)
 		}))
 		e := execR3(fs, srv.URL, srv.Client(), map[string]float64{"BTC": 0.06})
@@ -276,6 +295,9 @@ func TestD191R3_StrikeGate(t *testing.T) {
 	fs.quotes[0].Strike = f64(105000) // CALL 档低于 110000 界→滤出
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		calls++
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
@@ -315,6 +337,9 @@ func TestD191R3_StrikeGate(t *testing.T) {
 func TestD191R3_QtyBalanceShare(t *testing.T) {
 	fs := newFake()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
 	defer srv.Close()
@@ -343,6 +368,9 @@ func TestD191_Idempotent(t *testing.T) {
 	fs := newFake()
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		calls++
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
@@ -365,6 +393,9 @@ func TestD191_FailToGap(t *testing.T) {
 	fs := newFake()
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		calls++
 		w.WriteHeader(403)
 	}))
@@ -436,6 +467,9 @@ func TestD191R3_ReconcilePool(t *testing.T) {
 func TestD191R4_URLJoin(t *testing.T) {
 	var paths []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		paths = append(paths, r.URL.Path)
 		switch {
 		case strings.Contains(r.URL.Path, "ticker/price"):
@@ -507,6 +541,9 @@ func TestD191R5_LargeAccountJSON(t *testing.T) {
 		t.Fatalf("锚料应 >8KB: %d", sb.Len())
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		fmt.Fprint(w, sb.String())
 	}))
 	defer srv.Close()
@@ -525,6 +562,9 @@ func TestD191R6_PoolEarnAndRedeem(t *testing.T) {
 	spotBals := map[string]float64{"BTC": 0.02}
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		if strings.Contains(r.URL.Path, "subscribe") {
 			calls++
 		}
@@ -601,6 +641,9 @@ func TestD192_StreamBalanceGate(t *testing.T) {
 	}()
 	restCalls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		restCalls++
 		fmt.Fprint(w, `{"balances":[{"asset":"BTC","free":"0.5","locked":"0"}]}`)
 	}))
@@ -637,6 +680,9 @@ func TestD191R8_DeepPutSelectable(t *testing.T) {
 		Strike: f64(105000), OptType: "PUT", TenorDays: &tenor, APY: 0.50,
 		ProductRef: "NEARP", OrderRef: "ON1", PurchaseDecimal: idec(4)})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
 	defer srv.Close()
@@ -667,6 +713,9 @@ func TestD191R9_BoundFromConstraint(t *testing.T) {
 	}
 	fs.cons = cons
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
 	defer srv.Close()
@@ -698,6 +747,9 @@ func TestD191R10_OrderRefSkip(t *testing.T) {
 		Strike: f64(70000), OptType: "PUT", TenorDays: &tenor, APY: 0.05,
 		ProductRef: "PUTP2", OrderRef: "OP2", PurchaseDecimal: idec(0), MinAmount: f64(1)}) // 次档有 orderRef→跳此成交
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
 	defer srv.Close()
@@ -749,6 +801,9 @@ func TestD196_VenueErrKind(t *testing.T) {
 	// 全链：400 拒参→runtime 缺口「系统侧病灶」非「请」。
 	fs := newFake()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		w.WriteHeader(400)
 		fmt.Fprint(w, `{"code":-1102,"msg":"Mandatory parameter was not sent"}`)
 	}))
@@ -823,6 +878,9 @@ func TestD191R11_AmountBoundLease(t *testing.T) {
 	*fs.quotes[1].MaxAmount = 10
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		calls++
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
@@ -842,6 +900,9 @@ func TestD191R11_AmountBoundLease(t *testing.T) {
 	fs2 := newFake()
 	calls2 := 0
 	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
 		calls2++
 		fmt.Fprint(w, `{"orderId":9}`)
 	}))
@@ -862,5 +923,77 @@ func TestD191R11_AmountBoundLease(t *testing.T) {
 	}
 	if calls2 != 1 {
 		t.Fatalf("窗内二发应零 venue 调用, calls=%d", calls2)
+	}
+}
+
+// TestD191R14_OrderRefRefresh：申购前实时重取 orderId+canPurchase——
+// refresh 类拒因一次再刷新重提成功；下架→runtime gap；二败如实 gap。
+func TestD191R14_OrderRefRefresh(t *testing.T) {
+	// ①过期→刷新→重提成功：首 POST refresh 败、再取 orderId 重提成。
+	fs := newFake()
+	posts := 0
+	var gotOrderID string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
+		posts++
+		gotOrderID = r.URL.Query().Get("orderId")
+		if posts == 1 {
+			w.WriteHeader(400)
+			fmt.Fprint(w, `{"code":-1000,"msg":"please refresh orderId"}`)
+			return
+		}
+		fmt.Fprint(w, `{"orderId":1}`)
+	}))
+	defer srv.Close()
+	e := execR3(fs, srv.URL, srv.Client(), map[string]float64{"USDT": 10000})
+	if _, err := e.GoProposal(context.Background(), fs.addProposal("dci_buy_low")); err != nil {
+		t.Fatal(err)
+	}
+	if posts != 2 {
+		t.Fatalf("refresh 类错应一次再刷新重提, posts=%d", posts)
+	}
+	if gotOrderID != "8822" { // 重取新 orderId 发单（DB OP1 降格候选证据）
+		t.Fatalf("应发实时 orderId: %s", gotOrderID)
+	}
+	// ②下架→「产品已下架」runtime gap 零 POST。
+	fs2 := newFake()
+	posts2 := 0
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "product/list") {
+			fmt.Fprint(w, `{"list":[{"id":"OTHER","orderId":9,"canPurchase":true}]}`)
+			return
+		}
+		posts2++
+	}))
+	defer srv2.Close()
+	e2 := execR3(fs2, srv2.URL, srv2.Client(), map[string]float64{"USDT": 10000})
+	_, err := e2.GoProposal(context.Background(), fs2.addProposal("dci_buy_low"))
+	if err == nil || !strings.Contains(err.Error(), "产品已下架") {
+		t.Fatalf("下架应 runtime gap: %v", err)
+	}
+	if posts2 != 0 {
+		t.Fatalf("下架禁发单, posts=%d", posts2)
+	}
+	// ③二败如实 gap：两发都 refresh 错→不再重试如实败。
+	fs3 := newFake()
+	posts3 := 0
+	srv3 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dciListOK(w, r) {
+			return
+		}
+		posts3++
+		w.WriteHeader(400)
+		fmt.Fprint(w, `{"code":-1000,"msg":"please refresh orderId"}`)
+	}))
+	defer srv3.Close()
+	e3 := execR3(fs3, srv3.URL, srv3.Client(), map[string]float64{"USDT": 10000})
+	_, err = e3.GoProposal(context.Background(), fs3.addProposal("dci_buy_low"))
+	if err == nil || !strings.Contains(err.Error(), "refresh") {
+		t.Fatalf("二败应如实 gap: %v", err)
+	}
+	if posts3 != 2 {
+		t.Fatalf("refresh 类只重提一次, posts=%d", posts3)
 	}
 }

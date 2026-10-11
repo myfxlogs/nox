@@ -377,7 +377,19 @@ func (e *Executor) tryLeg(ctx context.Context, l leg, share float64, tenorCap in
 	if !created {
 		return fmt.Sprintf("%s腿已受理（request_id 防重）", l.name), nil
 	}
-	body, err := e.post(ctx, q.ProductRef, q.OrderRef, deposit, now)
+	// R14：申购前实时重取 orderId+canPurchase（DB order_ref 降格候选证据）。
+	orderRef, rerr := e.refreshOrderRef(ctx, l, q.ProductRef)
+	if rerr != nil {
+		e.finish(ctx, oid, "failed", rerr.Error())
+		return "", e.gap(ctx, l, "runtime", "dual_quote",
+			"系统侧病灶：%s腿产品已下架（%s 重取：%v）", l.name, q.ProductRef, rerr)
+	}
+	body, err := e.post(ctx, q.ProductRef, orderRef, deposit, now)
+	if isRefreshErr(err) { // 「refresh」类拒因→一次再刷新重提（第二次如实 gap）。
+		if orderRef, rerr = e.refreshOrderRef(ctx, l, q.ProductRef); rerr == nil {
+			body, err = e.post(ctx, q.ProductRef, orderRef, deposit, now)
+		}
+	}
 	if err != nil {
 		e.finish(ctx, oid, "failed", err.Error())
 		if venueErrKind(err) == "permission" {

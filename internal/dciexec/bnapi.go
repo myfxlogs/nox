@@ -234,3 +234,57 @@ func (e *Executor) streamBal(asset string) (float64, bool) {
 	}
 	return b.Free + b.Locked, true
 }
+
+// refreshOrderRef D-191-R14：申购前对选中 product_ref 实时重取 product/list——
+// 新 orderId+canPurchase 复验（DB order_ref 降格候选证据；同 cexscan 已签名 GET 径）。
+// 取不到该品/不可申购/orderId 空 → err（调用方落「产品已下架」runtime gap）。
+func (e *Executor) refreshOrderRef(ctx context.Context, l leg, productRef string) (string, error) {
+	under := "BTC"
+	exercised := under
+	if l.investCcy != "USDT" {
+		exercised = "USDT" // 卖高面 exercisedCoin=USDT&investCoin=underlying（R2 矩阵）
+	}
+	q := fmt.Sprintf("exercisedCoin=%s&optionType=%s&investCoin=%s&timestamp=%d&recvWindow=5000",
+		exercised, l.optType, l.investCcy, e.Now().UnixMilli())
+	url := fmt.Sprintf("%s/v1/dci/product/list?%s&signature=%s",
+		strings.TrimRight(e.Sapi, "/"), q, sign(e.BnSec, q))
+	b, err := e.get(ctx, url, true)
+	if err != nil {
+		return "", err
+	}
+	type row struct {
+		ID             string      `json:"id"`
+		InstrumentName string      `json:"instrumentName"`
+		OrderID        json.Number `json:"orderId"`
+		CanPurchase    bool        `json:"canPurchase"`
+	}
+	var raw struct {
+		Data []row `json:"data"`
+		List []row `json:"list"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return "", fmt.Errorf("dci list decode: %w", err)
+	}
+	rows := raw.Data
+	if len(rows) == 0 {
+		rows = raw.List
+	}
+	for _, r := range rows {
+		if r.ID != productRef && r.InstrumentName != productRef {
+			continue
+		}
+		if !r.CanPurchase {
+			return "", fmt.Errorf("产品 %s 已不可申购（canPurchase=false）", productRef)
+		}
+		if r.OrderID.String() == "" {
+			return "", fmt.Errorf("产品 %s 无 orderId", productRef)
+		}
+		return r.OrderID.String(), nil
+	}
+	return "", fmt.Errorf("产品 %s 不在售列表（已下架）", productRef)
+}
+
+// isRefreshErr POST「refresh」类拒因——orderId 过期面，一次再刷新重提。
+func isRefreshErr(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "refresh")
+}
