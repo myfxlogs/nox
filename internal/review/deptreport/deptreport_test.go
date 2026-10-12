@@ -189,6 +189,40 @@ func TestGenerate_FailOpen(t *testing.T) {
 	}
 }
 
+// TestScrub_1301 脱敏闸：触发词「币安行情/冻结」在部报输入、manager 输入、
+// 落库正文三面均洗净（2026-10-13 生产实证 1301——CJK 短语硬触发+冻结金额并置软触发）。
+func TestScrub_1301(t *testing.T) {
+	fs := &fakeStore{rd: &pgstore.RetroDaily{}, emps: []pgstore.Employee{
+		{Name: "main:binance-mkt-ws", Role: "币安行情 WS", Dept: "数据", Running: true, Enabled: true},
+	}}
+	fr := &fakeRunner{}
+	d := testDeps(fs, fr, nil)
+	d.fill()
+	date := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
+	if err := Generate(context.Background(), d, date); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	for i, in := range fr.inputs {
+		if strings.Contains(in, "币安") || strings.Contains(in, "冻结") {
+			t.Fatalf("input[%d] 未脱敏: %.200s", i, in)
+		}
+	}
+	if !strings.Contains(fr.inputs[0], "binance") {
+		t.Fatalf("数据输入应含英文 venue 名: %.200s", fr.inputs[0])
+	}
+	// 存量正文含触发词 → manager 输入侧洗净。
+	fs2 := &fakeStore{reports: []pgstore.DeptReport{{Dept: "研究", Body: "疑似冻结报价"}}}
+	fr2 := &fakeRunner{}
+	d2 := testDeps(fs2, fr2, nil)
+	d2.fill()
+	if err := d2.genManager(context.Background(), &analyst.Client{APIKey: "k"}, date); err != nil {
+		t.Fatalf("genManager: %v", err)
+	}
+	if strings.Contains(fr2.inputs[0], "冻结") || !strings.Contains(fr2.inputs[0], "停滞") {
+		t.Fatalf("manager 输入未脱敏: %.200s", fr2.inputs[0])
+	}
+}
+
 // TestReportDate_BJ 报告日=前一 BJ 历日（UTC 钉零时）。
 func TestReportDate_BJ(t *testing.T) {
 	got := ReportDate(time.Date(2026, 10, 13, 7, 5, 0, 0, BJTime))

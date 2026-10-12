@@ -27,7 +27,7 @@ func (d *Deps) genManager(ctx context.Context, client *analyst.Client, date time
 			continue
 		}
 		n++
-		fmt.Fprintf(&in, "=== %s部 ===\n%s\n\n", r.Dept, r.Body)
+		fmt.Fprintf(&in, "=== %s部 ===\n%s\n\n", r.Dept, compact(scrub(r.Body), mgrBodyBudget))
 	}
 	if n == 0 {
 		return fmt.Errorf("manager: 部报全缺（%s）——跳过摘要", date.Format("2006-01-02"))
@@ -40,7 +40,7 @@ func (d *Deps) genManager(ctx context.Context, client *analyst.Client, date time
 		return fmt.Errorf("manager llm: %w", err)
 	}
 	r := pgstore.DeptReport{
-		Dept: DeptManager, ReportDate: date, Body: body,
+		Dept: DeptManager, ReportDate: date, Body: scrub(body),
 		ElapsedMs: int(ms), PromptTokens: res.InputTokens, CompletionTokens: res.OutputTokens,
 	}
 	if err := d.Store.UpsertDeptReport(ctx, r); err != nil {
@@ -49,7 +49,7 @@ func (d *Deps) genManager(ctx context.Context, client *analyst.Client, date time
 	if d.OnReport != nil {
 		d.OnReport(r)
 	}
-	d.push(ctx, date, body)
+	d.push(ctx, date, r.Body)
 	return nil
 }
 
