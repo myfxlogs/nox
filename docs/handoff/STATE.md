@@ -2,22 +2,26 @@
 
 ## 现状
 
-- **2026-10-12 D-212 重建中**：本仓=新仓（module `arb`，`/opt/arb`）；旧仓=`/opt/arb-archive`（hotfix-only，其 STATE 全史在 `/opt/arb-archive/docs/handoff/STATE.md`，只读）。归档仓 hotfix 行「待移植」清单记于此段下方，M3 切流前清零。
-- 待移植：无。
+- **决策席接手须知（D-212 重建期，2026-10-12 起；决策席会话可换模型/终端，凭本段+D#+票接续，不依赖旧会话记忆）**：① **身份**：你=投委会/决策席，业主已全权授权（D-212、D-030/D-066：决策/下单/平仓/风控/编制全权，业主只出资+满足条件请求，**不做技术干涉、不中转退回**——退回补正由你直落或派票）。② **开工必读**：本文件 → `docs/handoff/decisions.md`（D-212 起；D-001~D-211 在归档仓 `/opt/arb-archive/docs/handoff/`）→ `docs/公司架构.md`（编制依据）→ `docs/搬迁清单.md`（搬迁唯一裁决面：逐包/逐表/逐 tab、对等闸 §7、切流 §8、票序 §9）→ `AGENTS.md`（纪律全文原样继承，§1 末一行指架构稿）。③ **职责**：收报审→独立复审（复审与实施不得同会话；你与实施席天然不同会话即满足）→ 机检独立重跑贴退出码→合并/退回→翻票→放行下一票→需要决策的写 D# 一行（续号）。**不替实施改代码**；一两行的 git/配置补正可直落并在 D# 或 STATE 注明「决策席补正」。④ **纪律红线**（违者直接退回）：数据流唯一正道、定时器只许看门狗、前端禁 `setInterval`、禁硬编码域值、PG 唯一真相/env 仅引导件（allowlist 只减不增）、装配点禁 env 驱动、≤300 行、`--no-verify` 禁、只 `git add` 显式文件、搬迁期「搬迁不重写」（唯一例外=前端 D-213）、D-212 入场门（部门目录+dNNN 改名+D# 注释清+模块页+import 红线）。⑤ **开工指令格式**：`[角色:实施|复审|决策] <一句话目标>`，上下文在票不在聊天；报审尾行 `[施工完成:<票号>] @<hash>`，缺标记=退回补述。⑥ **当前进度**：M0 ✅、M1 ✅（本席复审 `a824491`）；**下一票 M2.1 数据部已放行**，实施席开工指令见票行。⑦ **复审 M2.x 要点**：对拍归档仓——搬入包测试文件数一个不少（§7-2）、`dNNN_` 零残留、D# 注释只留约束行为者、import 红线脚本零报、`go test ./<包>/... -count=1` 与 `-race` 绿、模块页在。⑧ **归档仓 hotfix 径**：唯一远端 `github`，master 推送 refspec 固定落 `archive/2026-10-12`（永不落 github/master）；每条 hotfix 记入下方「待移植」，M3 前清零。⑨ **生产**：SG `192.229.85.35` 跑归档仓镜像直至 M3；任何生产取证先调 `.devin/skills/生产取证/`。
+- **2026-10-12 D-212 重建中**：本仓=新仓（module `arb`，`/opt/arb`，GitHub `myfxlogs/arb` master 已被 M1 一次性 force 覆盖 `a824491`，此后 ff-only）；旧仓=`/opt/arb-archive`（hotfix-only，tag `archive-2026-10-12`，远端分支 `archive/2026-10-12`）。
+- **M1 复审记录（决策席 2026-10-12）**：build/vet 绿；hooks/allowlist/check-*/skills/CLAUDE/.windsurfrules 与归档仓逐字节同（pre-push 仅路径 `/opt/arb` 三处=预期）；AGENTS 仅 §1 末加一行；import 红线三条已入脚本；`0001_baseline.sql` 在 5434 空库独立重放 exit=0、84 表、不搬表零命中；web 空壳 build 绿。实施席遗留三条裁定：① `cmd/core/main.go` 空壳=过渡，M2.6 替换；② 表数 84=SG 实拍 91−7，清单「110 活表」为 D-039 陈旧计数，**以 SG 实拍为准**（搬迁清单 §3/§7-5 的 110 读作 91）；③ `tools/arbkb` 独立 go.mod 保留。另立 **D-214**：迁移号段自 1000 起（M2.2 改名 baseline），`cmd/migrate` 随 M2.2 删。
+- **D-213 前端重写**（业主令）：`web/src` 旧源码不搬；M2.5 收窄为 API+IR 后端，新增 **M2.5b 运营看板 v1 + 投资人页 v0**（设计先行 `docs/modules/web.md`，决策席批后施工，M3 前落地）。
+- 待移植：无（归档仓 master `ef29ee503` 自 M0 起仅文档提交）。
 
 ## 票
 
 | 票 | 状态 | owner | 备注 |
 |---|---|---|---|
-| M0 归档与清场 | ✅ | 复审席 | tag `archive-2026-10-12` 双在；`/opt/arb-archive` build 绿；未合并分支 7 条保留待裁 |
-| M1 骨架 | 领 | 实施席 | 本票 |
-| M2.1 数据部 | 待领（前置 M1） | 实施席 | §1 数据部各包+wire+proto 数据面；出口=包测试全绿 |
-| M2.2 账本部+复盘部 | 待领 | 实施席 | settlement/settleadapter/swapledger/reconcile/review/mmm/sysretro/verification/kbreport |
+| M0 归档与清场 | ✅ `c70670a71`+补正 `ef29ee503` | 复审席 | tag/归档分支双在；归档仓 remote/refspec 终态见接手须知⑧ |
+| M1 骨架 | ✅ `a824491`（决策席复审） | 实施席 | 复审记录见现状段 |
+| **M2.1 数据部（D-212）**——**前置**：M1 ✅。**范围**：按 `docs/搬迁清单.md` §1 数据部行搬入：`adapter`→`internal/data/adapter`；`collect/{exchange,deribit,trx}`+`fact_emitter`+`sched`→`internal/data/collect/...`（**`collect/cmc` 不搬**）；`cexscan`、`macro`、`fact`、`bus`、`venue`、`normalize`、`keydomain`、`isreal`、`marketstate`、`symdig`→`internal/data/<pkg>`；它们依赖的 platform 层包（`config`/`cryptoutil`/`httpx`/`signutil`/`safego`/`errclass`/`alertcool`/`alerttext`/`decimalutil`/`notional`/`usdnotional`/`testutil`/`analyst`/`combo`）→`internal/platform/<pkg>`；`internal/store/pgstore` 中**仅数据部表族**的文件→`internal/store`（其余表族文件随各自部门票搬，pgstore 包名不变）；`internal/gen`+`proto/mtapi`、`proto/arb/explorer`→原位搬（`buf generate` 产物零 diff）；`tools/universe-radar`、`tools/xasset-monitor`、`tools/cex-proxy`→`tools/`。**方法**：`git filter-repo --path`/`subtree split` 自归档仓取带历史的子树后 `git mv` 到新目录，import 路径 sed 改写；**入场门逐包**：`dNNN_` 文件按关注点改名、D# 注释只留仍约束行为者（其余改写为行为描述，不删行为注释）、每包 `docs/modules/<pkg>.md`（照 `_模板.md`，≤100 行）、`scripts/check_import_direction.sh` 零报。**禁区**：零语义改动（除 import 路径与文件名）；不搬 `collect/cmc`；不碰 `web/`；不新增 env 键；不动 hooks；文件 ≤300 行（搬入时顺手拆超限者，纯移动）。**验收**：`go build ./... && go vet ./...` 绿；`gofmt -l` 空；`go test ./internal/data/... ./internal/platform/... ./internal/store/... -count=1` 绿（5434）；`go test -race ./internal/data/... -count=1` 净；**测试文件数对拍**：`find` 新仓上述目录 `*_test.go` 数 = 归档仓对应包数（剔 cmc），差额逐文件说明；`grep -rl '^d[0-9]\{3\}_' --include='*.go'` 零；模块页齐。报审尾行 `[施工完成:M2.1] @<hash>`。开工指令：`[角色:实施] M2.1 数据部搬迁（读 /opt/arb/docs/handoff/STATE.md M2.1 行 + docs/搬迁清单.md §0/§1）` | **待领（M1 ✅，已放行）** | 实施席 | 分支 `wip/m21-data`；设计=搬迁清单 §0/§1 |
+| M2.2 账本部+复盘部 | 待领（前置 M2.1） | 实施席 | settlement/settleadapter/swapledger/reconcile/review/mmm/sysretro/verification/kbreport + 迁移器包随 store 搬入；**D-214**：`0001_baseline.sql`→`1000_baseline.sql`、删 `cmd/migrate`；`cmd/resettle`/`settleonce`→`cmd/ledgerctl` |
 | M2.3 交易部+风控部 | 待领 | 实施席 | exec/engine/dciexec/autotrade 拆搬/position/selfwatch/gate；dciexec 闸调用点改经 risk 单入口（语义不变）；出口+race 净 |
 | M2.4 研究部+投资部+运营部 | 待领 | 实施席 | scan(剔 intra)/detector/evaluator/econ(+spread)/oppmatch/explorer/capitalview/idle/trxvote/lifecycle(拆入)/能力账本投影 |
-| M2.5 API+IR+前端 | 待领 | 实施席 | dashboard 拆搬/auth/notify/inboxfmt/web 9 tab/proto 删 CMC·pricealert 组；web 绿、RPC 面对账 |
+| M2.5 API+IR 后端（D-213 收窄） | 待领 | 实施席 | dashboard RPC service 拆搬/auth/notify/inboxfmt/proto；RPC 去留按 D-213 规则逐条举证列票面；`web/src` 不搬 |
+| **M2.5b 运营看板 v1 + 投资人页 v0（D-213）** | 待领（前置 M2.5；**设计先行**：先交 `docs/modules/web.md` 页面×RPC×topic 一页，决策席批后施工） | 实施席 | 硬约束=零信任/只订阅 StreamUpdates/禁 setInterval/≤300 行/buf 生成 TS；栈 React 19+纯 CSS；M3 前落地 |
 | M2.6 装配与员工 | 待领 | 实施席 | cmd/core 33 wire、roster Dept 十一部、D-211 钩子前移、tools 7、cron 脚本；`ListEmployees` 全员 |
-| M3 切流 | 待领（前置 M2.x 全 ✅） | 复审席 | 搬迁清单 §7 对等闸+§8 切流；生产跑新仓 |
-| M4+ 新件 | 待领 | 按架构稿 §10 | 复盘员→生命周期+晋级闸→验证器+评估卡→风控单入口收口→NAV+配置器→投资人页 |
+| M3 切流 | 待领（前置 M2.x 全 ✅） | 复审席 | 搬迁清单 §7 对等闸（表数口径=SG 实拍 91）+§8 切流（step 3 按 D-214：TRUNCATE schema_migrations 后写 1000）；Exited 残壳容器（arb-core/arb-postgres/arbcn-postgres）一并清 |
+| M4+ 新件 | 待领 | 按架构稿 §10 | 复盘员→生命周期+晋级闸→验证器+评估卡→风控单入口收口→NAV+配置器→投资人页 v1 |
 
-> 票文权威出处=`docs/搬迁清单.md` §9；各票范围/禁区/验收全文以该表+归档仓 STATE 行（M0/M1）为准。
+> 票文权威出处=`docs/搬迁清单.md` §9；M0/M1 全文票面在归档仓 STATE。
