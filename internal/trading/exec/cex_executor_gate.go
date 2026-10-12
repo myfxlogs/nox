@@ -94,7 +94,7 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 		default:
 			return nil, Fill{}, fmt.Errorf("gate dual close: PositionSide %q 非法（long/short）fail-closed", o.PositionSide)
 		}
-		// text 单号真实化（t-<clientOrderID> 截28B；空=t-arb 兜底）。
+		// text 单号真实化（t-<clientOrderID> 截28B；空=t-nox 兜底）。
 		// close=false 显式写出（服务端契约锚：auto_size 须 size=0&reduce_only=true&
 		// close=false——2026-09-29 生产 400 INVALID_ARGUMENT 实证，省略亦为 false 但显式可读）。
 		bodyStr = fmt.Sprintf(`{"contract":%q,"size":0,"price":"0","tif":"ioc","text":%q,"close":false,"auto_size":%q,"reduce_only":true}`,

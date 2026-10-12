@@ -1,5 +1,5 @@
 // wire_venue_close.go —— D-015 ②（R1）：venue 平仓/强平/ADL 推送事件 → recon.Kick。
-// 事故锚：#505 gate 腿 15:55 已平（position_closes text=t-arb），系统 15:59–16:35
+// 事故锚：#505 gate 腿 15:55 已平（position_closes text=t-nox），系统 15:59–16:35
 // 仍报「券商侧已无此腿」×7——事件只告警没进状态机。
 // R1 修订：帧不再直写 CLOSE 腿——WS 帧可能先于本系统平仓回报到达（自发平仓
 // position_closes 同为该帧），抢先落 EXTERNAL 会占住 attempt 序位、令权威 FILLED
