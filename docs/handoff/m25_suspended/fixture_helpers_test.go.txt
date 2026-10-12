@@ -1,0 +1,104 @@
+// fixture_helpers_test.go —— d335/d330 纯夹具（种库类 helper 不依赖 dashboard，D-212 拆搬保留；
+// d335Engine/d330XAUService/d330Engine 依赖 dashboard.Service → 随挂起件 M2.5 回补）。
+package autotrade
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"arb/internal/store/pgstore"
+)
+
+func d335SeedRegime(t *testing.T, s *pgstore.Store) {
+	t.Helper()
+	ctx := context.Background()
+	for i := 0; i < 13; i++ {
+		if _, err := s.Pool().Exec(ctx,
+			`INSERT INTO facts (kind, venue, symbol, value, unit, ts, src)
+			 VALUES ('funding', 'binance', 'XAUUSDT', $1, 'pct_annualized', $2, 'd335test')`,
+			5.0+float64(i), time.Now().Add(-time.Duration(13-i)*5*time.Minute)); err != nil {
+			t.Fatalf("seed funding fact %d: %v", i, err)
+		}
+	}
+}
+func d335SeedMonitor(t *testing.T, s *pgstore.Store, pair string, entry, noise *float64) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `
+		INSERT INTO fin_xasset_monitor (pair, binance_bid, binance_ask, exness_bid, exness_ask,
+			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
+			tracking_error_bps, equiv_annual_pct, noise_bps, cex_venue, mt_venue)
+		VALUES ($1, 4355, 4356, 4354, 4355, $2, 5, 3, 0.001, 21.9, 1.0, 24.9, $3,
+			'binance:perp','277842155:mt5')`, // D-423：venue 键=fixture 机会 venue
+		pair, entry, noise); err != nil {
+		t.Fatalf("seed monitor: %v", err)
+	}
+}
+
+// d330SeedDisabled 把 XASSET_CARRY 标记 disabled：gate 在 check2 早拒（intent 已产出的
+// 确定性观测点）——rejectLog 落 autotrade_logs 含 qty，既证明 intent 产出又避免真实执行。
+func d330SeedDisabled(t *testing.T, s *pgstore.Store) {
+	t.Helper()
+	if _, err := s.Pool().Exec(context.Background(),
+		`INSERT INTO strategy_stats (strategy, disabled) VALUES ('XASSET_CARRY', true)`); err != nil {
+		t.Fatalf("seed disabled: %v", err)
+	}
+}
+
+// d330RegimeHealthy 种卖腿 funding 健康正样本（13 期 ≥floor，过 D-328 持久性闸）。
+func d330RegimeHealthy(t *testing.T, s *pgstore.Store) {
+	t.Helper()
+	ctx := context.Background()
+	for i := 0; i < 13; i++ {
+		if _, err := s.Pool().Exec(ctx,
+			// carry 判定改 7d 滚动均值——基底抬到 17（均值 23%/yr）保持入场闸放行。
+			`INSERT INTO facts (kind, venue, symbol, value, unit, ts, src)
+			 VALUES ('funding', 'binance', 'XAUUSDT', $1, 'pct_annualized', $2, 'd330test')`,
+			17.0+float64(i), time.Now().Add(-time.Duration(13-i)*5*time.Minute)); err != nil {
+			t.Fatalf("seed funding fact %d: %v", i, err)
+		}
+	}
+}
+
+// d330GoldenOpp 断层②形态：XAUUSD@277842155 CS=100oz/lot → perLot≈$435.5k →
+// $1000 预算 qty=0.0023 < 0.01 minStep。
+func d330GoldenOpp() pgstore.Opportunity {
+	return pgstore.Opportunity{
+		ID: "XASSET_CARRY:XAUUSD:277842155:mt5:binance:perp", Type: "XASSET_CARRY",
+		Canonical: "XAUUSD", CanonicalSell: d311strptr("XAUUSDT"),
+		VenueBuy: "277842155:mt5", VenueSell: "binance:perp", NetBps: 18.09,
+	}
+}
+func d330CountLogs(t *testing.T, s *pgstore.Store, oppID string) int {
+	t.Helper()
+	var n int
+	if err := s.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM autotrade_logs WHERE opportunity_id = $1`, oppID).Scan(&n); err != nil {
+		t.Fatalf("count logs: %v", err)
+	}
+	return n
+}
+
+// d404SeedMonitorRowAt 指定时刻 monitor 行（D-341 兼容数据写入锚，收割决策已不再消费）。
+func d404SeedMonitorRowAt(t *testing.T, s *pgstore.Store, ts time.Time, entry, floor float64) {
+	t.Helper()
+	if _, err := s.Pool().Exec(context.Background(), `
+		INSERT INTO fin_xasset_monitor (ts, pair, binance_bid, binance_ask, exness_bid, exness_ask,
+			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
+			tracking_error_bps, equiv_annual_pct, noise_bps, harvest_floor_bps, cex_venue, mt_venue, src)
+		VALUES ($1, 'XPTUSDT-XPT', 4000, 4001, 3999, 4000, $2, 5, 3, 0.001, 21.9, 1.0, 24.9, 9, $3,
+			'okx:perp','3001157:mt5','live')`, ts, entry, floor); err != nil {
+		t.Fatalf("seed monitor row: %v", err)
+	}
+}
+
+// d014FeeAny 宽松版费率 fake：MT 腿 0（佣金旗），CEX 腿 5bps——供非 econ 专题的
+// 存量测试引擎装配 EconFeeBps（装配缺位=fail-closed 会拦死无关测试目标）。
+func d014FeeAny(_ context.Context, venueKey string) (float64, bool) {
+	if keydomain.IsMTKey(venueKey) {
+		return 0, true
+	}
+	return 5.0, true
+}
+
