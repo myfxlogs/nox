@@ -69,9 +69,6 @@ func (s *Service) assemblePositions(ctx context.Context, status string, limit, o
 // personalPositionToProto 组装单个个人持仓响应：取该 symbol 最新（Time 最新）且未超陈旧 TTL 的一帧 mid 为当前价，
 // 复用 position.PersonalLevel 算告警态。无报价或全陈旧 → price 保持 0、level 空（诚实空态，G3）。
 // 实账计算（D-043，全后端）：pnl/liq_price/距强平%/累计利息。
-// D-208 v2：CMC 行（cmc_instrument_id 非空 + cmcSource 注入）走 ComputeCMCPositionPrice +
-//
-//	从 fin_cmc_positions 填 EntryPrice/Leverage/OpenedAt/Qty 真值（视图全自动）。
 // positionPriceToProto 实时现价推送消息（D-049）：前端仅按 id 合并渲染，不计算。
 // --- 每日收益（财务线工作项 3：个人持仓实账化） ---
 

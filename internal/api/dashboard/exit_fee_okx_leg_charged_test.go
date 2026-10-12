@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -71,6 +72,7 @@ func TestD093_ExitFeeMissingKeyWarnOnce(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	defer log.SetOutput(os.Stderr)
+	exitFeeWarnOnce = sync.Map{} // 包级 once-map 序依赖隔离（改名后文件序变化）
 	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), time.Now(), map[string]time.Weekday{}, map[string]float64{}, map[int64]float64{})
 
 	if pb.ExitFeeEstUsd != nil {

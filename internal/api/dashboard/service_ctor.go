@@ -60,5 +60,5 @@ type Settler interface {
 	Settle(ctx context.Context, posID int64) error
 }
 
-// setter 注入面（SetSettler/SetCMCSource/SetTradeModes/.../SetCmcLiveProvider/aliasForVenueKey）
+// setter 注入面（SetSettler/SetTradeModes/.../aliasForVenueKey——见 service_setters.go 全集）
 // 见 service_setters.go（从本文件拆出控行数 <300）。

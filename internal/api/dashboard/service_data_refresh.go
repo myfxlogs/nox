@@ -74,7 +74,7 @@ func (s *Service) PublishDataRefresh(topics ...string) {
 	}
 }
 
-// subscribeRefreshTopic StreamUpdates 订阅口（镜像 subscribeCMCWatchTopic；nil=不订阅）。
+// subscribeRefreshTopic StreamUpdates 订阅口（nil=不订阅）。
 func (s *Service) subscribeRefreshTopic() (<-chan string, func()) {
 	if s.refreshTopic == nil {
 		return nil, func() {}
