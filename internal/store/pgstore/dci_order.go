@@ -120,10 +120,16 @@ func (s *Store) InsertPersonalPosition(ctx context.Context, asset, kind, priceSy
 // 锁定币离现货账——托管池对账实有侧回填，防假漂移）。
 func (s *Store) OutstandingDCIQty(ctx context.Context, venue, investCcy string) (float64, error) {
 	var q float64
+	// D-207③：未平仓窗按 response.settleDate 回执原值截（替 created+tenor
+	// 估算——估算有 +4h 过冲实证）；回执缺/不可解析行降回估算窗如实不猜。
 	err := s.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(qty),0) FROM fin_dci_order
 		WHERE venue=$1 AND invest_ccy=$2 AND status='filled'
-		  AND created_at + COALESCE(tenor_days,0) * interval '1 day' > now()`,
+		  AND CASE
+		      WHEN response ~ '^\s*\{' AND (response::jsonb->>'settleDate') ~ '^\d{10,15}$'
+		      THEN to_timestamp((response::jsonb->>'settleDate')::double precision/1000.0)
+		      ELSE created_at + COALESCE(tenor_days,0) * interval '1 day'
+		      END > now()`,
 		venue, investCcy).Scan(&q)
 	return q, err
 }
