@@ -98,26 +98,89 @@ func (b binance) Scan(ctx context.Context) ([]Row, error) {
 			CtVal: f64ptr(1.0), // D-311 S2：USDT-M qty=基础币数，无合约面值概念
 		})
 	}
-	// D-109 修补：binance src 白名单含 REST 看门狗落点（死流窗兜底 fact 同义消费）。
-	fund := latestFacts(ctx, b.pool, "binance", "funding", []string{"binance_ws_markprice", "binance_rest_markprice"}, "15 minutes")
-	ivl := latestFacts(ctx, b.pool, "binance", "funding_interval", nil, "15 minutes")
 	vol := latestFacts(ctx, b.pool, "binance", "vol24h", []string{"binance_ws_ticker", "binance_rest_ticker"}, "30 minutes")
 	idxP := latestFacts(ctx, b.pool, "binance", "index_price", []string{"binance_ws_markprice", "binance_rest_markprice"}, "15 minutes") // D-591 R2
 	mid := latestTicksMid(ctx, b.pool, "binance")
 	for i := range rows {
 		sym := rows[i].Symbol
-		if ap, ok := fund[sym]; ok {
-			if sec, ok2 := ivl[sym]; ok2 && sec > 0 {
-				// 年化% → 单期小数（D-582 同义换算）；interval 秒 → 小时
-				rows[i].FundingRate = ap * sec / (365 * 100 * 86400)
-				rows[i].IntervalH = int(math.Round(sec / 3600))
-			}
-		}
 		rows[i].Vol24h = vol[sym]
 		rows[i].Mark = mid[sym]   // ≈mark（bookTicker mid）
 		rows[i].Index = idxP[sym] // D-591 R2：index 同帧落库；缺=0→basisBps nil 诚实缺（既有守卫）
 	}
+	// D-205②：funding 换 venue 公共 REST 全量面（premiumIndex 单调用=lastFundingRate+
+	// nextFundingTime，斩断「要数据必先订阅」死锁）；fundingInfo 补 interval 小时真值，
+	// 读败→facts ivl 兜底参考（仅兜底不做 venue 扩集依据）。
+	rates, err := b.premiumIndexFunding(ctx)
+	ivls, ierr := b.fundingIntervals(ctx)
+	if ierr != nil {
+		log.Printf("[universe-radar] binance fundingInfo 读败（facts ivl 兜底）: %v", ierr)
+		ivls = nil
+	}
+	ivlFacts := latestFacts(ctx, b.pool, "binance", "funding_interval", nil, "15 minutes")
+	fundFacts := latestFacts(ctx, b.pool, "binance", "funding", []string{"binance_ws_markprice", "binance_rest_markprice"}, "15 minutes")
+	if err != nil {
+		log.Printf("[universe-radar] binance premiumIndex 读败（facts funding 兜底）: %v", err)
+		rates = nil
+	}
+	funded := 0
+	for i := range rows {
+		sym := rows[i].Symbol
+		ivH := ivls[sym]
+		if ivH <= 0 {
+			if sec, ok := ivlFacts[sym]; ok && sec > 0 {
+				ivH = int(math.Round(sec / 3600))
+			}
+		}
+		if r, ok := rates[sym]; ok && ivH > 0 {
+			rows[i].FundingRate = r // REST 原生单期费率（非年化，零换算）
+			rows[i].IntervalH = ivH
+			funded++
+			continue
+		}
+		if ap, ok := fundFacts[sym]; ok { // facts 兜底（年化%→单期小数，D-582 同式）
+			if sec, ok2 := ivlFacts[sym]; ok2 && sec > 0 {
+				rows[i].FundingRate = ap * sec / (365 * 100 * 86400)
+				rows[i].IntervalH = int(math.Round(sec / 3600))
+				funded++
+			}
+		}
+	}
+	fundNote("binance", len(rows), funded)
 	return rows, nil
+}
+
+// premiumIndexFunding D-205②：GET /fapi/v1/premiumIndex——单调用全市场
+// [symbol→lastFundingRate（单期小数）]（venue 官方公共端点无凭据）。
+func (b binance) premiumIndexFunding(ctx context.Context) (map[string]float64, error) {
+	var arr []struct {
+		Symbol          string    `json:"symbol"`
+		LastFundingRate flexFloat `json:"lastFundingRate"`
+	}
+	if err := getJSON(ctx, b.hc, b.base+"/fapi/v1/premiumIndex", &arr); err != nil {
+		return nil, err
+	}
+	out := make(map[string]float64, len(arr))
+	for _, r := range arr {
+		out[r.Symbol] = float64(r.LastFundingRate)
+	}
+	return out, nil
+}
+
+// fundingIntervals D-205②：GET /fapi/v1/fundingInfo——symbol→fundingIntervalHours
+// （interval 逐符号真值不猜；读败交 facts 兜底）。
+func (b binance) fundingIntervals(ctx context.Context) (map[string]int, error) {
+	var arr []struct {
+		Symbol               string  `json:"symbol"`
+		FundingIntervalHours flexInt `json:"fundingIntervalHours"`
+	}
+	if err := getJSON(ctx, b.hc, b.base+"/fapi/v1/fundingInfo", &arr); err != nil {
+		return nil, err
+	}
+	out := make(map[string]int, len(arr))
+	for _, r := range arr {
+		out[r.Symbol] = int(r.FundingIntervalHours)
+	}
+	return out, nil
 }
 
 // latestFacts 批查 venue kind 最新值（src 非空则锚定；funding_interval 落点 src 异构不过滤）。
@@ -132,6 +195,9 @@ func latestFacts(ctx context.Context, pool *pgxpool.Pool, venue, kind string, sr
 	}
 	q += ` ORDER BY symbol, ts DESC`
 	out := map[string]float64{}
+	if pool == nil {
+		return out // D-205：无库=兜底面无（REST 主径下调用方可零库运行）
+	}
 	rows, err := pool.Query(ctx, q, args...)
 	if err != nil {
 		log.Printf("[universe-radar] %s facts %s: %v", venue, kind, err)
@@ -151,6 +217,9 @@ func latestFacts(ctx context.Context, pool *pgxpool.Pool, venue, kind string, sr
 // latestTicksMid 批查 venue perp 最新 tick 中价（≈mark 近似）。
 func latestTicksMid(ctx context.Context, pool *pgxpool.Pool, venue string) map[string]float64 {
 	out := map[string]float64{}
+	if pool == nil {
+		return out
+	}
 	rows, err := pool.Query(ctx, `SELECT DISTINCT ON (symbol) symbol, (bid+ask)/2 FROM ticks
 		WHERE venue=$1 AND venue_type='perp' AND ts > now()-interval '120 seconds'
 		ORDER BY symbol, ts DESC`, venue)

@@ -67,10 +67,9 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("app_config 读取失败: %w", err)
 	}
+	// D-205①：proxy 空=直连语义（venue 官方公共域，非硬依赖）；
+	// 非空=cex-proxy 径（现状）。
 	proxy := cfgRows["BINANCE_PROXY_URL"]
-	if proxy == "" {
-		return fmt.Errorf("BINANCE_PROXY_URL 未配置（app_config 无行）")
-	}
 	fundingMinPct := radarParamF64(cfgRows, "RADAR_FUNDING_MIN_PCT", 15)
 	volMinUSD := radarParamF64(cfgRows, "RADAR_VOL_MIN_USD", 5e6)
 	divPct := radarParamF64(cfgRows, "RADAR_DIV_PCT", 20)

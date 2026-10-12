@@ -23,6 +23,7 @@ type okx struct {
 	base     string
 	pool     *pgxpool.Pool
 	cacheDir string
+	throttle time.Duration // funding-rate 逐 instId 限频间隔（测试置 0）
 }
 
 func (o okx) Venue() string { return "okx" }
@@ -111,24 +112,34 @@ func (o okx) Scan(ctx context.Context) ([]Row, error) {
 			CtVal: f64ptr(float64(d.CtVal)),
 		})
 	}
-	// funding → facts 读库（okx_ws_v5 覆盖集；instId→facts 键形剥 - 与 -SWAP）。
-	fund := latestFacts(ctx, o.pool, "okx", "funding", []string{"okx_ws_v5"}, "15 minutes")
-	ivl := latestFacts(ctx, o.pool, "okx", "funding_interval", []string{"okx_ws_v5"}, "15 minutes")
+	// D-205②：funding 换 venue 公共 REST——/api/v5/public/funding-rate 逐 instId
+	// 循环限频（不依赖订阅集，全量 SWAP 可评）；interval=(nextFundingTime-fundingTime)
+	// 同帧真值。per-instId 读败→跳过（行在值空如实报）；facts 仅兜底填缺口。
 	instBySym := make(map[string]string, len(idx)) // facts 键形 BTCUSDT → instId BTC-USDT-SWAP
 	for instID := range idx {
 		instBySym[strings.ReplaceAll(strings.TrimSuffix(instID, "-SWAP"), "-", "")] = instID
 	}
-	for sym, ap := range fund {
-		instID, ok := instBySym[sym]
-		if !ok {
+	funded := 0
+	fund := latestFacts(ctx, o.pool, "okx", "funding", []string{"okx_ws_v5"}, "15 minutes")
+	ivl := latestFacts(ctx, o.pool, "okx", "funding_interval", []string{"okx_ws_v5"}, "15 minutes")
+	for instID := range idx {
+		i := idx[instID]
+		if fr, err := o.fundingRate(ctx, instID); err == nil {
+			rows[i].FundingRate = fr.rate
+			rows[i].IntervalH = fr.ivlH
+			funded++
 			continue
 		}
-		i := idx[instID]
-		if sec, ok2 := ivl[sym]; ok2 && sec > 0 {
-			rows[i].FundingRate = ap * sec / (365 * 100 * 86400) // 年化%→单期小数（同 binance 式）
-			rows[i].IntervalH = int(math.Round(sec / 3600))
+		sym := strings.ReplaceAll(strings.TrimSuffix(instID, "-SWAP"), "-", "")
+		if ap, ok := fund[sym]; ok { // facts 兜底（年化%→单期小数，同 binance 式）
+			if sec, ok2 := ivl[sym]; ok2 && sec > 0 {
+				rows[i].FundingRate = ap * sec / (365 * 100 * 86400)
+				rows[i].IntervalH = int(math.Round(sec / 3600))
+				funded++
+			}
 		}
 	}
+	fundNote("okx", len(rows), funded)
 	for _, d := range snap.Tickers {
 		if i, ok := idx[d.InstID]; ok {
 			rows[i].Vol24h = float64(d.VolCcy24h) * float64(d.Last)
@@ -136,4 +147,41 @@ func (o okx) Scan(ctx context.Context) ([]Row, error) {
 		}
 	}
 	return rows, nil
+}
+
+// okxFunding D-205②：/api/v5/public/funding-rate 单 instId 读——
+// rate=fundingRate（当期单期小数）、ivlH=(nextFundingTime−fundingTime)/1h 同帧真值。
+type okxFunding struct {
+	rate float64
+	ivlH int
+}
+
+// fundingRate 逐 instId 读+限频（throttle 间隔；venue 官方公共端点无凭据）。
+func (o okx) fundingRate(ctx context.Context, instID string) (okxFunding, error) {
+	if o.throttle > 0 {
+		select {
+		case <-ctx.Done():
+			return okxFunding{}, ctx.Err()
+		case <-time.After(o.throttle):
+		}
+	}
+	var r struct {
+		Data []struct {
+			FundingRate     flexFloat `json:"fundingRate"`
+			FundingTime     flexInt   `json:"fundingTime"`
+			NextFundingTime flexInt   `json:"nextFundingTime"`
+		} `json:"data"`
+	}
+	if err := getJSON(ctx, o.hc, o.base+"/api/v5/public/funding-rate?instId="+instID, &r); err != nil {
+		return okxFunding{}, err
+	}
+	if len(r.Data) == 0 {
+		return okxFunding{}, fmt.Errorf("funding-rate %s 无行", instID)
+	}
+	d := r.Data[0]
+	ivlH := 0
+	if d.NextFundingTime > 0 && d.FundingTime > 0 {
+		ivlH = int(math.Round(float64(d.NextFundingTime-d.FundingTime) / 3600000))
+	}
+	return okxFunding{rate: float64(d.FundingRate), ivlH: ivlH}, nil
 }

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -44,11 +45,31 @@ type Source interface {
 }
 
 // allSources 注册表：新所=实现接口+注册一行。
+// D-205①：proxy 空→per-source 官方公共域直连（binance/okx/gate 公共端点无凭据——
+// 域为 venue 官方文档钦定取值非域值编造；路径自带 /fapi、/api/v5、/api/v4 前缀）；
+// proxy 非空→现状 cex-proxy 径（封禁防护同源）。
 func allSources(hc *http.Client, proxy string, pool *pgxpool.Pool, cacheDir string) []Source {
+	bbase, obase, gbase := proxy, proxy, proxy
+	if proxy == "" {
+		bbase = "https://fapi.binance.com"
+		obase = "https://www.okx.com"
+		gbase = "https://api.gateio.ws"
+	}
 	return []Source{
-		binance{hc: hc, base: proxy, pool: pool, cacheDir: cacheDir},
-		okx{hc: hc, base: proxy, pool: pool, cacheDir: cacheDir}, // D-591 R3：目录 24h 缓存+funding 读库
-		gate{pool: pool}, // D-591 R3：纯读库（WS 全市场落 ticks/facts）
+		binance{hc: hc, base: bbase, pool: pool, cacheDir: cacheDir},
+		okx{hc: hc, base: obase, pool: pool, cacheDir: cacheDir, throttle: 110 * time.Millisecond},
+		gate{hc: hc, base: gbase, pool: pool},
+	}
+}
+
+// fundNote D-205③：覆盖文案分「行在值空」vs「无行」——venue 枚举空集与
+// funding 覆盖缺口是两态（前者 venue 面病灶，后者数据面缺口）。
+func fundNote(venue string, rows, funded int) {
+	switch {
+	case rows == 0:
+		log.Printf("[universe-radar] %s 无行（venue 枚举空集）", venue)
+	case funded < rows:
+		log.Printf("[universe-radar] %s funding 行在值空：覆盖 %d/%d", venue, funded, rows)
 	}
 }
 
