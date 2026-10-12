@@ -139,6 +139,8 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 			newFill, closeErr := p.placeCloseOrder(ctx, posID, leg, closeSide, closeQty)
 			if closeErr != nil {
 				log.Printf("[exec] resume close leg %d (ticket=%s venue=%s): %v", leg.ID, leg.OrderID, leg.Venue, closeErr)
+				// D-208①：腿级平仓尝试失败落 FAILED 行（attempt_no 递增，拒因原文入库）。
+				p.persistFailedCloseLeg(ctx, legs, leg, closeErr)
 				if isMTVenueKey(leg.Venue) && !force {
 					// D-090 ②：MT 腿拒单 → 本轮到此为止，CEX 腿零下单保持 OPEN（对称
 					// D-084 开仓侧零成本语义），仓保持 CLOSING 由 ResumeClose/D-407
@@ -182,6 +184,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 			FilledQty:     &closeQty,                // D-346：与 OPEN 腿同字段语义，realized 逐腿分解复核
 			AvgFillPrice:  &closePrice,              // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
 			FeeUSD:        closeLegFeeUSD(fill, fx), // D-422+D-599：CEX 实采 USD 费/MT5 commission 落库（0→NULL）
+			SubmittedAt:   ptrNow(),                 // D-208①：CLOSE 腿 submitted_at 补写（#505 双腿 NULL 实证）
 		}
 		if err := p.store.CreatePositionLeg(ctx, closeLeg); err != nil {
 			if errors.Is(err, pgstore.ErrTerminalState) {
@@ -255,6 +258,10 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 			log.Printf("[exec] pos %d alert write: %v", posID, err)
 		}
 		log.Printf("[exec] %s", msg)
+		// D-208③：force 逃逸门留裸敞口 → warn 推送裸腿明细。
+		if force {
+			p.forceNakedAlert(ctx, posID, legs, closeLegs)
+		}
 		return fmt.Errorf("position %d residual legs not closed (%d/%d)", posID, closeFilled, openFilled)
 	}
 

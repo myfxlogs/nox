@@ -2,8 +2,10 @@ package exec
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -63,6 +65,7 @@ func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID 
 			AvgFillPrice:  &avgPrice,
 			SubmittedAt:   &now,
 			UncertainAt:   uncertainAt,
+			FailReason:    legFailReason(r), // D-208①：FAILED 腿落 venue 拒因原文（512B 截断）
 			FeeUSD:        feeUSD,
 			FillKind:      fillKind,
 		}); err != nil {
@@ -199,5 +202,81 @@ func (p *Pipeline) rollbackUnknownLeg(ctx context.Context, posID int64, i int, l
 func (p *Pipeline) alertCrit(ctx context.Context, msg string) {
 	if err := p.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
 		log.Printf("[exec] alert write failed: %v | original: %s", err, msg)
+	}
+}
+
+// legFailReason D-208①：FAILED 腿拒因截断落库（≤512B；venue 关键前缀不吞——截尾不截头）。
+func legFailReason(r LegResult) *string {
+	if r.Status != "FAILED" || r.Reason == "" {
+		return nil
+	}
+	rs := r.Reason
+	if len(rs) > 512 {
+		rs = rs[:512]
+	}
+	return &rs
+}
+
+// ptrNow D-208①：CLOSE 腿 submitted_at 写入点共用 helper。
+func ptrNow() *time.Time { t := time.Now(); return &t }
+
+// persistFailedCloseLeg D-208①：腿级平仓尝试失败落行——attempt_no=该腿
+// CLOSE 既有最大尝试+1（schema 唯一键防重），fail_reason=venue 拒因原文。
+// best-effort：落库败只 log（平仓主径错误语义不变）。
+func (p *Pipeline) persistFailedCloseLeg(ctx context.Context, legs []pgstore.PositionLeg, leg pgstore.PositionLeg, cause error) {
+	var next int16 = 1
+	var parent *int64
+	for _, l := range legs {
+		if l.Phase == "CLOSE" && l.LegNo == leg.LegNo && l.AttemptNo >= next {
+			next = l.AttemptNo + 1
+			if l.Status == "FAILED" {
+				id := l.ID
+				parent = &id // 重试关联上一败次
+			}
+		}
+	}
+	rs := cause.Error()
+	if len(rs) > 512 {
+		rs = rs[:512] // 截尾不截头（venue 关键前缀保留）
+	}
+	cl := &pgstore.PositionLeg{
+		PositionID: leg.PositionID, LegNo: leg.LegNo, Phase: "CLOSE", AttemptNo: next,
+		ParentAttemptID: parent,
+		Venue:           leg.Venue, Account: leg.Account, Symbol: leg.Symbol,
+		Qty: leg.EffectiveQty(), PriceExpected: leg.PriceExpected,
+		Status: "FAILED", FailReason: &rs, SubmittedAt: ptrNow(),
+	}
+	if leg.Side == "BUY" {
+		cl.Side = "SELL"
+	} else {
+		cl.Side = "BUY"
+	}
+	if err := p.store.CreatePositionLeg(ctx, cl); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
+		log.Printf("[exec] pos=%d leg=%d failed-close leg persist: %v", leg.PositionID, leg.LegNo, err)
+	}
+}
+
+// forceNakedAlert D-208③：ClosePositionForce 留裸敞口（任一腿未平）→ warn 推送
+// 裸腿明细（venue/symbol/量；InsertPositionAlert 为仓位内页，全局 warn 保飞书必达）。
+func (p *Pipeline) forceNakedAlert(ctx context.Context, posID int64, legs, closeLegs []pgstore.PositionLeg) {
+	var naked []string
+	closedNo := map[int16]bool{}
+	for _, l := range closeLegs {
+		if l.Status == "FILLED" || l.Status == "EXTERNAL" {
+			closedNo[l.LegNo] = true
+		}
+	}
+	for _, l := range legs {
+		if l.Phase == "OPEN" && l.Status == "FILLED" && !closedNo[l.LegNo] {
+			naked = append(naked, fmt.Sprintf("%s %s %.6g", l.Venue, l.Symbol, l.EffectiveQty()))
+		}
+	}
+	if len(naked) == 0 {
+		return
+	}
+	if err := p.store.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
+		"强制平仓留裸敞口 position #%d：%d 腿未平（%s）——裸奔升级径接管",
+		posID, len(naked), strings.Join(naked, ","))); err != nil {
+		log.Printf("[exec] pos %d force-naked alert write: %v", posID, err)
 	}
 }

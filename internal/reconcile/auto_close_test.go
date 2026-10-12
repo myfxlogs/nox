@@ -25,7 +25,8 @@ type fakeStore struct {
 	failedIDs     []int64
 	closeCalls    int
 	statusCalls   map[int64]string
-	cashflows     []fakeCashflow // D-159 W3a R4：兜底分支补写记录
+	cashflows     []fakeCashflow   // D-159 W3a R4：兜底分支补写记录
+	cfg           map[string]int64 // D-208②：app_config 阈值 fake 面（nil=行缺）
 }
 
 type fakeAlert struct {
@@ -688,4 +689,13 @@ var _ = strconv.Itoa
 func (f *fakeStore) InsertAutotradeLog(ctx context.Context, l *pgstore.AutotradeLog) error {
 	f.closeTriggers = append(f.closeTriggers, *l)
 	return nil
+}
+
+// D-208②：app_config 阈值 fake（cfg map 驱动；nil=行缺）。
+func (f *fakeStore) AppConfigInt64(_ context.Context, key string) (int64, bool, error) {
+	if f.cfg == nil {
+		return 0, false, nil
+	}
+	v, ok := f.cfg[key]
+	return v, ok, nil
 }

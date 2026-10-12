@@ -17,6 +17,7 @@ type Reconciler struct {
 	mu    sync.RWMutex
 	// D-245：CLOSING 告警分层的小时桶（posID→上次 warn 的整小时），进程重启最多重复 1 条（不落库）。
 	closingAlertHour map[int64]int64
+	nakedAlertHour   map[int64]int64 // D-208②：半平裸奔 warn 小时桶（独立键不与卡死告警互相抑）
 	// D-401：CEX 聚合对拍连续确认计数（agg key→连续不一致轮数，达 3 才 critical）。
 	// 仅 Run 路径串行读写，无锁；runTimeout 超时/查询失败的轮次冻结不计数。
 	cexAggPending map[string]int
@@ -54,7 +55,7 @@ func New(store Store, queriers ...venue.Querier) *Reconciler {
 		queriers:         queriers,
 		runTimeout:       10 * time.Second,
 		initialDelay:     60 * time.Second,
-		closingAlertHour: map[int64]int64{},
+		closingAlertHour: map[int64]int64{}, nakedAlertHour: map[int64]int64{},
 		cexAggPending:    map[string]int{},
 		cexForeignWarned: map[string]time.Time{},
 		nowFn:            time.Now,

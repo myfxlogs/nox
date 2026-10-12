@@ -116,8 +116,22 @@ func TestD090_MTRejectCEXNotSent(t *testing.T) {
 		t.Fatalf("仓应保持 CLOSING 等重试（非 LEGGED）, got %s", pos.Status)
 	}
 	closeLegs, lerr := s.ListPositionLegsByPhase(ctx, posID, "CLOSE")
-	if lerr != nil || len(closeLegs) != 0 {
-		t.Fatalf("MT 拒单轮不得写 CLOSE leg: %v n=%d", lerr, len(closeLegs))
+	// D-208①：败腿落行语义取代——FAILED 尝试行须存在（attempt_no=1+拒因原文），
+	// 但不得有 FILLED 行（不假装平仓，去重键只认 FILLED 不阻下轮重试）。
+	if lerr != nil {
+		t.Fatal(lerr)
+	}
+	var filledN int
+	for _, l := range closeLegs {
+		if l.Status == "FILLED" {
+			filledN++
+		}
+	}
+	if filledN != 0 || len(closeLegs) != 1 || closeLegs[0].Status != "FAILED" {
+		t.Fatalf("拒单轮应有恰一 FAILED 行零 FILLED 行: n=%d %+v", len(closeLegs), closeLegs)
+	}
+	if closeLegs[0].FailReason == nil || closeLegs[0].SubmittedAt == nil {
+		t.Fatalf("败腿缺 fail_reason/submitted_at: %+v", closeLegs[0])
 	}
 }
 

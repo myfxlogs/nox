@@ -327,15 +327,16 @@ func TestClose_LeggedReducing(t *testing.T) {
 		if l.Phase == "CLOSE" && l.LegNo == 0 {
 			leg0Closed = true
 		}
-		if l.Phase == "CLOSE" && l.LegNo == 1 {
+		if l.Phase == "CLOSE" && l.LegNo == 1 && l.Status == "FILLED" {
 			leg1Closed = true
 		}
 	}
 	if !leg0Closed {
 		t.Error("leg0 应有 CLOSE leg（发单成功）")
 	}
+	// D-208①：发单失败落 FAILED 尝试行（非 FILLED）——leg1 不得有 FILLED 行。
 	if leg1Closed {
-		t.Error("leg1 不应有 CLOSE leg（发单失败）")
+		t.Error("leg1 不应有 FILLED CLOSE leg（发单失败）")
 	}
 }
 

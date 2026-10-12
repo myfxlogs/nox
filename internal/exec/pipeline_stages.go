@@ -85,11 +85,13 @@ type ExecuteResult struct {
 
 // LegResult 是单腿成交结果。
 type LegResult struct {
-	VenueKey   string
-	OrderID    string
-	Price      float64
-	Qty        float64
-	Status     string // FILLED / FAILED
+	VenueKey string
+	OrderID  string
+	Price    float64
+	Qty      float64
+	Status   string // FILLED / FAILED
+	// Reason D-208①：venue 拒因原文（FAILED 时携带；落库限长截断 512B 由 persist 侧保证）。
+	Reason     string
 	Swap       float64
 	Commission float64
 	// FeeUSD D-391 S2：入场手续费（正数成本口径；0=venue 未回报）。

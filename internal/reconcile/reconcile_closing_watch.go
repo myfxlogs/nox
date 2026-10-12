@@ -4,6 +4,9 @@ package reconcile
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -48,4 +51,75 @@ func isClosingStuck(pos *pgstore.Position, now time.Time) bool {
 		return true // 无 closing_started_at=异常（fail-closed）
 	}
 	return now.Sub(*pos.ClosingStartedAt) > closingStuckTimeout
+}
+
+// closingNakedLegs D-208②：半平裸奔腿=OPEN FILLED 且无 FILLED/EXTERNAL CLOSE 行。
+// （UNKNOWN/FAILED OPEN 腿不计——UNKNOWN 可能已成交另走 uncertainty 径。）
+func closingNakedLegs(legs []pgstore.PositionLeg) []pgstore.PositionLeg {
+	closed := map[int16]bool{}
+	for _, l := range legs {
+		if l.Phase == "CLOSE" && (l.Status == "FILLED" || l.Status == "EXTERNAL") {
+			closed[l.LegNo] = true
+		}
+	}
+	var out []pgstore.PositionLeg
+	for _, l := range legs {
+		if l.Phase == "OPEN" && l.Status == "FILLED" && !closed[l.LegNo] {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// closingNakedCheck D-208②：CLOSING 半平裸奔升级——非终态腿裸奔时长
+// （自 ClosingStartedAt 起；无=异常按全 stuck 计）超 warn 阈→warn（小时桶抑频）、
+// 超 crit 阈→critical（每循环）。阈值 app_config 热读（seed-once 0201 落种）；
+// 行缺/读败→降级不判（门禁由既有 closingStuckAlert 覆盖，不造新缺省值）。
+func (r *Reconciler) closingNakedCheck(ctx context.Context, p *pgstore.Position, now time.Time) {
+	warnSec, ok, err := r.store.AppConfigInt64(ctx, "ARB_CLOSING_NAKED_WARN_SEC")
+	if err != nil || !ok || warnSec <= 0 {
+		return
+	}
+	critSec, _, _ := r.store.AppConfigInt64(ctx, "ARB_CLOSING_NAKED_CRIT_SEC")
+	if critSec <= warnSec {
+		critSec = 0 // 未配/非法序→critical 层不生效（warn 层独立可用）
+	}
+	// 无 ClosingStartedAt=异常态（同 isClosingStuck fail-closed 口径按最大时长计）。
+	stuckFor := time.Duration(1<<62 - 1)
+	if p.ClosingStartedAt != nil {
+		stuckFor = now.Sub(*p.ClosingStartedAt)
+	}
+	if stuckFor < time.Duration(warnSec)*time.Second {
+		return
+	}
+	legs, err := r.store.ListPositionLegs(ctx, p.ID)
+	if err != nil {
+		log.Printf("[reconcile] closing naked legs pos=%d: %v", p.ID, err)
+		return
+	}
+	naked := closingNakedLegs(legs)
+	if len(naked) == 0 {
+		return // 无裸腿=非半平形态（卡死径另报）
+	}
+	var desc []string
+	for _, l := range naked {
+		desc = append(desc, l.Venue+":"+l.Symbol)
+	}
+	base := fmt.Sprintf("CLOSING 半平裸奔 position #%d：%d 腿未平（%s），已裸 %s",
+		p.ID, len(naked), strings.Join(desc, ","), stuckFor.Round(time.Minute))
+	if critSec > 0 && stuckFor >= time.Duration(critSec)*time.Second {
+		r.insertAlertCtx(ctx, "critical", base)
+		return
+	}
+	hour := r.now().Unix() / 3600
+	r.mu.RLock()
+	last, seen := r.nakedAlertHour[p.ID]
+	r.mu.RUnlock()
+	if seen && last == hour {
+		return
+	}
+	r.mu.Lock()
+	r.nakedAlertHour[p.ID] = hour
+	r.mu.Unlock()
+	r.insertAlertCtx(ctx, "warn", base)
 }

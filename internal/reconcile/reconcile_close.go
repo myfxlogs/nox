@@ -227,6 +227,9 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		if p.ClosingStartedAt != nil {
 			stuckFor = now.Sub(*p.ClosingStartedAt)
 		}
+		// D-208②：半平裸奔升级径（warn→critical，阈值 app_config 热读）——
+		// 与既有卡死 ResumeClose 重触发并行不替代。
+		r.closingNakedCheck(ctx, &p, now)
 		// D-189 P0-4 S2：UNKNOWN（uncertainty_reason 非空）只告警，不自动重试（可能已成交，盲平=反向开新仓）。
 		if p.UncertaintyReason != nil && *p.UncertaintyReason != "" {
 			msg := fmt.Sprintf("CLOSING UNKNOWN position #%d 超 %v 未确认（人工/OrderHistory 查证，不自动重试）", p.ID, closingStuckTimeout)

@@ -126,6 +126,7 @@ func (p *Pipeline) autoFlattenLEGGED(ctx context.Context, posID int64, legs []Le
 			FilledQty:     &closeQty,                // D-346：与 OPEN 腿同字段语义，realized 逐腿分解复核
 			AvgFillPrice:  &closePrice,              // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
 			FeeUSD:        closeLegFeeUSD(fill, fx), // D-422+D-599：CEX 实采 USD 费/commission 落库（0→NULL）
+			SubmittedAt:   ptrNow(),                 // D-208①
 		}
 		if err := p.store.CreatePositionLeg(ctx, closeLeg); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
 			log.Printf("[exec] auto-flatten pos=%d leg=%d write CLOSE leg: %v", posID, i, err)

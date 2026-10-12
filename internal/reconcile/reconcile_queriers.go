@@ -27,6 +27,8 @@ type Store interface {
 	ClosePosition(ctx context.Context, id int64, realizedPnl float64, feesUSD *float64, feeQuality string) error
 	UpdatePositionStatus(ctx context.Context, id int64, status string) error
 	InsertAlert(ctx context.Context, ruleID *int64, level, msg string) error
+	// D-208②：app_config 热读阈值（半平裸奔 warn/crit 秒级门；行缺=ok=false 降级不判）。
+	AppConfigInt64(ctx context.Context, key string) (int64, bool, error)
 	// D-245：平仓触发源持久化（三入口调用侧；写失败只 log 不阻断）。
 	InsertAutotradeLog(ctx context.Context, l *pgstore.AutotradeLog) error
 	// D-159 W2a R3-9：settlement 失败标记 settle_failed 到 position.note（可重试状态）。

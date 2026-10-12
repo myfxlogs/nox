@@ -45,13 +45,13 @@ func (p *Pipeline) orderQtyFor(leg LegSpec) (float64, error) {
 func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec, clientOrderID string) LegResult {
 	exe, ok := p.registry.Get(leg.VenueKey)
 	if !ok {
-		return LegResult{VenueKey: leg.VenueKey, Status: "FAILED"}
+		return LegResult{VenueKey: leg.VenueKey, Status: "FAILED", Reason: "executor 未注册 " + leg.VenueKey}
 	}
 	// D-311 R4：:perp 腿合约数→基础币换算（缺失 fail-closed）。
 	orderQty, err := p.orderQtyFor(leg)
 	if err != nil {
 		log.Printf("[exec] leg %s %s %s: %v", leg.VenueKey, leg.Side, leg.VenueSymbol, err)
-		return LegResult{VenueKey: leg.VenueKey, Status: "FAILED"}
+		return LegResult{VenueKey: leg.VenueKey, Status: "FAILED", Reason: err.Error()}
 	}
 	// D-146 S1：MT 腿下单即带 broker 端灾难 SL（原子写入，断连时服务器端兜底）。
 	// CEX 腿不挂（CEX 端有仓位生存期+fail-closed）；仅 :mt4/:mt5 腿且配置 >0 时计算。
@@ -85,13 +85,14 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec, clientOrderID st
 			return LegResult{VenueKey: leg.VenueKey, Status: "UNKNOWN"}
 		}
 		log.Printf("[exec] leg %s %s %s: %v", leg.VenueKey, leg.Side, leg.VenueSymbol, err)
-		return LegResult{VenueKey: leg.VenueKey, Status: "FAILED"}
+		return LegResult{VenueKey: leg.VenueKey, Status: "FAILED", Reason: err.Error()}
 	}
 	// D-108 P2 T2：零成交/被拒 → 腿标 FAILED（不再假 FILLED 幻影腿）。
 	// MT5 OrderSend 成功但 lots=0/price=0 = 零成交；CEX 已在 PlaceOrder 内报错返回 err。
 	if fill.Qty <= 0 || fill.Price <= 0 {
 		log.Printf("[exec] leg %s %s %s: zero fill (qty=%v price=%v) → FAILED", leg.VenueKey, leg.Side, leg.VenueSymbol, fill.Qty, fill.Price)
-		return LegResult{VenueKey: leg.VenueKey, OrderID: fill.OrderID, Status: "FAILED"}
+		return LegResult{VenueKey: leg.VenueKey, OrderID: fill.OrderID, Status: "FAILED",
+			Reason: fmt.Sprintf("零成交回报（qty=%.6f price=%.6f）", fill.Qty, fill.Price)}
 	}
 	// D-018 阶段a：市价成交方式显式化（CEX 腿=taker；MT 腿留空=NULL 诚实缺省）。
 	// post-only 路径走 executeMakerLeg 另标 maker，不经过此返回点。

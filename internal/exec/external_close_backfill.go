@@ -97,6 +97,7 @@ func (p *Pipeline) externalCloseFallback(ctx context.Context, pos *pgstore.Posit
 		Qty: qty, PriceExpected: leg.PriceExpected, PriceActual: hit.px,
 		OrderID: leg.OrderID, Status: "EXTERNAL",
 		FilledQty: &qty, AvgFillPrice: hit.px, FeeUSD: hit.feeUSD,
+		SubmittedAt: ptrNow(), // D-208①：外部平回填腿同补
 	}
 	if hit.px != nil {
 		cl.PriceExpected = *hit.px
