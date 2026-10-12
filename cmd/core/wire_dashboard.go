@@ -153,6 +153,7 @@ func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *
 			},
 			Notify: feishu,
 			ChatID: st.FeishuChatID,
+			Beat:   func() { safego.Beat("main:deptreport") },
 		})
 	})
 

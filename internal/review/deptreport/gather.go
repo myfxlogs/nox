@@ -28,7 +28,7 @@ var deptFocus = map[string]string{
 	"合规": "关注：纪律面——critical 告警与异常行为审查。",
 }
 
-// rosterBlock 部门名册段：该部员工状态行（在职/滞跳/死亡/停用由后端 EmployeeStatus 算定）。
+// rosterBlock 部门名册段：该部员工状态行（在职/滞跳/离线/离职由后端 EmployeeStatus 算定）。
 func rosterBlock(dept string, emps []pgstore.Employee, now time.Time) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "【%s部·员工状态】\n", dept)

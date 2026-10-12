@@ -67,6 +67,9 @@ func Run(ctx context.Context, d Deps) {
 		if !sleepUntil(ctx, next) {
 			return
 		}
+		if d.Beat != nil {
+			d.Beat()
+		}
 		if d.Enabled != nil && !d.Enabled() {
 			log.Printf("[deptreport] disabled 当班跳过")
 			continue

@@ -58,6 +58,9 @@ type Deps struct {
 	Notify        Notifier                                  // nil=不推（只落库+alert 留痕）
 	ChatID        func(ctx context.Context) (string, error) // nil=不推
 	Enabled       func() bool                               // nil=恒开；false=当班跳过
+	// Beat 每班心跳钩（wire 注入 safego.Beat 保名册节拍新鲜——Run fn 内睡整天，
+	// 仅 GoLoop 启动拍一拍的话 cadence=86400 超龄即滞跳假阳性；nil=不拍）。
+	Beat func()
 	// OnReport 可选观察钩（测试/未来看板推送点；每行落库后回调，nil=跳过）。
 	OnReport func(r pgstore.DeptReport)
 }
