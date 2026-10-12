@@ -42,12 +42,12 @@
 ## 4. 工作流
 
 ```
-领票（STATE 加一行，owner=会话）→ 分支 wip/<票名>（可用 worktree /opt/arb-wt/<票名>）
+领票（STATE 加一行，owner=会话）→ 分支 wip/<票名>（可用 worktree /opt/nox-wt/<票名>）
 → 改动 + 测试 → 机检（§6）→ commit + push（产出即提交，不攒）→ 报审
 → 复审：机检独立重跑 → merge master → 删分支 + worktree → 部署 → STATE 行翻 ✅
 ```
 
-- `/opt/arb` = master 部署树：只 pull / 构建 / 部署，不在里面开发。
+- `/opt/nox` = master 部署树：只 pull / 构建 / 部署，不在里面开发。
 - 决策/复审会话周首查 `docs/经验库/待归纳*.md` 未消解行（D-172：积压闸推送为主、会话查为辅）。
 - 每个可独立交付单位单独 commit；只 `git add` 显式文件，禁 `-A`。
 - 涉及生产取证（声明运行时状态/部署后验证/bug 取证）时先调 `.devin/skills/生产取证/` skill（D-173 试点）。
@@ -88,7 +88,7 @@ cd web && npm run build                    # 触碰前端时
 ## 7. 门禁（`git config core.hooksPath scripts/hooks`，禁 `--no-verify`）
 
 pre-commit（10 道）：kill_switch · 凭据直读 · 秘钥扫描 · staticcheck 基线 · 文件行数 · 迁移契约 · gofmt · `_ =` 吞错 · import 方向 · 经验库 schema。
-pre-push：master 只允许从 `/opt/arb` 推。reference-transaction：master 禁非 ff 回退。
+pre-push：master 只允许从 `/opt/nox` 推。reference-transaction：master 禁非 ff 回退。
 
 ## 8. 环境
 

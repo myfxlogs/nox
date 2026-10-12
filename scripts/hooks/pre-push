@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pre-push 门禁：master 只允许从部署树 /opt/arb 推送。
+# pre-push 门禁：master 只允许从部署树 /opt/nox 推送。
 set -u
 
 remote="$1"
@@ -8,11 +8,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     [ "$remote_ref" = "refs/heads/master" ] || continue
     repo="$(git rev-parse --show-toplevel 2>/dev/null || echo "${GIT_DIR:-unknown}")"
     case "$repo" in
-        /opt/arb)
+        /opt/nox)
             exit 0
             ;;
         *)
-            echo "FAIL: master 只能从部署树 /opt/arb 推送；工作分支请推 wip/<票名>" >&2
+            echo "FAIL: master 只能从部署树 /opt/nox 推送；工作分支请推 wip/<票名>" >&2
             exit 1
             ;;
     esac
