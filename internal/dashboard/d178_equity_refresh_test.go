@@ -78,11 +78,13 @@ func TestD178_RefreshFailGoesAmbiguous(t *testing.T) {
 	q := &d178Querier{vk: "gate:perp", eq: 100, fail: true}
 	svc, _ := d178SvcWithMon(t, 10*time.Minute, q)
 	reject, ambiguous, _ := svc.replayIdleFunds(context.Background(), d178Proposal("gate:perp"), pgstore.ProbePremise{Kind: "idle_funds", Venue: "gate"})
-	if q.calls != 1 {
-		t.Fatalf("回读应恰一次, calls=%d", q.calls)
+	// D-206①：逐候选各至多刷一次——gate:perp 直刷 + 末位裸 gate 全 venue 扫各一次。
+	if q.calls != 2 {
+		t.Fatalf("回读应恰两次（perp 直刷+gate 裸扫）, calls=%d", q.calls)
 	}
-	if !strings.Contains(ambiguous, "快照缺") {
-		t.Fatalf("回读失败应走原缺歧义径, reject=%q ambiguous=%q", reject, ambiguous)
+	// D-206②：败径分文案——轮询败（querier 未就绪/凭据/超时）非「陈旧/快照缺」。
+	if !strings.Contains(ambiguous, "轮询败") {
+		t.Fatalf("回读失败应报轮询败, reject=%q ambiguous=%q", reject, ambiguous)
 	}
 }
 
@@ -119,5 +121,24 @@ func TestD178_MissingRefresh(t *testing.T) {
 	reject, ambiguous, note := svc.replayIdleFunds(context.Background(), d178Proposal("gate:perp"), pgstore.ProbePremise{Kind: "idle_funds", Venue: "gate"})
 	if q.calls != 1 || reject != "" || ambiguous != "" || !strings.Contains(note, "eq=") {
 		t.Fatalf("缺+回读成功应判绿, calls=%d r=%q a=%q n=%q", q.calls, reject, ambiguous, note)
+	}
+}
+
+// D-206①：腿型幻影键场景——contract vk=gate:mt5（无 querier 匹配）曾吞全局单发
+// refresh 致真存在的 gate:perp 永不得刷；逐候选一次后真候选得刷判绿。
+func TestD206_PhantomKeyRealCandRefreshes(t *testing.T) {
+	q := &d178Querier{vk: "gate:perp", eq: 100}
+	svc, _ := d178SvcWithMon(t, 10*time.Minute, q) // gate:perp 态陈旧
+	reject, ambiguous, note := svc.replayIdleFunds(context.Background(),
+		d178Proposal("gate:mt5"), // 腿型=mt5→幻影首候选
+		pgstore.ProbePremise{Kind: "idle_funds", Venue: "gate", FreeUSD: 50})
+	if reject != "" || ambiguous != "" {
+		t.Fatalf("幻影键场景真候选应判绿, reject=%q ambiguous=%q", reject, ambiguous)
+	}
+	if !strings.Contains(note, "gate:perp") {
+		t.Fatalf("佐证应落 gate:perp: %q", note)
+	}
+	if q.calls != 1 {
+		t.Fatalf("真候选回读应恰一次（幻影键零 querier 零调用）, calls=%d", q.calls)
 	}
 }

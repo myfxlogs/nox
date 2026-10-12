@@ -48,8 +48,9 @@ func TestD176_ProseBasisNotParsed(t *testing.T) {
 	if strings.Contains(note, "XTZUSDT") || strings.Contains(note, "≠") {
 		t.Fatalf("散文裸词不得入判据, note=%q", note)
 	}
-	if !strings.Contains(note, "权益快照缺") {
-		t.Fatalf("idle_funds 应走 venue 快照歧义, note=%q", note)
+	// D-206②：缺+回读败分文案——「轮询败」替代旧「权益快照缺」。
+	if !strings.Contains(note, "轮询败") {
+		t.Fatalf("idle_funds 应走 venue 轮询败歧义, note=%q", note)
 	}
 }
 

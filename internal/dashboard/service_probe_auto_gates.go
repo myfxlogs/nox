@@ -98,7 +98,6 @@ func (s *Service) replayIdleFunds(ctx context.Context, p *pgstore.ProbeProposal,
 	legType := keydomain.Parse(p.Contract.VenueKey).Type
 	cands := []string{keydomain.Join(venue, legType), keydomain.Join(venue, "perp"), keydomain.Join(venue, "spot"), venue}
 	seen := map[string]bool{}
-	refreshed := false
 	for _, vk := range cands {
 		if seen[vk] {
 			continue
@@ -107,8 +106,10 @@ func (s *Service) replayIdleFunds(ctx context.Context, p *pgstore.ProbeProposal,
 		eq, _, asOf, ok := s.AccountEquityUSDAt(vk)
 		// D-178：缺/超龄先定向回读复判一次（pollVenueKeys 按需径，非循环重试）——
 		// 静默 venue（gate 无私流帧→零 kick）asOf 冻结≠真不可达，直拒=结构性半盲。
-		if (!ok || time.Since(asOf) > probeEquitySnapshotMaxAge) && !refreshed {
-			refreshed = true
+		// D-206①：refreshed 全局单发改逐候选一次——幻影键（腿型组合零 querier 匹配，
+		// 如 gate:mt5）曾吞刷致真存在的 gate:perp 永不得刷；4 候选上界内每 vk 至多刷
+		// 一次，!ok（从未见/offline 两态）与 ok&&stale 皆得刷，不收敛成阻塞重试。
+		if !ok || time.Since(asOf) > probeEquitySnapshotMaxAge {
 			s.RefreshAccountEquity(ctx, vk)
 			eq, _, asOf, ok = s.AccountEquityUSDAt(vk)
 		}
@@ -123,7 +124,9 @@ func (s *Service) replayIdleFunds(ctx context.Context, p *pgstore.ProbeProposal,
 		}
 		return "", "", fmt.Sprintf("idle_funds %s eq=$%.2f（premise free=%.1f）", vk, eq, freeClaim)
 	}
-	return "", fmt.Sprintf("idle_funds venue %q 权益快照缺", venue), ""
+	// D-206②：每候选皆已按需回读——仍全缺=轮询败（querier 未就绪/凭据/超时），
+	// 与「快照缺」（从未观测）分文案，asOf 推进与否即归因分界。
+	return "", fmt.Sprintf("idle_funds venue %q 权益轮询败（querier 未就绪/凭据/超时——asOf 未推进）", venue), ""
 }
 
 // probeLegExecutable ④可执行性：报价鲜帧+原生符号、universe TRADING（CEX）、
