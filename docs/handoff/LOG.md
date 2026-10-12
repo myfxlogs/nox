@@ -33,6 +33,12 @@
 
 ### 本地
 - `git remote rename github→arb-archive`（只留 `nox` 远端推送，归档仓不再更新）
+- `filt*` 七个迁移过滤残远端（/tmp/arb-m2*）清除；/tmp/arb-* 全删；本地 docker 零 arb 容器
+
+### 终检抓残（同轮清）
+- `arb_default` 网络残留 → rm；`nox-postgres-test` 卷/角色/库改 nox 名
+- **`bin/` 构建产物不随 deploy_sync**——切流后 `/opt/nox/bin/` 空致 xasset-monitor/universe-radar cron 断写 1h（自盯 critical 实捕）：SG 就地 `build_host_tools.sh` 重建三件，手动跑通写库，自盯 18s 后报「已恢复」
+- `/etc/cloudflared/config.yml`=alfaqs.org 他项目件，未动；cron 活动行零 arb
 
 ## 2026-10-12 切流后热修②：analyst 只读链路断——NOX_AI_PG_DSN 值域坐标漏改
 
