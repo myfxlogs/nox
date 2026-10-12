@@ -82,6 +82,11 @@ func main() {
 	evalCfg := buildEvalConfig(cfg)
 	// D-469b S2/S3：双 kick topic（config 变更+positions 变更；helper 内注释详口径）。
 	configKick, posChange := newKickTopics()
+	// D-508 S9：域数据刷新通知总线（写源 Publish(topic)→StreamUpdates case 14；scan/intra/trx/pf 侧注入）。
+	refreshTopic := bus.NewTopic[string]()
+	// D-190/D-211：员工花名册——编制入库+safego 心跳/退出钩接 PG（须在首个 worker 前装钩：
+	// Beat 仅 fn 启动打一次，钩未装即丢拍→活岗名册显 NULL 假死，实证 watchlist-provider）。
+	wireEmployeeRoster(ctx, st, refreshTopic)
 	cexCfg, cexSymbols := buildCexExchangeConfig(ctx, st, configKick, cfg, secRes) // D-451 S1：装配块提取至 wire_cexscan.go（纯搬家）
 	alertCooler := newAlertCooler()                                                // D-301c S2：告警同指纹冷却单实例，四处注入点共享透传
 	// 5a. CEX 报价 → QuoteBus（WS+轮询装配已拆 wire_quotes.go，D-366 S2 同 wire_* 先例）
@@ -92,10 +97,6 @@ func main() {
 		factCache.UpdateIsRealMap(isRealMap)
 	}
 	// D-509 S1：WS funding fact 发射口接 makeMetaAwareSink（meta 反哺+is_real 复用零新通道）。
-	// D-508 S9：域数据刷新通知总线（写源 Publish(topic)→StreamUpdates case 14；scan/intra/trx/pf 侧注入）。
-	refreshTopic := bus.NewTopic[string]()
-	// D-190/D-211：员工花名册——编制入库+safego 心跳/退出钩接 PG（须在首个 worker 前装钩）。
-	wireEmployeeRoster(ctx, st, refreshTopic)
 	// D-301a S2：fundingInfo 缓存 boot 一次——D-509 S2 起实时流/history/(S5前)REST 三路共用。
 	fundingEmit, fundingIntervals := newFundingEmitAndIntervals(ctx, st, factCache, cexCfg)
 	gateWs := startQuoteStreams(ctx, cexCfg, qbus, alertCooler, st, fundingEmit, fundingIntervals) // D-570 包C：ref 透传 monitors 装配 OnContractInfo
