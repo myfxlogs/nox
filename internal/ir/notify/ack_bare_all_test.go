@@ -72,7 +72,7 @@ func TestD168_AckParentMiss(t *testing.T) {
 
 // 非 ack 词（含 ack 子串的查询句）→ LLM 径原样。
 func TestD168_NonAckGoesLLM(t *testing.T) {
-	fs := &fakeQueryStore{chatID: "chat1", openID: "user1", cmcPrice: 0.33, cmcPriceTs: time.Now()}
+	fs := &fakeQueryStore{chatID: "chat1", openID: "user1", tickPrice: 0.33}
 	feishuSrv, msgCh := feishuMockServer(t)
 	old := feishuBase
 	feishuBase = feishuSrv.URL

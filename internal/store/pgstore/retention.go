@@ -29,7 +29,6 @@ var retentionTableTTL = []struct {
 	{"fin_venue_account_snapshot", "fetched_at", []string{"venue", "venue_type"}, 90},
 	{"fin_symdig_findings", "run_ts", []string{"venue", "symbol", "klass"}, 90},
 	{"fin_trx_account", "fetched_at", []string{"address"}, 90},
-	{"fin_cmc_positions", "fetched_at", []string{"account_id", "instrument_id"}, 90},
 }
 
 // pruneTTL 通用分批 TTL 删：ts<cutoff 且非组终值（组=gROUP 列集，存在更新兄弟行才删）。

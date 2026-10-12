@@ -10,14 +10,13 @@ import (
 )
 
 func (t *feishuQueryTools) execTodayIncome(ctx context.Context, call analyst.ToolCall) (analyst.ToolResult, []analyst.Citation, error) {
-	energy, voting, interest, err := t.store.SumTodayIncome(ctx)
+	energy, voting, err := t.store.SumTodayIncome(ctx)
 	if err != nil {
 		return analyst.ToolResult{ToolUseID: call.ID, Content: "查今日收益失败: " + err.Error(), IsError: true}, nil, nil
 	}
 	out, _ := json.Marshal(map[string]any{
-		"energy_trx":   energy,
-		"voting_trx":   voting,
-		"interest_usd": interest,
+		"energy_trx": energy,
+		"voting_trx": voting,
 	})
 	return analyst.ToolResult{ToolUseID: call.ID, Content: string(out)}, nil, nil
 }

@@ -1,0 +1,176 @@
+// service_graduation_livefunds.go —— D-542 S1/S2 装配层 + D-549 S1 统一读口接线。
+// 口径（提示词 v2）：流主源（私有 WS 喂 bus.BalanceLedger）→ 干净直读零 REST；
+// 脏/空 → 一发 REST 校准（复用 CEXAccountQuerier 经代理链，30s 缓存）→ 回写账本；
+// REST 也败 → 快照表兜底（D-549：带龄注记禁静默，「快照+墙钟窗」判定路径根除）。
+// D-549 S1：读口本体收编进 internal/capitalview（本文件只留装配+腿池映射）。
+package dashboard
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"strings"
+	"time"
+
+	"arb/internal/data/keydomain"
+	"arb/internal/ledger/reconcile"
+	"arb/internal/portfolio/capitalview"
+	"arb/internal/store/pgstore"
+)
+
+// capitalView 统一资金读口（D-549 S1）——惰性装配一次（共享实例保校准单飞）；
+// liveMu 守构造，SetBalanceLedger/测试注入后重建。
+func (s *Service) capitalView() *capitalview.View {
+	s.liveMu.Lock()
+	defer s.liveMu.Unlock()
+	if s.capView != nil {
+		return s.capView
+	}
+	s.capView = capitalview.New(capitalview.Deps{
+		Ledger:     s.balLedger,
+		RestTTL:    s.liveRestTTL,
+		QuerierFor: s.livePoolQuerier,
+		Snapshots: func(ctx context.Context) ([]pgstore.VenueAccountLatest, error) {
+			if s.gradStore == nil && s.store == nil {
+				return nil, nil // 部分构造 Service（测试字面量）nil 安全
+			}
+			return s.liveAccountLatest(ctx) // #1c：快照兜底面=实时态
+		},
+		MTFrames:   s.mtFrameAt,                                         // D-572 S2：MT 键流帧读口
+		MTFrameTTL: func() time.Duration { return snapshotStaleWindow }, // 帧龄窗=快照龄闸同值
+	})
+	return s.capView
+}
+
+// CapitalView D-549 R1：统一资金读口透出（autotrade gate_margin 执行面 Src 闸用；
+// 与 dashboard 内部共享同一实例——REST 校准单飞语义）。
+func (s *Service) CapitalView() *capitalview.View { return s.capitalView() }
+
+// legPool 单腿池求值（D-542 统一入口 → D-549 起经 capitalview.Live）：
+// CEX 腿→活账本（干净直读→脏/空 REST 校准）；MT 腿/校准失败 → 快照兜底
+// （带龄注记；调用方快照龄闸只对非 live 池生效）。snaps=调用方预取面（nil=自取）。
+func (s *Service) legPool(ctx context.Context, snaps []pgstore.VenueAccountLatest, venueKey string) (allocPool, bool) {
+	f, ok := s.capitalView().LiveSnaps(ctx, venueKey, snaps)
+	if !ok {
+		return allocPool{}, false
+	}
+	p := allocPool{key: f.VenueKey, equity: f.Equity, currency: f.Currency, at: f.At, live: f.Live}
+	if f.Src != capitalview.SrcSnap {
+		p.src = f.Src // "ws"/"rest"（snap 行 src 留空=poolSource 映射 "snap"）
+	}
+	if f.HasAvailable {
+		avail := f.Available
+		p.free = &avail
+	}
+	return p, true
+}
+
+// liveRestTTL 校准缓存期（字段注入测试可缩短；缺省 liveRestTTL）。
+func (s *Service) liveRestTTL() time.Duration {
+	if s.liveRestTTLDur > 0 {
+		return s.liveRestTTLDur
+	}
+	return capitalview.DefaultRestTTL
+}
+
+// mtFrameAt D-572 S2：MT 键流帧读口包装（AccountMonitor.StreamAccount → capitalview.MTFrame；
+// 帧币种流帧恒空→如实空串，快照兜底层不因此误胜）。acctMon nil=未接线→miss 落快照。
+func (s *Service) mtFrameAt(venueKey string) (capitalview.MTFrame, bool) {
+	if s.acctMon == nil {
+		return capitalview.MTFrame{}, false
+	}
+	sa, ok := s.acctMon.StreamAccount(venueKey)
+	if !ok {
+		return capitalview.MTFrame{}, false
+	}
+	return capitalview.MTFrame{
+		Equity: sa.Equity, Available: sa.FreeMargin, Margin: sa.Margin,
+		Currency: sa.Currency, At: sa.FrameTime,
+	}, true
+}
+
+// livePoolQuerier 腿 venue → CEXAccountQuerier（复用 account-monitor 同链：
+// ListExchangeConfigs → realOnlyConfigs（sim 行 fail-closed）→ resolveExchangeBaseURL
+// （代理通道内建——binance key 白名单 IP 必经代理）→ CexVenueKey 撞键归一）。
+// 返回 (querier, 活账本池键, 命中)。okx 统一账户=任意 okx 交易配置可询，池键钉 okx:unified。
+func (s *Service) livePoolQuerier(ctx context.Context, venueKey string) (reconcile.AccountQuerier, string, bool) {
+	if s.liveQuerierFor != nil {
+		q, poolKey, ok := s.liveQuerierFor(ctx, venueKey)
+		return q, poolKey, ok
+	}
+	k := keydomain.Parse(venueKey)
+	bare, typ := k.Venue, k.Type
+	if i := strings.IndexByte(typ, '#'); i >= 0 {
+		typ = typ[:i]
+	}
+	cfgs, err := s.gradDB().ListExchangeConfigs(ctx)
+	if err != nil {
+		log.Printf("[live-funds] %s list exchange configs: %v（快照兜底）", venueKey, err)
+		return nil, "", false
+	}
+	live := realOnlyConfigs(cfgs, &s.liveSimWarned, "live-funds")
+	winners := cexKeyWinners(live)
+	// D-130 域1：funding/earn 子账户族——账户行资金径必须精确键（回退链=腿池语义，错账根因）。
+	// 查询径复用本 venue 任一 real 行凭据（okx 资金/理财经子账户端点 D-363 S2；
+	// binance funding/earn 面已摘除 D-133——请求 type 只会落 unsupported 或 okx 键），
+	// querier 按请求 type 构造（Account() 分派子账户端点），
+	// poolKey=精确键——禁 pin unified、禁用配置行 type 建 querier（Account 会查成交易账户）。
+	if typ == "funding" || typ == "earn" {
+		for i := range live {
+			c := &live[i]
+			if c.Venue != bare {
+				continue
+			}
+			q := reconcile.NewCEXAccountQuerier(c.Venue, typ, c.APIKey, c.APISecret, c.Passphrase,
+				resolveExchangeBaseURL(*c), c.Website, c.Simulated)
+			return q, keydomain.Join(bare, typ), true
+		}
+		return nil, "", false
+	}
+	for i := range live {
+		c := &live[i]
+		if c.Venue != bare {
+			continue
+		}
+		if bare != "okx" && c.VenueType != typ {
+			continue // binance/gate 按 venue_type 精确配腿（spot 腿禁读 perp 池）
+		}
+		base := resolveExchangeBaseURL(*c)
+		q := reconcile.NewCEXAccountQuerier(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Website, c.Simulated)
+		q.SetKeyOverride(reconcile.CexVenueKey(c.Venue, c.VenueType, c.ID, winners))
+		poolKey := keydomain.Join(bare, c.VenueType)
+		if bare == "okx" {
+			poolKey = "okx:unified" // 统一账户（快照行同口径钉法）
+		}
+		return q, poolKey, true
+	}
+	return nil, "", false
+}
+
+// legPoolSizing 批钱面腿池读口（D-565 S4：批钱=判定→全实时，快照禁入）：
+// CEX 腿→capitalView.LiveFresh（ws 直读/REST 实拉绕 restTTL——D-563 S4c 先例）；
+// MT 腿→mtAcctSummary 实时 RPC（equity/freeMargin/currency 同帧采，≤10s）；
+// 两径败/其他 venue 族 → (false, failNote) fail-closed 拒批。展示面 legPool 照旧。
+func (s *Service) legPoolSizing(ctx context.Context, venueKey string) (allocPool, bool, string) {
+	if capitalview.IsCEXVenue(venueKey) {
+		f, ok := s.capitalView().LiveFresh(ctx, venueKey)
+		if !ok || !f.Live {
+			return allocPool{}, false, "CEX 池实况不可得（活账本/REST 双败，批钱面禁快照兜底）"
+		}
+		p := allocPool{key: f.VenueKey, equity: f.Equity, currency: f.Currency, at: f.At, live: true, src: f.Src}
+		if f.HasAvailable {
+			avail := f.Available
+			p.free = &avail
+		}
+		return p, true, ""
+	}
+	k := keydomain.Parse(venueKey)
+	if k.Type == "mt4" || k.Type == "mt5" {
+		eq, fm, ccy, err := s.mtAcctSummary(ctx, venueKey)
+		if err != nil {
+			return allocPool{}, false, fmt.Sprintf("MT 池实况不可得（%v）", err)
+		}
+		return allocPool{key: venueKey, equity: eq, free: &fm, currency: ccy, at: time.Now(), live: true, src: "rpc"}, true, ""
+	}
+	return allocPool{}, false, "venue 族无批钱实时读径（快照禁入批钱面）"
+}

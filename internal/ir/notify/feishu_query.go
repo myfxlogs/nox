@@ -193,16 +193,13 @@ func (h *FeishuQueryHandler) resolveClient(ctx context.Context) (*analyst.Client
 
 // --- 4 专用工具 ---
 
-const trxInstrument = "X-AFQUL"
-
 func feishuQueryToolSpecs() []analyst.ToolSpec {
 	empty := json.RawMessage(`{"type":"object","properties":{}}`)
 	macroDays := json.RawMessage(`{"type":"object","properties":{"days_ahead":{"type":"integer","description":"向前看 N 天，缺省 7"}}}`)
 	return []analyst.ToolSpec{
-		{Name: "query_trx_price", Description: "查 TRX 当前价格（CMC 平台 X-AFQUL 合约中间价）", InputSchema: empty},
+		{Name: "query_trx_price", Description: "查 TRX 当前价格（binance TRXUSDT 现货中间价）", InputSchema: empty},
 		{Name: "query_trx_account", Description: "查 TRX 账户（余额/质押/待领取奖励/能量/带宽/票数）", InputSchema: empty},
-		{Name: "query_cmc_position", Description: "查 CMC 空单持仓（数量/开仓价/浮盈/强平价/距强平%）", InputSchema: empty},
-		{Name: "query_today_income", Description: "查今日收益（能量租金+投票奖励+隔夜息，USD）", InputSchema: empty},
+		{Name: "query_today_income", Description: "查今日收益（能量租金+投票奖励，TRX）", InputSchema: empty},
 		{Name: "query_macro_events", Description: "查未来 N 日宏观经济事件（财历：非农/CPI/议息等）", InputSchema: macroDays},
 	}
 }
@@ -212,7 +209,7 @@ type feishuQueryTools struct {
 }
 
 func (t *feishuQueryTools) Names() []string {
-	return append([]string{"query_trx_price", "query_trx_account", "query_cmc_position", "query_today_income",
+	return append([]string{"query_trx_price", "query_trx_account", "query_today_income",
 		"query_macro_events"}, fundToolNames...)
 }
 
@@ -222,8 +219,6 @@ func (t *feishuQueryTools) Execute(ctx context.Context, call analyst.ToolCall) (
 		return t.execTrxPrice(ctx, call)
 	case "query_trx_account":
 		return t.execTrxAccount(ctx, call)
-	case "query_cmc_position":
-		return t.execCmcPosition(ctx, call)
 	case "query_today_income":
 		return t.execTodayIncome(ctx, call)
 	case "query_macro_events":
@@ -234,11 +229,11 @@ func (t *feishuQueryTools) Execute(ctx context.Context, call analyst.ToolCall) (
 }
 
 func (t *feishuQueryTools) execTrxPrice(ctx context.Context, call analyst.ToolCall) (analyst.ToolResult, []analyst.Citation, error) {
-	price, fetchedAt, err := t.store.LastCMCPriceMid(ctx, trxInstrument)
-	if err != nil {
-		return analyst.ToolResult{ToolUseID: call.ID, Content: "查 TRX 价格失败: " + err.Error(), IsError: true}, nil, nil
+	price, ok := t.store.TickMid(ctx, "binance", "TRXUSDT")
+	if !ok {
+		return analyst.ToolResult{ToolUseID: call.ID, Content: "查 TRX 价格失败: 无 TRXUSDT 报价", IsError: true}, nil, nil
 	}
-	out, _ := json.Marshal(map[string]any{"price": price, "fetched_at": fetchedAt.Format(time.RFC3339)})
+	out, _ := json.Marshal(map[string]any{"price": price})
 	return analyst.ToolResult{ToolUseID: call.ID, Content: string(out)}, nil, nil
 }
 
@@ -257,25 +252,6 @@ func (t *feishuQueryTools) execTrxAccount(ctx context.Context, call analyst.Tool
 		"energy_delegated":   acc.EnergyDelegated,
 		"bandwidth_staked":   acc.BandwidthStaked,
 		"fetched_at":         acc.FetchedAt.Format(time.RFC3339),
-	})
-	return analyst.ToolResult{ToolUseID: call.ID, Content: string(out)}, nil, nil
-}
-
-func (t *feishuQueryTools) execCmcPosition(ctx context.Context, call analyst.ToolCall) (analyst.ToolResult, []analyst.Citation, error) {
-	pos, err := t.store.LastCMCPosition(ctx, trxInstrument)
-	if err != nil {
-		return analyst.ToolResult{ToolUseID: call.ID, Content: "查 CMC 持仓失败: " + err.Error(), IsError: true}, nil, nil
-	}
-	sum, _ := t.store.LastCMCAccountSummary(ctx)
-	out, _ := json.Marshal(map[string]any{
-		"instrument_id":            pos.InstrumentID,
-		"direction":                pos.Direction,
-		"quantity":                 pos.Quantity,
-		"entry_price":              pos.EntryPrice,
-		"unrealised_pnl":           pos.UnrealisedPnL,
-		"closeout_price":           sum.CloseoutPrice,
-		"distance_to_closeout_pct": sum.DistanceToCloseoutPct,
-		"fetched_at":               pos.FetchedAt.Format(time.RFC3339),
 	})
 	return analyst.ToolResult{ToolUseID: call.ID, Content: string(out)}, nil, nil
 }

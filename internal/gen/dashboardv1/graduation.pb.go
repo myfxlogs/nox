@@ -22,7 +22,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// 字段证据级别——A=服务侧结算/回执，B=venue 实数据，C=估算/假设，D=缺/不可用。
+// D-476a：字段证据级别——A=服务侧结算/回执，B=venue 实数据，C=估算/假设，D=缺/不可用。
 type EvidenceGrade int32
 
 const (
@@ -97,12 +97,12 @@ type CarryGraduationRow struct {
 	VenueGaps      []string               `protobuf:"bytes,15,rep,name=venue_gaps,json=venueGaps,proto3" json:"venue_gaps,omitempty"`                   // approve 时算的 venue env 缺口（pending 即时算；decided 回读快照）
 	NetAllInUsd    *float64               `protobuf:"fixed64,16,opt,name=net_all_in_usd,json=netAllInUsd,proto3,oneof" json:"net_all_in_usd,omitempty"` // D-410 S5：全账净额（accrued−est_fee+convergence；缺账行 NULL）
 	FlagWarn       *string                `protobuf:"bytes,17,opt,name=flag_warn,json=flagWarn,proto3,oneof" json:"flag_warn,omitempty"`                // D-463 S3：warn 旗标命中透出（⚠+reason；无旗=NULL）
-	// 质量杆观测（零拒批，先采数后定阈）：pending 行即时算不落库。
+	// D-475a S5 质量杆观测（零拒批，先采数后定阈）：pending 行即时算不落库。
 	AccrueTicks     *int64   `protobuf:"varint,18,opt,name=accrue_ticks,json=accrueTicks,proto3,oneof" json:"accrue_ticks,omitempty"`             // 实结期数（结算对齐累积写次数）
 	ExpectedPeriods *int64   `protobuf:"varint,19,opt,name=expected_periods,json=expectedPeriods,proto3,oneof" json:"expected_periods,omitempty"` // elapsed/funding_interval（interval 缺→NULL 诚实缺）
 	CoverageRatio   *float64 `protobuf:"fixed64,20,opt,name=coverage_ratio,json=coverageRatio,proto3,oneof" json:"coverage_ratio,omitempty"`      // accrue_ticks/expected_periods（<0.8 黄 <0.5 红 徽标）
 	MinAccruedUsd   *float64 `protobuf:"fixed64,21,opt,name=min_accrued_usd,json=minAccruedUsd,proto3,oneof" json:"min_accrued_usd,omitempty"`    // 存续期 accrued 最低水位（回撤观测）
-	// 18/19 已被 475a 观测列占用→顺延 22/23。
+	// D-471：18/19 已被 475a 观测列占用→顺延 22/23。
 	Risk          *GraduationRiskReport `protobuf:"bytes,22,opt,name=risk,proto3,oneof" json:"risk,omitempty"`                            // S1 风险档案（pending 即时算；decided NULL）
 	EntryWindow   string                `protobuf:"bytes,23,opt,name=entry_window,json=entryWindow,proto3" json:"entry_window,omitempty"` // S2 open / closed:<reason>（pending 即时算）
 	unknownFields protoimpl.UnknownFields
@@ -636,17 +636,17 @@ type XAssetAllowComboRow struct {
 	Enabled       bool                   `protobuf:"varint,10,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	Simulated     *bool                  `protobuf:"varint,11,opt,name=simulated,proto3,oneof" json:"simulated,omitempty"`
 	Note          string                 `protobuf:"bytes,12,opt,name=note,proto3" json:"note,omitempty"`
-	// S3④：实时字段——在仓敞口/双腿池可用/闸冲突。
+	// D-547 S3④：实时字段——在仓敞口/双腿池可用/闸冲突。
 	ActiveNotionalUsd float64                `protobuf:"fixed64,13,opt,name=active_notional_usd,json=activeNotionalUsd,proto3" json:"active_notional_usd,omitempty"` // Σ在仓金额（同 approve 闸口径）
 	BuyPoolUsd        float64                `protobuf:"fixed64,14,opt,name=buy_pool_usd,json=buyPoolUsd,proto3" json:"buy_pool_usd,omitempty"`                      // 买腿池可用（live 账本/校准/快照链）
 	SellPoolUsd       float64                `protobuf:"fixed64,15,opt,name=sell_pool_usd,json=sellPoolUsd,proto3" json:"sell_pool_usd,omitempty"`                   // 卖腿池可用
 	PoolSource        string                 `protobuf:"bytes,16,opt,name=pool_source,json=poolSource,proto3" json:"pool_source,omitempty"`                          // ws|rest|snap|""（池缺取=空）
 	PoolUpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=pool_updated_at,json=poolUpdatedAt,proto3" json:"pool_updated_at,omitempty"`
 	CapConflict       bool                   `protobuf:"varint,18,opt,name=cap_conflict,json=capConflict,proto3" json:"cap_conflict,omitempty"` // 任一腿池缺/可用<notional×2 → 结构冲突红标
-	// 近6h资金拒事实透出（autotrade_logs FAILED×IsFundingRejectMsg 批量查）。
+	// D-560 S2b：近6h资金拒事实透出（autotrade_logs FAILED×IsFundingRejectMsg 批量查）。
 	RecentFundingReject bool   `protobuf:"varint,19,opt,name=recent_funding_reject,json=recentFundingReject,proto3" json:"recent_funding_reject,omitempty"`
 	RecentRejectReason  string `protobuf:"bytes,20,opt,name=recent_reject_reason,json=recentRejectReason,proto3" json:"recent_reject_reason,omitempty"` // 拒文截断+「解法：」行（可行解法透出）
-	// 拒单熔断态透出（活动窗在档才置位）。
+	// D-560 S3：拒单熔断态透出（活动窗在档才置位）。
 	BreakerPaused   bool                   `protobuf:"varint,21,opt,name=breaker_paused,json=breakerPaused,proto3" json:"breaker_paused,omitempty"` // 签名熔断活动窗（含 funding 暂停态）
 	BreakerClass    string                 `protobuf:"bytes,22,opt,name=breaker_class,json=breakerClass,proto3" json:"breaker_class,omitempty"`     // variant/funding/liq-distance/other
 	BreakerResumeAt *timestamppb.Timestamp `protobuf:"bytes,23,opt,name=breaker_resume_at,json=breakerResumeAt,proto3" json:"breaker_resume_at,omitempty"`
@@ -913,7 +913,7 @@ func (x *ListXAssetAllowCombosResponse) GetRows() []*XAssetAllowComboRow {
 	return nil
 }
 
-// 待入场区行（enabled 组合−在持仓=挂单集）。
+// D-478 S3：待入场区行（enabled 组合−在持仓=挂单集）。
 type ListXAssetPendingEntriesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1004,25 +1004,25 @@ type XAssetPendingEntryRow struct {
 	Tier       string                 `protobuf:"bytes,6,opt,name=tier,proto3" json:"tier,omitempty"`                               // 安全档位：ok / over / unset / missing_data
 	TierDetail string                 `protobuf:"bytes,7,opt,name=tier_detail,json=tierDetail,proto3" json:"tier_detail,omitempty"` // 档位明细（「超档: 名义$X>权益$Y×5.0」等）
 	TierWarn   bool                   `protobuf:"varint,8,opt,name=tier_warn,json=tierWarn,proto3" json:"tier_warn,omitempty"`      // 任一腿超档
-	// 近6h资金拒事实透出（与 XAssetAllowComboRow 同字段同源）。
+	// D-560 S2b：近6h资金拒事实透出（与 XAssetAllowComboRow 同字段同源）。
 	RecentFundingReject bool   `protobuf:"varint,9,opt,name=recent_funding_reject,json=recentFundingReject,proto3" json:"recent_funding_reject,omitempty"`
 	RecentRejectReason  string `protobuf:"bytes,10,opt,name=recent_reject_reason,json=recentRejectReason,proto3" json:"recent_reject_reason,omitempty"`
-	// 拒单熔断态透出（与 XAssetAllowComboRow 同字段同源）。
+	// D-560 S3：拒单熔断态透出（与 XAssetAllowComboRow 同字段同源）。
 	BreakerPaused   bool                   `protobuf:"varint,11,opt,name=breaker_paused,json=breakerPaused,proto3" json:"breaker_paused,omitempty"`
 	BreakerClass    string                 `protobuf:"bytes,12,opt,name=breaker_class,json=breakerClass,proto3" json:"breaker_class,omitempty"`
 	BreakerResumeAt *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=breaker_resume_at,json=breakerResumeAt,proto3" json:"breaker_resume_at,omitempty"`
 	BreakerCount    int32                  `protobuf:"varint,14,opt,name=breaker_count,json=breakerCount,proto3" json:"breaker_count,omitempty"` // 本窗已抑制尝试数（徽标 ×N）
-	// 等待条件结构化透出（XASSET_CARRY 且七闸全过时填充；其余形态/数据缺=留空）。
+	// D-580：等待条件结构化透出（XASSET_CARRY 且七闸全过时填充；其余形态/数据缺=留空）。
 	WaitCurrentBps   *float64 `protobuf:"fixed64,15,opt,name=wait_current_bps,json=waitCurrentBps,proto3,oneof" json:"wait_current_bps,omitempty"`       // 实况入场价差 bps（双腿 qbus 现算，同 engine_opp 公式）
 	WaitThresholdBps *float64 `protobuf:"fixed64,16,opt,name=wait_threshold_bps,json=waitThresholdBps,proto3,oneof" json:"wait_threshold_bps,omitempty"` // 入场阈值 bps（monitor noise_bps 24h 摆幅）
 	WaitGapBps       *float64 `protobuf:"fixed64,17,opt,name=wait_gap_bps,json=waitGapBps,proto3,oneof" json:"wait_gap_bps,omitempty"`                   // 阈值−当前（正=还差多少）
-	// 保证金预算内联填写+名义相等反推透显（值皆服务端算，前端只渲染）。
+	// D-010 S5：保证金预算内联填写+名义相等反推透显（值皆服务端算，前端只渲染）。
 	MarginBudgetUsd  *float64 `protobuf:"fixed64,18,opt,name=margin_budget_usd,json=marginBudgetUsd,proto3,oneof" json:"margin_budget_usd,omitempty"`      // 组合保证金预算（margin_usd 设定时透出）
 	LegNotionalUsd   *float64 `protobuf:"fixed64,19,opt,name=leg_notional_usd,json=legNotionalUsd,proto3,oneof" json:"leg_notional_usd,omitempty"`         // 反推每腿名义 N=margin÷(fracB+fracS)（两链同口径）
 	BuyLegMarginUsd  *float64 `protobuf:"fixed64,20,opt,name=buy_leg_margin_usd,json=buyLegMarginUsd,proto3,oneof" json:"buy_leg_margin_usd,omitempty"`    // 买腿保证金占用=N×fracB
 	SellLegMarginUsd *float64 `protobuf:"fixed64,21,opt,name=sell_leg_margin_usd,json=sellLegMarginUsd,proto3,oneof" json:"sell_leg_margin_usd,omitempty"` // 卖腿保证金占用=N×fracS
 	MinMarginUsd     *float64 `protobuf:"fixed64,22,opt,name=min_margin_usd,json=minMarginUsd,proto3,oneof" json:"min_margin_usd,omitempty"`               // 最少需保证金=max(腿minStep名义)×(fracB+fracS)
-	// econ 同源入场回本估（EntryCost+ExitEst)/CarryPerDay；缺账→NULL 诚实缺。
+	// D-014：econ 同源入场回本估（EntryCost+ExitEst)/CarryPerDay；缺账→NULL 诚实缺。
 	EstBreakevenDays *float64 `protobuf:"fixed64,23,opt,name=est_breakeven_days,json=estBreakevenDays,proto3,oneof" json:"est_breakeven_days,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
@@ -1443,7 +1443,7 @@ func (x *UpsertXAssetAllowComboResponse) GetOverSubscribedWarn() string {
 	return ""
 }
 
-// 熔断恢复（清 dedupKey 前缀命中的全部熔断条目）。
+// D-560 S3：熔断恢复（清 dedupKey 前缀命中的全部熔断条目）。
 type ResumeXAssetComboRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ComboId       int64                  `protobuf:"varint,1,opt,name=combo_id,json=comboId,proto3" json:"combo_id,omitempty"`
@@ -1684,7 +1684,7 @@ func (x *PreviewXAssetComboRiskResponse) GetRisk() *GraduationRiskReport {
 	return nil
 }
 
-// venue 敞口闸消息（cap=0=冻结新批准不动存量；enabled=false=闸停用行在档）。
+// D-475a S6：venue 敞口闸消息（cap=0=冻结新批准不动存量；enabled=false=闸停用行在档）。
 type VenueExposureCapRow struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	VenueKey  string                 `protobuf:"bytes,1,opt,name=venue_key,json=venueKey,proto3" json:"venue_key,omitempty"`
@@ -1693,14 +1693,14 @@ type VenueExposureCapRow struct {
 	Note      string                 `protobuf:"bytes,4,opt,name=note,proto3" json:"note,omitempty"`
 	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	Unset     bool                   `protobuf:"varint,6,opt,name=unset,proto3" json:"unset,omitempty"` // D-542：合成占位行——已配置账户但闸表无行（显式提示未设闸，非冻结语义）
-	// S3①：闸真相——live 金额面值（allocated=Σ在仓金额，口径同 approve 闸）。
+	// D-547 S3①：闸真相——live 金额面值（allocated=Σ在仓金额，口径同 approve 闸）。
 	AllocatedUsd     float64                `protobuf:"fixed64,7,opt,name=allocated_usd,json=allocatedUsd,proto3" json:"allocated_usd,omitempty"`
 	LiveAvailableUsd float64                `protobuf:"fixed64,8,opt,name=live_available_usd,json=liveAvailableUsd,proto3" json:"live_available_usd,omitempty"` // 池可用余额（live 账本/校准/快照链）
 	LiveEquityUsd    float64                `protobuf:"fixed64,9,opt,name=live_equity_usd,json=liveEquityUsd,proto3" json:"live_equity_usd,omitempty"`
 	LiveSource       string                 `protobuf:"bytes,10,opt,name=live_source,json=liveSource,proto3" json:"live_source,omitempty"` // ws|rest|snap|""（池缺取=空）
 	LiveUpdatedAt    *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=live_updated_at,json=liveUpdatedAt,proto3" json:"live_updated_at,omitempty"`
 	OverCap          bool                   `protobuf:"varint,12,opt,name=over_cap,json=overCap,proto3" json:"over_cap,omitempty"` // allocated>cap（静态闸已过载，红标警示）
-	// 通道白名单 join（合并单表用）——kind=venue 规则按 venue_key 命中；
+	// D-557 S1：通道白名单 join（合并单表用）——kind=venue 规则按 venue_key 命中；
 	// sim/real 双行并存取 real 优先。0=无规则行（前端显「未开通」）。
 	AllowRuleId   int64 `protobuf:"varint,13,opt,name=allow_rule_id,json=allowRuleId,proto3" json:"allow_rule_id,omitempty"`
 	AllowEnabled  bool  `protobuf:"varint,14,opt,name=allow_enabled,json=allowEnabled,proto3" json:"allow_enabled,omitempty"`
@@ -2241,7 +2241,7 @@ type ApproveCarryGraduationResponse struct {
 	SizingNotes       []string               `protobuf:"bytes,13,rep,name=sizing_notes,json=sizingNotes,proto3" json:"sizing_notes,omitempty"`                        // D-490：池口径/币种/快照时间等审计注记
 	VenueGapKeys      []string               `protobuf:"bytes,14,rep,name=venue_gap_keys,json=venueGapKeys,proto3" json:"venue_gap_keys,omitempty"`                   // D-492：纯 venue_key 缺口列表（venue_gaps 混 capWarns 句串不可解析——双轨并存）
 	LegPools          []*GradLegPoolRow      `protobuf:"bytes,15,rep,name=leg_pools,json=legPools,proto3" json:"leg_pools,omitempty"`                                 // D-508 S8：dry_run 腿→资金池映射（后端推导 venue_key+回退链终值，前端删镜像）
-	// 可用资金基准+风险位+建议额（栏内联动基准/红字数据源；服务端权威，前端只渲染）。
+	// D-540：可用资金基准+风险位+建议额（栏内联动基准/红字数据源；服务端权威，前端只渲染）。
 	AllocBaseUsd      float64  `protobuf:"fixed64,16,opt,name=alloc_base_usd,json=allocBaseUsd,proto3" json:"alloc_base_usd,omitempty"`                // 可用基准=min(双池可用)；缺 free_margin 回退 equity
 	RiskLevel         string   `protobuf:"bytes,17,opt,name=risk_level,json=riskLevel,proto3" json:"risk_level,omitempty"`                             // ok / insufficient（请求额>基准）/ liquidation（保证金估后缓冲<安全垫）
 	SuggestedAllocUsd float64  `protobuf:"fixed64,18,opt,name=suggested_alloc_usd,json=suggestedAllocUsd,proto3" json:"suggested_alloc_usd,omitempty"` // 建议分配额（risk≠ok 时给；insufficient=基准全额，liquidation=缓冲反推）

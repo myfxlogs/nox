@@ -109,11 +109,12 @@ func TestBaseline_SquashSupersedes(t *testing.T) {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate after baseline marker: %v", err)
 	}
+	// <1000 全取代零重放；≥1000 新迁移（如 1001 dept 枚举）照常应用。
 	var n int
-	if err := s.Pool().QueryRow(ctx, `SELECT COUNT(*)::int FROM schema_migrations`).Scan(&n); err != nil {
+	if err := s.Pool().QueryRow(ctx, `SELECT COUNT(*)::int FROM schema_migrations WHERE version < 1000`).Scan(&n); err != nil {
 		t.Fatalf("count: %v", err)
 	}
-	if n != 1 {
-		t.Fatalf("baseline marker 后 Migrate 应零执行：schema_migrations 行数=%d want 1", n)
+	if n != 0 {
+		t.Fatalf("baseline marker 后 <1000 应零执行：schema_migrations 含 %d 行旧版本", n)
 	}
 }

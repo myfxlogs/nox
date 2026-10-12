@@ -179,7 +179,6 @@ func renderWeeklyStats(w *pgstore.RetroWeekly, kb string, zSigma, zLim float64) 
 	caseLine("top_deviation", w.TopDeviation)
 	b.WriteString("== 纸面交易 ==\n")
 	fmt.Fprintf(&b, "paper_spot_carry exits_7d=%d reasons: %s\n", w.PaperSpotN, joinDist(w.PaperSpot))
-	fmt.Fprintf(&b, "paper_intra_trades closed_7d=%d reasons: %s\n", w.PaperIntraN, joinDist(w.PaperIntra))
 	b.WriteString("== 策略生死 ==\n")
 	for _, s := range w.Strategies {
 		dis := ""
@@ -266,8 +265,8 @@ func weeklyTradeTable(w *pgstore.RetroWeekly) string {
 }
 
 func weeklyPaperTable(w *pgstore.RetroWeekly) string {
-	return fmt.Sprintf("paper_spot_carry exits_7d=%d reasons: %s\npaper_intra_trades closed_7d=%d reasons: %s",
-		w.PaperSpotN, joinDist(w.PaperSpot), w.PaperIntraN, joinDist(w.PaperIntra))
+	return fmt.Sprintf("paper_spot_carry exits_7d=%d reasons: %s",
+		w.PaperSpotN, joinDist(w.PaperSpot))
 }
 
 // hprText D-181 资本效率列：per-trade avg(net/notional) 转 bps；口径缺如实标。

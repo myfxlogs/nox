@@ -610,7 +610,7 @@ func (*RemoveBrokerResponse) Descriptor() ([]byte, []int) {
 	return file_dashboardv1_broker_admin_proto_rawDescGZIP(), []int{9}
 }
 
-// 凭据编辑——空串/0 = 不改动；password 永不回传。
+// D-493 S4：凭据编辑——空串/0 = 不改动；password 永不回传。
 type UpdateBrokerCredentialsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Venue         string                 `protobuf:"bytes,1,opt,name=venue,proto3" json:"venue,omitempty"`

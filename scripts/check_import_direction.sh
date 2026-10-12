@@ -8,6 +8,36 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 ALLOWED=$(cat <<'EOF'
+internal/api/dashboard -> internal/data/adapter
+internal/api/dashboard -> internal/data/adapter/gen/mtapi/mt5
+internal/api/dashboard -> internal/data/bus
+internal/api/dashboard -> internal/data/collect/exchange
+internal/api/dashboard -> internal/data/fact
+internal/api/dashboard -> internal/data/keydomain
+internal/api/dashboard -> internal/data/marketstate
+internal/api/dashboard -> internal/data/venue
+internal/api/dashboard -> internal/gen/dashboardv1
+internal/api/dashboard -> internal/infra/dephealth
+internal/api/dashboard -> internal/ledger/reconcile
+internal/api/dashboard -> internal/platform/alertcool
+internal/api/dashboard -> internal/platform/analyst
+internal/api/dashboard -> internal/platform/combo
+internal/api/dashboard -> internal/platform/config
+internal/api/dashboard -> internal/platform/cryptoutil
+internal/api/dashboard -> internal/platform/errclass
+internal/api/dashboard -> internal/platform/httpx
+internal/api/dashboard -> internal/platform/notional
+internal/api/dashboard -> internal/platform/safego
+internal/api/dashboard -> internal/platform/usdnotional
+internal/api/dashboard -> internal/portfolio/capitalview
+internal/api/dashboard -> internal/portfolio/trxvote
+internal/api/dashboard -> internal/research/econ
+internal/api/dashboard -> internal/research/scan
+internal/api/dashboard -> internal/review/kbreport
+internal/api/dashboard -> internal/review/sysretro
+internal/api/dashboard -> internal/review/verification
+internal/api/dashboard -> internal/store/pgstore
+internal/api/dashboard -> internal/trading/exec
 internal/data/adapter -> internal/data/adapter/gen/mtapi/mt5
 internal/data/adapter -> internal/data/bus
 internal/data/adapter -> internal/data/collect

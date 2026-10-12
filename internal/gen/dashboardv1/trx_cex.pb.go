@@ -22,8 +22,8 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// TrxAccountRefresh——手动刷新按钮+on-open 双踢 trx_account+trx_apr 后返回最新 fin_trx_account 全字段快照。
-// Q3 裁定：sun 单位 ÷1e6 转 double（对齐 HedgeAccounts 口径，前端零换算）；votes_total 用 double（对齐 HedgeAccounts.votes）。
+// D-254：TrxAccountRefresh——手动刷新按钮+on-open 双踢 trx_account+trx_apr 后返回最新 fin_trx_account 全字段快照。
+// Q3 裁定：sun 单位 ÷1e6 转 double（对齐 fin_trx_account 行口径，前端零换算）；votes_total 用 double（对齐 fin_trx_account.votes_total）。
 // Q1 裁定：全 11 字段透出（unfrozen/sr_address 是 TronLink 展示集合，数据面一次到位，渲染扩展挂账）。
 type TrxAccountRefreshRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -67,14 +67,14 @@ type TrxAccountRefreshResponse struct {
 	Address         string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`                                          // 钱包地址
 	SrAddress       string                 `protobuf:"bytes,3,opt,name=sr_address,json=srAddress,proto3" json:"sr_address,omitempty"`                     // 投票 SR 地址（nil=空字符串）
 	TrxBalance      float64                `protobuf:"fixed64,4,opt,name=trx_balance,json=trxBalance,proto3" json:"trx_balance,omitempty"`                // balance_sun ÷ 1e6（TRX）
-	TrxAllowance    float64                `protobuf:"fixed64,5,opt,name=trx_allowance,json=trxAllowance,proto3" json:"trx_allowance,omitempty"`          // reward_num_sun ÷ 1e6（D-285 链上真值，与 GetHedgeStructure.hedge_accounts.trx_allowance 同源）
+	TrxAllowance    float64                `protobuf:"fixed64,5,opt,name=trx_allowance,json=trxAllowance,proto3" json:"trx_allowance,omitempty"`          // reward_num_sun ÷ 1e6（D-285 链上真值，与 fin_trx_account.reward_num_sun 同源）
 	EnergyDelegated float64                `protobuf:"fixed64,6,opt,name=energy_delegated,json=energyDelegated,proto3" json:"energy_delegated,omitempty"` // energy_delegated ÷ 1e6（TRX）
 	BandwidthStaked float64                `protobuf:"fixed64,7,opt,name=bandwidth_staked,json=bandwidthStaked,proto3" json:"bandwidth_staked,omitempty"` // bandwidth_staked ÷ 1e6（TRX）
 	NetLimit        float64                `protobuf:"fixed64,8,opt,name=net_limit,json=netLimit,proto3" json:"net_limit,omitempty"`                      // 带宽上限（BP，链上原值透传）
-	Votes           float64                `protobuf:"fixed64,9,opt,name=votes,proto3" json:"votes,omitempty"`                                            // votes_total（票数，对齐 HedgeAccounts.votes 不除 1e6）
+	Votes           float64                `protobuf:"fixed64,9,opt,name=votes,proto3" json:"votes,omitempty"`                                            // votes_total（票数，对齐 fin_trx_account.votes_total 不除 1e6）
 	Unfrozen        string                 `protobuf:"bytes,10,opt,name=unfrozen,proto3" json:"unfrozen,omitempty"`                                       // JSONB 透传（nil=空字符串，在途解押）
 	FetchedAt       *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=fetched_at,json=fetchedAt,proto3" json:"fetched_at,omitempty"`                    // 采集时间
-	// 地址资源显示（剩余带宽/能量）
+	// D-278 S5：地址资源显示（剩余带宽/能量）
 	NetUsed         float64 `protobuf:"fixed64,12,opt,name=net_used,json=netUsed,proto3" json:"net_used,omitempty"`                       // 已用带宽（BP，链上原值透传）
 	FreeNetUsed     float64 `protobuf:"fixed64,13,opt,name=free_net_used,json=freeNetUsed,proto3" json:"free_net_used,omitempty"`         // 免费已用带宽（BP，链上原值透传）
 	FreeNetLimit    float64 `protobuf:"fixed64,14,opt,name=free_net_limit,json=freeNetLimit,proto3" json:"free_net_limit,omitempty"`      // 免费带宽上限（BP，链上原值透传）
@@ -234,7 +234,7 @@ func (x *TrxAccountRefreshResponse) GetBandwidthStatus() string {
 	return ""
 }
 
-// 收益率雷达——后端算好，前端零计算（D-043 前端零信任）。
+// D-258 S3：收益率雷达——后端算好，前端零计算（D-043 前端零信任）。
 // 能量=实收年化（rental_income÷在押）；投票=SR APR（D-233 对拍口径）。
 type GetTrxYieldRadarRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -283,7 +283,7 @@ type GetTrxYieldRadarResponse struct {
 	SampleDays_30D int32                  `protobuf:"varint,7,opt,name=sample_days_30d,json=sampleDays30d,proto3" json:"sample_days_30d,omitempty"`     // 30d 实际样本天数
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`                    // 数据更新时间
 	Transition     bool                   `protobuf:"varint,9,opt,name=transition,proto3" json:"transition,omitempty"`                                  // 扩容过渡期（7d 窗内 energy_delegated 变化>20%）：读数=旧租金÷新在押，floor 判定无效（9-9 B' 教训）
-	// 投票市场最高 APR（从 fin_trx_vote_apr 同行透传，消除 TrxHedgeCard 投票年化行重复）
+	// D-288：投票市场最高 APR（从 fin_trx_vote_apr 同行透传，消除投票年化行重复）
 	VoteAprMax    float64 `protobuf:"fixed64,10,opt,name=vote_apr_max,json=voteAprMax,proto3" json:"vote_apr_max,omitempty"`          // 市场最高 APR %（producer=true 降序第一）
 	VoteAprMaxSr  string  `protobuf:"bytes,11,opt,name=vote_apr_max_sr,json=voteAprMaxSr,proto3" json:"vote_apr_max_sr,omitempty"`    // 最高 APR SR 名
 	VoteAprSpread float64 `protobuf:"fixed64,12,opt,name=vote_apr_spread,json=voteAprSpread,proto3" json:"vote_apr_spread,omitempty"` // max−current 差值（pp）
@@ -405,8 +405,8 @@ func (x *GetTrxYieldRadarResponse) GetVoteAprSpread() float64 {
 	return 0
 }
 
-// 净收益率日曲线——后端聚合三成分日序列+滚动年化，前端零计算（D-043 前端零信任）。
-// 数据源=position_daily_income（rollup 日序列）+ fin_cmc_positions.evaluation_bid_price（现价）。
+// D-278 S1：净收益率日曲线——后端聚合三成分日序列+滚动年化，前端零计算（D-043 前端零信任）。
+// 数据源=position_daily_income（rollup 日序列）+ ticks TRXUSDT（现价）。
 // 分母=$36.5K 池口径常量（与底稿可比，AF4）；S4 敞口并入响应。
 type GetTrxYieldCurveRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -457,9 +457,8 @@ type TrxYieldCurvePoint struct {
 	Day           *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=day,proto3" json:"day,omitempty"`                                              // UTC 日期
 	EnergyTrx     float64                `protobuf:"fixed64,2,opt,name=energy_trx,json=energyTrx,proto3" json:"energy_trx,omitempty"`               // 当日能量租金收入（TRX）
 	VotingTrx     float64                `protobuf:"fixed64,3,opt,name=voting_trx,json=votingTrx,proto3" json:"voting_trx,omitempty"`               // 当日投票收入（TRX）
-	InterestUsd   float64                `protobuf:"fixed64,4,opt,name=interest_usd,json=interestUsd,proto3" json:"interest_usd,omitempty"`         // 当日空单隔夜息（USD）
 	Price         float64                `protobuf:"fixed64,5,opt,name=price,proto3" json:"price,omitempty"`                                        // 当日 TRX 价格（TRXUSDT，nil=无报价）
-	DailyTotalUsd float64                `protobuf:"fixed64,6,opt,name=daily_total_usd,json=dailyTotalUsd,proto3" json:"daily_total_usd,omitempty"` // 当日合计收益 USD =（energy+voting）×price+interest
+	DailyTotalUsd float64                `protobuf:"fixed64,6,opt,name=daily_total_usd,json=dailyTotalUsd,proto3" json:"daily_total_usd,omitempty"` // 当日合计收益 USD =（energy+voting）×price
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -515,13 +514,6 @@ func (x *TrxYieldCurvePoint) GetVotingTrx() float64 {
 	return 0
 }
 
-func (x *TrxYieldCurvePoint) GetInterestUsd() float64 {
-	if x != nil {
-		return x.InterestUsd
-	}
-	return 0
-}
-
 func (x *TrxYieldCurvePoint) GetPrice() float64 {
 	if x != nil {
 		return x.Price
@@ -541,15 +533,13 @@ type GetTrxYieldCurveResponse struct {
 	Points           []*TrxYieldCurvePoint  `protobuf:"bytes,1,rep,name=points,proto3" json:"points,omitempty"`                                                 // 日序列（按 day ASC）
 	Annualized_7D    float64                `protobuf:"fixed64,2,opt,name=annualized_7d,json=annualized7d,proto3" json:"annualized_7d,omitempty"`               // 7d 滚动合成年化 %
 	Annualized_30D   float64                `protobuf:"fixed64,3,opt,name=annualized_30d,json=annualized30d,proto3" json:"annualized_30d,omitempty"`            // 30d 滚动合成年化 %
-	CurrentPrice     float64                `protobuf:"fixed64,4,opt,name=current_price,json=currentPrice,proto3" json:"current_price,omitempty"`               // 现价（fin_cmc_prices REST mid，LastCMCPriceMidWithTime，D-278 AF3）
+	CurrentPrice     float64                `protobuf:"fixed64,4,opt,name=current_price,json=currentPrice,proto3" json:"current_price,omitempty"`               // 现价（ticks TRXUSDT mid，D-359 价锚）
 	PoolPrincipalUsd float64                `protobuf:"fixed64,5,opt,name=pool_principal_usd,json=poolPrincipalUsd,proto3" json:"pool_principal_usd,omitempty"` // 池本金 $36.5K（分母口径常量）
 	SampleDays_7D    int32                  `protobuf:"varint,6,opt,name=sample_days_7d,json=sampleDays7d,proto3" json:"sample_days_7d,omitempty"`              // 7d 实际样本天数
 	SampleDays_30D   int32                  `protobuf:"varint,7,opt,name=sample_days_30d,json=sampleDays30d,proto3" json:"sample_days_30d,omitempty"`           // 30d 实际样本天数
-	// 收益敞口计量（累积未对冲 TRX 收益折 USD + 对冲比例漂移）
+	// D-278 S4：收益敞口计量（累积未对冲 TRX 收益折 USD）
 	CumulativeUnhedgedIncomeTrx float64 `protobuf:"fixed64,8,opt,name=cumulative_unhedged_income_trx,json=cumulativeUnhedgedIncomeTrx,proto3" json:"cumulative_unhedged_income_trx,omitempty"` // 累积未对冲 TRX 收益（rental+vote_claim 累计）
 	CumulativeUnhedgedIncomeUsd float64 `protobuf:"fixed64,9,opt,name=cumulative_unhedged_income_usd,json=cumulativeUnhedgedIncomeUsd,proto3" json:"cumulative_unhedged_income_usd,omitempty"` // × 现价折 USD
-	HedgeRatioDriftPct          float64 `protobuf:"fixed64,10,opt,name=hedge_ratio_drift_pct,json=hedgeRatioDriftPct,proto3" json:"hedge_ratio_drift_pct,omitempty"`                           // 对冲比例漂移 %（现货含奖励 vs 空单名义）
-	HedgeRatioDriftWarn         bool    `protobuf:"varint,11,opt,name=hedge_ratio_drift_warn,json=hedgeRatioDriftWarn,proto3" json:"hedge_ratio_drift_warn,omitempty"`                         // 偏离>2% 提醒
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -647,21 +637,7 @@ func (x *GetTrxYieldCurveResponse) GetCumulativeUnhedgedIncomeUsd() float64 {
 	return 0
 }
 
-func (x *GetTrxYieldCurveResponse) GetHedgeRatioDriftPct() float64 {
-	if x != nil {
-		return x.HedgeRatioDriftPct
-	}
-	return 0
-}
-
-func (x *GetTrxYieldCurveResponse) GetHedgeRatioDriftWarn() bool {
-	if x != nil {
-		return x.HedgeRatioDriftWarn
-	}
-	return false
-}
-
-// CEX 只读扫描器快照
+// D-271：CEX 只读扫描器快照
 type GetCexScanSnapshotRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1268,16 +1244,15 @@ const file_dashboardv1_trx_cex_proto_rawDesc = "" +
 	"\x0fvote_apr_max_sr\x18\v \x01(\tR\fvoteAprMaxSr\x12&\n" +
 	"\x0fvote_apr_spread\x18\f \x01(\x01R\rvoteAprSpread\"-\n" +
 	"\x17GetTrxYieldCurveRequest\x12\x12\n" +
-	"\x04days\x18\x01 \x01(\x05R\x04days\"\xe1\x01\n" +
+	"\x04days\x18\x01 \x01(\x05R\x04days\"\xc4\x01\n" +
 	"\x12TrxYieldCurvePoint\x12,\n" +
 	"\x03day\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x03day\x12\x1d\n" +
 	"\n" +
 	"energy_trx\x18\x02 \x01(\x01R\tenergyTrx\x12\x1d\n" +
 	"\n" +
-	"voting_trx\x18\x03 \x01(\x01R\tvotingTrx\x12!\n" +
-	"\finterest_usd\x18\x04 \x01(\x01R\vinterestUsd\x12\x14\n" +
+	"voting_trx\x18\x03 \x01(\x01R\tvotingTrx\x12\x14\n" +
 	"\x05price\x18\x05 \x01(\x01R\x05price\x12&\n" +
-	"\x0fdaily_total_usd\x18\x06 \x01(\x01R\rdailyTotalUsd\"\xb7\x04\n" +
+	"\x0fdaily_total_usd\x18\x06 \x01(\x01R\rdailyTotalUsdJ\x04\b\x04\x10\x05\"\xdb\x03\n" +
 	"\x18GetTrxYieldCurveResponse\x12<\n" +
 	"\x06points\x18\x01 \x03(\v2$.arb.dashboard.v1.TrxYieldCurvePointR\x06points\x12#\n" +
 	"\rannualized_7d\x18\x02 \x01(\x01R\fannualized7d\x12%\n" +
@@ -1287,10 +1262,8 @@ const file_dashboardv1_trx_cex_proto_rawDesc = "" +
 	"\x0esample_days_7d\x18\x06 \x01(\x05R\fsampleDays7d\x12&\n" +
 	"\x0fsample_days_30d\x18\a \x01(\x05R\rsampleDays30d\x12C\n" +
 	"\x1ecumulative_unhedged_income_trx\x18\b \x01(\x01R\x1bcumulativeUnhedgedIncomeTrx\x12C\n" +
-	"\x1ecumulative_unhedged_income_usd\x18\t \x01(\x01R\x1bcumulativeUnhedgedIncomeUsd\x121\n" +
-	"\x15hedge_ratio_drift_pct\x18\n" +
-	" \x01(\x01R\x12hedgeRatioDriftPct\x123\n" +
-	"\x16hedge_ratio_drift_warn\x18\v \x01(\bR\x13hedgeRatioDriftWarn\"\x1b\n" +
+	"\x1ecumulative_unhedged_income_usd\x18\t \x01(\x01R\x1bcumulativeUnhedgedIncomeUsdJ\x04\b\n" +
+	"\x10\vJ\x04\b\v\x10\f\"\x1b\n" +
 	"\x19GetCexScanSnapshotRequest\"\xd2\x02\n" +
 	"\x1aGetCexScanSnapshotResponse\x12<\n" +
 	"\tearn_aprs\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.CexEarnAPRRowR\bearnAprs\x128\n" +

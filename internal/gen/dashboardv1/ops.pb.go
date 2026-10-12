@@ -454,7 +454,7 @@ func (x *ListSpotCarryDemoResponse) GetRows() []*SpotCarryDemoRow {
 	return nil
 }
 
-// 纸面轨前端卡行（active/demo/近 14 天 exited；数值后端算，前端零信任）。
+// D-352 S1：纸面轨前端卡行（active/demo/近 14 天 exited；数值后端算，前端零信任）。
 type ListPaperSpotCarryRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -508,17 +508,17 @@ type PaperSpotCarryRow struct {
 	ExitTs          string                 `protobuf:"bytes,13,opt,name=exit_ts,json=exitTs,proto3" json:"exit_ts,omitempty"`             // RFC3339，空=未退出
 	ExitReason      string                 `protobuf:"bytes,14,opt,name=exit_reason,json=exitReason,proto3" json:"exit_reason,omitempty"` // normalized / age_7d / promoted_demo
 	Note            string                 `protobuf:"bytes,15,opt,name=note,proto3" json:"note,omitempty"`
-	// 盈亏视图（基差=mark/index 近似；成本 0.30% 常量预估；NULL=诚实缺显「—」）
+	// D-354 S3：盈亏视图（基差=mark/index 近似；成本 0.30% 常量预估；NULL=诚实缺显「—」）
 	EntryBasisBps  *float64 `protobuf:"fixed64,16,opt,name=entry_basis_bps,json=entryBasisBps,proto3,oneof" json:"entry_basis_bps,omitempty"`    // 开仓基差快照（存量行 NULL）
 	LastBasisBps   *float64 `protobuf:"fixed64,17,opt,name=last_basis_bps,json=lastBasisBps,proto3,oneof" json:"last_basis_bps,omitempty"`       // 当前基差
 	BasisPnlUsd    *float64 `protobuf:"fixed64,18,opt,name=basis_pnl_usd,json=basisPnlUsd,proto3,oneof" json:"basis_pnl_usd,omitempty"`          // 基差浮盈（short: qty×(entry−last)/1e4；long 反号）
 	TotalPnlUsd    *float64 `protobuf:"fixed64,19,opt,name=total_pnl_usd,json=totalPnlUsd,proto3,oneof" json:"total_pnl_usd,omitempty"`          // 净浮盈=accrued+basis_pnl−qty×0.003（basis 缺→null）
 	RetPct         float64  `protobuf:"fixed64,20,opt,name=ret_pct,json=retPct,proto3" json:"ret_pct,omitempty"`                                 // 累计收益率%=accrued/qty×100
 	RealizedAnnPct *float64 `protobuf:"fixed64,21,opt,name=realized_ann_pct,json=realizedAnnPct,proto3,oneof" json:"realized_ann_pct,omitempty"` // 实收年化%=accrued/qty×365/days×100（days=0→null）
-	// DB 列透出（scanPaperSpotCarry 空串→spot_carry 归一，服务层直接信任）。
+	// D-393：DB 列透出（scanPaperSpotCarry 空串→spot_carry 归一，服务层直接信任）。
 	Structure string  `protobuf:"bytes,22,opt,name=structure,proto3" json:"structure,omitempty"`                  // spot_carry / perp_perp / long_cfd_short_perp / short_cfd_long_perp
 	MtVenue   *string `protobuf:"bytes,23,opt,name=mt_venue,json=mtVenue,proto3,oneof" json:"mt_venue,omitempty"` // cfd 行 MT 腿 venue；spot/perp_perp 恒 NULL（前端「—」）
-	// 往返费估计透出——perp_perp 存量行（est_fee IS NULL）前端徽标「观测轨」。
+	// D-474b S1：往返费估计透出——perp_perp 存量行（est_fee IS NULL）前端徽标「观测轨」。
 	EstRoundTripFeeUsd *float64 `protobuf:"fixed64,24,opt,name=est_round_trip_fee_usd,json=estRoundTripFeeUsd,proto3,oneof" json:"est_round_trip_fee_usd,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
@@ -722,7 +722,7 @@ func (x *PaperSpotCarryRow) GetEstRoundTripFeeUsd() float64 {
 	return 0
 }
 
-// 轨级汇总（行源=卡片同批 papers，exited=同 14d 窗口行；零新查询）。
+// D-393：轨级汇总（行源=卡片同批 papers，exited=同 14d 窗口行；零新查询）。
 type PaperTrackSummary struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	Structure           string                 `protobuf:"bytes,1,opt,name=structure,proto3" json:"structure,omitempty"` // spot_carry/perp_perp/long_cfd_short_perp/short_cfd_long_perp
@@ -891,7 +891,7 @@ type AutotradeAllowRuleRow struct {
 	Enabled   bool                   `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	Simulated bool                   `protobuf:"varint,5,opt,name=simulated,proto3" json:"simulated,omitempty"` // live 引擎只读 simulated=false
 	Note      string                 `protobuf:"bytes,6,opt,name=note,proto3" json:"note,omitempty"`
-	// venue 实时资金列（余额=已结算实现钱；净值=余额+浮动）。
+	// D-445：venue 实时资金列（余额=已结算实现钱；净值=余额+浮动）。
 	Balance       float64                `protobuf:"fixed64,7,opt,name=balance,proto3" json:"balance,omitempty"` // has_account=false 时 0 无意义
 	Equity        float64                `protobuf:"fixed64,8,opt,name=equity,proto3" json:"equity,omitempty"`
 	Currency      string                 `protobuf:"bytes,9,opt,name=currency,proto3" json:"currency,omitempty"`
@@ -1448,502 +1448,6 @@ func (x *DeleteAutotradeAllowRuleResponse) GetError() string {
 	return ""
 }
 
-type ListIntraTradesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Baseline      string                 `protobuf:"bytes,1,opt,name=baseline,proto3" json:"baseline,omitempty"` // ""=全部，momentum_break/meanrev
-	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListIntraTradesRequest) Reset() {
-	*x = ListIntraTradesRequest{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[19]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListIntraTradesRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListIntraTradesRequest) ProtoMessage() {}
-
-func (x *ListIntraTradesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[19]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListIntraTradesRequest.ProtoReflect.Descriptor instead.
-func (*ListIntraTradesRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{19}
-}
-
-func (x *ListIntraTradesRequest) GetBaseline() string {
-	if x != nil {
-		return x.Baseline
-	}
-	return ""
-}
-
-func (x *ListIntraTradesRequest) GetLimit() int32 {
-	if x != nil {
-		return x.Limit
-	}
-	return 0
-}
-
-type IntraTradeRow struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Baseline      string                 `protobuf:"bytes,2,opt,name=baseline,proto3" json:"baseline,omitempty"`
-	Symbol        string                 `protobuf:"bytes,3,opt,name=symbol,proto3" json:"symbol,omitempty"`
-	Venue         string                 `protobuf:"bytes,4,opt,name=venue,proto3" json:"venue,omitempty"`
-	Side          string                 `protobuf:"bytes,5,opt,name=side,proto3" json:"side,omitempty"`                       // long / short
-	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`                   // open / closed
-	EntryTs       int64                  `protobuf:"varint,7,opt,name=entry_ts,json=entryTs,proto3" json:"entry_ts,omitempty"` // unix
-	EntryPx       float64                `protobuf:"fixed64,8,opt,name=entry_px,json=entryPx,proto3" json:"entry_px,omitempty"`
-	Qty           float64                `protobuf:"fixed64,9,opt,name=qty,proto3" json:"qty,omitempty"`
-	NotionalUsd   float64                `protobuf:"fixed64,10,opt,name=notional_usd,json=notionalUsd,proto3" json:"notional_usd,omitempty"`
-	MarginUsd     float64                `protobuf:"fixed64,11,opt,name=margin_usd,json=marginUsd,proto3" json:"margin_usd,omitempty"`
-	StopPx        float64                `protobuf:"fixed64,12,opt,name=stop_px,json=stopPx,proto3" json:"stop_px,omitempty"`
-	ExitTs        int64                  `protobuf:"varint,13,opt,name=exit_ts,json=exitTs,proto3" json:"exit_ts,omitempty"` // unix，0=未平
-	ExitPx        float64                `protobuf:"fixed64,14,opt,name=exit_px,json=exitPx,proto3" json:"exit_px,omitempty"`
-	ExitReason    string                 `protobuf:"bytes,15,opt,name=exit_reason,json=exitReason,proto3" json:"exit_reason,omitempty"` // stop / signal / eod / circuit / kill
-	SlippageBps   *float64               `protobuf:"fixed64,16,opt,name=slippage_bps,json=slippageBps,proto3,oneof" json:"slippage_bps,omitempty"`
-	PnlUsd        *float64               `protobuf:"fixed64,17,opt,name=pnl_usd,json=pnlUsd,proto3,oneof" json:"pnl_usd,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *IntraTradeRow) Reset() {
-	*x = IntraTradeRow{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[20]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *IntraTradeRow) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*IntraTradeRow) ProtoMessage() {}
-
-func (x *IntraTradeRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[20]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use IntraTradeRow.ProtoReflect.Descriptor instead.
-func (*IntraTradeRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{20}
-}
-
-func (x *IntraTradeRow) GetId() int64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-func (x *IntraTradeRow) GetBaseline() string {
-	if x != nil {
-		return x.Baseline
-	}
-	return ""
-}
-
-func (x *IntraTradeRow) GetSymbol() string {
-	if x != nil {
-		return x.Symbol
-	}
-	return ""
-}
-
-func (x *IntraTradeRow) GetVenue() string {
-	if x != nil {
-		return x.Venue
-	}
-	return ""
-}
-
-func (x *IntraTradeRow) GetSide() string {
-	if x != nil {
-		return x.Side
-	}
-	return ""
-}
-
-func (x *IntraTradeRow) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *IntraTradeRow) GetEntryTs() int64 {
-	if x != nil {
-		return x.EntryTs
-	}
-	return 0
-}
-
-func (x *IntraTradeRow) GetEntryPx() float64 {
-	if x != nil {
-		return x.EntryPx
-	}
-	return 0
-}
-
-func (x *IntraTradeRow) GetQty() float64 {
-	if x != nil {
-		return x.Qty
-	}
-	return 0
-}
-
-func (x *IntraTradeRow) GetNotionalUsd() float64 {
-	if x != nil {
-		return x.NotionalUsd
-	}
-	return 0
-}
-
-func (x *IntraTradeRow) GetMarginUsd() float64 {
-	if x != nil {
-		return x.MarginUsd
-	}
-	return 0
-}
-
-func (x *IntraTradeRow) GetStopPx() float64 {
-	if x != nil {
-		return x.StopPx
-	}
-	return 0
-}
-
-func (x *IntraTradeRow) GetExitTs() int64 {
-	if x != nil {
-		return x.ExitTs
-	}
-	return 0
-}
-
-func (x *IntraTradeRow) GetExitPx() float64 {
-	if x != nil {
-		return x.ExitPx
-	}
-	return 0
-}
-
-func (x *IntraTradeRow) GetExitReason() string {
-	if x != nil {
-		return x.ExitReason
-	}
-	return ""
-}
-
-func (x *IntraTradeRow) GetSlippageBps() float64 {
-	if x != nil && x.SlippageBps != nil {
-		return *x.SlippageBps
-	}
-	return 0
-}
-
-func (x *IntraTradeRow) GetPnlUsd() float64 {
-	if x != nil && x.PnlUsd != nil {
-		return *x.PnlUsd
-	}
-	return 0
-}
-
-type ListIntraTradesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Trades        []*IntraTradeRow       `protobuf:"bytes,1,rep,name=trades,proto3" json:"trades,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListIntraTradesResponse) Reset() {
-	*x = ListIntraTradesResponse{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[21]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListIntraTradesResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListIntraTradesResponse) ProtoMessage() {}
-
-func (x *ListIntraTradesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[21]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListIntraTradesResponse.ProtoReflect.Descriptor instead.
-func (*ListIntraTradesResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{21}
-}
-
-func (x *ListIntraTradesResponse) GetTrades() []*IntraTradeRow {
-	if x != nil {
-		return x.Trades
-	}
-	return nil
-}
-
-type IntraBaselineStat struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Baseline      string                 `protobuf:"bytes,1,opt,name=baseline,proto3" json:"baseline,omitempty"`
-	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
-	Open          int32                  `protobuf:"varint,3,opt,name=open,proto3" json:"open,omitempty"`
-	Closed        int32                  `protobuf:"varint,4,opt,name=closed,proto3" json:"closed,omitempty"`
-	PnlUsd        float64                `protobuf:"fixed64,5,opt,name=pnl_usd,json=pnlUsd,proto3" json:"pnl_usd,omitempty"` // 已实现合计
-	WinCount      int32                  `protobuf:"varint,6,opt,name=win_count,json=winCount,proto3" json:"win_count,omitempty"`
-	SlipP90Bps    *float64               `protobuf:"fixed64,7,opt,name=slip_p90_bps,json=slipP90Bps,proto3,oneof" json:"slip_p90_bps,omitempty"`  // 无滑点样本→null（前端「—」）
-	CircuitDays   int32                  `protobuf:"varint,8,opt,name=circuit_days,json=circuitDays,proto3" json:"circuit_days,omitempty"`        // intra_events kind=circuit 去重天数
-	KillCount     int32                  `protobuf:"varint,9,opt,name=kill_count,json=killCount,proto3" json:"kill_count,omitempty"`              // intra_events kind=kill 计数
-	WinRatePct    *float64               `protobuf:"fixed64,10,opt,name=win_rate_pct,json=winRatePct,proto3,oneof" json:"win_rate_pct,omitempty"` // D-508 S8：胜率%=win/closed×100（closed=0→缺省，前端不除法）
-	WinTone       string                 `protobuf:"bytes,11,opt,name=win_tone,json=winTone,proto3" json:"win_tone,omitempty"`                    // D-508 S8：胜率色阶（>=50→"ok"/<50→"part"；缺数据=""）
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *IntraBaselineStat) Reset() {
-	*x = IntraBaselineStat{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[22]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *IntraBaselineStat) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*IntraBaselineStat) ProtoMessage() {}
-
-func (x *IntraBaselineStat) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[22]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use IntraBaselineStat.ProtoReflect.Descriptor instead.
-func (*IntraBaselineStat) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{22}
-}
-
-func (x *IntraBaselineStat) GetBaseline() string {
-	if x != nil {
-		return x.Baseline
-	}
-	return ""
-}
-
-func (x *IntraBaselineStat) GetTotal() int32 {
-	if x != nil {
-		return x.Total
-	}
-	return 0
-}
-
-func (x *IntraBaselineStat) GetOpen() int32 {
-	if x != nil {
-		return x.Open
-	}
-	return 0
-}
-
-func (x *IntraBaselineStat) GetClosed() int32 {
-	if x != nil {
-		return x.Closed
-	}
-	return 0
-}
-
-func (x *IntraBaselineStat) GetPnlUsd() float64 {
-	if x != nil {
-		return x.PnlUsd
-	}
-	return 0
-}
-
-func (x *IntraBaselineStat) GetWinCount() int32 {
-	if x != nil {
-		return x.WinCount
-	}
-	return 0
-}
-
-func (x *IntraBaselineStat) GetSlipP90Bps() float64 {
-	if x != nil && x.SlipP90Bps != nil {
-		return *x.SlipP90Bps
-	}
-	return 0
-}
-
-func (x *IntraBaselineStat) GetCircuitDays() int32 {
-	if x != nil {
-		return x.CircuitDays
-	}
-	return 0
-}
-
-func (x *IntraBaselineStat) GetKillCount() int32 {
-	if x != nil {
-		return x.KillCount
-	}
-	return 0
-}
-
-func (x *IntraBaselineStat) GetWinRatePct() float64 {
-	if x != nil && x.WinRatePct != nil {
-		return *x.WinRatePct
-	}
-	return 0
-}
-
-func (x *IntraBaselineStat) GetWinTone() string {
-	if x != nil {
-		return x.WinTone
-	}
-	return ""
-}
-
-type IntraTrackStatsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *IntraTrackStatsRequest) Reset() {
-	*x = IntraTrackStatsRequest{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[23]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *IntraTrackStatsRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*IntraTrackStatsRequest) ProtoMessage() {}
-
-func (x *IntraTrackStatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[23]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use IntraTrackStatsRequest.ProtoReflect.Descriptor instead.
-func (*IntraTrackStatsRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{23}
-}
-
-type IntraTrackStatsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Baselines     []*IntraBaselineStat   `protobuf:"bytes,1,rep,name=baselines,proto3" json:"baselines,omitempty"`
-	LastStepUnix  int64                  `protobuf:"varint,2,opt,name=last_step_unix,json=lastStepUnix,proto3" json:"last_step_unix,omitempty"` // 步进心跳（0=未跑过）
-	DaysElapsed   int32                  `protobuf:"varint,3,opt,name=days_elapsed,json=daysElapsed,proto3" json:"days_elapsed,omitempty"`      // min(entry_ts)::date 距今天数（空表=0）
-	DaysToGate    int32                  `protobuf:"varint,4,opt,name=days_to_gate,json=daysToGate,proto3" json:"days_to_gate,omitempty"`       // max(0, 30-days_elapsed)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *IntraTrackStatsResponse) Reset() {
-	*x = IntraTrackStatsResponse{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[24]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *IntraTrackStatsResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*IntraTrackStatsResponse) ProtoMessage() {}
-
-func (x *IntraTrackStatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[24]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use IntraTrackStatsResponse.ProtoReflect.Descriptor instead.
-func (*IntraTrackStatsResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{24}
-}
-
-func (x *IntraTrackStatsResponse) GetBaselines() []*IntraBaselineStat {
-	if x != nil {
-		return x.Baselines
-	}
-	return nil
-}
-
-func (x *IntraTrackStatsResponse) GetLastStepUnix() int64 {
-	if x != nil {
-		return x.LastStepUnix
-	}
-	return 0
-}
-
-func (x *IntraTrackStatsResponse) GetDaysElapsed() int32 {
-	if x != nil {
-		return x.DaysElapsed
-	}
-	return 0
-}
-
-func (x *IntraTrackStatsResponse) GetDaysToGate() int32 {
-	if x != nil {
-		return x.DaysToGate
-	}
-	return 0
-}
-
 type GetCapitalCoverageRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1952,7 +1456,7 @@ type GetCapitalCoverageRequest struct {
 
 func (x *GetCapitalCoverageRequest) Reset() {
 	*x = GetCapitalCoverageRequest{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[25]
+	mi := &file_dashboardv1_ops_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1964,7 +1468,7 @@ func (x *GetCapitalCoverageRequest) String() string {
 func (*GetCapitalCoverageRequest) ProtoMessage() {}
 
 func (x *GetCapitalCoverageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[25]
+	mi := &file_dashboardv1_ops_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1977,7 +1481,7 @@ func (x *GetCapitalCoverageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCapitalCoverageRequest.ProtoReflect.Descriptor instead.
 func (*GetCapitalCoverageRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{25}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{19}
 }
 
 type CapitalCoverageRow struct {
@@ -1999,7 +1503,7 @@ type CapitalCoverageRow struct {
 
 func (x *CapitalCoverageRow) Reset() {
 	*x = CapitalCoverageRow{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[26]
+	mi := &file_dashboardv1_ops_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2011,7 +1515,7 @@ func (x *CapitalCoverageRow) String() string {
 func (*CapitalCoverageRow) ProtoMessage() {}
 
 func (x *CapitalCoverageRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[26]
+	mi := &file_dashboardv1_ops_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2024,7 +1528,7 @@ func (x *CapitalCoverageRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CapitalCoverageRow.ProtoReflect.Descriptor instead.
 func (*CapitalCoverageRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{26}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *CapitalCoverageRow) GetPool() string {
@@ -2120,7 +1624,7 @@ type GetCapitalCoverageResponse struct {
 
 func (x *GetCapitalCoverageResponse) Reset() {
 	*x = GetCapitalCoverageResponse{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[27]
+	mi := &file_dashboardv1_ops_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2132,7 +1636,7 @@ func (x *GetCapitalCoverageResponse) String() string {
 func (*GetCapitalCoverageResponse) ProtoMessage() {}
 
 func (x *GetCapitalCoverageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[27]
+	mi := &file_dashboardv1_ops_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2145,7 +1649,7 @@ func (x *GetCapitalCoverageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCapitalCoverageResponse.ProtoReflect.Descriptor instead.
 func (*GetCapitalCoverageResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{27}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GetCapitalCoverageResponse) GetRows() []*CapitalCoverageRow {
@@ -2212,7 +1716,7 @@ type GetCapitalMapRequest struct {
 
 func (x *GetCapitalMapRequest) Reset() {
 	*x = GetCapitalMapRequest{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[28]
+	mi := &file_dashboardv1_ops_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2224,7 +1728,7 @@ func (x *GetCapitalMapRequest) String() string {
 func (*GetCapitalMapRequest) ProtoMessage() {}
 
 func (x *GetCapitalMapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[28]
+	mi := &file_dashboardv1_ops_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2237,7 +1741,7 @@ func (x *GetCapitalMapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCapitalMapRequest.ProtoReflect.Descriptor instead.
 func (*GetCapitalMapRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{28}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{22}
 }
 
 type CapitalMapNode struct {
@@ -2256,7 +1760,7 @@ type CapitalMapNode struct {
 
 func (x *CapitalMapNode) Reset() {
 	*x = CapitalMapNode{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[29]
+	mi := &file_dashboardv1_ops_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2268,7 +1772,7 @@ func (x *CapitalMapNode) String() string {
 func (*CapitalMapNode) ProtoMessage() {}
 
 func (x *CapitalMapNode) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[29]
+	mi := &file_dashboardv1_ops_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2281,7 +1785,7 @@ func (x *CapitalMapNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CapitalMapNode.ProtoReflect.Descriptor instead.
 func (*CapitalMapNode) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{29}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CapitalMapNode) GetLabel() string {
@@ -2353,7 +1857,7 @@ type CapitalMapTier struct {
 
 func (x *CapitalMapTier) Reset() {
 	*x = CapitalMapTier{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[30]
+	mi := &file_dashboardv1_ops_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2365,7 +1869,7 @@ func (x *CapitalMapTier) String() string {
 func (*CapitalMapTier) ProtoMessage() {}
 
 func (x *CapitalMapTier) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[30]
+	mi := &file_dashboardv1_ops_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2378,7 +1882,7 @@ func (x *CapitalMapTier) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CapitalMapTier.ProtoReflect.Descriptor instead.
 func (*CapitalMapTier) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{30}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *CapitalMapTier) GetTier() string {
@@ -2428,7 +1932,7 @@ type GetCapitalMapResponse struct {
 
 func (x *GetCapitalMapResponse) Reset() {
 	*x = GetCapitalMapResponse{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[31]
+	mi := &file_dashboardv1_ops_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2440,7 +1944,7 @@ func (x *GetCapitalMapResponse) String() string {
 func (*GetCapitalMapResponse) ProtoMessage() {}
 
 func (x *GetCapitalMapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[31]
+	mi := &file_dashboardv1_ops_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2453,7 +1957,7 @@ func (x *GetCapitalMapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCapitalMapResponse.ProtoReflect.Descriptor instead.
 func (*GetCapitalMapResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{31}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *GetCapitalMapResponse) GetTiers() []*CapitalMapTier {
@@ -2492,7 +1996,7 @@ type GetCexFinanceRequest struct {
 
 func (x *GetCexFinanceRequest) Reset() {
 	*x = GetCexFinanceRequest{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[32]
+	mi := &file_dashboardv1_ops_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2504,7 +2008,7 @@ func (x *GetCexFinanceRequest) String() string {
 func (*GetCexFinanceRequest) ProtoMessage() {}
 
 func (x *GetCexFinanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[32]
+	mi := &file_dashboardv1_ops_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2517,7 +2021,7 @@ func (x *GetCexFinanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCexFinanceRequest.ProtoReflect.Descriptor instead.
 func (*GetCexFinanceRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{32}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{26}
 }
 
 type CexFinanceHolding struct {
@@ -2532,7 +2036,7 @@ type CexFinanceHolding struct {
 
 func (x *CexFinanceHolding) Reset() {
 	*x = CexFinanceHolding{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[33]
+	mi := &file_dashboardv1_ops_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2544,7 +2048,7 @@ func (x *CexFinanceHolding) String() string {
 func (*CexFinanceHolding) ProtoMessage() {}
 
 func (x *CexFinanceHolding) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[33]
+	mi := &file_dashboardv1_ops_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2557,7 +2061,7 @@ func (x *CexFinanceHolding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CexFinanceHolding.ProtoReflect.Descriptor instead.
 func (*CexFinanceHolding) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{33}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *CexFinanceHolding) GetCcy() string {
@@ -2602,7 +2106,7 @@ type CexFinanceFlow struct {
 
 func (x *CexFinanceFlow) Reset() {
 	*x = CexFinanceFlow{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[34]
+	mi := &file_dashboardv1_ops_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2614,7 +2118,7 @@ func (x *CexFinanceFlow) String() string {
 func (*CexFinanceFlow) ProtoMessage() {}
 
 func (x *CexFinanceFlow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[34]
+	mi := &file_dashboardv1_ops_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2627,7 +2131,7 @@ func (x *CexFinanceFlow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CexFinanceFlow.ProtoReflect.Descriptor instead.
 func (*CexFinanceFlow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{34}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *CexFinanceFlow) GetTs() string {
@@ -2688,7 +2192,7 @@ type CexAccountFinance struct {
 
 func (x *CexAccountFinance) Reset() {
 	*x = CexAccountFinance{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[35]
+	mi := &file_dashboardv1_ops_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2700,7 +2204,7 @@ func (x *CexAccountFinance) String() string {
 func (*CexAccountFinance) ProtoMessage() {}
 
 func (x *CexAccountFinance) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[35]
+	mi := &file_dashboardv1_ops_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2713,7 +2217,7 @@ func (x *CexAccountFinance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CexAccountFinance.ProtoReflect.Descriptor instead.
 func (*CexAccountFinance) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{35}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *CexAccountFinance) GetVenue() string {
@@ -2781,7 +2285,7 @@ type GetCexFinanceResponse struct {
 
 func (x *GetCexFinanceResponse) Reset() {
 	*x = GetCexFinanceResponse{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[36]
+	mi := &file_dashboardv1_ops_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2793,7 +2297,7 @@ func (x *GetCexFinanceResponse) String() string {
 func (*GetCexFinanceResponse) ProtoMessage() {}
 
 func (x *GetCexFinanceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[36]
+	mi := &file_dashboardv1_ops_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2806,7 +2310,7 @@ func (x *GetCexFinanceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCexFinanceResponse.ProtoReflect.Descriptor instead.
 func (*GetCexFinanceResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{36}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *GetCexFinanceResponse) GetAccounts() []*CexAccountFinance {
@@ -2953,61 +2457,7 @@ const file_dashboardv1_ops_proto_rawDesc = "" +
 	"\x04note\x18\x02 \x01(\tR\x04note\"H\n" +
 	" DeleteAutotradeAllowRuleResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error\"J\n" +
-	"\x16ListIntraTradesRequest\x12\x1a\n" +
-	"\bbaseline\x18\x01 \x01(\tR\bbaseline\x12\x14\n" +
-	"\x05limit\x18\x02 \x01(\x05R\x05limit\"\xee\x03\n" +
-	"\rIntraTradeRow\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1a\n" +
-	"\bbaseline\x18\x02 \x01(\tR\bbaseline\x12\x16\n" +
-	"\x06symbol\x18\x03 \x01(\tR\x06symbol\x12\x14\n" +
-	"\x05venue\x18\x04 \x01(\tR\x05venue\x12\x12\n" +
-	"\x04side\x18\x05 \x01(\tR\x04side\x12\x16\n" +
-	"\x06status\x18\x06 \x01(\tR\x06status\x12\x19\n" +
-	"\bentry_ts\x18\a \x01(\x03R\aentryTs\x12\x19\n" +
-	"\bentry_px\x18\b \x01(\x01R\aentryPx\x12\x10\n" +
-	"\x03qty\x18\t \x01(\x01R\x03qty\x12!\n" +
-	"\fnotional_usd\x18\n" +
-	" \x01(\x01R\vnotionalUsd\x12\x1d\n" +
-	"\n" +
-	"margin_usd\x18\v \x01(\x01R\tmarginUsd\x12\x17\n" +
-	"\astop_px\x18\f \x01(\x01R\x06stopPx\x12\x17\n" +
-	"\aexit_ts\x18\r \x01(\x03R\x06exitTs\x12\x17\n" +
-	"\aexit_px\x18\x0e \x01(\x01R\x06exitPx\x12\x1f\n" +
-	"\vexit_reason\x18\x0f \x01(\tR\n" +
-	"exitReason\x12&\n" +
-	"\fslippage_bps\x18\x10 \x01(\x01H\x00R\vslippageBps\x88\x01\x01\x12\x1c\n" +
-	"\apnl_usd\x18\x11 \x01(\x01H\x01R\x06pnlUsd\x88\x01\x01B\x0f\n" +
-	"\r_slippage_bpsB\n" +
-	"\n" +
-	"\b_pnl_usd\"R\n" +
-	"\x17ListIntraTradesResponse\x127\n" +
-	"\x06trades\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.IntraTradeRowR\x06trades\"\xf4\x02\n" +
-	"\x11IntraBaselineStat\x12\x1a\n" +
-	"\bbaseline\x18\x01 \x01(\tR\bbaseline\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x12\n" +
-	"\x04open\x18\x03 \x01(\x05R\x04open\x12\x16\n" +
-	"\x06closed\x18\x04 \x01(\x05R\x06closed\x12\x17\n" +
-	"\apnl_usd\x18\x05 \x01(\x01R\x06pnlUsd\x12\x1b\n" +
-	"\twin_count\x18\x06 \x01(\x05R\bwinCount\x12%\n" +
-	"\fslip_p90_bps\x18\a \x01(\x01H\x00R\n" +
-	"slipP90Bps\x88\x01\x01\x12!\n" +
-	"\fcircuit_days\x18\b \x01(\x05R\vcircuitDays\x12\x1d\n" +
-	"\n" +
-	"kill_count\x18\t \x01(\x05R\tkillCount\x12%\n" +
-	"\fwin_rate_pct\x18\n" +
-	" \x01(\x01H\x01R\n" +
-	"winRatePct\x88\x01\x01\x12\x19\n" +
-	"\bwin_tone\x18\v \x01(\tR\awinToneB\x0f\n" +
-	"\r_slip_p90_bpsB\x0f\n" +
-	"\r_win_rate_pct\"\x18\n" +
-	"\x16IntraTrackStatsRequest\"\xc7\x01\n" +
-	"\x17IntraTrackStatsResponse\x12A\n" +
-	"\tbaselines\x18\x01 \x03(\v2#.arb.dashboard.v1.IntraBaselineStatR\tbaselines\x12$\n" +
-	"\x0elast_step_unix\x18\x02 \x01(\x03R\flastStepUnix\x12!\n" +
-	"\fdays_elapsed\x18\x03 \x01(\x05R\vdaysElapsed\x12 \n" +
-	"\fdays_to_gate\x18\x04 \x01(\x05R\n" +
-	"daysToGate\"\x1b\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\"\x1b\n" +
 	"\x19GetCapitalCoverageRequest\"\xc3\x02\n" +
 	"\x12CapitalCoverageRow\x12\x12\n" +
 	"\x04pool\x18\x01 \x01(\tR\x04pool\x12\x1f\n" +
@@ -3102,7 +2552,7 @@ func file_dashboardv1_ops_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_ops_proto_rawDescData
 }
 
-var file_dashboardv1_ops_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
+var file_dashboardv1_ops_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_dashboardv1_ops_proto_goTypes = []any{
 	(*ExecuteSpotCarryDemoRequest)(nil),          // 0: arb.dashboard.v1.ExecuteSpotCarryDemoRequest
 	(*SpotCarryDemoLeg)(nil),                     // 1: arb.dashboard.v1.SpotCarryDemoLeg
@@ -3123,46 +2573,38 @@ var file_dashboardv1_ops_proto_goTypes = []any{
 	(*AddAutotradeAllowRuleResponse)(nil),        // 16: arb.dashboard.v1.AddAutotradeAllowRuleResponse
 	(*DeleteAutotradeAllowRuleRequest)(nil),      // 17: arb.dashboard.v1.DeleteAutotradeAllowRuleRequest
 	(*DeleteAutotradeAllowRuleResponse)(nil),     // 18: arb.dashboard.v1.DeleteAutotradeAllowRuleResponse
-	(*ListIntraTradesRequest)(nil),               // 19: arb.dashboard.v1.ListIntraTradesRequest
-	(*IntraTradeRow)(nil),                        // 20: arb.dashboard.v1.IntraTradeRow
-	(*ListIntraTradesResponse)(nil),              // 21: arb.dashboard.v1.ListIntraTradesResponse
-	(*IntraBaselineStat)(nil),                    // 22: arb.dashboard.v1.IntraBaselineStat
-	(*IntraTrackStatsRequest)(nil),               // 23: arb.dashboard.v1.IntraTrackStatsRequest
-	(*IntraTrackStatsResponse)(nil),              // 24: arb.dashboard.v1.IntraTrackStatsResponse
-	(*GetCapitalCoverageRequest)(nil),            // 25: arb.dashboard.v1.GetCapitalCoverageRequest
-	(*CapitalCoverageRow)(nil),                   // 26: arb.dashboard.v1.CapitalCoverageRow
-	(*GetCapitalCoverageResponse)(nil),           // 27: arb.dashboard.v1.GetCapitalCoverageResponse
-	(*GetCapitalMapRequest)(nil),                 // 28: arb.dashboard.v1.GetCapitalMapRequest
-	(*CapitalMapNode)(nil),                       // 29: arb.dashboard.v1.CapitalMapNode
-	(*CapitalMapTier)(nil),                       // 30: arb.dashboard.v1.CapitalMapTier
-	(*GetCapitalMapResponse)(nil),                // 31: arb.dashboard.v1.GetCapitalMapResponse
-	(*GetCexFinanceRequest)(nil),                 // 32: arb.dashboard.v1.GetCexFinanceRequest
-	(*CexFinanceHolding)(nil),                    // 33: arb.dashboard.v1.CexFinanceHolding
-	(*CexFinanceFlow)(nil),                       // 34: arb.dashboard.v1.CexFinanceFlow
-	(*CexAccountFinance)(nil),                    // 35: arb.dashboard.v1.CexAccountFinance
-	(*GetCexFinanceResponse)(nil),                // 36: arb.dashboard.v1.GetCexFinanceResponse
-	(*timestamppb.Timestamp)(nil),                // 37: google.protobuf.Timestamp
+	(*GetCapitalCoverageRequest)(nil),            // 19: arb.dashboard.v1.GetCapitalCoverageRequest
+	(*CapitalCoverageRow)(nil),                   // 20: arb.dashboard.v1.CapitalCoverageRow
+	(*GetCapitalCoverageResponse)(nil),           // 21: arb.dashboard.v1.GetCapitalCoverageResponse
+	(*GetCapitalMapRequest)(nil),                 // 22: arb.dashboard.v1.GetCapitalMapRequest
+	(*CapitalMapNode)(nil),                       // 23: arb.dashboard.v1.CapitalMapNode
+	(*CapitalMapTier)(nil),                       // 24: arb.dashboard.v1.CapitalMapTier
+	(*GetCapitalMapResponse)(nil),                // 25: arb.dashboard.v1.GetCapitalMapResponse
+	(*GetCexFinanceRequest)(nil),                 // 26: arb.dashboard.v1.GetCexFinanceRequest
+	(*CexFinanceHolding)(nil),                    // 27: arb.dashboard.v1.CexFinanceHolding
+	(*CexFinanceFlow)(nil),                       // 28: arb.dashboard.v1.CexFinanceFlow
+	(*CexAccountFinance)(nil),                    // 29: arb.dashboard.v1.CexAccountFinance
+	(*GetCexFinanceResponse)(nil),                // 30: arb.dashboard.v1.GetCexFinanceResponse
+	(*timestamppb.Timestamp)(nil),                // 31: google.protobuf.Timestamp
 }
 var file_dashboardv1_ops_proto_depIdxs = []int32{
 	1,  // 0: arb.dashboard.v1.ExecuteSpotCarryDemoResponse.legs:type_name -> arb.dashboard.v1.SpotCarryDemoLeg
 	3,  // 1: arb.dashboard.v1.ListSpotCarryDemoResponse.rows:type_name -> arb.dashboard.v1.SpotCarryDemoRow
 	7,  // 2: arb.dashboard.v1.ListPaperSpotCarryResponse.rows:type_name -> arb.dashboard.v1.PaperSpotCarryRow
 	8,  // 3: arb.dashboard.v1.ListPaperSpotCarryResponse.tracks:type_name -> arb.dashboard.v1.PaperTrackSummary
-	37, // 4: arb.dashboard.v1.AutotradeAllowRuleRow.acct_updated_at:type_name -> google.protobuf.Timestamp
+	31, // 4: arb.dashboard.v1.AutotradeAllowRuleRow.acct_updated_at:type_name -> google.protobuf.Timestamp
 	10, // 5: arb.dashboard.v1.ListAutotradeAllowRulesResponse.rules:type_name -> arb.dashboard.v1.AutotradeAllowRuleRow
-	20, // 6: arb.dashboard.v1.ListIntraTradesResponse.trades:type_name -> arb.dashboard.v1.IntraTradeRow
-	22, // 7: arb.dashboard.v1.IntraTrackStatsResponse.baselines:type_name -> arb.dashboard.v1.IntraBaselineStat
-	26, // 8: arb.dashboard.v1.GetCapitalCoverageResponse.rows:type_name -> arb.dashboard.v1.CapitalCoverageRow
-	29, // 9: arb.dashboard.v1.CapitalMapTier.nodes:type_name -> arb.dashboard.v1.CapitalMapNode
-	30, // 10: arb.dashboard.v1.GetCapitalMapResponse.tiers:type_name -> arb.dashboard.v1.CapitalMapTier
-	33, // 11: arb.dashboard.v1.CexAccountFinance.holdings:type_name -> arb.dashboard.v1.CexFinanceHolding
-	34, // 12: arb.dashboard.v1.CexAccountFinance.flows:type_name -> arb.dashboard.v1.CexFinanceFlow
-	35, // 13: arb.dashboard.v1.GetCexFinanceResponse.accounts:type_name -> arb.dashboard.v1.CexAccountFinance
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	20, // 6: arb.dashboard.v1.GetCapitalCoverageResponse.rows:type_name -> arb.dashboard.v1.CapitalCoverageRow
+	23, // 7: arb.dashboard.v1.CapitalMapTier.nodes:type_name -> arb.dashboard.v1.CapitalMapNode
+	24, // 8: arb.dashboard.v1.GetCapitalMapResponse.tiers:type_name -> arb.dashboard.v1.CapitalMapTier
+	27, // 9: arb.dashboard.v1.CexAccountFinance.holdings:type_name -> arb.dashboard.v1.CexFinanceHolding
+	28, // 10: arb.dashboard.v1.CexAccountFinance.flows:type_name -> arb.dashboard.v1.CexFinanceFlow
+	29, // 11: arb.dashboard.v1.GetCexFinanceResponse.accounts:type_name -> arb.dashboard.v1.CexAccountFinance
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_ops_proto_init() }
@@ -3172,15 +2614,13 @@ func file_dashboardv1_ops_proto_init() {
 	}
 	file_dashboardv1_ops_proto_msgTypes[7].OneofWrappers = []any{}
 	file_dashboardv1_ops_proto_msgTypes[16].OneofWrappers = []any{}
-	file_dashboardv1_ops_proto_msgTypes[20].OneofWrappers = []any{}
-	file_dashboardv1_ops_proto_msgTypes[22].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_ops_proto_rawDesc), len(file_dashboardv1_ops_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   37,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

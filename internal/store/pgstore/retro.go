@@ -81,9 +81,7 @@ type RetroWeekly struct {
 	TopLoss      *RetroClosedCase
 	TopDeviation *RetroClosedCase // |est-real| 最大
 	PaperSpot    map[string]int   // exit_reason 分布（窗口内 exit_ts 落窗）
-	PaperIntra   map[string]int   // exit_reason 分布
-	PaperIntraN  int              // 窗口内平仓计数
-	PaperSpotN   int
+	PaperSpotN   int              // 窗口内平仓计数
 	Strategies   []RetroStrategyRow
 	AlertCluster []RetroAlertCluster
 	EvalDist     map[string]int
@@ -175,7 +173,7 @@ func (s *Store) RetroDailyStats(ctx context.Context, start, end time.Time) (*Ret
 // RetroWeeklyStats 周报数据面（窗口 [since,until)）。
 func (s *Store) RetroWeeklyStats(ctx context.Context, since, until time.Time) (*RetroWeekly, error) {
 	w := &RetroWeekly{
-		PaperSpot: map[string]int{}, PaperIntra: map[string]int{}, EvalDist: map[string]int{},
+		PaperSpot: map[string]int{}, EvalDist: map[string]int{},
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT p.id, p.type, COALESCE(p.realized_pnl,0),
@@ -235,15 +233,9 @@ func (s *Store) RetroWeeklyStats(ctx context.Context, since, until time.Time) (*
 		WHERE exit_ts >= $1 AND exit_ts < $2 GROUP BY exit_reason`, since, until); err != nil {
 		return nil, err
 	}
-	if err := s.scanDist(ctx, &w.PaperIntra, `
-		SELECT exit_reason, count(*) FROM paper_intra_trades
-		WHERE status='closed' AND exit_ts >= $1 AND exit_ts < $2 GROUP BY exit_reason`, since, until); err != nil {
-		return nil, err
-	}
 	if err := s.pool.QueryRow(ctx, `
-		SELECT (SELECT count(*) FROM paper_intra_trades WHERE status='closed' AND exit_ts >= $1 AND exit_ts < $2),
-		       (SELECT count(*) FROM paper_spot_carry WHERE exit_ts >= $1 AND exit_ts < $2)`,
-		since, until).Scan(&w.PaperIntraN, &w.PaperSpotN); err != nil {
+		SELECT count(*) FROM paper_spot_carry WHERE exit_ts >= $1 AND exit_ts < $2`,
+		since, until).Scan(&w.PaperSpotN); err != nil {
 		return nil, err
 	}
 	srows, err := s.retroStrategyRows(ctx)

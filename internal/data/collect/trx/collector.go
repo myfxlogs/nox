@@ -35,12 +35,8 @@ type TxsCollector struct {
 	floorPct     float64
 	lastAlertDay string // 内存节流：上次告警 UTC 日期（YYYY-MM-DD），1 条/天
 	// 扳机三件套节流（各 1 条/天，内存日期戳）。
-	lastEnergy30dAlertDay   string // 能量 30d 年化 <8% critical
-	lastOvernightDeclineDay string // 空单隔夜 7d 衰退 >50% warning
-	lastOvernightNegDay     string // 隔夜连续 2 日为负 warning
-	lastPressureDay         string // 净值压力 warning
-	lastS1CombinedDay       string // S1 30d 合成年化 <12% warning
-	lastS1OvernightNegDay   string // S1 隔夜连续 2 日为负 warning
+	lastEnergy30dAlertDay string // 能量 30d 年化 <8% critical
+	lastS1OvernightNegDay string // S1 隔夜连续 2 日为负 warning
 }
 
 // NewTxsCollector 创建交易流采集器。rentalPayers 为付款方地址集（env 解析）。

@@ -201,6 +201,7 @@ var migrationFiles = []struct {
 	{201, migrations.LegForensicsSQL, false},                  // D-208：腿级 fail_reason+半平裸奔阈值
 	{188, migrations.OppTemplateSQL, false},                   // D-185：机会模板册（fin_opp_template+cond）
 	{1000, migrations.BaselineSQL, true},                      // D-214：生产 schema 压平基线（marker，见上方注释）
+	{1001, migrations.EmployeeDeptElevenSQL, false},           // D-220：dept 十一部化
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

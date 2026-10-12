@@ -861,7 +861,7 @@ func (x *GenerateKbReportResponse) GetPath() string {
 	return ""
 }
 
-// kind=daily|weekly
+// D-457：kind=daily|weekly
 type GenerateRetroReportRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
@@ -1186,7 +1186,7 @@ func (x *GetReportResponse) GetContent() string {
 	return ""
 }
 
-// 返修② R3：AI 配置 DB 化
+// D-091 返修② R3：AI 配置 DB 化
 type GetAiSettingsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields

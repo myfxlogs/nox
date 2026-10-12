@@ -535,7 +535,7 @@ type Opportunity struct {
 	BreakevenDays  *float64               `protobuf:"fixed64,13,opt,name=breakeven_days,json=breakevenDays,proto3,oneof" json:"breakeven_days,omitempty"` // 息差型；价差型缺省
 	NetUsd         float64                `protobuf:"fixed64,18,opt,name=net_usd,json=netUsd,proto3" json:"net_usd,omitempty"`                            // 与 net_bps 同语义：价差型=一次性 USD（net_bps/10000×notional）；息差型=年化 USD/年（net_bps/100×notional，D-053）
 	NotionalUsd    float64                `protobuf:"fixed64,19,opt,name=notional_usd,json=notionalUsd,proto3" json:"notional_usd,omitempty"`             // 本次 net_usd 换算使用的单笔名义（前端「按单笔 $X 估算」标注，D-053）
-	// 显示层 USD 单位化（存储不动，API 派生；CS 缺失 → 全 0，前端回退 bps）：
+	// D-062 显示层 USD 单位化（存储不动，API 派生；CS 缺失 → 全 0，前端回退 bps）：
 	GapUsdPerUnit   float64                `protobuf:"fixed64,20,opt,name=gap_usd_per_unit,json=gapUsdPerUnit,proto3" json:"gap_usd_per_unit,omitempty"`         // price_sell − price_buy（$/桶、$/盎司、$/币；入场基差展示口径）
 	NetUsdPerLot    float64                `protobuf:"fixed64,21,opt,name=net_usd_per_lot,json=netUsdPerLot,proto3" json:"net_usd_per_lot,omitempty"`            // 价差型一次性 USD/手 = net_bps/1e4 × CS × price_buy；息差型不填
 	NetUsdPerLotDay float64                `protobuf:"fixed64,22,opt,name=net_usd_per_lot_day,json=netUsdPerLotDay,proto3" json:"net_usd_per_lot_day,omitempty"` // 息差型 USD/日/手 = net_bps/100 × CS × price_buy / 365；价差型不填
@@ -544,7 +544,7 @@ type Opportunity struct {
 	ExpiresAt       *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
 	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	// 验证阶梯：后端按 vkey 聚合填入（D-043 前端零信任只渲染）。
+	// D-086 验证阶梯：后端按 vkey 聚合填入（D-043 前端零信任只渲染）。
 	VerifiedLevel   int32    `protobuf:"varint,24,opt,name=verified_level,json=verifiedLevel,proto3" json:"verified_level,omitempty"`         // 0=V0 预估 / 1=V1 已验证（V2 预留）
 	VerifyRatio     float64  `protobuf:"fixed64,25,opt,name=verify_ratio,json=verifyRatio,proto3" json:"verify_ratio,omitempty"`              // R=Σrealized/Σexpected（不可用=0）
 	VerifySamples   int32    `protobuf:"varint,26,opt,name=verify_samples,json=verifySamples,proto3" json:"verify_samples,omitempty"`         // 验证样本数
@@ -1713,7 +1713,7 @@ type SourceHealth struct {
 	Venue       string                 `protobuf:"bytes,1,opt,name=venue,proto3" json:"venue,omitempty"` // {venue}:{venue_type}
 	State       string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"` // up / idle / down
 	LastEventAt *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=last_event_at,json=lastEventAt,proto3" json:"last_event_at,omitempty"`
-	// WS 重连计量透出（只渲染不算）。
+	// D-512 T4：WS 重连计量透出（只渲染不算）。
 	Source         string `protobuf:"bytes,4,opt,name=source,proto3" json:"source,omitempty"`                                        // WS 源标识（url 段，如 "perp:wss://…"）
 	ReconnectCount int64  `protobuf:"varint,5,opt,name=reconnect_count,json=reconnectCount,proto3" json:"reconnect_count,omitempty"` // 累计重连次数
 	LastEventUnix  int64  `protobuf:"varint,6,opt,name=last_event_unix,json=lastEventUnix,proto3" json:"last_event_unix,omitempty"`  // 末次警告 unix 秒（0=从未达风暴阈）

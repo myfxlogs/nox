@@ -11,7 +11,7 @@ import "dashboardv1/account.proto";
 // ==== trx_cex.proto —— D-508 S10 自 dashboard.proto 按域拆出（纯搬家：消息名/字段号/RPC 契约零漂移）。 ====
 
 // D-254：TrxAccountRefresh——手动刷新按钮+on-open 双踢 trx_account+trx_apr 后返回最新 fin_trx_account 全字段快照。
-// Q3 裁定：sun 单位 ÷1e6 转 double（对齐 HedgeAccounts 口径，前端零换算）；votes_total 用 double（对齐 HedgeAccounts.votes）。
+// Q3 裁定：sun 单位 ÷1e6 转 double（对齐 fin_trx_account 行口径，前端零换算）；votes_total 用 double（对齐 fin_trx_account.votes_total）。
 // Q1 裁定：全 11 字段透出（unfrozen/sr_address 是 TronLink 展示集合，数据面一次到位，渲染扩展挂账）。
 message TrxAccountRefreshRequest {}
 
@@ -20,11 +20,11 @@ message TrxAccountRefreshResponse {
   string address = 2;              // 钱包地址
   string sr_address = 3;           // 投票 SR 地址（nil=空字符串）
   double trx_balance = 4;          // balance_sun ÷ 1e6（TRX）
-  double trx_allowance = 5;        // reward_num_sun ÷ 1e6（D-285 链上真值，与 GetHedgeStructure.hedge_accounts.trx_allowance 同源）
+  double trx_allowance = 5;        // reward_num_sun ÷ 1e6（D-285 链上真值，与 fin_trx_account.reward_num_sun 同源）
   double energy_delegated = 6;     // energy_delegated ÷ 1e6（TRX）
   double bandwidth_staked = 7;     // bandwidth_staked ÷ 1e6（TRX）
   double net_limit = 8;            // 带宽上限（BP，链上原值透传）
-  double votes = 9;                // votes_total（票数，对齐 HedgeAccounts.votes 不除 1e6）
+  double votes = 9;                // votes_total（票数，对齐 fin_trx_account.votes_total 不除 1e6）
   string unfrozen = 10;            // JSONB 透传（nil=空字符串，在途解押）
   google.protobuf.Timestamp fetched_at = 11;  // 采集时间
   // D-278 S5：地址资源显示（剩余带宽/能量）
@@ -50,14 +50,14 @@ message GetTrxYieldRadarResponse {
   int32 sample_days_30d = 7;   // 30d 实际样本天数
   google.protobuf.Timestamp updated_at = 8;  // 数据更新时间
   bool transition = 9;  // 扩容过渡期（7d 窗内 energy_delegated 变化>20%）：读数=旧租金÷新在押，floor 判定无效（9-9 B' 教训）
-  // D-288：投票市场最高 APR（从 fin_trx_vote_apr 同行透传，消除 TrxHedgeCard 投票年化行重复）
+  // D-288：投票市场最高 APR（从 fin_trx_vote_apr 同行透传，消除投票年化行重复）
   double vote_apr_max = 10;      // 市场最高 APR %（producer=true 降序第一）
   string vote_apr_max_sr = 11;   // 最高 APR SR 名
   double vote_apr_spread = 12;   // max−current 差值（pp）
 }
 
 // D-278 S1：净收益率日曲线——后端聚合三成分日序列+滚动年化，前端零计算（D-043 前端零信任）。
-// 数据源=position_daily_income（rollup 日序列）+ fin_cmc_positions.evaluation_bid_price（现价）。
+// 数据源=position_daily_income（rollup 日序列）+ ticks TRXUSDT（现价）。
 // 分母=$36.5K 池口径常量（与底稿可比，AF4）；S4 敞口并入响应。
 message GetTrxYieldCurveRequest {
   int32 days = 1;  // 返回天数（≤0=默认 30）
@@ -67,24 +67,23 @@ message TrxYieldCurvePoint {
   google.protobuf.Timestamp day = 1;  // UTC 日期
   double energy_trx = 2;               // 当日能量租金收入（TRX）
   double voting_trx = 3;               // 当日投票收入（TRX）
-  double interest_usd = 4;             // 当日空单隔夜息（USD）
+  reserved 4;                          // interest_usd——CMC 域剔除
   double price = 5;                     // 当日 TRX 价格（TRXUSDT，nil=无报价）
-  double daily_total_usd = 6;          // 当日合计收益 USD =（energy+voting）×price+interest
+  double daily_total_usd = 6;          // 当日合计收益 USD =（energy+voting）×price
 }
 
 message GetTrxYieldCurveResponse {
   repeated TrxYieldCurvePoint points = 1;  // 日序列（按 day ASC）
   double annualized_7d = 2;                 // 7d 滚动合成年化 %
   double annualized_30d = 3;                // 30d 滚动合成年化 %
-  double current_price = 4;                 // 现价（fin_cmc_prices REST mid，LastCMCPriceMidWithTime，D-278 AF3）
+  double current_price = 4;                 // 现价（ticks TRXUSDT mid，D-359 价锚）
   double pool_principal_usd = 5;             // 池本金 $36.5K（分母口径常量）
   int32 sample_days_7d = 6;                  // 7d 实际样本天数
   int32 sample_days_30d = 7;                 // 30d 实际样本天数
-  // D-278 S4：收益敞口计量（累积未对冲 TRX 收益折 USD + 对冲比例漂移）
+  // D-278 S4：收益敞口计量（累积未对冲 TRX 收益折 USD）
   double cumulative_unhedged_income_trx = 8;  // 累积未对冲 TRX 收益（rental+vote_claim 累计）
   double cumulative_unhedged_income_usd = 9;  // × 现价折 USD
-  double hedge_ratio_drift_pct = 10;         // 对冲比例漂移 %（现货含奖励 vs 空单名义）
-  bool hedge_ratio_drift_warn = 11;          // 偏离>2% 提醒
+  reserved 10, 11;                            // hedge_ratio_drift_*——CMC 域剔除
 }
 
 // D-271：CEX 只读扫描器快照

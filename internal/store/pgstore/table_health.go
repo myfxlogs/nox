@@ -12,9 +12,6 @@ import (
 // 表名/列名均为编译期常量，TableMaxTs 只按 name 查白名单执行对应 SQL。
 // 空表 max() 返回 NULL → pgtype.Timestamp.Valid=false → 返回零值 time（调用方视为 crit）。
 var tableHealthQueries = map[string]string{
-	"cmc_prices":           "SELECT max(fetched_at) FROM fin_cmc_prices",
-	"cmc_account":          "SELECT max(fetched_at) FROM fin_cmc_account_summary",
-	"cmc_history":          "SELECT max(fetched_at) FROM fin_cmc_history",
 	"xasset_monitor":       "SELECT max(ts) FROM fin_xasset_monitor",
 	"cex_spread":           "SELECT max(ts) FROM fin_cex_spread",
 	"funding_hist_binance": "SELECT max(ts) FROM facts WHERE kind='funding_history' AND venue='binance'",

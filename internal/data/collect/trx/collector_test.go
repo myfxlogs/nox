@@ -850,16 +850,6 @@ func TestTxsCollector_Poll_CheatStatusPersisted(t *testing.T) {
 	if !cheatStatus {
 		t.Errorf("cheat_status = false, want true (TronScan marked cheat)")
 	}
-	// cheat 行不应出现在 ListHedgeFlowPage
-	items, err := st.ListHedgeFlowPage(context.Background(), "trx", 50, 0)
-	if err != nil {
-		t.Fatalf("ListHedgeFlowPage: %v", err)
-	}
-	for _, it := range items {
-		if it.TxID == "tx_cheat_test" {
-			t.Error("tx_cheat_test (cheat=true) appeared in flow, want filtered out")
-		}
-	}
 }
 
 // TestTxFee_Parsing D-279 S1：ret[0].fee 解析。

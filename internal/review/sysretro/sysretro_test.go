@@ -136,8 +136,7 @@ func TestGenerateWeekly(t *testing.T) {
 			{Strategy: "PERP_FUNDING", Trades: 10, WinRate: 0.8, TotalPnl: 3.3},
 			{Strategy: "DEAD", Disabled: true, Reason: "losers"},
 		},
-		PaperSpot:  map[string]int{"low_funding": 3},
-		PaperIntra: map[string]int{},
+		PaperSpot: map[string]int{"low_funding": 3},
 	}}
 	// AI 输出：五节 + 未闭合 suggestions 块（EOF 截断）。
 	ai := `## 交易成败归因

@@ -23,10 +23,7 @@ import (
 type fakeQueryStore struct {
 	chatID, openID string
 	trxAcc         TRXAccountSummary
-	cmcPrice       float64
-	cmcPriceTs     time.Time
-	cmcSum         CMCAccountSummary
-	cmcPos         CMCPositionSummary
+	tickPrice      float64
 	today          [3]float64
 	macroEvents    []pgstore.MacroEvent // D-528
 	// ack 字段
@@ -50,17 +47,11 @@ func (s *fakeQueryStore) FeishuTarget(context.Context) (string, string, error) {
 func (s *fakeQueryStore) LastTRXAccount(context.Context) (TRXAccountSummary, error) {
 	return s.trxAcc, nil
 }
-func (s *fakeQueryStore) LastCMCPriceMid(context.Context, string) (float64, time.Time, error) {
-	return s.cmcPrice, s.cmcPriceTs, nil
+func (s *fakeQueryStore) TickMid(context.Context, string, string) (float64, bool) {
+	return s.tickPrice, s.tickPrice > 0
 }
-func (s *fakeQueryStore) LastCMCAccountSummary(context.Context) (CMCAccountSummary, error) {
-	return s.cmcSum, nil
-}
-func (s *fakeQueryStore) LastCMCPosition(context.Context, string) (CMCPositionSummary, error) {
-	return s.cmcPos, nil
-}
-func (s *fakeQueryStore) SumTodayIncome(context.Context) (float64, float64, float64, error) {
-	return s.today[0], s.today[1], s.today[2], nil
+func (s *fakeQueryStore) SumTodayIncome(context.Context) (float64, float64, error) {
+	return s.today[0], s.today[1], nil
 }
 func (s *fakeQueryStore) SumTRXTxRentalAll(context.Context) (float64, error)    { return 0, nil }
 func (s *fakeQueryStore) SumTRXTxVoteClaimAll(context.Context) (float64, error) { return 0, nil }
@@ -199,7 +190,7 @@ func waitForMsg(t *testing.T, ch chan string) string {
 // --- 10 用例 ---
 
 func TestQuery_TRXPrice(t *testing.T) {
-	fs := &fakeQueryStore{chatID: "chat1", openID: "user1", cmcPrice: 0.33585, cmcPriceTs: time.Now()}
+	fs := &fakeQueryStore{chatID: "chat1", openID: "user1", tickPrice: 0.33585}
 	feishuSrv, msgCh := feishuMockServer(t)
 	old := feishuBase
 	feishuBase = feishuSrv.URL
@@ -231,25 +222,6 @@ func TestQuery_PendingReward(t *testing.T) {
 	msg := waitForMsg(t, msgCh)
 	if !strings.Contains(msg, "7.23") {
 		t.Errorf("msg=%q, want contains ~7.23", msg)
-	}
-}
-
-func TestQuery_CMCPosition(t *testing.T) {
-	fs := &fakeQueryStore{
-		chatID: "chat1", openID: "user1",
-		cmcPos: CMCPositionSummary{InstrumentID: "X-AFQUL", Direction: "short", Quantity: 18100, EntryPrice: 0.33875, UnrealisedPnL: -123.45},
-		cmcSum: CMCAccountSummary{CloseoutPrice: 0.45, DistanceToCloseoutPct: 25.5},
-	}
-	feishuSrv, msgCh := feishuMockServer(t)
-	old := feishuBase
-	feishuBase = feishuSrv.URL
-	t.Cleanup(func() { feishuBase = old })
-	llmSrv := llmToolTextServer(t, "query_cmc_position", "CMC 空单 18100 TRX")
-	h := newTestHandler(fs, llmSrv.URL, 10*time.Second)
-	h.HandleReply(context.Background(), textEvent("空单持仓"))
-	msg := waitForMsg(t, msgCh)
-	if !strings.Contains(msg, "18100") {
-		t.Errorf("msg=%q, want contains 18100", msg)
 	}
 }
 

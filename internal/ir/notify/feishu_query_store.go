@@ -1,6 +1,6 @@
 // 飞书自然语言查询存储接口 + notify 包本地类型。
 // 接口在 notify 包本地定义，pgstore 适配器实现（避免 notify→pgstore 依赖）。
-// 同 PgStoreReplyAdapter / PgStorePriceAlertAdapter 模式。
+// 同 PgStoreReplyAdapter 模式。
 package notify
 
 import (
@@ -14,10 +14,8 @@ import (
 type FeishuQueryStore interface {
 	FeishuTarget(ctx context.Context) (chatID, openID string, err error)
 	LastTRXAccount(ctx context.Context) (TRXAccountSummary, error)
-	LastCMCPriceMid(ctx context.Context, instrumentID string) (float64, time.Time, error)
-	LastCMCAccountSummary(ctx context.Context) (CMCAccountSummary, error)
-	LastCMCPosition(ctx context.Context, instrumentID string) (CMCPositionSummary, error)
-	SumTodayIncome(ctx context.Context) (energyTrx, votingTrx, interestUSD float64, err error)
+	TickMid(ctx context.Context, venue, symbol string) (float64, bool)
+	SumTodayIncome(ctx context.Context) (energyTrx, votingTrx float64, err error)
 	SumTRXTxRentalAll(ctx context.Context) (float64, error)
 	SumTRXTxVoteClaimAll(ctx context.Context) (float64, error)
 	// 宏观两工具数据面（返回 pgstore 行类型，零复制）。
@@ -44,26 +42,6 @@ type TRXAccountSummary struct {
 	EnergyDelegated  float64
 	BandwidthStaked  float64
 	FetchedAt        time.Time
-}
-
-// CMCAccountSummary CMC 账户摘要。
-type CMCAccountSummary struct {
-	TotalAccountValue     float64
-	TotalCashBalance      float64
-	TotalUnrealisedPnL    float64
-	CloseoutPrice         float64
-	DistanceToCloseoutPct float64
-	FetchedAt             time.Time
-}
-
-// CMCPositionSummary CMC 持仓摘要。
-type CMCPositionSummary struct {
-	InstrumentID  string
-	Direction     string
-	Quantity      float64
-	EntryPrice    float64
-	UnrealisedPnL float64
-	FetchedAt     time.Time
 }
 
 // FeishuFinanceSummary D-201：财务摘要（托管池 BTC 份额+今日/累计收益+在期 DCI）。

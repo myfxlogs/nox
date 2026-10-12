@@ -27,7 +27,7 @@ func TestD152_PruneRetentionTables(t *testing.T) {
 	mid := now.Add(-20 * 24 * time.Hour)  // 窗内
 	for _, ddl := range []string{
 		`TRUNCATE fin_cex_radar, fin_xasset_monitor, fin_venue_account_snapshot,
-			fin_symdig_findings, fin_trx_account, fin_cmc_positions`,
+			fin_symdig_findings, fin_trx_account`,
 	} {
 		if _, err := s.pool.Exec(ctx, ddl); err != nil {
 			t.Fatalf("truncate: %v", err)
@@ -71,13 +71,6 @@ func TestD152_PruneRetentionTables(t *testing.T) {
 		old, mid, old); err != nil {
 		t.Fatal(err)
 	}
-	// fin_cmc_positions（90d；组=account_id+instrument_id）
-	if _, err := s.pool.Exec(ctx, `INSERT INTO fin_cmc_positions
-		(account_id,instrument_id,fetched_at) VALUES (1,'BTC',$1),(1,'BTC',$2),(2,'ETH',$3)`,
-		old, mid, old); err != nil {
-		t.Fatal(err)
-	}
-
 	if err := s.PruneCexRadar(ctx, 14); err != nil {
 		t.Fatalf("radar prune: %v", err)
 	}
@@ -88,7 +81,7 @@ func TestD152_PruneRetentionTables(t *testing.T) {
 	// 每表删 1（超窗非终值），留 2（窗内+组终值卫兵）
 	for tbl, want := range map[string]int{
 		"fin_cex_radar": 3, "fin_xasset_monitor": 2, "fin_venue_account_snapshot": 2,
-		"fin_symdig_findings": 2, "fin_trx_account": 2, "fin_cmc_positions": 2,
+		"fin_symdig_findings": 2, "fin_trx_account": 2,
 	} {
 		if n := d152Count(t, ctx, s, tbl); n != want {
 			t.Fatalf("%s 留存 want=%d got=%d (pruned=%v)", tbl, want, n, got)

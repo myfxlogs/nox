@@ -11,14 +11,13 @@ import (
 
 // TrxYieldDay D-278 S1：日级三成分聚合（energy/voting TRX + overnight USD + price）。
 // energy/voting 来自 fin_trx_txs（rental_income/vote_claim 按 date(ts) 分组）；
-// overnight 来自 fin_cmc_history（OVERNIGHT_SETTLEMENT 按 date(transaction_time) 分组）；
 // price 来自 position_daily_income.price（rollup 时捕获的当日 TRXUSDT mid，nil=无报价）。
+// overnight 成分随 CMC 域剔除（fin_cmc_history 不搬，D-225 族件剔除）。
 type TrxYieldDay struct {
-	Day         time.Time
-	EnergyTrx   float64
-	VotingTrx   float64
-	InterestUSD float64
-	Price       *float64 // nil = 无报价
+	Day       time.Time
+	EnergyTrx float64
+	VotingTrx float64
+	Price     *float64 // nil = 无报价
 }
 
 // ListTRXYieldByDay D-278 S1：返回 [from, to) 区间日级三成分序列（按 day ASC）。
@@ -63,34 +62,7 @@ func (s *Store) ListTRXYieldByDay(ctx context.Context, from, to time.Time) ([]Tr
 		return nil, err
 	}
 
-	// 2. fin_cmc_history 按 day 聚合 OVERNIGHT_SETTLEMENT
-	overnightRows, err := s.pool.Query(ctx, `
-		SELECT date_trunc('day', transaction_time AT TIME ZONE 'UTC')::timestamptz AS day,
-		       COALESCE(SUM(amount), 0)
-		FROM fin_cmc_history
-		WHERE transaction_time >= $1 AND transaction_time < $2
-		  AND transaction_type = 'OVERNIGHT_SETTLEMENT'
-		GROUP BY 1
-	`, from, to)
-	if err != nil {
-		return nil, fmt.Errorf("list trx yield overnight by day: %w", err)
-	}
-	defer overnightRows.Close()
-	overnightByDay := map[time.Time]float64{}
-	for overnightRows.Next() {
-		var day time.Time
-		var sum float64
-		if err := overnightRows.Scan(&day, &sum); err != nil {
-			return nil, err
-		}
-		day = day.UTC().Truncate(24 * time.Hour)
-		overnightByDay[day] = sum
-	}
-	if err := overnightRows.Err(); err != nil {
-		return nil, err
-	}
-
-	// 3. position_daily_income 按 day 取 price（rollup 时捕获）
+	// 2. position_daily_income 按 day 取 price（rollup 时捕获）
 	priceRows, err := s.pool.Query(ctx, `
 		SELECT day, price FROM position_daily_income
 		WHERE day >= $1 AND day < $2
@@ -113,12 +85,9 @@ func (s *Store) ListTRXYieldByDay(ctx context.Context, from, to time.Time) ([]Tr
 		return nil, err
 	}
 
-	// 4. Merge by day
+	// 3. Merge by day
 	daySet := map[time.Time]bool{}
 	for d := range txByDay {
-		daySet[d] = true
-	}
-	for d := range overnightByDay {
 		daySet[d] = true
 	}
 	out := make([]TrxYieldDay, 0, len(daySet))
@@ -128,7 +97,6 @@ func (s *Store) ListTRXYieldByDay(ctx context.Context, from, to time.Time) ([]Tr
 			yp.EnergyTrx = float64(r.EnergyS) / 1e6
 			yp.VotingTrx = float64(r.VotingS) / 1e6
 		}
-		yp.InterestUSD = overnightByDay[d]
 		out = append(out, yp)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Day.Before(out[j].Day) })
