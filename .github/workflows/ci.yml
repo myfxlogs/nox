@@ -32,8 +32,16 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          version: 1.68.3
       - run: npm ci --legacy-peer-deps
         working-directory: web
+      # web/src/gen 不入库（gitignore）——npm build 前重产（protoc-gen-es 在 node_modules）
+      - run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.20.0
+          buf generate
       # 前端产物须在 go build 之前（embed.go go:embed web/dist）
       - run: npm run build
         working-directory: web
@@ -51,7 +59,17 @@ jobs:
           fi
       # 测试面：go test ./... 全量（DSN 注入 5434，缺 DSN 的 skip 语义不变）。
       # ulimit -n 提 hard limit（race detector + pgxpool fd 压力先例 D-177/D-255）。
-      - run: ulimit -n $(ulimit -Hn) && NOX_TEST_PG_DSN="postgres://postgres:test@localhost:5434/nox_test?pool_min_conns=0&pool_max_conns=2" go test ./... -count=1
+      - run: ulimit -n $(ulimit -Hn) && go test ./... -count=1
+        env:
+          NOX_TEST_PG_DSN: "postgres://postgres:test@localhost:5434/nox_test?sslmode=disable"
+          NOX_TEST_PG_SERVICE_DSN: "postgres://postgres:test@localhost:5434/nox_service_test?sslmode=disable"
+          NOX_EXEC_TEST_PG_DSN: "postgres://postgres:test@localhost:5434/nox_exec_test?sslmode=disable"
+          NOX_RECONCILE_TEST_PG_DSN: "postgres://postgres:test@localhost:5434/nox_reconcile_test?sslmode=disable"
       # -race：M2.1 数据部目录（后续 M2.x 每票追加各自部门目录）。
-      - run: ulimit -n $(ulimit -Hn) && NOX_TEST_PG_DSN="postgres://postgres:test@localhost:5434/nox_test?pool_min_conns=0&pool_max_conns=2" go test -race -count=1 ./internal/data/...
+      - run: ulimit -n $(ulimit -Hn) && go test -race -count=1 ./internal/data/...
+        env:
+          NOX_TEST_PG_DSN: "postgres://postgres:test@localhost:5434/nox_test?sslmode=disable"
+          NOX_TEST_PG_SERVICE_DSN: "postgres://postgres:test@localhost:5434/nox_service_test?sslmode=disable"
+          NOX_EXEC_TEST_PG_DSN: "postgres://postgres:test@localhost:5434/nox_exec_test?sslmode=disable"
+          NOX_RECONCILE_TEST_PG_DSN: "postgres://postgres:test@localhost:5434/nox_reconcile_test?sslmode=disable"
       - run: ./scripts/check-lines.sh

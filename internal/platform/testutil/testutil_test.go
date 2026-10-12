@@ -96,12 +96,12 @@ func TestNormalizeDSN_NoParams_OnlyOptionsAppended(t *testing.T) {
 	}
 }
 
-// TestNormalizeDSN_ExistingPool_LockTimeoutAppended：已有 pool 参数 → 只追加 options（v1.1：pool 不动）。
-func TestNormalizeDSN_ExistingPool_LockTimeoutAppended(t *testing.T) {
-	dsn := "postgres://arb:arb@localhost:5435/nox_test?pool_max_conns=2"
+// TestNormalizeDSN_ExistingPool_Stripped：已有 pool 参数 → 剥除（pgx.Connect 拒 pool_*；D-230 CI 修复）。
+func TestNormalizeDSN_ExistingPool_Stripped(t *testing.T) {
+	dsn := "postgres://arb:arb@localhost:5435/nox_test?pool_max_conns=2&pool_min_conns=0"
 	got := normalizeDSN(dsn)
-	if !strings.Contains(got, "pool_max_conns=2") {
-		t.Errorf("已有 pool_max_conns=2 应保留，got=%s", got)
+	if strings.Contains(got, "pool_max_conns") || strings.Contains(got, "pool_min_conns") {
+		t.Errorf("pool_* 应剥除（pgx.Connect 拒认），got=%s", got)
 	}
 	if !strings.Contains(got, "options=-c%20lock_timeout=5s") {
 		t.Errorf("缺 options 应追加 lock_timeout，got=%s", got)

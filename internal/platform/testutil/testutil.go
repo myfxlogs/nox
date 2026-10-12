@@ -110,6 +110,18 @@ func TestDSN(t *testing.T, envVar string) string {
 //   - pool_max_conns/pool_min_conns 不追加——TestDSN 消费方含 pgx.Connect 单连接路径，
 //     pool_* 是 pgxpool 专有参数。pgxpool 默认 defaultMaxConns=4/min=0 与原追加值相同（行为中性）。
 func normalizeDSN(dsn string) string {
+	// 入站剥 pool_*——pgx.Connect 单连接消费方拒 pgxpool 专有参数（CI DSN 带限流参先例）；
+	// pgxpool 消费方默认 defaultMaxConns=4/min=0 兜底，剥参行为中性。
+	for _, k := range []string{"pool_max_conns", "pool_min_conns"} {
+		if u, err := url.Parse(dsn); err == nil {
+			q := u.Query()
+			if q.Has(k) {
+				q.Del(k)
+				u.RawQuery = q.Encode()
+				dsn = u.String()
+			}
+		}
+	}
 	sep := "?"
 	if strings.Contains(dsn, "?") {
 		sep = "&"
