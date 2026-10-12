@@ -66,13 +66,14 @@ type Executor struct {
 	Client  *http.Client
 	Now     func() time.Time // 测试可覆
 	// 测试注入面（nil=真实 HTTP 实现）：
-	PriceFn     func(ctx context.Context, symbol string) (float64, error)
-	BalanceFn   func(ctx context.Context, asset string) (float64, error) // 现货 free+locked
-	EarnFn      func(ctx context.Context, asset string) ([]EarnPosition, error)
-	RedeemFn    func(ctx context.Context, productID string, amount float64) error
-	StreamFn    func() bool                                                         // 流存活闸（nil=dephealth 实读）
-	HoldingFn   func(ctx context.Context, productRef, optType string) (bool, error) // venue 持仓读（D-198 返修①；nil=实 GET）
-	PositionsFn func(ctx context.Context) ([]DCIPosition, error)                    // D-207 venue 持仓全列表（settle 观察；nil=实 GET）
+	PriceFn         func(ctx context.Context, symbol string) (float64, error)
+	BalanceFn       func(ctx context.Context, asset string) (float64, error) // 现货 free+locked
+	EarnFn          func(ctx context.Context, asset string) ([]EarnPosition, error)
+	RedeemFn        func(ctx context.Context, productID string, amount float64) error
+	StreamFn        func() bool                                                         // 流存活闸（nil=dephealth 实读）
+	HoldingFn       func(ctx context.Context, productRef, optType string) (bool, error) // venue 持仓读（D-198 返修①；nil=实 GET）
+	PositionsFn     func(ctx context.Context) ([]DCIPosition, error)                    // D-207 venue 持仓全列表（settle 观察；nil=实 GET）
+	SubscriptionsFn func(ctx context.Context) ([]DCIPosition, error)                    // M3-④ venue 申购史全列表（settle 死端切源；nil=实 GET）
 }
 
 // Go 裸口令主径：最新 pending 可执行提案→GoProposal 绑 id 执行（D-189③）。

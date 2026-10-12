@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"nox/internal/data/bus"
@@ -269,7 +268,7 @@ func brokerPositionToProto(o venue.Order, canonical string, price bus.Quote, has
 		Swap:        o.Swap,
 		Commission:  o.Commission,
 		Comment:     o.Comment,
-		IsArb:       strings.HasPrefix(o.Comment, exec.OrderComment),
+		IsArb:       exec.IsOrderComment(o.Comment),
 		Magic:       o.Magic,
 		VenueOnline: venueOnline,
 		Margin:      margin,     // D-124：方案 C 分摊保证金（0=未知/CEX/无账户数据）

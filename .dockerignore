@@ -1,0 +1,12 @@
+web/node_modules
+web/dist
+web/src/gen
+ref/
+docs/
+.git/
+.claude/
+.devin/
+.env*
+*.md
+# F8：经验库需 embed 进二进制（容器内无 docs/），保留 docs/经验库/
+!docs/经验库/

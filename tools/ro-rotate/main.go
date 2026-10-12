@@ -10,7 +10,7 @@
 //
 // 用法：
 //
-//	NOX_MASTER_KEY=<key> NOX_ROTATE_PG_DSN='postgresql://arb:<admin pw>@127.0.0.1:5433/arb' \
+//	NOX_MASTER_KEY=<key> NOX_ROTATE_PG_DSN='postgresql://nox:<admin pw>@127.0.0.1:5433/nox' \
 //	  go run ./tools/ro-rotate
 package main
 
@@ -159,9 +159,9 @@ func rewriteDSNPassword(dsn, newPw string) (user, out string, err error) {
 		return "", "", fmt.Errorf("DSN 非 URL 形态（keyword=），本工具不支持")
 	}
 	if u.User == nil {
-		user = "arb_ro"
+		user = "nox_ro"
 	} else if user = u.User.Username(); user == "" {
-		user = "arb_ro"
+		user = "nox_ro"
 	}
 	if newPw == "" {
 		return user, dsn, nil

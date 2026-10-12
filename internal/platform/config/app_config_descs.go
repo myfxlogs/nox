@@ -202,7 +202,6 @@ var appConfigDescs = map[string]string{
 	"NOX_SYMDIG_ENABLED":           "symdig 日报生成总开关（0/false=关）",
 	"NOX_SLEEPMON_ENABLED":         "sleepmon 进程级睡眠自检开关（0/false=关）",
 	"NOX_GATE_WS_MODE":             "Gate WS 采集模式（direct=绕代理原生直连）",
-	"CMC_WS_DISABLE":               "CMC WS 采集禁用开关（1=禁用，仅 REST）",
 	"NOX_DERIBIT_OPT_ENABLED":      "Deribit 期权面采集开关（0/false=关）",
 	"NOX_OPT_PARITY_ALERT_BPS":     "期权平价偏离告警阈值（bps）",
 	"NOX_LEG_TICK_WINDOW":          "残腿可平性判定窗口（默认 30m）",

@@ -3,16 +3,18 @@ package reconcile
 import "testing"
 
 // TestIsARBOrder 覆盖 D-032 系统外单判别契约：
-// ARB 源订单 = exec.OrderComment("arb") 前缀；其余（遗留 ca_/cx_/tri_ 格式、手工、空）一律系统外单。
+// 系统订单 = exec.OrderComment("nox") 前缀 + 遗留 OrderCommentLegacy("arb")（D-233 过渡双前缀）；其余（遗留 ca_/cx_/tri_ 格式、手工、空）一律系统外单。
 func TestIsARBOrder(t *testing.T) {
 	cases := []struct {
 		name    string
 		comment string
 		want    bool
 	}{
-		{"当前 ARB 单", "arb", true},
-		{"当前 ARB 单（带后缀）", "arb-leg1", true},
-		{"当前 ARB 单（带数字）", "arb-12345", true},
+		{"当前 NOX 单", "nox", true},
+		{"NOX 单（带后缀）", "nox-leg1", true},
+		{"遗留 ARB 单", "arb", true},
+		{"遗留 ARB 单（带后缀）", "arb-leg1", true},
+		{"遗留 ARB 单（带数字）", "arb-12345", true},
 		{"遗留 carry 单", "ca_63ca13306295e101-leg1", false},
 		{"遗留 cross-exchange 单", "cx_681e2b662bafee88-leg0", false},
 		{"遗留三角单", "tri_abc123def456-leg2", false},

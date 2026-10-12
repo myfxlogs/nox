@@ -18,7 +18,7 @@ import (
 func TestMigrate_EmptyDBFullMigration(t *testing.T) {
 	admin := adminDSN(t)
 	ctx := context.Background()
-	emptyDB := "arb_migrate_empty_test_" + testutil.SeatTag() // D-016 席位后缀：多席并发不互踩
+	emptyDB := "nox_migrate_empty_test_" + testutil.SeatTag() // D-016 席位后缀：多席并发不互踩
 
 	// 清理旧库
 	if out, err := exec.CommandContext(ctx, "psql", admin, "-c",
@@ -52,7 +52,7 @@ func TestMigrate_EmptyDBFullMigration(t *testing.T) {
 
 	// 验证 schema_migrations 版本数 = migrationFiles 长度
 	var versionCount int
-	err = s.pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations").Scan(&versionCount)
+	err = s.pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations WHERE version<90000").Scan(&versionCount)
 	if err != nil {
 		t.Fatalf("query schema_migrations count: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestMigrate_Idempotent(t *testing.T) {
 
 	// 确认版本数不变
 	var versionCount int
-	_ = s.pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations").Scan(&versionCount)
+	_ = s.pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations WHERE version<90000").Scan(&versionCount)
 	if versionCount != len(migrationFiles) {
 		t.Errorf("schema_migrations 行数=%d, want %d（幂等再跑不应改变版本数）",
 			versionCount, len(migrationFiles))

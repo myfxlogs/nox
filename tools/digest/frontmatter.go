@@ -1,4 +1,4 @@
-// frontmatter.go 条目 frontmatter 解析（S3.3 staleness 用，独立实现，不 import arbkb）。
+// frontmatter.go 条目 frontmatter 解析（S3.3 staleness 用，独立实现，不 import noxkb）。
 // 仅解析 staleness 所需字段：id / last_verified / evidence_refs。
 package main
 

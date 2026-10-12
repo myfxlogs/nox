@@ -41,7 +41,7 @@ func TestD065_SystemPromptContractSubset(t *testing.T) {
 }
 
 // TestD065_WeeklySpecHasQueryRO weekly 传入 specs 必含 query_ro（D-059 实拍：
-// arb_ro 断链时周深挖无自救力——spec 缺失即静默退化，锚住防回归）。
+// nox_ro 断链时周深挖无自救力——spec 缺失即静默退化，锚住防回归）。
 func TestD065_WeeklySpecHasQueryRO(t *testing.T) {
 	var gotSpecs []analyst.ToolSpec
 	capture := func(_ context.Context, _ *analyst.Client, _ analyst.ToolExecutor, specs []analyst.ToolSpec,

@@ -83,7 +83,7 @@ func TestTestDSN_UnknownEnvVarNoDefault_Fatalf(t *testing.T) {
 
 // TestNormalizeDSN_NoParams_OnlyOptionsAppended：无参 DSN 只追加 options（v1.1：不追加 pool 参数）。
 func TestNormalizeDSN_NoParams_OnlyOptionsAppended(t *testing.T) {
-	dsn := "postgres://arb:arb@localhost:5435/nox_test"
+	dsn := "postgres://nox:nox@localhost:5435/nox_test"
 	got := normalizeDSN(dsn)
 	if !strings.Contains(got, "options=-c%20lock_timeout=5s") {
 		t.Errorf("无参 DSN 应追加 options，got=%s", got)
@@ -98,7 +98,7 @@ func TestNormalizeDSN_NoParams_OnlyOptionsAppended(t *testing.T) {
 
 // TestNormalizeDSN_ExistingPool_Stripped：已有 pool 参数 → 剥除（pgx.Connect 拒 pool_*；D-230 CI 修复）。
 func TestNormalizeDSN_ExistingPool_Stripped(t *testing.T) {
-	dsn := "postgres://arb:arb@localhost:5435/nox_test?pool_max_conns=2&pool_min_conns=0"
+	dsn := "postgres://nox:nox@localhost:5435/nox_test?pool_max_conns=2&pool_min_conns=0"
 	got := normalizeDSN(dsn)
 	if strings.Contains(got, "pool_max_conns") || strings.Contains(got, "pool_min_conns") {
 		t.Errorf("pool_* 应剥除（pgx.Connect 拒认），got=%s", got)
@@ -111,9 +111,9 @@ func TestNormalizeDSN_ExistingPool_Stripped(t *testing.T) {
 // TestNormalizeDSN_PoolParamsNotAppended：防回归——输出不含 pool_max_conns=/pool_min_conns=（v1.1）。
 func TestNormalizeDSN_PoolParamsNotAppended(t *testing.T) {
 	for _, dsn := range []string{
-		"postgres://arb:arb@localhost:5435/nox_test",
-		"postgres://arb:arb@localhost:5435/nox_test?sslmode=disable",
-		"postgres://arb:arb@localhost:5435/nox_test?pool_max_conns=2",
+		"postgres://nox:nox@localhost:5435/nox_test",
+		"postgres://nox:nox@localhost:5435/nox_test?sslmode=disable",
+		"postgres://nox:nox@localhost:5435/nox_test?pool_max_conns=2",
 	} {
 		got := normalizeDSN(dsn)
 		if strings.Contains(got, "pool_max_conns=") && !strings.Contains(dsn, "pool_max_conns=") {
@@ -126,7 +126,7 @@ func TestNormalizeDSN_PoolParamsNotAppended(t *testing.T) {
 }
 
 func TestNormalizeDSN_ExistingOptions_NotAppended(t *testing.T) {
-	dsn := "postgres://arb:arb@localhost:5435/nox_test?options=-c%20lock_timeout=10s"
+	dsn := "postgres://nox:nox@localhost:5435/nox_test?options=-c%20lock_timeout=10s"
 	got := normalizeDSN(dsn)
 	if strings.Count(got, "options=") != 1 {
 		t.Errorf("已有 options 不应再追加，got=%s（options= 出现 %d 次）", got, strings.Count(got, "options="))
@@ -134,7 +134,7 @@ func TestNormalizeDSN_ExistingOptions_NotAppended(t *testing.T) {
 }
 
 func TestTestDSN_NonTestDB_Rejected(t *testing.T) {
-	setEnv(t, "NOX_TEST_PG_DSN", "postgres://arb:arb@localhost:5435/arb")
+	setEnv(t, "NOX_TEST_PG_DSN", "postgres://nox:nox@localhost:5435/nox")
 	setEnv(t, "NOX_TEST_ALLOW_SKIP_DSN", "")
 	failed, _ := assertTerminated(t, func(st *testing.T) {
 		TestDSN(st, "NOX_TEST_PG_DSN")
@@ -148,7 +148,7 @@ func TestTestDSN_NonTestDB_Rejected(t *testing.T) {
 // Fatalf——库名含 _test 也绕不过实例级端口闸（5433 复燃 22 库实证）。
 func TestTestDSN_ProductionInstanceRejected(t *testing.T) {
 	setEnv(t, "DB_DSN", "")
-	setEnv(t, "NOX_TEST_PG_DSN", "postgres://arb:arb@127.0.0.1:5433/nox_test_seat")
+	setEnv(t, "NOX_TEST_PG_DSN", "postgres://nox:nox@127.0.0.1:5433/nox_test_seat")
 	setEnv(t, "NOX_TEST_ALLOW_SKIP_DSN", "")
 	failed, _ := assertTerminated(t, func(st *testing.T) {
 		TestDSN(st, "NOX_TEST_PG_DSN")
@@ -162,23 +162,23 @@ func TestTestDSN_ProductionInstanceRejected(t *testing.T) {
 // 覆盖判定源（compose 注入形态）；5434 缺省测试实例/无显式端口（pgx 缺省 5432）不命中。
 func TestIsProdInstance(t *testing.T) {
 	setEnv(t, "DB_DSN", "")
-	if !isProdInstance("postgres://arb:arb@127.0.0.1:5433/nox_test_x") {
+	if !isProdInstance("postgres://nox:nox@127.0.0.1:5433/nox_test_x") {
 		t.Fatal("5433 库名含 _test 也应命中生产实例")
 	}
-	if !isProdInstance("postgres://arb:arb@otherhost:5433/nox_test_x") {
+	if !isProdInstance("postgres://nox:nox@otherhost:5433/nox_test_x") {
 		t.Fatal("任意 host 的 5433 应命中")
 	}
-	if isProdInstance("postgres://arb:arb@127.0.0.1:5434/nox_test") {
+	if isProdInstance("postgres://nox:nox@127.0.0.1:5434/nox_test") {
 		t.Fatal("5434 缺省测试实例不应命中")
 	}
-	if isProdInstance("postgres://arb:arb@127.0.0.1/nox_test") {
+	if isProdInstance("postgres://nox:nox@127.0.0.1/nox_test") {
 		t.Fatal("无显式端口（pgx 缺省 5432）不应命中")
 	}
-	setEnv(t, "DB_DSN", "postgres://arb:arb@10.0.0.5:6543/arb")
-	if !isProdInstance("postgres://arb:arb@10.0.0.5:6543/nox_test_x") {
+	setEnv(t, "DB_DSN", "postgres://nox:nox@10.0.0.5:6543/nox")
+	if !isProdInstance("postgres://nox:nox@10.0.0.5:6543/nox_test_x") {
 		t.Fatal("DB_DSN 声明的端口应作为生产实例端口")
 	}
-	if isProdInstance("postgres://arb:arb@127.0.0.1:5434/nox_test") {
+	if isProdInstance("postgres://nox:nox@127.0.0.1:5434/nox_test") {
 		t.Fatal("DB_DSN 覆盖后 5434 仍不应命中")
 	}
 }
@@ -187,9 +187,9 @@ func TestIsProdInstance(t *testing.T) {
 // connect_timeout=5——连接类故障 120s 挂死变 5s 快败（pgx/libpq 原生参数）。
 func TestNormalizeDSN_ConnectTimeoutAppended(t *testing.T) {
 	for _, dsn := range []string{
-		"postgres://arb:arb@localhost:5435/nox_test",
-		"postgres://arb:arb@localhost:5435/nox_test?sslmode=disable",
-		"postgres://arb:arb@localhost:5435/nox_test?options=-c%20lock_timeout=10s",
+		"postgres://nox:nox@localhost:5435/nox_test",
+		"postgres://nox:nox@localhost:5435/nox_test?sslmode=disable",
+		"postgres://nox:nox@localhost:5435/nox_test?options=-c%20lock_timeout=10s",
 	} {
 		got := normalizeDSN(dsn)
 		if strings.Count(got, "connect_timeout=5") != 1 {
@@ -200,7 +200,7 @@ func TestNormalizeDSN_ConnectTimeoutAppended(t *testing.T) {
 		}
 	}
 	// 已有自定义 connect_timeout=3 → 原样保留不覆盖
-	got := normalizeDSN("postgres://arb:arb@localhost:5435/nox_test?connect_timeout=3")
+	got := normalizeDSN("postgres://nox:nox@localhost:5435/nox_test?connect_timeout=3")
 	if !strings.Contains(got, "connect_timeout=3") {
 		t.Errorf("已有 connect_timeout=3 应保留，got=%s", got)
 	}
@@ -209,7 +209,7 @@ func TestNormalizeDSN_ConnectTimeoutAppended(t *testing.T) {
 // TestNormalizeDSN_ConnectTimeoutParsedByPgx T1 补充锚：pgx 必须真认这个参数
 // （ConnectTimeout=5s）——防「追加了个 pgx 不认的键=静默无效」伪绿。
 func TestNormalizeDSN_ConnectTimeoutParsedByPgx(t *testing.T) {
-	cfg, err := pgx.ParseConfig(normalizeDSN("postgres://arb:arb@localhost:5435/nox_test"))
+	cfg, err := pgx.ParseConfig(normalizeDSN("postgres://nox:nox@localhost:5435/nox_test"))
 	if err != nil {
 		t.Fatalf("pgx.ParseConfig: %v", err)
 	}

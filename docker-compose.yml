@@ -1,0 +1,114 @@
+services:
+  nox-core:
+    build:
+      context: .
+      dockerfile: Dockerfile.core
+    image: nox-core:latest
+    container_name: nox-core
+    restart: unless-stopped
+    # D-508 S4：资源封顶（32GB 主机宽值）+健康检查（busybox wget 探活 RPC 端口）。
+    mem_limit: 4g
+    cpus: 4
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:50051/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: # D-213 S2：日志轮转封顶 50m×3=150MB/容器，防 json 日志无界增长顶爆盘
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: "3"
+    ports:
+      - "127.0.0.1:50051:50051"
+    depends_on:
+      nox-postgres:
+        condition: service_healthy
+    env_file:
+      # D-515 S6：.env 键值全量进容器但不再是配置源——仅作 app_config/app_secrets/
+      # swaparb_allow_combos 空表一次性播种源 + env 残值告警；非空表一律 DB 为准。
+      - path: .env
+        required: false
+    environment:
+      # D-515 收口终态：仅基建/主权钥 4 键留 environment:；其余 ~110 键迁库
+      # （标量→app_config，密钥→app_secrets，swaparb 组合闸→swaparb_allow_combos 表）。
+      # M3：cex-proxy 不落生产（业主令；生产实证 BINANCE/OKX PROXY_URL 本为空=直连），
+      # proxy env 键与 CA 挂载不随搬。
+      DB_DSN: "postgres://nox:nox@nox-postgres:5432/nox?sslmode=disable"
+      NOX_MASTER_KEY: "${NOX_MASTER_KEY:-}"  # 密文主权钥（enc 列/app_secrets；业主生成勿入仓，空=遇密文行 fail-closed；M3 切流原值搬禁轮换）
+      NOX_ENVIRONMENT: "${NOX_ENVIRONMENT:-demo}"  # live/demo 模式旗（boot 期消费）
+      NOX_AUTH_TOKEN: "${NOX_AUTH_TOKEN}"  # dashboard 认证
+    volumes:
+      # D-091 分析员工具根 /kn：docs 可写（AppendAnalystNote 追加待归纳）+ internal/proto/cmd 只读（read_code/grep_kb）
+      - ./docs:/kn/docs
+      - ./internal:/kn/internal:ro
+      - ./proto:/kn/proto:ro
+      - ./cmd:/kn/cmd:ro
+
+  nox-postgres:
+    image: postgres:16
+    container_name: nox-postgres
+    restart: unless-stopped
+    # D-508 S4：资源封顶 + pg_stat_statements 预载（迁移 0147 CREATE EXTENSION 依赖）。
+    mem_limit: 8g
+    cpus: 8
+    # D-021：/dev/shm 从 docker 缺省 64MB 提到 1g——2026-10-02 14:56 多席并发测试并行查询
+    # 耗尽 shm（could not resize shared memory segment: No space left on device）→ 后端
+    # 段错误 → 全库 recovery 2 分钟+，生产随之不可用。
+    shm_size: "1gb"
+    command: -c shared_preload_libraries=pg_stat_statements
+    logging: # D-213 S2：日志轮转封顶 50m×3=150MB/容器
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: "3"
+    environment:
+      POSTGRES_USER: nox
+      POSTGRES_PASSWORD: nox
+      POSTGRES_DB: nox
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - nox-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nox -d nox"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # D-021：测试库独立实例——2026-10-02 生产 PG /dev/shm 被多席并发测试耗尽→后端段错误
+  # →recovery（shm_size 已兜底，本服务彻底隔离面）。测试全部流量（testutil 缺省
+  # DSN/CI/test_db_gc/restore_test）走 5434；生产实例不再承载任何 *test* 库。
+  nox-postgres-test:
+    image: postgres:16
+    container_name: nox-postgres-test
+    restart: unless-stopped
+    mem_limit: 4g
+    cpus: 4
+    shm_size: "1gb"
+    # D-165：缺省 max_connections=100 vs `go test -p` 并行需求（逐包隔离库×pool=4，
+    # 容器日志 96h 实证 1364 次 too many clients→broken pipe flake）。dev-only 抬 500。
+    command: postgres -c max_connections=500
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: "3"
+    environment:
+      POSTGRES_USER: nox
+      POSTGRES_PASSWORD: nox
+      POSTGRES_DB: nox_test
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - nox-pgdata-test:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nox -d nox_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  # 切流过渡（D-241⑦）：SG 现存数据在旧卷 arb_arb-pgdata——先 alpine cp 克隆到本卷再 up。
+  nox-pgdata:
+  nox-pgdata-test:

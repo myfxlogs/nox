@@ -30,7 +30,7 @@ func main() {
 
 	dsn := os.Getenv("DB_DSN") // D-145 引导件：连库前必需，业务配置权威=PG
 	if dsn == "" {
-		dsn = "postgres://arb:arb@localhost:5433/arb?sslmode=disable"
+		dsn = "postgres://nox:nox@localhost:5433/nox?sslmode=disable"
 	}
 	// 1. DB 连接 + migrations 自跑（§11.2）
 	ctx, cancel := context.WithCancel(context.Background())

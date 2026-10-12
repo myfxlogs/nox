@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # paper_window_report.sh —— D-023 ③：paper long_cfd_short_perp 逐日净额报告（观测窗固化查询）。
-# 观测窗起点=app_config ARB_PAPER_WINDOW_START（D-033 R1③ 单源；CLI 参数可覆盖——原
+# 观测窗起点=app_config NOX_PAPER_WINDOW_START（D-033 R1③ 单源；CLI 参数可覆盖——原
 # 硬编码 2026-10-02 23:06 UTC 已退役，窗起点运维经 app_config 热改与进程内日报同源）。
 # cohort=窗内新开行 ∪ 窗始已 active 行。
 # 口径注记（诚实边界）：paper_spot_carry.accrued_usd 为**累计值**，库内无逐日 accrual 流水——
@@ -9,10 +9,10 @@
 # 用法：scripts/paper_window_report.sh [--since '2026-10-02 23:06+00']
 set -euo pipefail
 
-PSQL="docker exec arb-postgres psql -U arb -d arb -v ON_ERROR_STOP=1 -t -A"
-SINCE="${1:-$($PSQL -c "SELECT value FROM app_config WHERE key='ARB_PAPER_WINDOW_START'" | tr -d '[:space:]')}"
+PSQL="docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -t -A"
+SINCE="${1:-$($PSQL -c "SELECT value FROM app_config WHERE key='NOX_PAPER_WINDOW_START'" | tr -d '[:space:]')}"
 if [[ -z "$SINCE" ]]; then
-  echo "FAIL: app_config ARB_PAPER_WINDOW_START 未配置且未传 --since" >&2
+  echo "FAIL: app_config NOX_PAPER_WINDOW_START 未配置且未传 --since" >&2
   exit 1
 fi
 

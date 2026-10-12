@@ -9,7 +9,7 @@ set -euo pipefail
 
 # === 配置（须与主机一致，按业主环境修改）===
 LISTEN=":8443"
-TOKEN=""           # 必填：与主机 -token 一致（arb 端 ARB_BINANCE_PROXY_TOKEN 指向同值）
+TOKEN=""           # 必填：与主机 -token 一致（nox 端 NOX_BINANCE_PROXY_TOKEN 指向同值）
 SANS=""            # 仅裸连回退必填：备机公网 IP（证书 SANs，与主机不同须重新生成或用域名）
 CERT_DIR="./certs" # 仅裸连回退需要：从主机复制的 certs 目录（CA + 服务器证书）
 CONFIG="./config.json" # 从主机复制的路由清单（缺失走内置默认，路由漂移=断流）

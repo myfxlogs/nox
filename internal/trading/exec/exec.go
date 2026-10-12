@@ -4,14 +4,24 @@ package exec
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 )
 
-// OrderComment 是 ARB 订单写入 broker 的 comment 标记（单一真相源）。
-// MT4/MT5 下单统一携带，供对账器（internal/reconcile）判别订单是否为 ARB 源：
-// `arb` 前缀 → ARB 源订单；其余（遗留 ca_/cx_/tri_+hex 格式、手工 UUID、空）→ 系统外单不追踪。
-const OrderComment = "arb"
+// OrderComment 是 NOX 订单写入 broker 的 comment 标记（单一真相源）。
+// MT4/MT5 下单统一携带，供对账器（internal/reconcile）判别订单是否为系统源：
+// `nox` 前缀 → 系统订单；其余（遗留 ca_/cx_/tri_+hex 格式、手工 UUID、空）→ 系统外单不追踪。
+const OrderComment = "nox"
+
+// OrderCommentLegacy D-233 过渡条款：切流前在仓单带 `arb` 标记——is_arb
+// 识别双前缀覆盖至在仓 arb 单清零，届时删本常量与第二前缀。
+const OrderCommentLegacy = "arb"
+
+// IsOrderComment 系统订单 comment 判定（新 `nox`+遗留 `arb` 双前缀，过渡期内）。
+func IsOrderComment(comment string) bool {
+	return strings.HasPrefix(comment, OrderComment) || strings.HasPrefix(comment, OrderCommentLegacy)
+}
 
 // Order 是下单请求（市价单）。
 type Order struct {

@@ -24,7 +24,7 @@ const KnRoot = "/kn"
 
 // Tools 工具执行器（实现 ToolExecutor）。
 type Tools struct {
-	ReadOnlyDSN string         // NOX_AI_PG_DSN（arb_ro 角色，query_ro 专用）
+	ReadOnlyDSN string         // NOX_AI_PG_DSN（nox_ro 角色，query_ro 专用）
 	Store       *pgstore.Store // get_entity 用主 store（已认证连接，只读查询）
 	KnRoot      string         // 文件工具根（默认 /kn，测试可覆盖）
 	// R2 返修②：position 派生字段回调（dashboard.Service 注入，复用 enrichOne 同源派生）。
@@ -76,7 +76,7 @@ func (t *Tools) Execute(ctx context.Context, call ToolCall) (ToolResult, []Citat
 // ToolSpecs 返回工具定义（供 client.go MessageRequest.Tools 用）。
 func ToolSpecs() []ToolSpec {
 	return []ToolSpec{
-		{Name: toolQueryRO, Description: "只读 SQL 查询（仅 SELECT，arb 库，自动 LIMIT 500，5s 超时）", InputSchema: rawJSON(`{"type":"object","properties":{"sql":{"type":"string","description":"SELECT 语句"}},"required":["sql"]}`)},
+		{Name: toolQueryRO, Description: "只读 SQL 查询（仅 SELECT，nox 库，自动 LIMIT 500，5s 超时）", InputSchema: rawJSON(`{"type":"object","properties":{"sql":{"type":"string","description":"SELECT 语句"}},"required":["sql"]}`)},
 		{Name: toolGetEntity, Description: "按 ID 拉实体结构化 JSON（position/opportunity/stat-vkey）", InputSchema: rawJSON(`{"type":"object","properties":{"type":{"type":"string","enum":["position","opportunity","stat-vkey"]},"id":{"type":"string"}},"required":["type","id"]}`)},
 		{Name: toolGrepKB, Description: "经验库/decisions/docs 关键词检索（grep -rn）", InputSchema: rawJSON(`{"type":"object","properties":{"pattern":{"type":"string"},"path":{"type":"string","description":"子路径如 docs/经验库"}},"required":["pattern"]}`)},
 		{Name: toolReadDoc, Description: "读 docs/**/*.md（≤2000 行）", InputSchema: rawJSON(`{"type":"object","properties":{"path":{"type":"string","description":"相对 /kn/docs 的路径"}},"required":["path"]}`)},

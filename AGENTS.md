@@ -6,7 +6,7 @@
 ## 1. 定位（方向锚 · 修改须 D# 留痕 + 业主明示）
 
 > **NOX = 跨市场套利套息「自动发现 + 自动执行 + 自动平仓」系统。**
-> **资产**：CFD（MT4/MT5）+ 加密货币（CEX/DeFi），两侧并进。
+> **资产**：CFD（MT5）+ 加密货币（CEX/DeFi），两侧并进。
 > **第一性原则**：**盈利**。自动执行+自动平仓+自动淘汰亏损策略；风控优先于速度。
 > **收益来源**：价差收敛 + 息差（funding/swap/carry）。
 > **闭环**（业主令 2026-10-11 修正）：发现 → 评估验证 → **纸面沙箱** → 自动执行 → 持仓 → 自动平仓 → 账本 → 复盘进化 → 策略淘汰。发现/验证/纸面三段**零业主接触**——投资人唯一接口=真金动用审批与条件请求响应（D-184）。
@@ -80,7 +80,7 @@
 
 ```
 go build ./... && go vet ./... && gofmt -l $(git diff --name-only master -- '*.go')
-go test ./... -count=1                     # 测试库=独立实例 postgres://arb:arb@127.0.0.1:5434/nox_test（D-021；env 未设自动缺省，生产 5433 零测试库）
+go test ./... -count=1                     # 测试库=独立实例 postgres://nox:nox@127.0.0.1:5434/nox_test（D-021；env 未设自动缺省，生产 5433 零测试库）
 go test -race ./internal/<触碰包>/... -count=1
 cd web && npm run build                    # 触碰前端时
 ```
@@ -96,9 +96,9 @@ pre-push：master 只允许从 `/opt/nox` 推。reference-transaction：master �
 |---|---|
 | 后端 | Go + ConnectRPC + PostgreSQL；`cmd/core` 单二进制，`//go:embed web/dist` |
 | 前端 | React 19 + 纯 CSS（不用 Tailwind），`cd web && npm install && npm run build` |
-| 生产部署 | **2026-10-07 起双机拓扑（D-105）**：生产=SG `192.229.85.35`（cex-proxy 共址）；本机=开发/测试席。发布流程=本机 `docker build -t arb-core:latest -f Dockerfile.core .` → `docker save arb-core:latest \| gzip -1 \| ssh -i ~/.ssh/id_ed25519 root@192.229.85.35 'docker load'` → 改动文件 rsync 到 SG `/opt/arb` → `ssh root@192.229.85.35 'cd /opt/arb && docker compose -f docker-compose.yml -f docker-compose.sg.yml up -d'`（sg override：pg=15433 避让 alphaforge 5433、mem 适配 4C/7G）。本机 `docker compose up -d --build` 仅用于本机起服务（非生产）。源码同步**唯一入口 `scripts/deploy_sync.sh`**（只推 `git ls-files` 跟踪面；`.env`、`bin/`、`logs/`、`docs/报告` 等 SG 侧运行时/构建产物不推不删——2026-10-09 手写 rsync 多源参数曾毁树+把 bin/ wrapper 盖回 5433 化石版致 xasset_monitor 断写 1h）；SG 二进制只走 `scripts/build_host_tools.sh` 就地重建；SG cron 一律指 `scripts/` 权威版不指 `bin/` 副本。 |
-| 生产访问 | SG pg `localhost:15433`（alphaforge 占 5433）；RPC `localhost:50051`；Cloudflare Tunnel 跑在 SG（cloudflared-arb.service）→ `arb.myfxlogs.org` |
+| 生产部署 | **2026-10-07 起双机拓扑（D-105）**：生产=SG `192.229.85.35`（cex-proxy 不落生产，M3 业主令=直连）；本机=开发/测试席。发布流程=本机 `docker build --network=host -t nox-core:latest -f Dockerfile.core .`（`--network=host` 必需——宿主流量走 mihomo 代理而 docker NAT 裸出，npm/go 拉包 ECONNRESET 实证；镜像内 buf regen 已钉 `@bufbuild/buf@1.68.3`） → `docker save nox-core:latest \| gzip -1 \| ssh -i ~/.ssh/id_ed25519 root@192.229.85.35 'docker load'` → 改动文件 rsync 到 SG `/opt/nox` → `ssh root@192.229.85.35 'cd /opt/nox && docker compose -f docker-compose.yml -f docker-compose.sg.yml up -d'`（sg override：pg=15433 避让 alphaforge 5433、mem 适配 4C/7G）。本机 `docker compose up -d --build` 仅用于本机起服务（非生产）。源码同步**唯一入口 `scripts/deploy_sync.sh`**（只推 `git ls-files` 跟踪面；`.env`、`bin/`、`logs/`、`docs/报告` 等 SG 侧运行时/构建产物不推不删——2026-10-09 手写 rsync 多源参数曾毁树+把 bin/ wrapper 盖回 5433 化石版致 xasset_monitor 断写 1h）；SG 二进制只走 `scripts/build_host_tools.sh` 就地重建；SG cron 一律指 `scripts/` 权威版不指 `bin/` 副本。 |
+| 生产访问 | SG pg `localhost:15433`（alphaforge 占 5433）；RPC `localhost:50051`；Cloudflare Tunnel 跑在 SG（cloudflared-nox.service）→ `nox.myfxlogs.org` |
 | cron | digest 06:10 / backup 03:00 / test-db-gc 04:45 / snapshot 20:17 / xasset-monitor */5 / universe-radar 每时 17 分（Asia/Shanghai；SG crontab 用 CRON_TZ 段定界，勿按宿主 UTC 解读） |
-| 备份三落点（D-110） | ① SG 本机 `/opt/arb-backups/arb_*.sql.gz` 14 份滚动（600）；② R2 `r2:arb-backup` age 加密 14 份（配置=仓库外 `/opt/arb-backups/backup-r2.env`，rclone remote=r2）；③ github 代码。还原=`age -d -i <私钥> x.age \| gunzip \| psql`——**私钥业主离线持有，全系统零副本**；外推失败=critical 告警+本地照常 |
+| 备份三落点（D-110） | ① SG 本机 `/opt/nox-backups/nox_*.sql.gz` 14 份滚动（600）；② R2 `r2:nox-backup` age 加密 14 份（配置=仓库外 `/opt/nox-backups/backup-r2.env`，rclone remote=r2）；③ github 代码。还原=`age -d -i <私钥> x.age \| gunzip \| psql`——**私钥业主离线持有，全系统零副本**；外推失败=critical 告警+本地照常 |
 | 运行时读写 docs 的路径 | `docs/经验库/`、`docs/报告/`（symdig 产物，不入 git）、`docs/handoff/STATE.md` — 搬动前先改代码 |
 | 参考 | `/opt/arbcn`（前端架构 + 加密采集） |

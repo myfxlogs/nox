@@ -80,7 +80,7 @@ func RunWeekly(ctx context.Context, deps Deps) (*WeeklyResult, error) {
 	return &WeeklyResult{Theme: theme, Path: path}, nil
 }
 
-// explorerToolSpecs 只读白名单（query_ro 补查件——analyst.ToolExecutor 现成，arb_ro 拒写）。
+// explorerToolSpecs 只读白名单（query_ro 补查件——analyst.ToolExecutor 现成，nox_ro 拒写）。
 func explorerToolSpecs() []analyst.ToolSpec {
 	var out []analyst.ToolSpec
 	for _, s := range analyst.ToolSpecs() {

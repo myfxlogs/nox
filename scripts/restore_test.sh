@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
-# restore_test.sh D-159 W6a S3：备份恢复演练（恢复到临时库 arb_restore_test，校验后清理）。
+# restore_test.sh D-159 W6a S3：备份恢复演练（恢复到临时库 nox_restore_test，校验后清理）。
 # 不碰生产库。输出 "RESTORE_TEST_OK" 或错误。
 #
 # 用法：scripts/restore_test.sh [DUMP_FILE] [PG_ADMIN_DSN]
-# DUMP_FILE 默认取 /opt/arb-backups/ 最新 arb_*.sql.gz
-# PG_ADMIN_DSN 默认 postgres://arb:arb@localhost:5434/postgres?sslmode=disable（有 CREATE DATABASE 权限）
+# DUMP_FILE 默认取 /opt/nox-backups/ 最新 nox_*.sql.gz
+# PG_ADMIN_DSN 默认 postgres://nox:nox@localhost:5434/postgres?sslmode=disable（有 CREATE DATABASE 权限）
 
 set -euo pipefail
 
-BACKUP_DIR="/opt/arb-backups"
+BACKUP_DIR="/opt/nox-backups"
 # D-016 席位后缀：与 pgstore backup_integrity_test 的 restoreTestDBName 同派生规则
-# （ARB_TEST_SEAT 优先，缺省=仓根目录名小写非字母数字转下划线）——多席并发不互踩。
-_restore_seat="${ARB_TEST_SEAT:-$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")}"
+# （NOX_TEST_SEAT 优先，缺省=仓根目录名小写非字母数字转下划线）——多席并发不互踩。
+_restore_seat="${NOX_TEST_SEAT:-$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")}"
 _restore_seat=$(echo "$_restore_seat" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]/_/g')
-TEST_DB="arb_restore_test_${_restore_seat}"
-PG_ADMIN_DSN="${2:-postgres://arb:arb@127.0.0.1:5434/postgres?sslmode=disable}" # D-021：恢复演练/临时库在测试实例
+TEST_DB="nox_restore_test_${_restore_seat}"
+PG_ADMIN_DSN="${2:-postgres://nox:nox@127.0.0.1:5434/postgres?sslmode=disable}" # D-021：恢复演练/临时库在测试实例
 
 # 取最新 dump
 if [ -n "${1:-}" ]; then
 	DUMP_FILE="$1"
 else
-	DUMP_FILE=$(ls -t "$BACKUP_DIR"/arb_*.sql.gz 2>/dev/null | head -1 || true)
+	DUMP_FILE=$(ls -t "$BACKUP_DIR"/nox_*.sql.gz 2>/dev/null | head -1 || true)
 fi
 
 if [ -z "$DUMP_FILE" ] || [ ! -f "$DUMP_FILE" ]; then
@@ -45,7 +45,7 @@ TEST_DSN=$(echo "$PG_ADMIN_DSN" | sed "s|/[^/]*?|/$TEST_DB?|")
 
 # 清理旧测试库 + 建新测试库
 psql "$PG_ADMIN_DSN" -c "DROP DATABASE IF EXISTS $TEST_DB;" >/dev/null 2>&1 || true
-if ! psql "$PG_ADMIN_DSN" -c "CREATE DATABASE $TEST_DB OWNER arb;" >/dev/null; then
+if ! psql "$PG_ADMIN_DSN" -c "CREATE DATABASE $TEST_DB OWNER nox;" >/dev/null; then
 	echo "RESTORE_TEST_FAIL: CREATE DATABASE $TEST_DB error" >&2
 	exit 1
 fi

@@ -31,7 +31,7 @@ func run(commitFlag bool) error {
 	// 路径解析：默认相对 tools/digest 上溯到项目根 docs/经验库/；可经 env 覆盖。
 	kbDir := envOr("NOX_KB_DIR", "../../docs/经验库")
 	statePath := filepath.Join(kbDir, ".digest_state")
-	dsn := envOr("NOX_PG_DSN", "postgres://arb:arb@localhost:5433/arb")
+	dsn := envOr("NOX_PG_DSN", "postgres://nox:nox@localhost:5433/nox")
 
 	// 1. 读水位
 	state, err := loadState(statePath)

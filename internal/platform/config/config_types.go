@@ -191,7 +191,7 @@ type Config struct {
 	MtQuoteStaleMin         int           // D-029 ② NOX_MT_QUOTE_STALE_MIN：MT 报价新鲜度阈值分钟（缺=fail-closed 判闭市）
 	MakerFirstLegTimeout    time.Duration // D-018 阶段a NOX_MAKER_TIMEOUT：首腿 post-only 超时 T（缺=fail-closed maker 停用）
 	MakerMaxAttemptsPerHour int           // D-018 阶段a NOX_MAKER_MAX_PER_HOUR：每 opp 每小时挂单上限 N（缺=fail-closed 停用）
-	AIPGDSN                 string        // NOX_AI_PG_DSN（arb_ro 只读角色 DSN）
+	AIPGDSN                 string        // NOX_AI_PG_DSN（nox_ro 只读角色 DSN）
 	RetroDisabled           bool          // NOX_RETRO_ENABLED=0/false 关复盘定时器（D-457）
 	AnalystRatePerHour      int           // NOX_ANALYST_RATE_PER_HOUR（默认 20）
 	ExplorerEnabled         bool          // NOX_EXPLORER_ENABLED 缺省 false——探矿员壳总闸（D-513：关=零行为变化）

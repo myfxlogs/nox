@@ -16,7 +16,7 @@ exempt() {
     internal/adapter/gen/*|internal/data/adapter/gen/*|internal/gen/*|internal/dashboard/gen/*|web/src/gen/*|*_test.go) return 0 ;;
     docs/*.go) return 0 ;;
     # 一次性建库工具（D-274 S2 backfill，2026-09-15 使命已完成 INSERT 已执行；
-    # 非 arb-core 生产代码，类 docs/*.go 证据探针。禁新增长期驻留工具到此豁免——Claude 决策席 2026-09-16）
+    # 非 nox-core 生产代码，类 docs/*.go 证据探针。禁新增长期驻留工具到此豁免——Claude 决策席 2026-09-16）
     tools/d274-backfill/*) return 0 ;;
   esac
   return 1

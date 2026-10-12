@@ -57,8 +57,8 @@ jobs:
             echo "FAIL: gofmt 漂移: $UNFMT —— gofmt -w 后重试" >&2
             exit 1
           fi
-      # D-237②：缺省 DSN 契约 arb:arb（D-021）——CI postgres 仅 postgres role，补建。
-      - run: psql "postgres://postgres:test@localhost:5434/postgres" -c "CREATE ROLE arb LOGIN PASSWORD 'arb' SUPERUSER" || true
+      # D-237②：缺省 DSN 契约 nox:nox（D-021）——CI postgres 仅 postgres role，补建。
+      - run: psql "postgres://postgres:test@localhost:5434/postgres" -c "CREATE ROLE nox LOGIN PASSWORD 'nox' SUPERUSER" || true
       # 测试面：go test ./... 全量（DSN 注入 5434，缺 DSN 的 skip 语义不变）。
       # ulimit -n 提 hard limit（race detector + pgxpool fd 压力先例 D-177/D-255）。
       - run: ulimit -n $(ulimit -Hn) && go test ./... -count=1 -timeout=1800s

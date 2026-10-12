@@ -26,9 +26,8 @@ const feishuQuerySystemPrompt = `你是 NOX 套利系统的飞书查询助手。
 4. 只读查询，不执行任何写操作。
 
 可用工具：
-- query_trx_price：查 TRX 当前价格（CMC 平台 X-AFQUL 合约中间价）
+- query_trx_price：查 TRX 当前价格（binance TRXUSDT 现货中间价）
 - query_trx_account：查 TRX 账户（余额/质押/待领取奖励/能量/带宽/票数）
-- query_cmc_position：查 CMC 空单持仓（数量/开仓价/浮盈/强平价/距强平%）
 - query_today_income：查今日收益（能量租金+投票奖励+隔夜息，USD）
 - query_macro_events：查未来 N 日宏观经济事件（财历：非农/CPI/议息等）
 - query_cot_latest：查 CFTC COT 最新持仓（按品种：日元/黄金/标普等）`

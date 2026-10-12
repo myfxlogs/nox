@@ -201,11 +201,11 @@ func (e *CEXExecutor) gateCancelOrder(ctx context.Context, orderID string) error
 
 // gateOrderText D-570 包B S5：text 单号真实化——o.ClientOrderID → "t-"+id 截 28 字节
 // （generateClientOrderID 产出纯 [a-zA-Z0-9] ⊂ gate charset [0-9A-Za-z_.-]）；
-// 空 → "t-arb"（现状兜底不伪造）。效果链：onOrders PutOrder clOrdID 键有真实值
+// 空 → "t-nox"（现状兜底不伪造）。效果链：onOrders PutOrder clOrdID 键有真实值
 // （消恒同值跨单覆盖）+ QueryOrderStatus clOrdID 退位查询键成立。
 func gateOrderText(o Order) string {
 	if o.ClientOrderID == "" {
-		return "t-arb"
+		return "t-nox"
 	}
 	t := "t-" + o.ClientOrderID
 	if len(t) > 28 {

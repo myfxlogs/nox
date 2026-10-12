@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"nox/internal/store/pgstore"
 )
@@ -85,65 +84,9 @@ func (p *DCIPosition) match(productRef, optType string) bool {
 	return p.ID == productRef || p.InstrumentName == productRef || p.ProductRef == productRef
 }
 
-// dciPositions venue 持仓全列表（签名 GET；PositionsFn=测试注入面）。
-func (e *Executor) dciPositions(ctx context.Context) ([]DCIPosition, error) {
-	if e.PositionsFn != nil {
-		return e.PositionsFn(ctx)
-	}
-	q := fmt.Sprintf("timestamp=%d&recvWindow=5000", e.Now().UnixMilli())
-	url := fmt.Sprintf("%s/v1/dci/product/positions?%s&signature=%s",
-		strings.TrimRight(e.Sapi, "/"), q, sign(e.BnSec, q))
-	b, err := e.get(ctx, url, true)
-	if err != nil {
-		return nil, err
-	}
-	var raw struct {
-		Data []DCIPosition `json:"data"`
-		List []DCIPosition `json:"list"`
-		Rows []DCIPosition `json:"rows"`
-	}
-	if err := json.Unmarshal(b, &raw); err != nil {
-		return nil, fmt.Errorf("dci positions decode: %w", err)
-	}
-	rows := raw.Data
-	if len(rows) == 0 {
-		rows = raw.List
-	}
-	if len(rows) == 0 {
-		rows = raw.Rows
-	}
-	return rows, nil
-}
-
-// settleDateOf response.settleDate 解析（回执原值不估算——ms epoch 或数字串；
-// venue 异名键不猜，缺/解析败=false）。
-func settleDateOf(resp string) (time.Time, bool) {
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(resp), &m); err != nil {
-		return time.Time{}, false
-	}
-	raw, ok := m["settleDate"]
-	if !ok {
-		return time.Time{}, false
-	}
-	var ms int64
-	if err := json.Unmarshal(raw, &ms); err != nil {
-		var s string
-		if err := json.Unmarshal(raw, &s); err != nil {
-			return time.Time{}, false
-		}
-		if _, err := fmt.Sscanf(s, "%d", &ms); err != nil {
-			return time.Time{}, false
-		}
-	}
-	if ms <= 0 {
-		return time.Time{}, false
-	}
-	return time.UnixMilli(ms), true
-}
-
 // SettleExpiredOrders 交割观察单拍——过期 filled 订单逐单 venue 终态确认翻
 // settled+入账+推送。返回本轮翻态数；venue 读败整体跳（下拍重试零风暴）。
+// 持仓行缺（positions 随交割移出行）→申购史端点确认终态（死端切源 M3-④）。
 func (e *Executor) SettleExpiredOrders(ctx context.Context) (int, error) {
 	orders, err := e.Store.ListFilledDCIOrders(ctx)
 	if err != nil {
@@ -164,6 +107,8 @@ func (e *Executor) SettleExpiredOrders(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("venue dci positions: %w", err) // 读败全跳——单错不翻态
 	}
 	settled := 0
+	var subs []DCIPosition
+	subsFetched := false // 申购史备份源——仅首个持仓行缺时惰性取（常态零加读）。
 	for _, o := range due {
 		var row *DCIPosition
 		for i := range pos {
@@ -173,7 +118,23 @@ func (e *Executor) SettleExpiredOrders(ctx context.Context) (int, error) {
 			}
 		}
 		if row == nil {
-			log.Printf("[dci-settle] order %d %s 持仓行未查得（venue 列表缺）——跳过下拍重试", o.ID, o.ProductRef)
+			if !subsFetched {
+				s, serr := e.dciSubscriptions(ctx)
+				if serr != nil {
+					log.Printf("[dci-settle] subscriptions 读败（持仓行缺 %s）: %v——下拍重试", o.ProductRef, serr)
+					continue
+				}
+				subs, subsFetched = s, true
+			}
+			for i := range subs {
+				if subs[i].match(o.ProductRef, o.OptType) {
+					row = &subs[i]
+					break
+				}
+			}
+		}
+		if row == nil {
+			log.Printf("[dci-settle] order %d %s 持仓/申购史行均未查得——跳过下拍重试", o.ID, o.ProductRef)
 			continue
 		}
 		if row.Status == "HOLDING" {

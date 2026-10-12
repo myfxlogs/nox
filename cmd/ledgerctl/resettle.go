@@ -12,12 +12,12 @@
 //   - 幂等可重跑：SettleAt 自身 applied/skipped 短路；清 note 与 stats_status 更新幂等。
 //
 // 安全闸（§5）：数据库名必须含 _test（解析 DSN path 尾部，不做整体字符串匹配——
-// "arb" 出现在用户名/主机不算数）；否则必须显式 -allow-live。首跑目标 pos=498。
+// "nox" 出现在用户名/主机不算数）；否则必须显式 -allow-live。首跑目标 pos=498。
 //
 // 用法：
 //
-//	NOX_PG_DSN="postgres://arb:arb@host:5432/nox_test?sslmode=disable" go run ./cmd/resettle -pos=498 -dry-run
-//	NOX_PG_DSN="postgres://arb:arb@host:5432/arb?sslmode=disable"     go run ./cmd/resettle -pos=498 -allow-live
+//	NOX_PG_DSN="postgres://nox:nox@host:5432/nox_test?sslmode=disable" go run ./cmd/resettle -pos=498 -dry-run
+//	NOX_PG_DSN="postgres://nox:nox@host:5432/nox?sslmode=disable"     go run ./cmd/resettle -pos=498 -allow-live
 package main
 
 import (
@@ -90,7 +90,7 @@ func runResettle() {
 	fmt.Println("DONE")
 }
 
-// dbNameFromDSN 解析 DSN path 尾部数据库名（不做整体字符串匹配——"arb" 在用户/主机段不算数）。
+// dbNameFromDSN 解析 DSN path 尾部数据库名（不做整体字符串匹配——"nox" 在用户/主机段不算数）。
 func dbNameFromDSN(dsn string) string {
 	u, err := url.Parse(dsn)
 	if err != nil {

@@ -41,10 +41,10 @@ import (
 // 缺省真跑不弱化 D-207（loud-FAIL 防「没跑像过了」的 SKIP）——测试照跑非跳过；
 // 未知 envVar（无缺省映射）仍走原 Fatalf/Skip 口径。
 var defaultTestDSN = map[string]string{
-	"NOX_TEST_PG_DSN":           "postgres://arb:arb@127.0.0.1:5434/nox_test",
-	"NOX_TEST_PG_SERVICE_DSN":   "postgres://arb:arb@127.0.0.1:5434/nox_service_test",
-	"NOX_EXEC_TEST_PG_DSN":      "postgres://arb:arb@127.0.0.1:5434/nox_exec_test",
-	"NOX_RECONCILE_TEST_PG_DSN": "postgres://arb:arb@127.0.0.1:5434/nox_reconcile_test",
+	"NOX_TEST_PG_DSN":           "postgres://nox:nox@127.0.0.1:5434/nox_test",
+	"NOX_TEST_PG_SERVICE_DSN":   "postgres://nox:nox@127.0.0.1:5434/nox_service_test",
+	"NOX_EXEC_TEST_PG_DSN":      "postgres://nox:nox@127.0.0.1:5434/nox_exec_test",
+	"NOX_RECONCILE_TEST_PG_DSN": "postgres://nox:nox@127.0.0.1:5434/nox_reconcile_test",
 }
 
 // TestDSN 测试用 DSN 门禁：envVar 未设→缺省独立测试实例 5434（D-021；缺省映射见
@@ -204,7 +204,7 @@ var (
 // SeatTag D-016 测试库多席隔离的会话标签（导出供固定名辅助库派生名额——pgstore
 // restore/migrate 临时库同席位后缀）。env NOX_TEST_SEAT 显式优先；缺省从测试进程
 // cwd（go test 置为包目录）上溯 go.mod 取仓根目录名：worktree 名即天然席位
-// （/opt/arb-wt/d016-test-green → d016_test_green；/opt/arb 部署树 → arb）。
+// （/opt/nox-wt/d016-test-green → d016_test_green；/opt/nox 部署树 → nox）。
 // 同席跨 run 同名复用（不按 run 增殖）；推导失败=空串（回落共享名，与既有行为等价）。
 func SeatTag() string {
 	if s := strings.TrimSpace(os.Getenv("NOX_TEST_SEAT")); s != "" {

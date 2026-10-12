@@ -140,7 +140,7 @@ func TestD570B_A5_PeekBridge(t *testing.T) {
 	}
 }
 
-// A7：text 单号——ClientOrderID → "t-<id>"；空 → "t-arb"；>28B 截断。
+// A7：text 单号——ClientOrderID → "t-<id>"；空 → "t-nox"；>28B 截断。
 func TestD570B_A7_TextTag(t *testing.T) {
 	h := map[string]func(http.ResponseWriter, *http.Request){
 		"POST /api/v4/futures/usdt/orders": func(w http.ResponseWriter, r *http.Request) {
@@ -155,12 +155,12 @@ func TestD570B_A7_TextTag(t *testing.T) {
 	if b := f.lastBody.Load().(string); !strings.Contains(b, `"text":"t-abc123"`) {
 		t.Fatalf("text 单号应真实化: %s（改回常量→本锚必红）", b)
 	}
-	// 空 → t-arb 兜底。
+	// 空 → t-nox 兜底。
 	if _, err := f.e.placeGate(context.Background(), Order{Symbol: "BTC_USDT", Side: "BUY", Qty: 1}); err != nil {
 		t.Fatalf("placeGate2: %v", err)
 	}
-	if b := f.lastBody.Load().(string); !strings.Contains(b, `"text":"t-arb"`) {
-		t.Fatalf("空 ClientOrderID 应 t-arb 兜底: %s", b)
+	if b := f.lastBody.Load().(string); !strings.Contains(b, `"text":"t-nox"`) {
+		t.Fatalf("空 ClientOrderID 应 t-nox 兜底: %s", b)
 	}
 	// >28 字节截断（"t-"+26 字符=28B 截）。
 	if got := gateOrderText(Order{ClientOrderID: strings.Repeat("x", 40)}); len(got) != 28 {

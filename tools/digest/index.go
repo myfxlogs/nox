@@ -1,4 +1,4 @@
-// index.go 索引.md 解析（S2.3，独立实现，不 import arbkb）。
+// index.go 索引.md 解析（S2.3，独立实现，不 import noxkb）。
 // 解析索引表行 → indexRow 列表，供 matchEntry 子串匹配。
 package main
 
