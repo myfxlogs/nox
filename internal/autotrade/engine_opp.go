@@ -121,6 +121,10 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
 			sellCanonical = *opp.CanonicalSell
 		}
+		// D-209①：休眠轨消费点（dormant.go）——命中即跳过，读败 fail-closed。
+		if e.xassetDormantSkip(ctx, &opp) {
+			return
+		}
 		if ok, reason := exec.CarryFundingRegimeCheck(ctx, e.store, opp.VenueBuy, opp.VenueSell, opp.Canonical, sellCanonical, time.Now(), e.cfg.CarryRegime); !ok {
 			log.Printf("[autotrade] skip %s: funding regime 未持续 (%s)", opp.ID, reason)
 			return
