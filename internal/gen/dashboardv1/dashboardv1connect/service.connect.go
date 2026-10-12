@@ -499,7 +499,7 @@ type DashboardServiceClient interface {
 	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
 	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
 	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
-	// D-190：员工花名册看板（daemon 编制实况：在职/死亡/任务中）。
+	// D-190：员工花名册看板（daemon 编制实况：在职/离线/任务中）。
 	ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error)
 	// D-189：提案执行台——提案实体行实况+业主拒批回执（执行=飞书 go 口令径）。
 	ListProposals(context.Context, *connect.Request[dashboardv1.ListProposalsRequest]) (*connect.Response[dashboardv1.ListProposalsResponse], error)
@@ -1959,7 +1959,7 @@ type DashboardServiceHandler interface {
 	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
 	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
 	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
-	// D-190：员工花名册看板（daemon 编制实况：在职/死亡/任务中）。
+	// D-190：员工花名册看板（daemon 编制实况：在职/离线/任务中）。
 	ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error)
 	// D-189：提案执行台——提案实体行实况+业主拒批回执（执行=飞书 go 口令径）。
 	ListProposals(context.Context, *connect.Request[dashboardv1.ListProposalsRequest]) (*connect.Response[dashboardv1.ListProposalsResponse], error)

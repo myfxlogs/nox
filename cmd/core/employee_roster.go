@@ -1,6 +1,6 @@
 // employee_roster.go —— D-190：员工花名册装配（编制=此处显式声明，禁自我声明漂移）。
 // role/dept/assembly 在册即裁决留档；cadence_sec=0 常驻型以 running 判生死，
-// >0 节拍型超 3×cadence 未心跳=死亡（心跳写经 safego OnBeat/OnExit 钩，
+// >0 节拍型超 3×cadence 未心跳=滞跳（心跳写经 safego OnBeat/OnExit 钩，
 // 挂现有 loop 节拍零新 goroutine）。
 package main
 

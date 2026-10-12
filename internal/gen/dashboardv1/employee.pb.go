@@ -21,7 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// D-190：员工花名册看板 RPC（编制实况=在职/死亡/任务中）。
+// D-190：员工花名册看板 RPC（编制实况=在职/离线/任务中）。
 type Employee struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -34,7 +34,7 @@ type Employee struct {
 	Task          string                 `protobuf:"bytes,8,opt,name=task,proto3" json:"task,omitempty"`
 	BeatTs        int64                  `protobuf:"varint,9,opt,name=beat_ts,json=beatTs,proto3" json:"beat_ts,omitempty"` // unix ts，0=未心跳
 	Enabled       bool                   `protobuf:"varint,10,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Status        string                 `protobuf:"bytes,11,opt,name=status,proto3" json:"status,omitempty"` // 在职|滞跳|死亡|停用（后端算定）
+	Status        string                 `protobuf:"bytes,11,opt,name=status,proto3" json:"status,omitempty"` // 在职|滞跳|离线|离职（后端算定）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

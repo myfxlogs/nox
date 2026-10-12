@@ -10,8 +10,8 @@ const DEPT_ORDER = ["数据", "研究", "投资", "交易", "风控", "运营", 
 const STATUS_CLS: Record<string, string> = {
   在职: "st-run",
   滞跳: "st-lag",
-  死亡: "st-dead",
-  停用: "st-off",
+  离线: "st-dead",
+  离职: "st-off",
 };
 
 export default function OrgPage() {
@@ -49,7 +49,7 @@ export default function OrgPage() {
   return (
     <div>
       {err && <div className="err">{err}</div>}
-      <div className="muted">员工状态由后端算定（在职/滞跳/死亡/停用）；共 {emps.length} 人。</div>
+      <div className="muted">员工状态由后端算定（在职/滞跳/离线/离职）；共 {emps.length} 人。</div>
       {depts.map((d) => (
         <div className="dept" key={d}>
           <h3>

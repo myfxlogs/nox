@@ -1,8 +1,8 @@
 // employee.go —— D-190：员工花名册 fin_employee_registry。
 // 语义：Register=装配点显式入职（幂等 upsert）；Beat=心跳（挂现有 loop 节拍）；
 // Exit=协程退出（running 置假、exits 累计）；Task=当前任务摘要更新。
-// 生死判定：cadence_sec>0 节拍型→超 3×cadence 未心跳=死亡；cadence_sec=0 常驻型
-// →running=false 即死亡（fn 退出为唯一真相，GoLoop 已知）；running+节拍滞→滞跳。
+// 在岗判定：cadence_sec>0 节拍型→超 3×cadence 未心跳=滞跳；cadence_sec=0 常驻型
+// →running=false 即离线（fn 退出为唯一真相，GoLoop 已知）；running+节拍滞→滞跳。
 package pgstore
 
 import (
@@ -24,17 +24,17 @@ type Employee struct {
 	Enabled    bool
 }
 
-// EmployeeStatus 看板态：在职 | 滞跳 | 死亡 | 停用。
+// EmployeeStatus 看板态：在职 | 滞跳 | 离线 | 离职。
 func (e Employee) EmployeeStatus(now time.Time) string {
 	if !e.Enabled {
-		return "停用"
+		return "离职"
 	}
 	if !e.Running {
-		return "死亡"
+		return "离线"
 	}
 	if e.CadenceSec > 0 &&
 		(e.BeatTs == nil || now.Sub(*e.BeatTs) > 3*time.Duration(e.CadenceSec)*time.Second) {
-		return "死亡"
+		return "滞跳"
 	}
 	return "在职"
 }
@@ -69,7 +69,7 @@ func (s *Store) EmployeeTask(ctx context.Context, name, task string) error {
 	return err
 }
 
-// EmployeeExit 协程退出：running=false、exits+1（死亡史）。
+// EmployeeExit 协程退出：running=false、exits+1（退出史）。
 func (s *Store) EmployeeExit(ctx context.Context, name string) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE fin_employee_registry SET running=false, exits=exits+1, updated_at=now()

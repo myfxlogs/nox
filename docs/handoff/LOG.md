@@ -94,15 +94,15 @@ D-212 重建系收官段：SG 生产机停旧 arb 全套、以全新 nox 名与�
 
 ---
 
-## 2026-10-13 · 名册假死修复（切流后热修③）
+## 2026-10-13 · 名册离线假象修复（切流后热修③）
 
 ### 病灶
-`fin_employee_registry` 出现「活岗假死」：`wireEmployeeRoster`（装 Beat/Exit 钩）原装配于 `buildCexExchangeConfig` **之后**，而 `Beat` 仅在 `GoLoop` fn 启动打一次——`main:watchlist-provider`（钩前启动）首拍打进 nil 钩永久丢失，名册 `beat_ts` 恒 NULL 显「死亡」。生产实证 `running=f/beat NULL` 与其代码中无条件 `GoLoop` 互证。
+`fin_employee_registry` 出现「在岗显离线假象」：`wireEmployeeRoster`（装 Beat/Exit 钩）原装配于 `buildCexExchangeConfig` **之后**，而 `Beat` 仅在 `GoLoop` fn 启动打一次——`main:watchlist-provider`（钩前启动）首拍打进 nil 钩永久丢失，名册 `beat_ts` 恒 NULL 显「离线」。生产实证 `running=f/beat NULL` 与其代码中无条件 `GoLoop` 互证。
 
 ### 修复+验证（commit `a7fdfd73`）
 `refreshTopic`+`wireEmployeeRoster` 提前至首个 worker 装配点前。SG 部署后实拍：`main:watchlist-provider` `running=t`+beat 新鲜；全册 123/142 岗本轮拿到心跳、110 running。
 
-### 死亡岗终分类
+### 离册岗终分类
 - **名册孤儿**（裁汰件历史行，代码已不接线）：`cmc-ws:kickHistory/seedFallback`、`main:intra-*`、`price_alert*`、`feishu_query:handle`、`margin_guard` 旧格式行——登记表 append-only 不回收
 - **条件/事件岗**（注册但未触发启动，正常）：`probe-report`（探针平仓才跑）、`setup:mt5-quote-fwd`（env 装配路径）、`main:cexProxyHealth`（无 PROXY_URL 不启，M3 直连令后恒停）
 - **一次性退出**：`main:trxvote`=`safego.Go`（非 Loop）`sched.Run` 正常返回 exits=36

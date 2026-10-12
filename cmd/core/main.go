@@ -85,7 +85,7 @@ func main() {
 	// D-508 S9：域数据刷新通知总线（写源 Publish(topic)→StreamUpdates case 14；scan/intra/trx/pf 侧注入）。
 	refreshTopic := bus.NewTopic[string]()
 	// D-190/D-211：员工花名册——编制入库+safego 心跳/退出钩接 PG（须在首个 worker 前装钩：
-	// Beat 仅 fn 启动打一次，钩未装即丢拍→活岗名册显 NULL 假死，实证 watchlist-provider）。
+	// Beat 仅 fn 启动打一次，钩未装即丢拍→在岗名册显 NULL 离线假象，实证 watchlist-provider）。
 	wireEmployeeRoster(ctx, st, refreshTopic)
 	cexCfg, cexSymbols := buildCexExchangeConfig(ctx, st, configKick, cfg, secRes) // D-451 S1：装配块提取至 wire_cexscan.go（纯搬家）
 	alertCooler := newAlertCooler()                                                // D-301c S2：告警同指纹冷却单实例，四处注入点共享透传

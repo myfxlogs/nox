@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// TestD190_EmployeeRegistry：装配员工全在册（幂等）+心跳刷新+死亡标死（
+// TestD190_EmployeeRegistry：装配员工全在册（幂等）+心跳刷新+离线标离线（
 // 节拍型超 3×cadence、常驻型 running=false）+退出累计。
 func TestD190_EmployeeRegistry(t *testing.T) {
 	s := sharedTestStore(t)
@@ -35,8 +35,8 @@ func TestD190_EmployeeRegistry(t *testing.T) {
 	if got == nil || got.Role != "测试员v2" {
 		t.Fatalf("登记幂等 upsert 败: %+v", got)
 	}
-	if got.EmployeeStatus(time.Now()) != "死亡" { // cadence>0 且未心跳=死亡
-		t.Fatalf("未心跳节拍型应死亡: %s", got.EmployeeStatus(time.Now()))
+	if got.EmployeeStatus(time.Now()) != "离线" { // 注册未心跳=不在岗=离线
+		t.Fatalf("未心跳节拍型应离线: %s", got.EmployeeStatus(time.Now()))
 	}
 	// 心跳→在职。
 	if err := s.EmployeeBeat(ctx, e.Name); err != nil {
@@ -51,7 +51,7 @@ func TestD190_EmployeeRegistry(t *testing.T) {
 	if got.EmployeeStatus(time.Now()) != "在职" || got.BeatTs == nil || !got.Running {
 		t.Fatalf("心跳后应在职: %+v", got)
 	}
-	// 退出→死亡+exits 累计。
+	// 退出→离线+exits 累计。
 	if err := s.EmployeeExit(ctx, e.Name); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestD190_EmployeeRegistry(t *testing.T) {
 			got = &rows[i]
 		}
 	}
-	if got.Exits != 1 || got.Running || got.EmployeeStatus(time.Now()) != "死亡" {
+	if got.Exits != 1 || got.Running || got.EmployeeStatus(time.Now()) != "离线" {
 		t.Fatalf("退出面错: %+v", got)
 	}
 	// 未登记员工 Beat 自动补册 role=未登记（装配漏登零静默）。

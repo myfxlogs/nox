@@ -1,4 +1,4 @@
-// service_employees.go —— D-190：员工花名册看板 RPC（编制实况=在职/死亡/任务中，
+// service_employees.go —— D-190：员工花名册看板 RPC（编制实况=在职/离线/任务中，
 // 状态后端算定，前端零计算）。
 package dashboard
 

@@ -3,7 +3,7 @@ package nox.dashboard.v1;
 
 option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
 
-// D-190：员工花名册看板 RPC（编制实况=在职/死亡/任务中）。
+// D-190：员工花名册看板 RPC（编制实况=在职/离线/任务中）。
 message Employee {
   string name = 1;
   string role = 2;
@@ -15,7 +15,7 @@ message Employee {
   string task = 8;
   int64 beat_ts = 9;   // unix ts，0=未心跳
   bool enabled = 10;
-  string status = 11;  // 在职|滞跳|死亡|停用（后端算定）
+  string status = 11;  // 在职|滞跳|离线|离职（后端算定）
 }
 
 message ListEmployeesRequest {}
