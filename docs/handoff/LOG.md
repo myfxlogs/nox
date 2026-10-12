@@ -1,5 +1,27 @@
 # LOG.md — 阶段交付归档（NOX 仓首条）
 
+## 2026-10-12 切流后热修①：总览持仓闪动+「连接中」卡死（f2064f28）
+
+### 业主报症
+前端一直「连接中」；持仓列表 510/498 等行时有、时无，页面一直跳动。
+
+### 取证（三通道交叉）
+- `positions` 表：14 行全 CLOSED/FAILED、零活跃；`ListPositions` 连采 8 次 14/14 行集恒定——**拉路径零抖动**
+- 隧道带权 `StreamUpdates` 60s 实测 122KB 帧稳定（尾帧即 `dataRefresh{funds}`），服务端无超时杀流
+- 定位双引擎：`streamInitPosMonDomains` 每次（重）连回放 latestPos **全量 14 行**；`NotifyFunds`（账户资金三源写）≥2s 节流推 `dataRefresh{funds}`→ overview `load()` 重拉 ACTIVE=0 行整体替换
+
+### 根因（全在前端，后端权威无损）
+1. `overview.tsx` `onCase("position")` 未判状态直 upsert——回放/推送的 CLOSED 行混进 ACTIVE 域 map，下次 load 抹除=「时有」↔「时无」（同型真 bug：OPEN→CLOSED 行永挂活跃表）
+2. `stream.ts` `onStatus` 注册不回报当前态+首帧前 `emit(true)` 早于父级监听注册（React 子 effect 先行）→ 指示永卡「连接中」
+
+### 修法
+- overview：position 事件按 ACTIVE 谓词（OPEN/OPENING/LEGGED/CLOSING）判定——活跃 set、非活跃 delete
+- stream：跟踪 `currentStatus`、onStatus 注册即回报、`emit(true)` 挪至首帧到达
+- 部署：`docker build --network=host`→save/load→compose up（embed web/dist 无独立径）；复验容器 healthy、RPC 14 行
+
+### 遗留
+- 若用户端→CF edge 链路（CN 段）仍 flap，回放仍在但每次回放被 ACTIVE 谓词正确过滤——行不再闪；指示届时诚实反映真实态而非卡死
+
 ## 2026-10-12 M3 切流交付（业主令窗口）
 
 ### 背景/范围
