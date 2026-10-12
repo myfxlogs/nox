@@ -12,10 +12,6 @@ import (
 )
 
 func TestMigrationFiles_RepoCoverage(t *testing.T) {
-	entries, err := os.ReadDir("../../../migrations")
-	if err != nil {
-		t.Fatalf("read migrations dir: %v", err)
-	}
 	registered := make(map[int]bool, len(migrationFiles))
 	for _, m := range migrationFiles {
 		if registered[m.version] {
@@ -23,20 +19,33 @@ func TestMigrationFiles_RepoCoverage(t *testing.T) {
 		}
 		registered[m.version] = true
 	}
-	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".sql") {
-			continue
-		}
-		if len(name) < 6 || name[4] != '_' {
-			t.Fatalf("迁移文件名不合 NNNN_*.sql 契约: %s", name)
-		}
-		v, err := strconv.Atoi(name[:4])
+	// D-214：replay/ 子目录=旧 0001..0201 历史链文件（测试重放源+直 exec 种子锚），
+	// 顶层=baseline 域（1000_baseline.sql）。两目录均受「在仓必注册」约束。
+	for _, dir := range []string{"../../../migrations", "../../../migrations/replay"} {
+		entries, err := os.ReadDir(dir)
 		if err != nil {
-			t.Fatalf("迁移文件名不合 NNNN_*.sql 契约: %s", name)
+			t.Fatalf("read %s: %v", dir, err)
 		}
-		if !registered[v] {
-			t.Errorf("migrations/%s 在仓但未注册 migrationFiles（版本 %d 永不执行）", name, v)
+		for _, e := range entries {
+			name := e.Name()
+			if e.IsDir() || !strings.HasSuffix(name, ".sql") {
+				continue
+			}
+			checkRegistered(t, name, registered)
 		}
+	}
+}
+
+func checkRegistered(t *testing.T, name string, registered map[int]bool) {
+	t.Helper()
+	if len(name) < 6 || name[4] != '_' {
+		t.Fatalf("迁移文件名不合 NNNN_*.sql 契约: %s", name)
+	}
+	v, err := strconv.Atoi(name[:4])
+	if err != nil {
+		t.Fatalf("迁移文件名不合 NNNN_*.sql 契约: %s", name)
+	}
+	if !registered[v] {
+		t.Errorf("migrations/%s 在仓但未注册 migrationFiles（版本 %d 永不执行）", name, v)
 	}
 }

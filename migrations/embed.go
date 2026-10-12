@@ -3,298 +3,304 @@ package migrations
 import _ "embed"
 
 var (
-	//go:embed 0001_init.sql
+	//go:embed replay/0001_init.sql
 	InitSQL string
-	//go:embed 0002_broker_accounts.sql
+	//go:embed replay/0002_broker_accounts.sql
 	BrokerAccountsSQL string
-	//go:embed 0003_broker_accounts_shorten.sql
+	//go:embed replay/0003_broker_accounts_shorten.sql
 	BrokerAccountsShortenSQL string
-	//go:embed 0004_broker_commission.sql
+	//go:embed replay/0004_broker_commission.sql
 	BrokerCommissionSQL string
-	//go:embed 0005_broker_symbol_map_contract.sql
+	//go:embed replay/0005_broker_symbol_map_contract.sql
 	BrokerSymbolMapContractSQL string
-	//go:embed 0006_personal_positions.sql
+	//go:embed replay/0006_personal_positions.sql
 	PersonalPositionsSQL string
-	//go:embed 0007_investment_records.sql
+	//go:embed replay/0007_investment_records.sql
 	InvestmentRecordsSQL string
-	//go:embed 0008_personal_ledger.sql
+	//go:embed replay/0008_personal_ledger.sql
 	PersonalLedgerSQL string
-	//go:embed 0009_opportunities_canonical.sql
+	//go:embed replay/0009_opportunities_canonical.sql
 	OpportunitiesCanonicalSQL string
-	//go:embed 0010_exchange_configs.sql
+	//go:embed replay/0010_exchange_configs.sql
 	ExchangeConfigsSQL string
-	//go:embed 0011_exchange_simulated.sql
+	//go:embed replay/0011_exchange_simulated.sql
 	ExchangeSimulatedSQL string
-	//go:embed 0012_canonical_usdt.sql
+	//go:embed replay/0012_canonical_usdt.sql
 	CanonicalUsdtSQL string
-	//go:embed 0032_perp_funding_type.sql
+	//go:embed replay/0032_perp_funding_type.sql
 	PerpFundingTypeSQL string
-	//go:embed 0033_autotrade.sql
+	//go:embed replay/0033_autotrade.sql
 	AutotradeSQL string
-	//go:embed 0034_autotrade_state.sql
+	//go:embed replay/0034_autotrade_state.sql
 	AutotradeStateSQL string
-	//go:embed 0035_stats_anchor.sql
+	//go:embed replay/0035_stats_anchor.sql
 	StatsAnchorSQL string
-	//go:embed 0036_combo_identity.sql
+	//go:embed replay/0036_combo_identity.sql
 	ComboIdentitySQL string
-	//go:embed 0037_verification_stats.sql
+	//go:embed replay/0037_verification_stats.sql
 	VerificationStatsSQL string
-	//go:embed 0038_settlement_typed_columns.sql
+	//go:embed replay/0038_settlement_typed_columns.sql
 	SettlementTypedColumnsSQL string
-	//go:embed 0039_watchlist.sql
+	//go:embed replay/0039_watchlist.sql
 	WatchlistSQL string
-	//go:embed 0040_watchlist_venues.sql
+	//go:embed replay/0040_watchlist_venues.sql
 	WatchlistVenuesSQL string
-	//go:embed 0041_analyst_ro_role.sql
+	//go:embed replay/0041_analyst_ro_role.sql
 	AnalystRoRoleSQL string
-	//go:embed 0042_ai_settings.sql
+	//go:embed replay/0042_ai_settings.sql
 	AiSettingsSQL string
-	//go:embed 0043_position_swap_snapshots.sql
+	//go:embed replay/0043_position_swap_snapshots.sql
 	PositionSwapSnapshotsSQL string
-	//go:embed 0044_broker_symbol_map_source.sql
+	//go:embed replay/0044_broker_symbol_map_source.sql
 	BrokerSymbolMapSourceSQL string
-	//go:embed 0045_broker_accounts_is_real.sql
+	//go:embed replay/0045_broker_accounts_is_real.sql
 	BrokerAccountsIsRealSQL string
-	//go:embed 0046_account_website.sql
+	//go:embed replay/0046_account_website.sql
 	AccountWebsiteSQL string
-	//go:embed 0047_arb_ro_revoke_credentials.sql
+	//go:embed replay/0047_arb_ro_revoke_credentials.sql
 	ArbRoRevokeCredentialsSQL string
-	//go:embed 0048_position_intent_fields.sql
+	//go:embed replay/0048_position_intent_fields.sql
 	PositionIntentFieldsSQL string
-	//go:embed 0049_cashflows_leg_no.sql
+	//go:embed replay/0049_cashflows_leg_no.sql
 	CashflowsLegNoSQL string
-	//go:embed 0050_broker_symbol_map_product_group.sql
+	//go:embed replay/0050_broker_symbol_map_product_group.sql
 	BrokerSymbolMapProductGroupSQL string
-	//go:embed 0051_delete_precious_metals_cross_currency.sql
+	//go:embed replay/0051_delete_precious_metals_cross_currency.sql
 	DeletePreciousMetalsCrossCurrencySQL string
-	//go:embed 0052_position_notional_usd.sql
+	//go:embed replay/0052_position_notional_usd.sql
 	PositionNotionalUsdSQL string
-	//go:embed 0053_position_closing_started_at.sql
+	//go:embed replay/0053_position_closing_started_at.sql
 	PositionClosingStartedAtSQL string
-	//go:embed 0054_cashflows_d193.sql
+	//go:embed replay/0054_cashflows_d193.sql
 	CashflowsD193SQL string
-	//go:embed 0055_settlements_d193.sql
+	//go:embed replay/0055_settlements_d193.sql
 	SettlementsD193SQL string
-	//go:embed 0056_capital_accounts.sql
+	//go:embed replay/0056_capital_accounts.sql
 	CapitalAccountsSQL string
-	//go:embed 0057_capital_snapshots.sql
+	//go:embed replay/0057_capital_snapshots.sql
 	CapitalSnapshotsSQL string
-	//go:embed 0058_ledger_d193.sql
+	//go:embed replay/0058_ledger_d193.sql
 	LedgerD193SQL string
-	//go:embed 0059_hypotheses.sql
+	//go:embed replay/0059_hypotheses.sql
 	HypothesesSQL string
-	//go:embed 0060_capital_decisions.sql
+	//go:embed replay/0060_capital_decisions.sql
 	CapitalDecisionsSQL string
-	//go:embed 0061_position_reviews.sql
+	//go:embed replay/0061_position_reviews.sql
 	PositionReviewsSQL string
-	//go:embed 0062_execution_controls.sql
+	//go:embed replay/0062_execution_controls.sql
 	ExecutionControlsSQL string
-	//go:embed 0063_position_legs_attempt.sql
+	//go:embed replay/0063_position_legs_attempt.sql
 	PositionLegsAttemptSQL string
-	//go:embed 0064_live_gate.sql
+	//go:embed replay/0064_live_gate.sql
 	LiveGateSQL string
-	//go:embed 0065_cmc_tables.sql
+	//go:embed replay/0065_cmc_tables.sql
 	CmcTablesSQL string
-	//go:embed 0066_personal_cmc_link.sql
+	//go:embed replay/0066_personal_cmc_link.sql
 	PersonalCMCLinkSQL string
-	//go:embed 0067_cmc_positions_meta.sql
+	//go:embed replay/0067_cmc_positions_meta.sql
 	CMCPositionsMetaSQL string
-	//go:embed 0068_trx_stake_tables.sql
+	//go:embed replay/0068_trx_stake_tables.sql
 	TrxStakeTablesSQL string
-	//go:embed 0069_cmc_ws_event_driven.sql
+	//go:embed replay/0069_cmc_ws_event_driven.sql
 	CmcWsEventDrivenSQL string
-	//go:embed 0070_cnfi_tables.sql
+	//go:embed replay/0070_cnfi_tables.sql
 	CnfiTablesSQL string
-	//go:embed 0071_trx_vote_apr.sql
+	//go:embed replay/0071_trx_vote_apr.sql
 	TrxVoteAprSQL string
-	//go:embed 0072_trx_cycle_vi.sql
+	//go:embed replay/0072_trx_cycle_vi.sql
 	TrxCycleViSQL string
-	//go:embed 0073_cnfi_holdings.sql
+	//go:embed replay/0073_cnfi_holdings.sql
 	CnfiHoldingsSQL string
-	//go:embed 0074_cnfi_actions.sql
+	//go:embed replay/0074_cnfi_actions.sql
 	CnfiActionsSQL string
-	//go:embed 0075_cnfi_candidate_pool.sql
+	//go:embed replay/0075_cnfi_candidate_pool.sql
 	CnfiCandidatePoolSQL string
-	//go:embed 0076_trx_vote_apr_top.sql
+	//go:embed replay/0076_trx_vote_apr_top.sql
 	TrxVoteAprTopSQL string
-	//go:embed 0077_feishu_push_target.sql
+	//go:embed replay/0077_feishu_push_target.sql
 	FeishuPushTargetSQL string
-	//go:embed 0078_repo_rates.sql
+	//go:embed replay/0078_repo_rates.sql
 	RepoRatesSQL string
-	//go:embed 0079_trx_vote_rebalance.sql
+	//go:embed replay/0079_trx_vote_rebalance.sql
 	TrxVoteRebalanceSQL string
-	//go:embed 0080_cnfi_repo_ops.sql
+	//go:embed replay/0080_cnfi_repo_ops.sql
 	CnfiRepoOpsSQL string
-	//go:embed 0081_trx_account_tron_power.sql
+	//go:embed replay/0081_trx_account_tron_power.sql
 	TrxAccountTronPowerSQL string
-	//go:embed 0082_cnfi_repo_config.sql
+	//go:embed replay/0082_cnfi_repo_config.sql
 	CnfiRepoConfigSQL string
-	//go:embed 0083_cex_scan.sql
+	//go:embed replay/0083_cex_scan.sql
 	CexScanSQL string
-	//go:embed 0084_exchange_configs_unique_simulated.sql
+	//go:embed replay/0084_exchange_configs_unique_simulated.sql
 	ExchangeConfigsUniqueSimulatedSQL string
-	//go:embed 0085_repo_trades.sql
+	//go:embed replay/0085_repo_trades.sql
 	RepoTradesSQL string
-	//go:embed 0086_cex_earn_judgment.sql
+	//go:embed replay/0086_cex_earn_judgment.sql
 	CexEarnJudgmentSQL string
-	//go:embed 0087_repo_trades_fee.sql
+	//go:embed replay/0087_repo_trades_fee.sql
 	RepoTradesFeeSQL string
-	//go:embed 0088_trx_account_resource.sql
+	//go:embed replay/0088_trx_account_resource.sql
 	TrxAccountResourceSQL string
-	//go:embed 0089_trx_txs_cheat_status.sql
+	//go:embed replay/0089_trx_txs_cheat_status.sql
 	TrxTxsCheatStatusSQL string
-	//go:embed 0090_trx_txs_kind_widen.sql
+	//go:embed replay/0090_trx_txs_kind_widen.sql
 	TrxTxsKindWidenSQL string
-	//go:embed 0091_price_alerts.sql
+	//go:embed replay/0091_price_alerts.sql
 	PriceAlertsSQL string
-	//go:embed 0092_trx_account_reward_num.sql
+	//go:embed replay/0092_trx_account_reward_num.sql
 	TrxAccountRewardNumSQL string
-	//go:embed 0093_system_settings.sql
+	//go:embed replay/0093_system_settings.sql
 	SystemSettingsSQL string
-	//go:embed 0094_trx_vote_apr_min_rate.sql
+	//go:embed replay/0094_trx_vote_apr_min_rate.sql
 	TrxVoteAprMinRateSQL string
-	//go:embed 0095_xasset_monitor.sql
+	//go:embed replay/0095_xasset_monitor.sql
 	XassetMonitorSQL string
-	//go:embed 0096_event_cases_paper_trades.sql
+	//go:embed replay/0096_event_cases_paper_trades.sql
 	EventCasesPaperTradesSQL string
-	//go:embed 0097_xasset_carry.sql
+	//go:embed replay/0097_xasset_carry.sql
 	XassetCarrySQL string
-	//go:embed 0098_xauusdt_gold.sql
+	//go:embed replay/0098_xauusdt_gold.sql
 	XauusdtGoldSQL string
-	//go:embed 0099_cex_universe.sql
+	//go:embed replay/0099_cex_universe.sql
 	CexUniverseSQL string
-	//go:embed 0100_t1_promotion.sql
+	//go:embed replay/0100_t1_promotion.sql
 	T1PromotionSQL string
-	//go:embed 0101_canonical_fix.sql
+	//go:embed replay/0101_canonical_fix.sql
 	CanonicalFixSQL string
-	//go:embed 0102_xasset_exec.sql
+	//go:embed replay/0102_xasset_exec.sql
 	XassetExecSQL string
-	//go:embed 0103_income_events.sql
+	//go:embed replay/0103_income_events.sql
 	IncomeEventsSQL string
-	//go:embed 0104_xasset_noise.sql
+	//go:embed replay/0104_xasset_noise.sql
 	XassetNoiseSQL string
-	//go:embed 0105_xasset_allow_combos.sql
+	//go:embed replay/0105_xasset_allow_combos.sql
 	XassetAllowCombosSQL string
-	//go:embed 0106_harvest_cycle.sql
+	//go:embed replay/0106_harvest_cycle.sql
 	HarvestCycleSQL string
-	//go:embed 0107_carry_universe.sql
+	//go:embed replay/0107_carry_universe.sql
 	CarryUniverseSQL string
-	//go:embed 0108_carry_universe_note.sql
+	//go:embed replay/0108_carry_universe_note.sql
 	CarryUniverseNoteSQL string
-	//go:embed 0109_paper_spot_carry.sql
+	//go:embed replay/0109_paper_spot_carry.sql
 	PaperSpotCarrySQL string
-	//go:embed 0110_paper_basis.sql
+	//go:embed replay/0110_paper_basis.sql
 	PaperBasisSQL string
-	//go:embed 0111_venue_account_snapshot.sql
+	//go:embed replay/0111_venue_account_snapshot.sql
 	VenueAccountSnapshotSQL string
-	//go:embed 0112_venue_snapshot_real_only.sql
+	//go:embed replay/0112_venue_snapshot_real_only.sql
 	VenueSnapshotRealOnlySQL string
-	//go:embed 0113_okx_unified_cleanup.sql
+	//go:embed replay/0113_okx_unified_cleanup.sql
 	OkxUnifiedCleanupSQL string
-	//go:embed 0114_cex_subaccount_seeds.sql
+	//go:embed replay/0114_cex_subaccount_seeds.sql
 	CexSubaccountSeedsSQL string
-	//go:embed 0115_fin_venue_io.sql
+	//go:embed replay/0115_fin_venue_io.sql
 	FinVenueIOSQL string
-	//go:embed 0116_xasset_combo_notional.sql
+	//go:embed replay/0116_xasset_combo_notional.sql
 	XassetComboNotionalSQL string
-	//go:embed 0117_app_config.sql
+	//go:embed replay/0117_app_config.sql
 	AppConfigSQL string
-	//go:embed 0118_radar_watchlist.sql
+	//go:embed replay/0118_radar_watchlist.sql
 	RadarWatchlistSQL string
-	//go:embed 0119_paper_cfd_columns.sql
+	//go:embed replay/0119_paper_cfd_columns.sql
 	PaperCfdColumnsSQL string
-	//go:embed 0120_position_evals.sql
+	//go:embed replay/0120_position_evals.sql
 	PositionEvalsSQL string
-	//go:embed 0121_venue_account_snapshot_src.sql
+	//go:embed replay/0121_venue_account_snapshot_src.sql
 	VenueAccountSnapshotSrcSQL string
-	//go:embed 0122_broker_symbol_map_is_primary.sql
+	//go:embed replay/0122_broker_symbol_map_is_primary.sql
 	BrokerSymbolMapIsPrimarySQL string
-	//go:embed 0123_radar_digest_state.sql
+	//go:embed replay/0123_radar_digest_state.sql
 	RadarDigestStateSQL string
-	//go:embed 0124_radar_digest_member.sql
+	//go:embed replay/0124_radar_digest_member.sql
 	RadarDigestMemberSQL string
-	//go:embed 0125_carry_graduations.sql
+	//go:embed replay/0125_carry_graduations.sql
 	CarryGraduationsSQL string
-	//go:embed 0126_margin_guard.sql
+	//go:embed replay/0126_margin_guard.sql
 	MarginGuardSQL string
-	//go:embed 0127_alerts_position_id.sql
+	//go:embed replay/0127_alerts_position_id.sql
 	AlertsPositionIDSQL string
-	//go:embed 0128_paper_all_in.sql
+	//go:embed replay/0128_paper_all_in.sql
 	PaperAllInSQL string
-	//go:embed 0129_xasset_monitor_venue.sql
+	//go:embed replay/0129_xasset_monitor_venue.sql
 	XassetMonitorVenueSQL string
-	//go:embed 0130_cashflows_leg_day_eventkey.sql
+	//go:embed replay/0130_cashflows_leg_day_eventkey.sql
 	CashflowsLegDayEventKeySQL string
-	//go:embed 0131_strategy_reason_d424.sql
+	//go:embed replay/0131_strategy_reason_d424.sql
 	StrategyReasonD424SQL string
-	//go:embed 0132_data_plane_venue.sql
+	//go:embed replay/0132_data_plane_venue.sql
 	DataPlaneVenueSQL string
-	//go:embed 0133_paper_intra_trades.sql
+	//go:embed replay/0133_paper_intra_trades.sql
 	PaperIntraTradesSQL string
-	//go:embed 0134_autotrade_allow_rules.sql
+	//go:embed replay/0134_autotrade_allow_rules.sql
 	AutotradeAllowRulesSQL string
-	//go:embed 0135_intra_events.sql
+	//go:embed replay/0135_intra_events.sql
 	IntraEventsSQL string
-	//go:embed 0136_cex_private_events.sql
+	//go:embed replay/0136_cex_private_events.sql
 	CexPrivateEventsSQL string
-	//go:embed 0137_symdig.sql
+	//go:embed replay/0137_symdig.sql
 	SymdigSQL string
-	//go:embed 0138_venue_symbol_flags.sql
+	//go:embed replay/0138_venue_symbol_flags.sql
 	VenueSymbolFlagsSQL string
-	//go:embed 0139_paper_miss_streak.sql
+	//go:embed replay/0139_paper_miss_streak.sql
 	PaperMissStreakSQL string
-	//go:embed 0140_venue_exposure_caps.sql
+	//go:embed replay/0140_venue_exposure_caps.sql
 	VenueExposureCapsSQL string
-	//go:embed 0141_perp_funding_admission.sql
+	//go:embed replay/0141_perp_funding_admission.sql
 	PerpFundingAdmissionSQL string
-	//go:embed 0142_keydomain_constitution.sql
+	//go:embed replay/0142_keydomain_constitution.sql
 	KeydomainConstitutionSQL string
-	//go:embed 0143_carry_graduation_pair_cols.sql
+	//go:embed replay/0143_carry_graduation_pair_cols.sql
 	CarryGraduationPairColsSQL string
 
-	//go:embed 0144_carry_graduation_type_drop_and_flag_pair_cols.sql
+	//go:embed replay/0144_carry_graduation_type_drop_and_flag_pair_cols.sql
 	D499TailColsSQL string
 
-	//go:embed 0145_execution_control_events_broker_scope.sql
+	//go:embed replay/0145_execution_control_events_broker_scope.sql
 	ExecControlBrokerScopeSQL string
 
-	//go:embed 0146_drop_binance_demo_config.sql
+	//go:embed replay/0146_drop_binance_demo_config.sql
 	DropBinanceDemoConfigSQL string
 
-	//go:embed 0147_facts_kind_index_and_pgstat.sql
+	//go:embed replay/0147_facts_kind_index_and_pgstat.sql
 	FactsKindIndexPgstatSQL string
-	//go:embed 0148_positions_legacy_demo.sql
+	//go:embed replay/0148_positions_legacy_demo.sql
 	PositionsLegacyDemoSQL string
-	//go:embed 0149_settlement_incident_attributed.sql
+	//go:embed replay/0149_settlement_incident_attributed.sql
 	SettlementIncidentAttributedSQL string
 
-	//go:embed 0150_explorer_shell.sql
+	//go:embed replay/0150_explorer_shell.sql
 	ExplorerShellSQL string
 
-	//go:embed 0151_config_to_pg.sql
+	//go:embed replay/0151_config_to_pg.sql
 	ConfigToPgSQL string
 
-	//go:embed 0152_macro_tables.sql
+	//go:embed replay/0152_macro_tables.sql
 	MacroTablesSQL string
 
-	//go:embed 0153_radar_watchlist_canonical.sql
+	//go:embed replay/0153_radar_watchlist_canonical.sql
 	RadarWatchlistCanonicalSQL string
 
-	//go:embed 0154_calib_tables.sql
+	//go:embed replay/0154_calib_tables.sql
 	CalibTablesSQL string
-	//go:embed 0155_idle_floor_streak.sql
+	//go:embed replay/0155_idle_floor_streak.sql
 	IdleFloorStreakSQL string
-	//go:embed 0156_exchange_configs_seed_endpoint_fossil.sql
+	//go:embed replay/0156_exchange_configs_seed_endpoint_fossil.sql
 	EndpointFossilSeedSQL string // D-543 补登：691544b2 只落文件未注册（从未应用）
-	//go:embed 0157_exposure_caps_seed.sql
+	//go:embed replay/0157_exposure_caps_seed.sql
 	ExposureCapsSeedSQL string
-	//go:embed 0159_exposure_cap_truth_fix.sql
+	//go:embed replay/0159_exposure_cap_truth_fix.sql
 	ExposureCapTruthFixSQL string // D-547：组合帽对齐+okx 幽灵键重键名
-	//go:embed 0160_paper_dual_cex_columns.sql
+	//go:embed replay/0160_paper_dual_cex_columns.sql
 	PaperDualCexColumnsSQL string // D-555 S1：paper_spot_carry/carry_graduations venue_type+venue_key 列
-	//go:embed 0161_quote_unit_scales.sql
+	//go:embed replay/0161_quote_unit_scales.sql
 	QuoteUnitScalesSQL string // D-594：broker_symbol_map price_scale/qty_scale + 铜行定标 + XCU 别名
-	//go:embed 0162_position_fees_netpnl.sql
+	//go:embed replay/0162_position_fees_netpnl.sql
 	PositionFeesNetPnlSQL string // D-599：positions fees_usd/fee_quality 新列（realized_pnl 改净额）
 	// 0163+ 续 embed_016x.go（D-006：行数拆分）
 )
+
+// BaselineSQL D-214：1000_baseline.sql=生产 schema dump 压平基线（鲜装唯一执行径；
+// 存量库仅记 marker——M3 切流 TRUNCATE schema_migrations 写入 1000）。
+//
+//go:embed 1000_baseline.sql
+var BaselineSQL string

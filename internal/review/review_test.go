@@ -15,7 +15,7 @@ type fakeStore struct {
 	legs      map[int64][]pgstore.PositionLeg
 	cashflows map[int64][]pgstore.Cashflow
 	upserts   []*pgstore.KnowledgeEntry
-	// D-126 P2：csByBrokerSymbol[(venue,brokerSymbol)] = contract_size；未配置默认 1。
+	// csByBrokerSymbol[(venue,brokerSymbol)] = contract_size；未配置默认 1。
 	csByBrokerSymbol map[[2]string]float64
 }
 
@@ -42,7 +42,7 @@ func (f *fakeStore) UpsertKnowledgeEntry(ctx context.Context, e *pgstore.Knowled
 	return int64(len(f.upserts)), nil
 }
 
-// D-126 P2：fakeStore 实现 ContractSizeByBrokerSymbol。
+// fakeStore 实现 ContractSizeByBrokerSymbol。
 // 未配置 csByBrokerSymbol 时返回 ok=false → notionalFromLegs 回退 cs=1（CEX 语义）。
 func (f *fakeStore) ContractSizeByBrokerSymbol(ctx context.Context, venueKey, brokerSymbol string) (float64, bool, error) {
 	if f.csByBrokerSymbol == nil {
@@ -192,7 +192,7 @@ func TestReviewSkipsIncomplete(t *testing.T) {
 	}
 }
 
-// D-126 P2：验证 notionalFromLegs 乘 contract_size 后 deviation 正确。
+// 验证 notionalFromLegs 乘 contract_size 后 deviation 正确。
 // 场景：BRENT cs=1000, qty=1, price=80 → notional=80000（非旧 bug 的 80）。
 // expected_net_bps=20（CROSS_VENUE 快照），realized=160USD → 160/80000×1e4=20bps → deviation=0 → spot_on。
 // 旧 bug（不乘 CS）：notional=80 → 160/80×1e4=20000bps → deviation=19980 → better_than_expected（假象）。

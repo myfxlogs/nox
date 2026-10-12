@@ -25,7 +25,7 @@ type Store interface {
 	ListPositionLegs(ctx context.Context, posID int64) ([]pgstore.PositionLeg, error)
 	ListCashflows(ctx context.Context, posID int64) ([]pgstore.Cashflow, error)
 	UpsertKnowledgeEntry(ctx context.Context, e *pgstore.KnowledgeEntry) (int64, error)
-	// D-126 P2：notionalFromLegs 需按 (venueKey, broker_symbol) 查 contract_size。
+	// notionalFromLegs 需按 (venueKey, broker_symbol) 查 contract_size。
 	ContractSizeByBrokerSymbol(ctx context.Context, venueKey, brokerSymbol string) (float64, bool, error)
 }
 
@@ -156,7 +156,7 @@ func Run(ctx context.Context, st Store, cfg Config) error {
 
 // notionalFromLegs 从买腿计算名义额（positions 无 notional 列，§2.11）。
 // 名义额 = 买腿 qty × price × contract_size（price_actual 优先，回退 price_expected）。
-// D-126 P2：乘 contract_size——旧版漏乘致 review deviation 被放大 1000 倍（BRENT cs=1000）。
+// 乘 contract_size——旧版漏乘致 review deviation 被放大 1000 倍（BRENT cs=1000）。
 // csFn 按 (venueKey, broker_symbol) 查 CS；未命中回退 1（CEX 无 CS 概念）。
 func notionalFromLegs(legs []pgstore.PositionLeg, csFn func(venueKey, brokerSymbol string) float64) (notional float64, symbol, venue string) {
 	for i := range legs {
