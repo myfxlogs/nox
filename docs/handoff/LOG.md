@@ -34,6 +34,19 @@
 ### 本地
 - `git remote rename github→arb-archive`（只留 `nox` 远端推送，归档仓不再更新）
 
+## 2026-10-12 切流后热修②：analyst 只读链路断——NOX_AI_PG_DSN 值域坐标漏改
+
+### 告警实症
+自盯报 `query_ro 不可用：failed to connect to user=arb_ro database=arb ... lookup arb-postgres`——连接串三面全旧（role/host/db）。
+
+### 根因
+1002 迁移只改 app_secrets/app_config **键名**（ARB_*→NOX_*），键内 DSN **值**（`arb_ro:pw@arb-postgres:5432/arb`）不在改名域；且生产 `nox_ro` 由影子 1004 集群级预造=NOLOGIN 无密码，`arb_ro` 切流时被 DROP——坐标与凭据双断。
+
+### 修法（SG 实拍）
+1. 一次性 `tools/tmpfix`（跑完删）：全表扫 app_secrets（解密判）+app_config 值域——`NOX_AI_PG_DSN` 为**唯一** arb 残值；坐标重写 `nox_ro@nox-postgres:5432/nox`（密码段原样）
+2. `tools/ro-rotate`（D-059 现成工具）：`ALTER ROLE nox_ro LOGIN PASSWORD`（补 1004 按设计留空的 LOGIN+密）+32B 新密+Seal 覆写+SELECT 1 自验
+3. 验证：`getent nox-postgres`=172.20.0.2（容器网 DNS ✓）、`rolcanlogin=t`、ro-rotate VERIFY OK；`AIReadOnlyDSN`/探针均热读 app_secrets——**免重启**，下轮自盯自绿
+
 ## 2026-10-12 M3 切流交付（业主令窗口）
 
 ### 背景/范围
