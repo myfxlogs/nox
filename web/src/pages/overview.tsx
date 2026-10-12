@@ -8,6 +8,10 @@ import type { Alert, Opportunity } from "../gen/dashboardv1/market_pb";
 import type { FundingNeedNotice } from "../gen/dashboardv1/stream_pb";
 import { fmtUsd, ts } from "../components/fmt";
 
+// ACTIVE 域=status:"ACTIVE" 后端谓词同款（OPEN/OPENING/LEGGED/CLOSING——
+// 源：pgstore.ListPositions 注释+service_positions_enrich.go activeStatuses）。
+const ACTIVE_STATUSES = new Set(["OPEN", "OPENING", "LEGGED", "CLOSING"]);
+
 export default function OverviewPage() {
   const [equity, setEquity] = useState<number | null>(null);
   const [realized, setRealized] = useState<number | null>(null);
@@ -49,7 +53,14 @@ export default function OverviewPage() {
     const offs = [
       onCase("position", (v) => {
         const p = v as Position;
-        setPositions((m) => new Map(m).set(Number(p.id), p));
+        // 本页=ACTIVE 域（load 拉 status:"ACTIVE"）：回放/事件推全量行，
+        // 非活跃态须从表剔除而非塞入——否则 CLOSED 行进表，下次 load 再抹=行闪。
+        setPositions((m) => {
+          const n = new Map(m);
+          if (ACTIVE_STATUSES.has(p.status)) n.set(Number(p.id), p);
+          else n.delete(Number(p.id));
+          return n;
+        });
       }),
       onCase("alert", (v) => {
         const a = v as Alert;

@@ -7,6 +7,7 @@ type Handler = (value: NonNullable<StreamUpdatesResponse["update"]["value"]>) =>
 
 const handlers = new Map<CaseName, Set<Handler>>();
 const statusHandlers = new Set<(connected: boolean) => void>();
+let currentStatus = false;
 let running = false;
 let abort: AbortController | null = null;
 let retryMs = 1000;
@@ -21,10 +22,12 @@ export function onCase(c: CaseName, fn: Handler): () => void {
 
 export function onStatus(fn: (connected: boolean) => void): () => void {
   statusHandlers.add(fn);
+  fn(currentStatus); // 注册即回报当前态——首个 emit 可能早于监听注册（子 effect 先于父）
   return () => statusHandlers.delete(fn);
 }
 
 function emit(connected: boolean) {
+  currentStatus = connected;
   statusHandlers.forEach((f) => f(connected));
 }
 
@@ -38,8 +41,12 @@ async function loop() {
   for (;;) {
     abort = new AbortController();
     try {
-      emit(true);
+      let firstFrame = true;
       for await (const res of client.streamUpdates({}, { signal: abort.signal })) {
+        if (firstFrame) {
+          firstFrame = false;
+          emit(true); // 首帧到达才算已连接（建连请求期仍是连接中）
+        }
         retryMs = 1000;
         const u = res.update;
         if (!u.case) continue;
