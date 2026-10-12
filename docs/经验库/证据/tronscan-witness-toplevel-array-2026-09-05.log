@@ -1,0 +1,22 @@
+# TRONSCAN /api/witness 顶层裸数组实证（2026-09-05，D-231 R1）
+
+GET https://apilist.tronscan.org/api/witness → HTTP 200
+
+顶层类型 = JSON array（445 行），无任何信封字段。首行原样（截断）：
+
+```json
+[{"address":"TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M","name":"Poloniex","url":"https://poloniex.com/","url_level":1,"producer":true,"logoUrl":"...","latestBlockNumber":85976160,"latestSlotNumber":596200068,"missedTotal":369,"produced...
+```
+
+关键字段实测：
+- address 全量 base58（`T` 开头），无 hex
+- annualizedRate = 字符串（如 "3.113046"），445 行中 0 空行
+- brokerage 全 int；producer=true 共 27 行
+- producer=true 最高年化 = 3.296627（TronSpark）
+
+同场对照 GET /api/vote?voter={addr} → HTTP 200，**有**信封：
+`{"totalVotes":18070,"data":[{"candidateAddress":"TLG2B6...（base58）","candidateName":"Nansen_ai","votes":6024,"timestamp":...}, ...]}`
+
+同一 API 域两个端点信封不一致——witness=裸数组，vote={"totalVotes",data[]}。3 个投票候选地址全部可在 witness 列表 join。
+
+证据性质：复审方 curl 实抓当日快照；金额/个人地址不入 git（D-047），以上仅公开链上数据。

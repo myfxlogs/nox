@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# reference-transaction —— D-512 T2：master 防回退门禁（A2，仓内版本化）。
+# 检测 refs/heads/master 更新非 ff（new 非 old 后代）→ 拒绝；
+# 显式豁免 ARB_ALLOW_NONFF=1。部署树本地装配由复审席执行，施工方只写仓内版本。
+# stdin 每行：old-oid SP new-oid SP ref-name
+set -euo pipefail
+
+while read -r old new ref; do
+  [ "$ref" = "refs/heads/master" ] || continue
+  case "$new" in
+    0000000000000000000000000000000000000000) continue ;;
+  esac
+  if [ "$old" != "0000000000000000000000000000000000000000" ]; then
+    if ! git merge-base --is-ancestor "$old" "$new" >/dev/null 2>&1; then
+      if [ "${ARB_ALLOW_NONFF:-0}" != "1" ]; then
+        echo "FAIL: master 非 ff 移动被拒（old=$old new=$new）；显式豁免请 ARB_ALLOW_NONFF=1" >&2
+        exit 1
+      fi
+    fi
+  fi
+done
+exit 0

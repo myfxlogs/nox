@@ -1,0 +1,27 @@
+# env-allowlist.txt —— D-564 S5：env 直读白名单（逐键显式登记；新键必须过本表+practices 评审）。
+# 「env 里能读到=合法」不是理由，读本表才是。
+# D-145（2026-10-09 票面修正）：本表只减不增——业务配置唯一真相=PG
+# （app_config/app_secrets），收敛目标=仅剩引导件；新增 env 消费点须业主令。
+# —— 引导件（连库前/解密钥/RPC 鉴权/debug/测试基建/工具参数；D-145 逐键注释钦定）——
+DB_DSN
+ARB_PG_DSN
+ARB_MASTER_KEY
+ARB_ENVIRONMENT
+ARB_AUTH_TOKEN
+ARB_ALLOW_EMPTY_AUTH
+ARB_PPROF_ADDR
+ARB_WEB_DIR
+ARB_KB_DIR
+# —— 测试基建（internal/testutil 域）——
+ARB_TEST_PG_DSN
+ARB_TEST_PG_SERVICE_DSN
+ARB_TEST_ALLOW_SKIP_DSN
+ARB_TEST_SEAT
+ARB_EXEC_TEST_PG_DSN
+# —— MT5_* broker_symbols 子命令一次性操作入参（D-145 钦定不进 PG）——
+MT5_HOST
+MT5_PASS
+MT5_PORT
+MT5_SERVER
+MT5_USER
+MT5_VENUE

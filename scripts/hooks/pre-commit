@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# pre-commit gate — AGENTS.md §7
+# 用法：git config core.hooksPath scripts/hooks
+set -euo pipefail
+
+# 3. 禁止 --no-verify 绕过（环境检查，非强制）
+if [ -f .kill_switch ]; then
+  echo "FAIL: .kill_switch 存在，禁止提交" >&2
+  exit 1
+fi
+
+# 3b. env 凭据直读门禁（D-564 S5）
+bash scripts/check-env-reads.sh || {
+  echo "[pre-commit] D-564 S5：env 凭据直读门禁拒绝（见上）"
+  exit 1
+}
+
+# 3c. staticcheck（D-512 T10）：基线对比式——只拦本 commit 新增告警，存量 51 条另案治理。
+# 工具：honnef.co/go/tools/cmd/staticcheck@2026.2.1（decisions.md D-514 留痕）。
+if command -v staticcheck >/dev/null 2>&1 || [ -x "$HOME/go/bin/staticcheck" ]; then
+  SC_BIN=$(command -v staticcheck || echo "$HOME/go/bin/staticcheck")
+  SC_BASE=/tmp/.d512_staticcheck_baseline.txt
+  SC_NOW=$(mktemp)
+  # D-153：staticcheck 调用域钉 go.mod 工具链——本机 go 高于 go.mod 时 GOTOOLCHAIN=auto
+  # 取高版产 v5+ export data，发布版 staticcheck 读不了（全包错文→误拦/毒化基线）。
+  GOTOOLCHAIN="go$(go mod edit -json | jq -r .Go)" "$SC_BIN" ./internal/... > "$SC_NOW" 2>&1 || true
+  # 工具链不兼容特征 fail-loud 直报（防静默混入告警比对当新违规）。
+  if grep -q "export data version" "$SC_NOW"; then
+    echo "FAIL: staticcheck 工具链不兼容（export data version 错文，本机 go 与 go.mod 漂移）" >&2
+    grep "export data version" "$SC_NOW" | head -3 >&2
+    rm -f "$SC_NOW"
+    exit 1
+  fi
+  # 毒化基线重建（v5-era 错文曾固化入基线）→ 丢弃重固一次。
+  if [ -f "$SC_BASE" ] && grep -q "export data version" "$SC_BASE"; then
+    rm -f "$SC_BASE"
+  fi
+  # 基线文件不存在=首次跑：固化当前为基线（不拦）。
+  if [ ! -f "$SC_BASE" ]; then
+    cp "$SC_NOW" "$SC_BASE"
+  fi
+  NEW_WARN=$(comm -23 <(sort "$SC_NOW") <(sort "$SC_BASE") | grep -v "^$" | head -5 || true)
+  if [ -n "$NEW_WARN" ]; then
+    echo "FAIL: staticcheck 新增告警（存量另案，新增必须自清）：" >&2
+    echo "$NEW_WARN" >&2
+    rm -f "$SC_NOW"
+    exit 1
+  fi
+  rm -f "$SC_NOW"
+fi
+
+# 4. 文件规模门禁（D-077 修复⑩ G7：check-lines 与 CI 一致）
+if [ -x scripts/check-lines.sh ]; then
+  scripts/check-lines.sh
+fi
+
+# 4b. 迁移契约门禁（D-496 §4 业主令 9-26：键域列 COMMENT+CHECK、禁 backup 残留表）
+if [ -x scripts/check_migration_contract.sh ]; then
+  scripts/check_migration_contract.sh
+fi
+
+# 5. gofmt 门禁（D-234 批 1：P4 无法检查的规则必被违反；docs/cmc/证据=历史快照豁免）
+# -c core.quotepath=off 必须带：中文路径默认 quoted 形态会同时破 grep 豁免匹配与 gofmt 调用。
+STAGED_GO=$(git -c core.quotepath=off diff --cached --name-only --diff-filter=ACMR | grep '\.go$' | grep -v '^docs/cmc/证据/' || true)
+if [ -n "$STAGED_GO" ]; then
+  UNFMT=$(echo "$STAGED_GO" | xargs gofmt -l)
+  if [ -n "$UNFMT" ]; then
+    echo "FAIL: gofmt 漂移: $UNFMT —— gofmt -w 后重试" >&2
+    exit 1
+  fi
+fi
+
+# 6. 经验库 schema 门禁（D-130 P4：格式错/索引过期=拒绝提交；Devin 旧格式 5 条入库实证）
+if git -c core.quotepath=off diff --cached --name-only | grep -qE '^docs/经验库/'; then
+  (cd tools/arbkb && go run . gen --check) || {
+    echo "FAIL: arbkb gen --check 未过——条目 frontmatter 须符合 Schema v2（模板 docs/经验库/模板.md），索引自动生成禁手编；修复后重试" >&2
+    exit 1
+  }
+fi
+
+# 8. 秘钥扫描门禁（D-460 S2，P4）：staged 新增行匹配秘钥形态即拒绝。
+# 前置实证：9-14 filter-repo 历史已净 + 9-24 全历史扫描零泄漏——本段防未来回归。
+# 扫描面=暂存新增行（-U0 added，存量内容不重扫）；-i 覆盖 API_KEY=/ClientSecret: 等大写/驼峰泄漏面；
+# PEM 模式写作 PRIVATE+空白+KEY----- 的 ERE（字面量含真实空格会自匹配本 hook 自身改动）。
+SECRET_ADDED=$(git -c core.quotepath=off diff --cached -U0 | grep '^+' | grep -v '^+++' | sed 's/^+//' || true)
+if [ -n "$SECRET_ADDED" ]; then
+  check_secret() {
+    if printf '%s\n' "$SECRET_ADDED" | grep -iqE "$1"; then
+      echo "FAIL: staged 新增行疑似秘钥泄漏（$2）——占位化/移出后重试；误报找复审席裁定，禁 --no-verify" >&2
+      printf '%s\n' "$SECRET_ADDED" | grep -inE "$1" | head -3 >&2 || true
+      exit 1
+    fi
+  }
+  _secret_sep='["'"'"'=:[:space:]]+'
+  check_secret "mrpc_(live|trial)_[a-f0-9]{16,}" "MRPC 账号 token"
+  check_secret "api[_-]?key${_secret_sep}[A-Za-z0-9]{20,}" "API key 赋值"
+  check_secret "secret${_secret_sep}[A-Za-z0-9]{20,}" "secret 赋值"
+  check_secret "PRIVATE[[:space:]]+KEY-----" "PEM 私钥块"
+  check_secret "(^|[^A-Za-z0-9])(ghp_|gho_)[A-Za-z0-9]{20,}" "GitHub token 前缀"
+  check_secret "(^|[^A-Za-z0-9])sk-[A-Za-z0-9]{20,}" "sk- 秘钥前缀"
+  check_secret "ARB_AUTH_TOKEN=[A-Za-z0-9]{16,}" "ARB_AUTH_TOKEN 非占位值"
+fi
+
+# 8b. 资金/审计写通道 `_ =` 门禁（D-508 S1 写路径审计契约，P4）：
+# 热路径文件清单内新增 `_ = <err-returning call>` 一律拒入；确属无返回值的刻意丢弃
+# 须行内注释 `// audit-noreturn-ok` 并带理由豁免。
+AUDIT_HOT_FILES='internal/autotrade/engine_swaparb.go
+internal/autotrade/gate.go
+internal/autotrade/gate_helpers.go
+internal/exec/pipeline_legs_persist.go
+internal/exec/cex_executor.go
+internal/exec/cex_executor_confirm.go
+internal/exec/cex_executor_margin_gate.go
+internal/store/pgstore/execution_controls.go'
+BAD_DISCARD=""
+for f in $AUDIT_HOT_FILES; do
+  [ -f "$f" ] || continue
+  # 只看 staged 新增行（-U0 added；存量行不重扫），豁免行带 audit-noreturn-ok
+  hits=$(git -c core.quotepath=off diff --cached -U0 -- "$f" 2>/dev/null | grep '^+' | grep -v '^+++' | grep -E '_ = ' | grep -v 'audit-noreturn-ok' || true)
+  [ -n "$hits" ] && BAD_DISCARD="${BAD_DISCARD}${f}:\n${hits}\n"
+done
+if [ -n "$BAD_DISCARD" ]; then
+  echo "FAIL: 资金/审计热路径新增 \`_ =\` 吞错（D-508 写路径审计契约）——错误须上抛(fail-stop)或 fail-open+声张(log+warn 告警)；确属无返回值丢弃须行内 \`// audit-noreturn-ok <理由>\` 豁免：" >&2
+  printf '%b' "$BAD_DISCARD" >&2
+  exit 1
+fi
+
+# 8c. 分层方向门禁（D-514 T1）：internal/* 跨包 import 白名单冻结，新增方向违例即拒。
+if git diff --cached --name-only | grep -qE '\.go$'; then
+  if ! ./scripts/check_import_direction.sh >/dev/null 2>&1; then
+    echo "FAIL: import 方向门禁违例——详见 ./scripts/check_import_direction.sh 直接跑出的违例行" >&2
+    ./scripts/check_import_direction.sh 2>&1 | tail -15 >&2 || true
+    exit 1
+  fi
+fi
+
+# 9. diff 通读提示（不自动拦截，提醒人工检查）
+echo "OK: pre-commit gate passed. Remember: diff 通读无死代码/TODO/调试残留."
+echo "记忆系统自问（D-075 触发锚）: 本次 commit 解决了什么坑? docs/经验库/ 有无对应条目或更新? 有则同 commit 入库."
