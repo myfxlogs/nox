@@ -1,0 +1,267 @@
+package main
+
+import (
+	"math"
+	"testing"
+	"time"
+
+	"arb/internal/store/pgstore"
+)
+
+// norm 便捷构造：经 normalize 走真归一链（classOf 测试默认空，按需传）。
+func norm(venue, symbol string, hedgeSet map[string]bool, r Row) normRow {
+	r.Symbol = symbol
+	return normalize(venue, []Row{r}, hedgeSet, nil)[0]
+}
+
+func TestNormBase(t *testing.T) {
+	for _, tc := range []struct{ sym, want string }{
+		{"XAUUSDT", "XAU"}, {"XAU_USDT", "XAU"}, {"XAU-USDT-SWAP", "XAU"},
+		{"BTCUSDT", "BTC"}, {"ETH_USDT", "ETH"},
+	} {
+		if got := normBase(tc.sym); got != tc.want {
+			t.Fatalf("normBase(%q)=%q want %q", tc.sym, got, tc.want)
+		}
+	}
+}
+
+func TestCanonicalAlias(t *testing.T) {
+	for _, tc := range []struct{ base, want string }{
+		{"XAU", "XAUUSD"}, {"CL", "WTI"}, {"COPPER", "XCUUSD"}, {"BZ", "BRENT"},
+		{"BTC", "BTC"}, // 未命中回退 base
+	} {
+		if got := canonicalOf(tc.base); got != tc.want {
+			t.Fatalf("canonicalOf(%q)=%q want %q", tc.base, got, tc.want)
+		}
+	}
+}
+
+func TestTierOf(t *testing.T) {
+	// 有腿=T1：canonical XAUUSD ∈ broker_symbol_map 腿集
+	if n := norm("binance", "XAUUSDT", map[string]bool{"XAUUSD": true}, Row{Class: "COMMODITY", Status: "TRADING"}); n.Tier != "T1" || n.HedgeCanonical != "XAUUSD" {
+		t.Fatalf("有腿 want T1+XAUUSD, got %s+%q", n.Tier, n.HedgeCanonical)
+	}
+	// symbol 本身 ∈ asset_equiv（PAXGUSDT 无别名但 asset_equiv 有 canonical=PAXGUSDT）：
+	// HedgeCanonical 存实际命中成员 PAXGUSDT，不存 normBase 幻影值 PAXG
+	if n := norm("binance", "PAXGUSDT", map[string]bool{"PAXGUSDT": true}, Row{Class: "COMMODITY", Status: "TRADING"}); n.Tier != "T1" || n.HedgeCanonical != "PAXGUSDT" {
+		t.Fatalf("symbol 命中 asset_equiv want T1+PAXGUSDT, got %s+%q", n.Tier, n.HedgeCanonical)
+	}
+	// 无腿但别名命中=T2（非加密外观）
+	if n := norm("binance", "XAUUSDT", nil, Row{Class: "", Status: "TRADING"}); n.Tier != "T2" {
+		t.Fatalf("别名命中 want T2, got %s", n.Tier)
+	}
+	// 无腿 Class≠COIN=T2
+	if n := norm("binance", "TSLAUSDT", nil, Row{Class: "EQUITY", Status: "TRADING"}); n.Tier != "T2" {
+		t.Fatalf("Class=EQUITY want T2, got %s", n.Tier)
+	}
+	// 普通加密=T3
+	if n := norm("binance", "BTCUSDT", nil, Row{Class: "COIN", Status: "TRADING"}); n.Tier != "T3" {
+		t.Fatalf("BTCUSDT want T3, got %s", n.Tier)
+	}
+}
+
+// TestAnnualize funding 年化口径：interval 逐符号真值，Gate 14400s→4h、OKX 4h → ×6 非 ×3。
+func TestAnnualize(t *testing.T) {
+	// rate 0.0001（1bps/期）× 6 期/日 × 365 = 21.9%/yr；若误按 8h×3=10.95%
+	got := annualize(0.0001, 4)
+	if got == nil || math.Abs(*got-21.9) > 0.01 {
+		t.Fatalf("annualize(1bps,4h)=%v want ~21.9%%（×6 非 ×3=10.95%%）", got)
+	}
+	if math.Abs(*got-10.95) < 0.01 {
+		t.Fatal("年化=×3 口径——interval 被当 8h 处理")
+	}
+	if annualize(0.0001, 0) != nil {
+		t.Fatal("intervalH=0 want nil（无 funding 数据）")
+	}
+}
+
+func TestDiffUniverse(t *testing.T) {
+	old := map[string]pgstore.CexUniverseRow{
+		"binance|OLDUSDT":  {Venue: "binance", Symbol: "OLDUSDT", Status: "TRADING", Tier: "T3", Class: "COIN"},
+		"binance|RELUSDT":  {Venue: "binance", Symbol: "RELUSDT", Status: "SUSPENDED", Tier: "T3", Class: "COIN"},
+		"binance|XAUUSDT":  {Venue: "binance", Symbol: "XAUUSDT", Status: "TRADING", Tier: "T2", Class: "COMMODITY"},
+		"binance|KEEPUSDT": {Venue: "binance", Symbol: "KEEPUSDT", Status: "TRADING", Tier: "T3", Class: "COIN"},
+	}
+	hedge := map[string]bool{"XAUUSD": true}
+	rows := normalize("binance", []Row{
+		{Symbol: "OLDUSDT", Class: "COIN", Status: "BREAK"},        // → DELISTED
+		{Symbol: "RELUSDT", Class: "COIN", Status: "TRADING"},      // → RELISTED
+		{Symbol: "XAUUSDT", Class: "COMMODITY", Status: "TRADING"}, // → HEDGE_APPEARED（T2→T1）
+		{Symbol: "KEEPUSDT", Class: "COIN", Status: "TRADING"},     // 无变化
+		{Symbol: "NEWUSDT", Class: "COIN", Status: "TRADING"},      // → NEW
+		{Symbol: "TSLAUSDT", Class: "EQUITY", Status: "TRADING"},   // → NEW + NEW_CLASS(EQUITY)
+	}, hedge, nil)
+	evs := diffUniverse(old, rows)
+	got := make(map[string]string)
+	for _, e := range evs {
+		got[e.Symbol+":"+e.EventType] = e.Detail
+	}
+	for _, want := range []string{
+		"OLDUSDT:DELISTED", "RELUSDT:RELISTED", "XAUUSDT:HEDGE_APPEARED",
+		"NEWUSDT:NEW", "TSLAUSDT:NEW", "TSLAUSDT:NEW_CLASS",
+	} {
+		if _, ok := got[want]; !ok {
+			t.Fatalf("missing event %s; got %v", want, got)
+		}
+	}
+	if _, ok := got["KEEPUSDT:NEW"]; ok {
+		t.Fatal("KEEPUSDT 无变化不应出事件")
+	}
+	if len(evs) != 6 {
+		t.Fatalf("want 6 events, got %d: %v", len(evs), got)
+	}
+}
+
+// TestDiffUniverseBootstrap 旧 map 空=首轮 bootstrap：零事件零告警（防 ~2200 NEW 洪泛）。
+func TestDiffUniverseBootstrap(t *testing.T) {
+	rows := normalize("binance", []Row{
+		{Symbol: "BTCUSDT", Class: "COIN", Status: "TRADING"},
+		{Symbol: "XAUUSDT", Class: "COMMODITY", Status: "TRADING"},
+	}, map[string]bool{"XAUUSD": true}, nil)
+	if evs := diffUniverse(nil, rows); len(evs) != 0 {
+		t.Fatalf("bootstrap want 0 events, got %d", len(evs))
+	}
+}
+
+// TestFundingAlertRows funding 告警门槛：|ann|≥15%/yr 且 vol24h≥$5M。
+// TestFundingAlertRows 已随 fundingAlertRows 删除（D-353 S2 事件式改造，测试随迁；见 TestFundingTransitions）。
+
+// TestDivergences 同 canonical 跨所分化 ≥20%/yr 出事件、<20% 不出、同所不比。
+func TestDivergences(t *testing.T) {
+	mk := func(venue, symbol string, ann, vol float64) normRow {
+		return normRow{Row: Row{Symbol: symbol, Vol24h: vol}, Venue: venue,
+			Canonical: canonicalOf(normBase(symbol)), FundingAnn: fptr(ann)}
+	}
+	rows := []normRow{
+		mk("binance", "XAUUSDT", 25.0, 6e6),    // XAUUSD
+		mk("okx", "XAU-USDT-SWAP", 2.0, 6e6),   // XAUUSD；|25−2|=23≥20 → 事件
+		mk("gate", "XAU_USDT", 26.0, 6e6),      // XAUUSD；与 binance 差 1、与 okx 差 24 → 事件
+		mk("binance", "BTCUSDT", 5.0, 1e8),     // BTC；与 okx 差 3 <20
+		mk("okx", "BTC-USDT-SWAP", 8.0, 1e8),   // BTC
+		mk("binance", "ETHUSDT", 30.0, 1e6),    // ETH；vol 不足不参与
+		mk("okx", "ETH-USDT-SWAP", -30.0, 1e6), // ETH
+	}
+	pairs, classFiltered := divergences(rows, 20, 5e6) // D-376：签名改 divPair 返回
+	// XAUUSD：3 所两两 → binance:okx 23、gate:okx 24 ≥20 → 2 对（binance:gate 差 1 不出）
+	if len(pairs) != 2 {
+		t.Fatalf("want 2 divergence pairs, got %d: %v", len(pairs), pairs)
+	}
+	for _, p := range pairs {
+		if p.Canon != "XAUUSD" {
+			t.Fatalf("bad divergence pair: %+v", p)
+		}
+	}
+	// BTC 3<20、ETH vol 不足 → 均无对；D-374：全部 COIN/XAU 类 → 零 class 过滤
+	for _, p := range pairs {
+		if p.Canon == "BTC" || p.Canon == "ETH" {
+			t.Fatalf("unexpected divergence: %+v", p)
+		}
+	}
+	if len(classFiltered) != 0 {
+		t.Fatalf("D-374: coin-class rows want 0 class_filtered, got %v", classFiltered)
+	}
+}
+
+// TestCooldownOK last_alert_ts 24h 冷却判定。
+func TestCooldownOK(t *testing.T) {
+	now := time.Now()
+	if !cooldownOK(nil, now) {
+		t.Fatal("nil last_alert_ts want OK")
+	}
+	if cooldownOK(ptrTime(now.Add(-time.Hour)), now) {
+		t.Fatal("1h 内 want 冷却中")
+	}
+	if !cooldownOK(ptrTime(now.Add(-25*time.Hour)), now) {
+		t.Fatal("25h want 可重发")
+	}
+}
+
+func fptr(v float64) *float64        { return &v }
+func ptrTime(t time.Time) *time.Time { return &t }
+
+// TestFundingTransitions D-353 T1：事件式 funding 告警四情形+边界——
+// 稳态（old qualify 同号）零事件（红=现行为每日重报）；new_entry/sign_flip/exit_band 各一；
+// old 缺行/ann nil 边界。行整体消失（VANISH）不属 exit_band（DELISTED 已单报，防双报）。
+func TestFundingTransitions(t *testing.T) {
+	old := map[string]pgstore.CexUniverseRow{
+		"binance|STEADY":   {Venue: "binance", Symbol: "STEADY", FundingAnn: fptr(16), Vol24h: fptr(6e6)},
+		"binance|FLIP":     {Venue: "binance", Symbol: "FLIP", FundingAnn: fptr(16), Vol24h: fptr(6e6)},
+		"binance|EXIT":     {Venue: "binance", Symbol: "EXIT", FundingAnn: fptr(20), Vol24h: fptr(6e6)},
+		"binance|VOLDROP":  {Venue: "binance", Symbol: "VOLDROP", FundingAnn: fptr(20), Vol24h: fptr(6e6)},
+		"binance|NILANN":   {Venue: "binance", Symbol: "NILANN", FundingAnn: fptr(20), Vol24h: fptr(6e6)},
+		"binance|VANISH":   {Venue: "binance", Symbol: "VANISH", FundingAnn: fptr(20), Vol24h: fptr(6e6)},
+		"binance|NEGRIGHT": {Venue: "binance", Symbol: "NEGRIGHT", FundingAnn: fptr(-16), Vol24h: fptr(6e6)},
+	}
+	rows := []normRow{
+		{Row: Row{Symbol: "STEADY", Vol24h: 6e6}, Venue: "binance", FundingAnn: fptr(16)},    // 稳态：零事件
+		{Row: Row{Symbol: "NEWIN", Vol24h: 6e6}, Venue: "binance", FundingAnn: fptr(25)},     // old 缺行 → new_entry
+		{Row: Row{Symbol: "FLIP", Vol24h: 6e6}, Venue: "binance", FundingAnn: fptr(-18)},     // 符号翻转
+		{Row: Row{Symbol: "NEGRIGHT", Vol24h: 6e6}, Venue: "binance", FundingAnn: fptr(-17)}, // 负侧稳态（同号）：零事件
+		{Row: Row{Symbol: "EXIT", Vol24h: 6e6}, Venue: "binance", FundingAnn: fptr(5)},       // ann 归常态 → exit_band
+		{Row: Row{Symbol: "VOLDROP", Vol24h: 1e6}, Venue: "binance", FundingAnn: fptr(20)},   // vol 跌破 → exit_band
+		{Row: Row{Symbol: "NILANN", Vol24h: 6e6}, Venue: "binance"},                          // ann→nil → exit_band
+		// VANISH 行整体消失：不在 rows → 不产生 exit_band（DELISTED 已单报）
+	}
+	out := fundingTransitions(rows, old, 15, 5e6)
+	got := map[string]fundingEventKind{}
+	for _, ev := range out {
+		got[ev.row.Symbol] = ev.kind
+	}
+	if _, ok := got["STEADY"]; ok {
+		t.Errorf("STEADY 稳态同号不应有事件（红=每日重报退化）: %v", got)
+	}
+	if _, ok := got["NEGRIGHT"]; ok {
+		t.Errorf("NEGRIGHT 负侧稳态不应有事件: %v", got)
+	}
+	if got["NEWIN"] != fundingNewEntry {
+		t.Errorf("NEWIN = %v, want new_entry（old 缺行）", got["NEWIN"])
+	}
+	if got["FLIP"] != fundingSignFlip {
+		t.Errorf("FLIP = %v, want sign_flip", got["FLIP"])
+	}
+	for _, sym := range []string{"EXIT", "VOLDROP", "NILANN"} {
+		if got[sym] != fundingExitBand {
+			t.Errorf("%s = %v, want exit_band", sym, got[sym])
+		}
+	}
+	if _, ok := got["VANISH"]; ok {
+		t.Error("VANISH 行整体消失不应产生 exit_band（DELISTED 已单报，防双报）")
+	}
+	// exit_band 旧→新值锚（文案数据源）：EXIT 20→5；NILANN 新值 nil
+	for _, ev := range out {
+		if ev.row.Symbol == "EXIT" && (ev.oldAnn == nil || *ev.oldAnn != 20) {
+			t.Errorf("EXIT oldAnn = %v, want 20", ev.oldAnn)
+		}
+		if ev.row.Symbol == "NILANN" && ev.oldAnn == nil {
+			t.Errorf("NILANN oldAnn 不应为 nil（old qualify 20）")
+		}
+	}
+}
+
+// TestFundingTransitions_OldNilVol 边界：old 行 Vol24h nil → 不 qualify → 本轮 qualify 判 new_entry。
+func TestFundingTransitions_OldNilVol(t *testing.T) {
+	old := map[string]pgstore.CexUniverseRow{
+		"okx|X": {Venue: "okx", Symbol: "X", FundingAnn: fptr(20)},
+	}
+	rows := []normRow{{Row: Row{Symbol: "X", Vol24h: 6e6}, Venue: "okx", FundingAnn: fptr(20)}}
+	out := fundingTransitions(rows, old, 15, 5e6)
+	if len(out) != 1 || out[0].kind != fundingNewEntry {
+		t.Errorf("old vol nil → 本轮应 new_entry, got %v", out)
+	}
+}
+
+// TestBasisBps D-354 T1：mark/index→bps 换算锚——(mark/index−1)×1e4 round 1 位；
+// mark≤0 或 index≤0 → nil（fail-closed，不臆造）。
+func TestBasisBps(t *testing.T) {
+	if got := basisBps(1.005, 1.0); got == nil || *got != 50.0 {
+		t.Errorf("basisBps(1.005,1.0) = %v, want 50.0（+0.5%%→50bps）", got)
+	}
+	if got := basisBps(0.9995, 1.0); got == nil || *got != -5.0 {
+		t.Errorf("basisBps(0.9995,1.0) = %v, want -5.0（贴水为负）", got)
+	}
+	for _, bad := range [][2]float64{{0, 1}, {1, 0}, {-1, 1}, {1, -1}} {
+		if got := basisBps(bad[0], bad[1]); got != nil {
+			t.Errorf("basisBps(%v,%v) = %v, want nil（非正数 fail-closed）", bad[0], bad[1], got)
+		}
+	}
+}
