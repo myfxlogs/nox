@@ -1,0 +1,260 @@
+package autotrade
+
+import (
+	"arb/internal/keydomain"
+	"context"
+	"fmt"
+	"log"
+	"strings"
+	"time"
+
+	"arb/internal/fact"
+	"arb/internal/position"
+	"arb/internal/store/pgstore"
+	"arb/internal/usdnotional"
+)
+
+// swapArbBasisExitBps SWAPARB/CARRY 基差止损门槛（D-108 A5，D-102 预设规则代码化）。； 包级 var 便于测试覆写（marginReconnectBackoff 先例）。
+var swapArbBasisExitBps = 4.0
+
+// checkExitCondition 按 type 分派退出条件（D-072 §4.2）。； 息差型判定走 position.IsCarryType 共用 helper（P3 单一真相：monitor.go 跳过收敛告警 + 此处退出分派同源）。
+// 返回 (shouldClose, reason)。
+func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (bool, string) {
+	if !position.IsCarryType(p.Type) {
+		// 收敛型（CROSS_VENUE/MEANREVERT 及未知类型）：currentNetBps ≤ CloseBpsThr
+		currentBps, ok := e.currentNetBps(p)
+		if !ok {
+			return false, ""
+		}
+		if currentBps <= e.cfg.CloseBpsThr {
+			return true, fmt.Sprintf("converged currentBps=%.2f <= %.1f", currentBps, e.cfg.CloseBpsThr)
+		}
+		return false, ""
+	}
+	// 息差型：按 swap/funding 子分派（IsCarryType 已判定为息差家族，此处只区分 swap vs funding）
+	// D-311 S5：XASSET_CARRY 专属分支——跨 canonical 逐腿泛化净收入（perp=funding、MT=swap）。
+	// 不复用 recalcNetFunding：XASSET 需跨 canonical（卖腿 canonical_sell）+ MT 腿 swap 泛化
+	// （recalcNetFunding 的 long−short 反向口径已由 D-312 修复为逐腿 :perp 净收入）。
+	// 退出判定复用 perpFundingExitDecision（持有下限+连续去抖+fail-closed，同一把 fundingMu）。
+	if p.Type == "XASSET_CARRY" {
+		// D-377 S2：XASSET 分支整组移入 engine_xasset_eval.go（评估行写入同文件族）。
+		// 非 XASSET_CARRY 不写行——scope 闸即本分支判定本身（其他型走原路径零触碰）。
+		return e.xassetExitCheck(ctx, p)
+	}
+	if p.Type == "FUNDING_HEDGE" || p.Type == "PERP_FUNDING" {
+		// D-133 T1：PERP_FUNDING 走持有下限 + 连续去抖（修复 D-129 瞬时费率判平致命缺陷）；
+		// FUNDING_HEDGE 保持旧语义（单次瞬时读数 ≤ 阈值即平，CFD 无结算窗概念）。
+		netFunding, ok := e.recalcNetFunding(ctx, p, 0) // FUNDING_HEDGE 旧语义（瞬时）
+		if p.Type == "PERP_FUNDING" {
+			netFunding, ok = e.recalcNetFunding(ctx, p, carryDeathMeanWindow) // D-027：3d 滚动均值
+			// D-133 T1：held = now − opened_at；opened_at nil（旧数据兜底）→ held=0（floor 未满，最安全）。
+			var held time.Duration
+			if p.OpenedAt != nil {
+				held = time.Since(*p.OpenedAt)
+			}
+			e.fundingMu.Lock()
+			curCount := e.fundingBreach[p.ID]
+			shouldClose, newCount, reason := perpFundingExitDecision(ok, held, netFunding, e.cfg.FundingExitPct, e.cfg.PerpFundMinHold, e.cfg.PerpFundExitDebounce, curCount)
+			if newCount == 0 {
+				delete(e.fundingBreach, p.ID) // 计数清零/平仓 → 删除条目（防泄漏）
+			} else {
+				e.fundingBreach[p.ID] = newCount
+			}
+			e.fundingMu.Unlock()
+			return shouldClose, reason
+		}
+		// FUNDING_HEDGE：旧语义——缺数据 fail-closed；netFunding ≤ 阈值即平。
+		if !ok {
+			return false, ""
+		}
+		if netFunding <= e.cfg.FundingExitPct {
+			return true, fmt.Sprintf("net funding %.2f%% <= %.1f%%", netFunding, e.cfg.FundingExitPct)
+		}
+		return false, ""
+	}
+	// SWAPARB/CARRY：净 swap ≤ SwapArbExitBps（默认 0）→ 平仓
+	netSwap, ok := e.recalcNetSwap(ctx, p)
+	if !ok {
+		return false, ""
+	}
+	if netSwap <= e.cfg.SwapArbExitBps {
+		return true, fmt.Sprintf("net swap %.3f bps/day <= %.1f", netSwap, e.cfg.SwapArbExitBps)
+	}
+	return e.basisStopCheck(p)
+}
+
+// recalcNetSwap 重算净 swap（D-072 §4.2，facts 驱动 + 48h 新鲜度守卫）。
+// D-105 T1：venue 匹配加 found 标志——任一 venue 未匹配 fact → 缺数据不决策平仓（fail-closed，
+// 修复 #264 误平：facts 缺失时静默取 0 → 0≤0 假信号平仓）。新鲜度守卫改为对匹配到的 fact 检查
+// （旧值查 longFacts[0] 列表首元素，非该 venue 的 fact——同修）。
+// D-180 S2：净 swap 改用 swapRateFor（实测优先 settled → spec 兜底 → none fail-closed），
+// 删除规格直查旧路径。止损用原值（不应用折扣——防误杀存量仓）。
+func (e *Engine) recalcNetSwap(ctx context.Context, p *pgstore.Position) (float64, bool) {
+	canonical := canonicalFromOppID(p.OpportunityID)
+	if canonical == "" {
+		return 0, false
+	}
+	// 解析 legs 取 venue
+	legs, err := e.store.ListPositionLegs(ctx, p.ID)
+	if err != nil {
+		return 0, false
+	}
+	var buyVenue, sellVenue string
+	for i := range legs {
+		if legs[i].Phase == "OPEN" {
+			if legs[i].Side == "BUY" {
+				buyVenue = legs[i].Venue
+			} else {
+				sellVenue = legs[i].Venue
+			}
+		}
+	}
+	if buyVenue == "" || sellVenue == "" {
+		return 0, false
+	}
+	buyBare := keydomain.BareOf(buyVenue)
+	sellBare := keydomain.BareOf(sellVenue)
+	// D-180 S2：swapRateFor 三态（settled 优先 → spec 兜底 → none fail-closed）。
+	// 止损用原值（不应用折扣——防误杀存量仓）。
+	longBps, longSrc := e.swapRateFor(ctx, buyBare, canonical, "BUY", 0)
+	shortBps, shortSrc := e.swapRateFor(ctx, sellBare, canonical, "SELL", 0)
+	if longSrc == swapSrcNone || shortSrc == swapSrcNone {
+		log.Printf("[autotrade] exit pos=%d: swapRateFor none (longSrc=%s shortSrc=%s) fail-closed",
+			p.ID, longSrc, shortSrc)
+		return 0, false
+	}
+	// D-159 W4a R7：spec 源时检查 fact 新鲜度（settled 7d 窗口已隐含新鲜度）。
+	// swapRateFor 内部已对 settled 做 7d 窗口过滤；spec 源需额外检查 SwapFactMaxAge。
+	if longSrc == swapSrcSpec || shortSrc == swapSrcSpec {
+		if !e.swapSpecFactsFresh(ctx, buyBare, sellBare, canonical) {
+			return 0, false
+		}
+	}
+	factsNetSwap := longBps + shortBps
+	// 决策日志带 swap_src（取较低优先级：任一 spec → spec）
+	swapSrc := swapSrcSettled
+	if longSrc == swapSrcSpec || shortSrc == swapSrcSpec {
+		swapSrc = swapSrcSpec
+	}
+	// D-165 S2：broker 实际 swap 对拍——偏差超阈值用实际值触发退出。
+	// 复用 DailySwapAccrued 取 broker 实际日增量（USD），换算 bps 后 vs facts 规格值算偏差。
+	// 偏差 > SwapDeviationExitPct → 改用 broker 实际值（bps）返回（修复"规格声明 0 但实际负→退出路径不触发"）。
+	// 无快照/ok=false → 用 facts 规格值（回退原行为，不阻塞退出决策）。
+	if e.cfg.SwapDeviationExitPct > 0 {
+		if actualBps, ok := e.brokerActualNetSwapBps(ctx, p, legs, buyBare, sellBare, canonical, factsNetSwap); ok {
+			if deviationPct := swapDeviationBetween(factsNetSwap, actualBps); deviationPct > e.cfg.SwapDeviationExitPct {
+				log.Printf("[autotrade] exit pos=%d: swap_src=%s deviation %.1f%% > %.1f%%, use broker actual %.4f bps vs %s %.4f bps",
+					p.ID, swapSrc, deviationPct, e.cfg.SwapDeviationExitPct, actualBps, swapSrc, factsNetSwap)
+				return actualBps, true
+			}
+		}
+	}
+	log.Printf("[autotrade] exit pos=%d: swap_src=%s netSwap=%.4f bps", p.ID, swapSrc, factsNetSwap)
+	return factsNetSwap, true
+}
+
+// swapSpecFactsFresh D-180 S2：检查 spec 源 swap_long/short facts 新鲜度（SwapFactMaxAge）。
+// swapRateFor 返回 spec 源时调用，settled 源已隐含 7d 窗口新鲜度无需再查。
+// 任一 venue 的 spec fact 陈旧 → false（fail-closed 不决策）。
+func (e *Engine) swapSpecFactsFresh(ctx context.Context, buyBare, sellBare, canonical string) bool {
+	maxAge := e.cfg.SwapFactMaxAge
+	if maxAge <= 0 {
+		return true
+	}
+	longFacts, err := e.store.LatestFacts(ctx, fact.KindSwapLong, buyBare, canonical)
+	if err != nil || len(longFacts) == 0 {
+		return false
+	}
+	if time.Since(longFacts[0].Ts) > maxAge {
+		log.Printf("[autotrade] skip exit: spec swap_long stale venue=%s >%v", buyBare, maxAge)
+		return false
+	}
+	shortFacts, err := e.store.LatestFacts(ctx, fact.KindSwapShort, sellBare, canonical)
+	if err != nil || len(shortFacts) == 0 {
+		return false
+	}
+	if time.Since(shortFacts[0].Ts) > maxAge {
+		log.Printf("[autotrade] skip exit: spec swap_short stale venue=%s >%v", sellBare, maxAge)
+		return false
+	}
+	return true
+}
+
+// brokerActualNetSwapBps D-165 S2：取 broker 实际净 swap（USD/日）换算 bps。
+// 复用 recalcNetSwap 已查的 legs + buyBare/sellBare。DailySwapAccrued 取两腿当日增量。
+// notional 从 legs qty×price_actual 算（无 CS 简化，CEX 腿 CS=1，MT 腿 price_actual 已含 CS 折算）。
+// 任一腿无快照/ok=false → 返回 (0, false)（回退 facts）。
+// factsNetSwap 用于 notional 缺失时回退（无法换算→false）。
+// D-190：notional 改 usdnotional.PerLot（USD 统一换算，JPY 对 ÷ USDJPY）；
+// cs resolver 统一用 e.cfg.LegContractSizeResolver（删 service 双路径）；nil→CS=1 回退；
+// PerLot false → 该腿按无快照处理（回退 factsNetSwap）。
+func (e *Engine) brokerActualNetSwapBps(ctx context.Context, p *pgstore.Position, legs []pgstore.PositionLeg, buyBare, sellBare, canonical string, factsNetSwap float64) (float64, bool) {
+	now := time.Now().UTC()
+	var buyActualUSD, sellActualUSD float64
+	var buyNotional, sellNotional float64
+	buyOK, sellOK := false, false
+	for _, leg := range legs {
+		if leg.Phase != "OPEN" {
+			continue
+		}
+		legBare := keydomain.BareOf(leg.Venue)
+		// D-190：notional 改 usdnotional.PerLot（USD 统一换算）。
+		price := 0.0
+		if leg.PriceActual != nil {
+			price = *leg.PriceActual
+		}
+		cs := 1.0
+		if e.cfg.LegContractSizeResolver != nil {
+			if resolved, ok := e.cfg.LegContractSizeResolver(leg.Venue, leg.Symbol); ok && resolved > 0 {
+				cs = resolved
+			}
+		}
+		perLot, ok := usdnotional.PerLot(canonical, price, cs, e.quotes)
+		if !ok || perLot <= 0 {
+			return 0, false // PerLot 不可得→回退 facts（不阻塞退出决策）
+		}
+		notional := leg.EffectiveQty() * perLot // D-311 R6：成交口径（CEX=基础币）
+		if leg.Side == "BUY" && legBare == buyBare {
+			// D-189 P0-1：快照查询用完整 venueKey（leg.Venue），buyBare 仅用于腿匹配与 swapRateFor。
+			usd, ok, err := e.store.DailySwapAccrued(ctx, p.ID, leg.Venue, now)
+			if err != nil || !ok {
+				return 0, false // 任一腿无快照→回退 facts
+			}
+			buyActualUSD = usd
+			buyNotional = notional
+			buyOK = true
+		} else if leg.Side != "BUY" && legBare == sellBare {
+			// D-189 P0-1：快照查询用完整 venueKey（leg.Venue），sellBare 仅用于腿匹配与 swapRateFor。
+			usd, ok, err := e.store.DailySwapAccrued(ctx, p.ID, leg.Venue, now)
+			if err != nil || !ok {
+				return 0, false
+			}
+			sellActualUSD = usd
+			sellNotional = notional
+			sellOK = true
+		}
+	}
+	if !buyOK || !sellOK {
+		return 0, false
+	}
+	// 净 swap USD/日 = buyActual + sellActual（BUY 腿通常负，SELL 腿通常正，净值=两腿之和）
+	netActualUSD := buyActualUSD + sellActualUSD
+	// 换算 bps：用两腿 notional 平均值（简化，对冲两腿名义相近）
+	avgNotional := (buyNotional + sellNotional) / 2
+	if avgNotional <= 0 {
+		return 0, false // 无法换算→回退 facts
+	}
+	return netActualUSD / avgNotional * 10000, true
+}
+
+// canonicalFromOppID 从 opportunity_id 解析 canonical（格式 PREFIX:SYMBOL:...）。
+func canonicalFromOppID(oppID string) string {
+	parts := strings.Split(oppID, ":")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[1]
+}
+
+// updateStrategyStat 已被 settlement.Settle 取代（D-087 §3.2，旧对象 no-op 缺陷根除）。
+// 删除——不留死代码。淘汰判定经 settlement.Eliminator 注入。
