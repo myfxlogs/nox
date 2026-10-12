@@ -28,6 +28,9 @@ func TestSwapDiagProbe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}
+	if err := st.Migrate(context.Background()); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
 	defer st.Close()
 
 	accounts, err := st.ListBrokerAccounts(ctx)

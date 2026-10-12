@@ -20,6 +20,9 @@ func d478Svc(t *testing.T) (*Service, *pgstore.Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := st.Migrate(context.Background()); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
 	t.Cleanup(func() { st.Close() })
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE xasset_allow_combos, autotrade_allow_rules,

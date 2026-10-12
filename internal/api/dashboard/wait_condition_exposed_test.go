@@ -24,6 +24,9 @@ func d580ReadySvc(t *testing.T) *Service {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := st.Migrate(context.Background()); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
 	t.Cleanup(func() { st.Close() })
 	testutil.EnsureTicksPartition(t, st) // 全新席位库迁移只建历史月分区——闸 4 ticks now() 插入需当月（D-016 R1）
 	ctx := context.Background()

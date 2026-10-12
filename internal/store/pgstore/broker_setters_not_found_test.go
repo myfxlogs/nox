@@ -18,6 +18,9 @@ func d388Store(t *testing.T) *Store {
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}
+	if err := s.Migrate(context.Background()); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
 	t.Cleanup(s.Close)
 	if _, err := s.pool.Exec(context.Background(), `TRUNCATE broker_accounts CASCADE`); err != nil {
 		t.Fatalf("TRUNCATE broker_accounts: %v", err)

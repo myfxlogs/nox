@@ -16,6 +16,9 @@ func TestD472_MarginWarnThrottled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := st.Migrate(context.Background()); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
 	defer st.Close()
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `DELETE FROM alerts WHERE message LIKE '[资金拒单]%' OR message LIKE '%【请加保证金】%'`); err != nil {

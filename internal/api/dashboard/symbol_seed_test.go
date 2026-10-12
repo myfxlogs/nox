@@ -44,6 +44,9 @@ func TestSymbolSeed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}
+	if err := st.Migrate(context.Background()); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
 	defer st.Close()
 
 	// 本进程内 BrokerManager：boot 恢复 connected 账号（适配器/订阅/swap 聚合全部复用）。

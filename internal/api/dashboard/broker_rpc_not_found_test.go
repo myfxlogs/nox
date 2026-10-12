@@ -24,6 +24,9 @@ func d388Service(t *testing.T) *Service {
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}
+	if err := s.Migrate(context.Background()); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
 	t.Cleanup(s.Close)
 	if _, err := s.Pool().Exec(context.Background(), `TRUNCATE broker_accounts CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)

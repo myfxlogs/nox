@@ -72,6 +72,9 @@ func capTestGate(t *testing.T, v *capitalview.View) (*Gate, *fakeMarginFloor) {
 	if err != nil {
 		t.Fatalf("store: %v", err)
 	}
+	if err := st.Migrate(context.Background()); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
 	g := NewGate(st, Config{}, NewControlPlane(st))
 	fake := &fakeMarginFloor{}
 	g.SetMarginFloorChecker(fake)

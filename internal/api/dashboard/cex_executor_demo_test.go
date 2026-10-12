@@ -49,6 +49,9 @@ func TestDemoRealOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}
+	if err := st.Migrate(context.Background()); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
 	defer st.Close()
 
 	cfgs, err := st.ListExchangeConfigs(ctx)
