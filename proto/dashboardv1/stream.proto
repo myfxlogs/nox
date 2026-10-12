@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+
+import "google/protobuf/timestamp.proto";
+import "dashboardv1/account.proto";
+import "dashboardv1/market.proto";
+import "dashboardv1/position.proto";
+
+// ==== stream.proto —— D-508 S10 自 dashboard.proto 按域拆出（纯搬家：消息名/字段号/RPC 契约零漂移）。 ====
+
+// === StreamUpdates（D-026，server streaming）===
+
+message StreamUpdatesRequest {}
+
+
+message StreamUpdatesResponse {
+  oneof update {
+    Quote quote = 1;
+    Opportunity opportunity = 2;
+    Alert alert = 3;
+    Position position = 4;
+    SourceHealth source_health = 5;
+    Keepalive keepalive = 6;     // 30s 心跳（Cloudflare Tunnel 存活，D-027）
+    FundingNeedNotice funding_need = 10;                // 资金注入提醒弹窗（D-072，余额不足实时推）
+    CMCWatchUpdate cmc_update = 13;                     // CMC 看盘实时帧（D-234，后端现算载荷→前端 merge 渲染）
+    DataRefreshNotice data_refresh = 14;                // 域数据刷新通知（D-508 S9，空载荷+topic→前端重取）
+    BrokerPositionEvent broker_position_event = 15;     // Broker 实持仓逐仓事件（D-571 包A：upsert/remove+聚合随发）
+    AccountEvent account_event = 16;                    // 账户资产逐 venue 事件（D-571 包B：upsert 单形态）
+    HedgeData hedge_data = 17;                          // 对冲结构+流水聚合域单槽帧（D-571 包C，替 case 12 通知）
+  }
+  // D-571 包C：快照/通知型死字段退役——行级事件通道全量替代（回放+keyed merge）。
+  // D-063：case 7（personal_position_price）/18（personal_position_event）随 personal
+  // 渲染面退役拆除（D-212 已零读者）——编号留档不重排不复用。
+  reserved 7, 8, 9, 11, 12, 18;
+  reserved "personal_position_price", "personal_position_event", "broker_positions", "accounts", "position_change", "hedge_refresh";
+}
+
+// BrokerPositionEvent D-571：逐仓 delta 事件（替代 case 8 全量快照的实时通道）。
+// 载荷=该仓完整显示态（复用 BrokerPosition 全字段，后端算好前端零信任）。
+message BrokerPositionEvent {
+  oneof kind {
+    BrokerPosition upsert = 1;          // 新增/任一显示字段变更
+    BrokerPositionRef remove = 2;       // 持仓消失（仅权威路径可发）
+  }
+  double pnl_sum_usd = 3;               // 每次事件顺带最新聚合
+  double net_sum_usd = 4;
+}
+
+// AccountEvent D-571 包B：逐 venue 账户事件（替代 case 9 全量快照的实时通道）。
+// 载荷=该 venue 完整 AccountInfo（复用 accountToProto 全字段，后端算好前端零信任）；
+// upsert 单形态（账户身份=查询器集，离线=online:false upsert 诚实标，无 remove）。
+message AccountEvent {
+  AccountInfo account = 1;
+}
+
+// HedgeData D-571 包C：对冲结构+统一流水聚合域单槽帧（替 case 12 空通知→前端重取）。
+// kick=hedgeTopic（TRX 写源）→ 后端同 GetHedgeStructure/ListHedgeFlow 组装路径重算 →
+// proto.Equal diff → case 17 载荷广播；新连接回放=单帧。
+message HedgeData {
+  HedgeStructure structure = 1;
+  repeated HedgeFlowItem flow = 2;
+}
+
+// BrokerPositionRef 逐仓删除事件的键。
+message BrokerPositionRef {
+  string venue_key = 1;
+  string ticket = 2;
+}
+
+// DataRefreshNotice（D-508 S9）：域数据刷新通知——topic 标域（allow_rules/carry_graduation/paper_carry/
+// intra_track/finance/trx），前端按订阅 topic 集重取对应 RPC。
+message DataRefreshNotice {
+  string topic = 1;
+}
+
+// CMCWatchUpdate（D-234）：CMC 看盘实时帧——后端 1s 蓄压后现算载荷，前端按字段 merge 渲染（不全量 load）。
+// 公式与 GetHedgeStructure 同源（mid=REST mid、ask=ForSide Sell、bid=持仓 EvaluationBidPrice、
+// 双腿 PnL=(baseline−pnlPx)×mirrorQty 镜像恒和=0、强平/预警净值=usedMargin×50%/80%）。
+message CMCWatchUpdate {
+  double mid = 1;                  // fin_cmc_prices 最近 mid（REST 行，WS 行 mid=NULL 不污染）
+  double bid = 2;                  // fin_cmc_positions.evaluation_bid_price（type7 patch 更新，15s 节流落库）
+  double ask = 3;                  // ForSide(Sell)=WS ask 优先回退 REST ask（与 GetHedgeStructure evalAsk 同源）
+  double baseline_price = 4;       // fin_cmc_positions.entry_price（基准=空单开仓价）
+  double leg_spot_pnl = 5;         // (pnlPx−baseline)×mirrorQty（镜像腿，恒和=0）
+  double leg_short_pnl = 6;        // (baseline−pnlPx)×mirrorQty（镜像腿，恒和=0）
+  double dist_to_closeout_pct = 7; // fin_cmc_account_summary.distance_to_closeout_pct
+  double closeout_level_usd = 8;   // used_margin × 50%（平台口径 platform_rule_50）
+  double warning_level_usd = 9;    // used_margin × 80%
+  double cmc_cash = 10;            // fin_cmc_account_summary.total_cash_balance
+  double cmc_equity = 11;          // fin_cmc_account_summary.total_account_value
+  double used_margin = 12;         // fin_cmc_account_summary.total_equity_used_in_margin（=totalMarginAmount F12）
+  double short_qty = 13;           // fin_cmc_positions.quantity（基准 qty，两腿镜像共用）
+  int32 short_lev = 14;            // 1/margin_percentage 推导
+  string platform_alert_state = 15; // normal/warning/breach（F13 alerts 直读）
+  bool ws_connected = 16;          // CMC ws 事件驱动健康（true=绿/false=黄 REST 兜底）
+  string closeout_source = 17;     // "platform_rule_50"（D-225 v2.2 标定）
+  google.protobuf.Timestamp quote_time = 18; // mid 行 fetched_at（无 mid=零值）
+  double short_liq = 19;           // D-234 R-V S3：强平价（fin_cmc_account_summary.closeout_price，与 HedgeLegShort.liq 同源）
+  double net_exposure_usd = 20;    // D-234 R-V S3：净敞口 USD（netExposureTrx × mid，与 GetHedgeStructure 同源）
+}
+
+// 资金注入提醒（D-072）：swap 套利余额不足时实时弹窗（不入 alerts 表，断线不回放）。
+// NeedUSD = minNotional − min(equityLong, equityShort)（差额，正数）。
+message FundingNeedNotice {
+  string canonical = 1;
+  string venue_long = 2;
+  string venue_short = 3;
+  string reason = 4;           // SwapArbNotional 返回的 reason（含具体数值）
+  double need_usd = 5;         // 需注入资金（USD）；0 = 仅 venue 离线/币种不符等非余额原因
+  google.protobuf.Timestamp ts = 6;
+  string alias_long = 7;       // D-154 返修②：买腿别名（后端 aliasOrKey 填充，空=无别名）
+  string alias_short = 8;      // D-154 返修②：卖腿别名（后端 aliasOrKey 填充，空=无别名）
+}

@@ -1,0 +1,306 @@
+syntax = "proto3";
+
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+
+import "google/protobuf/timestamp.proto";
+
+// ==== ops.proto —— D-508 S10 自 dashboard.proto 按域拆出（纯搬家：消息名/字段号/RPC 契约零漂移）。 ====
+
+// === Spot-carry demo 手动实测（D-350 阶段③；无 auto——发现≠授权，auto 化待经验另立 D#）===
+
+message ExecuteSpotCarryDemoRequest {
+  string venue = 1;      // binance（当前仅 binance demo）
+  string symbol = 2;     // 合约 symbol（现货 GUSDT / 永续 GUSDT）
+  string side = 3;       // short_perp（正 funding：买现货+空永续）/ long_perp（负 funding：卖现货+多永续）
+  double qty_usd = 4;    // 名义（USD）；两腿按实时价折算币量
+}
+
+message SpotCarryDemoLeg {
+  string side = 1;         // BUY/SELL
+  string market = 2;       // spot / perp
+  string order_id = 3;
+  double qty = 4;          // 币量（基础币）
+  double price = 5;        // 成交价（0=未得回执价）
+  bool rolled_back = 6;    // 对侧失败时被反腿市价回滚
+}
+
+message ExecuteSpotCarryDemoResponse {
+  bool ok = 1;
+  string error = 2;
+  int64 paper_id = 3;                    // paper_spot_carry 行 id（status='demo'）
+  repeated SpotCarryDemoLeg legs = 4;
+  double spot_price = 5;                 // 下单时现货价
+  double perp_price = 6;                 // 下单时永续 mark 价
+}
+
+message SpotCarryDemoRow {
+  int64 paper_id = 1;
+  string venue = 2;
+  string symbol = 3;
+  string side = 4;
+  double qty_usd = 5;
+  double entry_funding_ann = 6;
+  double last_funding_ann = 7;           // 雷达最新（0=缺行）
+  double accrued_usd = 8;                // 纸面累积（同口径复用）
+  string entry_ts = 9;                   // RFC3339
+  string note = 10;
+}
+
+message ListSpotCarryDemoRequest {}
+
+message ListSpotCarryDemoResponse {
+  repeated SpotCarryDemoRow rows = 1;
+}
+
+// D-352 S1：纸面轨前端卡行（active/demo/近 14 天 exited；数值后端算，前端零信任）。
+message ListPaperSpotCarryRequest {}
+
+message PaperSpotCarryRow {
+  int64 id = 1;
+  string venue = 2;
+  string symbol = 3;
+  string side = 4;                       // short_perp / long_perp
+  string status = 5;                     // active / demo / exited
+  double qty_usd = 6;
+  double entry_funding_ann = 7;
+  optional double last_funding_ann = 8;  // join fin_cex_universe 当前值；缺行→null（前端「—」）
+  optional double net_now = 9;           // |last|−0.15；null 传播
+  double accrued_usd = 10;
+  string entry_ts = 11;                  // RFC3339
+  double days_held = 12;                 // 后端算 =(now−entry_ts)/24h 取整 1 位
+  string exit_ts = 13;                   // RFC3339，空=未退出
+  string exit_reason = 14;               // normalized / age_7d / promoted_demo
+  string note = 15;
+  // D-354 S3：盈亏视图（基差=mark/index 近似；成本 0.30% 常量预估；NULL=诚实缺显「—」）
+  optional double entry_basis_bps = 16;  // 开仓基差快照（存量行 NULL）
+  optional double last_basis_bps = 17;   // 当前基差
+  optional double basis_pnl_usd = 18;    // 基差浮盈（short: qty×(entry−last)/1e4；long 反号）
+  optional double total_pnl_usd = 19;    // 净浮盈=accrued+basis_pnl−qty×0.003（basis 缺→null）
+  double ret_pct = 20;                   // 累计收益率%=accrued/qty×100
+  optional double realized_ann_pct = 21; // 实收年化%=accrued/qty×365/days×100（days=0→null）
+  // D-393：DB 列透出（scanPaperSpotCarry 空串→spot_carry 归一，服务层直接信任）。
+  string structure = 22;                 // spot_carry / perp_perp / long_cfd_short_perp / short_cfd_long_perp
+  optional string mt_venue = 23;         // cfd 行 MT 腿 venue；spot/perp_perp 恒 NULL（前端「—」）
+  // D-474b S1：往返费估计透出——perp_perp 存量行（est_fee IS NULL）前端徽标「观测轨」。
+  optional double est_round_trip_fee_usd = 24;
+}
+
+// D-393：轨级汇总（行源=卡片同批 papers，exited=同 14d 窗口行；零新查询）。
+message PaperTrackSummary {
+  string structure = 1;              // spot_carry/perp_perp/long_cfd_short_perp/short_cfd_long_perp
+  int32 active_n = 2;
+  int32 demo_n = 3;
+  double accrued_holding_usd = 4;    // 在轨+demo 应计合计（持仓中已收割的息差）
+  int32 exited_n = 5;                // 窗口内退出数
+  double exited_accrued_sum_usd = 6; // 退出行终态应计合计（轨道历史收割总量）
+  double win_rate_pct = 7;           // 退出胜率%：win=(total_pnl_usd ?? accrued_usd)>0，无退出→0
+  double avg_exit_days = 8;          // 退出行均存活天数（exit_ts−entry_ts）；无退出→0
+  double notional_holding_usd = 9;   // 在轨+demo 名义合计
+}
+
+message ListPaperSpotCarryResponse {
+  repeated PaperSpotCarryRow rows = 1;   // active（net_now desc，null 殿后）→ demo → exited（exit_ts desc）
+  repeated PaperTrackSummary tracks = 2; // D-393：轨级汇总（固定序四轨，未知 structure 尾追加）
+}
+
+// === D-444：autotrade 执行白名单启停（autotrade_allow_rules 读写面）===
+
+message AutotradeAllowRuleRow {
+  int64 id = 1;
+  string kind = 2;      // venue / canonical
+  string value = 3;     // venue_key 或 canonical symbol
+  bool enabled = 4;
+  bool simulated = 5;   // live 引擎只读 simulated=false
+  string note = 6;
+  // D-445：venue 实时资金列（余额=已结算实现钱；净值=余额+浮动）。
+  double balance = 7;                          // has_account=false 时 0 无意义
+  double equity = 8;
+  string currency = 9;
+  bool online = 10;                            // false=该 venue 本次查询失败/离线（前端置灰）
+  google.protobuf.Timestamp acct_updated_at = 11;
+  bool has_account = 12;                       // false=无账户数据（canonical/未知 venue）→ 前端「—」
+  string acct_mode = 13;                       // D-448："demo"/"real"/""（stream-only 无快照→空，前端显「—」不臆造）
+}
+
+message ListAutotradeAllowRulesRequest {}
+
+message ListAutotradeAllowRulesResponse {
+  repeated AutotradeAllowRuleRow rules = 1; // ORDER BY kind,value
+}
+
+message SetAutotradeAllowRuleEnabledRequest {
+  int64 id = 1;
+  bool enabled = 2;
+  string note = 3; // 非空才覆写 note
+}
+
+message SetAutotradeAllowRuleEnabledResponse {
+  bool ok = 1;
+}
+
+// === D-492：执行白名单增删（simulated 服务端推导，note 必填审计） ===
+
+message AddAutotradeAllowRuleRequest {
+  string kind = 1;    // venue / canonical
+  string value = 2;   // venue: "binance:spot" / "3001157:mt5"；canonical: "SKLUSDT"
+  string note = 3;    // 必填非空（权限变更强制审计备注）
+}
+message AddAutotradeAllowRuleResponse {
+  bool ok = 1; string error = 2;
+  optional int64 id = 3;              // 新增或复用行的 id
+  bool reenabled_existing = 4;        // true=已存在 disabled 行被复用翻转（非新插）
+  string warning = 5;                 // advisory（如 canonical 无采集记录），不阻断
+}
+message DeleteAutotradeAllowRuleRequest { int64 id = 1; string note = 2; }
+message DeleteAutotradeAllowRuleResponse { bool ok = 1; string error = 2; }
+
+// === D-441：日内纸面轨（沙箱·D-425）观测面 ===
+
+message ListIntraTradesRequest {
+  string baseline = 1; // ""=全部，momentum_break/meanrev
+  int32 limit = 2;
+}
+
+message IntraTradeRow {
+  int64 id = 1;
+  string baseline = 2;
+  string symbol = 3;
+  string venue = 4;
+  string side = 5;            // long / short
+  string status = 6;          // open / closed
+  int64 entry_ts = 7;         // unix
+  double entry_px = 8;
+  double qty = 9;
+  double notional_usd = 10;
+  double margin_usd = 11;
+  double stop_px = 12;
+  int64 exit_ts = 13;         // unix，0=未平
+  double exit_px = 14;
+  string exit_reason = 15;    // stop / signal / eod / circuit / kill
+  optional double slippage_bps = 16;
+  optional double pnl_usd = 17;
+}
+
+message ListIntraTradesResponse {
+  repeated IntraTradeRow trades = 1;
+}
+
+message IntraBaselineStat {
+  string baseline = 1;
+  int32 total = 2;
+  int32 open = 3;
+  int32 closed = 4;
+  double pnl_usd = 5;         // 已实现合计
+  int32 win_count = 6;
+  optional double slip_p90_bps = 7; // 无滑点样本→null（前端「—」）
+  int32 circuit_days = 8;     // intra_events kind=circuit 去重天数
+  int32 kill_count = 9;       // intra_events kind=kill 计数
+  optional double win_rate_pct = 10;  // D-508 S8：胜率%=win/closed×100（closed=0→缺省，前端不除法）
+  string win_tone = 11;               // D-508 S8：胜率色阶（>=50→"ok"/<50→"part"；缺数据=""）
+}
+
+message IntraTrackStatsRequest {}
+
+message IntraTrackStatsResponse {
+  repeated IntraBaselineStat baselines = 1;
+  int64 last_step_unix = 2;   // 步进心跳（0=未跑过）
+  int32 days_elapsed = 3;     // min(entry_ts)::date 距今天数（空表=0）
+  int32 days_to_gate = 4;     // max(0, 30-days_elapsed)
+}
+
+// === D-359：资金不眠覆盖率（口径 SSOT=D-356 §1.1；has_* 布尔对替代 0/nil 歧义）===
+
+message GetCapitalCoverageRequest {}
+
+message CapitalCoverageRow {
+  string pool        = 1;
+  double balance_usd = 2;  // has_balance=false 时无意义
+  bool   has_balance = 3;  // nil 语义：无 USD 价/未采 → 前端渲染「—」
+  string status      = 4;
+  double apr_pct     = 5;  // has_apr=false 时无意义
+  bool   has_apr     = 6;
+  string apr_text    = 7;  // APRNilText（如「新开仓」；空且 has_apr=false → 「—」）
+  string note        = 8;
+  bool   productive  = 9;
+  bool   real_money  = 10;
+  string balance_ccy = 11;  // D-130 域3：余额原币币种（USDT/USD/…；空=USD 口径）
+}
+
+message GetCapitalCoverageResponse {
+  repeated CapitalCoverageRow rows = 1;
+  double total_usd      = 2;  // 总资金（真金行余额和）
+  double productive_usd = 3;  // 在产
+  double coverage_pct   = 4;  // 在产/总资金×100；total=0 → 0+has_summary=false
+  double weighted_apr   = 5;  // Σbal×apr/Σ有年化真金 bal；无年化行 → has_weighted=false
+  bool   has_summary    = 6;
+  bool   has_weighted   = 7;
+  string caliber_note   = 8;  // 口径注记（与 digest 段注记同文本）
+}
+
+// === D-546：资金全景账（binance 六面钱包树+可用性三档；只读全景面，sizing 基准不动）===
+
+message GetCapitalMapRequest {}
+
+message CapitalMapNode {
+  string label      = 1;  // 节点名（如 binance:spot free / binance 理财活期）
+  double amount     = 2;  // 原币金额（未采=0，配合 note）
+  string currency   = 3;  // 原币种
+  bool   has_usd    = 4;  // false=未折算/未采 → 前端渲染「—」
+  double amount_usd = 5;
+  string source     = 6;  // 来源注记（ws/rest/快照/simple-earn/dapi/eapi）
+  string updated_at = 7;  // RFC3339（空=未采）
+  string note       = 8;  // 语义注记（折算价/降级原因/未采原因）
+}
+
+message CapitalMapTier {
+  string tier                   = 1;  // 立即可用/可转可用/锁定慢动
+  repeated CapitalMapNode nodes = 2;
+  bool   has_usd                = 3;
+  double total_usd              = 4;  // 仅计已折算节点
+  string note                   = 5;  // 立即可用档=「=sizing 基准口径」注记
+}
+
+message GetCapitalMapResponse {
+  repeated CapitalMapTier tiers = 1;
+  string generated_at = 2;  // RFC3339
+  string caliber_note = 3;  // 口径注记
+  bool   degraded     = 4;  // 任一面采集失败/未折算=true（诚实降级）
+}
+
+// === D-365：CEX 财务页（账户级盘点+流水）===
+
+message GetCexFinanceRequest {}
+
+message CexFinanceHolding {
+  string ccy         = 1;
+  double qty         = 2;
+  double usdt_value  = 3;
+  double weight_pct  = 4;  // usdt_value/inventory_usd×100（后端算；inventory=0 → 0）
+}
+
+message CexFinanceFlow {
+  string ts      = 1;  // RFC3339
+  string kind    = 2;  // deposit / withdraw / FUNDING_FEE 等（原样语义）
+  string ccy     = 3;
+  double amount  = 4;
+  double fee     = 5;
+  string status  = 6;
+}
+
+message CexAccountFinance {
+  string venue      = 1;
+  string venue_type = 2;
+  string key        = 3;  // venue:type（D-362 撞键后缀语义保留）
+  bool   simulated  = 4;  // real-only 过滤后恒 false（字段保留语义完整）
+  double usdt_equity   = 5;  // USDT 标 1:1 和（FullInventory）
+  double inventory_usd = 6;  // 全币种盘点总值（占比分母）
+  repeated CexFinanceHolding holdings = 7;  // usdt_value 降序
+  repeated CexFinanceFlow flows = 8;        // 进出+收益合并 ts 倒序（各 50 上限）
+}
+
+message GetCexFinanceResponse {
+  repeated CexAccountFinance accounts = 1;
+}

@@ -1,0 +1,219 @@
+syntax = "proto3";
+
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+
+import "google/protobuf/timestamp.proto";
+
+// ==== account.proto —— D-508 S10 自 dashboard.proto 按域拆出（纯搬家：消息名/字段号/RPC 契约零漂移）。 ====
+
+// === KnowledgeEntry（§2.9）===
+
+message KnowledgeEntry {
+  int64 id = 1;
+  google.protobuf.Timestamp ts = 2;
+  string signature = 3;
+  string venue = 4;
+  string symbol = 5;
+  string verdict = 6;
+  string rationale = 7;
+  string source = 8;
+  string status = 9;                    // active / superseded / retracted
+  google.protobuf.Timestamp validated_at = 10;
+  string validation_note = 11;
+}
+
+message ListKnowledgeEntriesRequest {}
+
+message ListKnowledgeEntriesResponse {
+  repeated KnowledgeEntry entries = 1;
+}
+
+// === 每日收益（财务线工作项 3：个人持仓实账化）===
+
+message PositionDailyIncome {
+  int64 id = 1;
+  string day = 2;              // YYYY-MM-DD（一日一条，全组合计）
+  double energy_trx = 3;       // 能量收益（手动）
+  double voting_trx = 4;       // 投票收益（手动）
+  double interest_usd = 5;     // 资金费/利息（手动）
+  double price = 6;            // 记录时 TRX 现价（后端自动快照；0 = 无报价）
+  double pnl_usd = 7;          // 记录时空单浮动盈亏（后端自动算；0 = 无报价/无 entry）
+  string note = 8;
+  double income_usd = 9;       // 后端算 = energy×price + voting×price + interest（price 无值按 0）
+  string warning = 10;         // 后端算：资金费翻负/急降预警；空 = 正常（D-043）
+}
+
+message AddDailyIncomeRequest {
+  string day = 1;             // YYYY-MM-DD（非法拒绝；同 day = upsert 覆盖，支持纠错）
+  double energy_trx = 2;
+  double voting_trx = 3;
+  double interest_usd = 4;
+  string note = 5;
+}
+
+message AddDailyIncomeResponse {
+  int64 id = 1;
+  string warning = 2;          // 本次提交即时预警（同 §11.1 规则）；空 = 正常
+}
+
+// F4 盈亏统计起点（stats_anchor 单行表）
+message GetPnlAnchorRequest {}
+message GetPnlAnchorResponse {
+  google.protobuf.Timestamp anchor = 1;  // 累计已实现口径起点（closed_at >= anchor）
+  double realized_since_anchor = 2;      // SUM(realized_pnl) WHERE closed_at >= anchor（后端口径）
+  double realized_today = 3;             // D-508 S8：当日已实现（closed_at>=当日零点，DB 时钟口径；前端直读不再聚合）
+  double floating_net_usd = 4;           // D-141：Σ active 仓 close_now_net_usd + Σ 游离腿 close_now_estimate_usd（全平到手口径）
+  bool floating_available = 5;           // D-141：false=任一仓/腿净估缺（断流/报价陈旧）→ 前端「—」不冒充 0
+  // D-123：真北行——30d 净年化（selfwatch/stage2 同源 NetRealizedSince(30d)/CapitalBase；
+  // 前端直读零算）。available=false（CapitalBase 缺/查询败）→ 前端「—」不冒充。
+  double net_ann_30d_pct = 6;
+  bool net_ann_30d_available = 7;
+}
+message ResetPnlAnchorRequest {}
+message ResetPnlAnchorResponse {
+  google.protobuf.Timestamp anchor = 1;  // 重置后的 anchor（= now()）
+}
+
+// F8 经验库只读浏览
+message KBEntry {
+  string id = 1;
+  string kind = 2;        // pitfall / invariant / pattern
+  string keywords = 3;
+  string summary = 4;
+  string status = 5;      // verified / draft
+  string risk = 6;        // high / medium / low
+}
+message ListKBEntriesRequest {}
+message ListKBEntriesResponse {
+  repeated KBEntry entries = 1;
+}
+message GetKBEntryRequest {
+  string id = 1;
+}
+message GetKBEntryResponse {
+  string id = 1;
+  string content = 2;     // 条目 markdown 全文（含 frontmatter）
+}
+
+message ListDailyIncomeRequest {
+  string from = 1;   // 可选起始日 YYYY-MM-DD；空 = 不设界
+  string to = 2;     // 可选截止日 YYYY-MM-DD；空 = 不设界
+  int32 limit = 3;   // ≤0 默认 200
+  int32 offset = 4;
+}
+
+message ListDailyIncomeResponse { repeated PositionDailyIncome items = 1; }
+
+// === 账户资产（D-053）===
+
+// 单个账户资金视图（CFD AccountSummary / CEX 签名余额查询）。
+// CEX 行的 margin/free_margin/credit/profit = 0（无对应概念，前端按 asset_type 置「—」）。
+message AccountInfo {
+  string venue_key = 1;    // "{venue}:{venueType}"（277842155:mt5 / binance:spot）
+  string venue = 2;        // 展示名（账号号 / binance / okx）
+  string venue_type = 3;   // mt5 / mt4 / spot
+  string asset_type = 4;   // cfd / cex
+  double balance = 5;      // 余额（CEX = 币种计价总权益，USDT 估算/权威 totalEq）
+  double equity = 6;       // 净值
+  double margin = 7;       // 占用保证金（CFD；CEX 0）
+  double free_margin = 8;  // 可用保证金（CFD；CEX 0）
+  double credit = 9;       // 信用（CFD；CEX 0）
+  double profit = 10;      // 浮动盈亏（CFD；CEX 0）
+  double leverage = 11;
+  string currency = 12;    // USD / USDT / EUR…
+  bool online = 13;        // false = 最近成功快照（离线）
+  google.protobuf.Timestamp updated_at = 14;
+  bool simulated = 15;     // CEX 模拟盘标记（OKX demo=true/binance 实盘=false；CFD 零值 false 无意义——CFD 实盘/模拟由 BrokerAccount.isReal 管）
+  string website = 16;     // 官网（D-157 V3：CEX 从 ExchangeConfig.website 透传；CFD 从 BrokerAccount.website 透传；空 = 未设置）
+  repeated Holding holdings = 17;  // 币种明细（D-273 S2：CEX 现货采集器保留明细不丢弃；只含 qty>0；CFD 空）
+  double buffer_multiple = 18;     // D-405 S2：CEX 距强平缓冲倍数=equity/MMR（写时归一；0=未采，CFD/spot 恒 0）
+}
+
+// === D-405 S6 账户资金与保证金 ===
+
+message ListAccountMarginStatusRequest {}
+
+// AccountMarginStatus 单账户保证金档位行（marginGuard 每轮评估 upsert 的 fin_venue_margin_status
+// + fin_venue_account_snapshot 最新行 join）。tier=normal/warn/urgent/data_stale；
+// coverage_days 为余粮覆盖天数（CEX 用 (equity−MMR)/日波动额 折算，0/负=不可算按 tier 呈现）。
+message AccountMarginStatus {
+  string venue = 1;
+  string venue_type = 2;              // mt5 / unified / perp / spot / funding / earn
+  string asset_type = 3;              // cfd / cex（venue_type 推导）
+  double balance = 4;
+  double equity = 5;
+  double margin_used = 6;             // 已用保证金（MT=equity−free_margin；CEX≈equity/buffer=MMR）
+  double free_margin = 7;             // 可用保证金（MT=free_margin_raw；CEX≈equity−MMR 头room）
+  double coverage_days = 8;           // 余粮天数（噪声自适应；<0=不适用）
+  double suggested_topup_usd = 9;     // 预警档缺口额（够档=0）
+  string tier = 10;
+  string currency = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message ListAccountMarginStatusResponse {
+  repeated AccountMarginStatus rows = 1;
+}
+
+// 单账户币种明细持有（D-273 S2）。
+message Holding {
+  string ccy = 1;         // 币种
+  double qty = 2;         // 本币数量（OKX cashBal 缺失 fallback availBal / Binance free+locked）
+  double usdt_value = 3;  // USD 估值（OKX eqUsd——2026-09-10 实采实证 eq 为本币权益非 USD；Binance qty×USDT 价，无价=0 保留）
+}
+
+message ListAccountsRequest {}
+
+message ListAccountsResponse {
+  repeated AccountInfo accounts = 1;
+}
+
+message Keepalive {
+  google.protobuf.Timestamp ts = 1;
+}
+
+// === Finance Overview（D-348 财务 Tab 第一性重构：三个数+收益分解+统一流水）===
+
+message GetFinanceOverviewRequest {}
+
+// FinancePnlByEnv 已实现 PnL 按环境分层（real/demo；environment NULL=legacy real 链路）。
+message FinancePnlByEnv {
+  string environment = 1;
+  double realized_pnl = 2;
+  int32 closed = 3;
+}
+
+// FinanceIncomeRow 收入构成按类型（funding/swap/commission；cashflows 全量口径）。
+message FinanceIncomeRow {
+  string kind = 1;
+  double total_usd = 2;
+  int32 rows = 3;
+}
+
+// FinanceFlowRow 统一流水行（双源合并：income_events 结算 / position_cashflows 实数轨
+// quality<>'estimated'；防双计=estimated 排除+同 venue+kind 时间轴无重叠；
+// 防漏计=NULL 轨必入——okx/MT 结算实数 income_events 不覆盖）。D-120 清退 ledger 台账源。
+message FinanceFlowRow {
+  google.protobuf.Timestamp ts = 1;
+  string source = 2;       // venue（binance / 277842155…）
+  string kind = 3;         // funding/swap/commission
+  string symbol = 4;       // income_events 有；cashflows 组合级无（诚实空）
+  double amount_usd = 5;
+  int64 position_id = 6;   // 0=非持仓级
+  string note = 7;
+}
+
+message GetFinanceOverviewResponse {
+  // D-120：ledger 手工台账清退，deposited_usd/net_pnl_usd 字段退役（保留号位不重用）。
+  reserved 1, 3;
+  reserved "deposited_usd", "net_pnl_usd";
+  double total_equity_usd = 2;  // Σ AccountInfo.equity（在线或快照；只计实盘：CFD broker_accounts
+                                // is_real=true 且非 stopped / CEX simulated=false；非 USD 计价跳过+warn）
+  repeated FinancePnlByEnv pnl_by_env = 4;
+  repeated FinanceIncomeRow income_by_kind = 5;
+  repeated FinanceFlowRow flows = 6;  // ts 倒序 LIMIT 200
+  double total_realized_usd = 7;      // D-508 S8：Σ pnl_by_env.realized_pnl（前端直读不再聚合）
+}

@@ -1,0 +1,33 @@
+syntax = "proto3";
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+// D-189：提案执行台看板 RPC（提案实体行实况；执行=飞书 go 口令径）。
+message Proposal {
+  int64 id = 1;
+  string template_id = 2;
+  string exec_track = 3;
+  string venue = 4;
+  string params_json = 5;    // 快照审计锚（执行时实时闸复验非钉价）
+  double expected_apr = 6;
+  string status = 7;         // proposed|executed|expired|declined
+  int64 created_at = 8;
+  int64 decided_at = 9;      // 0=未定
+}
+
+message ListProposalsRequest {
+  string status = 1; // 空=全部
+}
+message ListProposalsResponse {
+  repeated Proposal proposals = 1;
+}
+
+message AckProposalRequest {
+  int64 proposal_id = 1;
+  string action = 2; // 现仅 "decline"（执行走飞书 go 口令——提案不自动执行）
+}
+message AckProposalResponse {
+  string status = 1;
+  string message = 2;
+}

@@ -1,0 +1,227 @@
+package pgstore
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
+)
+
+// ListPositions 分页返回持仓。
+// D-106：status="ACTIVE" 特殊值 → WHERE status IN (OPEN/OPENING/LEGGED/CLOSING)（在仓 Tab）；
+// 排序改 ORDER BY COALESCE(closed_at, opened_at) DESC NULLS LAST（历史视图默认序，OPEN 行排前）。
+func (s *Store) ListPositions(ctx context.Context, status string, limit, offset int) ([]Position, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if status == "ACTIVE" {
+		// ACTIVE 路径不绑定 $1（IN 子句无参数），limit/offset 用 $1/$2。
+		q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, closing_started_at, uncertainty_reason, entry_noise_bps, entry_harvest_floor_bps, notional_usd, decision_ref, auto_close_at
+			FROM positions
+			WHERE status IN ('OPEN','OPENING','LEGGED','CLOSING')
+			ORDER BY COALESCE(closed_at, opened_at) DESC NULLS LAST LIMIT $1 OFFSET $2`
+		rows, err := s.pool.Query(ctx, q, limit, offset)
+		if err != nil {
+			return nil, fmt.Errorf("list positions: %w", err)
+		}
+		defer rows.Close()
+		return scanPositions(rows)
+	}
+	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, closing_started_at, uncertainty_reason, entry_noise_bps, entry_harvest_floor_bps, notional_usd, decision_ref, auto_close_at
+		FROM positions
+		WHERE ($1 = '' OR status = $1)
+		ORDER BY COALESCE(closed_at, opened_at) DESC NULLS LAST LIMIT $2 OFFSET $3`
+	rows, err := s.pool.Query(ctx, q, status, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list positions: %w", err)
+	}
+	defer rows.Close()
+	return scanPositions(rows)
+}
+
+// scanPositions 公共行扫描（ListPositions 两条路径共用）。
+// D-189 P0-4：含 closing_started_at + uncertainty_reason。
+func scanPositions(rows pgx.Rows) ([]Position, error) {
+	var out []Position
+	for rows.Next() {
+		var p Position
+		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
+			&p.ExpectedEntrySpreadBps, &p.ExpectedSwapBpsDaily, &p.ExpectedAnnualPct,
+			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note, &p.ClosingStartedAt, &p.UncertaintyReason,
+			&p.EntryNoiseBps, &p.EntryHarvestFloorBps, &p.NotionalUSD,
+			&p.DecisionRef, &p.AutoCloseAt); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// CountPositions 返回符合筛选条件的持仓总数（D-069 分页控件用）。
+// D-106：status="ACTIVE" 同 ListPositions 映射 4 活跃态。
+func (s *Store) CountPositions(ctx context.Context, status string) (int, error) {
+	var n int
+	var err error
+	if status == "ACTIVE" {
+		err = s.pool.QueryRow(ctx,
+			`SELECT COUNT(*) FROM positions WHERE status IN ('OPEN','OPENING','LEGGED','CLOSING')`).Scan(&n)
+	} else {
+		err = s.pool.QueryRow(ctx,
+			`SELECT COUNT(*) FROM positions WHERE ($1 = '' OR status = $1)`, status).Scan(&n)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("count positions: %w", err)
+	}
+	return n, nil
+}
+
+// ListActivePositions 返回所有活跃态持仓（OPENING/OPEN/LEGGED/CLOSING）。
+// D-080 R1：gate 防重改 DB 实时派生——替代内存 openCombos 集，治手动路径旁路。
+// D-159 W1a R2：UNKNOWN position 用 CLOSING+uncertainty_reason 识别（不新增 DB 枚举），CLOSING 已在列。
+// 行数=MaxPositions 量级，成本≈COUNT；返回行供 gate 派生 combo.FromOppID 匹配。
+func (s *Store) ListActivePositions(ctx context.Context) ([]Position, error) {
+	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, notional_usd, closing_started_at, uncertainty_reason
+		FROM positions
+		WHERE status IN ('OPENING','OPEN','LEGGED','CLOSING')
+		ORDER BY id`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("list active positions: %w", err)
+	}
+	defer rows.Close()
+	var out []Position
+	for rows.Next() {
+		var p Position
+		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
+			&p.ExpectedEntrySpreadBps, &p.ExpectedSwapBpsDaily, &p.ExpectedAnnualPct,
+			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note, &p.NotionalUSD, &p.ClosingStartedAt, &p.UncertaintyReason); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// CountOpenPositions 返回 OPEN+OPENING+LEGGED 持仓数（风控用）。
+func (s *Store) CountOpenPositions(ctx context.Context) (int, error) {
+	q := `SELECT count(*) FROM positions WHERE status IN ('OPEN','OPENING','LEGGED')`
+	var n int
+	err := s.pool.QueryRow(ctx, q).Scan(&n)
+	return n, err
+}
+
+// CountLiveOpenPositions 返回真金（environment='live'，0148：demo/legacy_demo 不算）
+// 在仓持仓数（OPEN/OPENING/LEGGED/CLOSING——平仓闭合前仍属在仓，D-106 在仓域）。
+// D-102：selfwatch Stage 1 段「已启动」判定用。
+func (s *Store) CountLiveOpenPositions(ctx context.Context) (int, error) {
+	q := `SELECT count(*) FROM positions
+		WHERE environment = 'live' AND status IN ('OPEN','OPENING','LEGGED','CLOSING')`
+	var n int
+	err := s.pool.QueryRow(ctx, q).Scan(&n)
+	return n, err
+}
+
+// HasOpenPositionByOpportunity 返回该机会是否已有未平仓持仓（D-058 幂等防重复执行）。
+// CLOSED/FAILED 不在列 → 已闭合/已失败的机会可重入（再执行是新的执行意图，非重复提交）。
+// D-159 W1a R2：UNKNOWN position（CLOSING+uncertainty_reason）计入防重——人工确认前禁止重入防双开仓；
+// 正常 CLOSING（uncertainty_reason IS NULL）不计入（平仓中可重开是既有行为，不破坏现有流程）。
+func (s *Store) HasOpenPositionByOpportunity(ctx context.Context, opportunityID string) (bool, error) {
+	var one int
+	err := s.pool.QueryRow(ctx,
+		`SELECT 1 FROM positions WHERE opportunity_id = $1 AND (
+			status IN ('OPEN','OPENING','LEGGED')
+			OR (status = 'CLOSING' AND uncertainty_reason IS NOT NULL)
+		) LIMIT 1`,
+		opportunityID).Scan(&one)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return false, fmt.Errorf("check open position by opportunity: %w", err)
+}
+
+// ListOpenPositionsByType 返回指定类型且状态为 OPEN 的持仓（D-077 swap 逐日记账用）。
+// 仅 OPEN（不含 OPENING/LEGGED——未完全成交的腿无 swap 记账语义）。
+func (s *Store) ListOpenPositionsByType(ctx context.Context, types []string) ([]Position, error) {
+	if len(types) == 0 {
+		return nil, nil
+	}
+	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, closing_started_at, uncertainty_reason, entry_noise_bps, entry_harvest_floor_bps
+		FROM positions
+		WHERE status = 'OPEN' AND type = ANY($1)
+		ORDER BY id`
+	rows, err := s.pool.Query(ctx, q, types)
+	if err != nil {
+		return nil, fmt.Errorf("list open positions by type: %w", err)
+	}
+	defer rows.Close()
+	var out []Position
+	for rows.Next() {
+		var p Position
+		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
+			&p.ExpectedEntrySpreadBps, &p.ExpectedSwapBpsDaily, &p.ExpectedAnnualPct,
+			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note, &p.ClosingStartedAt, &p.UncertaintyReason,
+			&p.EntryNoiseBps, &p.EntryHarvestFloorBps); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// ActiveOpportunityIDs 返回有活跃仓位的 opportunity_id 集合（D-331 机会卡「已持仓」标识）。
+// 活跃态权威定义=positions_active_dedup_key_idx（0048）：status IN ('OPENING','OPEN','LEGGED','CLOSING')
+// ——CLOSING（平仓途中）仍算持有。空集返空 map 不返 nil。
+func (s *Store) ActiveOpportunityIDs(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT DISTINCT opportunity_id FROM positions WHERE status IN ('OPENING','OPEN','LEGGED','CLOSING')`)
+	if err != nil {
+		return nil, fmt.Errorf("list active opportunity ids: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]bool)
+	for rows.Next() {
+		var oppID string
+		if err := rows.Scan(&oppID); err != nil {
+			return nil, err
+		}
+		out[oppID] = true
+	}
+	return out, rows.Err()
+}
+
+// EnvNotional 活跃仓名义额按 environment 分组（D-359 覆盖率面板行）。
+type EnvNotional struct {
+	Env         string // live / demo（NULL 归 live）
+	NotionalUSD float64
+}
+
+// ActiveNotionalByEnv 活跃仓（OPEN/OPENING/LEGGED/CLOSING）Σ notional_usd 按 environment。
+// D-360 S4：仅 live（demo/纸面=噪声不入覆盖率面板，PositionsPage 纸面区不动）。
+// 零活跃仓 → 空切片（调用方出「零持仓」行）。
+func (s *Store) ActiveNotionalByEnv(ctx context.Context) ([]EnvNotional, error) {
+	// D-512 T8：旧 NULL 行标 legacy_demo（0148）后，聚合显式只认 live——
+	// COALESCE 回退值改 legacy_demo（NULL 行不再静默计入 live 覆盖率面板）。
+	rows, err := s.pool.Query(ctx, `
+		SELECT COALESCE(environment, 'legacy_demo'), COALESCE(SUM(notional_usd), 0)
+		FROM positions
+		WHERE status IN ('OPENING', 'OPEN', 'LEGGED', 'CLOSING')
+		  AND COALESCE(environment, 'legacy_demo') = 'live'
+		GROUP BY 1`)
+	if err != nil {
+		return nil, fmt.Errorf("active notional by env: %w", err)
+	}
+	defer rows.Close()
+	var out []EnvNotional
+	for rows.Next() {
+		var e EnvNotional
+		if err := rows.Scan(&e.Env, &e.NotionalUSD); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}

@@ -1,0 +1,78 @@
+// explorer.proto —— D-513 探矿员壳：LLM 结构化提案输出 schema（protojson 严格模式解析，
+// DiscardUnknown=false——大小写敏感+未知字段拒收，D-505「b 价被 B 量覆盖」族风险构造性消除）。
+// 仅供进程内 JSON 契约用（非 RPC 服务）；生成链=buf.gen.explorer.yaml（protoc-gen-go 单件，
+// 不进 dashboard/Connect/TS 面）。
+syntax = "proto3";
+
+package arb.explorer.v1;
+
+option go_package = "arb/internal/gen/explorerv1;explorerv1";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// ProposalBatch LLM 一次主调用输出：叙事摘要 + 提案数组（单次 ≤10 条，校验层截断丢弃）。
+message ProposalBatch {
+  // narrative 叙事摘要（≤300 字，入收件箱行/日志）。
+  string narrative = 1;
+  // proposals 提案数组。
+  repeated Proposal proposals = 2;
+  // probe_proposals D-048①：探针提案数组（全字段必填契约；缺任一字段该行拒入库）。
+  repeated ProbeProposal probe_proposals = 3;
+}
+
+// ProbeProposal D-048①：scan_kind='probe' 提案契约——
+// 目的 / 可量化证伪标准 / 预算（venue_key, canonical, side, qty, 名义 USD, 预期成本）/
+// 退出条件（auto_close_at）/ 数据依据。缺一即废（校验层拒入库+log）。
+message ProbeProposal {
+  // purpose 目的（为什么要探）。
+  string purpose = 1;
+  // falsify 可量化证伪标准（含数字阈值；如 "swap_short 实收绝对值 > 0.01 USD"）。
+  string falsify = 2;
+  // venue_key venue 复合键（"{venue}:{venue_type}"）。
+  string venue_key = 3;
+  // canonical 规范符号键（须命中已知 canonical 集）。
+  string canonical = 4;
+  // side 单腿方向（BUY / SELL）。
+  string side = 5;
+  // qty 单腿数量（必填且 >0；MT=手数，CEX=张/币数 venue 口径。optional=缺字段检测）。
+  optional double qty = 6;
+  // notional_usd 名义预算 USD（必填 >0 且 ≤ ARB_PROBE_MAX_NOTIONAL；optional=缺字段检测）。
+  optional double notional_usd = 7;
+  // expected_cost_usd 预期成本 USD（必填 ≥0；手续费/价差/滑点合计预估；optional=缺字段检测）。
+  optional double expected_cost_usd = 8;
+  // auto_close_at 退出条件（到期自动平仓时刻；须在触发时未来）。
+  google.protobuf.Timestamp auto_close_at = 9;
+  // basis 数据依据（引用输入段字段名/事实键——D-176 起降级纯人读展示，机审不解析散文）。
+  string basis = 10;
+  // premises D-176：结构化前提数组（机审唯一判据源；≥1 条必填）。
+  repeated Premise premises = 11;
+}
+
+// Premise D-176：机审可回放的结构化前提（散文 basis 被当结构化数据解析的假歧义同源修）。
+message Premise {
+  // kind 前提种类（term_dispersion / idle_funds / …；未知 kind 机审判歧义留决）。
+  string kind = 1;
+  // venue term_dispersion 无关；idle_funds=权益快照 venue 键段（裸 venue 名，机审补 leg_type）。
+  string venue = 2;
+  // canonical 前提绑定符号（term_dispersion 必填；idle_funds 可空）。
+  string canonical = 3;
+  // free_usd idle_funds 声称闲置额（USD；term_dispersion 忽略）。
+  double free_usd = 4;
+}
+
+// Proposal 单条提案（与 explorer_proposals 表列对齐；D-513 设计稿 §4）。
+message Proposal {
+  // canonical 规范符号键（须命中已知 canonical 集，否则行丢弃）。
+  string canonical = 1;
+  // best_pair 最优腿对（venue_a×venue_b 键形；空=无配对）。
+  string best_pair = 2;
+  // direction 方向（≤16 字，如 long_perp/short_perp/watch）。
+  string direction = 3;
+  // rationale 一行理由。
+  string rationale = 4;
+  // anchor 所据数字段名（限输入五段字段名——防 LLM 自算数字，cross-venue 借用红线）。
+  string anchor = 5;
+  // evidence 佐证数字（键=输入段字段名→值）。
+  google.protobuf.Struct evidence = 6;
+}

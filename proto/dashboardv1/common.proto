@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+// ==== common.proto —— D-508 S10 公共件（新增 RPC 复用锚点）。 ====
+// 注：既有 inline 分页/回执字段对（limit+offset / ok+error）未嵌入收编——嵌入会使外层
+// 字段号/线型漂移，违 S10 验收「消息名/字段号不变」硬约束；冲突项留决策层裁决（LOG 留痕）。
+
+// Pagination 分页参数（limit=1/offset=2 与全仓既有内联对同字段号；新增请求直接复用）。
+message Pagination {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+// Envelope 写回执（ok=1/error=2 与全仓既有内联对同字段号；新增响应直接复用）。
+message Envelope {
+  bool ok = 1;
+  string error = 2;
+}

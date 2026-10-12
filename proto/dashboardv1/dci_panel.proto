@@ -1,0 +1,49 @@
+syntax = "proto3";
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+// D-200：个人持仓+DCI 订单看板读面（只读；提案 RPC 复用 ListProposals 零新面）。
+message PersonalPositionRow {
+  int64 id = 1;
+  string asset = 2;
+  string kind = 3;
+  string price_symbol = 4;
+  double qty = 5;            // NULL→0
+  double entry_price = 6;    // NULL→0
+  string status = 7;
+  string note = 8;           // DCI 回执行 note 自描述（kind=other 混行不细分）
+  int64 opened_at = 9;
+}
+
+message ListPersonalPositionsRequest {
+  string status = 1; // 空=全部；"OPEN"=持仓中
+  int32 limit = 2;   // 0→后端默认
+}
+message ListPersonalPositionsResponse {
+  repeated PersonalPositionRow positions = 1;
+}
+
+message DCIOrderRow {
+  int64 id = 1;
+  string request_id = 2;
+  string venue = 3;
+  string template_id = 4;
+  string product_ref = 5;
+  string opt_type = 6;
+  double strike = 7;         // NULL→0
+  string invest_ccy = 8;
+  double qty = 9;
+  int64 tenor_days = 10;     // NULL→0
+  string status = 11;        // pending|filled|failed|rejected
+  string response = 12;      // venue 原文截≤300 字符（后端截）
+  int64 proposal_id = 13;    // 0=非提案触发（提案→订单回链）
+  int64 created_at = 14;
+}
+
+message ListDCIOrdersRequest {
+  int32 limit = 1; // 0→后端默认（近 N 单 id DESC）
+}
+message ListDCIOrdersResponse {
+  repeated DCIOrderRow orders = 1;
+}
