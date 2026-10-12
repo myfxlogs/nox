@@ -65,8 +65,8 @@ func (s *fakeTableHealthStore) snapshot() []fakeAlert {
 // TestTableHealth_BootGraceNoAlert boot 宽限内只记状态不告警。
 func TestTableHealth_BootGraceNoAlert(t *testing.T) {
 	store := newFakeTableHealthStore()
-	store.setTs("cmc_prices", time.Time{}) // 空表=crit
-	watches := []TableWatch{{Name: "cmc_prices", WarnAfter: 10 * time.Minute, CritAfter: 30 * time.Minute}}
+	store.setTs("test_prices", time.Time{}) // 空表=crit
+	watches := []TableWatch{{Name: "test_prices", WarnAfter: 10 * time.Minute, CritAfter: 30 * time.Minute}}
 	mon := NewTableFreshnessMonitor(store, watches, time.Hour)
 	mon.now = func() time.Time { return time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC) }
 	mon.bootGraceTicks = 1
@@ -82,21 +82,21 @@ func TestTableHealth_StateTransitions(t *testing.T) {
 	defer log.SetOutput(os.Stderr)
 
 	store := newFakeTableHealthStore()
-	watches := []TableWatch{{Name: "cmc_prices", WarnAfter: 10 * time.Minute, CritAfter: 30 * time.Minute}}
+	watches := []TableWatch{{Name: "test_prices", WarnAfter: 10 * time.Minute, CritAfter: 30 * time.Minute}}
 	mon := NewTableFreshnessMonitor(store, watches, time.Hour)
 	base := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
 	mon.now = func() time.Time { return base }
 	mon.bootGraceTicks = 0
 
 	// tick1: healthy (age=5m)
-	store.setTs("cmc_prices", base.Add(-5*time.Minute))
+	store.setTs("test_prices", base.Add(-5*time.Minute))
 	mon.poll(context.Background())
 	if got := store.alertCount(); got != 0 {
 		t.Errorf("healthy should not alert, got %d", got)
 	}
 
 	// tick2: warn (age=15m)
-	store.setTs("cmc_prices", base.Add(-15*time.Minute))
+	store.setTs("test_prices", base.Add(-15*time.Minute))
 	mon.poll(context.Background())
 	alerts := store.snapshot()
 	if len(alerts) != 1 || alerts[0].level != "warn" {
@@ -104,7 +104,7 @@ func TestTableHealth_StateTransitions(t *testing.T) {
 	}
 
 	// tick3: crit (age=35m)
-	store.setTs("cmc_prices", base.Add(-35*time.Minute))
+	store.setTs("test_prices", base.Add(-35*time.Minute))
 	mon.poll(context.Background())
 	alerts = store.snapshot()
 	if len(alerts) != 2 || alerts[1].level != "critical" {
@@ -118,7 +118,7 @@ func TestTableHealth_StateTransitions(t *testing.T) {
 	}
 
 	// tick5: recover (age=5m)
-	store.setTs("cmc_prices", base.Add(-5*time.Minute))
+	store.setTs("test_prices", base.Add(-5*time.Minute))
 	mon.poll(context.Background())
 	alerts = store.snapshot()
 	if len(alerts) != 3 || alerts[2].level != "info" {

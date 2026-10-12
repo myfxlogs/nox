@@ -15,9 +15,9 @@ func TestD422_DBNameFromDSN(t *testing.T) {
 		dsn  string
 		want string
 	}{
-		{"postgres://arb:arb@host:5432/arb?sslmode=disable", "arb"},
-		{"postgres://arb:arb@host:5432/nox_test?sslmode=disable", "nox_test"},
-		{"postgres://arb:arb@arb-postgres:5432/nox_exec_test", "nox_exec_test"},
+		{"postgres://nox:nox@host:5432/nox?sslmode=disable", "nox"},
+		{"postgres://nox:nox@host:5432/nox_test?sslmode=disable", "nox_test"},
+		{"postgres://nox:nox@nox-postgres:5432/nox_exec_test", "nox_exec_test"},
 	}
 	for _, c := range cases {
 		if got := dbNameFromDSN(c.dsn); got != c.want {
@@ -26,15 +26,15 @@ func TestD422_DBNameFromDSN(t *testing.T) {
 	}
 }
 
-// 安全闸：arb 库名拒绝（"arb" 出现在用户名不算）；_test 放行；allow-live 放行。
+// 安全闸：nox 库名拒绝（"nox" 出现在用户名不算）；_test 放行；allow-live 放行。
 func TestD422_DSNSafety(t *testing.T) {
-	if err := checkDSNSafety("postgres://arb:arb@host:5432/arb?sslmode=disable", false); err == nil {
-		t.Error("arb 库名无 -allow-live 应拒绝")
+	if err := checkDSNSafety("postgres://nox:nox@host:5432/nox?sslmode=disable", false); err == nil {
+		t.Error("nox 库名无 -allow-live 应拒绝")
 	}
-	if err := checkDSNSafety("postgres://arb:arb@host:5432/nox_exec_test?sslmode=disable", false); err != nil {
+	if err := checkDSNSafety("postgres://nox:nox@host:5432/nox_exec_test?sslmode=disable", false); err != nil {
 		t.Errorf("_test 库应放行: %v", err)
 	}
-	if err := checkDSNSafety("postgres://arb:arb@host:5432/arb?sslmode=disable", true); err != nil {
+	if err := checkDSNSafety("postgres://nox:nox@host:5432/nox?sslmode=disable", true); err != nil {
 		t.Errorf("-allow-live 应放行: %v", err)
 	}
 }

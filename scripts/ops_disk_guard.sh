@@ -15,7 +15,7 @@ set -u
 THRESH=75
 # D-114：告警写库走容器内 psql——宿主端口会随部署拓扑变（SG=15433，5433=alphaforge），
 # docker exec 与端口解耦；docker daemon 本就须存活（下方清理全是 docker 命令）。
-PSQL="docker exec arb-postgres psql -U arb -d arb"
+PSQL="docker exec nox-postgres psql -U nox -d nox"
 
 pct() { df -P / | awk 'NR==2{gsub("%","");print $5}'; }
 

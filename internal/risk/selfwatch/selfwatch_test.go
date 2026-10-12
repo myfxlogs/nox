@@ -397,7 +397,7 @@ func TestD059_AnalystROProbe(t *testing.T) {
 	st := greenStore()
 	d := testDeps(st, goodEval(), tNow)
 	d.ProbeAnalystRO = func(context.Context) error {
-		return fmt.Errorf("failed to connect to host=127.0.0.1 user=arb_ro database=arb password=secret123")
+		return fmt.Errorf("failed to connect to host=127.0.0.1 user=nox_ro database=nox password=secret123")
 	}
 	CheckAnomalies(context.Background(), d)
 	joined := strings.Join(st.dedupCalls, "\n")
@@ -411,7 +411,7 @@ func TestD059_AnalystROProbe(t *testing.T) {
 	st2 := greenStore()
 	d2 := testDeps(st2, goodEval(), tNow)
 	d2.ProbeAnalystRO = func(context.Context) error {
-		return fmt.Errorf(`failed to parse config for URL "postgresql://arb_ro:sup3rs3cret@127.0.0.1:5433/arb": invalid`)
+		return fmt.Errorf(`failed to parse config for URL "postgresql://nox_ro:sup3rs3cret@127.0.0.1:5433/nox": invalid`)
 	}
 	CheckAnomalies(context.Background(), d2)
 	joined2 := strings.Join(st2.dedupCalls, "\n")
@@ -421,7 +421,7 @@ func TestD059_AnalystROProbe(t *testing.T) {
 	if strings.Contains(joined2, "sup3rs3cret") {
 		t.Fatalf("URL 形态密码泄漏进告警:\n%s", joined2)
 	}
-	if !strings.Contains(joined2, "arb_ro:***@") {
+	if !strings.Contains(joined2, "nox_ro:***@") {
 		t.Fatalf("URL 凭据段应打码:\n%s", joined2)
 	}
 	// 未接线 → 无告警。

@@ -6,7 +6,7 @@
 //
 // 用法（复审方执行）：
 //
-//	NOX_PG_DSN="postgres://arb:arb@arb-postgres:5432/arb?sslmode=disable" \
+//	NOX_PG_DSN="postgres://nox:nox@nox-postgres:5432/nox?sslmode=disable" \
 //	  go run ./cmd/settleonce -pos=479
 package main
 

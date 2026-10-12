@@ -4,8 +4,8 @@
 # 用法：./scripts/deploy_sync.sh [-n 干跑]
 set -euo pipefail
 cd "$(dirname "$0")/.."
-SG="${ARB_SG_HOST:-root@192.229.85.35}"
-DEST="/opt/arb/"
+SG="${NOX_SG_HOST:-root@192.229.85.35}"
+DEST="/opt/nox/"
 EXTRA=(); [ "${1:-}" = "-n" ] && EXTRA=(-n)
 # --files-from=git 跟踪清单：非跟踪文件不推不删（SG 侧 bin/.env/logs/报告 原样保留）。
 # core.quotepath=false：CJK 文件名原样输出（默认 C 引用转义会让 rsync link_stat 失配）。

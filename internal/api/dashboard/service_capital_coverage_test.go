@@ -61,6 +61,9 @@ func TestGetCapitalCoverage_TrxBalanceAnchor(t *testing.T) {
 	if err := s.InsertTRXVoteApr(ctx, pgstore.TRXVoteApr{FetchedAt: now, CurrentRate: 4.0}); err != nil {
 		t.Fatalf("InsertTRXVoteApr: %v", err)
 	}
+	if err := s.EnsureMonthPartition(ctx, now.Year(), int(now.Month())); err != nil {
+		t.Fatalf("EnsureMonthPartition: %v", err)
+	}
 	if err := s.InsertTicks(ctx, []pgstore.TickRow{
 		{Ts: now, Venue: "binance", Symbol: "TRXUSDT", Bid: 0.5, Ask: 0.5, VenueType: "spot"},
 	}); err != nil {
@@ -101,6 +104,9 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 	}
 	if err := s.InsertTRXVoteApr(ctx, pgstore.TRXVoteApr{FetchedAt: now, CurrentRate: 4.0}); err != nil {
 		t.Fatalf("InsertTRXVoteApr: %v", err)
+	}
+	if err := s.EnsureMonthPartition(ctx, now.Year(), int(now.Month())); err != nil {
+		t.Fatalf("EnsureMonthPartition: %v", err)
 	}
 	if err := s.InsertTicks(ctx, []pgstore.TickRow{
 		{Ts: now, Venue: "binance", Symbol: "TRXUSDT", Bid: 1.0, Ask: 1.0, VenueType: "spot"},

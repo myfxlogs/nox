@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"nox/internal/data/keydomain"
-	"strings"
 	"time"
 
 	"nox/internal/data/adapter"
@@ -75,10 +74,10 @@ type AccountQuerier interface {
 }
 
 // isARBOrder 判断 broker 订单是否为当前 NOX 系统开出。
-// 当前 exec 下单 comment 统一为 exec.OrderComment（"arb"）→ 前缀匹配即 ARB 源。
+// exec 下单 comment 前缀匹配即系统源（`nox`+遗留 `arb` 双前缀，D-233 过渡条款）。
 // 其余一律系统外单：遗留 ca_/cx_/tri_+hex 格式（旧系统 D-033）、手工单 UUID、空 comment。
 func isARBOrder(comment string) bool {
-	return strings.HasPrefix(comment, exec.OrderComment)
+	return exec.IsOrderComment(comment)
 }
 
 // MT5Querier 通过 MT5 gRPC 查询持仓。

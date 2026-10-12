@@ -1,4 +1,4 @@
-// service_capital_coverage_pools.go —— D-359 五源池行构造（TRX/CMC；自主文件拆出控行数 ≤300）。
+// service_capital_coverage_pools.go —— D-359 池行构造（TRX；CMC 池随族件剔除；自主文件拆出控行数 ≤300）。
 // 口径 SSOT 与主文件头注同源；digest capital_coverage*.go 同口径双实现。
 package dashboard
 

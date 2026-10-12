@@ -43,7 +43,6 @@ type EnvKnobs struct {
 	SymdigMaxTokens                int           // NOX_SYMDIG_MAX_TOKENS（0→symdig 8192）
 	SleepmonEnabled                bool          // NOX_SLEEPMON_ENABLED（默认开）
 	GateWSMode                     string        // NOX_GATE_WS_MODE（"direct"=原生直连）
-	CmcWsDisabled                  bool          // CMC_WS_DISABLE
 	DeribitOptEnabled              bool          // NOX_DERIBIT_OPT_ENABLED（默认开）
 	OptParityAlertBps              float64       // NOX_OPT_PARITY_ALERT_BPS（0→deribit 15）
 	LegTickWindow                  time.Duration // NOX_LEG_TICK_WINDOW（0→30m）
@@ -88,7 +87,6 @@ func loadEnvKnobs() EnvKnobs {
 		SymdigMaxTokens:                envInt("NOX_SYMDIG_MAX_TOKENS", 0),
 		SleepmonEnabled:                envBool("NOX_SLEEPMON_ENABLED", true),
 		GateWSMode:                     envStr("NOX_GATE_WS_MODE", ""),
-		CmcWsDisabled:                  envBool("CMC_WS_DISABLE", false),
 		DeribitOptEnabled:              envBool("NOX_DERIBIT_OPT_ENABLED", true),
 		OptParityAlertBps:              envFloat("NOX_OPT_PARITY_ALERT_BPS", 0),
 		LegTickWindow:                  envDur("NOX_LEG_TICK_WINDOW", 0),

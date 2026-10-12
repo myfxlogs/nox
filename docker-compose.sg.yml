@@ -1,0 +1,15 @@
+# docker-compose.sg.yml —— SG 生产机覆写层（与 docker-compose.yml 叠加用：
+# docker compose -f docker-compose.yml -f docker-compose.sg.yml up -d）。
+# 覆写点：①生产 PG 端口 15433（宿主 5433 已被 alphaforge-postgres 占用）；
+# ②SG 机型资源降配（core 1500m/2c、pg 2500m/2c/512m shm；test 库维持基线）。
+services:
+  nox-core:
+    mem_limit: 1500m
+    cpus: 2
+
+  nox-postgres:
+    mem_limit: 2500m
+    cpus: 2
+    shm_size: "512m"
+    ports: !override
+      - "127.0.0.1:15433:5432"

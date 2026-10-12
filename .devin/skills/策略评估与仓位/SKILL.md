@@ -4,7 +4,7 @@ description: 策略评估与仓位——策略统计判据（置信界/依赖性
 
 # 策略评估与仓位
 
-方法源：Ralph Vince《The Mathematics of Money Management》中文翻译 `/opt/arb/MathematicsMoneyManagement_zh.md`（唯一真相源，本卡只授判据口径与公式指针，不复制推导）。可用面=统计判据+仓位规模方法论；期权定价、E-V 矩阵解法、参数化分布拟合**不引进**（与跨市场套利盈亏结构不契合）。
+方法源：Ralph Vince《The Mathematics of Money Management》中文翻译 `/opt/nox/MathematicsMoneyManagement_zh.md`（唯一真相源，本卡只授判据口径与公式指针，不复制推导）。可用面=统计判据+仓位规模方法论；期权定价、E-V 矩阵解法、参数化分布拟合**不引进**（与跨市场套利盈亏结构不契合）。
 
 ## 触发条件
 

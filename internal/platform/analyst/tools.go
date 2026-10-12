@@ -24,7 +24,7 @@ const KnRoot = "/kn"
 
 // Tools 工具执行器（实现 ToolExecutor）。
 type Tools struct {
-	ReadOnlyDSN string         // NOX_AI_PG_DSN（arb_ro 角色，query_ro 专用）
+	ReadOnlyDSN string         // NOX_AI_PG_DSN（nox_ro 角色，query_ro 专用）
 	Store       *pgstore.Store // get_entity 用主 store（已认证连接，只读查询）
 	KnRoot      string         // 文件工具根（默认 /kn，测试可覆盖）
 	// R2 返修②：position 派生字段回调（dashboard.Service 注入，复用 enrichOne 同源派生）。

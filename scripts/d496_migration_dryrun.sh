@@ -7,33 +7,33 @@
 set -euo pipefail
 DB="${1:?usage: $0 <scratch_db> [source_db]}"
 SRC="${2:-arb}"
-PSQL="docker exec arb-postgres psql -U arb -d"
+PSQL="docker exec nox-postgres psql -U nox -d"
 
 # 行数对拍：某库全表 count(*)
 rowcounts() {
-  docker exec arb-postgres psql -U arb -d "$1" -Atc \
+  docker exec nox-postgres psql -U nox -d "$1" -Atc \
     "SELECT 'SELECT '''||table_name||''', count(*) FROM '||quote_ident(table_name)||';' \
      FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'" |
-  docker exec -i arb-postgres psql -U arb -d "$1" -At | sort -t'|' -k1,1
+  docker exec -i nox-postgres psql -U nox -d "$1" -At | sort -t'|' -k1,1
 }
 
 echo "== clone $SRC -> $DB"
 $PSQL postgres -c "DROP DATABASE IF EXISTS $DB"
 $PSQL postgres -c "CREATE DATABASE $DB"
-docker exec arb-postgres bash -c "pg_dump -U arb -d $SRC | psql -U arb -d $DB -q"
+docker exec nox-postgres bash -c "pg_dump -U nox -d $SRC | psql -U nox -d $DB -q"
 
 rowcounts "$DB" > /tmp/d496_rows_before.txt
 echo "== apply 0142"
-docker exec -i arb-postgres psql -U arb -d "$DB" -v ON_ERROR_STOP=1 -q -f - \
+docker exec -i nox-postgres psql -U nox -d "$DB" -v ON_ERROR_STOP=1 -q -f - \
   < "$(dirname "$0")/../migrations/0142_keydomain_constitution.sql"
-docker exec arb-postgres psql -U arb -d "$DB" -q -c \
+docker exec nox-postgres psql -U nox -d "$DB" -q -c \
   "INSERT INTO schema_migrations (version) VALUES (142) ON CONFLICT DO NOTHING" || true
 rowcounts "$DB" > /tmp/d496_rows_after.txt
 
 echo "== row-count diff（应只列已 DROP 的死表）"
 join -t'|' -j1 /tmp/d496_rows_before.txt \
   <(comm -23 <(cut -d'|' -f1 /tmp/d496_rows_before.txt) \
-             <(docker exec arb-postgres psql -U arb -d "$DB" -Atc \
+             <(docker exec nox-postgres psql -U nox -d "$DB" -Atc \
     "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'" | sort) \
    | sed 's/$/|DROPPED/') 2>/dev/null || true
 comm -12 <(cut -d'|' -f1 /tmp/d496_rows_before.txt) <(cut -d'|' -f1 /tmp/d496_rows_after.txt) \

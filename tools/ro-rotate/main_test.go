@@ -9,28 +9,28 @@ import (
 )
 
 func TestRewriteDSNPassword(t *testing.T) {
-	user, out, err := rewriteDSNPassword("postgresql://arb_ro:oldpw@127.0.0.1:5433/arb?sslmode=disable", "n3w")
+	user, out, err := rewriteDSNPassword("postgresql://nox_ro:oldpw@127.0.0.1:5433/nox?sslmode=disable", "n3w")
 	if err != nil {
 		t.Fatalf("rewrite: %v", err)
 	}
-	if user != "arb_ro" {
+	if user != "nox_ro" {
 		t.Fatalf("user 保留: %q", user)
 	}
-	if out != "postgresql://arb_ro:n3w@127.0.0.1:5433/arb?sslmode=disable" {
+	if out != "postgresql://nox_ro:n3w@127.0.0.1:5433/nox?sslmode=disable" {
 		t.Fatalf("out: %q", out)
 	}
 	// 仅解析（newPw 空）→ 原样返回。
-	user, out, err = rewriteDSNPassword("postgresql://arb_ro:oldpw@db:5432/arb", "")
-	if err != nil || user != "arb_ro" || out != "postgresql://arb_ro:oldpw@db:5432/arb" {
+	user, out, err = rewriteDSNPassword("postgresql://nox_ro:oldpw@db:5432/nox", "")
+	if err != nil || user != "nox_ro" || out != "postgresql://nox_ro:oldpw@db:5432/nox" {
 		t.Fatalf("parse-only: %q %q %v", user, out, err)
 	}
-	// 无 user 段 → 缺省 arb_ro。
-	user, _, err = rewriteDSNPassword("postgresql://127.0.0.1:5433/arb", "x")
-	if err != nil || user != "arb_ro" {
+	// 无 user 段 → 缺省 nox_ro。
+	user, _, err = rewriteDSNPassword("postgresql://127.0.0.1:5433/nox", "x")
+	if err != nil || user != "nox_ro" {
 		t.Fatalf("default user: %q %v", user, err)
 	}
 	// keyword= 形态：url.Parse 出空 authority——fail-closed 拒。
-	if _, _, err := rewriteDSNPassword("host=arb port=5433 user=arb_ro dbname=arb", "x"); err == nil {
+	if _, _, err := rewriteDSNPassword("host=nox port=5433 user=nox_ro dbname=nox", "x"); err == nil {
 		t.Fatal("keyword= 形态应拒绝")
 	}
 }
@@ -39,7 +39,7 @@ func TestRewriteDSNPassword(t *testing.T) {
 // 含密码的坏 DSN 经 rewriteDSNPassword/verifyAddrRewrite 返回的错误文本必须零回显
 // （url.Parse 对坏转义报 `parse "<原文>": ...`，原文嵌入错误串）。
 func TestRedactErr_ParseNoEcho(t *testing.T) {
-	const bad = "postgresql://arb_ro:sup3rs3cret@127.0.0.1:5433/%zz"
+	const bad = "postgresql://nox_ro:sup3rs3cret@127.0.0.1:5433/%zz"
 	_, _, err := rewriteDSNPassword(bad, "")
 	if err == nil {
 		t.Fatal("坏转义 DSN 应报错")

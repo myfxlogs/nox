@@ -28,9 +28,6 @@ const (
 	KindMTSymbolMeta      = "mt_symbol_meta"      // MT5 符号元数据（UnitContractSize，D-140 S2 CS 自动来源）
 	KindMTSymbolMargin    = "mt_symbol_margin"    // MT5 品种级保证金率（UnitRatio，D-142 ③ 品种级优先账户级回落）
 	KindMTSymbolProduct   = "mt_symbol_product"   // MT5 CalcMode 产品类型（UnitCalcMode，D-173 product_group 反哺）
-	KindCMCPrice          = "cmc_price"           // CMC 实时报价（UnitPrice，D-205）
-	KindCMCAccount        = "cmc_account"         // CMC 账户摘要（UnitUSD，D-205）
-	KindCMCHistory        = "cmc_history"         // CMC 历史记录/swap（UnitUSD，D-205）
 	KindEgressCanary      = "egress_canary"       // D-104 本机出口 canary（UnitCount，值=三锚通过数 0..3）
 )
 
@@ -46,7 +43,7 @@ const (
 	UnitBps           = "bps"            // 基点（1bp=0.01%，期权平价偏离 D-137）
 	UnitContractSize  = "contract_size"  // 合约规格（D-140 S2，MT5 SymbolInfo.ContractSize）
 	UnitCalcMode      = "calc_mode"      // CalcMode enum 数值（D-173，MT5 产品类型）
-	UnitUSD           = "usd"            // USD 金额（D-205 CMC 账户/历史）
+	UnitUSD           = "usd"            // USD 金额
 	UnitUnixSec       = "unix_sec"       // unix 秒时间戳（D-466 结算时刻）
 	UnitSeconds       = "seconds"        // 秒数时长（D-466 结算周期）
 	UnitCount         = "count"          // 计数（D-104 egress_canary 锚通过数）
@@ -99,9 +96,6 @@ var validKinds = map[string]bool{
 	KindMTSymbolMeta:      true,
 	KindMTSymbolMargin:    true,
 	KindMTSymbolProduct:   true,
-	KindCMCPrice:          true,
-	KindCMCAccount:        true,
-	KindCMCHistory:        true,
 	// 三所 spot 深度采样三 kind（src=cex_depth_sampler）。
 	"spot_depth_spread_bps": true,
 	"spot_depth_bid_usd":    true,

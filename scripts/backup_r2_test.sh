@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # backup_r2_test.sh D-110：backup_pg.sh 第三落点（age 加密 → rclone R2 上传 → R2 滚动）stub 测试。
 # 全程 PATH stub（pg_dump/age/rclone/psql/rsync）+ BACKUP_DIR 指向临时目录：
-# 不触生产库、不触 /opt/arb-backups、无需安装 age/rclone。
+# 不触生产库、不触 /opt/nox-backups、无需安装 age/rclone。
 # 覆盖施工提示词四锚 + 两个延伸面：配置残缺降级、psql 不可达 log 兜底。
 # 输出 BACKUP_R2_TEST_OK 或首个失败断言。
 

@@ -13,3 +13,6 @@ var EmployeeDeptElevenSQL string // D-220/D-225⑤：dept 八标签→十一部�
 
 //go:embed 1002_env_keys_nox.sql
 var EnvKeysNoxSQL string // D-230：app_config/app_secrets 键名 ARB_→NOX_（改名原子票）
+
+//go:embed 1003_drop_unmigrated.sql
+var DropUnmigratedSQL string // M3 前置①：不搬表族 DROP（§3 裁定 12 表；切流先 pg_dump 归档）

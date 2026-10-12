@@ -44,7 +44,7 @@ func TestGateSignKnownVector(t *testing.T) {
 		method = "POST"
 		url    = "/api/v4/futures/usdt/orders"
 		query  = ""
-		body   = `{"contract":"BTC_USDT","size":1,"price":"0","tif":"ioc","text":"t-arb"}`
+		body   = `{"contract":"BTC_USDT","size":1,"price":"0","tif":"ioc","text":"t-nox"}`
 		ts     = int64(1724476800)
 	)
 	got := signutil.GateSign(secret, method, url, query, body, ts)

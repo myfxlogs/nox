@@ -3,20 +3,20 @@
 # 动机（业主令 9-24）：real 盘全部数据留证——滑点/手续费/价差/funding/venue原始记录，
 #   为以后提供证据。DB 日备份只留 7 天，carry 仓可能跑数周→本脚本独立目录长期留存。
 #
-# 产出：/opt/arb-backups/evidence/pos<ID>/<UTC时间戳>/ 下：
+# 产出：/opt/nox-backups/evidence/pos<ID>/<UTC时间戳>/ 下：
 #   db_*.csv        — 该 pos 相关各表行（legs/evals/cashflows/settlements/swap快照/autotrade决策）
 #   okx_*.json      — venue 原生记录（positions/bills资金费流水/balance）signed REST 裸 JSON
 #   core_tail.log   — arb-core 近 500 行日志（当时点上下文）
 #
 # 凭据：OKX_* 经 tools/credread 从 exchange_configs 解密读（D-564 S5：.env 已退役；
 # DB_DSN/ARB_MASTER_KEY 基建键照旧）。credread 失败=fail-closed 跳过 venue 侧（DB 侧已采）。
-# crontab：7 */2 * * * /opt/arb/scripts/evidence_pos.sh 502 >> /opt/arb-backups/evidence/pos502/cron.log 2>&1
+# crontab：7 */2 * * * /opt/nox/scripts/evidence_pos.sh 502 >> /opt/nox-backups/evidence/pos502/cron.log 2>&1
 set -u
 POSID="${1:?usage: evidence_pos.sh <position_id>}"
 TS=$(date -u +%Y%m%dT%H%M%SZ)
-BASE="/opt/arb-backups/evidence/pos${POSID}/${TS}"
+BASE="/opt/nox-backups/evidence/pos${POSID}/${TS}"
 mkdir -p "$BASE"
-PSQL="docker exec arb-postgres psql -U arb -d arb -A -F,"
+PSQL="docker exec nox-postgres psql -U nox -d nox -A -F,"
 
 # D-508 S13：cron 退役自检——持仓已平（CLOSED/FAILED）则不再采集，提示摘除 cron。
 STATUS=$($PSQL -t -c "SELECT status FROM positions WHERE id=${POSID}" | tail -1)
@@ -40,16 +40,16 @@ OPP=$($PSQL -t -c "SELECT opportunity_id FROM positions WHERE id=${POSID}" | tai
 
 # ── venue 侧：OKX 原生裸 JSON（签名，凭据不回显）─────────
 # D-564 S5：credread 解密读 OKX 凭据（工具失败=stderr 记因+跳过 venue 侧）。
-CREAD="${CREDREAD_BIN:-/opt/arb/bin/credread}"
+CREAD="${CREDREAD_BIN:-/opt/nox/bin/credread}"
 if [ ! -x "$CREAD" ] && command -v go >/dev/null 2>&1; then
-  CREAD="$(mktemp)"; go build -o "$CREAD" /opt/arb/tools/credread || CREAD=""
+  CREAD="$(mktemp)"; go build -o "$CREAD" /opt/nox/tools/credread || CREAD=""
 fi
 OKX_ENV=""
 if [ -n "$CREAD" ] && [ -x "$CREAD" ]; then
-  # D-114：credread 需 TCP DSN，端口取 arb-postgres 运行容器发布值（5433=alphaforge 化石端口）。
-  ARB_PG_PORT="$(docker port arb-postgres 5432 2>/dev/null | head -n1 | awk -F: '{print $NF}')"
-  if [ -n "$ARB_PG_PORT" ]; then
-    OKX_ENV=$(DB_DSN="${DB_DSN:-postgres://arb:arb@127.0.0.1:${ARB_PG_PORT}/arb?sslmode=disable}" "$CREAD" -venue okx -type perp 2>/dev/null) || OKX_ENV=""
+  # D-114：credread 需 TCP DSN，端口取 nox-postgres 运行容器发布值（5433=alphaforge 化石端口）。
+  NOX_PG_PORT="$(docker port nox-postgres 5432 2>/dev/null | head -n1 | awk -F: '{print $NF}')"
+  if [ -n "$NOX_PG_PORT" ]; then
+    OKX_ENV=$(DB_DSN="${DB_DSN:-postgres://nox:nox@127.0.0.1:${NOX_PG_PORT}/nox?sslmode=disable}" "$CREAD" -venue okx -type perp 2>/dev/null) || OKX_ENV=""
   fi
 fi
 if [ -z "$OKX_ENV" ]; then
@@ -91,5 +91,5 @@ PYEOF
 
 # ── 运行上下文 ──────────────────────────────────────────
 docker logs arb-core --tail 500 > "$BASE/core_tail.log" 2>&1 || true
-ln -sfn "$BASE" "/opt/arb-backups/evidence/pos${POSID}/latest"
+ln -sfn "$BASE" "/opt/nox-backups/evidence/pos${POSID}/latest"
 echo "$(date -u +%FT%TZ) pos${POSID} evidence -> $BASE"

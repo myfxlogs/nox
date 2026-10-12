@@ -214,7 +214,6 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"NOX_SYMDIG_MAX_TOKENS":                      intv(func(c *Config) *int { return &c.SymdigMaxTokens }),
 	"NOX_SLEEPMON_ENABLED":                       boolv(func(c *Config) *bool { return &c.SleepmonEnabled }),
 	"NOX_GATE_WS_MODE":                           strv(func(c *Config) *string { return &c.GateWSMode }),
-	"CMC_WS_DISABLE":                             boolv(func(c *Config) *bool { return &c.CmcWsDisabled }),
 	"NOX_DERIBIT_OPT_ENABLED":                    boolv(func(c *Config) *bool { return &c.DeribitOptEnabled }),
 	"NOX_OPT_PARITY_ALERT_BPS":                   f64(func(c *Config) *float64 { return &c.OptParityAlertBps }),
 	"NOX_LEG_TICK_WINDOW":                        durv(func(c *Config) *time.Duration { return &c.LegTickWindow }),

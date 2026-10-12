@@ -16,7 +16,7 @@ import (
 )
 
 // capitalCoverageCaliberNote 口径注记（与 digest renderCapitalCoverageSection 注记同文本）。
-const capitalCoverageCaliberNote = "口径：快照时点在产=TRX 在赚+保证金占用+CMC 持仓中（非时序加权，日级趋势看历史行）；保证金占用=Σ(equity−free_margin) 账户级（MT5 优先帧直带 Margin），含同账户手动仓、腿级切分不可得（诚实上限）；账户可用额未采→该账户占用不计（禁 eq−0 假满占，覆盖率如实低估）；总资金=Σ账户净值+TRX+CMC（D-127 业主令：杠杆名义额退出合计，仅作占用行 note 参考值）；加权年化分母=有年化行余额（占用行按占用额加权；CMC 手动仓/未采/纸面/venue 现金不进）；仅实盘账户/持仓入表（demo/sim/纸面=噪声不入）；venue 账户现金=闲置不计在产（睡钱暴露；CEX=USDT 标余额，USDT/LDUSDT 计、杂币不折算；MT=USD 同视）；CFD 周末闭市持仓中≠空转；占用行年化=position_daily_income 近7日日均息差（TRX 收益×快照价+利息，浮动盈亏不计）按名义额折算；能量租赁年化=D-258 30d 口径。"
+const capitalCoverageCaliberNote = "口径：快照时点在产=TRX 在赚+保证金占用（非时序加权，日级趋势看历史行）；保证金占用=Σ(equity−free_margin) 账户级（MT5 优先帧直带 Margin），含同账户手动仓、腿级切分不可得（诚实上限）；账户可用额未采→该账户占用不计（禁 eq−0 假满占，覆盖率如实低估）；总资金=Σ账户净值+TRX（D-127 业主令：杠杆名义额退出合计，仅作占用行 note 参考值）；加权年化分母=有年化行余额（占用行按占用额加权；未采/纸面/venue 现金不进）；仅实盘账户/持仓入表（demo/sim/纸面=噪声不入）；venue 账户现金=闲置不计在产（睡钱暴露；CEX=USDT 标余额，USDT/LDUSDT 计、杂币不折算；MT=USD 同视）；CFD 周末闭市持仓中≠空转；占用行年化=position_daily_income 近7日日均息差（TRX 收益×快照价+利息，浮动盈亏不计）按名义额折算；能量租赁年化=D-258 30d 口径。"
 
 // venueTypeCn D-125 建、D-130 域2②改按 venue 原生中文词（业主令：面名随所）：
 // binance=现货/合约（perp→合约；D-133 理财面摘除——earn 落通用「赚币」词保险）、

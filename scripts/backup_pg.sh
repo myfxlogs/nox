@@ -6,20 +6,20 @@
 #   fail-open 只许在上传段，本地链路任何情况下不阻不断。
 #
 # 用法：scripts/backup_pg.sh [PG_DSN]
-# 默认 PG_DSN 端口取 arb-postgres 运行容器发布值（D-114：宿主拓扑权威源；5433=化石端口勿写死）。
-# 备份目录：/opt/arb-backups/（权限 600，仓库外；env BACKUP_DIR 可覆盖——仅测试/演练用，cron 不设=生产路径）
+# 默认 PG_DSN 端口取 nox-postgres 运行容器发布值（D-114：宿主拓扑权威源；5433=化石端口勿写死）。
+# 备份目录：/opt/nox-backups/（权限 600，仓库外；env BACKUP_DIR 可覆盖——仅测试/演练用，cron 不设=生产路径）
 # R2 外推配置：$BACKUP_DIR/backup-r2.env（仓库外 600，含 AGE_PUBKEY/R2_REMOTE/R2_BUCKET；私钥业主离线持有）
-# crontab：0 3 * * * /opt/arb/scripts/backup_pg.sh >> /opt/arb-backups/backup.log 2>&1
+# crontab：0 3 * * * /opt/nox/scripts/backup_pg.sh >> /opt/nox-backups/backup.log 2>&1
 
 set -euo pipefail
 
-BACKUP_DIR="${BACKUP_DIR:-/opt/arb-backups}"
+BACKUP_DIR="${BACKUP_DIR:-/opt/nox-backups}"
 if [ $# -ge 1 ]; then
 	PG_DSN="$1"
 else
-	ARB_PG_PORT="$(docker port arb-postgres 5432 2>/dev/null | head -n1 | awk -F: '{print $NF}')"
-	[ -n "$ARB_PG_PORT" ] || { echo "[$(date -u +%FT%TZ)] backup FAIL: arb-postgres 端口解析失败（传 PG_DSN 显式旁路）" >&2; exit 1; }
-	PG_DSN="postgres://arb:arb@localhost:${ARB_PG_PORT}/arb?sslmode=disable"
+	NOX_PG_PORT="$(docker port nox-postgres 5432 2>/dev/null | head -n1 | awk -F: '{print $NF}')"
+	[ -n "$NOX_PG_PORT" ] || { echo "[$(date -u +%FT%TZ)] backup FAIL: nox-postgres 端口解析失败（传 PG_DSN 显式旁路）" >&2; exit 1; }
+	PG_DSN="postgres://nox:nox@localhost:${NOX_PG_PORT}/nox?sslmode=disable"
 fi
 RETENTION_DAYS=7
 R2_KEEP=14
@@ -52,10 +52,10 @@ emit_alert() {
 	fi
 }
 
-# R2 侧滚动：arb_*.sql.gz.age 按对象时间序保留最新 R2_KEEP 份，删最旧（rclone lsl/deletefile）。
+# R2 侧滚动：nox_*.sql.gz.age 按对象时间序保留最新 R2_KEEP 份，删最旧（rclone lsl/deletefile）。
 r2_rotate() {
 	local listing total excess obj deleted=0
-	if ! listing=$(rclone lsl "$R2_REMOTE:$R2_BUCKET/" | awk 'NF>=4 && $NF ~ /^arb_/ && $NF ~ /\.sql\.gz\.age$/'); then
+	if ! listing=$(rclone lsl "$R2_REMOTE:$R2_BUCKET/" | awk 'NF>=4 && $NF ~ /^nox_/ && $NF ~ /\.sql\.gz\.age$/'); then
 		echo "[$(date -u +%FT%TZ)] WARN: rclone lsl failed, skip R2 rotation" >&2
 		return 0
 	fi
@@ -77,7 +77,7 @@ r2_rotate() {
 }
 
 TIMESTAMP=$(date -u +"%Y%m%d_%H%M%S")
-DUMP_FILE="$BACKUP_DIR/arb_${TIMESTAMP}.sql.gz"
+DUMP_FILE="$BACKUP_DIR/nox_${TIMESTAMP}.sql.gz"
 SHA_FILE="$DUMP_FILE.sha256"
 
 echo "[$(date -u +%FT%TZ)] backup start: $DUMP_FILE"
@@ -87,7 +87,7 @@ if ! pg_dump "$PG_DSN" | gzip > "$DUMP_FILE"; then
 	echo "[$(date -u +%FT%TZ)] backup FAIL: pg_dump error" >&2
 	rm -f "$DUMP_FILE"
 # D-277 C5：备份保留 14 份轮转（~80MB/日无界增长实证，D-213 增长源硬顶原则）
-ls -1t "$BACKUP_DIR"/arb_*.sql.gz 2>/dev/null | tail -n +15 | xargs -r rm -f
+ls -1t "$BACKUP_DIR"/nox_*.sql.gz 2>/dev/null | tail -n +15 | xargs -r rm -f
 	exit 1
 fi
 
@@ -98,10 +98,10 @@ sha256sum "$DUMP_FILE" > "$SHA_FILE"
 chmod 600 "$SHA_FILE"
 
 # retention 7 天
-find "$BACKUP_DIR" -name "arb_*.sql.gz" -mtime +${RETENTION_DAYS} -delete
-find "$BACKUP_DIR" -name "arb_*.sql.gz.sha256" -mtime +${RETENTION_DAYS} -delete
+find "$BACKUP_DIR" -name "nox_*.sql.gz" -mtime +${RETENTION_DAYS} -delete
+find "$BACKUP_DIR" -name "nox_*.sql.gz.sha256" -mtime +${RETENTION_DAYS} -delete
 # D-110：本地密文同窗滚动（上传段产物不无界落盘，D-213 同源）
-find "$BACKUP_DIR" -name "arb_*.sql.gz.age" -mtime +${RETENTION_DAYS} -delete
+find "$BACKUP_DIR" -name "nox_*.sql.gz.age" -mtime +${RETENTION_DAYS} -delete
 
 SIZE=$(stat -c%s "$DUMP_FILE" 2>/dev/null || stat -f%z "$DUMP_FILE")
 echo "[$(date -u +%FT%TZ)] backup OK: $DUMP_FILE (${SIZE} bytes), sha256=$SHA_FILE"

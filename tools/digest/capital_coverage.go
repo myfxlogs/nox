@@ -26,15 +26,12 @@ type CapitalCoverageRow struct {
 }
 
 // loadCapitalCoverage D-356 S1：五源逐池查询（纯读），返回行序
-// TRX→CMC→保证金占用→CEX/MT 未采固定行（capital_snapshots 腿随 D-120 退役）。
+// TRX→保证金占用→CEX/MT 未采固定行（capital_snapshots 腿随 D-120 退役）。
 // D-127：占用行=Σ(equity−free_margin) 账户级子集视图，名义额退出合计降 note 参考值。
 // 数据源全缺 → 空切片（渲染「数据源全缺」）。
 func loadCapitalCoverage(ctx context.Context, pool *pgxpool.Pool) ([]CapitalCoverageRow, error) {
 	rows := []CapitalCoverageRow{}
 	if r, ok := loadTRXPoolRow(ctx, pool); ok {
-		rows = append(rows, r)
-	}
-	if r, ok := loadCMCPoolRow(ctx, pool); ok {
 		rows = append(rows, r)
 	}
 	venueRows, occ := loadVenueAccountRows(ctx, pool)
@@ -79,7 +76,7 @@ func loadTRXPoolRow(ctx context.Context, pool *pgxpool.Pool) (CapitalCoverageRow
 	} else if hasVote {
 		aprNote += "（能量" + energyWhy + "未计）"
 	}
-	// TRX USD 价三级 fallback：fin_cmc_prices(X-AFQUL=TRX) → ticks TRXUSDT 中间价 → 无价
+	// TRX USD 价两级 fallback：ticks TRXUSDT 中间价 → 无价（fin_cmc_* 随族件剔除）
 	// 余额=balance+tron_power（R1：在押投票权与流动余额同池计，构成入说明列）
 	balTRX := float64(balanceSun+tronPower) / 1e6
 	if price, ok := trxUSDPrice(ctx, pool); ok {
@@ -130,16 +127,9 @@ func energyAPRFromSample(rentalTRX float64, sampleDays int, energyTRX float64) f
 	return (rentalTRX / float64(sampleDays) * 365) / energyTRX * 100
 }
 
-// trxUSDPrice TRX USD 价：fin_cmc_prices 最新 mid（instrument X-AFQUL=TRX，D-278 同款）
-// → ticks TRXUSDT 最新 bid/ask 中间价 → 无价 false。
+// trxUSDPrice TRX USD 价：ticks TRXUSDT 最新 bid/ask 中间价 → 无价 false（fin_cmc_* 随族件剔除）。
 func trxUSDPrice(ctx context.Context, pool *pgxpool.Pool) (float64, bool) {
 	var p float64
-	if err := pool.QueryRow(ctx, `
-		SELECT mid_price FROM fin_cmc_prices
-		WHERE instrument_id='X-AFQUL' AND mid_price > 0
-		ORDER BY fetched_at DESC LIMIT 1`).Scan(&p); err == nil && p > 0 {
-		return p, true
-	}
 	if err := pool.QueryRow(ctx, `
 		SELECT (bid+ask)/2 FROM ticks
 		WHERE symbol='TRXUSDT' AND bid > 0 AND ask > 0
@@ -147,32 +137,6 @@ func trxUSDPrice(ctx context.Context, pool *pgxpool.Pool) (float64, bool) {
 		return p, true
 	}
 	return 0, false
-}
-
-// loadCMCPoolRow ②CMC 池：余额=fin_cmc_account_summary 最新 total_account_value；
-// 状态=fin_cmc_positions 最新快照有行→「手动持仓中（浮盈 $X）」/无行→「现金闲置」。
-// 手动域无 carry 口径 → 年化「—」（不入加权年化，§1.1 表）。
-func loadCMCPoolRow(ctx context.Context, pool *pgxpool.Pool) (CapitalCoverageRow, bool) {
-	var total *float64
-	if err := pool.QueryRow(ctx, `
-		SELECT total_account_value FROM fin_cmc_account_summary
-		ORDER BY fetched_at DESC LIMIT 1`).Scan(&total); err != nil || total == nil {
-		return CapitalCoverageRow{}, false
-	}
-	row := CapitalCoverageRow{Pool: "CMC 账户", BalanceCcy: "USD", Note: "手动持仓监控域",
-		BalanceUSD: total, RealMoney: true}
-	var pnl *float64
-	var n int
-	if err := pool.QueryRow(ctx, `
-		SELECT SUM(unrealised_pnl), COUNT(*) FROM fin_cmc_positions
-		WHERE fetched_at = (SELECT MAX(fetched_at) FROM fin_cmc_positions)`).Scan(&pnl, &n); err == nil && n > 0 {
-		row.Status = fmt.Sprintf("$%.2f", *pnl) // D-128：浮盈直数（负号如实）
-		row.Note += "；手动持仓中"                    // D-129：说明收说明列
-		row.Productive = true
-	} else {
-		row.Status = "现金闲置"
-	}
-	return row, true
 }
 
 // venueOcc D-127：账户占用聚合（与 dashboard 服务端 venueOcc 同构——digest 独立 module 就地镜像）。

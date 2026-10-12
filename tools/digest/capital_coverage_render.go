@@ -23,7 +23,7 @@ func RenderCapitalCoverageSection(rows []CapitalCoverageRow) string {
 	var buf strings.Builder
 	buf.WriteString("\n## 资金不眠覆盖率（快照口径，D-356）\n\n")
 	if len(rows) == 0 {
-		buf.WriteString("数据源全缺（TRX/CMC/系统持仓/资金快照均无行——不猜零）\n")
+		buf.WriteString("数据源全缺（TRX/系统持仓/资金快照均无行——不猜零）\n")
 		return buf.String()
 	}
 	buf.WriteString("| 资金池 | 余额 | 状态 | 年化 % | 说明 |\n")
@@ -62,6 +62,6 @@ func RenderCapitalCoverageSection(rows []CapitalCoverageRow) string {
 	} else {
 		buf.WriteString("\n总资金 — | 在产 —（覆盖率 —）| 加权年化 —（总资金=0，除零不猜）\n")
 	}
-	buf.WriteString("\n> 口径：快照时点在产=TRX 在赚+保证金占用+CMC 持仓中（非时序加权，日级趋势看历史行）；保证金占用=Σ(equity−free_margin) 账户级（含同账户手动仓、腿级切分不可得），可用额未采→不计（禁 eq−0 假满占）；总资金=Σ账户净值+TRX+CMC（D-127 业主令：杠杆名义额退出合计，仅作占用行 note 参考值）；加权年化分母=有年化行余额（占用行按占用额加权；CMC 手动仓/未采/纸面/venue 现金不进）；纸面持仓非真金不入汇总；venue 账户现金=闲置不计在产（睡钱暴露；CEX=USDT 标余额，USDT/LDUSDT 计、杂币不折算；MT=USD 同视）；CFD 周末闭市持仓中≠空转；占用行年化=position_daily_income 近7日日均息差（TRX 收益×快照价+利息，浮动盈亏不计）按名义额折算；能量租赁年化=D-258 30d 口径。\n")
+	buf.WriteString("\n> 口径：快照时点在产=TRX 在赚+保证金占用（非时序加权，日级趋势看历史行）；保证金占用=Σ(equity−free_margin) 账户级（含同账户手动仓、腿级切分不可得），可用额未采→不计（禁 eq−0 假满占）；总资金=Σ账户净值+TRX（D-127 业主令：杠杆名义额退出合计，仅作占用行 note 参考值）；加权年化分母=有年化行余额（占用行按占用额加权；手动仓/未采/纸面/venue 现金不进）；纸面持仓非真金不入汇总；venue 账户现金=闲置不计在产（睡钱暴露；CEX=USDT 标余额，USDT/LDUSDT 计、杂币不折算；MT=USD 同视）；CFD 周末闭市持仓中≠空转；占用行年化=position_daily_income 近7日日均息差（TRX 收益×快照价+利息，浮动盈亏不计）按名义额折算；能量租赁年化=D-258 30d 口径。\n")
 	return buf.String()
 }

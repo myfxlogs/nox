@@ -9,7 +9,7 @@
 # 用法：scripts/paper_window_report.sh [--since '2026-10-02 23:06+00']
 set -euo pipefail
 
-PSQL="docker exec arb-postgres psql -U arb -d arb -v ON_ERROR_STOP=1 -t -A"
+PSQL="docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -t -A"
 SINCE="${1:-$($PSQL -c "SELECT value FROM app_config WHERE key='ARB_PAPER_WINDOW_START'" | tr -d '[:space:]')}"
 if [[ -z "$SINCE" ]]; then
   echo "FAIL: app_config ARB_PAPER_WINDOW_START 未配置且未传 --since" >&2
