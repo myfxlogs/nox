@@ -1,0 +1,282 @@
+package exec
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"strings"
+	"time"
+
+	"arb/internal/store/pgstore"
+)
+
+// orderStatusQuerier D-508 S7c：接口定义下沉消费方（reconcile.OrderStatusQuerier
+// 为规范名）——exec 是实现的宿主，此处仅留结构断言用未导出窄口。
+type orderStatusQuerier interface {
+	QueryOrderStatus(ctx context.Context, orderID, clOrdID, symbol string) (state string, accFillQty, avgPx, feeUSD float64, err error)
+}
+
+// persistOpenLegs D-195-B：OPEN leg 写入循环（从 Pipeline.Execute 提取，避免 pipeline.go 超 300 行）。
+// 腿写库失败 → error+critical 告警，孤儿不可留。
+// client_order_id 确定性编码 + attempt 字段填充。
+func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID int64, legs []LegSpec, results []LegResult) error {
+	for i, r := range results {
+		clientOrderID := generateClientOrderID(requestID, posID, int16(i), 1) // attempt_no=1 首次
+		now := time.Now()
+		var uncertainAt *time.Time
+		if r.Status == "UNKNOWN" {
+			uncertainAt = &now
+		}
+		filledQty := r.Qty
+		avgPrice := r.Price
+		// fee_usd 采集补洞（declared-but-never-wired 收编）。正数成本口径：
+		// CEX 走 Fill.FeeUSD（okx order 响应 fee 实证）；MT 腿顺手用 broker 回报
+		// commission（负=付出→取绝对值）。拿不到 → NULL（不写 0 冒充无费）。
+		fee := r.FeeUSD
+		if fee <= 0 && r.Commission < 0 {
+			fee = -r.Commission
+		}
+		var feeUSD *float64
+		if fee > 0 {
+			feeUSD = &fee
+		}
+		// 阶段a：fill_kind 落库（maker|taker；空=市价旧径 NULL 诚实缺省）。
+		var fillKind *string
+		if r.FillKind != "" {
+			fillKind = &r.FillKind
+		}
+		if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+			PositionID:    posID,
+			LegNo:         int16(i),
+			Phase:         "OPEN",
+			AttemptNo:     1,
+			Venue:         legs[i].VenueKey,
+			Symbol:        legs[i].VenueSymbol,
+			Side:          legs[i].Side,
+			Qty:           legs[i].Qty,
+			PriceExpected: legs[i].PriceExpected,
+			PriceActual:   &r.Price,
+			OrderID:       r.OrderID,
+			Status:        r.Status,
+			ClientOrderID: clientOrderID,
+			RequestedQty:  &legs[i].Qty,
+			FilledQty:     &filledQty,
+			AvgFillPrice:  &avgPrice,
+			SubmittedAt:   &now,
+			UncertainAt:   uncertainAt,
+			FailReason:    legFailReason(r), // D-208①：FAILED 腿落 venue 拒因原文（512B 截断）
+			FeeUSD:        feeUSD,
+			FillKind:      fillKind,
+		}); err != nil {
+			msg := fmt.Sprintf("持仓 #%d 第 %d 腿成交落库失败（%s）：%v", posID, i, legs[i].VenueKey, err)
+			log.Printf("[exec] %s", msg)
+			p.alertCrit(ctx, msg)
+			// 补偿回滚已 FILLED 腿（0~i），best-effort（回滚失败只 log+alert，不阻断返回原 error）。
+			p.rollbackFilledLegs(ctx, posID, legs, results, i)
+			return fmt.Errorf("leg persist: %w", err)
+		}
+		// OPEN 腿费入账并入 CreatePositionLeg 的 leg:<id> 自动写（MT 显式 0），
+		// 原 exec:*:open 键路径撤——同一费双键双行会被 PositionNetUSD 之外的求和路径双计。
+	}
+	return nil
+}
+
+// rollbackFilledLegs D-201：persistOpenLegs 失败时补偿回滚所有 FILLED 腿（0~len(results)-1）。
+// best-effort：回滚失败只 log+alert，不阻断。
+// MT 腿用 CloseOrder（按 ticket），CEX 腿用 PlaceOrder 反向。
+// UNKNOWN/FAILED 腿不回滚（UNKNOWN 可能已成交需人工确认，FAILED 未成交）。
+// 复审修正：原设计只回滚 0~failedIdx，但 persistOpenLegs 在第一个失败处 return，
+// failedIdx 之后的腿已在 broker 端并发执行（pipeline.go wg.Wait 后全部完成）——
+// 既未 persist 也未回滚 → 仍是孤儿。扩展回滚范围至全部 results。
+func (p *Pipeline) rollbackFilledLegs(ctx context.Context, posID int64, legs []LegSpec, results []LegResult, failedIdx int) {
+	_ = failedIdx // D-201 复审修正：保留签名兼容，实际回滚全部 results
+	for i := 0; i < len(results); i++ {
+		r := results[i]
+		if r.Status == "UNKNOWN" && r.OrderID != "" {
+			p.rollbackUnknownLeg(ctx, posID, i, legs[i], r)
+			continue
+		}
+		if r.Status != "FILLED" {
+			continue
+		}
+		exe, ok := p.registry.Get(legs[i].VenueKey)
+		if !ok {
+			log.Printf("[exec] rollback pos=%d leg=%d: no executor for %s", posID, i, legs[i].VenueKey)
+			continue
+		}
+		var closeErr error
+		if isMTVenueKey(legs[i].VenueKey) {
+			_, closeErr = exe.CloseOrder(ctx, OrderRef{OrderID: r.OrderID, Venue: legs[i].VenueKey})
+		} else {
+			// 回滚单同执行器边界——:perp 腿合约数→基础币（不换算会 1/cs 倍超量回滚）。
+			orderQty, convErr := p.orderQtyFor(legs[i])
+			if convErr != nil {
+				closeErr = convErr
+			} else {
+				closeErr = p.rollbackCEXPlace(ctx, exe, legs[i], orderQty)
+			}
+		}
+		if closeErr != nil {
+			rmsg := fmt.Sprintf("持仓 #%d 第 %d 腿回滚失败（%s）：%v", posID, i, legs[i].VenueKey, closeErr)
+			log.Printf("[exec] %s", rmsg)
+			p.alertCrit(ctx, rmsg)
+		} else {
+			log.Printf("[exec] rollback ok pos=%d leg=%d venue=%s ticket=%s", posID, i, legs[i].VenueKey, r.OrderID)
+		}
+	}
+}
+
+// rollbackCEXPlace CEX 反向平仓单（FILLED 回滚与 UNKNOWN 部分成交回滚共用，D-427 I2）。
+// qty=基础币数量（调用方负责换算）；PositionSide=原持仓侧（leg.Side 推导，对齐 placeCloseOrder）。
+func (p *Pipeline) rollbackCEXPlace(ctx context.Context, exe Executor, leg LegSpec, qty float64) error {
+	closeSide := "SELL"
+	if leg.Side == "SELL" {
+		closeSide = "BUY"
+	}
+	positionSide := ""
+	switch leg.Side {
+	case "BUY":
+		positionSide = "long"
+	case "SELL":
+		positionSide = "short"
+	}
+	_, err := exe.PlaceOrder(ctx, Order{
+		Symbol: leg.VenueSymbol, Side: closeSide, Qty: qty, Venue: leg.VenueKey,
+		PositionSide: positionSide,
+	})
+	return err
+}
+
+// rollbackUnknownLeg D-427 I2：UNKNOWN+OrderID 腿孤儿出证。
+// CEX：cancel → 终查 QueryOrderStatus——qty>0=真实部分量走同一反向平仓路径；=0=确定未成交干净跳过；
+// cancel/终查失败 → log+critical（孤儿未证否留人工），不阻断主循环。
+// MT：消解器 owns（市价单无 cancel 语义），只 log 跳过。
+func (p *Pipeline) rollbackUnknownLeg(ctx context.Context, posID int64, i int, leg LegSpec, r LegResult) {
+	if isMTVenueKey(leg.VenueKey) {
+		log.Printf("[exec] rollback pos=%d leg=%d: MT UNKNOWN order=%s skip（消解器 owns）", posID, i, r.OrderID)
+		return
+	}
+	exe, ok := p.registry.Get(leg.VenueKey)
+	if !ok {
+		log.Printf("[exec] rollback pos=%d leg=%d: no executor for %s", posID, i, leg.VenueKey)
+		return
+	}
+	canceler, ok := exe.(OrderCanceler)
+	if !ok {
+		log.Printf("[exec] rollback pos=%d leg=%d venue=%s: executor 无 CancelOrder，孤儿单未出证", posID, i, leg.VenueKey)
+		return
+	}
+	fail := func(what string, err error) {
+		msg := fmt.Sprintf("持仓 #%d 第 %d 腿回滚单 %s 处理失败（%s 订单 %s）：%v——订单可能仍挂在交易所、状态未知，需人工核对", posID, i, leg.VenueKey, r.OrderID, what, err)
+		log.Printf("[exec] %s", msg)
+		p.alertCrit(ctx, msg)
+	}
+	if err := canceler.CancelOrder(ctx, OrderRef{OrderID: r.OrderID, Venue: leg.VenueKey, Symbol: leg.VenueSymbol}); err != nil {
+		fail("cancel", err)
+		return
+	}
+	qs, ok := exe.(orderStatusQuerier)
+	if !ok {
+		fail("final-query", fmt.Errorf("executor 无 OrderStatusQuerier"))
+		return
+	}
+	_, qty, _, _, err := qs.QueryOrderStatus(ctx, r.OrderID, "", leg.VenueSymbol)
+	if err != nil {
+		fail("final-query", err)
+		return
+	}
+	if qty <= 0 {
+		log.Printf("[exec] rollback pos=%d leg=%d venue=%s order=%s canceled zero-fill（孤儿证否）", posID, i, leg.VenueKey, r.OrderID)
+		return
+	}
+	// 撤单前已部分成交 → 真实敞口走与 FILLED 同一反向平仓路径（qty 已为基础币）。
+	if err := p.rollbackCEXPlace(ctx, exe, leg, qty); err != nil {
+		fail("reverse-close", err)
+		return
+	}
+	log.Printf("[exec] rollback pos=%d leg=%d venue=%s order=%s partial qty=%.8g reversed", posID, i, leg.VenueKey, r.OrderID, qty)
+}
+
+// alertCrit D-508 审计契约：critical 告警写——写失败只落 log 防递归（不得再告警）。
+func (p *Pipeline) alertCrit(ctx context.Context, msg string) {
+	if err := p.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
+		log.Printf("[exec] alert write failed: %v | original: %s", err, msg)
+	}
+}
+
+// legFailReason D-208①：FAILED 腿拒因截断落库（≤512B；venue 关键前缀不吞——截尾不截头）。
+func legFailReason(r LegResult) *string {
+	if r.Status != "FAILED" || r.Reason == "" {
+		return nil
+	}
+	rs := r.Reason
+	if len(rs) > 512 {
+		rs = rs[:512]
+	}
+	return &rs
+}
+
+// ptrNow D-208①：CLOSE 腿 submitted_at 写入点共用 helper。
+func ptrNow() *time.Time { t := time.Now(); return &t }
+
+// persistFailedCloseLeg D-208①：腿级平仓尝试失败落行——attempt_no=该腿
+// CLOSE 既有最大尝试+1（schema 唯一键防重），fail_reason=venue 拒因原文。
+// best-effort：落库败只 log（平仓主径错误语义不变）。
+func (p *Pipeline) persistFailedCloseLeg(ctx context.Context, legs []pgstore.PositionLeg, leg pgstore.PositionLeg, cause error) {
+	var next int16 = 1
+	var parent *int64
+	for _, l := range legs {
+		if l.Phase == "CLOSE" && l.LegNo == leg.LegNo && l.AttemptNo >= next {
+			next = l.AttemptNo + 1
+			if l.Status == "FAILED" {
+				id := l.ID
+				parent = &id // 重试关联上一败次
+			}
+		}
+	}
+	rs := cause.Error()
+	if len(rs) > 512 {
+		rs = rs[:512] // 截尾不截头（venue 关键前缀保留）
+	}
+	cl := &pgstore.PositionLeg{
+		PositionID: leg.PositionID, LegNo: leg.LegNo, Phase: "CLOSE", AttemptNo: next,
+		ParentAttemptID: parent,
+		Venue:           leg.Venue, Account: leg.Account, Symbol: leg.Symbol,
+		Qty: leg.EffectiveQty(), PriceExpected: leg.PriceExpected,
+		Status: "FAILED", FailReason: &rs, SubmittedAt: ptrNow(),
+	}
+	if leg.Side == "BUY" {
+		cl.Side = "SELL"
+	} else {
+		cl.Side = "BUY"
+	}
+	if err := p.store.CreatePositionLeg(ctx, cl); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
+		log.Printf("[exec] pos=%d leg=%d failed-close leg persist: %v", leg.PositionID, leg.LegNo, err)
+	}
+}
+
+// forceNakedAlert D-208③：ClosePositionForce 留裸敞口（任一腿未平）→ warn 推送
+// 裸腿明细（venue/symbol/量；InsertPositionAlert 为仓位内页，全局 warn 保飞书必达）。
+func (p *Pipeline) forceNakedAlert(ctx context.Context, posID int64, legs, closeLegs []pgstore.PositionLeg) {
+	var naked []string
+	closedNo := map[int16]bool{}
+	for _, l := range closeLegs {
+		if l.Status == "FILLED" || l.Status == "EXTERNAL" {
+			closedNo[l.LegNo] = true
+		}
+	}
+	for _, l := range legs {
+		if l.Phase == "OPEN" && l.Status == "FILLED" && !closedNo[l.LegNo] {
+			naked = append(naked, fmt.Sprintf("%s %s %.6g", l.Venue, l.Symbol, l.EffectiveQty()))
+		}
+	}
+	if len(naked) == 0 {
+		return
+	}
+	if err := p.store.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
+		"强制平仓留裸敞口 position #%d：%d 腿未平（%s）——裸奔升级径接管",
+		posID, len(naked), strings.Join(naked, ","))); err != nil {
+		log.Printf("[exec] pos %d force-naked alert write: %v", posID, err)
+	}
+}
