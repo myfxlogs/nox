@@ -20,6 +20,7 @@ const (
 	RefreshFunds          = "funds"            // D-568：账户资金变更（CEX 活账本/MT5 流帧/monitor 轮询三源）
 	RefreshPendingEntries = "pending_entries"  // D-007 S1：待入场闸态翻转（diff 器翻转驱动 emit）
 	RefreshCexScan        = "cex_scan"         // D-007 S3：cexscan 每轮快照落库毕（earn APR+spreads+judgment）
+	RefreshEmployees      = "employees"        // D-230①：员工心跳写点（roster EmployeeBeat 接线=M2.6）
 )
 
 // fundsNotifyInterval D-568：funds 通知尾沿合批窗口。

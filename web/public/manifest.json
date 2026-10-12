@@ -1,7 +1,7 @@
 {
-  "name": "ARB",
-  "short_name": "ARB",
-  "description": "ARB 跨市场套利套息监控台",
+  "name": "NOX",
+  "short_name": "NOX",
+  "description": "NOX 跨市场套利套息监控台",
   "start_url": "/",
   "display": "standalone",
   "theme_color": "#2a78d6",

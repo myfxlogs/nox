@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      "/arb.dashboard.v1.DashboardService": "http://localhost:50051",
+      "/nox.dashboard.v1.DashboardService": "http://localhost:50051",
     },
   },
   build: {
