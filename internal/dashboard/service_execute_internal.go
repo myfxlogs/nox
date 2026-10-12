@@ -87,6 +87,13 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 		if exec.MatchXAssetComboAllow(s.xassetAllowSpecs(), found.Canonical, sellCanonical, found.VenueBuy, found.VenueSell) == nil {
 			return "FAILED", fmt.Sprintf("组合不在跨品种白名单：%s/%s %s×%s", found.Canonical, sellCanonical, found.VenueBuy, found.VenueSell), 0
 		}
+		// D-209②：执行侧休眠防御（手工/intent 径同源）——命中即拒，键粒度
+		// canonical×venue；约束读败 fail-closed 拒（与 autotrade 闸同义）。
+		if cons, err := s.store.ListCapabilityConstraints(ctx); err != nil {
+			return "FAILED", fmt.Sprintf("休眠约束读败 fail-closed：%v", err), 0
+		} else if key, hit := pgstore.XAssetDormantHit(cons, found.Canonical, found.VenueBuy, found.VenueSell); hit {
+			return "FAILED", fmt.Sprintf("休眠轨（D-209）%s 拒执行", key), 0
+		}
 	}
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源，pipeline.Execute 前拦截）。
 	if s.environment != "" {
