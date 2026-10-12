@@ -16,3 +16,6 @@ var EnvKeysNoxSQL string // D-230：app_config/app_secrets 键名 ARB_→NOX_（
 
 //go:embed 1003_drop_unmigrated.sql
 var DropUnmigratedSQL string // M3 前置①：不搬表族 DROP（§3 裁定 12 表；切流先 pg_dump 归档）
+
+//go:embed 1004_nox_ro_role.sql
+var NoxRoRoleSQL string // D-241⑧：鲜装 nox_ro 补造（0041+0047 语义合并；生产切流走 ALTER RENAME）

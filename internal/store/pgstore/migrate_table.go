@@ -197,4 +197,5 @@ var migrationFiles = []struct {
 	{1001, migrations.EmployeeDeptElevenSQL, false},           // D-220：dept 十一部化
 	{1002, migrations.EnvKeysNoxSQL, false},                   // D-230：app_config/app_secrets 键名 ARB_→NOX_
 	{1003, migrations.DropUnmigratedSQL, false},               // M3 前置①：不搬表族 DROP（§3 裁定 12 表）
+	{1004, migrations.NoxRoRoleSQL, false},                    // D-241⑧：鲜装 nox_ro 补造
 }

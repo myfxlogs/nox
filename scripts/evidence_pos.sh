@@ -9,7 +9,7 @@
 #   core_tail.log   — nox-core 近 500 行日志（当时点上下文）
 #
 # 凭据：OKX_* 经 tools/credread 从 exchange_configs 解密读（D-564 S5：.env 已退役；
-# DB_DSN/ARB_MASTER_KEY 基建键照旧）。credread 失败=fail-closed 跳过 venue 侧（DB 侧已采）。
+# DB_DSN/NOX_MASTER_KEY 基建键照旧）。credread 失败=fail-closed 跳过 venue 侧（DB 侧已采）。
 # crontab：7 */2 * * * /opt/nox/scripts/evidence_pos.sh 502 >> /opt/nox-backups/evidence/pos502/cron.log 2>&1
 set -u
 POSID="${1:?usage: evidence_pos.sh <position_id>}"
@@ -53,7 +53,7 @@ if [ -n "$CREAD" ] && [ -x "$CREAD" ]; then
   fi
 fi
 if [ -z "$OKX_ENV" ]; then
-  echo "$(date -u +%FT%TZ) credread OKX 凭据不可得（env 已退役；检查 exchange_configs/ARB_MASTER_KEY）——跳过 venue 侧"
+  echo "$(date -u +%FT%TZ) credread OKX 凭据不可得（env 已退役；检查 exchange_configs/NOX_MASTER_KEY）——跳过 venue 侧"
 fi
 export OKX_ENV
 python3 - "$BASE" <<'PYEOF'
@@ -65,7 +65,7 @@ for line in os.environ.get("OKX_ENV", "").splitlines():
         k, v = line.split("=", 1); env[k.strip()] = v.strip()
 key = env.get("API_KEY"); sec = env.get("API_SECRET"); pp = env.get("PASSPHRASE")
 base = env.get("BASE_URL", "https://www.okx.com") or "https://www.okx.com"  # pg base_url 权威；空=官方直连
-tok = os.environ.get("ARB_BINANCE_PROXY_TOKEN", "")
+tok = os.environ.get("NOX_BINANCE_PROXY_TOKEN", "")
 if not all([key, sec, pp]):
     sys.exit(0)  # 凭据缺则跳过 venue 侧，DB 侧已采
 ctx = ssl.create_default_context()

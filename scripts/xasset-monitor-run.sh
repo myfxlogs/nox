@@ -15,5 +15,5 @@ fi
 export DB_DSN="postgres://nox:nox@127.0.0.1:${NOX_PG_PORT}/nox?sslmode=disable"
 # 9-16 决策席裁定：飞书告警屏蔽（恒真噪音——进场价差不足/进场无利每 5min 恒触发，
 # D-300 裁 13 去重另单未实施前先静音；采集入库不受影响）。恢复=删此行。
-export ARB_FEISHU_APP_ID=""
+export NOX_FEISHU_APP_ID=""
 /opt/nox/bin/xasset-monitor 2>&1

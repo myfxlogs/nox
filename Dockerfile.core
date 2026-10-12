@@ -1,14 +1,19 @@
 FROM node:22-alpine AS web-build
-WORKDIR /web
-COPY web/package.json web/package-lock.json ./
-RUN npm ci
-COPY web/ .
-RUN npm run build
+WORKDIR /src
+COPY web/package.json web/package-lock.json web/
+RUN cd web && npm ci
+# web/src/gen gitignore——镜像内须 buf regen（D-241②；buf 版本对齐 dev 机 1.68.3）
+RUN npm i -g @bufbuild/buf@1.68.3
+COPY buf.yaml buf.gen.web.yaml ./
+COPY proto/dashboardv1 proto/dashboardv1
+COPY web/ web/
+RUN buf generate --template buf.gen.web.yaml
+RUN cd web && npm run build
 
 FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY . .
-COPY --from=web-build /web/dist web/dist
+COPY --from=web-build /src/web/dist web/dist
 RUN go build -o /bin/core ./cmd/core
 
 FROM alpine:3.20

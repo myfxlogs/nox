@@ -4,7 +4,7 @@
 # 用法：./scripts/build_host_tools.sh（repo 根目录跑；需宿主 go toolchain + git）
 set -euo pipefail
 cd "$(dirname "$0")/.."
-OUT="${ARB_BIN_DIR:-./bin}"
+OUT="${NOX_BIN_DIR:-./bin}"
 mkdir -p "$OUT"
 SHA="$(git rev-parse --short HEAD 2>/dev/null || echo nogit)"
 for t in tools/xasset-monitor tools/universe-radar tools/credread; do

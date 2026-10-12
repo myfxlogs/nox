@@ -1,7 +1,7 @@
 # cex-proxy — 静态 IP CEX API 通用反向代理（D-055 升级）
 
-> 目的：arb 服务器出口 IP 不固定或被 CEX 地区限制（如 Binance 对美区 IP 返回 451）。
-> 本代理部署在固定公网 IP 的机器上，把 arb 的 CEX REST 请求转发到各交易所——
+> 目的：nox 服务器出口 IP 不固定或被 CEX 地区限制（如 Binance 对美区 IP 返回 451）。
+> 本代理部署在固定公网 IP 的机器上，把 nox 的 CEX REST 请求转发到各交易所——
 > **交易所看到源 IP = 代理机固定 IP**，可在 key 白名单锁定。
 >
 > 前身 `tools/binance-proxy`（Binance 专用）已升级为配置驱动的通用 CEX 代理。
@@ -96,7 +96,7 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
 6. **保持常驻**（systemd）：
    ```ini
    [Unit]
-   Description=arb CEX static reverse proxy
+   Description=nox CEX static reverse proxy
    After=network-online.target
    Wants=network-online.target
 
@@ -115,7 +115,7 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
    WantedBy=multi-user.target
    ```
 
-## 客户端（arb 侧）配套配置
+## 客户端（nox 侧）配套配置
 
 - `.env` 权威键（appConfig 白名单可管，**禁脚本/代码硬编码覆盖**——D-538 教训）：
   ```
@@ -123,19 +123,19 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
   BINANCE_PROXY_URL=https://cex.myfxlogs.org
   NOX_OKX_PROXY_URL=https://cex.myfxlogs.org
   NOX_CEX_WS_BASE=wss://cex.myfxlogs.org     # okx/binance WS 代理基址（+_BACKUP 可选；gate 常态直连不走代理——VPS1 IP 被 gate 封禁，D-541 终局）
-  # NOX_BINANCE_PROXY_CA=/opt/arb/...       # 仅自签裸连场景需要；CF 域名走系统 CA
+  # NOX_BINANCE_PROXY_CA=/opt/nox/...       # 仅自签裸连场景需要；CF 域名走系统 CA
   ```
 - `exchange_configs.base_url` 同样只写域名（生产现值）：binance=
   `https://cex.myfxlogs.org/fapi` 与 `/api`；okx=`https://cex.myfxlogs.org`；
   gate=`https://cex.myfxlogs.org/api/v4`。
 - 各 CEX key 白名单加**代理机出口 IP**（交易所只见代理 IP——固定 IP 之本意；
-  域名只是 arb→代理机这一段的外衣）。
+  域名只是 nox→代理机这一段的外衣）。
 
 ## 安全说明
 
 - 自签证书私钥只存于代理机 `certs/`，不进 git。
 - `X-Proxy-Token` 鉴权防开放中继——**务必设令牌**。
-- 请求带各 CEX 的 API key 头；密钥 HMAC 永不离开 arb 侧。
+- 请求带各 CEX 的 API key 头；密钥 HMAC 永不离开 nox 侧。
 - WS 代理面：okx/binance 经本代理（握手一样过 `X-Proxy-Token` 闸——token 不泄往
   CEX 原生域，见 D-541 止血约束）；gate 9-28 终局改常态直连（VPS1 IP 被 gate 封禁），
   `/gatespotws`·`/v4/ws` 路由保留备 NOX_GATE_WS_MODE=proxy 回切。

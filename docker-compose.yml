@@ -109,5 +109,6 @@ services:
       retries: 5
 
 volumes:
+  # 切流过渡（D-241⑦）：SG 现存数据在旧卷 arb_arb-pgdata——先 alpine cp 克隆到本卷再 up。
   nox-pgdata:
   nox-pgdata-test:
