@@ -5,6 +5,8 @@ package pgstore
 
 import (
 	"context"
+
+	"arb/internal/keydomain"
 	"encoding/json"
 	"strings"
 	"time"
@@ -162,4 +164,27 @@ func (s *Store) DeferProposalsByPair(ctx context.Context, template, venue string
 		return 0, err
 	}
 	return int(res.RowsAffected()), nil
+}
+
+// XAssetDormantKey D-209：XASSET_CARRY 休眠键粒度=canonical×venue（非 venue 对）——
+// canonical 先剥 USD/USDT 报价后缀取金属键（XAUUSD→XAU、XAGUSDT→XAG），
+// venue 取裸端点（keydomain.BareOf 复合键归一）。例：xasset_carry:XAU@okx。
+func XAssetDormantKey(canonical, venue string) string {
+	metal := strings.ToUpper(canonical)
+	for _, suf := range []string{"USDT", "USD"} {
+		metal = strings.TrimSuffix(metal, suf)
+	}
+	return "xasset_carry:" + metal + "@" + keydomain.BareOf(venue)
+}
+
+// XAssetDormantHit 消费点判——cons 约束行集（调用方 ListCapabilityConstraints 热读）
+// 内休眠前缀查双腿 venue 各一次；命中返回休眠键（台账/拒因文案携键）。
+func XAssetDormantHit(cons []CapabilityConstraint, canonical string, venues ...string) (string, bool) {
+	d := DormantPairs(cons)
+	for _, v := range venues {
+		if k := XAssetDormantKey(canonical, v); d[k] {
+			return k, true
+		}
+	}
+	return "", false
 }
