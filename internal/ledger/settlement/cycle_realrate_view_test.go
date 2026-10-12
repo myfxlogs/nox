@@ -7,17 +7,11 @@ import (
 	"math"
 	"testing"
 
-	"nox/internal/platform/testutil"
 	"nox/internal/store/pgstore"
 )
 
 func TestD341_CycleRealrateView(t *testing.T) {
-	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
-	s, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	defer s.Close()
+	s := testStore(t) // D-237①：带 Migrate 助手自闭环（裸 New 依赖遗留库，CI 空库炸）
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx,
 		`TRUNCATE positions, position_legs, position_cashflows, income_events CASCADE`); err != nil {
