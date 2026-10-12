@@ -302,43 +302,15 @@ func (e *Executor) venueDCIHolding(ctx context.Context, productRef, optType stri
 	if e.HoldingFn != nil {
 		return e.HoldingFn(ctx, productRef, optType)
 	}
-	q := fmt.Sprintf("timestamp=%d&recvWindow=5000", e.Now().UnixMilli())
-	url := fmt.Sprintf("%s/v1/dci/product/positions?%s&signature=%s",
-		strings.TrimRight(e.Sapi, "/"), q, sign(e.BnSec, q))
-	b, err := e.get(ctx, url, true)
+	rows, err := e.dciPositions(ctx)
 	if err != nil {
 		return false, err
-	}
-	type pos struct {
-		ID             string `json:"id"`
-		InstrumentName string `json:"instrumentName"`
-		ProductRef     string `json:"productRef"`
-		OptionType     string `json:"optionType"`
-		Status         string `json:"status"`
-	}
-	var raw struct {
-		Data []pos `json:"data"`
-		List []pos `json:"list"`
-		Rows []pos `json:"rows"`
-	}
-	if err := json.Unmarshal(b, &raw); err != nil {
-		return false, fmt.Errorf("dci positions decode: %w", err)
-	}
-	rows := raw.Data
-	if len(rows) == 0 {
-		rows = raw.List
-	}
-	if len(rows) == 0 {
-		rows = raw.Rows
 	}
 	for _, p := range rows {
 		if p.Status != "HOLDING" {
 			continue
 		}
-		if p.OptionType != "" && p.OptionType != optType {
-			continue
-		}
-		if p.ID == productRef || p.InstrumentName == productRef || p.ProductRef == productRef {
+		if p.match(productRef, optType) {
 			return true, nil
 		}
 	}

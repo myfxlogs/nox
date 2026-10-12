@@ -38,6 +38,17 @@ type fakeStore struct {
 	outstanding float64
 	proposals   map[int64]*pgstore.Proposal
 	nextProp    int64
+	// D-207 交割观察面：
+	filledOrders []pgstore.FilledDCIOrder
+	settled      []struct {
+		id          int64
+		ccy         string
+		qty, income float64
+	}
+	closedMarkers []string
+	closeN        *int64
+	cfgID         int64
+	incomeEvs     []pgstore.IncomeEvent
 }
 
 // dciListJSON R14 重取产品面测试具——全候选品 canPurchase+orderId 齐帧。
@@ -1196,4 +1207,31 @@ func TestD198_Resume(t *testing.T) {
 	if !found {
 		t.Fatalf("读败应落 runtime gap: %+v", fs5.gaps)
 	}
+}
+
+// ---- D-207 交割观察面 fake ----
+func (f *fakeStore) ListFilledDCIOrders(context.Context) ([]pgstore.FilledDCIOrder, error) {
+	return f.filledOrders, nil
+}
+func (f *fakeStore) SettleDCIOrder(_ context.Context, id int64, ccy string, qty, income float64) (bool, error) {
+	f.settled = append(f.settled, struct {
+		id          int64
+		ccy         string
+		qty, income float64
+	}{id, ccy, qty, income})
+	return true, nil
+}
+func (f *fakeStore) ClosePersonalPositionsByMarker(_ context.Context, marker, suffix string) (int64, error) {
+	f.closedMarkers = append(f.closedMarkers, marker)
+	if f.closeN != nil {
+		return *f.closeN, nil
+	}
+	return 1, nil
+}
+func (f *fakeStore) ExchangeConfigID(context.Context, string, string) (int64, error) {
+	return f.cfgID, nil
+}
+func (f *fakeStore) InsertIncomeEvents(_ context.Context, evs []pgstore.IncomeEvent) (int64, error) {
+	f.incomeEvs = append(f.incomeEvs, evs...)
+	return int64(len(evs)), nil
 }
