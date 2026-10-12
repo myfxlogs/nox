@@ -247,6 +247,9 @@ const (
 	// DashboardServiceGetReportProcedure is the fully-qualified name of the DashboardService's
 	// GetReport RPC.
 	DashboardServiceGetReportProcedure = "/nox.dashboard.v1.DashboardService/GetReport"
+	// DashboardServiceListDeptReportsProcedure is the fully-qualified name of the DashboardService's
+	// ListDeptReports RPC.
+	DashboardServiceListDeptReportsProcedure = "/nox.dashboard.v1.DashboardService/ListDeptReports"
 	// DashboardServiceGetAiSettingsProcedure is the fully-qualified name of the DashboardService's
 	// GetAiSettings RPC.
 	DashboardServiceGetAiSettingsProcedure = "/nox.dashboard.v1.DashboardService/GetAiSettings"
@@ -452,6 +455,8 @@ type DashboardServiceClient interface {
 	GenerateRetroReport(context.Context, *connect.Request[dashboardv1.GenerateRetroReportRequest]) (*connect.Response[dashboardv1.GenerateRetroReportResponse], error)
 	ListReports(context.Context, *connect.Request[dashboardv1.ListReportsRequest]) (*connect.Response[dashboardv1.ListReportsResponse], error)
 	GetReport(context.Context, *connect.Request[dashboardv1.GetReportRequest]) (*connect.Response[dashboardv1.GetReportResponse], error)
+	// D-244：部门日报→经理摘要读面（dept='manager' 行=公司日报）
+	ListDeptReports(context.Context, *connect.Request[dashboardv1.ListDeptReportsRequest]) (*connect.Response[dashboardv1.ListDeptReportsResponse], error)
 	// D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
 	GetAiSettings(context.Context, *connect.Request[dashboardv1.GetAiSettingsRequest]) (*connect.Response[dashboardv1.GetAiSettingsResponse], error)
 	SetAiSettings(context.Context, *connect.Request[dashboardv1.SetAiSettingsRequest]) (*connect.Response[dashboardv1.SetAiSettingsResponse], error)
@@ -954,6 +959,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("GetReport")),
 			connect.WithClientOptions(opts...),
 		),
+		listDeptReports: connect.NewClient[dashboardv1.ListDeptReportsRequest, dashboardv1.ListDeptReportsResponse](
+			httpClient,
+			baseURL+DashboardServiceListDeptReportsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListDeptReports")),
+			connect.WithClientOptions(opts...),
+		),
 		getAiSettings: connect.NewClient[dashboardv1.GetAiSettingsRequest, dashboardv1.GetAiSettingsResponse](
 			httpClient,
 			baseURL+DashboardServiceGetAiSettingsProcedure,
@@ -1241,6 +1252,7 @@ type dashboardServiceClient struct {
 	generateRetroReport          *connect.Client[dashboardv1.GenerateRetroReportRequest, dashboardv1.GenerateRetroReportResponse]
 	listReports                  *connect.Client[dashboardv1.ListReportsRequest, dashboardv1.ListReportsResponse]
 	getReport                    *connect.Client[dashboardv1.GetReportRequest, dashboardv1.GetReportResponse]
+	listDeptReports              *connect.Client[dashboardv1.ListDeptReportsRequest, dashboardv1.ListDeptReportsResponse]
 	getAiSettings                *connect.Client[dashboardv1.GetAiSettingsRequest, dashboardv1.GetAiSettingsResponse]
 	setAiSettings                *connect.Client[dashboardv1.SetAiSettingsRequest, dashboardv1.SetAiSettingsResponse]
 	getCexScanSnapshot           *connect.Client[dashboardv1.GetCexScanSnapshotRequest, dashboardv1.GetCexScanSnapshotResponse]
@@ -1638,6 +1650,11 @@ func (c *dashboardServiceClient) GetReport(ctx context.Context, req *connect.Req
 	return c.getReport.CallUnary(ctx, req)
 }
 
+// ListDeptReports calls nox.dashboard.v1.DashboardService.ListDeptReports.
+func (c *dashboardServiceClient) ListDeptReports(ctx context.Context, req *connect.Request[dashboardv1.ListDeptReportsRequest]) (*connect.Response[dashboardv1.ListDeptReportsResponse], error) {
+	return c.listDeptReports.CallUnary(ctx, req)
+}
+
 // GetAiSettings calls nox.dashboard.v1.DashboardService.GetAiSettings.
 func (c *dashboardServiceClient) GetAiSettings(ctx context.Context, req *connect.Request[dashboardv1.GetAiSettingsRequest]) (*connect.Response[dashboardv1.GetAiSettingsResponse], error) {
 	return c.getAiSettings.CallUnary(ctx, req)
@@ -1912,6 +1929,8 @@ type DashboardServiceHandler interface {
 	GenerateRetroReport(context.Context, *connect.Request[dashboardv1.GenerateRetroReportRequest]) (*connect.Response[dashboardv1.GenerateRetroReportResponse], error)
 	ListReports(context.Context, *connect.Request[dashboardv1.ListReportsRequest]) (*connect.Response[dashboardv1.ListReportsResponse], error)
 	GetReport(context.Context, *connect.Request[dashboardv1.GetReportRequest]) (*connect.Response[dashboardv1.GetReportResponse], error)
+	// D-244：部门日报→经理摘要读面（dept='manager' 行=公司日报）
+	ListDeptReports(context.Context, *connect.Request[dashboardv1.ListDeptReportsRequest]) (*connect.Response[dashboardv1.ListDeptReportsResponse], error)
 	// D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
 	GetAiSettings(context.Context, *connect.Request[dashboardv1.GetAiSettingsRequest]) (*connect.Response[dashboardv1.GetAiSettingsResponse], error)
 	SetAiSettings(context.Context, *connect.Request[dashboardv1.SetAiSettingsRequest]) (*connect.Response[dashboardv1.SetAiSettingsResponse], error)
@@ -2410,6 +2429,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("GetReport")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListDeptReportsHandler := connect.NewUnaryHandler(
+		DashboardServiceListDeptReportsProcedure,
+		svc.ListDeptReports,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListDeptReports")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceGetAiSettingsHandler := connect.NewUnaryHandler(
 		DashboardServiceGetAiSettingsProcedure,
 		svc.GetAiSettings,
@@ -2766,6 +2791,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListReportsHandler.ServeHTTP(w, r)
 		case DashboardServiceGetReportProcedure:
 			dashboardServiceGetReportHandler.ServeHTTP(w, r)
+		case DashboardServiceListDeptReportsProcedure:
+			dashboardServiceListDeptReportsHandler.ServeHTTP(w, r)
 		case DashboardServiceGetAiSettingsProcedure:
 			dashboardServiceGetAiSettingsHandler.ServeHTTP(w, r)
 		case DashboardServiceSetAiSettingsProcedure:
@@ -3131,6 +3158,10 @@ func (UnimplementedDashboardServiceHandler) ListReports(context.Context, *connec
 
 func (UnimplementedDashboardServiceHandler) GetReport(context.Context, *connect.Request[dashboardv1.GetReportRequest]) (*connect.Response[dashboardv1.GetReportResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetReport is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListDeptReports(context.Context, *connect.Request[dashboardv1.ListDeptReportsRequest]) (*connect.Response[dashboardv1.ListDeptReportsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListDeptReports is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetAiSettings(context.Context, *connect.Request[dashboardv1.GetAiSettingsRequest]) (*connect.Response[dashboardv1.GetAiSettingsResponse], error) {

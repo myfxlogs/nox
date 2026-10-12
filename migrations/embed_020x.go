@@ -19,3 +19,6 @@ var DropUnmigratedSQL string // M3 前置①：不搬表族 DROP（§3 裁定 12
 
 //go:embed 1004_nox_ro_role.sql
 var NoxRoRoleSQL string // D-241⑧：鲜装 nox_ro 补造（0041+0047 语义合并；生产切流走 ALTER RENAME）
+
+//go:embed 1005_dept_reports.sql
+var DeptReportsSQL string // D-244：fin_dept_reports（十一部部报+账本专项+经理摘要）

@@ -141,6 +141,8 @@ internal/research/scan -> internal/data/fact
 internal/research/scan -> internal/data/keydomain
 internal/research/scan -> internal/store/pgstore
 internal/review -> internal/store/pgstore
+internal/review/deptreport -> internal/platform/analyst
+internal/review/deptreport -> internal/store/pgstore
 internal/review/kbreport -> internal/platform/analyst
 internal/review/kbreport -> internal/store/pgstore
 internal/review/sysretro -> internal/ir/inboxfmt

@@ -25,6 +25,10 @@ type LoopCallbacks struct {
 type LoopResult struct {
 	Grounded   bool   // 全程零工具调用=false
 	StopReason string // D-530：末轮 stop_reason（end_turn/max_tokens/...，symdig 截断检测消费）
+	// Usage D-244：全轮次 token 耗合计（message_start in / message_delta out 累积；
+	// 报告类调用方留痕用，流式缺 usage 事件时为 0 不误报）。
+	InputTokens  int
+	OutputTokens int
 }
 
 // Run 执行 agent 循环（硬编码 ToolSpecs()+SystemPrompt）。
@@ -55,6 +59,7 @@ func RunWithSpecsMaxTokens(ctx context.Context, c *Client, tools ToolExecutor, t
 func RunWithSpecsMaxTokensThinking(ctx context.Context, c *Client, tools ToolExecutor, toolSpecs []ToolSpec, systemPrompt string, msgs []Message, cb LoopCallbacks, maxTokens int, thinking json.RawMessage) (LoopResult, error) {
 	grounded := false
 	lastStop := ""
+	inTok, outTok := 0, 0
 	for round := 0; round < MaxToolRounds; round++ {
 		req := &MessageRequest{
 			Model:     c.Model,
@@ -81,6 +86,10 @@ func RunWithSpecsMaxTokensThinking(ctx context.Context, c *Client, tools ToolExe
 					Name:  call.Name,
 					Input: json.RawMessage(call.Input),
 				})
+			},
+			OnUsage: func(in, out int) {
+				inTok += in
+				outTok += out
 			},
 		})
 		if err != nil {
@@ -127,7 +136,7 @@ func RunWithSpecsMaxTokensThinking(ctx context.Context, c *Client, tools ToolExe
 			cb.OnFollowUps(fu)
 		}
 	}
-	return LoopResult{Grounded: grounded, StopReason: lastStop}, nil
+	return LoopResult{Grounded: grounded, StopReason: lastStop, InputTokens: inTok, OutputTokens: outTok}, nil
 }
 
 // parseFollowUps 从末条 assistant 文本中尝试解析 follow_ups（best-effort，非硬要求）。

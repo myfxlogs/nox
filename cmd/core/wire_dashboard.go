@@ -13,11 +13,13 @@ import (
 	"nox/internal/api/dashboard"
 	"nox/internal/data/bus"
 	"nox/internal/data/keydomain"
+	"nox/internal/ir/notify"
 	"nox/internal/platform/analyst"
 	"nox/internal/platform/config"
 	"nox/internal/platform/httpx"
 	"nox/internal/platform/safego"
 	"nox/internal/research/explorer"
+	"nox/internal/review/deptreport"
 	"nox/internal/review/kbreport"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/engine"
@@ -35,7 +37,7 @@ func wireAuthIntercept(secRes *config.SecretResolver, cfg *config.Config) *auth.
 }
 
 // wireDashboardSetters 注入 dashSvc 的 setter 依赖（leg 查询/CS/frontConfig/analyst）。
-func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *config.Config, st *pgstore.Store, brokerMgr *dashboard.BrokerManager, factCache *engine.FactCache) {
+func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *config.Config, st *pgstore.Store, brokerMgr *dashboard.BrokerManager, factCache *engine.FactCache, feishu *notify.FeishuClient) {
 	fundingNeedTopic := bus.NewTopic[dashboard.FundingNeedNotice]()
 	dashSvc.SetFundingNeedTopic(fundingNeedTopic)
 	// D-060 F5：手动预检单腿 trade_mode——D-004 P1#2 删 FactCache.TradeMode 单查法后，
@@ -138,6 +140,21 @@ func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *
 	aiTools.ProbeCaller = dashSvc.ProbeCallerForAnalyst()       // D-100：llm_probe 当问配置探针
 	aiRate := analyst.NewRateLimiter(cfg.AnalystRatePerHour)
 	dashSvc.SetAnalyst(aiClient, aiTools, aiRate, analyst.KnRoot, "docs/经验库/待归纳-分析员.md")
+
+	// D-244：部门日报→经理摘要——接入面复用本函数 aiClient/aiTools/aiRate（~12 调用/天）；
+	// 飞书扇出走直推（Notify/ChatID 缺=只 alerts 留痕）；fail-open 零业务阻塞。
+	safego.GoLoop("main:deptreport", func() {
+		deptreport.Run(ctx, deptreport.Deps{
+			Store: st,
+			Tools: aiTools,
+			Rate:  aiRate,
+			ResolveClient: func(ctx context.Context) (*analyst.Client, error) {
+				return kbreport.ResolveClient(ctx, st, cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)
+			},
+			Notify: feishu,
+			ChatID: st.FeishuChatID,
+		})
+	})
 
 	// D-048③：探针到期平仓取证报告钩——explorer.Deps 复用（store+ResolveClient+研报目录），
 	// LLM 生成自开 goroutine（2min 超时），平仓路径零阻塞；报告推/告警走 alerts→feishu 扇出。

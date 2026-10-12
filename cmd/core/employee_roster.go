@@ -28,6 +28,7 @@ var employeeRoster = []pgstore.Employee{
 	{Name: "main:oppmatch", Role: "模板匹配", Dept: "研究", Assembly: "wire_oppmatch.go", CadenceSec: 90000},
 	{Name: "main:selfwatch", Role: "自监控", Dept: "风控", Assembly: "wire_selfwatch.go"},
 	{Name: "main:feishu-push", Role: "飞书推送", Dept: "IR", Assembly: "wire_feishu.go"},
+	{Name: "main:deptreport", Role: "部门日报", Dept: "IR", Assembly: "wire_dashboard.go", CadenceSec: 86400},
 	{Name: "main:macro", Role: "宏观日历", Dept: "数据", Assembly: "wire_macro.go"},
 	{Name: "main:trxvote", Role: "TRX 投票", Dept: "数据", Assembly: "wire_trx.go"},
 	{Name: "main:ticker", Role: "行情", Dept: "数据", Assembly: "wire_quotes.go"},

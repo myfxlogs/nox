@@ -1,0 +1,25 @@
+syntax = "proto3";
+package nox.dashboard.v1;
+
+option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
+
+// D-244：部门日报→经理摘要读面（fin_dept_reports 行；dept='manager'=公司日报）。
+message DeptReport {
+  string dept = 1;
+  string report_date = 2;      // YYYY-MM-DD（BJ 历日）
+  string body = 3;
+  int32 elapsed_ms = 4;
+  int32 prompt_tokens = 5;
+  int32 completion_tokens = 6;
+  int64 created_ts = 7;        // unix ts
+}
+
+message ListDeptReportsRequest {
+  string report_date = 1;      // 空=最新有报日
+}
+
+message ListDeptReportsResponse {
+  string report_date = 1;
+  repeated DeptReport reports = 2;
+  repeated string dates = 3;   // 近 30 个有报日（列表侧栏）
+}

@@ -101,6 +101,7 @@ type StreamCallbacks struct {
 	OnDelta    func(text string)       // content_block_delta.text_delta
 	OnToolUse  func(call ToolCall)     // content_block_start tool_use + content_block_stop
 	OnComplete func(stopReason string) // message_stop / message_delta stop_reason
+	OnUsage    func(in, out int)       // message_start/message_delta usage（D-244 报告 token 耗留痕）
 	OnError    func(err error)         // 任意错误
 }
 
@@ -157,6 +158,8 @@ func parseSSE(r io.Reader, cb StreamCallbacks) (string, error) {
 			Type         string          `json:"type"`
 			Delta        json.RawMessage `json:"delta"`
 			ContentBlock json.RawMessage `json:"content_block"`
+			Message      json.RawMessage `json:"message"`
+			Usage        json.RawMessage `json:"usage"`
 			DeltaType    string          `json:"delta.type"`
 		}
 		if err := json.Unmarshal([]byte(data), &ev); err != nil {
@@ -193,12 +196,33 @@ func parseSSE(r io.Reader, cb StreamCallbacks) (string, error) {
 			}
 			inToolBlock = false
 			pendingTool = ToolCall{}
+		case "message_start":
+			// usage.input_tokens（message.usage）+ 初值 output_tokens。
+			if cb.OnUsage != nil && len(ev.Message) > 0 {
+				var m struct {
+					Usage struct {
+						Input  int `json:"input_tokens"`
+						Output int `json:"output_tokens"`
+					} `json:"usage"`
+				}
+				if err := json.Unmarshal(ev.Message, &m); err == nil {
+					cb.OnUsage(m.Usage.Input, m.Usage.Output)
+				}
+			}
 		case "message_delta":
 			var d struct {
 				StopReason string `json:"stop_reason"`
 			}
 			if err := json.Unmarshal(ev.Delta, &d); err == nil && d.StopReason != "" {
 				stopReason = d.StopReason
+			}
+			if cb.OnUsage != nil && len(ev.Usage) > 0 {
+				var u struct {
+					Output int `json:"output_tokens"`
+				}
+				if err := json.Unmarshal(ev.Usage, &u); err == nil {
+					cb.OnUsage(0, u.Output)
+				}
 			}
 		case "message_stop":
 			if cb.OnComplete != nil {

@@ -213,7 +213,7 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 	wireReconKicks(ctx, a, recon, cexStreamMgr)                  // D-004 P1#6：对账事件化（kick 订阅+重连钩+事件循环）
 	wireReconFastRetry(ctx, recon, cfg)                          // D-407：残腿密集重试装配（拆 wire_posmon.go 保行数）
 	// dashSvc setter 注入（leg 查询/CS/frontConfig/analyst）提取至 wire_dashboard.go 保 main() ≤300 行。
-	wireDashboardSetters(ctx, dashSvc, cfg, st, brokerMgr, a.factCache)
+	wireDashboardSetters(ctx, dashSvc, cfg, st, brokerMgr, a.factCache, a.feishuClient)
 	// D-163：探针机审——kick 驱动 + boot 扫（事件唯一正道，无定时轮询）。
 	safego.GoLoop("main:probeAdjudicator", func() {
 		sub, cancel := a.probeTopic.Subscribe()
