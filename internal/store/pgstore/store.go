@@ -57,15 +57,29 @@ func New(ctx context.Context, dsn string) (*Store, error) {
 	cfg.MaxConnLifetime = time.Hour
 	cfg.MaxConnIdleTime = 30 * time.Minute
 
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("create pool: %w", err)
+	// 瞬断重试（D-244）：PG service 重启/conn kill 窗口期建池+Ping 会吃到
+	// EBADF/reset 类瞬断（CI run 38267344834/38267696180 实证）——3 次指退；
+	// 凭据/schema 类真错不重试直接报。
+	var pool *pgxpool.Pool
+	var lastErr error
+	for i := 0; i < 3; i++ {
+		pool, lastErr = pgxpool.NewWithConfig(ctx, cfg)
+		if lastErr == nil {
+			if lastErr = pool.Ping(ctx); lastErr == nil {
+				return &Store{pool: pool}, nil
+			}
+			pool.Close()
+		}
+		if !isTransientConnErr(lastErr) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("new store: %w", ctx.Err())
+		case <-time.After(time.Duration(i+1) * 300 * time.Millisecond):
+		}
 	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("ping db: %w", err)
-	}
-	return &Store{pool: pool}, nil
+	return nil, fmt.Errorf("new store: %w", lastErr)
 }
 
 // Close 关闭连接池。

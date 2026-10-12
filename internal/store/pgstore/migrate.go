@@ -4,13 +4,34 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
 // 顺序执行 embed 的 SQL 文件，schema_migrations 表记录已应用版本。
+// 瞬断重试（D-244）：连接层瞬断（server conn kill/restart 窗口，CI EBADF 实证）
+// 3 次指退重试——per-migration 事务保证重入安全；非瞬断真错首败即报。
 func (s *Store) Migrate(ctx context.Context) error {
+	var lastErr error
+	for i := 0; i < 3; i++ {
+		if lastErr = s.migrateOnce(ctx); lastErr == nil {
+			return nil
+		}
+		if !isTransientConnErr(lastErr) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(i+1) * 300 * time.Millisecond):
+		}
+	}
+	return lastErr
+}
+
+func (s *Store) migrateOnce(ctx context.Context) error {
 	_, err := s.pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version     INTEGER PRIMARY KEY,
