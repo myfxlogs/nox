@@ -1,0 +1,274 @@
+// service_venue_exposure.go D-475a S6：venue 敞口闸 RPC——List 透传 / Set 校验+
+// Upsert+kickConfig 即时生效+info 审计留痕。cap=0=冻结新批准（approve 敞口闸消费）。
+package dashboard
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+
+	v1 "arb/internal/gen/dashboardv1"
+	"arb/internal/store/pgstore"
+
+	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+// ListVenueExposureCaps 闸表全量透传 + D-542 S3②：已配置账户但闸表无行的 venue_key
+// 合成 unset 占位行（显式提示未设闸——binance:spot/perp 类缺闸 venue 不再隐身）。
+func (s *Service) ListVenueExposureCaps(ctx context.Context, _ *connect.Request[v1.ListVenueExposureCapsRequest]) (*connect.Response[v1.ListVenueExposureCapsResponse], error) {
+	caps, err := s.gradDB().ListVenueExposureCaps(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	// D-547 S3①→D-010：live 面值——allocated=Σ白名单保证金预留（口径同 exposureCapGate），
+	// 池面=legPool 链（live 账本/REST 校准/快照兜底；缺取 source=空如实透出）。
+	snaps, _ := s.liveAccountLatest(ctx)
+	existing, _ := s.gradDB().LoadXAssetAllowCombos(ctx, "live")
+	allocated := s.allocMarginSumOf(ctx, existing)
+	// D-557 S1：venue_key→通道白名单规则 join（同 venue 规则 sim/real 双行取 real 优先；
+	// 读失败降级空 map 不拖垮闸表透出——join 面非执法面）。
+	venueRules := map[string]pgstore.AutotradeAllowRule{}
+	if rules, rerr := s.gradDB().ListAutotradeAllowRulesAll(ctx); rerr == nil {
+		for _, r := range rules {
+			if r.Kind != "venue" {
+				continue
+			}
+			if prev, ok := venueRules[r.Value]; !ok || (prev.Simulated && !r.Simulated) {
+				venueRules[r.Value] = r
+			}
+		}
+	}
+	joinRule := func(row *v1.VenueExposureCapRow) {
+		if r, ok := venueRules[row.VenueKey]; ok {
+			row.AllowRuleId = r.ID
+			row.AllowEnabled = r.Enabled
+		}
+	}
+	out := make([]*v1.VenueExposureCapRow, 0, len(caps))
+	for _, c := range caps {
+		row := &v1.VenueExposureCapRow{
+			VenueKey: c.VenueKey, CapUsd: c.CapUSD, Enabled: c.Enabled, Note: c.Note,
+			UpdatedAt:    timestamppb.New(c.UpdatedAt),
+			AllocatedUsd: allocated[c.VenueKey],
+			OverCap:      c.Enabled && c.CapUSD > 0 && allocated[c.VenueKey] > c.CapUSD,
+		}
+		if p, ok := s.legPool(ctx, snaps, c.VenueKey); ok {
+			avail := p.equity
+			if p.free != nil {
+				avail = *p.free
+			}
+			row.LiveAvailableUsd = avail
+			row.LiveEquityUsd = p.equity
+			row.LiveSource = poolSource(p)
+			row.LiveUpdatedAt = timestamppb.New(p.at)
+		}
+		joinRule(row)
+		out = append(out, row)
+	}
+	for _, key := range s.unsetCapKeys(ctx, caps) {
+		row := &v1.VenueExposureCapRow{
+			VenueKey: key, Unset: true, Note: "未设闸（approve 放行+warn；建议显式设上限）",
+		}
+		joinRule(row)
+		out = append(out, row)
+	}
+	return connect.NewResponse(&v1.ListVenueExposureCapsResponse{Rows: out}), nil
+}
+
+// unsetCapKeys 已配置账户面但闸表无行的 venue_key 集（CEX=exchange_configs live 行
+// venue:venue_type；MT=broker_accounts user:mt4|mt5——与 approve 腿 venue_key 同键域）。
+func (s *Service) unsetCapKeys(ctx context.Context, caps map[string]pgstore.VenueExposureCap) []string {
+	want := map[string]bool{}
+	if cfgs, err := s.gradDB().ListExchangeConfigs(ctx); err == nil {
+		for _, c := range cfgs {
+			if c.Simulated {
+				continue
+			}
+			want[c.Venue+":"+c.VenueType] = true
+		}
+	}
+	if accts, err := s.gradDB().ListBrokerAccounts(ctx); err == nil {
+		for _, a := range accts {
+			want[a.Venue+":"+brokerVenueType(a.Platform)] = true
+		}
+	}
+	keys := make([]string, 0, len(want))
+	for k := range want {
+		keys = append(keys, k)
+	}
+	return unsetCapKeysOf(keys, caps)
+}
+
+// unsetCapKeysOf 账户键集 − 闸表键集 = 未设闸键序（纯函数，D-542 A4 锚测点）。
+func unsetCapKeysOf(want []string, caps map[string]pgstore.VenueExposureCap) []string {
+	out := make([]string, 0, len(want))
+	seen := map[string]bool{}
+	for _, k := range want {
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		if _, ok := caps[k]; !ok {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// brokerVenueType platform int → venue_type 段（0=mt4 1=mt5；其他如实回传不猜）。
+func brokerVenueType(platform int) string {
+	if platform == 1 {
+		return "mt5"
+	}
+	return "mt4"
+}
+
+// SetVenueExposureCap 写/改闸：venue_key 非空+cap_usd>=0（负值 DB CHECK 也拒，
+// 前置给友好文案）→Upsert→kickConfig（写即踢，敞口变更即时生效）+info 审计。
+// 域内错误 in-band ok=false（前端可展示）。
+func (s *Service) SetVenueExposureCap(ctx context.Context, req *connect.Request[v1.SetVenueExposureCapRequest]) (*connect.Response[v1.SetVenueExposureCapResponse], error) {
+	g := req.Msg
+	resp := &v1.SetVenueExposureCapResponse{}
+	key := strings.TrimSpace(g.VenueKey)
+	if key == "" {
+		resp.Error = "venue_key 必填（账户级键：'3001157:mt5'/'okx:perp'）"
+		return connect.NewResponse(resp), nil
+	}
+	if g.CapUsd < 0 {
+		resp.Error = "cap_usd 禁负（0=显式全禁=冻结新批准）"
+		return connect.NewResponse(resp), nil
+	}
+	if err := s.store.UpsertVenueExposureCap(ctx, &pgstore.VenueExposureCap{
+		VenueKey: key, CapUSD: g.CapUsd, Enabled: g.Enabled, Note: g.Note,
+	}); err != nil {
+		resp.Error = fmt.Sprintf("写入失败: %v", err)
+		return connect.NewResponse(resp), nil
+	}
+	s.kickConfig() // D-475a S6：Set→kick（nil 安全）
+	if err := s.store.InsertAlert(ctx, nil, "info",
+		fmt.Sprintf("[敞口闸] %s 上限 $%.0f 启用=%v %s", key, g.CapUsd, g.Enabled, g.Note)); err != nil {
+		resp.Error = fmt.Sprintf("已写入但审计告警失败: %v", err)
+		return connect.NewResponse(resp), nil
+	}
+	s.PublishDataRefresh(RefreshAllowRules)
+	resp.Ok = true
+	return connect.NewResponse(resp), nil
+}
+
+// exposureLeg 敞口闸腿参（typed venue_key + canonical 供 qbus 符号解析 + 腿向）。
+type exposureLeg struct {
+	VenueKey  string
+	Canonical string
+	SellLeg   bool
+}
+
+// exposureCapGate D-475a S3→D-010 S2 敞口闸（G5，approve 链路；保证金占用口径）：
+// 两腿 venue_key 各查 caps——行缺席→放行+capWarns 如实透出；enabled=false→跳过；
+// cap=0→冻结新批准（不吊销存量 enabled 组合）；Σ实占保证金+本次腿保证金>cap→拒。
+// 本次=N×frac(v)（N=单腿名义：NotionalUSD 优先，缺→MaxGrossUSD/2）；frac 读败→
+// 名义全款计（保守）。读失败 fail-closed。返回 (warns, "") 或 (nil, 拒因)。
+func (s *Service) exposureCapGate(ctx context.Context, legs []exposureLeg, grossUSD float64, notionalUSD *float64) ([]string, string) {
+	db := s.gradDB()
+	caps, err := db.ListVenueExposureCaps(ctx)
+	if err != nil {
+		return nil, fmt.Sprintf("敞口闸表读取失败: %v（fail-closed 不批钱）", err)
+	}
+	proposed := grossUSD / 2
+	if notionalUSD != nil {
+		proposed = *notionalUSD
+	}
+	var warns []string
+	for _, leg := range legs {
+		legKey := leg.VenueKey
+		capRow, ok := caps[legKey]
+		if !ok {
+			warns = append(warns, fmt.Sprintf("venue %s 未设敞口闸（fin_venue_exposure_caps 无行）", legKey))
+			continue
+		}
+		if !capRow.Enabled {
+			continue // 闸停用（行仍在档）
+		}
+		if capRow.CapUSD == 0 {
+			return nil, fmt.Sprintf("venue %s 保证金闸冻结新批准（cap=0）", legKey)
+		}
+		// D-009 S4→D-010：实占=在途系统仓保证金（外单不入），与闸6/执行守卫同谓词。
+		sum, serr := s.VenueSystemMarginUSD(ctx, strings.SplitN(legKey, ":", 2)[0])
+		if serr != nil {
+			return nil, fmt.Sprintf("venue %s 保证金实占查询失败（fail-closed）: %v", legKey, serr)
+		}
+		frac, known := s.legMarginFracFor(ctx, legKey, leg.Canonical, leg.SellLeg)
+		if !known {
+			frac = 1.0 // 杠杆实读败→名义全款计（保守不批超）
+		}
+		prop := proposed * frac
+		if sum+prop > capRow.CapUSD {
+			return nil, fmt.Sprintf("venue %s 保证金占用超限: 实占 $%.0f+本次 $%.0f > cap $%.0f",
+				legKey, sum, prop, capRow.CapUSD)
+		}
+	}
+	return warns, ""
+}
+
+// allocMarginSumOf venue_key→预留保证金汇总（D-010 margin 口径，承 exposureSumOf
+// 旧义=AllocatedUsd 列+overSubscribedWarn，非执法面）：
+// margin 行→N×frac_v（N=margin÷(fracB+fracS)；frac 缺→整额预算两键同记=保守高估）；
+// notional/gross 行→N×frac_v（frac 缺→名义全款计）。
+func (s *Service) allocMarginSumOf(ctx context.Context, existing []pgstore.XAssetAllowRow) map[string]float64 {
+	sum := map[string]float64{}
+	for _, r := range existing {
+		fB, kB := s.legMarginFracFor(ctx, r.VenueBuy, r.CanonicalBuy, false)
+		fS, kS := s.legMarginFracFor(ctx, r.VenueSell, r.CanonicalSell, true)
+		if r.MarginUSD != nil {
+			if kB && kS && fB+fS > 0 {
+				n := *r.MarginUSD / (fB + fS)
+				sum[r.VenueBuy] += n * fB
+				sum[r.VenueSell] += n * fS
+			} else {
+				sum[r.VenueBuy] += *r.MarginUSD // frac 缺→整额两键同记=保守高估
+				sum[r.VenueSell] += *r.MarginUSD
+			}
+			continue
+		}
+		n := r.MaxGrossUSD / 2
+		if r.NotionalUSD != nil {
+			n = *r.NotionalUSD
+		}
+		if !kB {
+			fB = 1.0
+		}
+		if !kS {
+			fS = 1.0
+		}
+		sum[r.VenueBuy] += n * fB
+		sum[r.VenueSell] += n * fS
+	}
+	return sum
+}
+
+// ghostCapKeys 闸表键 − 账户面键 = 幽灵键序（D-547 T2：caps 键域须 ⊆ 账户面键域——
+// 不在 exchange_configs/broker_accounts 键域的闸行保护不了任何真腿）。纯函数锚点。
+func ghostCapKeys(caps map[string]pgstore.VenueExposureCap, accountKeys []string) []string {
+	want := map[string]bool{}
+	for _, k := range accountKeys {
+		want[k] = true
+	}
+	var out []string
+	for k := range caps {
+		if !want[k] {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// poolSource 池来源透出标签（live 账本/REST 校准/快照兜底）。
+func poolSource(p allocPool) string {
+	if p.src != "" {
+		return p.src
+	}
+	return "snap"
+}
