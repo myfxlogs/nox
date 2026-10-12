@@ -1,4 +1,4 @@
-// D-269 S4：TRX 投票收益优化器调度器。SSOT: docs/D-269设计…Claude.md §5
+// TRX 投票收益优化器调度器。SSOT: docs/D-269设计…Claude.md §5
 package trxvote
 
 import (
@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/safego"
+	"arb/internal/platform/safego"
 )
 
 // AccountDetail 账户投票详情——读面本地域结构（D-117：与 gotron proto 解耦，
@@ -37,7 +37,7 @@ type Scheduler struct {
 	lastRebalanceBlockAt time.Time // 改投阻塞冷却（带宽不足/查询失败共用，15min）
 	aboveThreshold       bool      // reward 是否在 >10e6 区间（状态迁移才打日志）
 	accountQueryFailing  bool      // D-117：账户查询失败 episode 标记（告警去重+恢复边沿）
-	// D-137：事件驱动改投（30min 盲醒 tick 已摘除，见 boundary.go）。
+	// 事件驱动改投（30min 盲醒 tick 已摘除，见 boundary.go）。
 	boundaryCh        chan string
 	nextMaintFn       func(ctx context.Context) (time.Time, error) // GetNextMaintenanceTime 源（failsafe 用）
 	nextMaint         time.Time                                    // 缓存下一维护期边界

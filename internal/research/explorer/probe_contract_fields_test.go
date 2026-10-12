@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/analyst"
+	"arb/internal/platform/analyst"
 
 	explorerv1 "arb/internal/gen/arb/explorer/v1"
 	"arb/internal/store/pgstore"

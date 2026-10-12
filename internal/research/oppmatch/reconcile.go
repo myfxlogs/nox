@@ -7,7 +7,7 @@ import (
 	"log"
 	"strings"
 
-	"arb/internal/dciexec"
+	"arb/internal/risk/gate"
 	"arb/internal/store/pgstore"
 )
 
@@ -16,7 +16,7 @@ import (
 // （episode 防抖）。未接执行轨模板声明新 venue=合法投资人请求不报。
 // 内部不一致报系统不修数据（修种子=策略治理权）。
 func checkVenueFloat(ctx context.Context, st *pgstore.Store, in []Template) {
-	execVenue := dciexec.ExecTemplateVenues()
+	execVenue := gate.ExecTemplateVenues()
 	for _, t := range in {
 		ev, ok := execVenue[t.ID]
 		if !ok {

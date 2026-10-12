@@ -75,27 +75,10 @@ type Executor struct {
 	PositionsFn func(ctx context.Context) ([]DCIPosition, error)                    // D-207 venue 持仓全列表（settle 观察；nil=实 GET）
 }
 
-// execTemplates 可执行提案模板→腿映射（D-189：提案模板=腿子集；
-// 其余模板提案可批不执行「模板未接执行轨」）。
-var execTemplates = map[string][]gate.DCILeg{
-	"dci_sell_high_covered_call": {gate.CallLeg},
-	"dci_buy_low":                {gate.PutLeg},
-}
-
-// ExecTemplateVenues 可执行提案模板→执行 venue（D-193① venue 悬空自检数据源；
-// 本 executor=binance 单所写径——venue 集从腿面衍生非手抄）。
-func ExecTemplateVenues() map[string]string {
-	out := make(map[string]string, len(execTemplates))
-	for t := range execTemplates {
-		out[t] = "binance"
-	}
-	return out
-}
-
 // Go 裸口令主径：最新 pending 可执行提案→GoProposal 绑 id 执行（D-189③）。
 func (e *Executor) Go(ctx context.Context) (string, error) {
 	var tmpls []string
-	for t := range execTemplates {
+	for t := range gate.ExecTemplates {
 		tmpls = append(tmpls, t)
 	}
 	p, err := e.Store.LatestPendingProposal(ctx, tmpls)
@@ -129,7 +112,7 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	if p.Status != "proposed" {
 		return "", fmt.Errorf("提案#%d 已 %s（拒单）", id, p.Status)
 	}
-	legs, ok := execTemplates[p.TemplateID]
+	legs, ok := gate.ExecTemplates[p.TemplateID]
 	if !ok {
 		return "", fmt.Errorf("提案#%d 模板 %s 未接执行轨（提案可批执行面未接线）", id, p.TemplateID)
 	}

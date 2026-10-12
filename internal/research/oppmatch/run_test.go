@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"arb/internal/platform/testutil"
 	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
 )
 
 // TestD187_RunOnceRealStore：真测试库首扫——≥1 提案或缺口（票面验收同型），

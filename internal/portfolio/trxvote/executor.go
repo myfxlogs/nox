@@ -1,4 +1,4 @@
-// D-269 S3：TRX 投票交易执行器（gotron-sdk v0.26.0 集成）。
+// TRX 投票交易执行器（gotron-sdk v0.26.0 集成）。
 // 实现 Vote（改投）+ ClaimReward（领奖），私钥从 env 读取 never log。
 // SSOT: docs/D-269设计-TRX投票收益优化器-2026-09-10-Claude.md §4
 package trxvote
@@ -35,7 +35,7 @@ type TronClient interface {
 	GetRewardsInfoCtx(ctx context.Context, addr string) (int64, error)
 	BroadcastCtx(ctx context.Context, tx *core.Transaction) (*api.Return, error)
 	GetAccountResourceCtx(ctx context.Context, addr string) (*api.AccountResourceMessage, error)
-	// D-137③：自发 tx 回执查询（有界确认窗用）。
+	// 自发 tx 回执查询（有界确认窗用）。
 	GetTransactionInfoByIDCtx(ctx context.Context, id string) (*core.TransactionInfo, error)
 }
 
@@ -88,7 +88,7 @@ func (e *Executor) Vote(ctx context.Context, target []VoteEntry) (string, error)
 		return "", fmt.Errorf("broadcast vote tx: %w", err)
 	}
 
-	// D-293 F1：签名后本地重算 tx hash（PermissionId 变异在取 txid 前，txExt.GetTxid() 是变异前 hash）。
+	// 签名后本地重算 tx hash（PermissionId 变异在取 txid 前，txExt.GetTxid() 是变异前 hash）。
 	txHash, err := recomputeTxHash(signedTx)
 	if err != nil {
 		return "", fmt.Errorf("recompute vote txid: %w", err)
@@ -130,7 +130,7 @@ func (e *Executor) ClaimReward(ctx context.Context) (string, int64, error) {
 		return "", 0, fmt.Errorf("broadcast withdraw tx: %w", err)
 	}
 
-	// D-293 F1：签名后本地重算 tx hash（同 Vote 修复）。
+	// 签名后本地重算 tx hash（同 Vote 修复）。
 	txHash, err := recomputeTxHash(signedTx)
 	if err != nil {
 		return "", 0, fmt.Errorf("recompute withdraw txid: %w", err)

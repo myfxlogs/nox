@@ -1,4 +1,4 @@
-// D-137 R1：改投调度事件驱动化——reward_num_sun 差分即维护期边界探测器
+// 改投调度事件驱动化——reward_num_sun 差分即维护期边界探测器
 // （实证：rewardNum 12/12 次变化都在 00/06/12/18 UTC±90s 内、vote_claim 全贴边界）。
 // 30min 盲醒 tick 摘除；改投评估只在三类事件后发生：
 //
@@ -12,7 +12,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/safego"
+	"arb/internal/platform/safego"
 )
 
 // maintenancePeriod TRON SR 维护期=6h（00/06/12/18 UTC 边界，实证±90s 结算）。

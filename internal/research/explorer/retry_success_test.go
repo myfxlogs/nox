@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/analyst"
+	"arb/internal/platform/analyst"
 )
 
 // seqRun 按序回放 LLM 输出（补救轮用）；calls 计数断言轮数。

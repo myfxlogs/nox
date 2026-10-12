@@ -256,7 +256,7 @@ func TestCalcYield_ProducerBonus(t *testing.T) {
 	}
 }
 
-// D-285 S5：3 个新增测试。
+// 3 个新增测试。
 
 // TestDecide_ZeroThreshold_NoChange BetterOppPct=0 + current==target → 不触发（验证 S3 `>` 修复）。
 func TestDecide_ZeroThreshold_NoChange(t *testing.T) {

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/analyst"
-	"arb/internal/inboxfmt"
+	"arb/internal/ir/inboxfmt"
+	"arb/internal/platform/analyst"
 	"arb/internal/store/pgstore"
 )
 
@@ -54,7 +54,7 @@ type DailyResult struct {
 }
 
 // RunDaily 执行日扫五项。同日重跑幂等（dedupe 索引挡提案重复；state 覆盖幂等）。
-// D-048④：每跑必 log「候选数/LLM 调用结果/解析结果/入库数」（0 提案归因面）；
+// 每跑必 log「候选数/LLM 调用结果/解析结果/入库数」（0 提案归因面）；
 // LLM 调用失败/解析失败落 alerts warn 不吞。
 func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 	deps.fill()
@@ -150,7 +150,7 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 	}
 	llmRes = "ok"
 
-	// D-143：parse fail → 同 prompt 补救一轮（上限两轮，Rate.Allow 每轮过闸不过即停）；
+	// parse fail → 同 prompt 补救一轮（上限两轮，Rate.Allow 每轮过闸不过即停）；
 	// StopReason 随轮次刷新供分型告警（symdig D-530/D-589 同型先例）。
 	batch, truncDrop, ok, kind := parseBatchDiag(aiText)
 	stop := lr.StopReason
@@ -198,7 +198,7 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 		rows[i].ScanDate = res.ScanDate
 		rows[i].ScanKind = "daily"
 	}
-	// D-048①：探针提案契约校验→落库→「待审批探针」推送（缺字段拒行+log）。
+	// 探针提案契约校验→落库→「待审批探针」推送（缺字段拒行+log）。
 	probeInserted, probeDrop := runProbeProposals(ctx, deps, batch, known, now, res.ScanDate)
 	res.ProbeInserted = probeInserted
 	res.Drop += probeDrop

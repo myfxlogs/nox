@@ -1,4 +1,4 @@
-// D-269 S2：TRX 投票收益优化器决策引擎（纯函数，无 DB/IO 副作用）。
+// TRX 投票收益优化器决策引擎（纯函数，无 DB/IO 副作用）。
 // 输入 SR 列表+当前投票+总 TP+配置 → 输出目标投票分布+是否需要改投。
 // SSOT: docs/D-269设计-TRX投票收益优化器-2026-09-10-Claude.md §3
 package trxvote
@@ -32,11 +32,11 @@ type RebalanceConfig struct {
 	MaxSRs       int // 最多分散 SR 数（默认 3，D-355）
 	MaxBrokerage int // 最大可接受 brokerage（默认 20，即 20%）
 	MinRank      int // 最低排名要求（默认 127，即 top 127 都可）
-	// D-297 deprecated: 改用 SpreadThreshold 触发，保留 env 兼容
+	// 改用 SpreadThreshold 触发，保留 env 兼容
 	YieldDropPct       float64 // 触发改投的收益下降阈值（默认 15%）
 	BetterOppPct       float64 // 触发改投的更优机会阈值（默认 20%）
 	MaxRebalancePerDay int     // 每日最大改投次数（默认 1）
-	// D-137：TickInterval 字段已随 30min 盲醒 tick 摘除（改投=边界事件驱动）。
+	// TickInterval 字段已随 30min 盲醒 tick 摘除（改投=边界事件驱动）。
 	MinInterval     time.Duration // D-293 S3：防抖间隔（距上次 executed <MinInterval → 跳过，默认 2h）
 	SpreadThreshold float64       // D-297：价差触发改投阈值（pp，默认 0.001）
 }
@@ -142,7 +142,7 @@ func Decide(input RebalanceInput) RebalanceDecision {
 
 	needRebalance := false
 	reason := ""
-	// D-297：价差驱动——(未投候选最高年化 − 已投最低年化) >= SpreadThreshold → 触发改投
+	// 价差驱动——(未投候选最高年化 − 已投最低年化) >= SpreadThreshold → 触发改投
 	// D1：用 candidates（filterCandidates 后）非 SRRanking 全网
 	// D2：用 maxNotVotedRate（未投候选最高），非 maxAvailable（含已投）——
 	//   已投最优 SR 时 maxNotVoted < minVoted → spread < 0 → 不触发，防每日空转

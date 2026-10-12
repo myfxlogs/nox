@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"arb/internal/analyst"
+	"arb/internal/platform/analyst"
 )
 
 // weeklyThemes 静态主题表（设计稿 §3 五项；周序号取模轮转）。

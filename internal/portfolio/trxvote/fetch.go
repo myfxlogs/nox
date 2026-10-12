@@ -1,4 +1,4 @@
-// D-269 S2：TronScan HTTP fetch（独立于 internal/collect/trx，v1.1 A1/A2 修复）。
+// TronScan HTTP fetch（独立于 internal/collect/trx，v1.1 A1/A2 修复）。
 // TRON API JSON shape 是公开事实不是代码逻辑，自建 fetch+struct ~20 行。
 package trxvote
 

@@ -1,5 +1,5 @@
 // D-269 S3 测试：Executor Vote + ClaimReward（mock TronClient）。
-// D-293 S1：tx hash 重算红绿锚（变异后重算 ≠ 原 txid，证明修复必要+正确）。
+// tx hash 重算红绿锚（变异后重算 ≠ 原 txid，证明修复必要+正确）。
 package trxvote
 
 import (
@@ -30,7 +30,7 @@ type mockTronClient struct {
 	// 带宽查询 mock（nil=充足带宽）
 	acctResource *api.AccountResourceMessage
 	acctResErr   error
-	// D-137：自发 tx 回执查询 mock
+	// 自发 tx 回执查询 mock
 	txInfo    *core.TransactionInfo
 	txInfoErr error
 }
@@ -102,7 +102,7 @@ func TestVote_Normal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Vote: %v", err)
 	}
-	// D-293 F1：返回的是重算 hash（变异后），非 txExt.GetTxid()（变异前）
+	// 返回的是重算 hash（变异后），非 txExt.GetTxid()（变异前）
 	want := recomputeHash(t, mc.voteTxExt.GetTransaction())
 	if txHash != want {
 		t.Errorf("txHash = %q, want recompute %q", txHash, want)
@@ -196,7 +196,7 @@ func TestClaimReward_Normal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClaimReward: %v", err)
 	}
-	// D-293 F1：返回的是重算 hash（变异后），非 txExt.GetTxid()（变异前）
+	// 返回的是重算 hash（变异后），非 txExt.GetTxid()（变异前）
 	want := recomputeHash(t, mc.withdrawTxExt.GetTransaction())
 	if txHash != want {
 		t.Errorf("txHash = %q, want recompute %q", txHash, want)

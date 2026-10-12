@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"arb/internal/analyst"
+	"arb/internal/platform/analyst"
 	"arb/internal/store/pgstore"
 )
 

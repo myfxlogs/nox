@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/analyst"
+	"arb/internal/platform/analyst"
 
 	explorerv1 "arb/internal/gen/arb/explorer/v1"
 	"arb/internal/store/pgstore"
@@ -60,7 +60,7 @@ type fakeStore struct {
 	alerts    []pgstore.Alert
 	state     map[string]json.RawMessage
 	proposals []pgstore.ExplorerProposal
-	// D-048：探针提案/报告断言面。
+	// 探针提案/报告断言面。
 	alertRows []string
 	probeKeys map[string]bool
 	probeSeq  int64

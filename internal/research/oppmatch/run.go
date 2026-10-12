@@ -9,7 +9,7 @@ import (
 	"log"
 	"strings"
 
-	"arb/internal/dciexec"
+	"arb/internal/risk/gate"
 	"arb/internal/store/pgstore"
 )
 
@@ -135,7 +135,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store) (int, int, error) {
 	}
 	propN, gapN := 0, 0
 	var liveTmpls []string // 当轮达标模板集（过期判定并入扫描拍——零新定时器）
-	// D-204②：休眠轨集（约束表 subject 'dormant:<tmpl>@<venue>' value_num=1）——
+	// 休眠轨集（约束表 subject 'dormant:<tmpl>@<venue>' value_num=1）——
 	// 命中跳过 CreateProposal+存量 proposed 翻 deferred；读败不阻扫描（集空降级）。
 	dormant := map[string]bool{}
 	if cons, cerr := st.ListCapabilityConstraints(ctx); cerr == nil {
@@ -159,7 +159,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store) (int, int, error) {
 			if r.APR != nil {
 				apr = fmt.Sprintf("apy=%.4g（venue原生口径）", *r.APR)
 			}
-			// D-189①②：提案实体化——行即稳定 id（同模板 pending 复用），
+			// 提案实体化——行即稳定 id（同模板 pending 复用），
 			// params=快照审计锚（执行时实时闸复验，非钉价）。
 			pid, created, err := st.CreateProposal(ctx, &pgstore.Proposal{
 				TemplateID: r.TemplateID, ExecTrack: r.ExecTrack, Venue: "binance",
@@ -198,10 +198,10 @@ func RunOnce(ctx context.Context, st *pgstore.Store) (int, int, error) {
 			gapN++
 		}
 	}
-	// D-193①②：对账哨兵并入扫描拍（零新定时器）。
+	// 对账哨兵并入扫描拍（零新定时器）。
 	checkVenueFloat(ctx, st, in)
 	reconcileGaps(ctx, st, in, view)
-	// D-189⑤：过期并入扫描拍——当轮不再达标的 pending 提案→expired。
+	// 过期并入扫描拍——当轮不再达标的 pending 提案→expired。
 	if n, err := st.ExpireProposalsExcept(ctx, liveTmpls); err != nil {
 		log.Printf("[oppmatch] expire proposals: %v", err)
 	} else if n > 0 {
@@ -227,18 +227,18 @@ func proposalParams(ctx context.Context, st *pgstore.Store, r Result) map[string
 		opt, inv = "PUT", "USDT"
 	}
 	if opt != "" {
-		// D-191-R8/R9：快照同界——bound=现货参照×约束表 OTM 界（无参照/界行缺
+		// 快照同界——bound=现货参照×约束表 OTM 界（无参照/界行缺
 		// →无界快照降级；快照=审计锚非钉价，执行时实时闸复验不变）。
 		var bound float64
 		if spot, err := st.LatestSpreadSpotRef(ctx, "BTC"); err == nil && spot > 0 {
 			if cons, err := st.ListCapabilityConstraints(ctx); err == nil {
-				cb, pb := dciexec.OTMBoundRatios(cons)
+				cb, pb := gate.OTMBoundRatios(cons)
 				ratio := cb
 				if opt == "PUT" {
 					ratio = pb
 				}
 				if ratio != nil {
-					bound = dciexec.StrikeBound(spot, *ratio)
+					bound = gate.StrikeBound(spot, *ratio)
 				}
 			}
 		}

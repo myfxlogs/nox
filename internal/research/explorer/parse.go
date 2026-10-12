@@ -16,7 +16,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	explorerv1 "arb/internal/gen/arb/explorer/v1"
-	"arb/internal/inboxfmt"
+	"arb/internal/ir/inboxfmt"
 	"arb/internal/store/pgstore"
 )
 
@@ -35,7 +35,7 @@ const maxDirectionRunes = 16
 // parseBatch 严格解析 LLM 输出中的提案块。
 // 返回 (batch, truncDrop, ok)：ok=false=无块/截断/protojson 拒收——整批不落库；
 // ok=true 时 truncDrop=超限截断条数（proposals+探针提案合计，调用方并入 drop 记账）。
-// D-078：超上限由「整批拒收」（D-513/D-048 防滥发闸）改截断留前 10 条+log 警示——
+// 超上限由「整批拒收」（D-513/D-048 防滥发闸）改截断留前 10 条+log 警示——
 // 防滥发本义=防告警风暴，截断已足；良性超限（周一开盘 universe 候选增多）不应整批废。
 func parseBatch(aiText string) (*explorerv1.ProposalBatch, int, bool) {
 	b, t, ok, _ := parseBatchDiag(aiText)
@@ -53,7 +53,7 @@ func parseBatchDiag(aiText string) (*explorerv1.ProposalBatch, int, bool, string
 	var b explorerv1.ProposalBatch
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(
 		[]byte(m[1]), &b); err != nil {
-		// D-081 ①：模型 JSON 尾部偶发机械瑕疵（sensenova 实拍 "probe_proposals":[]}}
+		// 模型 JSON 尾部偶发机械瑕疵（sensenova 实拍 "probe_proposals":[]}}
 		// 多一右括号）→ sanitize 修一次重试；无可修/修后仍坏照拒（fail-closed 保真，
 		// 一次机械修正为限——不做多轮/模糊解析）。
 		fixed := sanitizeJSONTail(m[1])

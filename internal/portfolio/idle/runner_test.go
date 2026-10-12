@@ -1,4 +1,4 @@
-package sleepmon
+package idle
 
 import (
 	"context"

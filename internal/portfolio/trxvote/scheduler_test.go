@@ -1,5 +1,5 @@
 // D-269 S4 测试：Scheduler doRebalance + ClaimCheck（mock executor + fake store + mock account）。
-// D-293 S2：doClaim 测试适配为 ClaimCheck 路径（三态+冷却+hook panic）。
+// doClaim 测试适配为 ClaimCheck 路径（三态+冷却+hook panic）。
 package trxvote
 
 import (
@@ -26,10 +26,10 @@ type fakeStore struct {
 	updateStatus      string
 	updateErr         error
 	rebalancedToday   bool
-	// D-293 S3：防抖查询 mock
+	// 防抖查询 mock
 	lastExecutedAt  time.Time
 	lastExecutedErr error
-	// D-137：boot 补课查询 mock
+	// boot 补课查询 mock
 	lastDecidedAt  time.Time
 	lastDecidedErr error
 }
@@ -78,7 +78,7 @@ type testExecutorConn struct {
 	// 带宽预检 mock（nil=返回充足带宽）
 	acctResource *api.AccountResourceMessage
 	acctResErr   error
-	// D-137：自发 tx 回执 mock
+	// 自发 tx 回执 mock
 	txInfo    *core.TransactionInfo
 	txInfoErr error
 }
@@ -294,7 +294,7 @@ func TestClaimCheck_BelowThreshold(t *testing.T) {
 }
 
 // TestClaimCheck_BandwidthLow 带宽不足 → 跳过领奖 + warn 告警 + 设冷却。
-// D-293 R1 P2-1：连调两次，第二次不告警（冷却内），防每 60s 告警轰炸。
+// 连调两次，第二次不告警（冷却内），防每 60s 告警轰炸。
 func TestClaimCheck_BandwidthLow(t *testing.T) {
 	conn := &testExecutorConn{
 		reward: 20_000_000, // 20 TRX > 阈值，但带宽不足
@@ -445,7 +445,7 @@ func TestFormatRebalanceAlert(t *testing.T) {
 	if len(alert) < 16 {
 		t.Error("alert too short")
 	}
-	// D-293 S4：应含旧/新 SR 前 8 字符
+	// 应含旧/新 SR 前 8 字符
 	if !strings.Contains(alert, "TOldSR87") {
 		t.Errorf("alert should contain old top SR prefix 'TOldSR87': %q", alert)
 	}

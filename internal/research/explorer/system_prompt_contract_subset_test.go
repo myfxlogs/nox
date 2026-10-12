@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/analyst"
+	"arb/internal/platform/analyst"
 )
 
 // TestD065_SystemPromptContractSubset 三面提示词各含契约子集锚（证伪/触发点/口径）。
 // probe_report 无工具——契约项只写与输入段引用相关的三条，不写需工具的条款。
-// D-099：三面再含 矛盾（13）/分层（15）；判别性最小实验（14）daily 无（无 query 面），
+// 三面再含 矛盾（13）/分层（15）；判别性最小实验（14）daily 无（无 query 面），
 // weekly/probe 有（D-099 R1：probe 版去工具措辞「基于输入段」；probe 面永不含 query_ro）。
 func TestD065_SystemPromptContractSubset(t *testing.T) {
 	for name, p := range map[string]string{

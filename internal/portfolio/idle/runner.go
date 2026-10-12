@@ -4,7 +4,7 @@
 // 收件箱提案行（source=sleep_money，动钱永不自动，再配置走业主通道）。
 // 非 below → streak 归零+alerted 复位（本轮 resolved 下轮重计）。
 // 只写 idle_floor_streak 自表+alert+inbox，无外部副作用。
-package sleepmon
+package idle
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/inboxfmt"
+	"arb/internal/ir/inboxfmt"
 	"arb/internal/store/pgstore"
 )
 

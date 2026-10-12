@@ -21,9 +21,9 @@ type integrationStore struct {
 	updatedID       int64
 	updatedTxHash   string
 	updatedStatus   string
-	// D-293 S3：防抖查询 mock
+	// 防抖查询 mock
 	lastExecutedAt time.Time
-	// D-137：boot 补课查询 mock
+	// boot 补课查询 mock
 	lastDecidedAt time.Time
 }
 
@@ -55,7 +55,7 @@ type integrationConn struct {
 	withdrawTxExt *api.TransactionExtention
 	broadcastErr  error
 	acctResource  *api.AccountResourceMessage // nil=返回充足带宽
-	// D-137：自发 tx 回执 mock
+	// 自发 tx 回执 mock
 	txInfo    *core.TransactionInfo
 	txInfoErr error
 }
@@ -163,7 +163,7 @@ func TestIntegration_RebalanceExecute(t *testing.T) {
 	if store.updatedStatus != "executed" {
 		t.Errorf("updatedStatus = %q, want executed", store.updatedStatus)
 	}
-	// D-293 S1：返回重算 hash（变异后），非 txExt.GetTxid()（变异前 deadbeef12345678）
+	// 返回重算 hash（变异后），非 txExt.GetTxid()（变异前 deadbeef12345678）
 	wantHash := recomputeHash(t, conn.voteTxExt.GetTransaction())
 	if store.updatedTxHash != wantHash {
 		t.Errorf("updatedTxHash = %q, want %q (recomputed)", store.updatedTxHash, wantHash)

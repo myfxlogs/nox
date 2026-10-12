@@ -1,4 +1,4 @@
-// D-269 S4：pgstore.Store → trxvote.Store 适配器。
+// pgstore.Store → trxvote.Store 适配器。
 // 解耦：scheduler_test 用 fake store，生产用 pgstore 适配器。
 package trxvote
 
