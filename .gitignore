@@ -1,3 +1,5 @@
 .env
 logs/
 bin/
+web/node_modules/
+web/dist/
