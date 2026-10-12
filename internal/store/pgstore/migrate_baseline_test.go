@@ -17,7 +17,7 @@ import (
 func TestBaseline_Replayable(t *testing.T) {
 	admin := adminDSN(t)
 	ctx := context.Background()
-	db := "arb_baseline_replay_test_" + testutil.SeatTag()
+	db := "nox_baseline_replay_test_" + testutil.SeatTag()
 	defer func() {
 		exec.CommandContext(context.Background(), "psql", admin, "-c",
 			fmt.Sprintf("DROP DATABASE IF EXISTS %s;", db)).Run()
@@ -69,7 +69,7 @@ func TestBaseline_Replayable(t *testing.T) {
 func TestBaseline_SquashSupersedes(t *testing.T) {
 	admin := adminDSN(t)
 	ctx := context.Background()
-	db := "arb_baseline_squash_test_" + testutil.SeatTag()
+	db := "nox_baseline_squash_test_" + testutil.SeatTag()
 	defer func() {
 		exec.CommandContext(context.Background(), "psql", admin, "-c",
 			fmt.Sprintf("DROP DATABASE IF EXISTS %s;", db)).Run()

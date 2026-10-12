@@ -16,7 +16,7 @@ echo "[kill] reason: ${REASON}"
 echo ""
 
 docker compose -f /opt/nox/docker-compose.yml exec -T nox-postgres \
-  psql -U arb -d arb -v ON_ERROR_STOP=1 -v reason="$REASON" <<SQL
+  psql -U nox -d nox -v ON_ERROR_STOP=1 -v reason="$REASON" <<SQL
 UPDATE autotrade_state SET state='CLOSE_ONLY', reason=:'reason', updated_at=now();
 SELECT state, reason, updated_at FROM autotrade_state;
 SQL
@@ -25,4 +25,4 @@ echo ""
 echo "[kill] 已急停。gate 将拒绝所有新开仓（仅允许平仓）。"
 echo "[kill] 恢复命令："
 echo "  docker compose -f /opt/nox/docker-compose.yml exec -T nox-postgres \\"
-echo "    psql -U arb -d arb -c \"UPDATE autotrade_state SET state='RUNNING', reason='manual recover', updated_at=now();\""
+echo "    psql -U nox -d nox -c \"UPDATE autotrade_state SET state='RUNNING', reason='manual recover', updated_at=now();\""

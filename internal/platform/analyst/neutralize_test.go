@@ -92,7 +92,7 @@ func TestNeutralizeRequest_WalkShapes(t *testing.T) {
 // TestNeutralizeRequest_NoTriggerZeroChange 不含触发词载荷 → 字节级零变换。
 func TestNeutralizeRequest_NoTriggerZeroChange(t *testing.T) {
 	req := &MessageRequest{
-		System: "You are an arb analyst.",
+		System: "You are a nox analyst.",
 		Messages: []Message{
 			TextContent("user", "check ETHUSD funding"),
 			{Role: "user", Content: json.RawMessage(`[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]`)},

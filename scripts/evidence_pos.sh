@@ -6,7 +6,7 @@
 # 产出：/opt/nox-backups/evidence/pos<ID>/<UTC时间戳>/ 下：
 #   db_*.csv        — 该 pos 相关各表行（legs/evals/cashflows/settlements/swap快照/autotrade决策）
 #   okx_*.json      — venue 原生记录（positions/bills资金费流水/balance）signed REST 裸 JSON
-#   core_tail.log   — arb-core 近 500 行日志（当时点上下文）
+#   core_tail.log   — nox-core 近 500 行日志（当时点上下文）
 #
 # 凭据：OKX_* 经 tools/credread 从 exchange_configs 解密读（D-564 S5：.env 已退役；
 # DB_DSN/ARB_MASTER_KEY 基建键照旧）。credread 失败=fail-closed 跳过 venue 侧（DB 侧已采）。
@@ -90,6 +90,6 @@ probe("/api/v5/account/leverage-info?instId=XAU-USDT-SWAP&mgnMode=cross", "okx_l
 PYEOF
 
 # ── 运行上下文 ──────────────────────────────────────────
-docker logs arb-core --tail 500 > "$BASE/core_tail.log" 2>&1 || true
+docker logs nox-core --tail 500 > "$BASE/core_tail.log" 2>&1 || true
 ln -sfn "$BASE" "/opt/nox-backups/evidence/pos${POSID}/latest"
 echo "$(date -u +%FT%TZ) pos${POSID} evidence -> $BASE"

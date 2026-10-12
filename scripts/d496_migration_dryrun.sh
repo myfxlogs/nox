@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # D-496 P-B：迁移 0142 干跑验证（测试/克隆库专用，禁生产）。
 # 用法：scripts/d496_migration_dryrun.sh <目标库名> [源库名]
-#   源库名缺省=arb（只读 pg_dump 克隆）；目标库先 DROP 再建——务必传专用测试库。
+#   源库名缺省=nox（只读 pg_dump 克隆）；目标库先 DROP 再建——务必传专用测试库。
 # 产出：迁移前/后行数对拍 + 键域宪法校验（R1 裸 venue / R2 闭集 type / R3 生成列 /
 #       R4 账号级 fact symbol=NULL / FK 孤儿 / 死表清除）。
 set -euo pipefail
 DB="${1:?usage: $0 <scratch_db> [source_db]}"
-SRC="${2:-arb}"
+SRC="${2:-nox}"
 PSQL="docker exec nox-postgres psql -U nox -d"
 
 # 行数对拍：某库全表 count(*)

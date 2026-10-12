@@ -76,7 +76,7 @@ func (t *Tools) Execute(ctx context.Context, call ToolCall) (ToolResult, []Citat
 // ToolSpecs 返回工具定义（供 client.go MessageRequest.Tools 用）。
 func ToolSpecs() []ToolSpec {
 	return []ToolSpec{
-		{Name: toolQueryRO, Description: "只读 SQL 查询（仅 SELECT，arb 库，自动 LIMIT 500，5s 超时）", InputSchema: rawJSON(`{"type":"object","properties":{"sql":{"type":"string","description":"SELECT 语句"}},"required":["sql"]}`)},
+		{Name: toolQueryRO, Description: "只读 SQL 查询（仅 SELECT，nox 库，自动 LIMIT 500，5s 超时）", InputSchema: rawJSON(`{"type":"object","properties":{"sql":{"type":"string","description":"SELECT 语句"}},"required":["sql"]}`)},
 		{Name: toolGetEntity, Description: "按 ID 拉实体结构化 JSON（position/opportunity/stat-vkey）", InputSchema: rawJSON(`{"type":"object","properties":{"type":{"type":"string","enum":["position","opportunity","stat-vkey"]},"id":{"type":"string"}},"required":["type","id"]}`)},
 		{Name: toolGrepKB, Description: "经验库/decisions/docs 关键词检索（grep -rn）", InputSchema: rawJSON(`{"type":"object","properties":{"pattern":{"type":"string"},"path":{"type":"string","description":"子路径如 docs/经验库"}},"required":["pattern"]}`)},
 		{Name: toolReadDoc, Description: "读 docs/**/*.md（≤2000 行）", InputSchema: rawJSON(`{"type":"object","properties":{"path":{"type":"string","description":"相对 /kn/docs 的路径"}},"required":["path"]}`)},

@@ -4,7 +4,7 @@
 # DELETE 72h 外 + VACUUM ANALYZE ticks（防死元组堆积表膨胀；autovacuum 对大表触发滞后）。幂等。
 #
 # D-114：连接走容器内 psql——宿主端口随拓扑漂移（SG=15433，5433=alphaforge），
-# docker exec 与端口解耦。容器内 arb 超级用户有 DELETE 权限。
+# docker exec 与端口解耦。容器内 nox 超级用户有 DELETE 权限。
 # ⚠️ 勿读 .env 的 NOX_AI_PG_DSN——那是 nox_ro 只读 AI DSN（grants 仅 SELECT，无 DELETE 权限，已核），
 #    照抄=每天权限拒绝+cron 静默假绿（运维版 D-207 假绿教训）。
 #

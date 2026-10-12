@@ -37,12 +37,12 @@ SG="ssh -i ~/.ssh/id_ed25519 root@192.229.85.35"
 $SG "cd /opt/nox && TOK=\$(grep '^NOX_AUTH_TOKEN=' .env | cut -d= -f2-) \
   && buf curl --protocol connect --schema . -H \"Authorization: Bearer \$TOK\" \
   --data '{\"refresh\":true}' \
-  http://localhost:50051/arb.dashboard.v1.DashboardService/ListBrokerPositions"
+  http://localhost:50051/nox.dashboard.v1.DashboardService/ListBrokerPositions"
 ```
 
-- 服务全名 `arb.dashboard.v1.DashboardService`（proto/dashboardv1/service.proto 为准）
+- 服务全名 `nox.dashboard.v1.DashboardService`（proto/dashboardv1/service.proto 为准）
 - 认证 `Authorization: Bearer <NOX_AUTH_TOKEN>`——token 从 SG `/opt/nox/.env` 读（app_secrets 库内是密文 value_enc 读不出明文），禁抄入会话
-- **grpcurl 已装（v1.9.3 真件）但本服务不可用**：arb-core 是 HTTP/1.1 Connect server 无 h2c，gRPC 协议握手超时——只留作其他 gRPC 服务备用
+- **grpcurl 已装（v1.9.3 真件）但本服务不可用**：nox-core 是 HTTP/1.1 Connect server 无 h2c，gRPC 协议握手超时——只留作其他 gRPC 服务备用
 - `refresh=true` 强制刷新缓存；`fresh=false` → 取证无效，先查采集链
 
 **通道② 数据库查询**（SG pg `localhost:15433`，alphaforge 占 5433——端口勿混）：
@@ -58,8 +58,8 @@ $SG "docker exec nox-postgres psql -U nox -d nox -c \"
 **通道③ 日志检查**（SG 上 docker logs）：
 
 ```
-$SG "docker logs arb-core --since 6h 2>&1 | grep -iE 'panic|error|fatal' | head"
-$SG "docker logs arb-core --since 6h 2>&1 | grep -iE 'swap.*cold|reconnect' | tail"
+$SG "docker logs nox-core --since 6h 2>&1 | grep -iE 'panic|error|fatal' | head"
+$SG "docker logs nox-core --since 6h 2>&1 | grep -iE 'swap.*cold|reconnect' | tail"
 ```
 
 - grep 无匹配 = 该类事件未发生（exit 1 = 正常）
