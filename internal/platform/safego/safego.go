@@ -3,7 +3,7 @@
 // 修复前：全仓 goroutine 启动点无 recover，任一 panic 致进程崩溃。
 // 修复后：统一 safego.Go 包装，panic → log + stack，进程存活。
 // panic 增设 OnPanic 全局告警钩（cmd/core 装配 alerts critical 去重
-// 落库——静默死亡整类消除）；常驻循环用 GoLoop 获 panic→退避重启自愈
+// 落库——静默失联整类消除）；常驻循环用 GoLoop 获 panic→退避重启自愈
 // （D-113 事故：positionLoop panic 后协程消亡，退出评估停摆 37min 零报警）。
 //
 // 依赖仅标准库 log/runtime/debug/time（叶子包，零内部依赖）。

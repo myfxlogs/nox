@@ -20,4 +20,4 @@ cmc / intra / pricealert 三装配族不入 M2.6——对应 wire 文件、roste
 
 ## 员工口径（D-220/D-225⑤）
 
-Dept 十一枚举：数据/研究/投资/交易/风控/运营/账本/复盘/IR/运维/合规；cadence=0 常驻按 running，>0 超 3× 未 beat=死亡；`ListEmployees` 全员（roster+Beat 自补册）。
+Dept 十一枚举：数据/研究/投资/交易/风控/运营/账本/复盘/IR/运维/合规；cadence=0 常驻按 running，>0 超 3× 未 beat=滞跳；`ListEmployees` 全员（roster+Beat 自补册）。

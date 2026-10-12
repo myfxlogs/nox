@@ -6,7 +6,7 @@ risk: high
 status: verified
 keywords: [退出条件, fail-closed, 缺数据, 假信号, 误平仓, facts 缺失, 静默取零, recalcNetSwap]
 scope: [autotrade, engine, facts]
-summary: 退出条件按 venue 匹配 fact 时「匹配不到静默取 0」= 缺数据被当收益死亡——测试截断 facts 表 → #264 被假「净 swap 归零」信号误平仓；缺数据必须 fail-closed（不决策）
+summary: 退出条件按 venue 匹配 fact 时「匹配不到静默取 0」= 缺数据被当收益失联——测试截断 facts 表 → #264 被假「净 swap 归零」信号误平仓；缺数据必须 fail-closed（不决策）
 first_seen: 2026-08-25
 last_verified: 2026-09-26
 skills: [KB维护]
@@ -27,7 +27,7 @@ evidence_refs:
 - `recalcNetSwap` 按 venue 匹配 fact：`for _, f := range longFacts { if f.Venue == buyVenue { swapLong = f.Value } }`——**匹配不到时 swapLong 保持零值**
 - `0 + 0 = 0 ≤ SwapArbExitBps(0)` → 「净 swap 归零」→ 平仓
 
-缺数据被当成了「收益源死亡」。修复（D-105 T1）：found 标志 + 匹配不到 → `log + return 0, false`（**不决策**）+ 新鲜度守卫改对匹配到的 fact。
+缺数据被当成了「收益源失联」。修复（D-105 T1）：found 标志 + 匹配不到 → `log + return 0, false`（**不决策**）+ 新鲜度守卫改对匹配到的 fact。
 
 ## 根因或策略解释
 

@@ -6,7 +6,7 @@ risk: high
 status: verified
 keywords: [websocket, 僵尸连接, pong续期, readIdle遮蔽, 静默断流, 零日志, wsrunner, okx, mihomo, TUN重启, 数据帧看门狗]
 scope: [cex行情WS, okx_ws, gate_ws, binance_market_ws, wsrunner, gorilla/websocket, 代理链路切换]
-summary: WS 连接控制面（ping/pong）存活但数据面死亡时，pong 续期会遮蔽 readIdle 判死窗，连接僵尸化且零日志——需独立数据帧看门狗兜底。
+summary: WS 连接控制面（ping/pong）存活但数据面断线时，pong 续期会遮蔽 readIdle 判活窗，连接僵尸化且零日志——需独立数据帧看门狗兜底。
 first_seen: 2026-09-27
 last_verified: 2026-09-27
 skills: [KB维护, 事实核验]

@@ -85,7 +85,7 @@ func TestD518_WrapFundingEmit(t *testing.T) {
 }
 
 // TestD593_PublishNonBlockingOnFullChannel D-593 T1：channel 满（bridge goroutine
-// 死亡等形态）时 publish 必须按时返回——emit 路径永不在热读循环上阻塞下游 channel。
+// 失联等形态）时 publish 必须按时返回——emit 路径永不在热读循环上阻塞下游 channel。
 // 止血前形态（裸 send）下本测死锁红；加固后 select-default 绿。
 func TestD593_PublishNonBlockingOnFullChannel(t *testing.T) {
 	InitFundingDoneChannel()

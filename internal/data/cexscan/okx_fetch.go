@@ -1,5 +1,5 @@
 // okx_fetch.go —— D-011 S2：OKX 直连→cex-proxy 回落骨架（spread/earn 两采集面共用）。
-// 同源脆弱面修复：spread/earn 硬编码直连 www.okx.com，mihomo 死亡即全灭（okx spot 配置行
+// 同源脆弱面修复：spread/earn 硬编码直连 www.okx.com，mihomo 断线即全灭（okx spot 配置行
 // base_url 已指向 cex-proxy，生产实拍）。回落语义同构 httpx failoverRT（D-301b）：仅传输层
 // 错误（RST/超时/DNS——链路故障形态）触发；HTTP 已到达（4xx/5xx/业务码≠0 如 51001 品种
 // 映射语义）不回落。每轮先试直连，直连恢复自动回主（无粘滞）。

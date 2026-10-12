@@ -76,7 +76,7 @@ func venueAnchor(ctx context.Context, pool *pgxpool.Pool, e *staleDataErr) bool 
 var venueAnchorFn = venueAnchor
 
 // classifyStale 分级：dead=真断流（critical+飞书）；still=簿面静止（warn 落行不推）。
-// 判定序：无行→dead（超帽劣化）→超帽→dead（订阅疑似被摘）→锚鲜→still→锚死→dead。
+// 判定序：无行→dead（超帽劣化）→超帽→dead（订阅疑似被摘）→锚鲜→still→锚失效→dead。
 func classifyStale(ctx context.Context, pool *pgxpool.Pool, e *staleDataErr) string {
 	if e.age == 0 || e.age > stillHardCap {
 		return "dead"

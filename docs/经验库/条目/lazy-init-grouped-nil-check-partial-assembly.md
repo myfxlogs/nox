@@ -4,7 +4,7 @@ id: lazy-init-grouped-nil-check-partial-assembly
 kind: pitfall
 risk: critical
 status: verified
-keywords: [nil map panic, lazy init, assignment to entry in nil map, positionLoop, safego, 协程死亡, 退出评估停摆, Engine 装配]
+keywords: [nil map panic, lazy init, assignment to entry in nil map, positionLoop, safego, 协程失联, 退出评估停摆, Engine 装配]
 scope: [autotrade, engine, wiring, disaster, golang]
 summary: lazy-init 用「if 表A==nil{建多表}」合并建表，而生产 New() 只预建表A——三表合并块被跳过、表B 首写即 panic「assignment to entry in nil map」；safego 兜住 panic 但协程已死，测试全用裸 &Engine{}（全 nil→整块初始化）故全绿=夹具与生产装配不同源假绿
 first_seen: 2026-10-07

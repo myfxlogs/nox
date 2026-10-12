@@ -28,7 +28,7 @@ evidence_refs:
 ## 事实/症状
 
 - 机审 `idle_funds` premise 对 gate venue 一律「权益快照陈旧」硬伤拒（`probeEquitySnapshotMaxAge`=5min）。
-- `cex_private_events` gate 共 49 条，止于 2026-10-08 14:09 UTC；末尾 4 条是 `futures.system`「service upgrade please reconnect」广播——不是业务帧死亡证据。
+- `cex_private_events` gate 共 49 条，止于 2026-10-08 14:09 UTC；末尾 4 条是 `futures.system`「service upgrade please reconnect」广播——不是业务帧断线证据。
 - `fin_venue_account_snapshot` gate:perp 最后行 09-30——钦定（scheduler 面 3d-P1#1c 退役，留痕只走值变搭车写口；gate 非 REST-only venue 故无 rest_poll 行）。
 
 ## 根因或策略解释

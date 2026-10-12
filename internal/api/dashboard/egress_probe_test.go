@@ -51,7 +51,7 @@ func (f *fakeEgressSink) Snapshot() []dephealth.Row {
 	return rows
 }
 
-// deadURL 起一个随即关闭的服务器——其 URL 连接必被拒（传输层死亡形态）。
+// deadURL 起一个随即关闭的服务器——其 URL 连接必被拒（传输层断线形态）。
 func deadURL(t *testing.T) string {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))

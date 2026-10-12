@@ -81,7 +81,7 @@ func TestD328_HandleOpportunity_RegimeDead_SilentSkip(t *testing.T) {
 	e.handleOpportunity(ctx, opp, newComboAccumulator())
 
 	if got := e.csMissCounts["gate:perp|CLUSDT"]; got != 0 {
-		t.Errorf("regime 死亡应静默跳过（未达 sizing）, csMiss=%d", got)
+		t.Errorf("regime 失联应静默跳过（未达 sizing）, csMiss=%d", got)
 	}
 	if n := d328RejectedCount(t, s, opp.ID); n != 0 {
 		t.Errorf("静默跳过不落 REJECTED, autotrade_logs=%d", n)

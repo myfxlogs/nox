@@ -96,7 +96,7 @@ func runPairs(ctx context.Context, st *pgstore.Store, pairs []monitorPair) error
 		}
 		if err := runPair(ctx, st, p, p.mtVenueKey, exBid, exAsk); err != nil {
 			// stale 命中二次判定——venue 活性锚成立=簿面静止降 warn
-			// （stale 价不落簿=D-591 指标纯洁不动）；锚死/超帽/无行=dead 走原链。
+			// （stale 价不落簿=D-591 指标纯洁不动）；锚失效/超帽/无行=dead 走原链。
 			var sde *staleDataErr
 			if errors.As(err, &sde) && classifyStale(ctx, st.Pool(), sde) == "still" {
 				log.Printf("xasset-monitor: pair=%s 簿面静止（venue 活性锚成立，降 warn）: %v", p.pair, err)

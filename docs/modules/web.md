@@ -18,7 +18,7 @@
 | 持仓 | `/positions` | ListPositions, ListBrokerPositions, CloseBrokerPosition, CloseBrokerPositions | 4,15,14(finance) | 行级 upsert+平仓写径（运维操作 D-213 钦定留） |
 | 账户管理 | `/accounts` | 券商组 21 RPC：ListBrokerAccounts, VerifyAccount, UpdateBrokerCredentials, SetBrokerDisabled/Alias/IsReal/Commission/Website, AddBroker/RemoveBroker, ListExchanges, AddExchange, RemoveExchange, SetExchangeLabel/Website, BrokerSymbols, SearchBroker, AutoMapBroker, ListAccounts | 16,3 | 删号/凭据/alias/手续费——写径同 RPC |
 | 风控健康 | `/risk` | ListSourceHealth, ListAlerts, ListAccountMarginStatus, ListVerificationStats, GetCapitalCoverage | 3,5,10 | 数据源健康+保证金状态+覆盖率+告警 |
-| 公司架构 | `/org` | ListEmployees | 14(employees，待接线) | **D-220 钦定**：十一部树×名册×在线状态（status 后端算定：在职\|滞跳\|死亡\|停用），零前端计算 |
+| 公司架构 | `/org` | ListEmployees | 14(employees，待接线) | **D-220 钦定**：十一部树×名册×在线状态（status 后端算定：在职\|滞跳\|离线\|离职），零前端计算 |
 | 投资人页 v0 | `/investor` | ListDailyIncome, GetPnlAnchor, ListPositions（只读摘要）, GetFinanceOverview | 6 | **NOX 露面②**（页抬头）；只读 NAV/收益/持仓摘要，无写径无运维件 |
 | 报告落款 | — | — | — | **NOX 露面③**：GenerateKbReport/复盘报告渲染落款品牌位（报告页 v2 回补，本票先留品牌常量） |
 

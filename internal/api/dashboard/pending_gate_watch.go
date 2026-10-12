@@ -6,8 +6,8 @@
 // 元组与上拍 diff → 变了才 PublishDataRefresh("pending_entries")。
 //   - qbus 帧：canonical→combo 索引命中即标脏（只对受影响组合重估，非全表）；
 //   - RefreshAllowRules 写事件：组合/白名单/敞口闸配置变更 → 全量标脏；
-//   - 看门狗 60s：报价流死亡→tick 超龄/快照超龄/monitor 超龄翻转捕手
-//     （§5 定时器唯一合法形态：检测流死亡触发重估，不产业务数据）。
+//   - 看门狗 60s：报价流断线→tick 超龄/快照超龄/monitor 超龄翻转捕手
+//     （§5 定时器唯一合法形态：检测流断线触发重估，不产业务数据）。
 //
 // 翻转驱动非逐 tick：1s 尾沿合批（泵内多帧/多组合合并成一次 emit）。
 package dashboard

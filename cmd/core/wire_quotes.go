@@ -168,7 +168,7 @@ func (p *fundingDonePub) publish(fs []fact.Fact) {
 		return
 	}
 	// D-593：emit 路径永不在热读循环上阻塞下游 channel——cap 满（bridge goroutine
-	// 死亡等）即丢 hint 记日志（kick hint 语义允许丢；日志经上方 60s fire 闸天然限流）。
+	// 断线等）即丢 hint 记日志（kick hint 语义允许丢；日志经上方 60s fire 闸天然限流）。
 	dropped := 0
 	for src := range srcSet {
 		select {

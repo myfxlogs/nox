@@ -27,7 +27,7 @@ type Client struct {
 // NewClient 创建客户端。baseURL 不含尾 /；model 如 "glm-4.6"。
 // Timeout=600s 运输层上限（流式调用的整流硬顶不该卡在交互默认值——
 // explorer 日报大 prompt+思考开销冲破 120s → "sse scan: context deadline exceeded"
-// round 0 死亡实拍 10-06）。真正的时长控制=调用点 ctx 预算（120s 会话 / 300s 探索，
+// round 0 失联实拍 10-06）。真正的时长控制=调用点 ctx 预算（120s 会话 / 300s 探索，
 // explorer deps 缺省 Runner 包 WithTimeout；ctx 到点自然截止，非轮询定时器）。
 func NewClient(baseURL, apiKey, model string) *Client {
 	return &Client{

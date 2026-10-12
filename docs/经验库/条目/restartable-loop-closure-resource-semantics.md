@@ -53,4 +53,4 @@ fn 体内含 `safego.Go/GoLoop`/`go ` 孵化子协程的（`Run` 包装点、各
 
 - `Go` 域 panic → `OnPanic(willRestart=false)` → 协程终止；`GoLoop` 域 → `willRestart=true` → 1s×2 退避（封顶 30s，距上次 panic>60s 重置）
 - `OnPanic` 用 `atomic.Pointer` 装载而非裸 var——测试实证泄漏 goroutine 的 panic recover 路径与下一测试的钩子赋值并发冲突（DATA RACE）
-- main 钩接 `InsertAlertDedup(critical, 30min)`——静默死亡整类消除
+- main 钩接 `InsertAlertDedup(critical, 30min)`——静默失联整类消除

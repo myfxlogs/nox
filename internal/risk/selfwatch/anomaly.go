@@ -78,7 +78,7 @@ func checkPaperHealth(ctx context.Context, d Deps, now time.Time, warn func(stri
 }
 
 // checkPaperDataLost ⑥paper 双 CEX 轨 data_lost 退出行数（D-042 R1 ③：常态应近零，
-// ≈4000/天=报价流死亡开平闭环失控；冷却中对数随行——同对 24h 内 ≥2 次 data_lost 停开）。
+// ≈4000/天=报价流断线开平闭环失控；冷却中对数随行——同对 24h 内 ≥2 次 data_lost 停开）。
 func checkPaperDataLost(ctx context.Context, d Deps, now time.Time, warn func(string, ...any)) {
 	rows, pairs, err := d.Store.PaperDataLostStats(ctx, now.Add(-24*time.Hour))
 	if err != nil {
