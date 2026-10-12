@@ -192,6 +192,8 @@ var migrationFiles = []struct {
 	{197, migrations.DCIOrderRefSQL},                   // D-191-R10：报价行 order_ref 补列
 	{198, migrations.DCIAmountBoundSQL},                // D-191-R11：报价行 min/max/decimal 三字段
 	{199, migrations.DormantDeferredSQL},               // D-204：deferred 态+休眠轨种子
+	{200, migrations.DCISettleSQL},                     // D-207：DCI 交割观察（0200 漏注册教训——本票补挂）
+	{201, migrations.LegForensicsSQL},                  // D-208：腿级 fail_reason+半平裸奔阈值
 	{188, migrations.OppTemplateSQL},                   // D-185：机会模板册（fin_opp_template+cond）
 }
 
