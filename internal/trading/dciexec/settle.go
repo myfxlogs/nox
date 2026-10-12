@@ -19,29 +19,45 @@ import (
 
 // DCIPosition venue 持仓行（settle 观察消费集——键名多形以 venue 实拍为准）。
 type DCIPosition struct {
-	ID             string `json:"id"`
-	InstrumentName string `json:"instrumentName"`
-	ProductRef     string `json:"productRef"`
-	OptionType     string `json:"optionType"`
-	Status         string `json:"status"`
-	ExercisedCoin  string `json:"exercisedCoin"`
-	ExerciseCoin   string `json:"exerciseCoin"`
-	ExercisedAmt   string `json:"exercisedAmount"`
-	ExerciseAmt    string `json:"exerciseAmount"`
-	InterestAmt    string `json:"interestAmount"`
-	EarnAmt        string `json:"earnAmount"`
+	ID                 string `json:"id"`
+	InstrumentName     string `json:"instrumentName"`
+	ProductRef         string `json:"productRef"`
+	OptionType         string `json:"optionType"`
+	Status             string `json:"status"`
+	ExercisedCoin      string `json:"exercisedCoin"`
+	ExerciseCoin       string `json:"exerciseCoin"`
+	ExercisedAmt       string `json:"exercisedAmount"`
+	ExerciseAmt        string `json:"exerciseAmount"`
+	InterestAmt        string `json:"interestAmount"`
+	EarnAmt            string `json:"earnAmount"`
+	IsExercised        *bool  `json:"isExercised"`        // Binance 实拍键：行权旗（nil=venue 未给）
+	SettleAsset        string `json:"settleAsset"`        // Binance 实拍键：交割资产（未行权=投币）
+	SettleAmount       string `json:"settleAmount"`       // Binance 实拍键：交割到账总额（本息和）
+	SubscriptionAmount string `json:"subscriptionAmount"` // Binance 实拍键：申购本金
 }
 
-// settleCcy 行权方向=exercisedCoin（多键名容错；未给=空如实）。
+// settleCcy 交割资产=settleAsset（Binance 实拍键）→exercisedCoin 兜底
+// （多键名容错；未给=空如实）。#7 实证 exercisedCoin 是标的币非到账币，
+// 未行权 PUT 直接先取会错记 BTC——settleAsset 优先是必修正。
 func (p *DCIPosition) settleCcy() string {
+	if p.SettleAsset != "" {
+		return p.SettleAsset
+	}
 	if p.ExercisedCoin != "" {
 		return p.ExercisedCoin
 	}
 	return p.ExerciseCoin
 }
 
-// settleQty 行权接货量（多键名容错；未给/解析败=0 如实不编）。
+// settleQty 行权接货量：Binance isExercised=true→settleAmount（接货额即
+// 本息折标的到账量）；未行权/venue 缺旗→exercisedAmount/exerciseAmount
+// 多键名容错；未给/解析败=0 如实不编。
 func (p *DCIPosition) settleQty() float64 {
+	if p.IsExercised != nil && *p.IsExercised {
+		if f, err := parseNum(p.SettleAmount); err == nil && f > 0 {
+			return f
+		}
+	}
 	for _, v := range []string{p.ExercisedAmt, p.ExerciseAmt} {
 		if f, err := parseNum(v); err == nil && f > 0 {
 			return f
@@ -50,11 +66,20 @@ func (p *DCIPosition) settleQty() float64 {
 	return 0
 }
 
-// interestQty 利息额（多键名容错同上）。
+// interestQty 利息额：interestAmount/earnAmount 多键名容错；Binance 未行权
+// 实证=settleAmount−subscriptionAmount 同币差（#7：542.4066−541=1.4066 USDT）；
+// 行权面跨币差不可算→0 如实（接货量已含本息折标）。
 func (p *DCIPosition) interestQty() float64 {
 	for _, v := range []string{p.InterestAmt, p.EarnAmt} {
 		if f, err := parseNum(v); err == nil && f > 0 {
 			return f
+		}
+	}
+	if p.IsExercised != nil && !*p.IsExercised {
+		settle, err1 := parseNum(p.SettleAmount)
+		sub, err2 := parseNum(p.SubscriptionAmount)
+		if err1 == nil && err2 == nil && settle > sub {
+			return settle - sub
 		}
 	}
 	return 0
@@ -107,8 +132,8 @@ func (e *Executor) SettleExpiredOrders(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("venue dci positions: %w", err) // 读败全跳——单错不翻态
 	}
 	settled := 0
-	var subs []DCIPosition
-	subsFetched := false // 申购史备份源——仅首个持仓行缺时惰性取（常态零加读）。
+	var done []DCIPosition
+	doneFetched := false // 终态行备份源——仅首个持仓行缺时惰性取（常态零加读）。
 	for _, o := range due {
 		var row *DCIPosition
 		for i := range pos {
@@ -118,23 +143,33 @@ func (e *Executor) SettleExpiredOrders(ctx context.Context) (int, error) {
 			}
 		}
 		if row == nil {
-			if !subsFetched {
-				s, serr := e.dciSubscriptions(ctx)
+			if !doneFetched {
+				s, serr := e.dciSettledPositions(ctx)
 				if serr != nil {
-					log.Printf("[dci-settle] subscriptions 读败（持仓行缺 %s）: %v——下拍重试", o.ProductRef, serr)
+					log.Printf("[dci-settle] 终态持仓读败（持仓行缺 %s）: %v——下拍重试", o.ProductRef, serr)
 					continue
 				}
-				subs, subsFetched = s, true
+				done, doneFetched = s, true
 			}
-			for i := range subs {
-				if subs[i].match(o.ProductRef, o.OptType) {
-					row = &subs[i]
-					break
+			if pid := positionIDOf(o.Response); pid != "" {
+				for i := range done {
+					if done[i].ID == pid {
+						row = &done[i]
+						break
+					}
+				}
+			}
+			if row == nil {
+				for i := range done {
+					if done[i].match(o.ProductRef, o.OptType) {
+						row = &done[i]
+						break
+					}
 				}
 			}
 		}
 		if row == nil {
-			log.Printf("[dci-settle] order %d %s 持仓/申购史行均未查得——跳过下拍重试", o.ID, o.ProductRef)
+			log.Printf("[dci-settle] order %d %s 持仓/终态行均未查得——跳过下拍重试", o.ID, o.ProductRef)
 			continue
 		}
 		if row.Status == "HOLDING" {
