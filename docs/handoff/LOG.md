@@ -22,6 +22,18 @@
 ### 遗留
 - 若用户端→CF edge 链路（CN 段）仍 flap，回放仍在但每次回放被 ACTIVE 谓词正确过滤——行不再闪；指示届时诚实反映真实态而非卡死
 
+## 2026-10-12 ARB 残骸清除（业主令「arb端已归档，SG不再需要arb项目」）
+
+### SG 实清
+- 停禁删 `cloudflared.service`（旧隧道 token 直嵌、与 nox 服务双跑——arb 域名 200 即其所喂；域名已归 nox 隧道）+ `cex-proxy.service`（业主令生产不落 proxy）+ `rm -rf /opt/cex-proxy`
+- `docker rm arb-core arb-postgres`；`docker volume rm arb_arb-pgdata`（归档 dump 已验 `dump complete` 尾标 + 数据已克隆入 nox 卷实跑）；`docker rmi arb-core:latest/d108r1`；`docker network rm arb_default`；`rm -rf /opt/arb`（含 .env 密钥副本——删=安全+）
+- `nox-postgres-test` 卷换名：克隆 `arb_arb-pgdata-test`→`nox_nox-pgdata-test` 后按 compose 重建容器；集群内 `ALTER ROLE arb→nox`+`ALTER DATABASE arb_test→nox_test`（临时超管径，tmp_admin 已回收）
+- **保留 `/opt/arb-backups`**（29 份历史滚动备份+age 件）——数据保险非项目件，清除需业主另令
+- 终检：容器/卷/镜像/目录/服务五面 arb 计数清零；nox-core/nox-postgres/nox-postgres-test 全 healthy；`cloudflared-nox` active
+
+### 本地
+- `git remote rename github→arb-archive`（只留 `nox` 远端推送，归档仓不再更新）
+
 ## 2026-10-12 M3 切流交付（业主令窗口）
 
 ### 背景/范围
