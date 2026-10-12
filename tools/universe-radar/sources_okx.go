@@ -115,10 +115,6 @@ func (o okx) Scan(ctx context.Context) ([]Row, error) {
 	// D-205②：funding 换 venue 公共 REST——/api/v5/public/funding-rate 逐 instId
 	// 循环限频（不依赖订阅集，全量 SWAP 可评）；interval=(nextFundingTime-fundingTime)
 	// 同帧真值。per-instId 读败→跳过（行在值空如实报）；facts 仅兜底填缺口。
-	instBySym := make(map[string]string, len(idx)) // facts 键形 BTCUSDT → instId BTC-USDT-SWAP
-	for instID := range idx {
-		instBySym[strings.ReplaceAll(strings.TrimSuffix(instID, "-SWAP"), "-", "")] = instID
-	}
 	funded := 0
 	fund := latestFacts(ctx, o.pool, "okx", "funding", []string{"okx_ws_v5"}, "15 minutes")
 	ivl := latestFacts(ctx, o.pool, "okx", "funding_interval", []string{"okx_ws_v5"}, "15 minutes")
