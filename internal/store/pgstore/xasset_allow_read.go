@@ -14,7 +14,7 @@ import (
 // XAssetAllowRow xasset_allow_combos 行（调用方映射到 exec.XAssetComboAllowSpec——
 // pgstore 不能 import exec：exec→pgstore 既有依赖方向成环；结构同构零信息损失，
 // exec.XAssetComboAllowSpec 结构不变约束保持。D-367 S2：NotionalUSD 指针=NULL 语义
-// 显式（NULL=回退 ARB_OPP_NOTIONAL_USD 全局缺省），同构零信息损失约束随列扩展保持）。
+// 显式（NULL=回退 NOX_OPP_NOTIONAL_USD 全局缺省），同构零信息损失约束随列扩展保持）。
 type XAssetAllowRow struct {
 	CanonicalBuy  string
 	CanonicalSell string

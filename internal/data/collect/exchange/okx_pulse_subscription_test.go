@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // TestD155_OkxPulseSubscription 订阅面：SWAP 加 mark-price、spot 加 index-tickers。

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // csResolver 返回固定 CS 的 resolver（venueKey→CS 映射，未匹配返回 ok=false）。

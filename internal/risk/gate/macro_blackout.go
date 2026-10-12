@@ -1,11 +1,11 @@
 // gate_macro_blackout.go —— D-053 ③：高影响财历事件执行禁区闸。
-// 开仓侧 Gate.Submit（incidentGate 后）：窗（±ARB_MACRO_BLACKOUT_MIN，缺省 15）内存在
+// 开仓侧 Gate.Submit（incidentGate 后）：窗（±NOX_MACRO_BLACKOUT_MIN，缺省 15）内存在
 // importance='high' 事件且 currency ∈ 禁区币种集 → REJECTED + rejectLog（reason 固定
 // 前缀 "macro blackout"——selfwatch 禁区拒开计数依赖该前缀 LIKE）。查询失败 fail-closed 拒开。
 // 平仓侧 evaluatePosition（allLegsActionable 后、checkExitCondition 前）同窗判定 →
 // markLegSuspend(macro_blackout) 推迟本轮常规退出；查询失败 fail-open（不推迟=照常评估）；
 // disasterCheckXAsset/止损路径不经此闸（独立调用链）。
-// 币种集 = ARB_MACRO_BLACKOUT_CURRENCIES（热读，缺省 USD，逗号分隔）∪ canonical 为
+// 币种集 = NOX_MACRO_BLACKOUT_CURRENCIES（热读，缺省 USD，逗号分隔）∪ canonical 为
 // 6 字母且两半均为 ISO 币种码时的两币。配置键热读（app_config 直读回落 cfg，incidentGate 先例）。
 package gate
 
@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/macro"
+	"nox/internal/data/macro"
 )
 
 // macroBJLoc 禁区 reason 的 BJ 时刻坐标（macro 包 bjLoc 同值独立定义——包间不互引）。
@@ -32,7 +32,7 @@ var macroBJLoc = func() *time.Location {
 // 读取失败回落 cfg（boot env 值）；基集空串=缺省 USD。
 func (g *Gate) macroBlackoutCurrencies(ctx context.Context, canonical string) []string {
 	base := g.cfg.MacroBlackoutCurrencies
-	if v, ok, err := g.store.AppConfigString(ctx, "ARB_MACRO_BLACKOUT_CURRENCIES"); err != nil {
+	if v, ok, err := g.store.AppConfigString(ctx, "NOX_MACRO_BLACKOUT_CURRENCIES"); err != nil {
 		log.Printf("[autotrade] macro blackout currencies read: %v（回落 cfg）", err)
 	} else if ok && strings.TrimSpace(v) != "" {
 		base = v
@@ -46,7 +46,7 @@ func (g *Gate) macroBlackoutCurrencies(ctx context.Context, canonical string) []
 // macroBlackoutWindow 禁区窗分钟数（热读；缺省回落 cfg；<=0=禁用返回 false）。
 func (g *Gate) macroBlackoutWindow(ctx context.Context) (int, bool) {
 	minutes := g.cfg.MacroBlackoutMin
-	if v, ok, err := g.store.AppConfigInt64(ctx, "ARB_MACRO_BLACKOUT_MIN"); err != nil {
+	if v, ok, err := g.store.AppConfigInt64(ctx, "NOX_MACRO_BLACKOUT_MIN"); err != nil {
 		log.Printf("[autotrade] macro blackout min read: %v（回落 cfg）", err)
 	} else if ok {
 		minutes = int(v)

@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/httpx"
+	"nox/internal/platform/httpx"
 )
 
 // TestCEXAccount_Binance：签名余额查询 → D-364 v2 权益=USDT 标 qty 和（非 USDT 标不读取，
@@ -149,7 +149,7 @@ func TestCEXAccount_OKXSimulated(t *testing.T) {
 	}
 }
 
-// TestCEXAccount_BinanceProxyToken：配置 ARB_BINANCE_PROXY_TOKEN 时，Binance 签名请求
+// TestCEXAccount_BinanceProxyToken：配置 NOX_BINANCE_PROXY_TOKEN 时，Binance 签名请求
 // 带 X-Proxy-Token 头（静态代理防开放中继鉴权，D-055；D-364 v2 起 ticker 不再调用，
 // 仅签名 account 请求）。
 func TestCEXAccount_BinanceProxyToken(t *testing.T) {
@@ -242,7 +242,7 @@ func TestCEXAccount_GatePerpEmptyTotal(t *testing.T) {
 }
 
 // TestHttpxClientTrustsProxyCA：默认客户端不信任自签代理证书（握手失败）；加载
-// ARB_BINANCE_PROXY_CA 后握手成功——静态 Binance 代理 TLS 链路能建立的关键（D-055）。
+// NOX_BINANCE_PROXY_CA 后握手成功——静态 Binance 代理 TLS 链路能建立的关键（D-055）。
 func TestHttpxClientTrustsProxyCA(t *testing.T) {
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "pong")

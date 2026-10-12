@@ -7,8 +7,8 @@ import (
 
 	"connectrpc.com/connect"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 // streamInitQuotes D-090/D-508 S9 拆出：流启动初始化——缓存未初始化则先查库填缓存；首帧快照逐条 Send。

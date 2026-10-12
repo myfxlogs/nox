@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// testStore 连接 ARB_TEST_PG_DSN 指定的专用测试库（可销毁数据）。
+// testStore 连接 NOX_TEST_PG_DSN 指定的专用测试库（可销毁数据）。
 // 未设置时跳过：go test ./... 无 PG 环境仍全过。
 // 安全闸（ref/arbcn 同款教训）：测试会对目标表 TRUNCATE，绝不允许指向非测试库——TestDSN fail-closed 门禁。
 // 原 investment_records 清表随表清退移除。

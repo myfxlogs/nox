@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/platform/httpx"
+	"nox/internal/platform/httpx"
 )
 
 const (

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 )
 
 // fakeRetroStore 注入罐装统计 + 记录 alert。

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // GateFundingHistory 采集 Gate funding 结算历史。

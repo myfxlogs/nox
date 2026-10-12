@@ -3,20 +3,20 @@
 package dashboard
 
 import (
-	"arb/internal/data/keydomain"
-	"arb/internal/data/venue"
 	"context"
 	"fmt"
+	"nox/internal/data/keydomain"
+	"nox/internal/data/venue"
 	"sync"
 	"time"
 
-	"arb/internal/data/adapter"
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/platform/alertcool"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/adapter"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/platform/alertcool"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // SymbolGroup 服务器符号 + broker 分组 + 合约规格（MT5 GroupName 顶层段；MT4 降级空组/合约 0）。

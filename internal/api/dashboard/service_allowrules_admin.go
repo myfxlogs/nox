@@ -6,16 +6,16 @@
 package dashboard
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"fmt"
 	"log/slog"
+	"nox/internal/data/keydomain"
 	"regexp"
 	"strings"
 
 	"connectrpc.com/connect"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // D-492 value 硬校验（venue_key 全形唯一口径，禁裸 venue——KB swap-snapshot-venuekey-mismatch）：

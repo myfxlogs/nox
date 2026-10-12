@@ -17,9 +17,9 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // metaPerCallTimeout 单符号元数据拉取超时（与 swap 同量级）。

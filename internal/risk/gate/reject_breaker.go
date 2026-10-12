@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/platform/errclass"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/errclass"
+	"nox/internal/store/pgstore"
 )
 
 const (

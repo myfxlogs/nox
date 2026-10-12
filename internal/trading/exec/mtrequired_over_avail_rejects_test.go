@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
-	"arb/internal/data/bus"
 	"google.golang.org/grpc"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
+	"nox/internal/data/bus"
 )
 
 // fakeMT5Client mt5pb.MT5Client fake：覆盖 RequiredMargin/AccountSummary +

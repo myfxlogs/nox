@@ -5,7 +5,7 @@ package autotrade
 import (
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func d475aSnap(flags ...pgstore.VenueSymbolFlag) *flagSnapshot {

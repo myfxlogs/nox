@@ -2,12 +2,12 @@
 package dciexec
 
 import (
-	"arb/internal/risk/gate"
 	"context"
 	"fmt"
+	"nox/internal/risk/gate"
 	"strings"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // tryLeg 单腿：池余额×share→qty、spot 不足→活期赎回缺口→重读、候选档 strike 闸

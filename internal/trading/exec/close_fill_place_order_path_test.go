@@ -7,8 +7,8 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // assertCloseFillFields CLOSE FILLED 腿两字段断言（D-346 唯一锚，两路径共用）。

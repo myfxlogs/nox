@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // d329LegsService 构造纯单元 Service：qbus + 双 CS/步长解析器（无 store——resolveLegs 不触库）。

@@ -4,7 +4,7 @@ package autotrade
 import (
 	"testing"
 
-	"arb/internal/trading/exec"
+	"nox/internal/trading/exec"
 )
 
 func floatPtr(f float64) *float64 { return &f }

@@ -6,8 +6,8 @@ import (
 	"context"
 	"log"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // canonicalCapRejectLog Σ在途同 canonical 名义+本次名义>cap → log skip（true=拦）。

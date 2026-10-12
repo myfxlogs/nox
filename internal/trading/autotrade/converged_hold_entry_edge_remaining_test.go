@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // seedConvergedPosition D-424：CROSS_VENUE 双腿持仓（BUY vA / SELL vB）。

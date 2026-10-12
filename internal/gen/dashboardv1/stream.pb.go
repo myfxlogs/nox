@@ -620,32 +620,32 @@ var File_dashboardv1_stream_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_stream_proto_rawDesc = "" +
 	"\n" +
-	"\x18dashboardv1/stream.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19dashboardv1/account.proto\x1a\x18dashboardv1/market.proto\x1a\x1adashboardv1/position.proto\"\x16\n" +
+	"\x18dashboardv1/stream.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19dashboardv1/account.proto\x1a\x18dashboardv1/market.proto\x1a\x1adashboardv1/position.proto\"\x16\n" +
 	"\x14StreamUpdatesRequest\"\xf2\x06\n" +
 	"\x15StreamUpdatesResponse\x12/\n" +
-	"\x05quote\x18\x01 \x01(\v2\x17.arb.dashboard.v1.QuoteH\x00R\x05quote\x12A\n" +
-	"\vopportunity\x18\x02 \x01(\v2\x1d.arb.dashboard.v1.OpportunityH\x00R\vopportunity\x12/\n" +
-	"\x05alert\x18\x03 \x01(\v2\x17.arb.dashboard.v1.AlertH\x00R\x05alert\x128\n" +
-	"\bposition\x18\x04 \x01(\v2\x1a.arb.dashboard.v1.PositionH\x00R\bposition\x12E\n" +
-	"\rsource_health\x18\x05 \x01(\v2\x1e.arb.dashboard.v1.SourceHealthH\x00R\fsourceHealth\x12;\n" +
-	"\tkeepalive\x18\x06 \x01(\v2\x1b.arb.dashboard.v1.KeepaliveH\x00R\tkeepalive\x12H\n" +
+	"\x05quote\x18\x01 \x01(\v2\x17.nox.dashboard.v1.QuoteH\x00R\x05quote\x12A\n" +
+	"\vopportunity\x18\x02 \x01(\v2\x1d.nox.dashboard.v1.OpportunityH\x00R\vopportunity\x12/\n" +
+	"\x05alert\x18\x03 \x01(\v2\x17.nox.dashboard.v1.AlertH\x00R\x05alert\x128\n" +
+	"\bposition\x18\x04 \x01(\v2\x1a.nox.dashboard.v1.PositionH\x00R\bposition\x12E\n" +
+	"\rsource_health\x18\x05 \x01(\v2\x1e.nox.dashboard.v1.SourceHealthH\x00R\fsourceHealth\x12;\n" +
+	"\tkeepalive\x18\x06 \x01(\v2\x1b.nox.dashboard.v1.KeepaliveH\x00R\tkeepalive\x12H\n" +
 	"\ffunding_need\x18\n" +
-	" \x01(\v2#.arb.dashboard.v1.FundingNeedNoticeH\x00R\vfundingNeed\x12H\n" +
-	"\fdata_refresh\x18\x0e \x01(\v2#.arb.dashboard.v1.DataRefreshNoticeH\x00R\vdataRefresh\x12[\n" +
-	"\x15broker_position_event\x18\x0f \x01(\v2%.arb.dashboard.v1.BrokerPositionEventH\x00R\x13brokerPositionEvent\x12E\n" +
-	"\raccount_event\x18\x10 \x01(\v2\x1e.arb.dashboard.v1.AccountEventH\x00R\faccountEventB\b\n" +
+	" \x01(\v2#.nox.dashboard.v1.FundingNeedNoticeH\x00R\vfundingNeed\x12H\n" +
+	"\fdata_refresh\x18\x0e \x01(\v2#.nox.dashboard.v1.DataRefreshNoticeH\x00R\vdataRefresh\x12[\n" +
+	"\x15broker_position_event\x18\x0f \x01(\v2%.nox.dashboard.v1.BrokerPositionEventH\x00R\x13brokerPositionEvent\x12E\n" +
+	"\raccount_event\x18\x10 \x01(\v2\x1e.nox.dashboard.v1.AccountEventH\x00R\faccountEventB\b\n" +
 	"\x06updateJ\x04\b\a\x10\bJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
 	"J\x04\b\v\x10\fJ\x04\b\f\x10\rJ\x04\b\r\x10\x0eJ\x04\b\x11\x10\x12J\x04\b\x12\x10\x13R\x17personal_position_priceR\x17personal_position_eventR\x10broker_positionsR\baccountsR\x0fposition_changeR\rhedge_refreshR\n" +
 	"cmc_updateR\n" +
 	"hedge_data\"\xd8\x01\n" +
 	"\x13BrokerPositionEvent\x12:\n" +
-	"\x06upsert\x18\x01 \x01(\v2 .arb.dashboard.v1.BrokerPositionH\x00R\x06upsert\x12=\n" +
-	"\x06remove\x18\x02 \x01(\v2#.arb.dashboard.v1.BrokerPositionRefH\x00R\x06remove\x12\x1e\n" +
+	"\x06upsert\x18\x01 \x01(\v2 .nox.dashboard.v1.BrokerPositionH\x00R\x06upsert\x12=\n" +
+	"\x06remove\x18\x02 \x01(\v2#.nox.dashboard.v1.BrokerPositionRefH\x00R\x06remove\x12\x1e\n" +
 	"\vpnl_sum_usd\x18\x03 \x01(\x01R\tpnlSumUsd\x12\x1e\n" +
 	"\vnet_sum_usd\x18\x04 \x01(\x01R\tnetSumUsdB\x06\n" +
 	"\x04kind\"G\n" +
 	"\fAccountEvent\x127\n" +
-	"\aaccount\x18\x01 \x01(\v2\x1d.arb.dashboard.v1.AccountInfoR\aaccount\"H\n" +
+	"\aaccount\x18\x01 \x01(\v2\x1d.nox.dashboard.v1.AccountInfoR\aaccount\"H\n" +
 	"\x11BrokerPositionRef\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x16\n" +
 	"\x06ticket\x18\x02 \x01(\tR\x06ticket\")\n" +
@@ -663,7 +663,7 @@ const file_dashboardv1_stream_proto_rawDesc = "" +
 	"\n" +
 	"alias_long\x18\a \x01(\tR\taliasLong\x12\x1f\n" +
 	"\valias_short\x18\b \x01(\tR\n" +
-	"aliasShortB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"aliasShortB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_stream_proto_rawDescOnce sync.Once
@@ -679,38 +679,38 @@ func file_dashboardv1_stream_proto_rawDescGZIP() []byte {
 
 var file_dashboardv1_stream_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_dashboardv1_stream_proto_goTypes = []any{
-	(*StreamUpdatesRequest)(nil),  // 0: arb.dashboard.v1.StreamUpdatesRequest
-	(*StreamUpdatesResponse)(nil), // 1: arb.dashboard.v1.StreamUpdatesResponse
-	(*BrokerPositionEvent)(nil),   // 2: arb.dashboard.v1.BrokerPositionEvent
-	(*AccountEvent)(nil),          // 3: arb.dashboard.v1.AccountEvent
-	(*BrokerPositionRef)(nil),     // 4: arb.dashboard.v1.BrokerPositionRef
-	(*DataRefreshNotice)(nil),     // 5: arb.dashboard.v1.DataRefreshNotice
-	(*FundingNeedNotice)(nil),     // 6: arb.dashboard.v1.FundingNeedNotice
-	(*Quote)(nil),                 // 7: arb.dashboard.v1.Quote
-	(*Opportunity)(nil),           // 8: arb.dashboard.v1.Opportunity
-	(*Alert)(nil),                 // 9: arb.dashboard.v1.Alert
-	(*Position)(nil),              // 10: arb.dashboard.v1.Position
-	(*SourceHealth)(nil),          // 11: arb.dashboard.v1.SourceHealth
-	(*Keepalive)(nil),             // 12: arb.dashboard.v1.Keepalive
-	(*BrokerPosition)(nil),        // 13: arb.dashboard.v1.BrokerPosition
-	(*AccountInfo)(nil),           // 14: arb.dashboard.v1.AccountInfo
+	(*StreamUpdatesRequest)(nil),  // 0: nox.dashboard.v1.StreamUpdatesRequest
+	(*StreamUpdatesResponse)(nil), // 1: nox.dashboard.v1.StreamUpdatesResponse
+	(*BrokerPositionEvent)(nil),   // 2: nox.dashboard.v1.BrokerPositionEvent
+	(*AccountEvent)(nil),          // 3: nox.dashboard.v1.AccountEvent
+	(*BrokerPositionRef)(nil),     // 4: nox.dashboard.v1.BrokerPositionRef
+	(*DataRefreshNotice)(nil),     // 5: nox.dashboard.v1.DataRefreshNotice
+	(*FundingNeedNotice)(nil),     // 6: nox.dashboard.v1.FundingNeedNotice
+	(*Quote)(nil),                 // 7: nox.dashboard.v1.Quote
+	(*Opportunity)(nil),           // 8: nox.dashboard.v1.Opportunity
+	(*Alert)(nil),                 // 9: nox.dashboard.v1.Alert
+	(*Position)(nil),              // 10: nox.dashboard.v1.Position
+	(*SourceHealth)(nil),          // 11: nox.dashboard.v1.SourceHealth
+	(*Keepalive)(nil),             // 12: nox.dashboard.v1.Keepalive
+	(*BrokerPosition)(nil),        // 13: nox.dashboard.v1.BrokerPosition
+	(*AccountInfo)(nil),           // 14: nox.dashboard.v1.AccountInfo
 	(*timestamppb.Timestamp)(nil), // 15: google.protobuf.Timestamp
 }
 var file_dashboardv1_stream_proto_depIdxs = []int32{
-	7,  // 0: arb.dashboard.v1.StreamUpdatesResponse.quote:type_name -> arb.dashboard.v1.Quote
-	8,  // 1: arb.dashboard.v1.StreamUpdatesResponse.opportunity:type_name -> arb.dashboard.v1.Opportunity
-	9,  // 2: arb.dashboard.v1.StreamUpdatesResponse.alert:type_name -> arb.dashboard.v1.Alert
-	10, // 3: arb.dashboard.v1.StreamUpdatesResponse.position:type_name -> arb.dashboard.v1.Position
-	11, // 4: arb.dashboard.v1.StreamUpdatesResponse.source_health:type_name -> arb.dashboard.v1.SourceHealth
-	12, // 5: arb.dashboard.v1.StreamUpdatesResponse.keepalive:type_name -> arb.dashboard.v1.Keepalive
-	6,  // 6: arb.dashboard.v1.StreamUpdatesResponse.funding_need:type_name -> arb.dashboard.v1.FundingNeedNotice
-	5,  // 7: arb.dashboard.v1.StreamUpdatesResponse.data_refresh:type_name -> arb.dashboard.v1.DataRefreshNotice
-	2,  // 8: arb.dashboard.v1.StreamUpdatesResponse.broker_position_event:type_name -> arb.dashboard.v1.BrokerPositionEvent
-	3,  // 9: arb.dashboard.v1.StreamUpdatesResponse.account_event:type_name -> arb.dashboard.v1.AccountEvent
-	13, // 10: arb.dashboard.v1.BrokerPositionEvent.upsert:type_name -> arb.dashboard.v1.BrokerPosition
-	4,  // 11: arb.dashboard.v1.BrokerPositionEvent.remove:type_name -> arb.dashboard.v1.BrokerPositionRef
-	14, // 12: arb.dashboard.v1.AccountEvent.account:type_name -> arb.dashboard.v1.AccountInfo
-	15, // 13: arb.dashboard.v1.FundingNeedNotice.ts:type_name -> google.protobuf.Timestamp
+	7,  // 0: nox.dashboard.v1.StreamUpdatesResponse.quote:type_name -> nox.dashboard.v1.Quote
+	8,  // 1: nox.dashboard.v1.StreamUpdatesResponse.opportunity:type_name -> nox.dashboard.v1.Opportunity
+	9,  // 2: nox.dashboard.v1.StreamUpdatesResponse.alert:type_name -> nox.dashboard.v1.Alert
+	10, // 3: nox.dashboard.v1.StreamUpdatesResponse.position:type_name -> nox.dashboard.v1.Position
+	11, // 4: nox.dashboard.v1.StreamUpdatesResponse.source_health:type_name -> nox.dashboard.v1.SourceHealth
+	12, // 5: nox.dashboard.v1.StreamUpdatesResponse.keepalive:type_name -> nox.dashboard.v1.Keepalive
+	6,  // 6: nox.dashboard.v1.StreamUpdatesResponse.funding_need:type_name -> nox.dashboard.v1.FundingNeedNotice
+	5,  // 7: nox.dashboard.v1.StreamUpdatesResponse.data_refresh:type_name -> nox.dashboard.v1.DataRefreshNotice
+	2,  // 8: nox.dashboard.v1.StreamUpdatesResponse.broker_position_event:type_name -> nox.dashboard.v1.BrokerPositionEvent
+	3,  // 9: nox.dashboard.v1.StreamUpdatesResponse.account_event:type_name -> nox.dashboard.v1.AccountEvent
+	13, // 10: nox.dashboard.v1.BrokerPositionEvent.upsert:type_name -> nox.dashboard.v1.BrokerPosition
+	4,  // 11: nox.dashboard.v1.BrokerPositionEvent.remove:type_name -> nox.dashboard.v1.BrokerPositionRef
+	14, // 12: nox.dashboard.v1.AccountEvent.account:type_name -> nox.dashboard.v1.AccountInfo
+	15, // 13: nox.dashboard.v1.FundingNeedNotice.ts:type_name -> google.protobuf.Timestamp
 	14, // [14:14] is the sub-list for method output_type
 	14, // [14:14] is the sub-list for method input_type
 	14, // [14:14] is the sub-list for extension type_name

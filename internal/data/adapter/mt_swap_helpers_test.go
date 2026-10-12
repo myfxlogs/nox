@@ -3,7 +3,7 @@ package adapter
 import (
 	"testing"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // TestApplyTripleSwapDayOverride D-115：实测 venue 覆盖、未实测 venue 原样返回。

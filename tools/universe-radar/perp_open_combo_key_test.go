@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/platform/testutil"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/platform/testutil"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 )
 
 // d376NormRow 构造 radar 内存行（funding nil=缺腿）。
@@ -37,7 +37,7 @@ func d376OPPair() divPair {
 // d376PerpStore 真库 store + 清 paper_spot_carry（行级隔离自持）。
 func d376PerpStore(t *testing.T) *pgstore.Store {
 	t.Helper()
-	s := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	s := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	if _, err := s.Pool().Exec(context.Background(),
 		`TRUNCATE paper_spot_carry, carry_graduations RESTART IDENTITY`); err != nil {
 		t.Fatalf("TRUNCATE: %v", err)
@@ -272,24 +272,24 @@ func TestD474b_PerpBasisFeeOnOpen(t *testing.T) {
 	// tick 缺席面：另一对不开 basis。
 	if _, _, err := stepPaperPerpCarry(ctx, s, []divPair{{
 		Canon: "ARB", ShortVenue: "binance", LongVenue: "gate",
-		ShortSym: "ARBUSDT", LongSym: "ARB_USDT", FundShort: 30, FundLong: 5, NetAnn: 25, VolMin: 1e7,
+		ShortSym: "ARBUSDT", LongSym: "NOX_USDT", FundShort: 30, FundLong: 5, NetAnn: 25, VolMin: 1e7,
 	}}, nil, 20, now); err != nil {
 		t.Fatalf("step2: %v", err)
 	}
 	active, _ = s.ListActivePaperSpotCarry(ctx)
-	var arb *pgstore.PaperSpotCarry
+	var pc *pgstore.PaperSpotCarry
 	for i := range active {
 		if active[i].Symbol == "ARB" {
-			arb = &active[i]
+			pc = &active[i]
 		}
 	}
-	if arb == nil {
+	if pc == nil {
 		t.Fatal("ARB 行未开")
 	}
-	if arb.EntryBasisBps != nil {
-		t.Fatalf("tick 缺席 → basis NULL 诚实缺，got %v", *arb.EntryBasisBps)
+	if pc.EntryBasisBps != nil {
+		t.Fatalf("tick 缺席 → basis NULL 诚实缺，got %v", *pc.EntryBasisBps)
 	}
-	if arb.EstRoundTripFeeUSD == nil || *arb.EstRoundTripFeeUSD <= 0 {
+	if pc.EstRoundTripFeeUSD == nil || *pc.EstRoundTripFeeUSD <= 0 {
 		t.Fatal("est_fee 与 tick 无关应仍有值（venue 费率表覆盖时）")
 	}
 }

@@ -9,10 +9,10 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/venue"
+	"nox/internal/data/bus"
+	"nox/internal/data/venue"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // feedQuotes 驱 consumeQuoteFrames 消费一组报价帧并逐帧 drain（断言帧已入缓存后返回）。

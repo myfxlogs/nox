@@ -72,8 +72,8 @@ fi
 
 # 6. 经验库 schema 门禁（D-130 P4：格式错/索引过期=拒绝提交；Devin 旧格式 5 条入库实证）
 if git -c core.quotepath=off diff --cached --name-only | grep -qE '^docs/经验库/'; then
-  (cd tools/arbkb && go run . gen --check) || {
-    echo "FAIL: arbkb gen --check 未过——条目 frontmatter 须符合 Schema v2（模板 docs/经验库/模板.md），索引自动生成禁手编；修复后重试" >&2
+  (cd tools/noxkb && go run . gen --check) || {
+    echo "FAIL: noxkb gen --check 未过——条目 frontmatter 须符合 Schema v2（模板 docs/经验库/模板.md），索引自动生成禁手编；修复后重试" >&2
     exit 1
   }
 fi
@@ -98,7 +98,7 @@ if [ -n "$SECRET_ADDED" ]; then
   check_secret "PRIVATE[[:space:]]+KEY-----" "PEM 私钥块"
   check_secret "(^|[^A-Za-z0-9])(ghp_|gho_)[A-Za-z0-9]{20,}" "GitHub token 前缀"
   check_secret "(^|[^A-Za-z0-9])sk-[A-Za-z0-9]{20,}" "sk- 秘钥前缀"
-  check_secret "ARB_AUTH_TOKEN=[A-Za-z0-9]{16,}" "ARB_AUTH_TOKEN 非占位值"
+  check_secret "NOX_AUTH_TOKEN=[A-Za-z0-9]{16,}" "NOX_AUTH_TOKEN 非占位值"
 fi
 
 # 8b. 资金/审计写通道 `_ =` 门禁（D-508 S1 写路径审计契约，P4）：

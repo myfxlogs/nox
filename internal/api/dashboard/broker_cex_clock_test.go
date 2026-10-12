@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/collect/exchange"
-	"arb/internal/data/fact"
-	"arb/internal/data/venue"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/data/collect/exchange"
+	"nox/internal/data/fact"
+	"nox/internal/data/venue"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/trading/exec"
 )
 
 // fakeCEXQuerier CEX querier stub（仅持仓；CEX 无 ServerTZQuerier 实现=nil 空态语义）。

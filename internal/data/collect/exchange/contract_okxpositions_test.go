@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/venue"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/platform/httpx"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/venue"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/platform/httpx"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // d475bSink 捕获 snapshot 写入（balance 通道对拍面）。

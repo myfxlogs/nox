@@ -13,7 +13,7 @@ description: 生产取证——验证运行时状态时的强制工作流（SSH�
 - 持仓/swap/报价/风控状态确认（声明当前运行事实）
 - 复审运行时验证
 
-关联条目清单：`docs/经验库/技能清单.md` 的「生产取证」节（arbkb gen 生成，指针式，条目为唯一真相源）。
+关联条目清单：`docs/经验库/技能清单.md` 的「生产取证」节（noxkb gen 生成，指针式，条目为唯一真相源）。
 
 ## 前置读取
 
@@ -34,14 +34,14 @@ SG="ssh -i ~/.ssh/id_ed25519 root@192.229.85.35"
 钦定径 = `buf curl --protocol connect`（schema 校验径——请求体按 proto 契约校验，错字段在发出前就报；手写裸 JSON POST 已废）。SG 已装 `buf`（v1.68.3，`/usr/local/bin/buf`），`/opt/arb` 下 `--schema .` 直解 buf.yaml 模块：
 
 ```
-$SG "cd /opt/arb && TOK=\$(grep '^ARB_AUTH_TOKEN=' .env | cut -d= -f2-) \
+$SG "cd /opt/arb && TOK=\$(grep '^NOX_AUTH_TOKEN=' .env | cut -d= -f2-) \
   && buf curl --protocol connect --schema . -H \"Authorization: Bearer \$TOK\" \
   --data '{\"refresh\":true}' \
   http://localhost:50051/arb.dashboard.v1.DashboardService/ListBrokerPositions"
 ```
 
 - 服务全名 `arb.dashboard.v1.DashboardService`（proto/dashboardv1/service.proto 为准）
-- 认证 `Authorization: Bearer <ARB_AUTH_TOKEN>`——token 从 SG `/opt/arb/.env` 读（app_secrets 库内是密文 value_enc 读不出明文），禁抄入会话
+- 认证 `Authorization: Bearer <NOX_AUTH_TOKEN>`——token 从 SG `/opt/arb/.env` 读（app_secrets 库内是密文 value_enc 读不出明文），禁抄入会话
 - **grpcurl 已装（v1.9.3 真件）但本服务不可用**：arb-core 是 HTTP/1.1 Connect server 无 h2c，gRPC 协议握手超时——只留作其他 gRPC 服务备用
 - `refresh=true` 强制刷新缓存；`fresh=false` → 取证无效，先查采集链
 

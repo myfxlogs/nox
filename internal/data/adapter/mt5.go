@@ -9,11 +9,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/data/venue"
-	"arb/internal/platform/safego"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/data/venue"
+	"nox/internal/platform/safego"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"

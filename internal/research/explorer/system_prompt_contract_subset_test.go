@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/analyst"
+	"nox/internal/platform/analyst"
 )
 
 // TestD065_SystemPromptContractSubset 三面提示词各含契约子集锚（证伪/触发点/口径）。

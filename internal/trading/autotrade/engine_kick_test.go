@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // TestEngine_KickMerge D-107 P4：连续多 kick 只缓冲 1 个（chan 容量 1 合并语义）。

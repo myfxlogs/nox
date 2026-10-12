@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // TestD336R1_XAUDualShapeJoin XAU 双面（MT XAUUSD map canonical=XAUUSD swap_long=0

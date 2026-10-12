@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/store/pgstore"
 )
 
 // cfdCexQuoteSources monitor 簿 CEX 报价源集（xasset-monitor fetcher 三所读库轨）。

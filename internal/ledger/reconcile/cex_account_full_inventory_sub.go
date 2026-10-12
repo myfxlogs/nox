@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strconv"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // fullInventoryOkxBySource okx 子账户盘点（funding=/asset/balances 全 ccy；

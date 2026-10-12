@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )

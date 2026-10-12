@@ -1,18 +1,18 @@
 package reconcile
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"fmt"
+	"nox/internal/data/keydomain"
 	"strings"
 	"time"
 
-	"arb/internal/data/adapter"
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
-	"arb/internal/data/venue"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/adapter"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
+	"nox/internal/data/venue"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 
 	"google.golang.org/grpc/metadata"
 )
@@ -74,7 +74,7 @@ type AccountQuerier interface {
 	VenueKey() string
 }
 
-// isARBOrder 判断 broker 订单是否为当前 ARB 系统开出。
+// isARBOrder 判断 broker 订单是否为当前 NOX 系统开出。
 // 当前 exec 下单 comment 统一为 exec.OrderComment（"arb"）→ 前缀匹配即 ARB 源。
 // 其余一律系统外单：遗留 ca_/cx_/tri_+hex 格式（旧系统 D-033）、手工单 UUID、空 comment。
 func isARBOrder(comment string) bool {

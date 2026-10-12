@@ -9,14 +9,14 @@ import (
 	"sort"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/platform/combo"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/keydomain"
+	"nox/internal/platform/combo"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 
-	v1 "arb/internal/gen/dashboardv1"
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // 档位判据常量（D-478 S4）。
@@ -25,7 +25,7 @@ const (
 	monitorFreshWindow  = 30 * time.Minute // XASSET 监控簿新鲜度闸
 	snapshotStaleWindow = 5 * time.Minute  // 账户快照 >5min=缺数据不猜
 	tierAlertInterval   = 6 * time.Hour    // 恶化告警去重（对齐 D-472 S3）
-	defaultCrossCap     = 0.5              // cfg 未注入时的占比档（ARB_CROSS_NOTIONAL_EQUITY_CAP 缺省同值）
+	defaultCrossCap     = 0.5              // cfg 未注入时的占比档（NOX_CROSS_NOTIONAL_EQUITY_CAP 缺省同值）
 )
 
 // ListXAssetPendingEntries D-478 S3：enabled 组合−在持仓=挂单集，按序探闸。

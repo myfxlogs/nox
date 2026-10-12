@@ -16,8 +16,8 @@ import (
 	"strconv"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/store/pgstore"
 )
 
 // OKXIncomeAccount 采集账户（wiring 从 exchange_configs okx perp 行逐轮供给——配置驱动）。

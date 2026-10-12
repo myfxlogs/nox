@@ -19,9 +19,9 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/platform/safego"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/platform/safego"
+	"nox/internal/store/pgstore"
 )
 
 // 资金费率换算常量。

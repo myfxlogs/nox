@@ -8,7 +8,7 @@ import (
 	"errors"
 	"net/http"
 
-	"arb/internal/infra/dephealth"
+	"nox/internal/infra/dephealth"
 )
 
 // depRoundTripper 透传 RT + dephealth 记账（venue:venueType:rest 键）。

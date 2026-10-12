@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 
 	"github.com/jackc/pgx/v5"
 )

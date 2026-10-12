@@ -1,6 +1,6 @@
 package autotrade
 
-import "arb/internal/data/isreal"
+import "nox/internal/data/isreal"
 
 // 三态：实盘/demo/未知 同类型配对安全红线。
 // 首个实盘账户入池触发——组合引擎不区分 demo/实盘，随时可能开出

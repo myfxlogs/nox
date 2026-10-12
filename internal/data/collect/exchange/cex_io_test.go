@@ -2,15 +2,15 @@
 package exchange
 
 import (
-	"arb/internal/platform/httpx"
 	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"nox/internal/platform/httpx"
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // fakeIOSink 落库/水位 fake。
@@ -152,7 +152,7 @@ func TestFilterIOAccounts(t *testing.T) {
 	}
 }
 
-// TestCexIOCollector_BinanceProxyToken D-365-R4 S2 锚：env 设 ARB_BINANCE_PROXY_TOKEN 时
+// TestCexIOCollector_BinanceProxyToken D-365-R4 S2 锚：env 设 NOX_BINANCE_PROXY_TOKEN 时
 // binance 请求带 X-Proxy-Token 头（httpx.Client() 注入；旧实现红=裸 DefaultClient 头缺失
 // =生产 x509 skip 复现）。
 func TestCexIOCollector_BinanceProxyToken(t *testing.T) {

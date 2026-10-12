@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // ProposalLister D-194：提案清单回调（cmd/core 装配 *pgstore.Store，同 DCIGoRunner 模式）。

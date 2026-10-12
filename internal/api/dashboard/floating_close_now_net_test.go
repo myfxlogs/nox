@@ -10,15 +10,15 @@ import (
 
 	"strconv"
 
-	"arb/internal/platform/testutil/storetest"
+	"nox/internal/platform/testutil/storetest"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestD141_FloatingCloseNowNet(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	_, _ = st.Pool().Exec(ctx, `DELETE FROM position_legs WHERE position_id IN (SELECT id FROM positions WHERE opportunity_id LIKE 'D-141%')`)
 	_, _ = st.Pool().Exec(ctx, `DELETE FROM positions WHERE opportunity_id LIKE 'D-141%'`)

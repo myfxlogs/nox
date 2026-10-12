@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // SubscribeOrderUpdate 覆盖（D-107 P1）：返回 OK（subsOUErr 时返回 err），计数供断言。

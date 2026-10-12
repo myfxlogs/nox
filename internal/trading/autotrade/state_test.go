@@ -1,7 +1,7 @@
 package autotrade
 
 import (
-	"arb/internal/risk/gate"
+	"nox/internal/risk/gate"
 	"testing"
 	"time"
 )

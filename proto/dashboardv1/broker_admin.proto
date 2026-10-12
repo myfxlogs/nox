@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package arb.dashboard.v1;
+package nox.dashboard.v1;
 
-option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
 
 
 import "google/protobuf/timestamp.proto";
@@ -383,12 +383,12 @@ message ListSwapCombosResponse {
 message GetFrontConfigRequest {}
 
 message GetFrontConfigResponse {
-  double notify_min_net_bps = 1;     // ARB_NOTIFY_MIN_NET_BPS（机会推送提醒门槛 bps）
-  int32  freshness_ttl_sec = 2;     // ARB_DETECTOR_FRESHNESS_TTL（报价陈旧排除 TTL 秒）
-  double entry_spread_min_bps = 3;  // ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS（入场成本容忍 bps）
-  double min_net_swap_bps = 4;      // ARB_AUTOTRADE_MIN_NET_SWAP_BPS（swap 套利最低净 swap bps）
-  double revalidate_abs_bps = 5;    // ARB_REVALIDATE_ABS_BPS（复核劣化绝对阈值 bps）
-  double revalidate_rel_pct = 6;    // ARB_REVALIDATE_REL_PCT（复核劣化相对阈值 %）
+  double notify_min_net_bps = 1;     // NOX_NOTIFY_MIN_NET_BPS（机会推送提醒门槛 bps）
+  int32  freshness_ttl_sec = 2;     // NOX_DETECTOR_FRESHNESS_TTL（报价陈旧排除 TTL 秒）
+  double entry_spread_min_bps = 3;  // NOX_SWAPARB_ENTRY_SPREAD_MIN_BPS（入场成本容忍 bps）
+  double min_net_swap_bps = 4;      // NOX_AUTOTRADE_MIN_NET_SWAP_BPS（swap 套利最低净 swap bps）
+  double revalidate_abs_bps = 5;    // NOX_REVALIDATE_ABS_BPS（复核劣化绝对阈值 bps）
+  double revalidate_rel_pct = 6;    // NOX_REVALIDATE_REL_PCT（复核劣化相对阈值 %）
 }
 
 // === StrategyLedger（D-080 S5：理论 vs 实际对账）===

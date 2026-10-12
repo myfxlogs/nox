@@ -20,8 +20,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/infra/dephealth"
-	"arb/internal/platform/safego"
+	"nox/internal/infra/dephealth"
+	"nox/internal/platform/safego"
 
 	"github.com/gorilla/websocket"
 )

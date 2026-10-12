@@ -13,7 +13,7 @@ var (
 	IncidentExitKindCleanupSQL string // D-032 R1：清零成交 FAILED 误打的 legged_unwind（#503/#504 形态）
 
 	//go:embed replay/0173_paper_window_start.sql
-	PaperWindowStartSQL string // D-033①：app_config 播种 ARB_PAPER_WINDOW_START（窗起点单源）
+	PaperWindowStartSQL string // D-033①：app_config 播种 NOX_PAPER_WINDOW_START（窗起点单源）
 
 	//go:embed replay/0174_drop_opportunities_tick.sql
 	DropOpportunitiesTickSQL string // D-040②：opportunities_tick 死表 DROP（stale 8-22 零引用，已备份）

@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // TestFullInventory_BinancePerpWallet R1 S2 锚：perp 配置走 /fapi/v2/account 合约钱包

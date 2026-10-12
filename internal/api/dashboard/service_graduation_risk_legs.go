@@ -4,12 +4,12 @@
 package dashboard
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"fmt"
+	"nox/internal/data/keydomain"
 
-	"arb/internal/research/scan"
-	"arb/internal/store/pgstore"
+	"nox/internal/research/scan"
+	"nox/internal/store/pgstore"
 )
 
 func gradRiskLegs(g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry, mtPair *scan.ResolvedCfdPair) ([]riskLegSpec, error) {

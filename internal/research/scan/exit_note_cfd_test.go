@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 var exitNoteRe = regexp.MustCompile(`exit=(\w+) net=(-?\d+\.\d{2}) funding7d=(-?\d+\.\d{2}) swap=(-?\d+\.\d{2}) streak=(\d+)`)

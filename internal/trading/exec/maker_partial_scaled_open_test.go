@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // d026Executor 市价腿 fake：fillRatio 模拟 IOC 部分成交（FILLED 带部分量）；

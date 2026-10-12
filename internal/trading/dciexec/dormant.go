@@ -6,7 +6,7 @@ package dciexec
 import (
 	"context"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // dormantPairs D-204③：约束表休眠轨集（读败=err 上抛——执行闸面如实报）。

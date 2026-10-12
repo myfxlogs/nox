@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/research/econ"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/research/econ"
+	"nox/internal/store/pgstore"
 )
 
 // currentBasisBps 重算 SWAPARB/CARRY/XASSET_CARRY 当前基差（两腿 venue 最新报价 cross-broker spread bps）。

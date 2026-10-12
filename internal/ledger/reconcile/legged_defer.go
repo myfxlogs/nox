@@ -1,5 +1,5 @@
 // legged_defer.go —— D-175：混合腿 LEGGED 裸露告警的惰性复查。
-// finalize 侧只登记（pgstore ARB_LEGGED_DEFERRALS）不即时 critical——独立平仓链
+// finalize 侧只登记（pgstore NOX_LEGGED_DEFERRALS）不即时 critical——独立平仓链
 // （autoClose/ResumeClose）实测秒级自愈，即时告警与事实错配。本件在 Run 尾部复查：
 // CLOSED→降级 info「已自动处置（耗时 Xs）」；逾期（leggedDeferWindow）仍 LEGGED/FAILED
 // →critical「自动处置未闭环——需人工介入」；其余态续挂。
@@ -11,7 +11,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // leggedDeferWindow 延迟判定窗（票面钦定 5min 起；包级 var 供测试缩短）。

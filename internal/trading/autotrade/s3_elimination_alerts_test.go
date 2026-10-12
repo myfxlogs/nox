@@ -1,6 +1,6 @@
 // 单测：策略淘汰告警 runStartupElimination（boot 时 → AlertSink）。
 // 参照 d256a_revival_alert_test.go AlertSink spy 模式——用 AlertSink spy 捕获告警。
-// 需要 test-pg2 DSN（ARB_TEST_PG_DSN）——DB 设置仓位/结算数据，AlertSink spy 验证告警。
+// 需要 test-pg2 DSN（NOX_TEST_PG_DSN）——DB 设置仓位/结算数据，AlertSink spy 验证告警。
 package autotrade
 
 import (
@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // insertElimFixture 插入 7 笔 PERP_FUNDING CLOSED 仓位 + 对应 position_settlements。

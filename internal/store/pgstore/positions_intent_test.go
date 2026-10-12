@@ -14,7 +14,7 @@ import (
 //  4. 重复 active dedup_key 拒绝（partial unique index WHERE status IN active）
 //  5. CLOSED 行的 dedup_key 不阻止新 active（WHERE 条件过滤）
 //
-// DSN-gated：无 ARB_TEST_PG_DSN 跳过。
+// DSN-gated：无 NOX_TEST_PG_DSN 跳过。
 func TestPositionIntentFields_Migration0048(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
@@ -116,7 +116,7 @@ func TestPositionIntentFields_Migration0048(t *testing.T) {
 
 // TestClaimClose D-159 W1a R3-1：原子领取平仓权 E2E。
 // OPEN/LEGGED → CLOSING 成功；OPENING/CLOSING/CLOSED/FAILED → ErrClaimFailed。
-// DSN-gated：无 ARB_TEST_PG_DSN 跳过。
+// DSN-gated：无 NOX_TEST_PG_DSN 跳过。
 func TestClaimClose(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

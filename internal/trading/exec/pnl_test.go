@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // fakeCSResolver 测试用 ContractSizeResolver（D-077 修复⑪A M1）。

@@ -16,12 +16,12 @@ package exec
 // binance base+/v3/ticker/price → price；gate /api/v4/spot/tickers?currency_pair → last。
 
 import (
-	"arb/internal/platform/signutil"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"nox/internal/platform/signutil"
 	"strconv"
 	"strings"
 )

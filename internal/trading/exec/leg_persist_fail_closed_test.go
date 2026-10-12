@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // TestD108_LegPersistFailClosed OPEN phase 腿写库失败 → 返回 error（孤儿不可留）。

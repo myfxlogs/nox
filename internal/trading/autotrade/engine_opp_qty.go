@@ -5,8 +5,8 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // effectiveNotionalUSD D-367 S4：有效名义额=组合级 spec 列优先，NULL（行缺列或 env 来源）

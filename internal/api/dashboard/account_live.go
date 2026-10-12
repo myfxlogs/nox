@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/data/venue"
-	"arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/data/venue"
+	"nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 // liveAccountLatest 从 AccountMonitor 实时态派生 VenueAccountLatest 视图（零 DB 资金读；

@@ -1,4 +1,4 @@
-// Package main implements arbkb — Arb 本地经验库索引生成器。
+// Package main implements noxkb — Nox 本地经验库索引生成器。
 // P0 只实现 gen / gen --check。不连接 PG，不执行条目命令，不被 core import。
 package main
 
@@ -64,9 +64,9 @@ type Entry struct {
 }
 
 // header 是索引文件的固定头部（标题 + 说明 + 表头 + 分隔行）。
-const header = `# Arb 项目经验索引
+const header = `# Nox 项目经验索引
 
-> 任务开始时读取一次；命中后读 docs/经验库/条目/<id>.md 全文（P1 起可用 arbkb read <id>）。
+> 任务开始时读取一次；命中后读 docs/经验库/条目/<id>.md 全文（P1 起可用 noxkb read <id>）。
 
 | id | kind | keywords | summary | status | risk |
 |----|------|----------|---------|--------|------|
@@ -165,7 +165,7 @@ func renderSkillsIndex(entries []*Entry) []byte {
 	}
 	sort.Strings(tags)
 	var buf bytes.Buffer
-	buf.WriteString("# 技能关联条目清单（arbkb gen 生成，勿手编）\n\n")
+	buf.WriteString("# 技能关联条目清单（noxkb gen 生成，勿手编）\n\n")
 	buf.WriteString("> 按条目 frontmatter `skills:` 标签归组——清单是指针，条目全文见 docs/经验库/条目/<id>.md。\n\n")
 	for _, tag := range tags {
 		buf.WriteString("## " + sanitize(tag) + "\n\n")
@@ -269,7 +269,7 @@ func genCheck() error {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: arbkb gen | gen --check")
+		fmt.Fprintln(os.Stderr, "usage: noxkb gen | gen --check")
 		os.Exit(2)
 	}
 	var err error

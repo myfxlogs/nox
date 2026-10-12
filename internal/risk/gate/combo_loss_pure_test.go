@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/platform/combo"
-	"arb/internal/platform/testutil/storetest"
+	"nox/internal/platform/combo"
+	"nox/internal/platform/testutil/storetest"
 	"time"
 )
 
@@ -36,7 +36,7 @@ func TestD378a_ComboLossPure(t *testing.T) {
 // TestD378a_ComboLossGate_DB 锚4b：真库 3 行 stop/exec_drift 同 ComboKey in 24h → Hit=3；
 
 func TestD378a_ComboLossGate_DB(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx,
 		`TRUNCATE positions, position_legs RESTART IDENTITY CASCADE`); err != nil {
@@ -85,7 +85,7 @@ func TestD378a_ComboLossGate_DB(t *testing.T) {
 
 // A7（C1 集成）：同组合 24h 内 3 次 disaster 平仓 → comboLossCheck 命中（kind 集含 disaster）。
 func TestD378b_A7_C1DisasterCounted(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx,
 		`TRUNCATE positions, position_legs RESTART IDENTITY CASCADE`); err != nil {

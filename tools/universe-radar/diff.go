@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 const statusTrading = "TRADING" // 归一后「在交易中」统一值（sources.go 各所适配）

@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // setupSwapDeviationStore 构造真库 store + autotrade_state=RUNNING + broker_accounts + 已有 OPEN 持仓 + legs + swap snapshots + facts。

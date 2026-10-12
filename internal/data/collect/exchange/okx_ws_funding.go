@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // handleFundingRate D-509 S4：funding-rate 频道帧→funding 三 fact。

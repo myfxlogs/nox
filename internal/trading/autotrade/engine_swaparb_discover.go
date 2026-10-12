@@ -6,12 +6,12 @@ import (
 	"sort"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // discoverSwapCombos 从 facts 表自动扫描所有跨账户 swap 组合。
-// minNetSwapBps 从 env 读取（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）。
+// minNetSwapBps 从 env 读取（NOX_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）。
 // swap facts 新鲜度门禁 fail-closed——now−f.Ts > SwapFactMaxAge → 跳过该 fact + 计数日志。
 // 净 swap 评估改用 swapRateFor（实测优先 settled → spec 兜底 → none fail-closed），
 // 删除规格直查旧路径（longFacts/shortFacts 直接遍历配对）。
@@ -104,7 +104,7 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 	var combos []swapComboCandidate
 	minNetSwapBps := e.cfg.MinNetSwapBps
 	// 修复⑪B N5：删除 ==0 → 0.2 二次默认（config 已有 env 默认 0.2）。
-	// 显式 0 = 全扫语义恢复（用户可通过 ARB_AUTOTRADE_MIN_NET_SWAP_BPS=0 关闭门槛）。
+	// 显式 0 = 全扫语义恢复（用户可通过 NOX_AUTOTRADE_MIN_NET_SWAP_BPS=0 关闭门槛）。
 	for _, lf := range longFacts {
 		// 删除 lf.Value<=0 单腿正 swap 过滤——套利看净 swap（long+short），
 		// 非单腿。指数/商品/加密 CFD 的 swap_long 通常为负（broker 收过夜费），

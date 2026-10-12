@@ -11,7 +11,7 @@ import (
 	"log"
 	"time"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // orderHistoryCommission 按 ticket 回查 MT5 历史单的 commission。

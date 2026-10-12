@@ -12,8 +12,8 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/ir/inboxfmt"
-	"arb/internal/store/pgstore"
+	"nox/internal/ir/inboxfmt"
+	"nox/internal/store/pgstore"
 )
 
 // Store 依赖面（pgstore.Store 实现；测试 fake）。

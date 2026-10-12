@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // fakeSnapshotter mock AccountSnapshotter（mu 保护：#1b 测试运行中换 infos）。

@@ -1,18 +1,18 @@
 package autotrade
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"fmt"
 	"log"
+	"nox/internal/data/keydomain"
 	"strings"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/platform/usdnotional"
-	"arb/internal/risk/gate"
-	"arb/internal/risk/position"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/platform/usdnotional"
+	"nox/internal/risk/gate"
+	"nox/internal/risk/position"
+	"nox/internal/store/pgstore"
 )
 
 // swapArbBasisExitBps SWAPARB/CARRY 基差止损门槛（D-108 A5，D-102 预设规则代码化）。； 包级 var 便于测试覆写（marginReconnectBackoff 先例）。

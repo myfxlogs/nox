@@ -8,7 +8,7 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // joinCfdLegs CEX funding × MT swap 双腿 join + 结构行生成（D-412 F2 全叉积：

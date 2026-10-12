@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/alerttext"
+	"nox/internal/platform/alerttext"
 )
 
 // seedEpisodes 直接落 app_config JSON（跨 now 边界场景的种子手段）。

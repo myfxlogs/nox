@@ -5,8 +5,8 @@ package dashboard
 import (
 	"math"
 
-	"arb/internal/data/keydomain"
-	v1 "arb/internal/gen/dashboardv1"
+	"nox/internal/data/keydomain"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 )

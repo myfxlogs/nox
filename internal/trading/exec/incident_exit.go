@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // markOpenIncident 开仓终态归因：Execute 判定 LEGGED/FAILED 时写 legged_unwind。

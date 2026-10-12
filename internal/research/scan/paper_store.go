@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // PaperStore D-350 阶段②：纸面轨存储依赖（*pgstore.Store 原生实现）。

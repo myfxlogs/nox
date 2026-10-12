@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/platform/combo"
-	"arb/internal/portfolio/capitalview"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/combo"
+	"nox/internal/portfolio/capitalview"
+	"nox/internal/store/pgstore"
 )
 
 // Gate 统一开仓门禁（D-072 §3.1）。三 goroutine 串行化。

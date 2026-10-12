@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
 	"connectrpc.com/connect"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 // d540Snaps 池快照（含 free_margin——D-540 可用基准源）。

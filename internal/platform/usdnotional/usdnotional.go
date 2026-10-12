@@ -9,7 +9,7 @@ package usdnotional
 import (
 	"strings"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // usdQuotedCommodities USD 计价商品/指数 CFD 白名单（无 USD 后缀但 USD 计价）。

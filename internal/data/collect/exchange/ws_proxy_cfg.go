@@ -4,13 +4,13 @@ package exchange
 
 // ProxyEndpoints D-145：原 env 直读端点键的注入面（cfg.EnvKnobs 供值）。
 type ProxyEndpoints struct {
-	CexWSBase          string // ARB_CEX_WS_BASE 主基址（空=直连）
-	CexWSBaseBackup    string // ARB_CEX_WS_BASE_BACKUP
+	CexWSBase          string // NOX_CEX_WS_BASE 主基址（空=直连）
+	CexWSBaseBackup    string // NOX_CEX_WS_BASE_BACKUP
 	BinanceProxyBackup string // BINANCE_PROXY_URL_BACKUP（binance-mkt-ws 候选#2）
-	PerpPublicWSURL    string // ARB_BINANCE_PERP_PUBLIC_WS_URL 逐流覆盖
-	PerpMarketWSURL    string // ARB_BINANCE_PERP_MARKET_WS_URL
-	SpotWSURL          string // ARB_BINANCE_SPOT_WS_URL
-	GateWSMode         string // ARB_GATE_WS_MODE（"direct"=原生直连）
+	PerpPublicWSURL    string // NOX_BINANCE_PERP_PUBLIC_WS_URL 逐流覆盖
+	PerpMarketWSURL    string // NOX_BINANCE_PERP_MARKET_WS_URL
+	SpotWSURL          string // NOX_BINANCE_SPOT_WS_URL
+	GateWSMode         string // NOX_GATE_WS_MODE（"direct"=原生直连）
 }
 
 var ep ProxyEndpoints

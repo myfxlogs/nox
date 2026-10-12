@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // fakeUsdPerLot 构造 (canonical,venueKey,side)→usdPerLot 的内存 fake（D-190 新签名）。

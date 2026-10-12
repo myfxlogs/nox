@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/api/dashboard"
-	"arb/internal/data/bus"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/api/dashboard"
+	"nox/internal/data/bus"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // d328SeedFunding 种 funding 预测流样本（5min 间隔升序，全部落在近 1h 窗口内）。

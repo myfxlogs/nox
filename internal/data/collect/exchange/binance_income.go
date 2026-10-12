@@ -17,8 +17,8 @@ import (
 	"net/http"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/store/pgstore"
 )
 
 // BinanceIncomeAccount 采集账户（wiring 从 exchange_configs binance perp 行逐轮供给——配置驱动不硬编码 id）。

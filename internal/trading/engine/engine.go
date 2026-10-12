@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/keydomain"
-	"arb/internal/research/detector"
-	"arb/internal/research/evaluator"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/keydomain"
+	"nox/internal/research/detector"
+	"nox/internal/research/evaluator"
+	"nox/internal/store/pgstore"
 )
 
 // AssetEquivView 引擎侧标的等价类消费口（D-300 裁 5：与 detector 共享同一
@@ -39,7 +39,7 @@ type Engine struct {
 	store         opportunityStore
 	facts         *FactCache
 	commissionFor func(venueKey string) float64
-	// pubDeltaBps 发布实质变化阈值（bps，ARB_OPP_PUBLISH_DELTA_BPS）；
+	// pubDeltaBps 发布实质变化阈值（bps，NOX_OPP_PUBLISH_DELTA_BPS）；
 	// pubHeartbeat TTL 续命心跳（=OpportunityTTL/3，语义=过期续命非判定节拍）。
 	pubDeltaBps  float64
 	pubHeartbeat time.Duration
@@ -59,7 +59,7 @@ type Engine struct {
 	xassetCarryMinNetStore  float64
 	// assetEquiv 跨标的等价类映射（D-300 G1 快照扩展）。nil=无等价类（存量 4 型行为不变）。
 	assetEquiv AssetEquivView
-	// excludeCanonicals 检测产出排除集合（D-072 资金提醒弹窗提示词 B1：复用 ARB_AUTOTRADE_EXCLUDE_CANONICALS
+	// excludeCanonicals 检测产出排除集合（D-072 资金提醒弹窗提示词 B1：复用 NOX_AUTOTRADE_EXCLUDE_CANONICALS
 	// 双用途——执行层排除 + 检测层排除，P3 单一真相）。nil/空 = 不排除（测试默认）。
 	// 命中时机会不入库（TTL 自然过期不适用——根本不产），从源头消除 BRENT/WTI 假机会（1314615 报价偏高 $3，D-068 实证）。
 	excludeCanonicals map[string]bool
@@ -162,7 +162,7 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 			continue
 		}
 		o := resultToOpp(result)
-		// 资金提醒弹窗提示词 B1：检测层排除 BRENT/WTI 等假机会（复用 ARB_AUTOTRADE_EXCLUDE_CANONICALS，
+		// 资金提醒弹窗提示词 B1：检测层排除 BRENT/WTI 等假机会（复用 NOX_AUTOTRADE_EXCLUDE_CANONICALS，
 		// 执行层+检测层双用途，P3 单一真相）。命中 → 不入库（从源头消除，TTL 自然过期不适用）。
 		if len(e.excludeCanonicals) > 0 && e.excludeCanonicals[o.Canonical] {
 			continue

@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/analyst"
+	"nox/internal/platform/analyst"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // nProposalBatch 造含 n 条合法提案的 ```explorer-proposals 块（逐行异 canonical

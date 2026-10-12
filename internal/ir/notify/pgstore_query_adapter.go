@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // PgStoreQueryAdapter 包装 pgstore.Store 实现 notify.FeishuQueryStore 接口。
@@ -160,12 +160,12 @@ func (a *PgStoreQueryAdapter) ListDCIOrders(ctx context.Context, limit int) ([]p
 	return a.Store.ListDCIOrders(ctx, limit)
 }
 
-// AIReadOnlyDSN D-201②：app_secrets ARB_AI_PG_DSN 热读（轮换未重启即探真值，
+// AIReadOnlyDSN D-201②：app_secrets NOX_AI_PG_DSN 热读（轮换未重启即探真值，
 // 同 wire_selfwatch probeAnalystRO 口径）。空=未配置→工具如实报。
 func (a *PgStoreQueryAdapter) AIReadOnlyDSN(ctx context.Context) (string, error) {
 	secrets, err := a.Store.LoadAppSecrets(ctx)
 	if err != nil {
 		return "", err
 	}
-	return secrets["ARB_AI_PG_DSN"], nil
+	return secrets["NOX_AI_PG_DSN"], nil
 }

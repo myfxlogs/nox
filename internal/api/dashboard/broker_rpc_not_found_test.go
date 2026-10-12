@@ -10,17 +10,17 @@ import (
 	"strings"
 	"testing"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/gen/dashboardv1/dashboardv1connect"
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/gen/dashboardv1/dashboardv1connect"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )
 
 func d388Service(t *testing.T) *Service {
 	t.Helper()
-	s, err := pgstore.New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := pgstore.New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestD388_SetBrokerDisabled_WireE2E(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	post := func(body string) (*http.Response, string) {
-		resp, err := http.Post(srv.URL+"/arb.dashboard.v1.DashboardService/SetBrokerDisabled",
+		resp, err := http.Post(srv.URL+"/nox.dashboard.v1.DashboardService/SetBrokerDisabled",
 			"application/json", strings.NewReader(body))
 		if err != nil {
 			t.Fatalf("post: %v", err)

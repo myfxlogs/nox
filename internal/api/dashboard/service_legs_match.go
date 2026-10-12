@@ -9,8 +9,8 @@ import (
 	"log"
 	"math"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/keydomain"
+	"nox/internal/data/bus"
+	"nox/internal/data/keydomain"
 )
 
 // legStepQty 单腿最小步长（pass-2 粗腿锚定用；floorToStepQty 的 step 分派下沉复用）：

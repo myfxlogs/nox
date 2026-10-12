@@ -15,9 +15,9 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
-	explorerv1 "arb/internal/gen/arb/explorer/v1"
-	"arb/internal/ir/inboxfmt"
-	"arb/internal/store/pgstore"
+	explorerv1 "nox/internal/gen/nox/explorer/v1"
+	"nox/internal/ir/inboxfmt"
+	"nox/internal/store/pgstore"
 )
 
 // proposalsFenceRe ```explorer-proposals 块（要求闭合 ```——未闭合=截断，整批拒收）。

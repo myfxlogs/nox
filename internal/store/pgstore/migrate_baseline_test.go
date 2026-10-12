@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"testing"
 
-	"arb/internal/platform/testutil"
-	"arb/migrations"
+	"nox/internal/platform/testutil"
+	"nox/migrations"
 )
 
 // TestBaseline_Replayable：baseline dump 对空库可重放+表数=84（生产 91−7 不搬表）。
@@ -30,7 +30,7 @@ func TestBaseline_Replayable(t *testing.T) {
 			t.Fatalf("%s: %v\n%s", c, err, out)
 		}
 	}
-	dsn := stripPgxParams(swapDBName(testutil.TestDSN(t, "ARB_TEST_PG_DSN"), db))
+	dsn := stripPgxParams(swapDBName(testutil.TestDSN(t, "NOX_TEST_PG_DSN"), db))
 	s, err := New(ctx, dsn)
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
@@ -82,7 +82,7 @@ func TestBaseline_SquashSupersedes(t *testing.T) {
 			t.Fatalf("%s: %v\n%s", c, err, out)
 		}
 	}
-	dsn := stripPgxParams(swapDBName(testutil.TestDSN(t, "ARB_TEST_PG_DSN"), db))
+	dsn := stripPgxParams(swapDBName(testutil.TestDSN(t, "NOX_TEST_PG_DSN"), db))
 	s, err := New(ctx, dsn)
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)

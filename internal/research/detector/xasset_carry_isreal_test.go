@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 func boolPtr(b bool) *bool { return &b }

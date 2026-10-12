@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // d419ErrStore 包装真库注入 HasXAssetMonitorRow 查询错（S3 fail-open 分支）。

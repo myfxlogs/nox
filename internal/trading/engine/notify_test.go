@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/research/detector"
-	"arb/internal/research/evaluator"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/research/detector"
+	"nox/internal/research/evaluator"
+	"nox/internal/store/pgstore"
 )
 
 // fakeOppStore 模拟 UpsertOpportunity 的 inserted 判定（D-050）：新 id → true，重复 id → false。

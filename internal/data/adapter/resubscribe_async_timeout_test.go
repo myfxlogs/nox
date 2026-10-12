@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
 	"google.golang.org/grpc"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // blockSubClient Subscribe 阻塞至 ctx 超时（楔死演练）；done 记超时返回。

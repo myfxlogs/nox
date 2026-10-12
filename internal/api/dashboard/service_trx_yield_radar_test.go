@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/gen/dashboardv1/dashboardv1connect"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/gen/dashboardv1/dashboardv1connect"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )

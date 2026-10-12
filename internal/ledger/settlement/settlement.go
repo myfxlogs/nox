@@ -5,15 +5,15 @@
 package settlement
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"fmt"
 	"log"
+	"nox/internal/data/keydomain"
 	"strings"
 	"time"
 
-	"arb/internal/review/verification"
-	"arb/internal/store/pgstore"
+	"nox/internal/review/verification"
+	"nox/internal/store/pgstore"
 )
 
 // 注入面类型 Deps/Eliminator/FamilyResolver 在 settlement_deps.go（D-042 R2 拆分保行数）。

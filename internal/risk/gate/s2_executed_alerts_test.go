@@ -1,7 +1,7 @@
 // 单测：机会通过门禁+执行成功告警（Submit EXECUTED → g.store.InsertAlert）。
 // 参照 d256a_revival_alert_test.go spy 模式——S2 告警走 g.store.InsertAlert（非 AlertSink），
 // 用 alerts 表查询验证（DB 设置门禁状态，查 alerts 表验证告警落库）。
-// 需要 test-pg2 DSN（ARB_TEST_PG_DSN）。
+// 需要 test-pg2 DSN（NOX_TEST_PG_DSN）。
 package gate
 
 import (
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // setupGateAlertStore 构造真库 store：autotrade_state=RUNNING + broker_accounts demo（is_real=false）。

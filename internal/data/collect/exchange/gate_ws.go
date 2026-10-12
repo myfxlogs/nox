@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/platform/safego"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/platform/safego"
 
 	"github.com/gorilla/websocket"
 )
@@ -52,7 +52,7 @@ type GateWebSocket struct {
 	onContractInfo func(contract string)
 }
 
-// NewGateWebSocket 创建 Gate WS 采集器（ARB_CEX_WS_BASE 置位→经 cex-proxy /gatespotws 与 /v4/ws 前缀）。
+// NewGateWebSocket 创建 Gate WS 采集器（NOX_CEX_WS_BASE 置位→经 cex-proxy /gatespotws 与 /v4/ws 前缀）。
 // GateWSMode=direct→强制原生直连（per-venue 止血开关，缺省 proxy=现行，
 // 切回=env 还原；不动 okx/binance 装配）。
 func NewGateWebSocket(cfg Config) *GateWebSocket {

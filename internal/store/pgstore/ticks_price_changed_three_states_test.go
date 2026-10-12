@@ -1,5 +1,5 @@
 // ticks_d495_test.go —— D-495 S7①：TicksPriceChanged 三态（无 tick / 单值冻结 / 多值活动）。
-// 需 ARB_TEST_PG_DSN（pgstore 包测试库口径）。
+// 需 NOX_TEST_PG_DSN（pgstore 包测试库口径）。
 package pgstore
 
 import (
@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 func d495Store(t *testing.T) *Store {
 	t.Helper()
 	ctx := context.Background()
-	s, err := New(ctx, testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := New(ctx, testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}

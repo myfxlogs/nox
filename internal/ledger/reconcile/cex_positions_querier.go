@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"sync"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/data/venue"
-	"arb/internal/platform/httpx"
+	"nox/internal/data/keydomain"
+	"nox/internal/data/venue"
+	"nox/internal/platform/httpx"
 )
 
 // CEXPositionQuerier 查询 CEX perp 持仓（实现 venue.Querier）；字段同 CEXAccountQuerier（复用签名逻辑），但查持仓而非余额。

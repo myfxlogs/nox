@@ -5,15 +5,15 @@
 package dashboard
 
 import (
-	"arb/internal/data/bus"
 	"context"
 	"log"
+	"nox/internal/data/bus"
 	"sync"
 	"time"
 
-	"arb/internal/data/collect/exchange"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/trading/exec"
+	"nox/internal/data/collect/exchange"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/trading/exec"
 )
 
 // CexExecutorManager 管理 CEX 执行器注册。
@@ -62,7 +62,7 @@ func NewCexExecutorManager(s ExchangeStore, reg *exec.Registry, interval time.Du
 	}
 }
 
-// SetLiqGuards D-472 S4：cfg 注入强平闸参数（ARB_MIN_LIQ_DISTANCE_PCT/ARB_CROSS_NOTIONAL_EQUITY_CAP）。
+// SetLiqGuards D-472 S4：cfg 注入强平闸参数（NOX_MIN_LIQ_DISTANCE_PCT/NOX_CROSS_NOTIONAL_EQUITY_CAP）。
 func (m *CexExecutorManager) SetLiqGuards(minLiqDistPct, crossNotionalEquityCap float64) {
 	m.minLiqDistPct = minLiqDistPct
 	m.crossNotionalEquityCap = crossNotionalEquityCap
@@ -123,7 +123,7 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 	// 输家键带 #id 后缀：allowlist/pipeline 路由只命中 canonical 键（D-158 安全语义保持，
 	// SSOT §1 案 C）；输家执行器注册但无人调用=休眠可见。gate:perp 单 config 无撞键键不变。
 	// D-516：sim 行不入集（realOnlyConfigs）——canonical 恒归 real 赢家。
-	// D-362 S4① 核证：ARB_AUTOTRADE_ALLOW_VENUES 匹配在 engine_opp.go:61 用 opp 腿
+	// D-362 S4① 核证：NOX_AUTOTRADE_ALLOW_VENUES 匹配在 engine_opp.go:61 用 opp 腿
 	// venue（canonical 形），#id 后缀键天然不命中 allowlist 条目=安全。
 	// D-362 S4② 核证：pipeline 执行路由 reg.Get(leg.VenueKey)（pipeline_execute.go:62 等）
 	// 用仓腿 venue（canonical 形）→ 永不路由到 #id 后缀执行器=休眠不可达。

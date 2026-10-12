@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // GradMinAgeDays 毕业最短验证天数（SSOT §1 写死常量不进 env——先跑稳再谈可调）。

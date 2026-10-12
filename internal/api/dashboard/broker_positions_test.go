@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/venue"
+	"nox/internal/data/bus"
+	"nox/internal/data/venue"
 )
 
 // TestBrokerPositionToProto_FreshFrame：新鲜帧 → current_price=mid、fresh=true、

@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/store/pgstore"
 )
 
 // externalCloseHit 平仓帧命中结果：px/feeUSD 帧有则取、无则 nil（不造假）。

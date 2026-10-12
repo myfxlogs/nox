@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/platform/config"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/platform/config"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -57,13 +57,13 @@ func d047Svc(t *testing.T) (*Service, *pgstore.Store, *fakeProbeExec) {
 	t.Helper()
 	ctx := context.Background()
 	// 共享池+一次性 Migrate（dashboard 测试约定；service 域独立库免与 pgstore 测试抢 TRUNCATE）。
-	st := storetest.SharedStore(t, "ARB_TEST_PG_SERVICE_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
 	for _, q := range []string{
 		`TRUNCATE position_cashflows, position_settlements, position_legs, positions CASCADE`,
 		`TRUNCATE alerts`,
 		`TRUNCATE autotrade_allow_rules`,
 		`DELETE FROM execution_controls`,
-		`DELETE FROM app_config WHERE key LIKE 'ARB_PROBE%'`,
+		`DELETE FROM app_config WHERE key LIKE 'NOX_PROBE%'`,
 	} {
 		if _, err := st.Pool().Exec(ctx, q); err != nil {
 			t.Fatalf("clean: %v", err)
@@ -185,7 +185,7 @@ func TestD047_RejectEquity(t *testing.T) {
 	d047ExpectReject(t, svc, st, fx, d047Req(0.005))
 }
 
-// TestD047_RejectOverNotional 名义 > ARB_PROBE_MAX_NOTIONAL → 拒。
+// TestD047_RejectOverNotional 名义 > NOX_PROBE_MAX_NOTIONAL → 拒。
 func TestD047_RejectOverNotional(t *testing.T) {
 	svc, st, fx := d047Svc(t)
 	// 0.02 × 60001 ≈ $1200 > $1000 上限。
@@ -362,7 +362,7 @@ func TestD047_ExpireNotDue(t *testing.T) {
 	}
 }
 
-// TestD047_RejectRPCDisabled R1②：ARB_PROBE_RPC_ENABLED=false → 第一道守卫即拒 + warn。
+// TestD047_RejectRPCDisabled R1②：NOX_PROBE_RPC_ENABLED=false → 第一道守卫即拒 + warn。
 func TestD047_RejectRPCDisabled(t *testing.T) {
 	svc, st, fx := d047Svc(t)
 	svc.SetAppConfigView(&config.Config{

@@ -3,7 +3,7 @@ package dashboard
 import (
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // D-493 S1：账户卡片报价健康透出——复用 MT 健康监控同源数据（qbus.AllLatest）与阈值，

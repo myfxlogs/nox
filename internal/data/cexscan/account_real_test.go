@@ -5,7 +5,7 @@ package cexscan
 import (
 	"testing"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // TestScanAccounts_RealKeysPassthrough D-360 S1：AssetType/Simulated 透传（不再丢弃）。

@@ -4,8 +4,8 @@ package dashboard
 import (
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // TestD434_NotionalUSD T1-T4：分域折叠矩阵（T1=P1 主锚先红后绿）。

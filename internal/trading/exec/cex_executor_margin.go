@@ -11,9 +11,9 @@ import (
 func (e *CEXExecutor) SetMarginReservePct(pct float64) { e.marginReservePct = pct }
 
 // SetLiqGuards D-472 S4：注入强平距离预检参数（cfg 注入）。
-// minLiqDistPct=isolated 距离下限（ARB_MIN_LIQ_DISTANCE_PCT，缺省 0=显式关闸——
+// minLiqDistPct=isolated 距离下限（NOX_MIN_LIQ_DISTANCE_PCT，缺省 0=显式关闸——
 // 开启前置=回放定标报告，复审方标定后才允许非零值上线）；crossNotionalEquityCap=
-// cross 名义/权益占比上限（ARB_CROSS_NOTIONAL_EQUITY_CAP，缺省 0.5；≤0=cross 支路关）。
+// cross 名义/权益占比上限（NOX_CROSS_NOTIONAL_EQUITY_CAP，缺省 0.5；≤0=cross 支路关）。
 func (e *CEXExecutor) SetLiqGuards(minLiqDistPct, crossNotionalEquityCap float64) {
 	e.minLiqDistPct = minLiqDistPct
 	e.crossNotionalEquityCap = crossNotionalEquityCap
@@ -74,7 +74,7 @@ type liqInput struct {
 }
 
 // liqDistanceGuard D-472 S4：强平距离预检（现闸只答「能不能开」，本闸答「开完离爆多远」）。
-// 缺省 ARB_MIN_LIQ_DISTANCE_PCT=0=显式关闸（开启前置=5 组合回放定标报告，复审方标定后
+// 缺省 NOX_MIN_LIQ_DISTANCE_PCT=0=显式关闸（开启前置=5 组合回放定标报告，复审方标定后
 // 才允许非零值上线）。模式分流（B-006）：
 //   - isolated：estLiqDist=(1/leverage_eff)−mmr_est ≥ minPct；MMR 运行时取 leverageBracket
 //     （fail-closed，不硬编码——binance -2015 实测在案）；

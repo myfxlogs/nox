@@ -6,10 +6,10 @@ import (
 	"math"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/data/keydomain"
-	"arb/internal/platform/usdnotional"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/data/keydomain"
+	"nox/internal/platform/usdnotional"
+	"nox/internal/store/pgstore"
 )
 
 // environmentIsRealCheck D-159 W1a I6：environment/is_real 一致性检查。
@@ -71,7 +71,7 @@ func (g *Gate) liveGateCheck(ctx context.Context, intent TradeIntent) GateVerdic
 			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: venue %s is_real unknown (null)", venueKey)}
 		}
 		if *isReal {
-			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live trade disabled (ARB_LIVE_TRADE=false, venueKey=%s is_real=true)", venueKey)}
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live trade disabled (NOX_LIVE_TRADE=false, venueKey=%s is_real=true)", venueKey)}
 		}
 	}
 	return GateVerdict{Pass: true}

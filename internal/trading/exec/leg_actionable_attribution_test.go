@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // --- D-170：LegActionable 归因文案对拍（fail-closed 行为零动） ---

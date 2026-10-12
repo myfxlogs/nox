@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/store/pgstore"
 )
 
 // fakeAcctQ 计数假 AccountQuerier（A1/A3 REST 调用面钉死）。

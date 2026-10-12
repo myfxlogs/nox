@@ -6,15 +6,15 @@
 package autotrade
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"fmt"
 	"math"
+	"nox/internal/data/keydomain"
 	"time"
 
-	"arb/internal/platform/combo"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/platform/combo"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // 轮转参数（SSOT §1 钉死值：H=30d 摊销窗 + 2×安全边际 + 组合对 24h 冷却）。

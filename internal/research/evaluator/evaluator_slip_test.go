@@ -3,7 +3,7 @@ package evaluator
 import (
 	"testing"
 
-	"arb/internal/research/detector"
+	"nox/internal/research/detector"
 )
 
 // TestSlipBpsForCEX D-145 §②：CEX 滑点品种分级表。

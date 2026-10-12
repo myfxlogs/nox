@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // d032Truncate 清账本/事故域表（setupLiveGateStore 已清 positions/legs；本函数补 settlements+controls+app_config）。
@@ -104,7 +104,7 @@ func TestD032_IncidentGate_UnackedBlocksAckedReleases(t *testing.T) {
 		t.Fatalf("锚3: want REJECTED(incident), got %s (%s)", res.Status, res.Reason)
 	}
 	// ack：app_config 推到该仓 id（热生效读口直验）。
-	if err := s.UpsertAppConfig(ctx, "ARB_RISK_INCIDENT_ACK_ID", strconv.FormatInt(posID, 10), "d032 test ack"); err != nil {
+	if err := s.UpsertAppConfig(ctx, "NOX_RISK_INCIDENT_ACK_ID", strconv.FormatInt(posID, 10), "d032 test ack"); err != nil {
 		t.Fatalf("ack: %v", err)
 	}
 	res = g.Submit(ctx, intent())
@@ -245,7 +245,7 @@ func TestD032_ReportText(t *testing.T) {
 		t.Fatalf("build: %v", err)
 	}
 	for _, want := range []string{
-		"【ARB 周报】",
+		"【NOX 周报】",
 		"基数 $10000",
 		"30d 账本净额（全样本） $-150.00 → 年化 -18.25%",
 		"30d 账本净额（剔事故） $-50.00 → 年化 -6.08%",

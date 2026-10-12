@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/platform/usdnotional"
+	"nox/internal/data/bus"
+	"nox/internal/platform/usdnotional"
 )
 
 // absDiffBps 浮点比较容差。

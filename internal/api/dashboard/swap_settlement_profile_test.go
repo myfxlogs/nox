@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/data/venue"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/data/venue"
+	"nox/internal/store/pgstore"
 )
 
 // absDiff 返回两浮点数差的绝对值（测试比较用）。

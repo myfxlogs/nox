@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // zeroResolver 模拟首次回填（无历史数据，返回零时间）。

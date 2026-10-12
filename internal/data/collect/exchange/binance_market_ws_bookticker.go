@@ -9,7 +9,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // 返回是否业务产出帧（parseBookTicker 成功→publish 报价=true；

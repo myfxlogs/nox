@@ -1,7 +1,7 @@
 // d015_ws_frame_race_test.go —— D-015 R1 验收：「自发平仓 WS 帧先到」竞态 + EXTERNAL 兜底。
 // 核心不变量：venue 平仓帧只叫醒对账，不直写 CLOSE 腿——自发平仓走正常管线落唯一
 // FILLED 权威腿（价费非空、realized 含腿）；只有历史查证+平仓帧双证据时才写 EXTERNAL。
-// 需要 test-pg2 DSN（ARB_TEST_PG_DSN）。
+// 需要 test-pg2 DSN（NOX_TEST_PG_DSN）。
 package exec
 
 import (
@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // d015VenueCase 三所平仓帧形态（cex_private_events 落库原文 schema）。

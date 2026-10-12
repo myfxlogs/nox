@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // norm 便捷构造：经 normalize 走真归一链（classOf 测试默认空，按需传）。

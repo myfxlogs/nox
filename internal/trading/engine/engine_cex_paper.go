@@ -5,8 +5,8 @@ package engine
 import (
 	"context"
 
-	"arb/internal/data/bus"
-	"arb/internal/research/detector"
+	"nox/internal/data/bus"
+	"nox/internal/research/detector"
 )
 
 // unfilteredScanner detector 侧 Allow 前流可选口（FundingHedgeDetector 实现）。

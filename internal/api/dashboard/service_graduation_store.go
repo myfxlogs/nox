@@ -6,8 +6,8 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // graduationStore approve/list 的存储依赖窄接口（*pgstore.Store 原生满足；测试 fake 替身）。

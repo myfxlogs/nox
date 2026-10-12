@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// cexScanTestStore 连接 ARB_TEST_PG_DSN，迁移后 TRUNCATE 隔离。
+// cexScanTestStore 连接 NOX_TEST_PG_DSN，迁移后 TRUNCATE 隔离。
 func cexScanTestStore(t *testing.T) *Store {
 	t.Helper()
 	s := sharedTestStore(t)

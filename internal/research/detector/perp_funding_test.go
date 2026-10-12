@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // fakeFactProvider 实现 FactProvider，注入 funding facts。

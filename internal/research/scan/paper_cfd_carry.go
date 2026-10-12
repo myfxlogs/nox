@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // cfd 纸面轨参数（§2B 定值：地板 8 独立于 spot 20——cfd carry 稳态低于 spot 票价；
@@ -31,7 +31,7 @@ const (
 type PaperCfdOpts struct {
 	// CexFeeBps 退役——费用改读 venue 真值表（paper_fees.go）。
 	// AuthorizedMaxActive 退役——保底段不设上限，只留质量闸。
-	// ReopenCooldown flap 冷却（env ARB_PAPER_AUTHORIZED_REOPEN_COOLDOWN_HOURS，默认 24h）。
+	// ReopenCooldown flap 冷却（env NOX_PAPER_AUTHORIZED_REOPEN_COOLDOWN_HOURS，默认 24h）。
 	ReopenCooldown time.Duration
 }
 

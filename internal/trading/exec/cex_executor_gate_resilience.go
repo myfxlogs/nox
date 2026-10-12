@@ -16,7 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/platform/signutil"
+	"nox/internal/platform/signutil"
 )
 
 // gateErrLabel D-570 包A S2b：errors.As 解 *httpStatusError → body {"label":"..."} 解析。

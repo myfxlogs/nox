@@ -16,8 +16,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/infra/dephealth"
+	"nox/internal/data/fact"
+	"nox/internal/infra/dephealth"
 )
 
 // restClientFor D-109 R1②：按目标 host 收敛 REST client（binance_user_ws restFor

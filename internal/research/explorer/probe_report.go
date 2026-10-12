@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 )
 
 // probeReportSystemPrompt 取证报告约束（数字禁自算——全部引用输入段原值；
 // 结论三选一：A=假设获证据支持 / B=假设被证伪 / C=证据不足或数据缺失）。
-const probeReportSystemPrompt = `你是 ARB 套利系统的取证分析员（只读）。输入=探针仓的确定性事实（Go 拼装，禁止改动/重算/自算）。
+const probeReportSystemPrompt = `你是 NOX 套利系统的取证分析员（只读）。输入=探针仓的确定性事实（Go 拼装，禁止改动/重算/自算）。
 任务：按假设与证伪标准，对证据下结论。
 输出（严格）：一个 fenced 块 ` + "```probe-report" + ` 内含 JSON：
 {"conclusion":"A|B|C","analysis":"≤300字证据分析（只引用输入数字）","recommendation":"≤150字建议"}

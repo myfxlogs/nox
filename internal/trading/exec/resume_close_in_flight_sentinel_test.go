@@ -7,8 +7,8 @@ import (
 	"errors"
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // TestResumeClose_InFlightSentinel D-407：tryLock 持锁中 → ResumeClose 返 ErrCloseInFlight；

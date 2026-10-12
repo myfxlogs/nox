@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // SetConfigKick D-469b S2：注入 config 变更 kick 回调（main 装配 bus.Topic.Publish）。

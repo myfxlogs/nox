@@ -4,8 +4,8 @@ package autotrade
 // 独立文件避免 engine_swaparb.go 超 300 行。
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
+	"nox/internal/data/keydomain"
 )
 
 // SwapComboPublic D-140 S3：公开 swap 组合条目（供 dashboard RPC 展示，无内部字段）。

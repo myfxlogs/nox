@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/venue"
+	"nox/internal/data/venue"
 )
 
 func d068Order(ticket string, side string, lots float64) venue.Order {

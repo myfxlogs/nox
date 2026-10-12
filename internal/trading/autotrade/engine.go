@@ -7,13 +7,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/ledger/settlement"
-	"arb/internal/platform/errclass"
-	"arb/internal/platform/safego"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/ledger/settlement"
+	"nox/internal/platform/errclass"
+	"nox/internal/platform/safego"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // ZeroSettlementDetector D-182 S1：零结算检测接口（scanAndClose 周期调用）。
@@ -156,7 +156,7 @@ type Engine struct {
 // OpportunityNotionalUSD > AutoTradeMaxNotional → log.Fatal（SWAPARB 不参与）。
 func (e *Engine) ValidateStartup() {
 	if e.cfg.NotionalUSD > e.cfg.MaxNotional && e.cfg.MaxNotional > 0 {
-		log.Fatalf("[autotrade] config fail-fast: OpportunityNotionalUSD $%.0f > AutoTradeMaxNotional $%.0f (fix env or lower ARB_OPP_NOTIONAL_USD)", e.cfg.NotionalUSD, e.cfg.MaxNotional)
+		log.Fatalf("[autotrade] config fail-fast: OpportunityNotionalUSD $%.0f > AutoTradeMaxNotional $%.0f (fix env or lower NOX_OPP_NOTIONAL_USD)", e.cfg.NotionalUSD, e.cfg.MaxNotional)
 	}
 }
 
@@ -190,7 +190,7 @@ func (e *Engine) SetTradeModeProberResolver(resolve func(venueKey string) exec.T
 // Run 启动自动交易引擎（阻塞，ctx 取消时退出）。
 func (e *Engine) Run(ctx context.Context) {
 	if !e.cfg.Enabled {
-		log.Println("[autotrade] disabled (ARB_AUTOTRADE_ENABLED=false)")
+		log.Println("[autotrade] disabled (NOX_AUTOTRADE_ENABLED=false)")
 		return
 	}
 	e.ValidateStartup()

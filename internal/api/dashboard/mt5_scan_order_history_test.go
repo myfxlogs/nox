@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 
 	"google.golang.org/grpc"
 )

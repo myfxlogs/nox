@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/platform/httpx"
+	"nox/internal/platform/httpx"
 )
 
 // CoinMBalance 币本位单币余额（dapi/v1/balance 行）。

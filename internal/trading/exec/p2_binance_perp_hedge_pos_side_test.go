@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // === T1: Binance perp ===

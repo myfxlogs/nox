@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/store/pgstore"
 )
 
 // d549Svc 部分构造 Service（活账本+可脚本化 querier；无 store=快照径空）。

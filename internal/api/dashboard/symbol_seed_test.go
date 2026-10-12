@@ -1,5 +1,5 @@
 // symbol_seed_test.go —— D-060 F7/F8：CFD 探测面扩容幂等 seed 工具。
-// 仅当 ARB_SYMBOL_SEED=1 且 ARB_DEMO_PG_DSN 设置时运行（env 门控，不进 CI 常跑）。
+// 仅当 NOX_SYMBOL_SEED=1 且 NOX_DEMO_PG_DSN 设置时运行（env 门控，不进 CI 常跑）。
 //
 // 流程：本进程内起 BrokerManager（boot 恢复 connected 账号，复用 fetch/订阅/swap 路径）→
 // 逐 venue 按方案 §4 F8 候选表 + 变体做大小写不敏感匹配（含 cent 后缀变体）→
@@ -21,21 +21,21 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // seedAliases 已移至生产代码 canonicalAliases（alias_table.go，D-066 整合）。
 // 本 test 直接引用 canonicalAliases（单一真相源，P3）。
 
 func TestSymbolSeed(t *testing.T) {
-	if os.Getenv("ARB_SYMBOL_SEED") != "1" {
-		t.Skip("ARB_SYMBOL_SEED=1 才跑（幂等 seed 工具，手动 gate）")
+	if os.Getenv("NOX_SYMBOL_SEED") != "1" {
+		t.Skip("NOX_SYMBOL_SEED=1 才跑（幂等 seed 工具，手动 gate）")
 	}
-	dsn := os.Getenv("ARB_DEMO_PG_DSN")
+	dsn := os.Getenv("NOX_DEMO_PG_DSN")
 	if dsn == "" {
-		t.Skip("ARB_DEMO_PG_DSN 未设置")
+		t.Skip("NOX_DEMO_PG_DSN 未设置")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()

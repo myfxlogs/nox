@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/trading/exec"
 )
 
 // makeFreezeBus 构造一个 QuoteBus：buy 腿价格活跃（已变化），sell 腿可选活跃/冻结。

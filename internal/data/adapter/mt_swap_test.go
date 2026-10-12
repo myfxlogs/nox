@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 func TestNormalizeSwapBpsDaily(t *testing.T) {

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // d414Closer Closer fake：分别记录 ClaimClose/ResumeClose 调用，可注入错误。

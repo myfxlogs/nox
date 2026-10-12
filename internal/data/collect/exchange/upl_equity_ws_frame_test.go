@@ -6,8 +6,8 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 func newD142WS() (*BinanceUserWS, *uplSnapSink, *bus.BalanceLedger) {

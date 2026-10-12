@@ -1,19 +1,19 @@
 package exec
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"fmt"
 	"log"
 	"math"
+	"nox/internal/data/keydomain"
 	"strconv"
 	"strings"
 	"time"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // MT5Executor 复用 MT5Adapter 的 gRPC 连接执行交易（§13.2）。
@@ -24,7 +24,7 @@ type MT5Executor struct {
 	mt5      mt5pb.MT5Client // D-415：RequiredMargin/AccountSummary 资金预检面
 	token    string
 	venueKey string // "venue:mt5"
-	// marginReservePct 可用保证金安全垫（D-415 ARB_MARGIN_RESERVE_PCT，缺省 0.20）。
+	// marginReservePct 可用保证金安全垫（D-415 NOX_MARGIN_RESERVE_PCT，缺省 0.20）。
 	marginReservePct float64
 }
 

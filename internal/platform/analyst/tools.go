@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -24,7 +24,7 @@ const KnRoot = "/kn"
 
 // Tools 工具执行器（实现 ToolExecutor）。
 type Tools struct {
-	ReadOnlyDSN string         // ARB_AI_PG_DSN（arb_ro 角色，query_ro 专用）
+	ReadOnlyDSN string         // NOX_AI_PG_DSN（arb_ro 角色，query_ro 专用）
 	Store       *pgstore.Store // get_entity 用主 store（已认证连接，只读查询）
 	KnRoot      string         // 文件工具根（默认 /kn，测试可覆盖）
 	// R2 返修②：position 派生字段回调（dashboard.Service 注入，复用 enrichOne 同源派生）。
@@ -110,7 +110,7 @@ func (t *Tools) execQueryRO(ctx context.Context, call ToolCall) (ToolResult, []C
 		q += " LIMIT 500"
 	}
 	if t.ReadOnlyDSN == "" {
-		return ToolResult{ToolUseID: call.ID, Content: "query_ro 未配置（ARB_AI_PG_DSN 缺失）", IsError: true}, nil, nil
+		return ToolResult{ToolUseID: call.ID, Content: "query_ro 未配置（NOX_AI_PG_DSN 缺失）", IsError: true}, nil, nil
 	}
 	// R1 返修②：改用 pgxpool（贴仓内惯例，pgxpool.ParseConfig 天然注册驱动，无 database/sql "unknown driver" 坑）。
 	pool, err := pgxpool.New(ctx, t.ReadOnlyDSN)

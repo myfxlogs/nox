@@ -4,7 +4,7 @@
 //  2. trade_session 周表命中该腿 → 按 UTC 周表判开闭（adapter 落库已换算服务器→UTC）；
 //  3. 周表说开市 → 动态径：MT 腿报价新鲜度 > MtQuoteStaleMin 分钟 → 闭；**N 缺（≤0）=
 //     fail-closed 判闭**（无动态佐证不判开——宁可不累计/不 new，不下带病单）。
-//     部署须配 ARB_MT_QUOTE_STALE_MIN 启用（报审钉明）。
+//     部署须配 NOX_MT_QUOTE_STALE_MIN 启用（报审钉明）。
 //  4. 周表未命中（采集缺席）→ false（fail-open 既有链兜底；下单回报 10018 兜底）。
 //
 // 闭市语义消费=「carry_death breach 不累计」（xassetExitCheck）+「econEntryGate 拒开」。
@@ -14,10 +14,10 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/data/keydomain"
-	"arb/internal/data/marketstate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/data/keydomain"
+	"nox/internal/data/marketstate"
+	"nox/internal/store/pgstore"
 )
 
 // sessionNow 判定时刻（UTC；hook 可注入——测试控时相，生产 nil=真钟）。

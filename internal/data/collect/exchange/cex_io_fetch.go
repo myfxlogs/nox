@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	"arb/internal/platform/httpx"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/httpx"
+	"nox/internal/store/pgstore"
 )
 
 // fetchDirection 拉单配置单方向（binance/okx 分派），返回待插行（调用方幂等落库）。
@@ -49,8 +49,8 @@ func (c *CexIOCollector) fetchBinance(ctx context.Context, acc CexIOAccount, dir
 	default:
 		return nil, fmt.Errorf("bad direction %q", direction)
 	}
-	// binance 必须走 httpx.Client()——静态代理自签 CA（ARB_BINANCE_PROXY_CA）
-	// 与 X-Proxy-Token（ARB_BINANCE_PROXY_TOKEN）全靠该 client 注入；裸 DefaultClient →
+	// binance 必须走 httpx.Client()——静态代理自签 CA（NOX_BINANCE_PROXY_CA）
+	// 与 X-Proxy-Token（NOX_BINANCE_PROXY_TOKEN）全靠该 client 注入；裸 DefaultClient →
 	// 生产 x509: unknown authority 每轮 skip（reconcile querier httpx.Client() 同款先例）。
 	// okx 同走 httpx.Client()（D-396：代理需 CA+token；直连兜底时 token 头与公共采集现状一致无害）。
 	body, err := signedBinanceGet(ctx, httpx.Client(), sapiBase, path, acc.APIKey, acc.APISecret, extra)

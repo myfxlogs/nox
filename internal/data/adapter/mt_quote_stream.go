@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
-	"arb/internal/data/bus"
-	"arb/internal/platform/safego"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
+	"nox/internal/data/bus"
+	"nox/internal/platform/safego"
 )
 
 // resubscribeAll 逐符号超时上限。

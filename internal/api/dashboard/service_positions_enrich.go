@@ -21,10 +21,10 @@ import (
 	"math"
 	"time"
 
-	"arb/internal/platform/notional"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/notional"
+	"nox/internal/store/pgstore"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // activeStatuses 活跃态集合（enrich 仅对这些行计算；CLOSED/FAILED 只填 realized 既有）。

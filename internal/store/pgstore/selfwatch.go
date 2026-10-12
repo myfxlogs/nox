@@ -11,8 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/platform/alerttext"
+	"nox/internal/data/keydomain"
+	"nox/internal/platform/alerttext"
 )
 
 // PaperWindowCohort paper_window_report.sh cohort 口径进程内化：

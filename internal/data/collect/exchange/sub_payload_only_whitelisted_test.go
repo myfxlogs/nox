@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // d537DirREST 伪 gate REST 目录：spot=currency_pairs[].id；futures=contracts[].name。

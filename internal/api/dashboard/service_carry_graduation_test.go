@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/trading/exec"
+	"nox/internal/trading/exec"
 
-	"arb/internal/data/fact"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
 	"connectrpc.com/connect"
+	"nox/internal/data/fact"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 type fakeGradDB struct {

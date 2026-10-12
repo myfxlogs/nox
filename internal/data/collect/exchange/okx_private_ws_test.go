@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestD383B2_LoginFrameAndSign B2：签名=base64(HMAC-SHA256(secret, ts+"GET"+"/users/self/verify"))

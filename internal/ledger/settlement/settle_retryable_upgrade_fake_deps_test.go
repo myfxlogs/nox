@@ -9,14 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 // testStore settlement 包 D-249 S4 新增：DB 测试用 store（复用 pgstore.Migrate）。
 func testStore(t *testing.T) *pgstore.Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	s, err := pgstore.New(ctx, dsn)
 	if err != nil {

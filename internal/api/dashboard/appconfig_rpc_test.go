@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	dashv1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/config"
+	dashv1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/config"
 
 	"connectrpc.com/connect"
 )
@@ -34,14 +34,14 @@ func d523Find(resp *dashv1.ListAppConfigResponse, key string) *dashv1.AppConfigK
 func TestD523_A1_ListKeyView(t *testing.T) {
 	svc := d523Svc(t)
 	ctx := context.Background()
-	if _, err := svc.store.Pool().Exec(ctx, `DELETE FROM app_config WHERE key='ARB_EXPLORER_ENABLED'`); err != nil {
+	if _, err := svc.store.Pool().Exec(ctx, `DELETE FROM app_config WHERE key='NOX_EXPLORER_ENABLED'`); err != nil {
 		t.Fatal(err)
 	}
 	resp, err := svc.ListAppConfig(ctx, connect.NewRequest(&dashv1.ListAppConfigRequest{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	k := d523Find(resp.Msg, "ARB_EXPLORER_ENABLED")
+	k := d523Find(resp.Msg, "NOX_EXPLORER_ENABLED")
 	if k == nil {
 		t.Fatal("key missing")
 	}
@@ -55,9 +55,9 @@ func TestD523_A2_UpdateValidation(t *testing.T) {
 	svc := d523Svc(t)
 	ctx := context.Background()
 	cases := []*dashv1.UpdateAppConfigRequest{
-		{Key: "ARB_NOPE", Value: "1", Note: "n"},
-		{Key: "ARB_EXPLORER_ENABLED", Value: "maybe", Note: "n"},
-		{Key: "ARB_EXPLORER_ENABLED", Value: "true", Note: ""},
+		{Key: "NOX_NOPE", Value: "1", Note: "n"},
+		{Key: "NOX_EXPLORER_ENABLED", Value: "maybe", Note: "n"},
+		{Key: "NOX_EXPLORER_ENABLED", Value: "true", Note: ""},
 	}
 	for i, c := range cases {
 		_, err := svc.UpdateAppConfig(ctx, connect.NewRequest(c))
@@ -79,12 +79,12 @@ func asConnect(err error, ce *connect.Error) bool {
 func TestD523_A3_UpdateIdempotent(t *testing.T) {
 	svc := d523Svc(t)
 	ctx := context.Background()
-	r1, err := svc.UpdateAppConfig(ctx, connect.NewRequest(&dashv1.UpdateAppConfigRequest{Key: "ARB_EXPLORER_ENABLED", Value: "true", Note: "a3 首调"}))
+	r1, err := svc.UpdateAppConfig(ctx, connect.NewRequest(&dashv1.UpdateAppConfigRequest{Key: "NOX_EXPLORER_ENABLED", Value: "true", Note: "a3 首调"}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(10 * time.Millisecond)
-	r2, err := svc.UpdateAppConfig(ctx, connect.NewRequest(&dashv1.UpdateAppConfigRequest{Key: "ARB_EXPLORER_ENABLED", Value: "true", Note: "a3 再调"}))
+	r2, err := svc.UpdateAppConfig(ctx, connect.NewRequest(&dashv1.UpdateAppConfigRequest{Key: "NOX_EXPLORER_ENABLED", Value: "true", Note: "a3 再调"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestD523_A3_UpdateIdempotent(t *testing.T) {
 		t.Fatalf("note/updated_at not refreshed: %+v vs %+v", r1.Msg.Key, r2.Msg.Key)
 	}
 	// 清理（其他锚依赖无 DB 行基线）
-	if _, err := svc.store.Pool().Exec(ctx, `DELETE FROM app_config WHERE key='ARB_EXPLORER_ENABLED'`); err != nil {
+	if _, err := svc.store.Pool().Exec(ctx, `DELETE FROM app_config WHERE key='NOX_EXPLORER_ENABLED'`); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -101,18 +101,18 @@ func TestD523_A3_UpdateIdempotent(t *testing.T) {
 func TestD523_A4_PendingRestart(t *testing.T) {
 	svc := d523Svc(t)
 	ctx := context.Background()
-	if _, err := svc.UpdateAppConfig(ctx, connect.NewRequest(&dashv1.UpdateAppConfigRequest{Key: "ARB_EXPLORER_ENABLED", Value: "true", Note: "a4"})); err != nil {
+	if _, err := svc.UpdateAppConfig(ctx, connect.NewRequest(&dashv1.UpdateAppConfigRequest{Key: "NOX_EXPLORER_ENABLED", Value: "true", Note: "a4"})); err != nil {
 		t.Fatal(err)
 	}
 	resp, err := svc.ListAppConfig(ctx, connect.NewRequest(&dashv1.ListAppConfigRequest{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	k := d523Find(resp.Msg, "ARB_EXPLORER_ENABLED")
+	k := d523Find(resp.Msg, "NOX_EXPLORER_ENABLED")
 	if k == nil || !k.PendingRestart || k.ValueSource != "db" || k.RunningValue != "false" {
 		t.Fatalf("want pendingRestart=true source=db running=false, got %+v", k)
 	}
-	if _, err := svc.store.Pool().Exec(ctx, `DELETE FROM app_config WHERE key='ARB_EXPLORER_ENABLED'`); err != nil {
+	if _, err := svc.store.Pool().Exec(ctx, `DELETE FROM app_config WHERE key='NOX_EXPLORER_ENABLED'`); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -124,7 +124,7 @@ func TestD526_A2_DescAndGroupLabel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	k := d523Find(resp.Msg, "ARB_EXPLORER_ENABLED")
+	k := d523Find(resp.Msg, "NOX_EXPLORER_ENABLED")
 	if k == nil {
 		t.Fatal("key missing")
 	}

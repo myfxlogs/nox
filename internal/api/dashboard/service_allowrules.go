@@ -15,7 +15,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // ListAutotradeAllowRules 全量行直读（kind,value 序后端已排）。

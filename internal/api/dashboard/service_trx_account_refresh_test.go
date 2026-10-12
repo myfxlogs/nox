@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // TestD254_TrxAccountRefresh_DoubleKickAndReturn 验证 handler 双踢 trx_account+trx_apr 后返回最新 fin_trx_account 全字段。

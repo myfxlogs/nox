@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestD047_ProbeSettleSkipped D-047④：type='PROBE' 仓写 settlement 审计行

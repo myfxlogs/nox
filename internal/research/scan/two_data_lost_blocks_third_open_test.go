@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // d042Opts 保底段守卫断言专用：关 flap 径（ReopenCooldown=0），冷却拦截只剩 openCand 守卫。

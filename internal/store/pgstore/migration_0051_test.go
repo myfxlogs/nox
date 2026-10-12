@@ -6,7 +6,7 @@ import (
 )
 
 // TestMigration0051_CleanPollution D-176：migration 0051 三条 DELETE 清理 97 行污染 + 保留合法映射。
-// 需 ARB_TEST_PG_DSN，未设置时 skip（testStore 门禁）。
+// 需 NOX_TEST_PG_DSN，未设置时 skip（testStore 门禁）。
 func TestMigration0051_CleanPollution(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

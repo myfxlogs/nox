@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/risk/gate"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/risk/gate"
 )
 
 // TestD256A_S1_NonSettleBareVenues lazy 构建集合：cfg 条目 "277842155:mt5" → bare "277842155"。

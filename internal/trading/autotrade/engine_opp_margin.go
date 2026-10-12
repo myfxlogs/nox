@@ -7,8 +7,8 @@ import (
 	"context"
 	"log"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // xassetMarginGate D-010 S3：margin 模式预算折算（N=margin÷(fracB+fracS)）+

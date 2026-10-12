@@ -1,16 +1,16 @@
 package autotrade
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"fmt"
 	"log"
+	"nox/internal/data/keydomain"
 	"strings"
 	"time"
 
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // oppLoop 订阅机会事件 → 过滤 → 产 intent 走 gate（D-072：风控由 gate 统一）。

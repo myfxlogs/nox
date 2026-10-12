@@ -13,15 +13,15 @@ import (
 
 	"time"
 
-	"arb/internal/ir/inboxfmt"
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	"nox/internal/ir/inboxfmt"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 )
 
 // maxLLMRows 单轮深挖行数上限（防 token 爆）。
 const maxLLMRows = 30
 
-const symdigSystemPrompt = `你是 ARB 系统的 symbol 配对深挖员。用户消息给出 MT 经纪商未配对/疑似错配品种清单（JSON）。
+const symdigSystemPrompt = `你是 NOX 系统的 symbol 配对深挖员。用户消息给出 MT 经纪商未配对/疑似错配品种清单（JSON）。
 任务：对每个品种判断是否存在语义别名可配对（例：GOLD→XAU、GER40→DE30、PLATINUM→XPT、WS30→US30、NIKKEI↔JP225）或明显的映射漂移。
 只输出一个 ` + "```symdig-proposals" + ` fenced JSON 数组，每项 {"symbol","venue","proposed_canonical","evidence","confidence"}；
 evidence 必须基于给定字段（品种名/canonical/venue），禁止纯猜测编造。无提案输出空数组。块外文字不解析。`

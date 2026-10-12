@@ -222,7 +222,7 @@ EOF
 )
 
 RAW=$(go list -f '{{.ImportPath}}|{{join .Imports " "}}' ./internal/... 2>/dev/null)
-ACTUAL=$(printf '%s\n' "$RAW" | awk -F'|' '{split($2,a," "); for(i in a) if(a[i] ~ /^arb\/internal\//) print $1" -> "a[i]}' | sed 's|arb/||g' | sort -u)
+ACTUAL=$(printf '%s\n' "$RAW" | awk -F'|' '{split($2,a," "); for(i in a) if(a[i] ~ /^nox\/internal\//) print $1" -> "a[i]}' | sed 's|nox/||g' | sort -u)
 
 VIOL=""
 while IFS= read -r e; do

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 )
 
 func d378aPtrS(v string) *string { return &v }
@@ -47,7 +47,7 @@ func d378aSeedXAssetPos(t *testing.T, st *pgstore.Store) int64 {
 // TestD378a_QuoteEntrySpreadBps_PureQuote 锚1a：quote 口径=(buyBid−sellAsk)/buyAsk×1e4，
 // 与 fill 口径 (+5.0) 分离；写点落列后 DB 值=quote 值。
 func TestD378a_QuoteEntrySpreadBps_PureQuote(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_SERVICE_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
 	ctx := context.Background()
 	posID := d378aSeedXAssetPos(t, st)
 	qb := bus.New()
@@ -80,7 +80,7 @@ func TestD378a_QuoteEntrySpreadBps_PureQuote(t *testing.T) {
 
 // TestD378a_QuoteAnchor_MissingQuote_NoWrite 锚1b：任一腿 quote 缺失 → ok=false 不写（NULL fail-closed）。
 func TestD378a_QuoteAnchor_MissingQuote_NoWrite(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_SERVICE_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
 	ctx := context.Background()
 	posID := d378aSeedXAssetPos(t, st)
 	qb := bus.New()
@@ -98,7 +98,7 @@ func TestD378a_QuoteAnchor_MissingQuote_NoWrite(t *testing.T) {
 
 // TestD378a_SellCanonicalFallback 锚1c：opp=nil（手动路径）→ broker_symbol_map 反查 sellLeg.Symbol。
 func TestD378a_SellCanonicalFallback(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_SERVICE_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
 	ctx := context.Background()
 	posID := d378aSeedXAssetPos(t, st)
 	if _, err := st.Pool().Exec(ctx,

@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // reconKickCoalesce kick 合流窗口（D-004 P1#6）：多腿开仓会连发订单事件，

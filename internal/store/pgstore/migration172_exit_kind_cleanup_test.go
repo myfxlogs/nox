@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"arb/migrations"
+	"nox/migrations"
 )
 
 // TestD032_Migration172_ExitKindCleanup 迁移 0172 语义锚：

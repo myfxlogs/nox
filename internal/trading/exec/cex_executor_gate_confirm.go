@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"time"
 
-	"arb/internal/platform/signutil"
+	"nox/internal/platform/signutil"
 )
 
 // GateOrderSnap D-570 包B S4③：私有 WS 订单事件快照（gate 帧原生 fee → FeeUSD 回填）。

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 // d144BookCover 让 (canonical,mt,cex) 组合簿结构性可覆盖——按 CfdBookSpecs 实解析

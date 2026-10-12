@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestD417_ResidualCEXL leg CEX 残余检测：leg ordId 与 orders instId 异构但同仓 → 须报残余。

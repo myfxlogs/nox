@@ -11,18 +11,18 @@ import (
 // AppConfigGroup 键分组（值集=设计稿 §2 六组）。
 func AppConfigGroup(key string) string {
 	switch {
-	case strings.HasPrefix(key, "ARB_AUTOTRADE_"), strings.HasPrefix(key, "ARB_INTRA_"),
-		strings.HasPrefix(key, "ARB_PAPER_AUTHORIZED_"), key == "ARB_LIVE_TRADE":
+	case strings.HasPrefix(key, "NOX_AUTOTRADE_"), strings.HasPrefix(key, "NOX_INTRA_"),
+		strings.HasPrefix(key, "NOX_PAPER_AUTHORIZED_"), key == "NOX_LIVE_TRADE":
 		return "AUTOTRADE"
-	case strings.HasPrefix(key, "ARB_CARRY_"), strings.HasPrefix(key, "ARB_SWAPARB_"),
-		strings.HasPrefix(key, "ARB_PERPFUNDING_"), strings.HasPrefix(key, "ARB_XASSET_"):
+	case strings.HasPrefix(key, "NOX_CARRY_"), strings.HasPrefix(key, "NOX_SWAPARB_"),
+		strings.HasPrefix(key, "NOX_PERPFUNDING_"), strings.HasPrefix(key, "NOX_XASSET_"):
 		return "CARRY"
-	case strings.HasPrefix(key, "ARB_EXPLORER_"):
+	case strings.HasPrefix(key, "NOX_EXPLORER_"):
 		return "EXPLORER"
-	case strings.HasPrefix(key, "ARB_ANALYST_"):
+	case strings.HasPrefix(key, "NOX_ANALYST_"):
 		return "ANALYST"
-	case strings.HasPrefix(key, "ARB_FUNDING_"), strings.HasPrefix(key, "ARB_COMMISSION_"),
-		strings.HasPrefix(key, "ARB_FUNDING"):
+	case strings.HasPrefix(key, "NOX_FUNDING_"), strings.HasPrefix(key, "NOX_COMMISSION_"),
+		strings.HasPrefix(key, "NOX_FUNDING"):
 		return "FUNDING"
 	default:
 		return "OTHER"

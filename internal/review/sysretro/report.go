@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"arb/internal/platform/analyst"
+	"nox/internal/platform/analyst"
 )
 
 // retroToolNames 报告专用工具子集（只读白名单，同 kbreport 口径）。

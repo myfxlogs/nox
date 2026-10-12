@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // disasterBand D-378b：判距=max(绝对下限, noise×倍数)。防呆：BPS≤0→用 40；MULT≤0→不乘

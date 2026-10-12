@@ -1,11 +1,11 @@
-# ARB — 协作契约
+# NOX — 协作契约
 
 > 唯一真相源。`CLAUDE.md` / `.windsurfrules` 只做一件事：加载本文件。冲突以本文件为准。
 > 2026-09-30 重置（D-001）：旧契约、旧 D-001~D-599、旧流程文档全部封存于 `docs/archive/2026-09-reset/`，只读、只作出处引证，**不作规则来源**。
 
 ## 1. 定位（方向锚 · 修改须 D# 留痕 + 业主明示）
 
-> **ARB = 跨市场套利套息「自动发现 + 自动执行 + 自动平仓」系统。**
+> **NOX = 跨市场套利套息「自动发现 + 自动执行 + 自动平仓」系统。**
 > **资产**：CFD（MT4/MT5）+ 加密货币（CEX/DeFi），两侧并进。
 > **第一性原则**：**盈利**。自动执行+自动平仓+自动淘汰亏损策略；风控优先于速度。
 > **收益来源**：价差收敛 + 息差（funding/swap/carry）。
@@ -23,7 +23,7 @@
 2. 代码 + 测试（`internal/` `cmd/` `web/src` `migrations/` `proto/`）
 3. `docs/modules/<pkg>.md`（每模块一页，阶段 2 逐步填充）
 4. `docs/handoff/STATE.md`、`docs/handoff/decisions.md`
-5. `docs/经验库/`（踩坑条目，`tools/arbkb gen` 生成索引，禁手编）
+5. `docs/经验库/`（踩坑条目，`tools/noxkb gen` 生成索引，禁手编）
 6. `docs/archive/`（历史，只读）
 
 同一事实只存一处，其余用指针。文档与代码不一致时改文档，不改代码去迎合文档。
@@ -80,7 +80,7 @@
 
 ```
 go build ./... && go vet ./... && gofmt -l $(git diff --name-only master -- '*.go')
-go test ./... -count=1                     # 测试库=独立实例 postgres://arb:arb@127.0.0.1:5434/arb_test（D-021；env 未设自动缺省，生产 5433 零测试库）
+go test ./... -count=1                     # 测试库=独立实例 postgres://arb:arb@127.0.0.1:5434/nox_test（D-021；env 未设自动缺省，生产 5433 零测试库）
 go test -race ./internal/<触碰包>/... -count=1
 cd web && npm run build                    # 触碰前端时
 ```

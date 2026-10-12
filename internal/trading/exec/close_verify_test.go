@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // fakeVerifier 测试用 PositionVerifier（D-077 修复⑩ G1）。

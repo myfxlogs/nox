@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // d051r1Row 目标行 miss_streak/last_basis_bps/status 直读。

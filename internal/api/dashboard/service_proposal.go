@@ -8,7 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	dashv1 "arb/internal/gen/dashboardv1"
+	dashv1 "nox/internal/gen/dashboardv1"
 )
 
 func (s *Service) ListProposals(ctx context.Context, req *connect.Request[dashv1.ListProposalsRequest]) (*connect.Response[dashv1.ListProposalsResponse], error) {

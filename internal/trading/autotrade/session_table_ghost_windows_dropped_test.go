@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // TestD083_SessionTableGhostWindowsDropped (b)：#n 计数行截断越界幽灵窗。

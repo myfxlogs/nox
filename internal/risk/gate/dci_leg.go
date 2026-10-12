@@ -4,7 +4,7 @@ package gate
 import (
 	"fmt"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // %OTM 闸界读约束表（D-191-R9：字面量入库——subject=dci_call_otm_bound/

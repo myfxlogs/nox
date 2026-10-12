@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // PerpFundingDetector 检测跨所 perp funding rate 价差（D-064）。

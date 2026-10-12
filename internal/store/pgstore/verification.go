@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"arb/internal/review/verification"
+	"nox/internal/review/verification"
 )
 
 // VerificationStat 对应 verification_stats 表（D-086）。

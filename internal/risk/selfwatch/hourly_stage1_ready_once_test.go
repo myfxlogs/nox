@@ -1,6 +1,6 @@
 // d071_stage1_hourly_test.go —— D-071 C 锚：anomalyLoop 小时级 Stage 1 就绪评估。
 // 全 ✅ 首评 → emitStage1Ready InsertAlertDedup 恰一次（cfgStage1Ready 翻 "1"）；
-// 下一整点同态 ✅→✅ 不重复发；evalStage1 纯读面零副作用（不写 ARB_SELFWATCH_PAPER_NET
+// 下一整点同态 ✅→✅ 不重复发；evalStage1 纯读面零副作用（不写 NOX_SELFWATCH_PAPER_NET
 // 逐日快照——那是 BuildDaily 渲染路径的日报副作用）。
 package selfwatch
 
@@ -36,7 +36,7 @@ func TestD071_HourlyStage1ReadyOnce(t *testing.T) {
 	}
 	// 纯读面断言：小时评不得写逐日净额快照（日报副作用仅限 BuildDaily）。
 	if _, wrote := st.upserts[cfgPaperNetHist]; wrote {
-		t.Fatal("小时级就绪评估不得写 ARB_SELFWATCH_PAPER_NET")
+		t.Fatal("小时级就绪评估不得写 NOX_SELFWATCH_PAPER_NET")
 	}
 	hourly() // 下一整点同态 ✅→✅：不重复发
 	if n := countReady(); n != 1 {

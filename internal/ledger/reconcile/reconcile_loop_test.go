@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // countingStore 统计 Run 次数（Run 每轮恰好一次 ListPositions("OPEN")；

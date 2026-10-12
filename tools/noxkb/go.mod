@@ -1,4 +1,4 @@
-module arbkb
+module noxkb
 
 go 1.26.5
 

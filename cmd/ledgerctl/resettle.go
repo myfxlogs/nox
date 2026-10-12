@@ -16,8 +16,8 @@
 //
 // 用法：
 //
-//	ARB_PG_DSN="postgres://arb:arb@host:5432/arb_test?sslmode=disable" go run ./cmd/resettle -pos=498 -dry-run
-//	ARB_PG_DSN="postgres://arb:arb@host:5432/arb?sslmode=disable"     go run ./cmd/resettle -pos=498 -allow-live
+//	NOX_PG_DSN="postgres://arb:arb@host:5432/nox_test?sslmode=disable" go run ./cmd/resettle -pos=498 -dry-run
+//	NOX_PG_DSN="postgres://arb:arb@host:5432/arb?sslmode=disable"     go run ./cmd/resettle -pos=498 -allow-live
 package main
 
 import (
@@ -29,14 +29,14 @@ import (
 	"os"
 	"strings"
 
-	"arb/internal/data/keydomain"
+	"nox/internal/data/keydomain"
 	"time"
 
-	"arb/internal/data/adapter"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/ledger/settlement"
-	"arb/internal/portfolio/lifecycle"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/adapter"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/ledger/settlement"
+	"nox/internal/portfolio/lifecycle"
+	"nox/internal/store/pgstore"
 )
 
 func runResettle() {
@@ -49,9 +49,9 @@ func runResettle() {
 	if (*posID <= 0) == !*all {
 		log.Fatal("-pos 与 -all 二选一（必填其一）")
 	}
-	dsn := os.Getenv("ARB_PG_DSN") // D-145 引导件：连库前必需
+	dsn := os.Getenv("NOX_PG_DSN") // D-145 引导件：连库前必需
 	if dsn == "" {
-		log.Fatal("ARB_PG_DSN 未设置")
+		log.Fatal("NOX_PG_DSN 未设置")
 	}
 	dbName := dbNameFromDSN(dsn)
 	if err := checkDSNSafety(dsn, *allowLive); err != nil {

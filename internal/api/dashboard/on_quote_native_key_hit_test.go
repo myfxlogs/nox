@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/venue"
+	"nox/internal/data/bus"
+	"nox/internal/data/venue"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // T3a：onQuote 原生 brokerSym 命中——CEX 行 pb.Symbol==q.VenueSymbol 脏化（变体/原生行）。

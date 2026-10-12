@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // TestD108P2_LeggedZombie_VenueHit FILLED 腿在 venue 有 → 不置 FAILED + warn 告警。

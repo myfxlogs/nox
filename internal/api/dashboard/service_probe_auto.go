@@ -3,7 +3,7 @@
 // 判定序（全 fail-closed）：
 //
 //	① 契约复读（validateProbeContractForOpen 同一函数，不复制守卫）→ 硬伤拒
-//	② cap：expected_cost ≤ ARB_PROBE_MAX_COST、在途 OPEN PROBE < ARB_PROBE_MAX_OPEN → 拒
+//	② cap：expected_cost ≤ NOX_PROBE_MAX_COST、在途 OPEN PROBE < NOX_PROBE_MAX_OPEN → 拒
 //	③ premise 回放：basis 按段（；/;）前缀判别——
 //	   term_dispersion → 鲜 funding facts 重算跨 venue min/max（贡献腿任一根
 //	     facts 超 2×interval[funding_interval 缺省 8h×2] 或鲜腿<2 或离散塌缩 → 硬伤拒）
@@ -15,7 +15,7 @@
 // 全绿 → approveProbeOpen（同一 CAS+OpenProbe 守卫链，decision_ref=D-163）。
 // 硬伤 → ProbeProposalReject（CAS，理由落 gate_note）。歧义 → 留 proposed +
 // gate_note 幂等键（同判据不重复 warn）。
-// ARB_PROBE_RPC_ENABLED 主闸：未开=整机审不跑（OpenProbe 同闸双保险）。
+// NOX_PROBE_RPC_ENABLED 主闸：未开=整机审不跑（OpenProbe 同闸双保险）。
 package dashboard
 
 import (
@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // probeAutoRef D-163 机审 decision_ref（validator ^D-\d{3,}$ 合法形）。

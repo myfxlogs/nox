@@ -8,8 +8,8 @@ import (
 	"math"
 	"time"
 
-	"arb/internal/platform/errclass"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/errclass"
+	"nox/internal/store/pgstore"
 )
 
 // classifyFailure 按双腿 venue 分类执行失败（D-077 修复⑩ G3）。

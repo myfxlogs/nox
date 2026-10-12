@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	dashv1 "arb/internal/gen/dashboardv1"
+	dashv1 "nox/internal/gen/dashboardv1"
 
 	"connectrpc.com/connect"
 )

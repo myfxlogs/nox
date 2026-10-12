@@ -1970,7 +1970,7 @@ var File_dashboardv1_account_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_account_proto_rawDesc = "" +
 	"\n" +
-	"\x19dashboardv1/account.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe8\x02\n" +
+	"\x19dashboardv1/account.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe8\x02\n" +
 	"\x0eKnowledgeEntry\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12*\n" +
 	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x1c\n" +
@@ -1986,7 +1986,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\x0fvalidation_note\x18\v \x01(\tR\x0evalidationNote\"\x1d\n" +
 	"\x1bListKnowledgeEntriesRequest\"Z\n" +
 	"\x1cListKnowledgeEntriesResponse\x12:\n" +
-	"\aentries\x18\x01 \x03(\v2 .arb.dashboard.v1.KnowledgeEntryR\aentries\"\x94\x02\n" +
+	"\aentries\x18\x01 \x03(\v2 .nox.dashboard.v1.KnowledgeEntryR\aentries\"\x94\x02\n" +
 	"\x13PositionDailyIncome\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x10\n" +
 	"\x03day\x18\x02 \x01(\tR\x03day\x12\x1d\n" +
@@ -2034,7 +2034,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\x04risk\x18\x06 \x01(\tR\x04risk\"\x16\n" +
 	"\x14ListKBEntriesRequest\"L\n" +
 	"\x15ListKBEntriesResponse\x123\n" +
-	"\aentries\x18\x01 \x03(\v2\x19.arb.dashboard.v1.KBEntryR\aentries\"#\n" +
+	"\aentries\x18\x01 \x03(\v2\x19.nox.dashboard.v1.KBEntryR\aentries\"#\n" +
 	"\x11GetKBEntryRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\">\n" +
 	"\x12GetKBEntryResponse\x12\x0e\n" +
@@ -2046,7 +2046,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x04 \x01(\x05R\x06offset\"V\n" +
 	"\x17ListDailyIncomeResponse\x12;\n" +
-	"\x05items\x18\x01 \x03(\v2%.arb.dashboard.v1.PositionDailyIncomeR\x05items\"\xbc\x04\n" +
+	"\x05items\x18\x01 \x03(\v2%.nox.dashboard.v1.PositionDailyIncomeR\x05items\"\xbc\x04\n" +
 	"\vAccountInfo\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x14\n" +
 	"\x05venue\x18\x02 \x01(\tR\x05venue\x12\x1d\n" +
@@ -2069,7 +2069,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"updated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1c\n" +
 	"\tsimulated\x18\x0f \x01(\bR\tsimulated\x12\x18\n" +
 	"\awebsite\x18\x10 \x01(\tR\awebsite\x125\n" +
-	"\bholdings\x18\x11 \x03(\v2\x19.arb.dashboard.v1.HoldingR\bholdings\x12'\n" +
+	"\bholdings\x18\x11 \x03(\v2\x19.nox.dashboard.v1.HoldingR\bholdings\x12'\n" +
 	"\x0fbuffer_multiple\x18\x12 \x01(\x01R\x0ebufferMultiple\" \n" +
 	"\x1eListAccountMarginStatusRequest\"\x9d\x03\n" +
 	"\x13AccountMarginStatus\x12\x14\n" +
@@ -2092,7 +2092,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\\\n" +
 	"\x1fListAccountMarginStatusResponse\x129\n" +
-	"\x04rows\x18\x01 \x03(\v2%.arb.dashboard.v1.AccountMarginStatusR\x04rows\"L\n" +
+	"\x04rows\x18\x01 \x03(\v2%.nox.dashboard.v1.AccountMarginStatusR\x04rows\"L\n" +
 	"\aHolding\x12\x10\n" +
 	"\x03ccy\x18\x01 \x01(\tR\x03ccy\x12\x10\n" +
 	"\x03qty\x18\x02 \x01(\x01R\x03qty\x12\x1d\n" +
@@ -2100,7 +2100,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"usdt_value\x18\x03 \x01(\x01R\tusdtValue\"\x15\n" +
 	"\x13ListAccountsRequest\"Q\n" +
 	"\x14ListAccountsResponse\x129\n" +
-	"\baccounts\x18\x01 \x03(\v2\x1d.arb.dashboard.v1.AccountInfoR\baccounts\"7\n" +
+	"\baccounts\x18\x01 \x03(\v2\x1d.nox.dashboard.v1.AccountInfoR\baccounts\"7\n" +
 	"\tKeepalive\x12*\n" +
 	"\x02ts\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\"\x1b\n" +
 	"\x19GetFinanceOverviewRequest\"n\n" +
@@ -2125,10 +2125,10 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\x1aGetFinanceOverviewResponse\x12(\n" +
 	"\x10total_equity_usd\x18\x02 \x01(\x01R\x0etotalEquityUsd\x12?\n" +
 	"\n" +
-	"pnl_by_env\x18\x04 \x03(\v2!.arb.dashboard.v1.FinancePnlByEnvR\bpnlByEnv\x12H\n" +
-	"\x0eincome_by_kind\x18\x05 \x03(\v2\".arb.dashboard.v1.FinanceIncomeRowR\fincomeByKind\x126\n" +
-	"\x05flows\x18\x06 \x03(\v2 .arb.dashboard.v1.FinanceFlowRowR\x05flows\x12,\n" +
-	"\x12total_realized_usd\x18\a \x01(\x01R\x10totalRealizedUsdJ\x04\b\x01\x10\x02J\x04\b\x03\x10\x04R\rdeposited_usdR\vnet_pnl_usdB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"pnl_by_env\x18\x04 \x03(\v2!.nox.dashboard.v1.FinancePnlByEnvR\bpnlByEnv\x12H\n" +
+	"\x0eincome_by_kind\x18\x05 \x03(\v2\".nox.dashboard.v1.FinanceIncomeRowR\fincomeByKind\x126\n" +
+	"\x05flows\x18\x06 \x03(\v2 .nox.dashboard.v1.FinanceFlowRowR\x05flows\x12,\n" +
+	"\x12total_realized_usd\x18\a \x01(\x01R\x10totalRealizedUsdJ\x04\b\x01\x10\x02J\x04\b\x03\x10\x04R\rdeposited_usdR\vnet_pnl_usdB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_account_proto_rawDescOnce sync.Once
@@ -2144,56 +2144,56 @@ func file_dashboardv1_account_proto_rawDescGZIP() []byte {
 
 var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_dashboardv1_account_proto_goTypes = []any{
-	(*KnowledgeEntry)(nil),                  // 0: arb.dashboard.v1.KnowledgeEntry
-	(*ListKnowledgeEntriesRequest)(nil),     // 1: arb.dashboard.v1.ListKnowledgeEntriesRequest
-	(*ListKnowledgeEntriesResponse)(nil),    // 2: arb.dashboard.v1.ListKnowledgeEntriesResponse
-	(*PositionDailyIncome)(nil),             // 3: arb.dashboard.v1.PositionDailyIncome
-	(*AddDailyIncomeRequest)(nil),           // 4: arb.dashboard.v1.AddDailyIncomeRequest
-	(*AddDailyIncomeResponse)(nil),          // 5: arb.dashboard.v1.AddDailyIncomeResponse
-	(*GetPnlAnchorRequest)(nil),             // 6: arb.dashboard.v1.GetPnlAnchorRequest
-	(*GetPnlAnchorResponse)(nil),            // 7: arb.dashboard.v1.GetPnlAnchorResponse
-	(*ResetPnlAnchorRequest)(nil),           // 8: arb.dashboard.v1.ResetPnlAnchorRequest
-	(*ResetPnlAnchorResponse)(nil),          // 9: arb.dashboard.v1.ResetPnlAnchorResponse
-	(*KBEntry)(nil),                         // 10: arb.dashboard.v1.KBEntry
-	(*ListKBEntriesRequest)(nil),            // 11: arb.dashboard.v1.ListKBEntriesRequest
-	(*ListKBEntriesResponse)(nil),           // 12: arb.dashboard.v1.ListKBEntriesResponse
-	(*GetKBEntryRequest)(nil),               // 13: arb.dashboard.v1.GetKBEntryRequest
-	(*GetKBEntryResponse)(nil),              // 14: arb.dashboard.v1.GetKBEntryResponse
-	(*ListDailyIncomeRequest)(nil),          // 15: arb.dashboard.v1.ListDailyIncomeRequest
-	(*ListDailyIncomeResponse)(nil),         // 16: arb.dashboard.v1.ListDailyIncomeResponse
-	(*AccountInfo)(nil),                     // 17: arb.dashboard.v1.AccountInfo
-	(*ListAccountMarginStatusRequest)(nil),  // 18: arb.dashboard.v1.ListAccountMarginStatusRequest
-	(*AccountMarginStatus)(nil),             // 19: arb.dashboard.v1.AccountMarginStatus
-	(*ListAccountMarginStatusResponse)(nil), // 20: arb.dashboard.v1.ListAccountMarginStatusResponse
-	(*Holding)(nil),                         // 21: arb.dashboard.v1.Holding
-	(*ListAccountsRequest)(nil),             // 22: arb.dashboard.v1.ListAccountsRequest
-	(*ListAccountsResponse)(nil),            // 23: arb.dashboard.v1.ListAccountsResponse
-	(*Keepalive)(nil),                       // 24: arb.dashboard.v1.Keepalive
-	(*GetFinanceOverviewRequest)(nil),       // 25: arb.dashboard.v1.GetFinanceOverviewRequest
-	(*FinancePnlByEnv)(nil),                 // 26: arb.dashboard.v1.FinancePnlByEnv
-	(*FinanceIncomeRow)(nil),                // 27: arb.dashboard.v1.FinanceIncomeRow
-	(*FinanceFlowRow)(nil),                  // 28: arb.dashboard.v1.FinanceFlowRow
-	(*GetFinanceOverviewResponse)(nil),      // 29: arb.dashboard.v1.GetFinanceOverviewResponse
+	(*KnowledgeEntry)(nil),                  // 0: nox.dashboard.v1.KnowledgeEntry
+	(*ListKnowledgeEntriesRequest)(nil),     // 1: nox.dashboard.v1.ListKnowledgeEntriesRequest
+	(*ListKnowledgeEntriesResponse)(nil),    // 2: nox.dashboard.v1.ListKnowledgeEntriesResponse
+	(*PositionDailyIncome)(nil),             // 3: nox.dashboard.v1.PositionDailyIncome
+	(*AddDailyIncomeRequest)(nil),           // 4: nox.dashboard.v1.AddDailyIncomeRequest
+	(*AddDailyIncomeResponse)(nil),          // 5: nox.dashboard.v1.AddDailyIncomeResponse
+	(*GetPnlAnchorRequest)(nil),             // 6: nox.dashboard.v1.GetPnlAnchorRequest
+	(*GetPnlAnchorResponse)(nil),            // 7: nox.dashboard.v1.GetPnlAnchorResponse
+	(*ResetPnlAnchorRequest)(nil),           // 8: nox.dashboard.v1.ResetPnlAnchorRequest
+	(*ResetPnlAnchorResponse)(nil),          // 9: nox.dashboard.v1.ResetPnlAnchorResponse
+	(*KBEntry)(nil),                         // 10: nox.dashboard.v1.KBEntry
+	(*ListKBEntriesRequest)(nil),            // 11: nox.dashboard.v1.ListKBEntriesRequest
+	(*ListKBEntriesResponse)(nil),           // 12: nox.dashboard.v1.ListKBEntriesResponse
+	(*GetKBEntryRequest)(nil),               // 13: nox.dashboard.v1.GetKBEntryRequest
+	(*GetKBEntryResponse)(nil),              // 14: nox.dashboard.v1.GetKBEntryResponse
+	(*ListDailyIncomeRequest)(nil),          // 15: nox.dashboard.v1.ListDailyIncomeRequest
+	(*ListDailyIncomeResponse)(nil),         // 16: nox.dashboard.v1.ListDailyIncomeResponse
+	(*AccountInfo)(nil),                     // 17: nox.dashboard.v1.AccountInfo
+	(*ListAccountMarginStatusRequest)(nil),  // 18: nox.dashboard.v1.ListAccountMarginStatusRequest
+	(*AccountMarginStatus)(nil),             // 19: nox.dashboard.v1.AccountMarginStatus
+	(*ListAccountMarginStatusResponse)(nil), // 20: nox.dashboard.v1.ListAccountMarginStatusResponse
+	(*Holding)(nil),                         // 21: nox.dashboard.v1.Holding
+	(*ListAccountsRequest)(nil),             // 22: nox.dashboard.v1.ListAccountsRequest
+	(*ListAccountsResponse)(nil),            // 23: nox.dashboard.v1.ListAccountsResponse
+	(*Keepalive)(nil),                       // 24: nox.dashboard.v1.Keepalive
+	(*GetFinanceOverviewRequest)(nil),       // 25: nox.dashboard.v1.GetFinanceOverviewRequest
+	(*FinancePnlByEnv)(nil),                 // 26: nox.dashboard.v1.FinancePnlByEnv
+	(*FinanceIncomeRow)(nil),                // 27: nox.dashboard.v1.FinanceIncomeRow
+	(*FinanceFlowRow)(nil),                  // 28: nox.dashboard.v1.FinanceFlowRow
+	(*GetFinanceOverviewResponse)(nil),      // 29: nox.dashboard.v1.GetFinanceOverviewResponse
 	(*timestamppb.Timestamp)(nil),           // 30: google.protobuf.Timestamp
 }
 var file_dashboardv1_account_proto_depIdxs = []int32{
-	30, // 0: arb.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
-	30, // 1: arb.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
-	0,  // 2: arb.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> arb.dashboard.v1.KnowledgeEntry
-	30, // 3: arb.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	30, // 4: arb.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	10, // 5: arb.dashboard.v1.ListKBEntriesResponse.entries:type_name -> arb.dashboard.v1.KBEntry
-	3,  // 6: arb.dashboard.v1.ListDailyIncomeResponse.items:type_name -> arb.dashboard.v1.PositionDailyIncome
-	30, // 7: arb.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
-	21, // 8: arb.dashboard.v1.AccountInfo.holdings:type_name -> arb.dashboard.v1.Holding
-	30, // 9: arb.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
-	19, // 10: arb.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> arb.dashboard.v1.AccountMarginStatus
-	17, // 11: arb.dashboard.v1.ListAccountsResponse.accounts:type_name -> arb.dashboard.v1.AccountInfo
-	30, // 12: arb.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
-	30, // 13: arb.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
-	26, // 14: arb.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> arb.dashboard.v1.FinancePnlByEnv
-	27, // 15: arb.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> arb.dashboard.v1.FinanceIncomeRow
-	28, // 16: arb.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> arb.dashboard.v1.FinanceFlowRow
+	30, // 0: nox.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
+	30, // 1: nox.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
+	0,  // 2: nox.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> nox.dashboard.v1.KnowledgeEntry
+	30, // 3: nox.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	30, // 4: nox.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	10, // 5: nox.dashboard.v1.ListKBEntriesResponse.entries:type_name -> nox.dashboard.v1.KBEntry
+	3,  // 6: nox.dashboard.v1.ListDailyIncomeResponse.items:type_name -> nox.dashboard.v1.PositionDailyIncome
+	30, // 7: nox.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
+	21, // 8: nox.dashboard.v1.AccountInfo.holdings:type_name -> nox.dashboard.v1.Holding
+	30, // 9: nox.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
+	19, // 10: nox.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> nox.dashboard.v1.AccountMarginStatus
+	17, // 11: nox.dashboard.v1.ListAccountsResponse.accounts:type_name -> nox.dashboard.v1.AccountInfo
+	30, // 12: nox.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
+	30, // 13: nox.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
+	26, // 14: nox.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> nox.dashboard.v1.FinancePnlByEnv
+	27, // 15: nox.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> nox.dashboard.v1.FinanceIncomeRow
+	28, // 16: nox.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> nox.dashboard.v1.FinanceFlowRow
 	17, // [17:17] is the sub-list for method output_type
 	17, // [17:17] is the sub-list for method input_type
 	17, // [17:17] is the sub-list for extension type_name

@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/platform/safego"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/platform/safego"
+	"nox/internal/store/pgstore"
 )
 
 // PersonalMonitor 监控个人持仓价格阈值（财务线 TRX 持仓接入，D-046）。

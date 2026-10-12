@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/venue"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/venue"
+	"nox/internal/store/pgstore"
 )
 
 // TestD215_CLOSINGLegInVenue_NoOrphanAlert：CLOSING 持仓（未超 30min 不触发 stuck）+ OPEN-phase

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func d500CfdRow(id int64, entryTs time.Time) *pgstore.PaperSpotCarry {

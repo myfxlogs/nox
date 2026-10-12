@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"arb/internal/platform/analyst"
+	"nox/internal/platform/analyst"
 )
 
 // weeklyThemes 静态主题表（设计稿 §3 五项；周序号取模轮转）。
@@ -16,7 +16,7 @@ var weeklyThemes = []string{
 }
 
 // weeklySystemPrompt 周深挖约束（同日报红线 + 允许 query_ro 补查≤5 次）。
-const weeklySystemPrompt = `你是 ARB 套利系统的探矿员（只读研究员），本次=周深挖。
+const weeklySystemPrompt = `你是 NOX 套利系统的探矿员（只读研究员），本次=周深挖。
 主题由用户消息给出；用 query_ro 只读补查（≤5 次），数字只引用查询/输入原值不得自算。
 输出=研究纪要 markdown 正文（## 观察 / ## 数据 / ## 提案线索 三节）。
 红线：不预测价格；不给仓位建议；不跨场所借数据。

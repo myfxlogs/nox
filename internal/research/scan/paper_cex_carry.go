@@ -13,15 +13,15 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/store/pgstore"
 )
 
 // PaperCexOpts 装配参数（cmd/core 注入；D-050 数量槽退役——AuthorizedMaxActive/
 // MaxActive 删，只留质量闸：data_lost 冷却+双腿报价连续性+D-051 深度/funding）。
 type PaperCexOpts struct {
 	ReopenCooldown time.Duration // 保底 flap 冷却（退出行 max(exit_ts) 窗）
-	// D-051② 质量闸阈（>0 生效；缺省源=ARB_PAPER_CEX_MIN_DEPTH_USD/MIN_FUNDING_PCT）。
+	// D-051② 质量闸阈（>0 生效；缺省源=NOX_PAPER_CEX_MIN_DEPTH_USD/MIN_FUNDING_PCT）。
 	MinDepthUSD   float64           // 双腿 fin_cex_depth 24h 均 mid_depth_usd 下限；无样本 fail-closed
 	MinFundingPct float64           // perp 腿 funding_history 7d 年化均值下限（%）；无样本 fail-closed
 	Skips         *PaperSkipCounter // D-051③：入口拦截原因计数（nil=不记，selfwatch 分布源）

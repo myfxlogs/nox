@@ -6,17 +6,17 @@
 package dciexec
 
 import (
-	"arb/internal/risk/gate"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"nox/internal/risk/gate"
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // sign HMAC-SHA256 hex（binance sapi 同法，包内独立实现 P3 不适用）。

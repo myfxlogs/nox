@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/research/detector"
-	"arb/internal/research/evaluator"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/research/detector"
+	"nox/internal/research/evaluator"
+	"nox/internal/store/pgstore"
 )
 
 // fakeEquivView 测试用 AssetEquivView（Partners 反查 + MaybeRefresh 计数）。

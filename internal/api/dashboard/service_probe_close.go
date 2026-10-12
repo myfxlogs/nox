@@ -12,8 +12,8 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/store/pgstore"
 )
 
 // probeCloseFailRetryWindow 平仓失败重试告警去重窗（探针仓回 OPEN 后逐次重试）。

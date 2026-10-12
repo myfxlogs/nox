@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 // TestD594_UnitScales migration 0161 锚 + UnitQty 语义（CS×qty_scale）+ 敏感集 +
@@ -13,7 +13,7 @@ import (
 // venue 维度行自带 FK → 本测自造 venue+映射行）。
 func TestD594_UnitScales(t *testing.T) {
 	ctx := context.Background()
-	s, err := New(ctx, testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := New(ctx, testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}

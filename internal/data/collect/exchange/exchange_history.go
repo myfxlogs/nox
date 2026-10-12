@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // HistoryStartResolver 返回某 venue×symbol 的最近 funding_history 时间戳，

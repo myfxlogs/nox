@@ -5,10 +5,10 @@ import (
 	"log"
 	"math"
 
-	"arb/internal/review/verification"
-	"arb/internal/store/pgstore"
+	"nox/internal/review/verification"
+	"nox/internal/store/pgstore"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"

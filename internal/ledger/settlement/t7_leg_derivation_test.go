@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // T7：settle 接线 bool 推导——perp FILLED 腿→hasFundingLeg；FAILED→false；

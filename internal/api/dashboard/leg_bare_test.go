@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 )
 
 // ---- T2 legBare 剥域 ----
@@ -87,7 +87,7 @@ func TestD563_ComboPoolVerdict(t *testing.T) {
 // ---- T5 MT 腿资金实时化 ----
 
 func TestD563_MarginFloorMTRealtime(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_SERVICE_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE positions, position_legs RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)

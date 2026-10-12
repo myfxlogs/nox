@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // A1：#509 型回放——仅 MT 腿偏离破带（CEX 腿贴共识），连续多轮也不杀，只落 warn。

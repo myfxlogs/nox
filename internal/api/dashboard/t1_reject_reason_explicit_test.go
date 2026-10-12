@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/trading/exec"
+	"nox/internal/trading/exec"
 )
 
 // T1：qty=0 → 拒因含「最小步长/notional」字样（D-433 显式化）。

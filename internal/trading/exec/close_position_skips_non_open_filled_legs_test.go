@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // TestClosePosition_SkipsNonOpenFilledLegs A1：只对 Phase=OPEN AND Status=FILLED 腿发平仓单。

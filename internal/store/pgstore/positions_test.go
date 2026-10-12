@@ -201,7 +201,7 @@ func abs(v float64) float64 {
 // 挪列后 SWAPARB 行 expected_net_bps 合法 NULL，Position.ExpectedNetBps 非指针 float64
 // → 4 条 SELECT 直扫 NULL 进非指针 dest 报 Scan error（ListPositions 500 + monitor/autotrade 致盲）。
 // 修法：4 处 SELECT 加 COALESCE(expected_net_bps, 0)。本测试插 NULL 行走全链 4 个方法 + settlement load。
-// DSN-gated：无 ARB_TEST_PG_DSN 跳过（go test ./... 无 PG 环境仍全过）。
+// DSN-gated：无 NOX_TEST_PG_DSN 跳过（go test ./... 无 PG 环境仍全过）。
 func TestListPositions_NullExpectedNetBps(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

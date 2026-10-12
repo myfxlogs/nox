@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 // d544SpotFixture spot_carry 档案底料：binance spot+perp 双腿同 symbol SKLUSDT。

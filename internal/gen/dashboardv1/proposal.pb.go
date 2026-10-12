@@ -326,7 +326,7 @@ var File_dashboardv1_proposal_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_proposal_proto_rawDesc = "" +
 	"\n" +
-	"\x1adashboardv1/proposal.proto\x12\x10arb.dashboard.v1\"\x8a\x02\n" +
+	"\x1adashboardv1/proposal.proto\x12\x10nox.dashboard.v1\"\x8a\x02\n" +
 	"\bProposal\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1f\n" +
 	"\vtemplate_id\x18\x02 \x01(\tR\n" +
@@ -345,14 +345,14 @@ const file_dashboardv1_proposal_proto_rawDesc = "" +
 	"\x14ListProposalsRequest\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\"Q\n" +
 	"\x15ListProposalsResponse\x128\n" +
-	"\tproposals\x18\x01 \x03(\v2\x1a.arb.dashboard.v1.ProposalR\tproposals\"M\n" +
+	"\tproposals\x18\x01 \x03(\v2\x1a.nox.dashboard.v1.ProposalR\tproposals\"M\n" +
 	"\x12AckProposalRequest\x12\x1f\n" +
 	"\vproposal_id\x18\x01 \x01(\x03R\n" +
 	"proposalId\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\"G\n" +
 	"\x13AckProposalResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessageB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\amessage\x18\x02 \x01(\tR\amessageB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_proposal_proto_rawDescOnce sync.Once
@@ -368,14 +368,14 @@ func file_dashboardv1_proposal_proto_rawDescGZIP() []byte {
 
 var file_dashboardv1_proposal_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_dashboardv1_proposal_proto_goTypes = []any{
-	(*Proposal)(nil),              // 0: arb.dashboard.v1.Proposal
-	(*ListProposalsRequest)(nil),  // 1: arb.dashboard.v1.ListProposalsRequest
-	(*ListProposalsResponse)(nil), // 2: arb.dashboard.v1.ListProposalsResponse
-	(*AckProposalRequest)(nil),    // 3: arb.dashboard.v1.AckProposalRequest
-	(*AckProposalResponse)(nil),   // 4: arb.dashboard.v1.AckProposalResponse
+	(*Proposal)(nil),              // 0: nox.dashboard.v1.Proposal
+	(*ListProposalsRequest)(nil),  // 1: nox.dashboard.v1.ListProposalsRequest
+	(*ListProposalsResponse)(nil), // 2: nox.dashboard.v1.ListProposalsResponse
+	(*AckProposalRequest)(nil),    // 3: nox.dashboard.v1.AckProposalRequest
+	(*AckProposalResponse)(nil),   // 4: nox.dashboard.v1.AckProposalResponse
 }
 var file_dashboardv1_proposal_proto_depIdxs = []int32{
-	0, // 0: arb.dashboard.v1.ListProposalsResponse.proposals:type_name -> arb.dashboard.v1.Proposal
+	0, // 0: nox.dashboard.v1.ListProposalsResponse.proposals:type_name -> nox.dashboard.v1.Proposal
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name

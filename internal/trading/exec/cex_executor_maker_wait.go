@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/platform/signutil"
+	"nox/internal/platform/signutil"
 )
 
 // SetOrderWake 注入订单事件订阅闭包（OrderEventCache.SubscribeEvents；manager 装配，

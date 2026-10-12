@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
 	"google.golang.org/grpc"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // slowFakeMT5Client 模拟 PXBT 慢 SymbolParams：指定符号阻塞 delay 后返回，其余即时。

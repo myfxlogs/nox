@@ -6,8 +6,8 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 func d018MakerStr(s string) *string { return &s }

@@ -187,7 +187,7 @@ type Position struct {
 	FloatingPnlUsd        *float64               `protobuf:"fixed64,13,opt,name=floating_pnl_usd,json=floatingPnlUsd,proto3,oneof" json:"floating_pnl_usd,omitempty"`                          // D-095：浮动（broker profit 匹配和；未匹配=缺省）
 	SwapAccruedUsd        *float64               `protobuf:"fixed64,14,opt,name=swap_accrued_usd,json=swapAccruedUsd,proto3,oneof" json:"swap_accrued_usd,omitempty"`                          // D-095：已收息差（broker swap 匹配和）
 	NetPnlUsd             *float64               `protobuf:"fixed64,15,opt,name=net_pnl_usd,json=netPnlUsd,proto3,oneof" json:"net_pnl_usd,omitempty"`                                         // D-093（语义改，业主授权净到手口径）：净盈亏=13+14+已付佣金−出场费估(44)；15 及以前=仅已付成本旧口径
-	ExitFeeEstUsd         *float64               `protobuf:"fixed64,44,opt,name=exit_fee_est_usd,json=exitFeeEstUsd,proto3,oneof" json:"exit_fee_est_usd,omitempty"`                           // D-093：平仓出场费估（Σ CEX 腿名义×takerBps，费率=app_config ARB_EXIT_FEE_BPS_<venue> 热键；MT 腿 0 点差内嵌；未配置 venue 该腿按 0+warn）
+	ExitFeeEstUsd         *float64               `protobuf:"fixed64,44,opt,name=exit_fee_est_usd,json=exitFeeEstUsd,proto3,oneof" json:"exit_fee_est_usd,omitempty"`                           // D-093：平仓出场费估（Σ CEX 腿名义×takerBps，费率=app_config NOX_EXIT_FEE_BPS_<venue> 热键；MT 腿 0 点差内嵌；未配置 venue 该腿按 0+warn）
 	ExpectedSwapUsdToDate *float64               `protobuf:"fixed64,16,opt,name=expected_swap_usd_to_date,json=expectedSwapUsdToDate,proto3,oneof" json:"expected_swap_usd_to_date,omitempty"` // D-095：预期应得（SWAPARB/CARRY）
 	AttainmentPct         *float64               `protobuf:"fixed64,17,opt,name=attainment_pct,json=attainmentPct,proto3,oneof" json:"attainment_pct,omitempty"`                               // D-095：达成率 16 vs 14（息差型）
 	CurrentNetBps         *float64               `protobuf:"fixed64,18,opt,name=current_net_bps,json=currentNetBps,proto3,oneof" json:"current_net_bps,omitempty"`                             // D-095：收敛型当前 bps（rollup 最新）
@@ -959,7 +959,7 @@ type BrokerPosition struct {
 	Swap                        float64                `protobuf:"fixed64,12,opt,name=swap,proto3" json:"swap,omitempty"`
 	Commission                  float64                `protobuf:"fixed64,13,opt,name=commission,proto3" json:"commission,omitempty"`
 	Comment                     string                 `protobuf:"bytes,14,opt,name=comment,proto3" json:"comment,omitempty"`
-	IsArb                       bool                   `protobuf:"varint,15,opt,name=is_arb,json=isArb,proto3" json:"is_arb,omitempty"` // comment 前缀 = exec.OrderComment("arb") → ARB 源订单
+	IsArb                       bool                   `protobuf:"varint,15,opt,name=is_arb,json=isArb,proto3" json:"is_arb,omitempty"` // comment 前缀 = exec.OrderComment("arb"——券商侧历史订单标记，域值不改）
 	OpenedAt                    *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=opened_at,json=openedAt,proto3" json:"opened_at,omitempty"`
 	Magic                       int64                  `protobuf:"varint,17,opt,name=magic,proto3" json:"magic,omitempty"`                                                                                    // MT5 ExpertId / MT4 MagicNumber；0 = 无（手动单）
 	VenueOnline                 bool                   `protobuf:"varint,18,opt,name=venue_online,json=venueOnline,proto3" json:"venue_online,omitempty"`                                                     // venue 在线状态；false = 最近快照（离线，非实时）
@@ -2383,7 +2383,7 @@ var File_dashboardv1_position_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_position_proto_rawDesc = "" +
 	"\n" +
-	"\x1adashboardv1/position.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x98\x03\n" +
+	"\x1adashboardv1/position.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x98\x03\n" +
 	"\vPositionLeg\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1f\n" +
 	"\vposition_id\x18\x02 \x01(\x03R\n" +
@@ -2413,7 +2413,7 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\tclosed_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\bclosedAt\x12\x12\n" +
 	"\x04note\x18\t \x01(\tR\x04note\x121\n" +
 	"\x04legs\x18\n" +
-	" \x03(\v2\x1d.arb.dashboard.v1.PositionLegR\x04legs\x123\n" +
+	" \x03(\v2\x1d.nox.dashboard.v1.PositionLegR\x04legs\x123\n" +
 	"\x13expected_annual_pct\x18\v \x01(\x01H\x01R\x11expectedAnnualPct\x88\x01\x01\x12:\n" +
 	"\x17expected_swap_bps_daily\x18\f \x01(\x01H\x02R\x14expectedSwapBpsDaily\x88\x01\x01\x12-\n" +
 	"\x10floating_pnl_usd\x18\r \x01(\x01H\x03R\x0efloatingPnlUsd\x88\x01\x01\x12-\n" +
@@ -2497,7 +2497,7 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\"g\n" +
 	"\x15ListPositionsResponse\x128\n" +
-	"\tpositions\x18\x01 \x03(\v2\x1a.arb.dashboard.v1.PositionR\tpositions\x12\x14\n" +
+	"\tpositions\x18\x01 \x03(\v2\x1a.nox.dashboard.v1.PositionR\tpositions\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\"\x86\n" +
 	"\n" +
 	"\x0eBrokerPosition\x12\x14\n" +
@@ -2545,7 +2545,7 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x1aListBrokerPositionsRequest\x12\x18\n" +
 	"\arefresh\x18\x01 \x01(\bR\arefresh\"\xc7\x01\n" +
 	"\x1bListBrokerPositionsResponse\x12>\n" +
-	"\tpositions\x18\x01 \x03(\v2 .arb.dashboard.v1.BrokerPositionR\tpositions\x12#\n" +
+	"\tpositions\x18\x01 \x03(\v2 .nox.dashboard.v1.BrokerPositionR\tpositions\x12#\n" +
 	"\vpnl_sum_usd\x18\x02 \x01(\x01H\x00R\tpnlSumUsd\x88\x01\x01\x12#\n" +
 	"\vnet_sum_usd\x18\x03 \x01(\x01H\x01R\tnetSumUsd\x88\x01\x01B\x0e\n" +
 	"\f_pnl_sum_usdB\x0e\n" +
@@ -2557,9 +2557,9 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"a\n" +
 	"\x1bCloseBrokerPositionsRequest\x12B\n" +
-	"\x05items\x18\x01 \x03(\v2,.arb.dashboard.v1.CloseBrokerPositionRequestR\x05items\"g\n" +
+	"\x05items\x18\x01 \x03(\v2,.nox.dashboard.v1.CloseBrokerPositionRequestR\x05items\"g\n" +
 	"\x1cCloseBrokerPositionsResponse\x12G\n" +
-	"\aresults\x18\x01 \x03(\v2-.arb.dashboard.v1.CloseBrokerPositionResponseR\aresults\"\xf0\x01\n" +
+	"\aresults\x18\x01 \x03(\v2-.nox.dashboard.v1.CloseBrokerPositionResponseR\aresults\"\xf0\x01\n" +
 	"\x10OpenProbeRequest\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x1c\n" +
 	"\tcanonical\x18\x02 \x01(\tR\tcanonical\x12\x12\n" +
@@ -2593,7 +2593,7 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x11ListProbesRequest\x12\x1b\n" +
 	"\topen_only\x18\x01 \x01(\bR\bopenOnly\"M\n" +
 	"\x12ListProbesResponse\x127\n" +
-	"\x06probes\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.ProbePositionR\x06probes\"Y\n" +
+	"\x06probes\x18\x01 \x03(\v2\x1f.nox.dashboard.v1.ProbePositionR\x06probes\"Y\n" +
 	"\x13ApproveProbeRequest\x12\x1f\n" +
 	"\vproposal_id\x18\x01 \x01(\x03R\n" +
 	"proposalId\x12!\n" +
@@ -2630,7 +2630,7 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x19ListProbeProposalsRequest\x12'\n" +
 	"\x0finclude_decided\x18\x01 \x01(\bR\x0eincludeDecided\"_\n" +
 	"\x1aListProbeProposalsResponse\x12A\n" +
-	"\tproposals\x18\x01 \x03(\v2#.arb.dashboard.v1.ProbeProposalCardR\tproposalsB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\tproposals\x18\x01 \x03(\v2#.nox.dashboard.v1.ProbeProposalCardR\tproposalsB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_position_proto_rawDescOnce sync.Once
@@ -2646,60 +2646,60 @@ func file_dashboardv1_position_proto_rawDescGZIP() []byte {
 
 var file_dashboardv1_position_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_dashboardv1_position_proto_goTypes = []any{
-	(*PositionLeg)(nil),                  // 0: arb.dashboard.v1.PositionLeg
-	(*Position)(nil),                     // 1: arb.dashboard.v1.Position
-	(*ExecuteOpportunityRequest)(nil),    // 2: arb.dashboard.v1.ExecuteOpportunityRequest
-	(*ExecuteOpportunityResponse)(nil),   // 3: arb.dashboard.v1.ExecuteOpportunityResponse
-	(*ClosePositionRequest)(nil),         // 4: arb.dashboard.v1.ClosePositionRequest
-	(*ClosePositionResponse)(nil),        // 5: arb.dashboard.v1.ClosePositionResponse
-	(*BackfillSwapHistoryRequest)(nil),   // 6: arb.dashboard.v1.BackfillSwapHistoryRequest
-	(*BackfillSwapHistoryReply)(nil),     // 7: arb.dashboard.v1.BackfillSwapHistoryReply
-	(*ListPositionsRequest)(nil),         // 8: arb.dashboard.v1.ListPositionsRequest
-	(*ListPositionsResponse)(nil),        // 9: arb.dashboard.v1.ListPositionsResponse
-	(*BrokerPosition)(nil),               // 10: arb.dashboard.v1.BrokerPosition
-	(*ListBrokerPositionsRequest)(nil),   // 11: arb.dashboard.v1.ListBrokerPositionsRequest
-	(*ListBrokerPositionsResponse)(nil),  // 12: arb.dashboard.v1.ListBrokerPositionsResponse
-	(*CloseBrokerPositionRequest)(nil),   // 13: arb.dashboard.v1.CloseBrokerPositionRequest
-	(*CloseBrokerPositionResponse)(nil),  // 14: arb.dashboard.v1.CloseBrokerPositionResponse
-	(*CloseBrokerPositionsRequest)(nil),  // 15: arb.dashboard.v1.CloseBrokerPositionsRequest
-	(*CloseBrokerPositionsResponse)(nil), // 16: arb.dashboard.v1.CloseBrokerPositionsResponse
-	(*OpenProbeRequest)(nil),             // 17: arb.dashboard.v1.OpenProbeRequest
-	(*OpenProbeResponse)(nil),            // 18: arb.dashboard.v1.OpenProbeResponse
-	(*ProbePosition)(nil),                // 19: arb.dashboard.v1.ProbePosition
-	(*ListProbesRequest)(nil),            // 20: arb.dashboard.v1.ListProbesRequest
-	(*ListProbesResponse)(nil),           // 21: arb.dashboard.v1.ListProbesResponse
-	(*ApproveProbeRequest)(nil),          // 22: arb.dashboard.v1.ApproveProbeRequest
-	(*ApproveProbeResponse)(nil),         // 23: arb.dashboard.v1.ApproveProbeResponse
-	(*RejectProbeRequest)(nil),           // 24: arb.dashboard.v1.RejectProbeRequest
-	(*RejectProbeResponse)(nil),          // 25: arb.dashboard.v1.RejectProbeResponse
-	(*ProbeProposalCard)(nil),            // 26: arb.dashboard.v1.ProbeProposalCard
-	(*ListProbeProposalsRequest)(nil),    // 27: arb.dashboard.v1.ListProbeProposalsRequest
-	(*ListProbeProposalsResponse)(nil),   // 28: arb.dashboard.v1.ListProbeProposalsResponse
+	(*PositionLeg)(nil),                  // 0: nox.dashboard.v1.PositionLeg
+	(*Position)(nil),                     // 1: nox.dashboard.v1.Position
+	(*ExecuteOpportunityRequest)(nil),    // 2: nox.dashboard.v1.ExecuteOpportunityRequest
+	(*ExecuteOpportunityResponse)(nil),   // 3: nox.dashboard.v1.ExecuteOpportunityResponse
+	(*ClosePositionRequest)(nil),         // 4: nox.dashboard.v1.ClosePositionRequest
+	(*ClosePositionResponse)(nil),        // 5: nox.dashboard.v1.ClosePositionResponse
+	(*BackfillSwapHistoryRequest)(nil),   // 6: nox.dashboard.v1.BackfillSwapHistoryRequest
+	(*BackfillSwapHistoryReply)(nil),     // 7: nox.dashboard.v1.BackfillSwapHistoryReply
+	(*ListPositionsRequest)(nil),         // 8: nox.dashboard.v1.ListPositionsRequest
+	(*ListPositionsResponse)(nil),        // 9: nox.dashboard.v1.ListPositionsResponse
+	(*BrokerPosition)(nil),               // 10: nox.dashboard.v1.BrokerPosition
+	(*ListBrokerPositionsRequest)(nil),   // 11: nox.dashboard.v1.ListBrokerPositionsRequest
+	(*ListBrokerPositionsResponse)(nil),  // 12: nox.dashboard.v1.ListBrokerPositionsResponse
+	(*CloseBrokerPositionRequest)(nil),   // 13: nox.dashboard.v1.CloseBrokerPositionRequest
+	(*CloseBrokerPositionResponse)(nil),  // 14: nox.dashboard.v1.CloseBrokerPositionResponse
+	(*CloseBrokerPositionsRequest)(nil),  // 15: nox.dashboard.v1.CloseBrokerPositionsRequest
+	(*CloseBrokerPositionsResponse)(nil), // 16: nox.dashboard.v1.CloseBrokerPositionsResponse
+	(*OpenProbeRequest)(nil),             // 17: nox.dashboard.v1.OpenProbeRequest
+	(*OpenProbeResponse)(nil),            // 18: nox.dashboard.v1.OpenProbeResponse
+	(*ProbePosition)(nil),                // 19: nox.dashboard.v1.ProbePosition
+	(*ListProbesRequest)(nil),            // 20: nox.dashboard.v1.ListProbesRequest
+	(*ListProbesResponse)(nil),           // 21: nox.dashboard.v1.ListProbesResponse
+	(*ApproveProbeRequest)(nil),          // 22: nox.dashboard.v1.ApproveProbeRequest
+	(*ApproveProbeResponse)(nil),         // 23: nox.dashboard.v1.ApproveProbeResponse
+	(*RejectProbeRequest)(nil),           // 24: nox.dashboard.v1.RejectProbeRequest
+	(*RejectProbeResponse)(nil),          // 25: nox.dashboard.v1.RejectProbeResponse
+	(*ProbeProposalCard)(nil),            // 26: nox.dashboard.v1.ProbeProposalCard
+	(*ListProbeProposalsRequest)(nil),    // 27: nox.dashboard.v1.ListProbeProposalsRequest
+	(*ListProbeProposalsResponse)(nil),   // 28: nox.dashboard.v1.ListProbeProposalsResponse
 	(*timestamppb.Timestamp)(nil),        // 29: google.protobuf.Timestamp
 }
 var file_dashboardv1_position_proto_depIdxs = []int32{
-	29, // 0: arb.dashboard.v1.PositionLeg.ts:type_name -> google.protobuf.Timestamp
-	29, // 1: arb.dashboard.v1.Position.opened_at:type_name -> google.protobuf.Timestamp
-	29, // 2: arb.dashboard.v1.Position.closed_at:type_name -> google.protobuf.Timestamp
-	0,  // 3: arb.dashboard.v1.Position.legs:type_name -> arb.dashboard.v1.PositionLeg
-	29, // 4: arb.dashboard.v1.Position.auto_close_at:type_name -> google.protobuf.Timestamp
-	1,  // 5: arb.dashboard.v1.ListPositionsResponse.positions:type_name -> arb.dashboard.v1.Position
-	29, // 6: arb.dashboard.v1.BrokerPosition.opened_at:type_name -> google.protobuf.Timestamp
-	29, // 7: arb.dashboard.v1.BrokerPosition.swap_charge_at:type_name -> google.protobuf.Timestamp
-	29, // 8: arb.dashboard.v1.BrokerPosition.probe_auto_close_at:type_name -> google.protobuf.Timestamp
-	29, // 9: arb.dashboard.v1.BrokerPosition.as_of:type_name -> google.protobuf.Timestamp
-	29, // 10: arb.dashboard.v1.BrokerPosition.price_at:type_name -> google.protobuf.Timestamp
-	10, // 11: arb.dashboard.v1.ListBrokerPositionsResponse.positions:type_name -> arb.dashboard.v1.BrokerPosition
-	13, // 12: arb.dashboard.v1.CloseBrokerPositionsRequest.items:type_name -> arb.dashboard.v1.CloseBrokerPositionRequest
-	14, // 13: arb.dashboard.v1.CloseBrokerPositionsResponse.results:type_name -> arb.dashboard.v1.CloseBrokerPositionResponse
-	29, // 14: arb.dashboard.v1.OpenProbeRequest.auto_close_at:type_name -> google.protobuf.Timestamp
-	29, // 15: arb.dashboard.v1.ProbePosition.auto_close_at:type_name -> google.protobuf.Timestamp
-	29, // 16: arb.dashboard.v1.ProbePosition.opened_at:type_name -> google.protobuf.Timestamp
-	29, // 17: arb.dashboard.v1.ProbePosition.closed_at:type_name -> google.protobuf.Timestamp
-	19, // 18: arb.dashboard.v1.ListProbesResponse.probes:type_name -> arb.dashboard.v1.ProbePosition
-	29, // 19: arb.dashboard.v1.ProbeProposalCard.auto_close_at:type_name -> google.protobuf.Timestamp
-	29, // 20: arb.dashboard.v1.ProbeProposalCard.proposed_at:type_name -> google.protobuf.Timestamp
-	26, // 21: arb.dashboard.v1.ListProbeProposalsResponse.proposals:type_name -> arb.dashboard.v1.ProbeProposalCard
+	29, // 0: nox.dashboard.v1.PositionLeg.ts:type_name -> google.protobuf.Timestamp
+	29, // 1: nox.dashboard.v1.Position.opened_at:type_name -> google.protobuf.Timestamp
+	29, // 2: nox.dashboard.v1.Position.closed_at:type_name -> google.protobuf.Timestamp
+	0,  // 3: nox.dashboard.v1.Position.legs:type_name -> nox.dashboard.v1.PositionLeg
+	29, // 4: nox.dashboard.v1.Position.auto_close_at:type_name -> google.protobuf.Timestamp
+	1,  // 5: nox.dashboard.v1.ListPositionsResponse.positions:type_name -> nox.dashboard.v1.Position
+	29, // 6: nox.dashboard.v1.BrokerPosition.opened_at:type_name -> google.protobuf.Timestamp
+	29, // 7: nox.dashboard.v1.BrokerPosition.swap_charge_at:type_name -> google.protobuf.Timestamp
+	29, // 8: nox.dashboard.v1.BrokerPosition.probe_auto_close_at:type_name -> google.protobuf.Timestamp
+	29, // 9: nox.dashboard.v1.BrokerPosition.as_of:type_name -> google.protobuf.Timestamp
+	29, // 10: nox.dashboard.v1.BrokerPosition.price_at:type_name -> google.protobuf.Timestamp
+	10, // 11: nox.dashboard.v1.ListBrokerPositionsResponse.positions:type_name -> nox.dashboard.v1.BrokerPosition
+	13, // 12: nox.dashboard.v1.CloseBrokerPositionsRequest.items:type_name -> nox.dashboard.v1.CloseBrokerPositionRequest
+	14, // 13: nox.dashboard.v1.CloseBrokerPositionsResponse.results:type_name -> nox.dashboard.v1.CloseBrokerPositionResponse
+	29, // 14: nox.dashboard.v1.OpenProbeRequest.auto_close_at:type_name -> google.protobuf.Timestamp
+	29, // 15: nox.dashboard.v1.ProbePosition.auto_close_at:type_name -> google.protobuf.Timestamp
+	29, // 16: nox.dashboard.v1.ProbePosition.opened_at:type_name -> google.protobuf.Timestamp
+	29, // 17: nox.dashboard.v1.ProbePosition.closed_at:type_name -> google.protobuf.Timestamp
+	19, // 18: nox.dashboard.v1.ListProbesResponse.probes:type_name -> nox.dashboard.v1.ProbePosition
+	29, // 19: nox.dashboard.v1.ProbeProposalCard.auto_close_at:type_name -> google.protobuf.Timestamp
+	29, // 20: nox.dashboard.v1.ProbeProposalCard.proposed_at:type_name -> google.protobuf.Timestamp
+	26, // 21: nox.dashboard.v1.ListProbeProposalsResponse.proposals:type_name -> nox.dashboard.v1.ProbeProposalCard
 	22, // [22:22] is the sub-list for method output_type
 	22, // [22:22] is the sub-list for method input_type
 	22, // [22:22] is the sub-list for extension type_name

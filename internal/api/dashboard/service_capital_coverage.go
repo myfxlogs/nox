@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/data/keydomain"
-	v1 "arb/internal/gen/dashboardv1"
+	"nox/internal/data/keydomain"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"connectrpc.com/connect"
 )

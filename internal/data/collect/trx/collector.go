@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // DefaultBase 是 TronGrid 主网 API 基址。
@@ -31,7 +31,7 @@ type TxsCollector struct {
 	apiKey       func() string
 	tronscanBase string          // D-279：TronScan cheatStatus 查询基址（默认 DefaultTronscanBase，空=跳过）
 	rentalPayers map[string]bool // TRX_RENTAL_PAYERS env 解析集
-	// 能量租金率 floor 告警（ARB_TRX_ENERGY_RATE_FLOOR_PCT，默认 8.0；0=禁用）。
+	// 能量租金率 floor 告警（NOX_TRX_ENERGY_RATE_FLOOR_PCT，默认 8.0；0=禁用）。
 	floorPct     float64
 	lastAlertDay string // 内存节流：上次告警 UTC 日期（YYYY-MM-DD），1 条/天
 	// 扳机三件套节流（各 1 条/天，内存日期戳）。

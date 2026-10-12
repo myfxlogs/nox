@@ -8,15 +8,15 @@ import (
 	"sync"
 	"testing"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/platform/testutil"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 func newReloadEngine(t *testing.T) *Engine {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	st, err := pgstore.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("pgstore: %v", err)

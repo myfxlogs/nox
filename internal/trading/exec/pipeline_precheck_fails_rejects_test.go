@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // fakePrecheckExecutor 实现 Executor + Prechecker（D-121 预检测试）。

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/trading/exec"
 )
 
 // slowAcctQuerier 慢速受控查询器（D-460 S1 并发测试）：Account 模拟 200ms 网络 RPC。

@@ -9,7 +9,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/platform/alerttext"
+	"nox/internal/platform/alerttext"
 )
 
 // Alert 对应 alerts 表（§2.5）。

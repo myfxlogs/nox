@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/platform/cryptoutil"
+	"nox/internal/platform/cryptoutil"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -41,7 +41,7 @@ func (s *Store) InsertExchangeConfig(ctx context.Context, c *ExchangeConfig) err
 
 // ListExchangeConfigs 全量交易所配置（按创建时间序）。
 // enc 列存在 → 解密回填 APIKey/APISecret/Passphrase（读面全走解密，明文列恒空）；
-// enc 行存在但 ARB_MASTER_KEY 缺失/解失败 → error 上抛（fail-closed，调用方 boot fatal）。
+// enc 行存在但 NOX_MASTER_KEY 缺失/解失败 → error 上抛（fail-closed，调用方 boot fatal）。
 func (s *Store) ListExchangeConfigs(ctx context.Context) ([]ExchangeConfig, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, venue, venue_type, label, api_key, api_secret, passphrase, base_url, simulated, created_at, website,
@@ -68,7 +68,7 @@ func (s *Store) ListExchangeConfigs(ctx context.Context) ([]ExchangeConfig, erro
 				key, keyReady = cryptoutil.MasterKey()
 			}
 			if !keyReady {
-				return nil, fmt.Errorf("exchange_configs enc rows present but ARB_MASTER_KEY missing (fail-closed)")
+				return nil, fmt.Errorf("exchange_configs enc rows present but NOX_MASTER_KEY missing (fail-closed)")
 			}
 			if c.APIKey, err = openOrEmpty(key, kEnc); err != nil {
 				return nil, fmt.Errorf("exchange_config %d api_key: %w", c.ID, err)
@@ -131,7 +131,7 @@ func (s *Store) SealExchangeKeys(ctx context.Context) (sealed int, err error) {
 	}
 	key, ok := cryptoutil.MasterKey()
 	if !ok {
-		return 0, fmt.Errorf("%d exchange_configs rows need sealing but ARB_MASTER_KEY missing (fail-closed)", len(pending))
+		return 0, fmt.Errorf("%d exchange_configs rows need sealing but NOX_MASTER_KEY missing (fail-closed)", len(pending))
 	}
 	seal := func(plain string) ([]byte, error) {
 		if plain == "" {

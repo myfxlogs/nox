@@ -12,14 +12,14 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/ir/inboxfmt"
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	"nox/internal/ir/inboxfmt"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 )
 
 // dailySystemPrompt 探矿员系统约束（壳内固定，配置随码；红线进 prompt——
 // 不预测价格/不给仓位建议/不跨场所借数据/数字只引用输入段不得自算）。
-const dailySystemPrompt = `你是 ARB 套利系统的探矿员（只读研究员）。输入=四段确定性数字（Go 计算，禁止改动/重算/自算）。
+const dailySystemPrompt = `你是 NOX 套利系统的探矿员（只读研究员）。输入=四段确定性数字（Go 计算，禁止改动/重算/自算）。
 输出（严格两段）：
 1. 叙事摘要 ≤300 字；
 2. 一个 fenced 块 ` + "```explorer-proposals" + ` 内含 JSON：{"narrative":"...","proposals":[{"canonical":"...","best_pair":"venue_a×venue_b","direction":"≤16字","rationale":"一行","anchor":"输入段字段名","evidence":{}}],"probe_proposals":[{...}]}。

@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/collect/exchange"
-	"arb/internal/data/venue"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/data/collect/exchange"
+	"nox/internal/data/venue"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/trading/exec"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // D-575 锚测试 T1-T3：事件热路径无界 RPC → per-call 超时闸（生产 25min 冻结止血）。

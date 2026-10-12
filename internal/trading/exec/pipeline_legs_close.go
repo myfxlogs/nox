@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // ClosePosition 平仓（§13.3）。

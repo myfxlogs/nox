@@ -27,7 +27,7 @@ import (
 	"strconv"
 	"strings"
 
-	"arb/internal/platform/signutil"
+	"nox/internal/platform/signutil"
 )
 
 // EnsureVenueLeverage perp 腿杠杆策略化（开仓前置，pipeline leverageSetter 缝）。

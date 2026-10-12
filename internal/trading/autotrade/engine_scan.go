@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"log"
 
-	"arb/internal/ledger/settlement"
-	"arb/internal/trading/exec"
+	"nox/internal/ledger/settlement"
+	"nox/internal/trading/exec"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // scanAndClose 扫描 OPEN 持仓，按 type 分派退出条件（D-072 §4.2）。

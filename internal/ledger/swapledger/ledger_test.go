@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // stubTripleDay 测试用 TripleDayResolver（D-077 修复⑪A M3：per-venue + per-symbol）。

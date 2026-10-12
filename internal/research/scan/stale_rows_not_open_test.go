@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // d050Clean 清本票族行（D05% 前缀——席位测试库跨 run 持久）。

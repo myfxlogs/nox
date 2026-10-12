@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // 单测：basis_bps 计算 + 排序不动 + 缺报价 nil 安全。

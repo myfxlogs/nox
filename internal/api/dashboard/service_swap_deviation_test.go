@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // newSwapDeviationQuotes D-190 R5：构造带 USDJPY 报价的 QuoteBus（AUDJPY 腿 PerLot 用）。

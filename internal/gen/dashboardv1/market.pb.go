@@ -1877,7 +1877,7 @@ var File_dashboardv1_market_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_market_proto_rawDesc = "" +
 	"\n" +
-	"\x18dashboardv1/market.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xcb\x01\n" +
+	"\x18dashboardv1/market.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xcb\x01\n" +
 	"\x05Quote\x12\x16\n" +
 	"\x06symbol\x18\x01 \x01(\tR\x06symbol\x12\x14\n" +
 	"\x05venue\x18\x02 \x01(\tR\x05venue\x12\x10\n" +
@@ -1890,7 +1890,7 @@ const file_dashboardv1_market_proto_rawDesc = "" +
 	"\x11ListQuotesRequest\x12\x16\n" +
 	"\x06symbol\x18\x01 \x01(\tR\x06symbol\"E\n" +
 	"\x12ListQuotesResponse\x12/\n" +
-	"\x06quotes\x18\x01 \x03(\v2\x17.arb.dashboard.v1.QuoteR\x06quotes\"\xb0\x01\n" +
+	"\x06quotes\x18\x01 \x03(\v2\x17.nox.dashboard.v1.QuoteR\x06quotes\"\xb0\x01\n" +
 	"\x04Fact\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x14\n" +
 	"\x05venue\x18\x02 \x01(\tR\x05venue\x12\x16\n" +
@@ -1904,7 +1904,7 @@ const file_dashboardv1_market_proto_rawDesc = "" +
 	"\x05venue\x18\x02 \x01(\tR\x05venue\x12\x16\n" +
 	"\x06symbol\x18\x03 \x01(\tR\x06symbol\"G\n" +
 	"\x17ListLatestFactsResponse\x12,\n" +
-	"\x05facts\x18\x01 \x03(\v2\x16.arb.dashboard.v1.FactR\x05facts\"\x82\x01\n" +
+	"\x05facts\x18\x01 \x03(\v2\x16.nox.dashboard.v1.FactR\x05facts\"\x82\x01\n" +
 	"\x10ListFactsRequest\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x14\n" +
 	"\x05venue\x18\x02 \x01(\tR\x05venue\x12\x16\n" +
@@ -1912,7 +1912,7 @@ const file_dashboardv1_market_proto_rawDesc = "" +
 	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x05 \x01(\x05R\x06offset\"A\n" +
 	"\x11ListFactsResponse\x12,\n" +
-	"\x05facts\x18\x01 \x03(\v2\x16.arb.dashboard.v1.FactR\x05facts\"\xf0\n" +
+	"\x05facts\x18\x01 \x03(\v2\x16.nox.dashboard.v1.FactR\x05facts\"\xf0\n" +
 	"\n" +
 	"\vOpportunity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
@@ -1969,7 +1969,7 @@ const file_dashboardv1_market_proto_rawDesc = "" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\"`\n" +
 	"\x19ListOpportunitiesResponse\x12C\n" +
-	"\ropportunities\x18\x01 \x03(\v2\x1d.arb.dashboard.v1.OpportunityR\ropportunities\"\xde\x01\n" +
+	"\ropportunities\x18\x01 \x03(\v2\x1d.nox.dashboard.v1.OpportunityR\ropportunities\"\xde\x01\n" +
 	"\x10VerificationStat\x12\x12\n" +
 	"\x04vkey\x18\x01 \x01(\tR\x04vkey\x12\x18\n" +
 	"\asamples\x18\x02 \x01(\x05R\asamples\x12!\n" +
@@ -1979,7 +1979,7 @@ const file_dashboardv1_market_proto_rawDesc = "" +
 	"\x0elast_sample_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\flastSampleAt\"\x1e\n" +
 	"\x1cListVerificationStatsRequest\"Y\n" +
 	"\x1dListVerificationStatsResponse\x128\n" +
-	"\x05stats\x18\x01 \x03(\v2\".arb.dashboard.v1.VerificationStatR\x05stats\"\x86\x02\n" +
+	"\x05stats\x18\x01 \x03(\v2\".nox.dashboard.v1.VerificationStatR\x05stats\"\x86\x02\n" +
 	"\x05Alert\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1c\n" +
 	"\arule_id\x18\x02 \x01(\x03H\x00R\x06ruleId\x88\x01\x01\x12\x1b\n" +
@@ -1997,7 +1997,7 @@ const file_dashboardv1_market_proto_rawDesc = "" +
 	"\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\x05R\x06offset\"E\n" +
 	"\x12ListAlertsResponse\x12/\n" +
-	"\x06alerts\x18\x01 \x03(\v2\x17.arb.dashboard.v1.AlertR\x06alerts\"!\n" +
+	"\x06alerts\x18\x01 \x03(\v2\x17.nox.dashboard.v1.AlertR\x06alerts\"!\n" +
 	"\x0fAckAlertRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"\x12\n" +
 	"\x10AckAlertResponse\"\x0f\n" +
@@ -2005,7 +2005,7 @@ const file_dashboardv1_market_proto_rawDesc = "" +
 	"\x0eAckAllResponse\"\x14\n" +
 	"\x12ListUnackedRequest\"\\\n" +
 	"\x13ListUnackedResponse\x12/\n" +
-	"\x06alerts\x18\x01 \x03(\v2\x17.arb.dashboard.v1.AlertR\x06alerts\x12\x14\n" +
+	"\x06alerts\x18\x01 \x03(\v2\x17.nox.dashboard.v1.AlertR\x06alerts\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x05R\x05count\"'\n" +
 	"\x13DeleteAlertsRequest\x12\x10\n" +
 	"\x03ids\x18\x01 \x03(\x03R\x03ids\"0\n" +
@@ -2023,7 +2023,7 @@ const file_dashboardv1_market_proto_rawDesc = "" +
 	"\x0flast_event_unix\x18\x06 \x01(\x03R\rlastEventUnix\"\x19\n" +
 	"\x17ListSourceHealthRequest\"T\n" +
 	"\x18ListSourceHealthResponse\x128\n" +
-	"\asources\x18\x01 \x03(\v2\x1e.arb.dashboard.v1.SourceHealthR\asourcesB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\asources\x18\x01 \x03(\v2\x1e.nox.dashboard.v1.SourceHealthR\asourcesB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_market_proto_rawDescOnce sync.Once
@@ -2039,56 +2039,56 @@ func file_dashboardv1_market_proto_rawDescGZIP() []byte {
 
 var file_dashboardv1_market_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_dashboardv1_market_proto_goTypes = []any{
-	(*Quote)(nil),                         // 0: arb.dashboard.v1.Quote
-	(*ListQuotesRequest)(nil),             // 1: arb.dashboard.v1.ListQuotesRequest
-	(*ListQuotesResponse)(nil),            // 2: arb.dashboard.v1.ListQuotesResponse
-	(*Fact)(nil),                          // 3: arb.dashboard.v1.Fact
-	(*ListLatestFactsRequest)(nil),        // 4: arb.dashboard.v1.ListLatestFactsRequest
-	(*ListLatestFactsResponse)(nil),       // 5: arb.dashboard.v1.ListLatestFactsResponse
-	(*ListFactsRequest)(nil),              // 6: arb.dashboard.v1.ListFactsRequest
-	(*ListFactsResponse)(nil),             // 7: arb.dashboard.v1.ListFactsResponse
-	(*Opportunity)(nil),                   // 8: arb.dashboard.v1.Opportunity
-	(*ListOpportunitiesRequest)(nil),      // 9: arb.dashboard.v1.ListOpportunitiesRequest
-	(*ListOpportunitiesResponse)(nil),     // 10: arb.dashboard.v1.ListOpportunitiesResponse
-	(*VerificationStat)(nil),              // 11: arb.dashboard.v1.VerificationStat
-	(*ListVerificationStatsRequest)(nil),  // 12: arb.dashboard.v1.ListVerificationStatsRequest
-	(*ListVerificationStatsResponse)(nil), // 13: arb.dashboard.v1.ListVerificationStatsResponse
-	(*Alert)(nil),                         // 14: arb.dashboard.v1.Alert
-	(*ListAlertsRequest)(nil),             // 15: arb.dashboard.v1.ListAlertsRequest
-	(*ListAlertsResponse)(nil),            // 16: arb.dashboard.v1.ListAlertsResponse
-	(*AckAlertRequest)(nil),               // 17: arb.dashboard.v1.AckAlertRequest
-	(*AckAlertResponse)(nil),              // 18: arb.dashboard.v1.AckAlertResponse
-	(*AckAllRequest)(nil),                 // 19: arb.dashboard.v1.AckAllRequest
-	(*AckAllResponse)(nil),                // 20: arb.dashboard.v1.AckAllResponse
-	(*ListUnackedRequest)(nil),            // 21: arb.dashboard.v1.ListUnackedRequest
-	(*ListUnackedResponse)(nil),           // 22: arb.dashboard.v1.ListUnackedResponse
-	(*DeleteAlertsRequest)(nil),           // 23: arb.dashboard.v1.DeleteAlertsRequest
-	(*DeleteAlertsResponse)(nil),          // 24: arb.dashboard.v1.DeleteAlertsResponse
-	(*ClearAckedAlertsRequest)(nil),       // 25: arb.dashboard.v1.ClearAckedAlertsRequest
-	(*ClearAckedAlertsResponse)(nil),      // 26: arb.dashboard.v1.ClearAckedAlertsResponse
-	(*SourceHealth)(nil),                  // 27: arb.dashboard.v1.SourceHealth
-	(*ListSourceHealthRequest)(nil),       // 28: arb.dashboard.v1.ListSourceHealthRequest
-	(*ListSourceHealthResponse)(nil),      // 29: arb.dashboard.v1.ListSourceHealthResponse
+	(*Quote)(nil),                         // 0: nox.dashboard.v1.Quote
+	(*ListQuotesRequest)(nil),             // 1: nox.dashboard.v1.ListQuotesRequest
+	(*ListQuotesResponse)(nil),            // 2: nox.dashboard.v1.ListQuotesResponse
+	(*Fact)(nil),                          // 3: nox.dashboard.v1.Fact
+	(*ListLatestFactsRequest)(nil),        // 4: nox.dashboard.v1.ListLatestFactsRequest
+	(*ListLatestFactsResponse)(nil),       // 5: nox.dashboard.v1.ListLatestFactsResponse
+	(*ListFactsRequest)(nil),              // 6: nox.dashboard.v1.ListFactsRequest
+	(*ListFactsResponse)(nil),             // 7: nox.dashboard.v1.ListFactsResponse
+	(*Opportunity)(nil),                   // 8: nox.dashboard.v1.Opportunity
+	(*ListOpportunitiesRequest)(nil),      // 9: nox.dashboard.v1.ListOpportunitiesRequest
+	(*ListOpportunitiesResponse)(nil),     // 10: nox.dashboard.v1.ListOpportunitiesResponse
+	(*VerificationStat)(nil),              // 11: nox.dashboard.v1.VerificationStat
+	(*ListVerificationStatsRequest)(nil),  // 12: nox.dashboard.v1.ListVerificationStatsRequest
+	(*ListVerificationStatsResponse)(nil), // 13: nox.dashboard.v1.ListVerificationStatsResponse
+	(*Alert)(nil),                         // 14: nox.dashboard.v1.Alert
+	(*ListAlertsRequest)(nil),             // 15: nox.dashboard.v1.ListAlertsRequest
+	(*ListAlertsResponse)(nil),            // 16: nox.dashboard.v1.ListAlertsResponse
+	(*AckAlertRequest)(nil),               // 17: nox.dashboard.v1.AckAlertRequest
+	(*AckAlertResponse)(nil),              // 18: nox.dashboard.v1.AckAlertResponse
+	(*AckAllRequest)(nil),                 // 19: nox.dashboard.v1.AckAllRequest
+	(*AckAllResponse)(nil),                // 20: nox.dashboard.v1.AckAllResponse
+	(*ListUnackedRequest)(nil),            // 21: nox.dashboard.v1.ListUnackedRequest
+	(*ListUnackedResponse)(nil),           // 22: nox.dashboard.v1.ListUnackedResponse
+	(*DeleteAlertsRequest)(nil),           // 23: nox.dashboard.v1.DeleteAlertsRequest
+	(*DeleteAlertsResponse)(nil),          // 24: nox.dashboard.v1.DeleteAlertsResponse
+	(*ClearAckedAlertsRequest)(nil),       // 25: nox.dashboard.v1.ClearAckedAlertsRequest
+	(*ClearAckedAlertsResponse)(nil),      // 26: nox.dashboard.v1.ClearAckedAlertsResponse
+	(*SourceHealth)(nil),                  // 27: nox.dashboard.v1.SourceHealth
+	(*ListSourceHealthRequest)(nil),       // 28: nox.dashboard.v1.ListSourceHealthRequest
+	(*ListSourceHealthResponse)(nil),      // 29: nox.dashboard.v1.ListSourceHealthResponse
 	(*timestamppb.Timestamp)(nil),         // 30: google.protobuf.Timestamp
 }
 var file_dashboardv1_market_proto_depIdxs = []int32{
-	30, // 0: arb.dashboard.v1.Quote.time:type_name -> google.protobuf.Timestamp
-	0,  // 1: arb.dashboard.v1.ListQuotesResponse.quotes:type_name -> arb.dashboard.v1.Quote
-	30, // 2: arb.dashboard.v1.Fact.ts:type_name -> google.protobuf.Timestamp
-	3,  // 3: arb.dashboard.v1.ListLatestFactsResponse.facts:type_name -> arb.dashboard.v1.Fact
-	3,  // 4: arb.dashboard.v1.ListFactsResponse.facts:type_name -> arb.dashboard.v1.Fact
-	30, // 5: arb.dashboard.v1.Opportunity.quote_time:type_name -> google.protobuf.Timestamp
-	30, // 6: arb.dashboard.v1.Opportunity.expires_at:type_name -> google.protobuf.Timestamp
-	30, // 7: arb.dashboard.v1.Opportunity.created_at:type_name -> google.protobuf.Timestamp
-	30, // 8: arb.dashboard.v1.Opportunity.updated_at:type_name -> google.protobuf.Timestamp
-	8,  // 9: arb.dashboard.v1.ListOpportunitiesResponse.opportunities:type_name -> arb.dashboard.v1.Opportunity
-	30, // 10: arb.dashboard.v1.VerificationStat.last_sample_at:type_name -> google.protobuf.Timestamp
-	11, // 11: arb.dashboard.v1.ListVerificationStatsResponse.stats:type_name -> arb.dashboard.v1.VerificationStat
-	30, // 12: arb.dashboard.v1.Alert.ts:type_name -> google.protobuf.Timestamp
-	14, // 13: arb.dashboard.v1.ListAlertsResponse.alerts:type_name -> arb.dashboard.v1.Alert
-	14, // 14: arb.dashboard.v1.ListUnackedResponse.alerts:type_name -> arb.dashboard.v1.Alert
-	30, // 15: arb.dashboard.v1.SourceHealth.last_event_at:type_name -> google.protobuf.Timestamp
-	27, // 16: arb.dashboard.v1.ListSourceHealthResponse.sources:type_name -> arb.dashboard.v1.SourceHealth
+	30, // 0: nox.dashboard.v1.Quote.time:type_name -> google.protobuf.Timestamp
+	0,  // 1: nox.dashboard.v1.ListQuotesResponse.quotes:type_name -> nox.dashboard.v1.Quote
+	30, // 2: nox.dashboard.v1.Fact.ts:type_name -> google.protobuf.Timestamp
+	3,  // 3: nox.dashboard.v1.ListLatestFactsResponse.facts:type_name -> nox.dashboard.v1.Fact
+	3,  // 4: nox.dashboard.v1.ListFactsResponse.facts:type_name -> nox.dashboard.v1.Fact
+	30, // 5: nox.dashboard.v1.Opportunity.quote_time:type_name -> google.protobuf.Timestamp
+	30, // 6: nox.dashboard.v1.Opportunity.expires_at:type_name -> google.protobuf.Timestamp
+	30, // 7: nox.dashboard.v1.Opportunity.created_at:type_name -> google.protobuf.Timestamp
+	30, // 8: nox.dashboard.v1.Opportunity.updated_at:type_name -> google.protobuf.Timestamp
+	8,  // 9: nox.dashboard.v1.ListOpportunitiesResponse.opportunities:type_name -> nox.dashboard.v1.Opportunity
+	30, // 10: nox.dashboard.v1.VerificationStat.last_sample_at:type_name -> google.protobuf.Timestamp
+	11, // 11: nox.dashboard.v1.ListVerificationStatsResponse.stats:type_name -> nox.dashboard.v1.VerificationStat
+	30, // 12: nox.dashboard.v1.Alert.ts:type_name -> google.protobuf.Timestamp
+	14, // 13: nox.dashboard.v1.ListAlertsResponse.alerts:type_name -> nox.dashboard.v1.Alert
+	14, // 14: nox.dashboard.v1.ListUnackedResponse.alerts:type_name -> nox.dashboard.v1.Alert
+	30, // 15: nox.dashboard.v1.SourceHealth.last_event_at:type_name -> google.protobuf.Timestamp
+	27, // 16: nox.dashboard.v1.ListSourceHealthResponse.sources:type_name -> nox.dashboard.v1.SourceHealth
 	17, // [17:17] is the sub-list for method output_type
 	17, // [17:17] is the sub-list for method input_type
 	17, // [17:17] is the sub-list for extension type_name

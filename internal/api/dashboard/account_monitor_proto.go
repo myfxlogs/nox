@@ -4,10 +4,10 @@ package dashboard
 import (
 	"time"
 
-	"arb/internal/ledger/reconcile"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"nox/internal/ledger/reconcile"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // accountToProto 账户视图 → proto（D-053）。

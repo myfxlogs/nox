@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"arb/internal/platform/combo"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/platform/combo"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // comboAllowVerdict D-159 W1a R1 + D-168 自动准入：SWAPARB 组合门禁判定（纯函数，无 IO）。

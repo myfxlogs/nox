@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // orderStatusQuerier D-508 S7c：接口定义下沉消费方（reconcile.OrderStatusQuerier

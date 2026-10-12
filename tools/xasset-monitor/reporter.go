@@ -1,6 +1,6 @@
 // reporter.go —— D-558 S2：启动致命错误上报通道 + 端点同源装载助手。
 // 与 tick 价差告警（sendFeishuAlert，env 凭据静音）完全独立：fatal 走 app_secrets
-// 凭据直推（run.sh 置空 ARB_FEISHU_* 只影响 tick 通道，本条不被误静音）。
+// 凭据直推（run.sh 置空 NOX_FEISHU_* 只影响 tick 通道，本条不被误静音）。
 // 尽力而为：任一步败只 log，绝不 panic/改写原 fatal error；st=nil（pg 未连上）优雅退化只 log。
 // 30min 同类去重查 alerts 表（cron 每 5min 独立进程，内存态不持久——必须查库）。
 package main
@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"log"
 
-	"arb/internal/ir/notify"
-	"arb/internal/platform/alerttext"
-	"arb/internal/store/pgstore"
+	"nox/internal/ir/notify"
+	"nox/internal/platform/alerttext"
+	"nox/internal/store/pgstore"
 )
 
 // binanceProxyURL D-558 S1→D-145：BINANCE_PROXY_URL 唯一权威=app_config 行
@@ -73,7 +73,7 @@ func hasRecentSameKeyAlert(ctx context.Context, st *pgstore.Store, level, messag
 	return false
 }
 
-// pushFatalFeishu 飞书直推——凭据只认 app_secrets（ARB_FEISHU_* env 已被 run.sh 置空，
+// pushFatalFeishu 飞书直推——凭据只认 app_secrets（NOX_FEISHU_* env 已被 run.sh 置空，
 // env 回退=永假死路）；未配置/未绑定/发送败各只 log 不 escalate。
 func pushFatalFeishu(ctx context.Context, st *pgstore.Store, fatalErr error) {
 	secrets, err := st.LoadAppSecrets(ctx)
@@ -81,7 +81,7 @@ func pushFatalFeishu(ctx context.Context, st *pgstore.Store, fatalErr error) {
 		log.Printf("xasset-monitor: fatal 飞书推送跳过（app_secrets 读取失败: %v）", err)
 		return
 	}
-	fc := notify.NewFeishuClient(secrets["ARB_FEISHU_APP_ID"], secrets["ARB_FEISHU_APP_SECRET"])
+	fc := notify.NewFeishuClient(secrets["NOX_FEISHU_APP_ID"], secrets["NOX_FEISHU_APP_SECRET"])
 	if !fc.Enabled() {
 		log.Printf("xasset-monitor: fatal 飞书推送跳过（app_secrets 凭据未配置）")
 		return

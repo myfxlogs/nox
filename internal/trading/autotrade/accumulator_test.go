@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 func absFloat(v float64) float64 {
@@ -19,7 +19,7 @@ func absFloat(v float64) float64 {
 
 // testAccumStore D-080 S4 单测专用 store（复用 pgstore testStore 的 DSN 约定）。
 func testAccumStore(t *testing.T) *pgstore.Store {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	s, err := pgstore.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)

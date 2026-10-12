@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/research/scan"
-	"arb/internal/store/pgstore"
+	"nox/internal/research/scan"
+	"nox/internal/store/pgstore"
 )
 
 // TestD056_ComboExactMatch 同 venue 对双 canonical 只计目标：白名单

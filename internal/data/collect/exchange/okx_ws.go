@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
 
 	"github.com/gorilla/websocket"
 )
@@ -42,7 +42,7 @@ type OKXWebSocket struct {
 	pulseFn func(symbol, venueKey string)
 }
 
-// NewOKXWebSocket 创建 OKX WS 采集器（ARB_CEX_WS_BASE 置位→经 cex-proxy /okxws 前缀）。
+// NewOKXWebSocket 创建 OKX WS 采集器（NOX_CEX_WS_BASE 置位→经 cex-proxy /okxws 前缀）。
 func NewOKXWebSocket(cfg Config) *OKXWebSocket {
 	proxied := cexWSBase() != ""
 	d, h := wsDialer(proxied)

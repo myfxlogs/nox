@@ -9,9 +9,9 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // 用例①：InitMarginRate 有值 → 产出 mt_symbol_margin fact（value=InitMarginRate[0], unit=ratio）。

@@ -5,16 +5,16 @@
 package dashboard
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"log"
+	"nox/internal/data/keydomain"
 	"strings"
 	"sync"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/ledger/reconcile"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/ledger/reconcile"
 )
 
 // HealthFactStore 健康监控所需的 fact 查询接口（pgstore.Store 满足）。

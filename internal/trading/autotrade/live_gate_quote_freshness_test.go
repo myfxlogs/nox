@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/trading/exec"
 )
 
 func d563Spec() exec.XAssetComboAllowSpec {

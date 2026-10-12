@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )
@@ -18,7 +18,7 @@ import (
 // paperBoardTestStore D-352 T1 fixture：共享池（D-351 S1）+ 本测试自持清表。
 func paperBoardTestStore(t *testing.T) *pgstore.Store {
 	t.Helper()
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	if _, err := st.Pool().Exec(context.Background(),
 		`TRUNCATE paper_spot_carry, fin_cex_universe, carry_graduations RESTART IDENTITY`); err != nil {
 		t.Fatalf("TRUNCATE: %v", err)

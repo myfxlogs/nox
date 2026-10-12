@@ -6,8 +6,8 @@ import (
 	"math"
 	"strings"
 
-	"arb/internal/data/adapter"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/adapter"
+	"nox/internal/store/pgstore"
 )
 
 // primarySplit D-383 A2.2/A2.3：按「is_primary 或 (venue,canonical) 组内恰一行（隐式 primary）」

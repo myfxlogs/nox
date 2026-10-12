@@ -3,37 +3,37 @@
 package dashboard
 
 var appSecretDescs = map[string]string{
-	"ARB_FEISHU_APP_ID":       "飞书自建应用 App ID（报告/告警推送通道凭据）",
-	"ARB_FEISHU_APP_SECRET":   "飞书自建应用 App Secret（报告/告警推送通道凭据）",
-	"ARB_FEISHU_VERIFY_TOKEN": "飞书事件订阅 Verify Token（事件回调验签）",
-	"ARB_AI_BASE_URL":         "AI 分析 OpenAI 兼容端点地址（复盘/分析师调用）",
-	"ARB_AI_API_KEY":          "AI 分析 API Key（复盘/分析师调用凭据）",
-	"ARB_AI_MODEL":            "AI 分析模型名（复盘/分析师调用选型）",
-	"ARB_AI_PG_DSN":           "AI 侧库连接串（缺则 AI 库写入关闭）",
+	"NOX_FEISHU_APP_ID":       "飞书自建应用 App ID（报告/告警推送通道凭据）",
+	"NOX_FEISHU_APP_SECRET":   "飞书自建应用 App Secret（报告/告警推送通道凭据）",
+	"NOX_FEISHU_VERIFY_TOKEN": "飞书事件订阅 Verify Token（事件回调验签）",
+	"NOX_AI_BASE_URL":         "AI 分析 OpenAI 兼容端点地址（复盘/分析师调用）",
+	"NOX_AI_API_KEY":          "AI 分析 API Key（复盘/分析师调用凭据）",
+	"NOX_AI_MODEL":            "AI 分析模型名（复盘/分析师调用选型）",
+	"NOX_AI_PG_DSN":           "AI 侧库连接串（缺则 AI 库写入关闭）",
 	"LONGBRIDGE_APP_KEY":      "Longbridge OpenAPI App Key（港美股行情凭据）",
 	"LONGBRIDGE_APP_SECRET":   "Longbridge OpenAPI App Secret（港美股行情凭据）",
 	"LONGBRIDGE_ACCESS_TOKEN": "Longbridge OpenAPI Access Token（港美股行情凭据）",
 	"CMC_EMAIL":               "CoinMarketCal 账号邮箱（财历事件采集登录）",
 	"CMC_PASSWORD":            "CoinMarketCal 账号密码（财历事件采集登录）",
-	"ARB_CMC_CREATE_TPL":      "CoinMarketCal 建事件模板（财历事件提交格式）",
+	"NOX_CMC_CREATE_TPL":      "CoinMarketCal 建事件模板（财历事件提交格式）",
 	"TRX_VOTE_PRIVATE_KEY":    "TRX 质押/投票签名私钥（链上投票执行）",
 	"TRONGRID_API_KEY":        "TronGrid API Key（TRX 链上采集限速提额）",
-	"ARB_AUTH_TOKEN":          "面板/API 认证令牌（Bearer；改后 ≤5s 生效，旧令牌即失效，无需重启）",
-	"ARB_BINANCE_PROXY_TOKEN": "币安代理通道 Bearer 令牌（D-145 入 secrets；仅发往代理端点，不泄给原生 venue 端点）",
+	"NOX_AUTH_TOKEN":          "面板/API 认证令牌（Bearer；改后 ≤5s 生效，旧令牌即失效，无需重启）",
+	"NOX_BINANCE_PROXY_TOKEN": "币安代理通道 Bearer 令牌（D-145 入 secrets；仅发往代理端点，不泄给原生 venue 端点）",
 }
 
 // appSecretGroup 密钥键分组（密钥卡列展示；按消费域归类）。
 func appSecretGroup(k string) string {
 	switch {
-	case k == "CMC_EMAIL" || k == "CMC_PASSWORD" || k == "ARB_CMC_CREATE_TPL":
+	case k == "CMC_EMAIL" || k == "CMC_PASSWORD" || k == "NOX_CMC_CREATE_TPL":
 		return "宏观采集"
 	case k == "TRONGRID_API_KEY" || k == "TRX_VOTE_PRIVATE_KEY":
 		return "TRX 链上"
-	case k == "ARB_AUTH_TOKEN" || k == "ARB_BINANCE_PROXY_TOKEN":
+	case k == "NOX_AUTH_TOKEN" || k == "NOX_BINANCE_PROXY_TOKEN":
 		return "接入认证"
-	case len(k) >= 11 && k[:11] == "ARB_FEISHU_":
+	case len(k) >= 11 && k[:11] == "NOX_FEISHU_":
 		return "推送通道"
-	case len(k) >= 7 && k[:7] == "ARB_AI_":
+	case len(k) >= 7 && k[:7] == "NOX_AI_":
 		return "AI 分析"
 	default:
 		return "行情接入" // LONGBRIDGE_*3

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 // 批4 存储三项：per-migration 事务 + CreatePosition 链原子性测试。
@@ -37,7 +37,7 @@ func TestMigrate_PerMigrationTx_HalfFailureReentry(t *testing.T) {
 		t.Fatalf("create half-fail db: %v\n%s", err, out)
 	}
 
-	halfFailDSN := swapDBName(testutil.TestDSN(t, "ARB_TEST_PG_DSN"), halfFailDB)
+	halfFailDSN := swapDBName(testutil.TestDSN(t, "NOX_TEST_PG_DSN"), halfFailDB)
 	s, err := New(ctx, halfFailDSN)
 	if err != nil {
 		t.Fatalf("pgstore.New on half-fail db: %v", err)

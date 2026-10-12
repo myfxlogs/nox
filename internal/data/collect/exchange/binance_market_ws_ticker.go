@@ -9,7 +9,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // tickerEmitEvery vol24h fact 每符号发射节流（radar 小时级读取，15min 新鲜度足够；

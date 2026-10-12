@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // TestD108_AutoFailZombie_VenueHit 命中 venue（全腿在场）→ D-417 §1.3b 推进 OPEN。

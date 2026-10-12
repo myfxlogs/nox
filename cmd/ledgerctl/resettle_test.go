@@ -5,9 +5,9 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/ledger/reconcile"
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 func TestD422_DBNameFromDSN(t *testing.T) {
@@ -16,8 +16,8 @@ func TestD422_DBNameFromDSN(t *testing.T) {
 		want string
 	}{
 		{"postgres://arb:arb@host:5432/arb?sslmode=disable", "arb"},
-		{"postgres://arb:arb@host:5432/arb_test?sslmode=disable", "arb_test"},
-		{"postgres://arb:arb@arb-postgres:5432/arb_exec_test", "arb_exec_test"},
+		{"postgres://arb:arb@host:5432/nox_test?sslmode=disable", "nox_test"},
+		{"postgres://arb:arb@arb-postgres:5432/nox_exec_test", "nox_exec_test"},
 	}
 	for _, c := range cases {
 		if got := dbNameFromDSN(c.dsn); got != c.want {
@@ -31,7 +31,7 @@ func TestD422_DSNSafety(t *testing.T) {
 	if err := checkDSNSafety("postgres://arb:arb@host:5432/arb?sslmode=disable", false); err == nil {
 		t.Error("arb 库名无 -allow-live 应拒绝")
 	}
-	if err := checkDSNSafety("postgres://arb:arb@host:5432/arb_exec_test?sslmode=disable", false); err != nil {
+	if err := checkDSNSafety("postgres://arb:arb@host:5432/nox_exec_test?sslmode=disable", false); err != nil {
 		t.Errorf("_test 库应放行: %v", err)
 	}
 	if err := checkDSNSafety("postgres://arb:arb@host:5432/arb?sslmode=disable", true); err != nil {
@@ -154,7 +154,7 @@ func TestD422_ResettleHistoryUnreachableKeep(t *testing.T) {
 
 func testStoreResettle(t *testing.T) *pgstore.Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_EXEC_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_EXEC_TEST_PG_DSN")
 	s, err := pgstore.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestD209_XAssetDormantKey 键粒度对拍——canonical 剥 USD/USDT 后缀、venue 裸端点归一。

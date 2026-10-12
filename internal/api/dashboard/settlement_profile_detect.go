@@ -2,12 +2,12 @@
 package dashboard
 
 import (
-	"arb/internal/data/keydomain"
-	"arb/internal/data/venue"
 	"context"
+	"nox/internal/data/keydomain"
+	"nox/internal/data/venue"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // detectRealtimeJump D-180 S1：实时链路跳变检测——从 in-memory prev→current 构造 swapJump。

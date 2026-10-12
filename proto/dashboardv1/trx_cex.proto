@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package arb.dashboard.v1;
+package nox.dashboard.v1;
 
-option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
 
 
 import "google/protobuf/timestamp.proto";
@@ -45,7 +45,7 @@ message GetTrxYieldRadarResponse {
   double energy_apr_30d = 2;    // 30d 能量租金年化 %
   double vote_apr_current = 3;  // 当前投票 APR %（最新 fin_trx_vote_apr.current_rate）
   double vote_apr_30d_avg = 4; // 30d 投票 APR 均值 %
-  double floor_pct = 5;        // floor 告警阈值 %（ARB_TRX_ENERGY_RATE_FLOOR_PCT）
+  double floor_pct = 5;        // floor 告警阈值 %（NOX_TRX_ENERGY_RATE_FLOOR_PCT）
   int32 sample_days_7d = 6;     // 7d 实际样本天数（冷启动 <7 时前端显示「样本不足」）
   int32 sample_days_30d = 7;   // 30d 实际样本天数
   google.protobuf.Timestamp updated_at = 8;  // 数据更新时间

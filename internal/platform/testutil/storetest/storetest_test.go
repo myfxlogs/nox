@@ -6,14 +6,14 @@ import (
 	"os"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 func TestSharedStore_SamePointerPerDSN(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	setEnv(t, "ARB_TEST_PG_DSN", dsn)
-	a := SharedStore(t, "ARB_TEST_PG_DSN")
-	b := SharedStore(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
+	setEnv(t, "NOX_TEST_PG_DSN", dsn)
+	a := SharedStore(t, "NOX_TEST_PG_DSN")
+	b := SharedStore(t, "NOX_TEST_PG_DSN")
 	if a != b {
 		t.Error("同 DSN 两次 SharedStore 应返回同一 *pgstore.Store（共享池=O(1) dial），实得不同指针")
 	}

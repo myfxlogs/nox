@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 
-	v1 "arb/internal/gen/dashboardv1"
 	"connectrpc.com/connect"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // TestD493_FeedStateOf 三态推导：live/stale/dark + 无样本 -1。
@@ -63,7 +63,7 @@ func TestD493_QuoteAgeByVenue(t *testing.T) {
 
 // TestD493_CredUpdateAndAudit DSN 集成：凭据编辑（空=不改）+ 删除审计事件 + 映射计数透出。
 func TestD493_CredUpdateAndAudit(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_SERVICE_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `DELETE FROM broker_accounts WHERE venue IN ('4930001','4930002')`); err != nil {
 		t.Fatal(err)

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/macro"
-	"arb/internal/platform/analyst"
+	"nox/internal/data/macro"
+	"nox/internal/platform/analyst"
 )
 
 // execMacroEvents 未来 N 日宏观事件（中文摘要；days_ahead 缺省 7、夹取 1..30）。

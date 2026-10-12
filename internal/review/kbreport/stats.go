@@ -13,7 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// entryFM 条目 frontmatter 最小字段集（Schema v2 子集；自解析不重构 arbkb 共享，D-442 边界）。
+// entryFM 条目 frontmatter 最小字段集（Schema v2 子集；自解析不重构 noxkb 共享，D-442 边界）。
 type entryFM struct {
 	ID           string   `yaml:"id"`
 	Kind         string   `yaml:"kind"`
@@ -110,7 +110,7 @@ func Scan(root string, now time.Time) (Stats, error) {
 	return s, nil
 }
 
-// parseFM 解 frontmatter（--- YAML ---；同 arbkb parse 的跳过首行策略）。
+// parseFM 解 frontmatter（--- YAML ---；同 noxkb parse 的跳过首行策略）。
 func parseFM(data []byte) (*entryFM, error) {
 	content := string(data)
 	fmStart := 0

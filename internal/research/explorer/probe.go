@@ -12,21 +12,21 @@ import (
 	"strings"
 	"time"
 
-	explorerv1 "arb/internal/gen/arb/explorer/v1"
-	"arb/internal/store/pgstore"
+	explorerv1 "nox/internal/gen/nox/explorer/v1"
+	"nox/internal/store/pgstore"
 )
 
 // probeFalsifyDigitRe 证伪标准「可量化」底线校验——至少含一个数字锚
 // （阈值/比率/金额；纯文字「看 swap 大不大」不可证伪，拒收）。
 var probeFalsifyDigitRe = regexp.MustCompile(`\d`)
 
-// probeMaxNotionalDefault ARB_PROBE_MAX_NOTIONAL 行缺时缺省（与 config envFloat 缺省同源=1000）。
+// probeMaxNotionalDefault NOX_PROBE_MAX_NOTIONAL 行缺时缺省（与 config envFloat 缺省同源=1000）。
 const probeMaxNotionalDefault = 1000.0
 
 // probeMaxNotional 探针名义上限热读（app_config 链）。err → 告警 + false
 // （fail-closed：上限不可读时本轮探针提案全拒，不放行无上限契约）。
 func probeMaxNotional(ctx context.Context, deps Deps) (float64, bool) {
-	v, ok, err := deps.Store.AppConfigFloat(ctx, "ARB_PROBE_MAX_NOTIONAL")
+	v, ok, err := deps.Store.AppConfigFloat(ctx, "NOX_PROBE_MAX_NOTIONAL")
 	if err != nil {
 		deps.alert(ctx, "warn", "[探索] 探针名义上限读取失败（本轮探针提案全拒）: "+err.Error())
 		return 0, false

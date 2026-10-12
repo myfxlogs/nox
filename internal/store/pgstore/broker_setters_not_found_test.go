@@ -9,12 +9,12 @@ import (
 	"errors"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 func d388Store(t *testing.T) *Store {
 	t.Helper()
-	s, err := New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}

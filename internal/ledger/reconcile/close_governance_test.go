@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // 固定基点除墙钟 flaky——runtime 小时桶按墙钟去重，time.Now() 基点分钟 ≥50 时

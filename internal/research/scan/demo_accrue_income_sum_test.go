@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 )
 
 // seedDemoRow 插 demo 实测行（last_accrue_ts 回拨 base 使 income 窗可控）。
@@ -54,7 +54,7 @@ func seedIncome(t *testing.T, s *pgstore.Store, venue, symbol string, amount flo
 // TestD474c_DemoAccrueIncomeSum S3①：窗口内多事件累加=实收和（非模型估值）；
 // 锚②附验：水位前推后再跑一轮（无新事件）→ +0 不重复计。
 func TestD474c_DemoAccrueIncomeSum(t *testing.T) {
-	s := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	s := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx,
 		`TRUNCATE fin_cex_universe, paper_spot_carry, income_events RESTART IDENTITY CASCADE`); err != nil {
@@ -92,7 +92,7 @@ func TestD474c_DemoAccrueIncomeSum(t *testing.T) {
 // TestD474c_DemoAccrueAbsentWindow S3②：无任何 income_events → accrued +0（不外推、
 // 不走模型公式），last_accrue_ts 照前推（实收口径缺席=真 0）。
 func TestD474c_DemoAccrueAbsentWindow(t *testing.T) {
-	s := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	s := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx,
 		`TRUNCATE fin_cex_universe, paper_spot_carry, income_events RESTART IDENTITY CASCADE`); err != nil {
@@ -115,7 +115,7 @@ func TestD474c_DemoAccrueAbsentWindow(t *testing.T) {
 // TestD474c_DemoWarnAnnotate S3③：归属粒度上限注记——行 note 幂等追加 flag_warn
 // marker（两轮不叠注）；纸面行不被注（边界=只动 demo 行）。
 func TestD474c_DemoWarnAnnotate(t *testing.T) {
-	s := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	s := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx,
 		`TRUNCATE fin_cex_universe, paper_spot_carry, income_events RESTART IDENTITY CASCADE`); err != nil {

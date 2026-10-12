@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
 	"connectrpc.com/connect"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 // d490Fixture：gradFixture(structure) + qbus 双腿报价 + CS/step 解析器 + 池快照。

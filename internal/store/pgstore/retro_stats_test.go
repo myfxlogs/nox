@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 // TestRetroStats_D457：日报/周报聚合 SQL 真库语法+语义冒烟（建最小行集验证计数）。
 func TestRetroStats_D457(t *testing.T) {
-	s, err := New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatal(err)
 	}

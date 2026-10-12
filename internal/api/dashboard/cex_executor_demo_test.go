@@ -1,5 +1,5 @@
 // cex_executor_demo_test.go —— demo 真单验证（D-059，手动 gate）。
-// 仅当 ARB_DEMO_ORDER=1 且 ARB_DEMO_PG_DSN 设置时运行；对 exchange_configs 每条配置
+// 仅当 NOX_DEMO_ORDER=1 且 NOX_DEMO_PG_DSN 设置时运行；对 exchange_configs 每条配置
 // （spot/perp 都验）下极小 qty 买单 → 断言 orderId → 反向平掉，证明 demo key 真实具备
 // 交易权限 + 签名/端点/路由正确。
 // 安全闸：demo 模拟盘假钱 + 极小量 + 立即反向平仓；连的是生产库（只读 exchange_configs，
@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/httpx"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/platform/httpx"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // TestDemoRealOrder 对 DB 中每条 exchange_configs 配置下 demo 真单并反向平掉。
@@ -36,12 +36,12 @@ import (
 //   - okx spot：手续费按 USDT 计，base 可全卖 → 用买入量；
 //   - perp：平仓=平掉持仓数量（手续费从 USDT 结算，持仓数不变）→ 用买入量。
 func TestDemoRealOrder(t *testing.T) {
-	if os.Getenv("ARB_DEMO_ORDER") != "1" {
-		t.Skip("ARB_DEMO_ORDER=1 才跑 demo 真单（手动 gate，避免常规 go test 触发真实下单）")
+	if os.Getenv("NOX_DEMO_ORDER") != "1" {
+		t.Skip("NOX_DEMO_ORDER=1 才跑 demo 真单（手动 gate，避免常规 go test 触发真实下单）")
 	}
-	dsn := os.Getenv("ARB_DEMO_PG_DSN")
+	dsn := os.Getenv("NOX_DEMO_PG_DSN")
 	if dsn == "" {
-		t.Skip("ARB_DEMO_PG_DSN 未设置")
+		t.Skip("NOX_DEMO_PG_DSN 未设置")
 	}
 
 	ctx := context.Background()

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/keydomain"
+	"nox/internal/data/keydomain"
 )
 
 // quoteSub D-249 S2：订阅条目（D-108 Topic 同款 close/send 竞态防护）。

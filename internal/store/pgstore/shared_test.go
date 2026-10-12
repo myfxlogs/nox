@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 var (
@@ -20,7 +20,7 @@ var (
 
 func sharedTestStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	sharedTestMu.Lock()
 	defer sharedTestMu.Unlock()
 	if sharedTestInst == nil || sharedTestDsn != dsn {

@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/research/econ"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/research/econ"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // econFeeBps 腿费率解析（venue→bps；resolver 未接线/无源 → ok=false）。

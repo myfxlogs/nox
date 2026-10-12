@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // TestD430_Evaluate_MT_Unmapped T4：MT 腿符号未入 broker_symbol_map → data_stale

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/infra/dephealth"
+	"nox/internal/infra/dephealth"
 )
 
 // fakeEgressSink per-key 连败计数（dephealth 判据最小镜像）。

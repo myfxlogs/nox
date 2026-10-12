@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 func d101Dispatch(t *testing.T, contract, state string, hit *bool) (level, msg string) {

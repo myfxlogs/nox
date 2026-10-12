@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/fact"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 
 	"connectrpc.com/connect"
 )

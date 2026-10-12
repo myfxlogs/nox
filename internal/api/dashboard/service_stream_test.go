@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // TestOrderTopicPublishSubscribe D-107 P3：orderTopic Publish → 订阅者收到 OrderEvent（扇出接线验证）。

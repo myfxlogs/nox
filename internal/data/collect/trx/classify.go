@@ -4,7 +4,7 @@ package trx
 import (
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // classifyTx 按合约类型分类（SSOT §4）。monitorAddr 用于判断 TransferContract 方向。

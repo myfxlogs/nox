@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"time"
 
-	"arb/internal/data/venue"
-	"arb/internal/platform/signutil"
+	"nox/internal/data/venue"
+	"nox/internal/platform/signutil"
 )
 
 // === OKX ===

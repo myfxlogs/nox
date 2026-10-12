@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // judgeFixture 单用例输入：APR 行集 + 持仓。

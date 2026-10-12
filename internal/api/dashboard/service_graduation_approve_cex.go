@@ -3,8 +3,8 @@ package dashboard
 import (
 	"fmt"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/store/pgstore"
 )
 
 // cexCexLegKeys long_spot_short_perp（D-555 双CEX跨所轨）腿键合成——取行数据

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func TestReconcileLeg_FormulaEqualsActual(t *testing.T) {

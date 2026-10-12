@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestD423_HarvestNetNegative D-014 R1 重写：NetIfClosedNow<0 永不收割（旧 capture 守卫退役）。

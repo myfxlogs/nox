@@ -10,7 +10,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // Closer 平仓接口（service.AutoClosePosition 实现，reconcile 不依赖 dashboard 包避免循环导入）。

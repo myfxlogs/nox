@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // TestD182_DetectZero_ConstantZero48h 恒零 48h → 写 settled=0。

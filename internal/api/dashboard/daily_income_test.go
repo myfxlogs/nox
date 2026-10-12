@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 
-	v1 "arb/internal/gen/dashboardv1"
 	"connectrpc.com/connect"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // TestAddDailyIncome_InvalidDay：day 非法 → CodeInvalidArgument（含非严格 YYYY-MM-DD，如 2026-8-17）。

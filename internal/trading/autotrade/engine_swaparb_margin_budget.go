@@ -11,7 +11,7 @@ import (
 	"math"
 	"time"
 
-	"arb/internal/data/keydomain"
+	"nox/internal/data/keydomain"
 )
 
 // aliasOrKey D-144 ③：venueKey → alias（有别名显示别名，无则回退 venueKey）。

@@ -1,5 +1,5 @@
 // service_allowrules_d444_test.go —— D-444 T2：SetAutotradeAllowRuleEnabled RPC
-// 翻转+note→alerts 表新增 info 行含 id/value/新态；不存在 id→NotFound。需 ARB_TEST_PG_DSN。
+// 翻转+note→alerts 表新增 info 行含 id/value/新态；不存在 id→NotFound。需 NOX_TEST_PG_DSN。
 package dashboard
 
 import (
@@ -7,16 +7,16 @@ import (
 	"strings"
 	"testing"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )
 
 func d444Store(t *testing.T) *pgstore.Store {
 	t.Helper()
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	// D-512 T7 连带：双 DELETE 拆两条（共享池 prepared 复用上报 08P01 偶发）。
 	if _, err := st.Pool().Exec(context.Background(),
 		`DELETE FROM autotrade_allow_rules WHERE value LIKE 'd444svc%'`); err != nil {

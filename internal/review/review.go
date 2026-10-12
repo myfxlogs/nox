@@ -8,7 +8,7 @@ import (
 	"log"
 	"math"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // agg 按类型聚合的偏差统计。

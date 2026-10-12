@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 // 端到端：LISTEN 成功兜底调用 → DisableStrategy/EnableStrategy 触发 NOTIFY →
 // 2s 内 onEvent 收到；ctx 取消 → Listen 返回。覆盖进程内写路径（触发器对
 // 进程外写者同样生效——psql/resettle 走同一触发器，不另测）。
 func TestStore_Listen(t *testing.T) {
-	s, err := New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}

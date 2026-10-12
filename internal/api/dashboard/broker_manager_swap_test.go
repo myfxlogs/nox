@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/adapter"
-	"arb/internal/data/fact"
+	"nox/internal/data/adapter"
+	"nox/internal/data/fact"
 )
 
 // TestSwapFacts_ColdStartReturnsFacts R-c1：venue 返回 (facts, ErrSwapColdStart) →

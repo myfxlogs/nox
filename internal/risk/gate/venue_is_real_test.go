@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func d311Truncate(t *testing.T, s *pgstore.Store) {
@@ -55,7 +55,7 @@ func TestD311_VenueIsRealGate_CEXAndMT(t *testing.T) {
 	if v := gLive.environmentIsRealCheck(ctx, TradeIntent{VenueBuy: "gate:perp", VenueSell: "gate:perp"}); !v.Pass {
 		t.Errorf("real CEX venue env=live: want pass, got %s", v.Reason)
 	}
-	// liveGate（ARB_LIVE_TRADE=false）：gate:perp 实盘拦；okx:perp 模拟放行；vD:mt5 demo 放行（MT 回归）。
+	// liveGate（NOX_LIVE_TRADE=false）：gate:perp 实盘拦；okx:perp 模拟放行；vD:mt5 demo 放行（MT 回归）。
 	gl := &Gate{store: s, cfg: Config{}}
 	if v := gl.liveGateCheck(ctx, TradeIntent{VenueBuy: "gate:perp", VenueSell: "gate:perp"}); v.Pass {
 		t.Error("liveGate real CEX: want reject, got pass")

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 type fakePropLister struct{ rows []pgstore.Proposal }

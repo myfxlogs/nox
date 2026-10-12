@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // d079LeverageExec perp 腿 fake：实现 leverageSetter 记录调用面（symbol/sellLeg/target）。

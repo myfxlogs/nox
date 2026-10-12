@@ -8,7 +8,7 @@ package dashboard
 import (
 	"context"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // floatingCloseNowNet 全平净估合计。返回 (合计, 计入行数, 全部可得)。

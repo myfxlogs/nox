@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// carryUniverseTestStore 连接 ARB_TEST_PG_DSN 测试库，TRUNCATE fin_carry_universe 隔离数据。
+// carryUniverseTestStore 连接 NOX_TEST_PG_DSN 测试库，TRUNCATE fin_carry_universe 隔离数据。
 func carryUniverseTestStore(t *testing.T) *Store {
 	t.Helper()
 	s := sharedTestStore(t)

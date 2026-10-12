@@ -11,13 +11,13 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/platform/analyst"
-	"arb/internal/platform/safego"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/analyst"
+	"nox/internal/platform/safego"
+	"nox/internal/store/pgstore"
 )
 
 // feishuQuerySystemPrompt 飞书查询专用系统提示词（不复用 analyst.SystemPrompt——后者面向前端分析员）。
-const feishuQuerySystemPrompt = `你是 ARB 套利系统的飞书查询助手。业主通过飞书发自然语言问题，你调用工具查数据库，用中文回复数值。
+const feishuQuerySystemPrompt = `你是 NOX 套利系统的飞书查询助手。业主通过飞书发自然语言问题，你调用工具查数据库，用中文回复数值。
 
 规则：
 1. 只用工具返回的数字，不编造。

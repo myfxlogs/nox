@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/venue"
+	"nox/internal/data/bus"
+	"nox/internal/data/venue"
 )
 
 // TestD162_StaleTickFallback 休市+重启形态：o.PriceAt=0（ClosePrice=0/无帧价）→

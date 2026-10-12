@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // setupProbeStore 构造真库 store + position + legs + swap snapshots。
@@ -17,7 +17,7 @@ import (
 // swapJumps：每腿的 swap 快照序列（已按 ts 升序）。
 func setupProbeStore(t *testing.T, openedAtDaysAgo int, legs []probeLegSeed, snaps []probeSnapSeed) *pgstore.Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	s, err := pgstore.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
@@ -187,7 +187,7 @@ func TestEvaluateProbe_Disabled(t *testing.T) {
 
 // TestEvaluateProbe_NotProbeNote note 非 PROBE → 不评估。
 func TestEvaluateProbe_NotProbeNote(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	s, err := pgstore.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)

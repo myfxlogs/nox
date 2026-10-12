@@ -7,11 +7,11 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/keydomain"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"nox/internal/data/keydomain"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 // financeOverviewTTL 聚合缓存 TTL（D-331 ActiveOpportunityIDs 15s 先例——聚合查询防热路径重压）。

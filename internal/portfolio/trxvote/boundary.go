@@ -12,7 +12,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/platform/safego"
+	"nox/internal/platform/safego"
 )
 
 // maintenancePeriod TRON SR 维护期=6h（00/06/12/18 UTC 边界，实证±90s 结算）。

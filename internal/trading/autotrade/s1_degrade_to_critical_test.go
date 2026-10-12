@@ -1,11 +1,11 @@
 // 单测：autotrade_state 状态转换告警（stateMachineTick → AlertSink）。
 // 参照 d256a_revival_alert_test.go AlertSink spy 模式——用 AlertSink spy 捕获告警。
-// 需要 test-pg2 DSN（ARB_TEST_PG_DSN）——DB 设置状态/日亏，AlertSink spy 验证告警。
+// 需要 test-pg2 DSN（NOX_TEST_PG_DSN）——DB 设置状态/日亏，AlertSink spy 验证告警。
 package autotrade
 
 import (
-	"arb/internal/risk/gate"
 	"context"
+	"nox/internal/risk/gate"
 	"strings"
 	"sync"
 	"testing"

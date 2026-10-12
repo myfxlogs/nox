@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/migrations"
+	"nox/migrations"
 )
 
 func TestD033_PaperWindowCohort(t *testing.T) {
@@ -97,28 +97,37 @@ func TestD033_Migration173_Idempotent(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, migrations.PaperWindowStartSQL); err != nil {
 		t.Fatalf("seed replay: %v", err)
 	}
-	v, ok, err := s.AppConfigString(ctx, "ARB_PAPER_WINDOW_START")
+	if _, err := s.Pool().Exec(ctx, migrations.EnvKeysNoxSQL); err != nil {
+		t.Fatalf("1002 rename: %v", err)
+	}
+	v, ok, err := s.AppConfigString(ctx, "NOX_PAPER_WINDOW_START")
 	if err != nil || !ok || v != "2026-10-03T01:59Z" {
 		t.Fatalf("seed: %v %v %q", ok, err, v)
 	}
 	// 运维改值 → 重放迁移不覆盖
-	if err := s.UpsertAppConfig(ctx, "ARB_PAPER_WINDOW_START", "2026-11-01T00:00Z", "运维改"); err != nil {
+	if err := s.UpsertAppConfig(ctx, "NOX_PAPER_WINDOW_START", "2026-11-01T00:00Z", "运维改"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Pool().Exec(ctx, migrations.PaperWindowStartSQL); err != nil {
 		t.Fatalf("replay 0173: %v", err)
 	}
-	if v, _, _ := s.AppConfigString(ctx, "ARB_PAPER_WINDOW_START"); v != "2026-11-01T00:00Z" {
+	if _, err := s.Pool().Exec(ctx, migrations.EnvKeysNoxSQL); err != nil {
+		t.Fatalf("1002 rename: %v", err)
+	}
+	if v, _, _ := s.AppConfigString(ctx, "NOX_PAPER_WINDOW_START"); v != "2026-11-01T00:00Z" {
 		t.Fatalf("override clobbered: %q", v)
 	}
 	// 新键空位播种语义：删掉行再重放 → 复活
-	if _, err := s.Pool().Exec(ctx, `DELETE FROM app_config WHERE key='ARB_PAPER_WINDOW_START'`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM app_config WHERE key='NOX_PAPER_WINDOW_START'`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Pool().Exec(ctx, migrations.PaperWindowStartSQL); err != nil {
 		t.Fatal(err)
 	}
-	if v, _, _ := s.AppConfigString(ctx, "ARB_PAPER_WINDOW_START"); v != "2026-10-03T01:59Z" {
+	if _, err := s.Pool().Exec(ctx, migrations.EnvKeysNoxSQL); err != nil {
+		t.Fatal(err)
+	}
+	if v, _, _ := s.AppConfigString(ctx, "NOX_PAPER_WINDOW_START"); v != "2026-10-03T01:59Z" {
 		t.Fatalf("reseed: %q", v)
 	}
 }

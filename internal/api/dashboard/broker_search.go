@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/adapter/gen/mtapi/mt5"
+	"nox/internal/data/adapter/gen/mtapi/mt5"
 
-	v1 "arb/internal/gen/dashboardv1"
 	"connectrpc.com/connect"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // mtapi 网关地址：与 internal/adapter 内现有适配器常量一致（MT4 实测 mt4grpc / MT5 mt5grpc3）。

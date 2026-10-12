@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
 	"connectrpc.com/connect"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 func d475aFlag(venue, symbol, level string) pgstore.VenueSymbolFlag {

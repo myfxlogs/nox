@@ -19,10 +19,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/platform/httpx"
-	"arb/internal/platform/safego"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/platform/httpx"
+	"nox/internal/platform/safego"
 
 	"github.com/gorilla/websocket"
 )

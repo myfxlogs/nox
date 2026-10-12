@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 func allowTestEngine(venues, canonicals map[string]bool) *Engine {

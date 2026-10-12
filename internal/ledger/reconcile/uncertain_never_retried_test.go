@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // d407Closer Closer fake：记录 ResumeClose 调用次数，可注入错误/成功置 CLOSED。

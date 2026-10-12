@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/platform/combo"
-	"arb/internal/platform/notional"
+	"nox/internal/platform/combo"
+	"nox/internal/platform/notional"
 )
 
 // SetRevalidateThresholds 设置复核劣化双阈值（D-077 修复⑪B N4，env 化）。
@@ -16,7 +16,7 @@ func (p *Pipeline) SetRevalidateThresholds(absBps, relPct float64) {
 	p.revalidateRelPct = relPct
 }
 
-// SetMTDisasterSlPct 注入 MT 灾难 SL 距离百分比（D-146 S1，ARB_MT_DISASTER_SL_PCT）。
+// SetMTDisasterSlPct 注入 MT 灾难 SL 距离百分比（D-146 S1，NOX_MT_DISASTER_SL_PCT）。
 // ≤0 = 禁用（MT 腿不挂 SL，回退现行为）。main 装配后调。
 func (p *Pipeline) SetMTDisasterSlPct(pct float64) { p.mtDisasterSlPct = pct }
 

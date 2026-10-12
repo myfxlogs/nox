@@ -6,30 +6,30 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/research/scan"
-	"arb/internal/review/sysretro"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/research/scan"
+	"nox/internal/review/sysretro"
+	"nox/internal/store/pgstore"
 )
 
 // cfgPaperWindowStart paper 观测窗起点键（迁移 0173 播种=D-028 部署时刻；env 兜底后
 // 两者皆缺 → 报告显式「未配置」fail-closed，不误报窗龄/净额）。
-const cfgPaperWindowStart = "ARB_PAPER_WINDOW_START"
+const cfgPaperWindowStart = "NOX_PAPER_WINDOW_START"
 
 // cfgPaperNetHist 逐日净额快照状态键（accrued_usd 库内为累计值，逐日净额=逐日快照
 // 差分——状态存 app_config 跨进程重启存活，同 paper_window_report.sh state 目录语义）。
-const cfgPaperNetHist = "ARB_SELFWATCH_PAPER_NET"
+const cfgPaperNetHist = "NOX_SELFWATCH_PAPER_NET"
 
 // cfgFailClosedPrev fail-closed 行数环比基数（上次观测值+时点，JSON）。
-const cfgFailClosedPrev = "ARB_SELFWATCH_FAILCLOSED_PREV"
+const cfgFailClosedPrev = "NOX_SELFWATCH_FAILCLOSED_PREV"
 
 // cfgStage1Ready Stage 1 就绪态标记（"1"/"0"——就绪推送只在 ❌→✅ 转换时一次，
 // 态存 app_config 跨进程重启存活；就绪态本身仍每日附在日报条件表）。
-const cfgStage1Ready = "ARB_SELFWATCH_STAGE1_READY"
+const cfgStage1Ready = "NOX_SELFWATCH_STAGE1_READY"
 
 // cfgCexSkipsPrev CEX 纸面入口拦截计数环比基线（JSON map——进程内计数器重启
 // 清零，差分为负时按重启语义取当前值，同 dailyNetLine 快照差分先例）。
-const cfgCexSkipsPrev = "ARB_SELFWATCH_CEX_SKIPS"
+const cfgCexSkipsPrev = "NOX_SELFWATCH_CEX_SKIPS"
 
 // Store 自盯存储窄面（*pgstore.Store 原生实现）。
 type Store interface {
@@ -74,7 +74,7 @@ type Deps struct {
 	EvalPaper  func(ctx context.Context, rows []pgstore.PaperSpotCarry, since, now time.Time) (*scan.PaperWindowEval, error)
 	Weekly     func(ctx context.Context, now time.Time) (string, error)
 	KillActive func(ctx context.Context) (bool, error)
-	// ProbeAnalystRO D-059 ②：analyst 只读链路探针（热读 app_secrets ARB_AI_PG_DSN→SELECT 1；
+	// ProbeAnalystRO D-059 ②：analyst 只读链路探针（热读 app_secrets NOX_AI_PG_DSN→SELECT 1；
 	// nil=未接线跳过；DSN 缺=静默 ok 功能未启用）。失败→warn（降级不得无声）。
 	ProbeAnalystRO func(ctx context.Context) error
 	CapitalBase    float64

@@ -3,7 +3,7 @@ package dashboard
 import (
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestStreamableBinanceSpot D-459：binance:spot real 行起 ws-api 流；spot demo 行不起（

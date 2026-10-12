@@ -8,7 +8,7 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 // okxFeeToUSD 纯函数：venue 负号→正数成本；非 USD 系 feeCcy/空/0 → ok=false（NULL）。
@@ -36,7 +36,7 @@ func TestD391_OkxFeeToUSD(t *testing.T) {
 
 // persistOpenLegs 落库锚：CEX 腿 FeeUSD 实采值、MT 腿 commission 负值 → fee_usd 正数成本。
 func TestD391_PersistOpenLegs_FeeUSD(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_EXEC_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_EXEC_TEST_PG_DSN")
 	s := testStore(t)
 	conn := seedConn(t, dsn)
 	ctx := context.Background()
@@ -75,7 +75,7 @@ func TestD391_PersistOpenLegs_FeeUSD(t *testing.T) {
 
 // 拿不到 fee/commission → fee_usd 写 NULL（不写 0 冒充无费）。
 func TestD391_PersistOpenLegs_FeeNull(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_EXEC_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_EXEC_TEST_PG_DSN")
 	s := testStore(t)
 	conn := seedConn(t, dsn)
 	ctx := context.Background()

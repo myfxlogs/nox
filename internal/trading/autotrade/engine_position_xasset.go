@@ -5,13 +5,13 @@
 package autotrade
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"log"
+	"nox/internal/data/keydomain"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // carry 期望口径常量（D-027 裁定）：econ 入场闸/收割地平/轮转 EV=滚动 7 日均值年化；

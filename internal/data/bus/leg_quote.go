@@ -1,7 +1,7 @@
 package bus
 
 import (
-	"arb/internal/data/keydomain"
+	"nox/internal/data/keydomain"
 	"strings"
 )
 

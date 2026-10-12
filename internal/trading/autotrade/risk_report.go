@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // risk_report.go —— D-032 ④（D-030）：每周一 08:00 BJ 经营周报。
@@ -72,7 +72,7 @@ func BuildRiskReport(ctx context.Context, st *pgstore.Store, cp *gate.ControlPla
 		return "<8% ✗"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "【ARB 周报】%s BJ\n", now.In(riskReportLoc).Format("2006-01-02"))
+	fmt.Fprintf(&b, "【NOX 周报】%s BJ\n", now.In(riskReportLoc).Format("2006-01-02"))
 	fmt.Fprintf(&b, "基数 $%.0f｜目标净年化 ≥%.0f%%\n", capitalBaseUSD, riskReportTargetPct)
 	fmt.Fprintf(&b, "30d 账本净额（全样本） $%.2f → 年化 %.2f%%（%s）\n", netAll, ann(netAll), mark(ann(netAll)))
 	fmt.Fprintf(&b, "30d 账本净额（剔事故） $%.2f → 年化 %.2f%%（%s）\n", netClean, ann(netClean), mark(ann(netClean)))

@@ -142,7 +142,7 @@ func TestD472_BinanceLiqGuardCrossCap(t *testing.T) {
 	}
 }
 
-// TestD472_LiqGuardDefaultOff S4：缺省 ARB_MIN_LIQ_DISTANCE_PCT=0=关闸（零额外语义）。
+// TestD472_LiqGuardDefaultOff S4：缺省 NOX_MIN_LIQ_DISTANCE_PCT=0=关闸（零额外语义）。
 func TestD472_LiqGuardDefaultOff(t *testing.T) {
 	e := NewCEXExecutor("binance", "perp", "k", "s", "", "http://x", false)
 	// account: equity=1（名义 200 → ratio=200 巨额）——闸关=不因占比拒

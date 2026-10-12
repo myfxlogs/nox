@@ -8,10 +8,10 @@ import (
 	"sort"
 	"strings"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 
-	v1 "arb/internal/gen/dashboardv1"
 	"connectrpc.com/connect"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // --- Symbol 映射 ---

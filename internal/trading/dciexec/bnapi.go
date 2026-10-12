@@ -2,20 +2,20 @@
 package dciexec
 
 import (
-	"arb/internal/risk/gate"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"nox/internal/risk/gate"
 	"strconv"
 	"strings"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/infra/dephealth"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/infra/dephealth"
+	"nox/internal/store/pgstore"
 )
 
 // spotPrice 实时现货读（/v3/ticker/price 公开端点；base 含 /api 段从 /vN 起拼——earn.go 约定；测试注 PriceFn）。

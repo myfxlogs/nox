@@ -6,11 +6,11 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/data/keydomain"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/research/scan"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/data/keydomain"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/research/scan"
+	"nox/internal/store/pgstore"
 )
 
 // graduationObservability D-475a S5：pending 行质量杆观测即时算（venue_gaps 同模式

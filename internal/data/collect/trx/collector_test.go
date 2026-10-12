@@ -11,16 +11,16 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 )
 
-// newTestStore 创建测试 store（DSN-gated，ARB_TEST_PG_DSN）。
+// newTestStore 创建测试 store（DSN-gated，NOX_TEST_PG_DSN）。
 // 改走 SharedStore 包级共享池——28 处 per-test pgstore.New 池全不 Close，
 // go test ./... 并行期合计打爆 max_connections=100（too many clients 假红根因）。
 func newTestStore(t *testing.T) *pgstore.Store {
 	t.Helper()
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	for _, tbl := range []string{"fin_trx_account", "fin_trx_txs", "fin_trx_witness", "fin_trx_vote_apr"} {
 		if _, err := st.Pool().Exec(context.Background(), "DELETE FROM "+tbl); err != nil {
 			t.Fatalf("cleanup %s: %v", tbl, err)

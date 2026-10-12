@@ -3,7 +3,7 @@ package trx
 import (
 	"testing"
 
-	"arb/internal/data/collect"
+	"nox/internal/data/collect"
 )
 
 func TestCollectorInterface(t *testing.T) {

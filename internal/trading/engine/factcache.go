@@ -4,7 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // FactCache 实现 detector.FactProvider，从内存缓存提供 funding/swap/trade_mode Fact。

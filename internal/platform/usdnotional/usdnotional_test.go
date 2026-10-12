@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 func TestPerLot_USDSuffix(t *testing.T) {

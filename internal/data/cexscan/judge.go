@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"math"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // EarnJudgment earn APR 判断结果（cexscan 内部类型）。

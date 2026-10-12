@@ -8,11 +8,11 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/keydomain"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/research/scan"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/keydomain"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/research/scan"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // gradDossier 建议行→档案：腿解析（cfd 需 canonical resolver）+notional 优先序。

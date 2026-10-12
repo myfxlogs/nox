@@ -1407,17 +1407,17 @@ var File_dashboardv1_watchlist_analyst_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_watchlist_analyst_proto_rawDesc = "" +
 	"\n" +
-	"#dashboardv1/watchlist_analyst.proto\x12\x10arb.dashboard.v1\"E\n" +
+	"#dashboardv1/watchlist_analyst.proto\x12\x10nox.dashboard.v1\"E\n" +
 	"\rWatchlistItem\x12\x1c\n" +
 	"\tcanonical\x18\x01 \x01(\tR\tcanonical\x12\x16\n" +
 	"\x06venues\x18\x02 \x03(\tR\x06venues\"\x15\n" +
 	"\x13GetWatchlistRequest\"M\n" +
 	"\x14GetWatchlistResponse\x125\n" +
-	"\x05items\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.WatchlistItemR\x05items\"L\n" +
+	"\x05items\x18\x01 \x03(\v2\x1f.nox.dashboard.v1.WatchlistItemR\x05items\"L\n" +
 	"\x13SetWatchlistRequest\x125\n" +
-	"\x05items\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.WatchlistItemR\x05items\"M\n" +
+	"\x05items\x18\x01 \x03(\v2\x1f.nox.dashboard.v1.WatchlistItemR\x05items\"M\n" +
 	"\x14SetWatchlistResponse\x125\n" +
-	"\x05items\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.WatchlistItemR\x05items\"/\n" +
+	"\x05items\x18\x01 \x03(\v2\x1f.nox.dashboard.v1.WatchlistItemR\x05items\"/\n" +
 	"\tEntityRef\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\"2\n" +
@@ -1426,9 +1426,9 @@ const file_dashboardv1_watchlist_analyst_proto_rawDesc = "" +
 	"\x04text\x18\x02 \x01(\tR\x04text\"\xb0\x01\n" +
 	"\x11AskAnalystRequest\x12\x1a\n" +
 	"\bquestion\x18\x01 \x01(\tR\bquestion\x125\n" +
-	"\acontext\x18\x02 \x03(\v2\x1b.arb.dashboard.v1.EntityRefR\acontext\x12\x12\n" +
+	"\acontext\x18\x02 \x03(\v2\x1b.nox.dashboard.v1.EntityRefR\acontext\x12\x12\n" +
 	"\x04page\x18\x03 \x01(\tR\x04page\x124\n" +
-	"\ahistory\x18\x04 \x03(\v2\x1a.arb.dashboard.v1.ChatTurnR\ahistory\"Q\n" +
+	"\ahistory\x18\x04 \x03(\v2\x1a.nox.dashboard.v1.ChatTurnR\ahistory\"Q\n" +
 	"\x0fAnalystCitation\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x10\n" +
 	"\x03ref\x18\x02 \x01(\tR\x03ref\x12\x18\n" +
@@ -1440,15 +1440,15 @@ const file_dashboardv1_watchlist_analyst_proto_rawDesc = "" +
 	"\bgrounded\x18\x01 \x01(\bR\bgrounded\"\xf1\x01\n" +
 	"\x12AskAnalystResponse\x12\x16\n" +
 	"\x05delta\x18\x01 \x01(\tH\x00R\x05delta\x12?\n" +
-	"\bcitation\x18\x02 \x01(\v2!.arb.dashboard.v1.AnalystCitationH\x00R\bcitation\x12E\n" +
+	"\bcitation\x18\x02 \x01(\v2!.nox.dashboard.v1.AnalystCitationH\x00R\bcitation\x12E\n" +
 	"\n" +
-	"follow_ups\x18\x03 \x01(\v2$.arb.dashboard.v1.SuggestedFollowUpsH\x00R\tfollowUps\x123\n" +
-	"\x04done\x18\x04 \x01(\v2\x1d.arb.dashboard.v1.AnalystDoneH\x00R\x04doneB\x06\n" +
+	"follow_ups\x18\x03 \x01(\v2$.nox.dashboard.v1.SuggestedFollowUpsH\x00R\tfollowUps\x123\n" +
+	"\x04done\x18\x04 \x01(\v2\x1d.nox.dashboard.v1.AnalystDoneH\x00R\x04doneB\x06\n" +
 	"\x04part\"\x91\x01\n" +
 	"\x18AppendAnalystNoteRequest\x12\x1a\n" +
 	"\bquestion\x18\x01 \x01(\tR\bquestion\x12\x18\n" +
 	"\asummary\x18\x02 \x01(\tR\asummary\x12?\n" +
-	"\tcitations\x18\x03 \x03(\v2!.arb.dashboard.v1.AnalystCitationR\tcitations\"+\n" +
+	"\tcitations\x18\x03 \x03(\v2!.nox.dashboard.v1.AnalystCitationR\tcitations\"+\n" +
 	"\x19AppendAnalystNoteResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\"\x19\n" +
 	"\x17GenerateKbReportRequest\".\n" +
@@ -1467,7 +1467,7 @@ const file_dashboardv1_watchlist_analyst_proto_rawDesc = "" +
 	"modifiedAt\"\x14\n" +
 	"\x12ListReportsRequest\"M\n" +
 	"\x13ListReportsResponse\x126\n" +
-	"\areports\x18\x01 \x03(\v2\x1c.arb.dashboard.v1.ReportInfoR\areports\"&\n" +
+	"\areports\x18\x01 \x03(\v2\x1c.nox.dashboard.v1.ReportInfoR\areports\"&\n" +
 	"\x10GetReportRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"A\n" +
 	"\x11GetReportResponse\x12\x12\n" +
@@ -1485,7 +1485,7 @@ const file_dashboardv1_watchlist_analyst_proto_rawDesc = "" +
 	"\aapi_key\x18\x03 \x01(\tR\x06apiKey\x12\x18\n" +
 	"\aenabled\x18\x04 \x01(\bR\aenabled\"'\n" +
 	"\x15SetAiSettingsResponse\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02okB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x02ok\x18\x01 \x01(\bR\x02okB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_watchlist_analyst_proto_rawDescOnce sync.Once
@@ -1501,45 +1501,45 @@ func file_dashboardv1_watchlist_analyst_proto_rawDescGZIP() []byte {
 
 var file_dashboardv1_watchlist_analyst_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_dashboardv1_watchlist_analyst_proto_goTypes = []any{
-	(*WatchlistItem)(nil),               // 0: arb.dashboard.v1.WatchlistItem
-	(*GetWatchlistRequest)(nil),         // 1: arb.dashboard.v1.GetWatchlistRequest
-	(*GetWatchlistResponse)(nil),        // 2: arb.dashboard.v1.GetWatchlistResponse
-	(*SetWatchlistRequest)(nil),         // 3: arb.dashboard.v1.SetWatchlistRequest
-	(*SetWatchlistResponse)(nil),        // 4: arb.dashboard.v1.SetWatchlistResponse
-	(*EntityRef)(nil),                   // 5: arb.dashboard.v1.EntityRef
-	(*ChatTurn)(nil),                    // 6: arb.dashboard.v1.ChatTurn
-	(*AskAnalystRequest)(nil),           // 7: arb.dashboard.v1.AskAnalystRequest
-	(*AnalystCitation)(nil),             // 8: arb.dashboard.v1.AnalystCitation
-	(*SuggestedFollowUps)(nil),          // 9: arb.dashboard.v1.SuggestedFollowUps
-	(*AnalystDone)(nil),                 // 10: arb.dashboard.v1.AnalystDone
-	(*AskAnalystResponse)(nil),          // 11: arb.dashboard.v1.AskAnalystResponse
-	(*AppendAnalystNoteRequest)(nil),    // 12: arb.dashboard.v1.AppendAnalystNoteRequest
-	(*AppendAnalystNoteResponse)(nil),   // 13: arb.dashboard.v1.AppendAnalystNoteResponse
-	(*GenerateKbReportRequest)(nil),     // 14: arb.dashboard.v1.GenerateKbReportRequest
-	(*GenerateKbReportResponse)(nil),    // 15: arb.dashboard.v1.GenerateKbReportResponse
-	(*GenerateRetroReportRequest)(nil),  // 16: arb.dashboard.v1.GenerateRetroReportRequest
-	(*GenerateRetroReportResponse)(nil), // 17: arb.dashboard.v1.GenerateRetroReportResponse
-	(*ReportInfo)(nil),                  // 18: arb.dashboard.v1.ReportInfo
-	(*ListReportsRequest)(nil),          // 19: arb.dashboard.v1.ListReportsRequest
-	(*ListReportsResponse)(nil),         // 20: arb.dashboard.v1.ListReportsResponse
-	(*GetReportRequest)(nil),            // 21: arb.dashboard.v1.GetReportRequest
-	(*GetReportResponse)(nil),           // 22: arb.dashboard.v1.GetReportResponse
-	(*GetAiSettingsRequest)(nil),        // 23: arb.dashboard.v1.GetAiSettingsRequest
-	(*GetAiSettingsResponse)(nil),       // 24: arb.dashboard.v1.GetAiSettingsResponse
-	(*SetAiSettingsRequest)(nil),        // 25: arb.dashboard.v1.SetAiSettingsRequest
-	(*SetAiSettingsResponse)(nil),       // 26: arb.dashboard.v1.SetAiSettingsResponse
+	(*WatchlistItem)(nil),               // 0: nox.dashboard.v1.WatchlistItem
+	(*GetWatchlistRequest)(nil),         // 1: nox.dashboard.v1.GetWatchlistRequest
+	(*GetWatchlistResponse)(nil),        // 2: nox.dashboard.v1.GetWatchlistResponse
+	(*SetWatchlistRequest)(nil),         // 3: nox.dashboard.v1.SetWatchlistRequest
+	(*SetWatchlistResponse)(nil),        // 4: nox.dashboard.v1.SetWatchlistResponse
+	(*EntityRef)(nil),                   // 5: nox.dashboard.v1.EntityRef
+	(*ChatTurn)(nil),                    // 6: nox.dashboard.v1.ChatTurn
+	(*AskAnalystRequest)(nil),           // 7: nox.dashboard.v1.AskAnalystRequest
+	(*AnalystCitation)(nil),             // 8: nox.dashboard.v1.AnalystCitation
+	(*SuggestedFollowUps)(nil),          // 9: nox.dashboard.v1.SuggestedFollowUps
+	(*AnalystDone)(nil),                 // 10: nox.dashboard.v1.AnalystDone
+	(*AskAnalystResponse)(nil),          // 11: nox.dashboard.v1.AskAnalystResponse
+	(*AppendAnalystNoteRequest)(nil),    // 12: nox.dashboard.v1.AppendAnalystNoteRequest
+	(*AppendAnalystNoteResponse)(nil),   // 13: nox.dashboard.v1.AppendAnalystNoteResponse
+	(*GenerateKbReportRequest)(nil),     // 14: nox.dashboard.v1.GenerateKbReportRequest
+	(*GenerateKbReportResponse)(nil),    // 15: nox.dashboard.v1.GenerateKbReportResponse
+	(*GenerateRetroReportRequest)(nil),  // 16: nox.dashboard.v1.GenerateRetroReportRequest
+	(*GenerateRetroReportResponse)(nil), // 17: nox.dashboard.v1.GenerateRetroReportResponse
+	(*ReportInfo)(nil),                  // 18: nox.dashboard.v1.ReportInfo
+	(*ListReportsRequest)(nil),          // 19: nox.dashboard.v1.ListReportsRequest
+	(*ListReportsResponse)(nil),         // 20: nox.dashboard.v1.ListReportsResponse
+	(*GetReportRequest)(nil),            // 21: nox.dashboard.v1.GetReportRequest
+	(*GetReportResponse)(nil),           // 22: nox.dashboard.v1.GetReportResponse
+	(*GetAiSettingsRequest)(nil),        // 23: nox.dashboard.v1.GetAiSettingsRequest
+	(*GetAiSettingsResponse)(nil),       // 24: nox.dashboard.v1.GetAiSettingsResponse
+	(*SetAiSettingsRequest)(nil),        // 25: nox.dashboard.v1.SetAiSettingsRequest
+	(*SetAiSettingsResponse)(nil),       // 26: nox.dashboard.v1.SetAiSettingsResponse
 }
 var file_dashboardv1_watchlist_analyst_proto_depIdxs = []int32{
-	0,  // 0: arb.dashboard.v1.GetWatchlistResponse.items:type_name -> arb.dashboard.v1.WatchlistItem
-	0,  // 1: arb.dashboard.v1.SetWatchlistRequest.items:type_name -> arb.dashboard.v1.WatchlistItem
-	0,  // 2: arb.dashboard.v1.SetWatchlistResponse.items:type_name -> arb.dashboard.v1.WatchlistItem
-	5,  // 3: arb.dashboard.v1.AskAnalystRequest.context:type_name -> arb.dashboard.v1.EntityRef
-	6,  // 4: arb.dashboard.v1.AskAnalystRequest.history:type_name -> arb.dashboard.v1.ChatTurn
-	8,  // 5: arb.dashboard.v1.AskAnalystResponse.citation:type_name -> arb.dashboard.v1.AnalystCitation
-	9,  // 6: arb.dashboard.v1.AskAnalystResponse.follow_ups:type_name -> arb.dashboard.v1.SuggestedFollowUps
-	10, // 7: arb.dashboard.v1.AskAnalystResponse.done:type_name -> arb.dashboard.v1.AnalystDone
-	8,  // 8: arb.dashboard.v1.AppendAnalystNoteRequest.citations:type_name -> arb.dashboard.v1.AnalystCitation
-	18, // 9: arb.dashboard.v1.ListReportsResponse.reports:type_name -> arb.dashboard.v1.ReportInfo
+	0,  // 0: nox.dashboard.v1.GetWatchlistResponse.items:type_name -> nox.dashboard.v1.WatchlistItem
+	0,  // 1: nox.dashboard.v1.SetWatchlistRequest.items:type_name -> nox.dashboard.v1.WatchlistItem
+	0,  // 2: nox.dashboard.v1.SetWatchlistResponse.items:type_name -> nox.dashboard.v1.WatchlistItem
+	5,  // 3: nox.dashboard.v1.AskAnalystRequest.context:type_name -> nox.dashboard.v1.EntityRef
+	6,  // 4: nox.dashboard.v1.AskAnalystRequest.history:type_name -> nox.dashboard.v1.ChatTurn
+	8,  // 5: nox.dashboard.v1.AskAnalystResponse.citation:type_name -> nox.dashboard.v1.AnalystCitation
+	9,  // 6: nox.dashboard.v1.AskAnalystResponse.follow_ups:type_name -> nox.dashboard.v1.SuggestedFollowUps
+	10, // 7: nox.dashboard.v1.AskAnalystResponse.done:type_name -> nox.dashboard.v1.AnalystDone
+	8,  // 8: nox.dashboard.v1.AppendAnalystNoteRequest.citations:type_name -> nox.dashboard.v1.AnalystCitation
+	18, // 9: nox.dashboard.v1.ListReportsResponse.reports:type_name -> nox.dashboard.v1.ReportInfo
 	10, // [10:10] is the sub-list for method output_type
 	10, // [10:10] is the sub-list for method input_type
 	10, // [10:10] is the sub-list for extension type_name

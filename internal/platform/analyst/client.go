@@ -1,7 +1,7 @@
 package analyst
 
 // client.go Anthropic 兼容 messages API 客户端（纯 net/http，无 SDK）。
-// POST {ARB_AI_BASE_URL}/v1/messages，SSE 流式解析。baseURL 为根 URL（不含 /v1/messages，代码自动拼接）。
+// POST {NOX_AI_BASE_URL}/v1/messages，SSE 流式解析。baseURL 为根 URL（不含 /v1/messages，代码自动拼接）。
 // 设计 §2：x-api-key + anthropic-version: 2023-06-01 头；stream:true。
 
 import (
@@ -108,7 +108,7 @@ type StreamCallbacks struct {
 // 返回最终 stop_reason（end_turn / tool_use / max_tokens / stop_sequence）。
 func (c *Client) StreamMessages(ctx context.Context, req *MessageRequest, cb StreamCallbacks) (string, error) {
 	if c.APIKey == "" {
-		return "", fmt.Errorf("analyst: ARB_AI_API_KEY 未配置")
+		return "", fmt.Errorf("analyst: NOX_AI_API_KEY 未配置")
 	}
 	NeutralizeRequest(req) // D-087：发送前载荷中性化（幂等；词表与 walk 规则见 neutralize.go）
 	body, err := json.Marshal(req)

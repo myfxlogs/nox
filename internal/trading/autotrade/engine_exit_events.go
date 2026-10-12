@@ -9,8 +9,8 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/risk/position"
-	"arb/internal/store/pgstore"
+	"nox/internal/risk/position"
+	"nox/internal/store/pgstore"
 )
 
 // authMinInterval 同一仓 quote 快路命中态持续时（如休市 suspend）升权威评估的合流

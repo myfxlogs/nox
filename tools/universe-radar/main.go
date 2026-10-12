@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/platform/httpx" // SSOT：自动注入 CA + X-Proxy-Token
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/httpx" // SSOT：自动注入 CA + X-Proxy-Token
+	"nox/internal/store/pgstore"
 )
 
 func main() {
@@ -43,10 +43,10 @@ func radarParamF64(rows map[string]string, key string, def float64) float64 {
 func configureHttpxProxy(ctx context.Context, st *pgstore.Store) {
 	var caPath, token string
 	if rows, err := st.LoadAppConfig(ctx); err == nil {
-		caPath = rows["ARB_BINANCE_PROXY_CA"]
+		caPath = rows["NOX_BINANCE_PROXY_CA"]
 	}
 	if secrets, err := st.LoadAppSecrets(ctx); err == nil {
-		token = secrets["ARB_BINANCE_PROXY_TOKEN"]
+		token = secrets["NOX_BINANCE_PROXY_TOKEN"]
 	}
 	httpx.Configure(caPath, token, nil)
 }
@@ -92,7 +92,7 @@ func run(ctx context.Context) error {
 	if cerr != nil {
 		cacheDir = os.TempDir()
 	}
-	for _, src := range allSources(hc, proxy, st.Pool(), filepath.Join(cacheDir, "arb-universe-radar")) {
+	for _, src := range allSources(hc, proxy, st.Pool(), filepath.Join(cacheDir, "nox-universe-radar")) {
 		rs, err := src.Scan(ctx)
 		if err != nil {
 			log.Printf("universe-radar: venue=%s 扫描失败: %v", src.Venue(), err)
@@ -247,7 +247,7 @@ func run(ctx context.Context) error {
 			// 读取失败=凭据空串→sendRadarAlert 返 error（调用侧不落状态，下轮重试）。
 			var feishuID, feishuSecret string
 			if secrets, serr := st.LoadAppSecrets(ctx); serr == nil {
-				feishuID, feishuSecret = secrets["ARB_FEISHU_APP_ID"], secrets["ARB_FEISHU_APP_SECRET"]
+				feishuID, feishuSecret = secrets["NOX_FEISHU_APP_ID"], secrets["NOX_FEISHU_APP_SECRET"]
 			} else {
 				log.Printf("universe-radar: app_secrets 读取失败，本轮告警凭据空: %v", serr)
 			}

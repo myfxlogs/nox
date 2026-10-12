@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/marketstate"
-	"arb/internal/platform/alertcool"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/data/marketstate"
+	"nox/internal/platform/alertcool"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // NewBrokerManager 创建管理器。symbolsTTL 由调用方从 config.SymbolsTTL 注入。

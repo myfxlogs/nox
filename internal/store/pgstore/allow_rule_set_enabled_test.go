@@ -1,17 +1,17 @@
 // allow_rules_d444_test.go —— D-444 T1：SetAutotradeAllowRuleEnabled 翻转+note+RETURNING
-// 回读；不存在 id→error；ListAutotradeAllowRulesAll 含 disabled。需 ARB_TEST_PG_DSN。
+// 回读；不存在 id→error；ListAutotradeAllowRulesAll 含 disabled。需 NOX_TEST_PG_DSN。
 package pgstore
 
 import (
 	"context"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 func d444Store(t *testing.T) *Store {
 	t.Helper()
-	s, err := New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}

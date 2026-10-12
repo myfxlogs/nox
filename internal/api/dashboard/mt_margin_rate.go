@@ -6,13 +6,13 @@ package dashboard
 import (
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // effMTMarginRateFloor D-006 悲观档下界：init_margin_rate 不得小于 1/20。
 const effMTMarginRateFloor = 1.0 / 20.0
 
-// effMTMarginRateMaxAge 消费端新鲜窗。D-068：与 ARB_MT_HEALTH_MARGIN_CRIT 缺省
+// effMTMarginRateMaxAge 消费端新鲜窗。D-068：与 NOX_MT_HEALTH_MARGIN_CRIT 缺省
 // 同值——init_margin_rate 为准静态、重连驱动写入（D-067），监控判 crit 之前
 // 消费端不得先判陈；两处若改须同改。
 const effMTMarginRateMaxAge = 72 * time.Hour

@@ -8,8 +8,8 @@ import (
 	"math/rand"
 	"time"
 
-	"arb/internal/infra/dephealth"
-	"arb/internal/platform/alerttext"
+	"nox/internal/infra/dephealth"
+	"nox/internal/platform/alerttext"
 )
 
 // banJitter D-591 S1：封禁到期后重连抖动界 0..N 随机（测试可缩）。

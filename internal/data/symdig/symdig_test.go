@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 )
 
 // fakeStore 罐装 facts/映射/别名/universe 键 + findings/alert 记录。

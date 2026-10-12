@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/httpx"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/httpx"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 
 	"connectrpc.com/connect"
 )

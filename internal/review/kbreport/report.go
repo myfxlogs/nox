@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 )
 
 // 默认路径（容器内 /kn/docs 映射宿主 docs/；Deps 字段可覆盖便于测试指 tmpdir）。
@@ -61,7 +61,7 @@ func (d *Deps) fill() {
 }
 
 // systemPrompt 报告专用系统提示词（防编数/限定三节输出/候选走 fenced 块供程序解析）。
-const systemPrompt = `你是 ARB 经验库的元分析员。用户消息里 fenced 块中的统计数字由 Go 确定性计算——禁止改动、重算或复述时写错。
+const systemPrompt = `你是 NOX 经验库的元分析员。用户消息里 fenced 块中的统计数字由 Go 确定性计算——禁止改动、重算或复述时写错。
 只输出三个二级标题节（标题照抄）：
 ## 分析
 主导失效类别 / 复发模式 / 覆盖缺口 / 趋势判读；每条判读用条目 id 佐证（可用只读工具查条目全文）。

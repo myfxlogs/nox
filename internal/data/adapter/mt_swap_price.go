@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/keydomain"
+	"nox/internal/data/bus"
+	"nox/internal/data/keydomain"
 )
 
 // summarizeMissingSyms 缺报价符号名单摘要：前 10 个 + 超出计 "…+N"（D-104 P0 返修③ R-c2）。

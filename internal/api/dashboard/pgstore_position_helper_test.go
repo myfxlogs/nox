@@ -3,7 +3,7 @@ package dashboard
 import (
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func pgstorePositionHelper() pgstore.Position {

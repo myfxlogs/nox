@@ -20,9 +20,9 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // AcctFrameSink D-445 S0：OrderUpdateSummary 余额六字段帧下沉回调。

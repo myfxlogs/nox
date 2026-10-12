@@ -1,5 +1,5 @@
 // kb.go 经验库只读浏览（F8）：解析 docs/经验库/索引.md 表行 + 读条目文件全文。
-// 数据源：arb/kb 包 embed 的索引 markdown + 条目目录 embed.FS。
+// 数据源：nox/kb 包 embed 的索引 markdown + 条目目录 embed.FS。
 // 安全：条目内容原样返回（前端渲染，不执行任何 markdown 内脚本）；无写路径。
 package dashboard
 
@@ -8,8 +8,8 @@ import (
 	"path"
 	"strings"
 
-	kb "arb"
-	v1 "arb/internal/gen/dashboardv1"
+	kb "nox"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"connectrpc.com/connect"
 )

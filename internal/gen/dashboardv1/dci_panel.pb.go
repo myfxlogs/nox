@@ -466,7 +466,7 @@ var File_dashboardv1_dci_panel_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_dci_panel_proto_rawDesc = "" +
 	"\n" +
-	"\x1bdashboardv1/dci_panel.proto\x12\x10arb.dashboard.v1\"\xee\x01\n" +
+	"\x1bdashboardv1/dci_panel.proto\x12\x10nox.dashboard.v1\"\xee\x01\n" +
 	"\x13PersonalPositionRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x14\n" +
 	"\x05asset\x18\x02 \x01(\tR\x05asset\x12\x12\n" +
@@ -482,7 +482,7 @@ const file_dashboardv1_dci_panel_proto_rawDesc = "" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"d\n" +
 	"\x1dListPersonalPositionsResponse\x12C\n" +
-	"\tpositions\x18\x01 \x03(\v2%.arb.dashboard.v1.PersonalPositionRowR\tpositions\"\x8b\x03\n" +
+	"\tpositions\x18\x01 \x03(\v2%.nox.dashboard.v1.PersonalPositionRowR\tpositions\"\x8b\x03\n" +
 	"\vDCIOrderRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1d\n" +
 	"\n" +
@@ -509,7 +509,7 @@ const file_dashboardv1_dci_panel_proto_rawDesc = "" +
 	"\x14ListDCIOrdersRequest\x12\x14\n" +
 	"\x05limit\x18\x01 \x01(\x05R\x05limit\"N\n" +
 	"\x15ListDCIOrdersResponse\x125\n" +
-	"\x06orders\x18\x01 \x03(\v2\x1d.arb.dashboard.v1.DCIOrderRowR\x06ordersB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x06orders\x18\x01 \x03(\v2\x1d.nox.dashboard.v1.DCIOrderRowR\x06ordersB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_dci_panel_proto_rawDescOnce sync.Once
@@ -525,16 +525,16 @@ func file_dashboardv1_dci_panel_proto_rawDescGZIP() []byte {
 
 var file_dashboardv1_dci_panel_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_dashboardv1_dci_panel_proto_goTypes = []any{
-	(*PersonalPositionRow)(nil),           // 0: arb.dashboard.v1.PersonalPositionRow
-	(*ListPersonalPositionsRequest)(nil),  // 1: arb.dashboard.v1.ListPersonalPositionsRequest
-	(*ListPersonalPositionsResponse)(nil), // 2: arb.dashboard.v1.ListPersonalPositionsResponse
-	(*DCIOrderRow)(nil),                   // 3: arb.dashboard.v1.DCIOrderRow
-	(*ListDCIOrdersRequest)(nil),          // 4: arb.dashboard.v1.ListDCIOrdersRequest
-	(*ListDCIOrdersResponse)(nil),         // 5: arb.dashboard.v1.ListDCIOrdersResponse
+	(*PersonalPositionRow)(nil),           // 0: nox.dashboard.v1.PersonalPositionRow
+	(*ListPersonalPositionsRequest)(nil),  // 1: nox.dashboard.v1.ListPersonalPositionsRequest
+	(*ListPersonalPositionsResponse)(nil), // 2: nox.dashboard.v1.ListPersonalPositionsResponse
+	(*DCIOrderRow)(nil),                   // 3: nox.dashboard.v1.DCIOrderRow
+	(*ListDCIOrdersRequest)(nil),          // 4: nox.dashboard.v1.ListDCIOrdersRequest
+	(*ListDCIOrdersResponse)(nil),         // 5: nox.dashboard.v1.ListDCIOrdersResponse
 }
 var file_dashboardv1_dci_panel_proto_depIdxs = []int32{
-	0, // 0: arb.dashboard.v1.ListPersonalPositionsResponse.positions:type_name -> arb.dashboard.v1.PersonalPositionRow
-	3, // 1: arb.dashboard.v1.ListDCIOrdersResponse.orders:type_name -> arb.dashboard.v1.DCIOrderRow
+	0, // 0: nox.dashboard.v1.ListPersonalPositionsResponse.positions:type_name -> nox.dashboard.v1.PersonalPositionRow
+	3, // 1: nox.dashboard.v1.ListDCIOrdersResponse.orders:type_name -> nox.dashboard.v1.DCIOrderRow
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name

@@ -1,6 +1,6 @@
 // 基差止损翻正 + entry 基准写入。
 // expected_entry_spread_bps = (buyActual − sellActual) / buyActual × 10000（双腿成交价差）。
-// 止损条件：PnL_bps = currentBasisBps − expected_entry_spread_bps < −ARB_SWAPARB_BASIS_STOP_BPS → 平仓。
+// 止损条件：PnL_bps = currentBasisBps − expected_entry_spread_bps < −NOX_SWAPARB_BASIS_STOP_BPS → 平仓。
 // 口径：entry=成交价(含滑点) / current=报价口径(不含滑点) → PnL 保守(止损偏早=安全)。
 package autotrade
 
@@ -8,7 +8,7 @@ import (
 	"context"
 	"fmt"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // computeEntrySpreadFromLegs D-180 S3（D-327 S1 起薄包装）：实现下沉 pgstore.EntrySpreadBpsFromLegs

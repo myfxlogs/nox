@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // d378aFptr float 指针（noise 列构造）。
@@ -63,7 +63,7 @@ func d378aEngine(st *pgstore.Store, driftBps float64) *Engine {
 
 // TestD378a_ExecDriftKill 锚2a：drift=14.3 > thresh 8 → 杀，reason 含 exec_drift（493 回放）。
 func TestD378a_ExecDriftKill(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	posID := d378aDriftPos(t, st, nil)
 	p := d378aOpenPos(t, st, posID)
 	should, reason := d378aEngine(st, 8.0).execDriftCheck(context.Background(), p)
@@ -77,7 +77,7 @@ func TestD378a_ExecDriftKill(t *testing.T) {
 
 // TestD378a_ExecDriftPass 锚2b：drift≈5 < 8 不杀（494/495 型放行）+ noise 抬阈生效。
 func TestD378a_ExecDriftPass(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	posID := d378aDriftPos(t, st, nil)
 	// 漂移 ~5：fill=−4.0 vs 锚 −9.0（fillBps=(99.96−100)/99.96×1e4≈−4.0 → drift=+5.0）
@@ -111,7 +111,7 @@ func TestExitKindFromReason_ExecDrift(t *testing.T) {
 func TestD378a_FallbackInterval(t *testing.T) {
 	e := &Engine{cfg: gate.Config{PositionFallbackInterval: 120 * time.Second}}
 	if got := e.fallbackInterval(); got != 120*time.Second {
-		t.Fatalf("锚3: fallback = %v, want 120s（ARB_POSITION_EVAL_SEC=120 注入）", got)
+		t.Fatalf("锚3: fallback = %v, want 120s（NOX_POSITION_EVAL_SEC=120 注入）", got)
 	}
 	if got := (&Engine{cfg: gate.Config{}}).fallbackInterval(); got != 10*time.Minute {
 		t.Fatalf("锚3: 零值回退 = %v, want 10min（防呆）", got)
@@ -122,7 +122,7 @@ func TestD378a_FallbackInterval(t *testing.T) {
 // TestD378a_LifecycleExecDrift 锚5：真库全链——quote 锚仓→exec_drift 杀→exit_kind 落列→
 // ListCooledExits({stop,exec_drift}) 可见（gate C1 计数源闭环）。
 func TestD378a_LifecycleExecDrift(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	posID := d378aDriftPos(t, st, nil)
 	p := d378aOpenPos(t, st, posID)
 	should, reason := d378aEngine(st, 8.0).execDriftCheck(context.Background(), p)

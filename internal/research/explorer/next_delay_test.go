@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/analyst"
+	"nox/internal/platform/analyst"
 
-	explorerv1 "arb/internal/gen/arb/explorer/v1"
-	"arb/internal/store/pgstore"
+	explorerv1 "nox/internal/gen/nox/explorer/v1"
+	"nox/internal/store/pgstore"
 
 	"github.com/jackc/pgx/v5"
 )

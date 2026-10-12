@@ -1,7 +1,7 @@
 // canary.go —— D-104：本机出口 canary（60s 看门狗拍）。
 // 出口健康是网络路径自身属性，无任何 WS/推送源可订阅，主动拨测为唯一观测形态
 // （D-004 例外已留痕 decisions.md D-104：用途限制=自盯告警聚合+复盘，不进交易链）。
-// 三锚点 TLS 拨测（cex 代理域/MT 桥外网面/公共互联网；env ARB_EGRESS_CANARY_ANCHORS
+// 三锚点 TLS 拨测（cex 代理域/MT 桥外网面/公共互联网；env NOX_EGRESS_CANARY_ANCHORS
 // 可覆盖）；连续 2 拍全锚失败=红窗确认（首拍只更新内态——单拍瞬时抖动零告警）：
 // 单条 critical「本机出口故障，所有 venue 面按 fail-closed 对待」（30min 去重）+
 // 恢复单条 info，红窗态经 EgressRed 供装配层聚合 ws-storm/面判定劣化告警；
@@ -17,11 +17,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // cfgEgressAnchors 锚点 env 覆盖（逗号分隔 host:port）；缺省=D-104 票面三锚。
-const cfgEgressAnchors = "ARB_EGRESS_CANARY_ANCHORS"
+const cfgEgressAnchors = "NOX_EGRESS_CANARY_ANCHORS"
 
 // canaryCriticalMsg D-104 红窗单条聚合 critical（聚合闸=EgressRed，见 cmd/core）。
 const canaryCriticalMsg = "[canary] 本机出口故障，所有 venue 面按 fail-closed 对待"

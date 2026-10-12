@@ -6,10 +6,10 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/ledger/settlement"
-	"arb/internal/portfolio/lifecycle"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/ledger/settlement"
+	"nox/internal/portfolio/lifecycle"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // StoreDeps 把 pgstore.Store 适配为 settlement.Deps（D-087 §3.2）。

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
 	"google.golang.org/grpc"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // TestD594EmitPlan 表驱动：三尺度×scale 出 canonical lb 价系数 / 未标定行抑制 /

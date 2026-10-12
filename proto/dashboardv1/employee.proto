@@ -1,7 +1,7 @@
 syntax = "proto3";
-package arb.dashboard.v1;
+package nox.dashboard.v1;
 
-option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
 
 // D-190：员工花名册看板 RPC（编制实况=在职/死亡/任务中）。
 message Employee {

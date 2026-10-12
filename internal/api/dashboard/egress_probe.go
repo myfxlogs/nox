@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/infra/dephealth"
-	"arb/internal/platform/httpx"
+	"nox/internal/infra/dephealth"
+	"nox/internal/platform/httpx"
 )
 
 const (

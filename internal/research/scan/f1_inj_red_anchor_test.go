@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 func d412Scanner(st Store) *CarryUniverseScanner { return NewCarryUniverseScanner(st) }

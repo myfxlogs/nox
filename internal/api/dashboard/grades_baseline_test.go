@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 func egOf(rep *v1.GraduationRiskReport, field string) v1.EvidenceGrade {

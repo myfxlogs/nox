@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/trading/exec"
 )
 
 // countingAcctQuerier 包装 fakeAccountQuerier 记 Account() 调用数（帧/kick 零 REST 断言用）。

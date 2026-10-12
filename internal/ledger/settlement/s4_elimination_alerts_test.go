@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // elimYes 总是触发淘汰的 Eliminator（测试用）。

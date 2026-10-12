@@ -1,7 +1,7 @@
 package gate
 
 // 熔断锚：同签名三连败起窗、窗内零执行+每窗 1 行 PAUSED、
-// 窗到探测成败两路、异签名隔离、funding 暂停态+2h 兜底。真库（ARB_TEST_PG_DSN）。
+// 窗到探测成败两路、异签名隔离、funding 暂停态+2h 兜底。真库（NOX_TEST_PG_DSN）。
 
 import (
 	"context"
@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/errclass"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/errclass"
+	"nox/internal/store/pgstore"
 )
 
 func d560GateFixture(t *testing.T) *Gate {

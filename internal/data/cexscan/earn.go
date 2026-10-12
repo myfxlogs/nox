@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"time"
 
-	"arb/internal/platform/config"
-	"arb/internal/platform/httpx"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/config"
+	"nox/internal/platform/httpx"
+	"nox/internal/store/pgstore"
 )
 
 // EarnCollector 采集 OKX + Binance 理财 APR。

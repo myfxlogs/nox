@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // RiskLimits 风控上限（§12 executor 配置）。
@@ -61,11 +61,11 @@ type Pipeline struct {
 	fxResolver FxResolver
 	// feeBps 估算费率链（D-599 S2 净额核算——NULL 费腿按 venue bps×名义额估算）。nil=不估算。
 	feeBps FeeBpsResolver
-	// revalidateAbsBps 复核劣化绝对阈值 bps（D-077 修复⑪B N4，ARB_REVALIDATE_ABS_BPS 默认 2.0）。
+	// revalidateAbsBps 复核劣化绝对阈值 bps（D-077 修复⑪B N4，NOX_REVALIDATE_ABS_BPS 默认 2.0）。
 	revalidateAbsBps float64
-	// revalidateRelPct 复核劣化相对阈值 %（D-077 修复⑪B N4，ARB_REVALIDATE_REL_PCT 默认 20）。
+	// revalidateRelPct 复核劣化相对阈值 %（D-077 修复⑪B N4，NOX_REVALIDATE_REL_PCT 默认 20）。
 	revalidateRelPct float64
-	// mtDisasterSlPct MT 灾难 SL 距离百分比（D-146 S1，ARB_MT_DISASTER_SL_PCT 默认 2.0）。
+	// mtDisasterSlPct MT 灾难 SL 距离百分比（D-146 S1，NOX_MT_DISASTER_SL_PCT 默认 2.0）。
 	// ≤0 = 禁用（不挂 SL）。仅 MT 腿（:mt4/:mt5）下单时用，CEX 腿忽略。
 	mtDisasterSlPct float64
 
@@ -115,7 +115,7 @@ type Pipeline struct {
 	makerBudgetMu   sync.Mutex
 	makerBudget     map[string][]time.Time // opportunityID → 近 1h attempt 时标（进程内预算；重启复位）
 
-	// perpLeverageTarget D-079：perp 腿开仓前置 set-leverage 目标（ARB_PERP_LEVERAGE_TARGET）。
+	// perpLeverageTarget D-079：perp 腿开仓前置 set-leverage 目标（NOX_PERP_LEVERAGE_TARGET）。
 	// ≤0 = 停用（旧行为：只读不设）。
 	perpLeverageTarget float64
 

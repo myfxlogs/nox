@@ -69,7 +69,7 @@ func DefaultConfig() RebalanceConfig {
 		YieldDropPct:       15.0,
 		BetterOppPct:       0.0,
 		MaxRebalancePerDay: 1,
-		MinInterval:        2 * time.Hour, // D-293 S3：防抖 2h（env ARB_TRX_VOTE_MIN_INTERVAL_MINUTES 可调）
+		MinInterval:        2 * time.Hour, // D-293 S3：防抖 2h（env NOX_TRX_VOTE_MIN_INTERVAL_MINUTES 可调）
 		SpreadThreshold:    0.001,         // D-297：价差触发改投阈值 0.001pp
 	}
 }

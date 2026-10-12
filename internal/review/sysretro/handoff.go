@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/ir/inboxfmt"
+	"nox/internal/ir/inboxfmt"
 )
 
 // handoffBlock 装配交接面 fenced 块内容。

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // TestFundingHedgeBaseline D-084 基准费率超额口径（实施修正①：跨所同所统一扣基准）。

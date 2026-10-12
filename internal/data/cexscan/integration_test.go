@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/config"
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/config"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 // mockAllOKX 模拟 OKX Savings + ticker。
@@ -64,9 +64,9 @@ func (f *fakeSnap) Snapshot() []*v1.AccountInfo { return f.infos }
 
 // TestScanOnce_FullFlow DSN 集成：scanOnce 全流程（账户→理财→价差→入库）。
 // DSN 走 testutil.TestDSN 门禁（裸读 env 绕过逐包+席位改写——GC 回收裸
-// arb_test 库后暴露；未设 env 由 Skip 改 D-207 loud-FAIL 口径）。
+// nox_test 库后暴露；未设 env 由 Skip 改 D-207 loud-FAIL 口径）。
 func TestScanOnce_FullFlow(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	okxSrv := mockAllOKX(t)
 	defer okxSrv.Close()
 	bnSrv := mockAllBinance(t)

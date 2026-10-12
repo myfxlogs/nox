@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/data/venue"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/httpx"
-	"arb/internal/platform/signutil"
+	"nox/internal/data/keydomain"
+	"nox/internal/data/venue"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/httpx"
+	"nox/internal/platform/signutil"
 )
 
 // CEXAccountQuerier 查 CEX 账户资金（D-053）。只读余额，不执行。

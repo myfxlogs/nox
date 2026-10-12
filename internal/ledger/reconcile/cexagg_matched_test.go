@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // okxPosStub 回固定 SWAP 持仓的 okx positions mock（pos 单位=张，posSide=long/short/net）。

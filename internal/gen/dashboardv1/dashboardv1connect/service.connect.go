@@ -5,11 +5,11 @@
 package dashboardv1connect
 
 import (
-	dashboardv1 "arb/internal/gen/dashboardv1"
 	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
 	http "net/http"
+	dashboardv1 "nox/internal/gen/dashboardv1"
 	strings "strings"
 )
 
@@ -22,7 +22,7 @@ const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// DashboardServiceName is the fully-qualified name of the DashboardService service.
-	DashboardServiceName = "arb.dashboard.v1.DashboardService"
+	DashboardServiceName = "nox.dashboard.v1.DashboardService"
 )
 
 // These constants are the fully-qualified names of the RPCs defined in this package. They're
@@ -35,326 +35,326 @@ const (
 const (
 	// DashboardServiceListLatestQuotesProcedure is the fully-qualified name of the DashboardService's
 	// ListLatestQuotes RPC.
-	DashboardServiceListLatestQuotesProcedure = "/arb.dashboard.v1.DashboardService/ListLatestQuotes"
+	DashboardServiceListLatestQuotesProcedure = "/nox.dashboard.v1.DashboardService/ListLatestQuotes"
 	// DashboardServiceListLatestFactsProcedure is the fully-qualified name of the DashboardService's
 	// ListLatestFacts RPC.
-	DashboardServiceListLatestFactsProcedure = "/arb.dashboard.v1.DashboardService/ListLatestFacts"
+	DashboardServiceListLatestFactsProcedure = "/nox.dashboard.v1.DashboardService/ListLatestFacts"
 	// DashboardServiceListOpportunitiesProcedure is the fully-qualified name of the DashboardService's
 	// ListOpportunities RPC.
-	DashboardServiceListOpportunitiesProcedure = "/arb.dashboard.v1.DashboardService/ListOpportunities"
+	DashboardServiceListOpportunitiesProcedure = "/nox.dashboard.v1.DashboardService/ListOpportunities"
 	// DashboardServiceListAlertsProcedure is the fully-qualified name of the DashboardService's
 	// ListAlerts RPC.
-	DashboardServiceListAlertsProcedure = "/arb.dashboard.v1.DashboardService/ListAlerts"
+	DashboardServiceListAlertsProcedure = "/nox.dashboard.v1.DashboardService/ListAlerts"
 	// DashboardServiceListSourceHealthProcedure is the fully-qualified name of the DashboardService's
 	// ListSourceHealth RPC.
-	DashboardServiceListSourceHealthProcedure = "/arb.dashboard.v1.DashboardService/ListSourceHealth"
+	DashboardServiceListSourceHealthProcedure = "/nox.dashboard.v1.DashboardService/ListSourceHealth"
 	// DashboardServiceListFactsProcedure is the fully-qualified name of the DashboardService's
 	// ListFacts RPC.
-	DashboardServiceListFactsProcedure = "/arb.dashboard.v1.DashboardService/ListFacts"
+	DashboardServiceListFactsProcedure = "/nox.dashboard.v1.DashboardService/ListFacts"
 	// DashboardServiceAckAlertProcedure is the fully-qualified name of the DashboardService's AckAlert
 	// RPC.
-	DashboardServiceAckAlertProcedure = "/arb.dashboard.v1.DashboardService/AckAlert"
+	DashboardServiceAckAlertProcedure = "/nox.dashboard.v1.DashboardService/AckAlert"
 	// DashboardServiceAckAllProcedure is the fully-qualified name of the DashboardService's AckAll RPC.
-	DashboardServiceAckAllProcedure = "/arb.dashboard.v1.DashboardService/AckAll"
+	DashboardServiceAckAllProcedure = "/nox.dashboard.v1.DashboardService/AckAll"
 	// DashboardServiceListUnackedProcedure is the fully-qualified name of the DashboardService's
 	// ListUnacked RPC.
-	DashboardServiceListUnackedProcedure = "/arb.dashboard.v1.DashboardService/ListUnacked"
+	DashboardServiceListUnackedProcedure = "/nox.dashboard.v1.DashboardService/ListUnacked"
 	// DashboardServiceDeleteAlertsProcedure is the fully-qualified name of the DashboardService's
 	// DeleteAlerts RPC.
-	DashboardServiceDeleteAlertsProcedure = "/arb.dashboard.v1.DashboardService/DeleteAlerts"
+	DashboardServiceDeleteAlertsProcedure = "/nox.dashboard.v1.DashboardService/DeleteAlerts"
 	// DashboardServiceClearAckedAlertsProcedure is the fully-qualified name of the DashboardService's
 	// ClearAckedAlerts RPC.
-	DashboardServiceClearAckedAlertsProcedure = "/arb.dashboard.v1.DashboardService/ClearAckedAlerts"
+	DashboardServiceClearAckedAlertsProcedure = "/nox.dashboard.v1.DashboardService/ClearAckedAlerts"
 	// DashboardServiceListKnowledgeEntriesProcedure is the fully-qualified name of the
 	// DashboardService's ListKnowledgeEntries RPC.
-	DashboardServiceListKnowledgeEntriesProcedure = "/arb.dashboard.v1.DashboardService/ListKnowledgeEntries"
+	DashboardServiceListKnowledgeEntriesProcedure = "/nox.dashboard.v1.DashboardService/ListKnowledgeEntries"
 	// DashboardServiceExecuteOpportunityProcedure is the fully-qualified name of the DashboardService's
 	// ExecuteOpportunity RPC.
-	DashboardServiceExecuteOpportunityProcedure = "/arb.dashboard.v1.DashboardService/ExecuteOpportunity"
+	DashboardServiceExecuteOpportunityProcedure = "/nox.dashboard.v1.DashboardService/ExecuteOpportunity"
 	// DashboardServiceClosePositionProcedure is the fully-qualified name of the DashboardService's
 	// ClosePosition RPC.
-	DashboardServiceClosePositionProcedure = "/arb.dashboard.v1.DashboardService/ClosePosition"
+	DashboardServiceClosePositionProcedure = "/nox.dashboard.v1.DashboardService/ClosePosition"
 	// DashboardServiceBackfillSwapHistoryProcedure is the fully-qualified name of the
 	// DashboardService's BackfillSwapHistory RPC.
-	DashboardServiceBackfillSwapHistoryProcedure = "/arb.dashboard.v1.DashboardService/BackfillSwapHistory"
+	DashboardServiceBackfillSwapHistoryProcedure = "/nox.dashboard.v1.DashboardService/BackfillSwapHistory"
 	// DashboardServiceListPositionsProcedure is the fully-qualified name of the DashboardService's
 	// ListPositions RPC.
-	DashboardServiceListPositionsProcedure = "/arb.dashboard.v1.DashboardService/ListPositions"
+	DashboardServiceListPositionsProcedure = "/nox.dashboard.v1.DashboardService/ListPositions"
 	// DashboardServiceListBrokerPositionsProcedure is the fully-qualified name of the
 	// DashboardService's ListBrokerPositions RPC.
-	DashboardServiceListBrokerPositionsProcedure = "/arb.dashboard.v1.DashboardService/ListBrokerPositions"
+	DashboardServiceListBrokerPositionsProcedure = "/nox.dashboard.v1.DashboardService/ListBrokerPositions"
 	// DashboardServiceCloseBrokerPositionProcedure is the fully-qualified name of the
 	// DashboardService's CloseBrokerPosition RPC.
-	DashboardServiceCloseBrokerPositionProcedure = "/arb.dashboard.v1.DashboardService/CloseBrokerPosition"
+	DashboardServiceCloseBrokerPositionProcedure = "/nox.dashboard.v1.DashboardService/CloseBrokerPosition"
 	// DashboardServiceCloseBrokerPositionsProcedure is the fully-qualified name of the
 	// DashboardService's CloseBrokerPositions RPC.
-	DashboardServiceCloseBrokerPositionsProcedure = "/arb.dashboard.v1.DashboardService/CloseBrokerPositions"
+	DashboardServiceCloseBrokerPositionsProcedure = "/nox.dashboard.v1.DashboardService/CloseBrokerPositions"
 	// DashboardServiceOpenProbeProcedure is the fully-qualified name of the DashboardService's
 	// OpenProbe RPC.
-	DashboardServiceOpenProbeProcedure = "/arb.dashboard.v1.DashboardService/OpenProbe"
+	DashboardServiceOpenProbeProcedure = "/nox.dashboard.v1.DashboardService/OpenProbe"
 	// DashboardServiceListProbesProcedure is the fully-qualified name of the DashboardService's
 	// ListProbes RPC.
-	DashboardServiceListProbesProcedure = "/arb.dashboard.v1.DashboardService/ListProbes"
+	DashboardServiceListProbesProcedure = "/nox.dashboard.v1.DashboardService/ListProbes"
 	// DashboardServiceApproveProbeProcedure is the fully-qualified name of the DashboardService's
 	// ApproveProbe RPC.
-	DashboardServiceApproveProbeProcedure = "/arb.dashboard.v1.DashboardService/ApproveProbe"
+	DashboardServiceApproveProbeProcedure = "/nox.dashboard.v1.DashboardService/ApproveProbe"
 	// DashboardServiceRejectProbeProcedure is the fully-qualified name of the DashboardService's
 	// RejectProbe RPC.
-	DashboardServiceRejectProbeProcedure = "/arb.dashboard.v1.DashboardService/RejectProbe"
+	DashboardServiceRejectProbeProcedure = "/nox.dashboard.v1.DashboardService/RejectProbe"
 	// DashboardServiceListProbeProposalsProcedure is the fully-qualified name of the DashboardService's
 	// ListProbeProposals RPC.
-	DashboardServiceListProbeProposalsProcedure = "/arb.dashboard.v1.DashboardService/ListProbeProposals"
+	DashboardServiceListProbeProposalsProcedure = "/nox.dashboard.v1.DashboardService/ListProbeProposals"
 	// DashboardServiceListAccountsProcedure is the fully-qualified name of the DashboardService's
 	// ListAccounts RPC.
-	DashboardServiceListAccountsProcedure = "/arb.dashboard.v1.DashboardService/ListAccounts"
+	DashboardServiceListAccountsProcedure = "/nox.dashboard.v1.DashboardService/ListAccounts"
 	// DashboardServiceTrxAccountRefreshProcedure is the fully-qualified name of the DashboardService's
 	// TrxAccountRefresh RPC.
-	DashboardServiceTrxAccountRefreshProcedure = "/arb.dashboard.v1.DashboardService/TrxAccountRefresh"
+	DashboardServiceTrxAccountRefreshProcedure = "/nox.dashboard.v1.DashboardService/TrxAccountRefresh"
 	// DashboardServiceGetTrxYieldRadarProcedure is the fully-qualified name of the DashboardService's
 	// GetTrxYieldRadar RPC.
-	DashboardServiceGetTrxYieldRadarProcedure = "/arb.dashboard.v1.DashboardService/GetTrxYieldRadar"
+	DashboardServiceGetTrxYieldRadarProcedure = "/nox.dashboard.v1.DashboardService/GetTrxYieldRadar"
 	// DashboardServiceGetTrxYieldCurveProcedure is the fully-qualified name of the DashboardService's
 	// GetTrxYieldCurve RPC.
-	DashboardServiceGetTrxYieldCurveProcedure = "/arb.dashboard.v1.DashboardService/GetTrxYieldCurve"
+	DashboardServiceGetTrxYieldCurveProcedure = "/nox.dashboard.v1.DashboardService/GetTrxYieldCurve"
 	// DashboardServiceAddDailyIncomeProcedure is the fully-qualified name of the DashboardService's
 	// AddDailyIncome RPC.
-	DashboardServiceAddDailyIncomeProcedure = "/arb.dashboard.v1.DashboardService/AddDailyIncome"
+	DashboardServiceAddDailyIncomeProcedure = "/nox.dashboard.v1.DashboardService/AddDailyIncome"
 	// DashboardServiceListDailyIncomeProcedure is the fully-qualified name of the DashboardService's
 	// ListDailyIncome RPC.
-	DashboardServiceListDailyIncomeProcedure = "/arb.dashboard.v1.DashboardService/ListDailyIncome"
+	DashboardServiceListDailyIncomeProcedure = "/nox.dashboard.v1.DashboardService/ListDailyIncome"
 	// DashboardServiceGetPnlAnchorProcedure is the fully-qualified name of the DashboardService's
 	// GetPnlAnchor RPC.
-	DashboardServiceGetPnlAnchorProcedure = "/arb.dashboard.v1.DashboardService/GetPnlAnchor"
+	DashboardServiceGetPnlAnchorProcedure = "/nox.dashboard.v1.DashboardService/GetPnlAnchor"
 	// DashboardServiceResetPnlAnchorProcedure is the fully-qualified name of the DashboardService's
 	// ResetPnlAnchor RPC.
-	DashboardServiceResetPnlAnchorProcedure = "/arb.dashboard.v1.DashboardService/ResetPnlAnchor"
+	DashboardServiceResetPnlAnchorProcedure = "/nox.dashboard.v1.DashboardService/ResetPnlAnchor"
 	// DashboardServiceListKBEntriesProcedure is the fully-qualified name of the DashboardService's
 	// ListKBEntries RPC.
-	DashboardServiceListKBEntriesProcedure = "/arb.dashboard.v1.DashboardService/ListKBEntries"
+	DashboardServiceListKBEntriesProcedure = "/nox.dashboard.v1.DashboardService/ListKBEntries"
 	// DashboardServiceGetKBEntryProcedure is the fully-qualified name of the DashboardService's
 	// GetKBEntry RPC.
-	DashboardServiceGetKBEntryProcedure = "/arb.dashboard.v1.DashboardService/GetKBEntry"
+	DashboardServiceGetKBEntryProcedure = "/nox.dashboard.v1.DashboardService/GetKBEntry"
 	// DashboardServiceListVerificationStatsProcedure is the fully-qualified name of the
 	// DashboardService's ListVerificationStats RPC.
-	DashboardServiceListVerificationStatsProcedure = "/arb.dashboard.v1.DashboardService/ListVerificationStats"
+	DashboardServiceListVerificationStatsProcedure = "/nox.dashboard.v1.DashboardService/ListVerificationStats"
 	// DashboardServiceSearchBrokerProcedure is the fully-qualified name of the DashboardService's
 	// SearchBroker RPC.
-	DashboardServiceSearchBrokerProcedure = "/arb.dashboard.v1.DashboardService/SearchBroker"
+	DashboardServiceSearchBrokerProcedure = "/nox.dashboard.v1.DashboardService/SearchBroker"
 	// DashboardServiceAddBrokerProcedure is the fully-qualified name of the DashboardService's
 	// AddBroker RPC.
-	DashboardServiceAddBrokerProcedure = "/arb.dashboard.v1.DashboardService/AddBroker"
+	DashboardServiceAddBrokerProcedure = "/nox.dashboard.v1.DashboardService/AddBroker"
 	// DashboardServiceRemoveBrokerProcedure is the fully-qualified name of the DashboardService's
 	// RemoveBroker RPC.
-	DashboardServiceRemoveBrokerProcedure = "/arb.dashboard.v1.DashboardService/RemoveBroker"
+	DashboardServiceRemoveBrokerProcedure = "/nox.dashboard.v1.DashboardService/RemoveBroker"
 	// DashboardServiceUpdateBrokerCredentialsProcedure is the fully-qualified name of the
 	// DashboardService's UpdateBrokerCredentials RPC.
-	DashboardServiceUpdateBrokerCredentialsProcedure = "/arb.dashboard.v1.DashboardService/UpdateBrokerCredentials"
+	DashboardServiceUpdateBrokerCredentialsProcedure = "/nox.dashboard.v1.DashboardService/UpdateBrokerCredentials"
 	// DashboardServiceListBrokerAccountsProcedure is the fully-qualified name of the DashboardService's
 	// ListBrokerAccounts RPC.
-	DashboardServiceListBrokerAccountsProcedure = "/arb.dashboard.v1.DashboardService/ListBrokerAccounts"
+	DashboardServiceListBrokerAccountsProcedure = "/nox.dashboard.v1.DashboardService/ListBrokerAccounts"
 	// DashboardServiceVerifyAccountProcedure is the fully-qualified name of the DashboardService's
 	// VerifyAccount RPC.
-	DashboardServiceVerifyAccountProcedure = "/arb.dashboard.v1.DashboardService/VerifyAccount"
+	DashboardServiceVerifyAccountProcedure = "/nox.dashboard.v1.DashboardService/VerifyAccount"
 	// DashboardServiceListExchangesProcedure is the fully-qualified name of the DashboardService's
 	// ListExchanges RPC.
-	DashboardServiceListExchangesProcedure = "/arb.dashboard.v1.DashboardService/ListExchanges"
+	DashboardServiceListExchangesProcedure = "/nox.dashboard.v1.DashboardService/ListExchanges"
 	// DashboardServiceAddExchangeProcedure is the fully-qualified name of the DashboardService's
 	// AddExchange RPC.
-	DashboardServiceAddExchangeProcedure = "/arb.dashboard.v1.DashboardService/AddExchange"
+	DashboardServiceAddExchangeProcedure = "/nox.dashboard.v1.DashboardService/AddExchange"
 	// DashboardServiceRemoveExchangeProcedure is the fully-qualified name of the DashboardService's
 	// RemoveExchange RPC.
-	DashboardServiceRemoveExchangeProcedure = "/arb.dashboard.v1.DashboardService/RemoveExchange"
+	DashboardServiceRemoveExchangeProcedure = "/nox.dashboard.v1.DashboardService/RemoveExchange"
 	// DashboardServiceSetExchangeLabelProcedure is the fully-qualified name of the DashboardService's
 	// SetExchangeLabel RPC.
-	DashboardServiceSetExchangeLabelProcedure = "/arb.dashboard.v1.DashboardService/SetExchangeLabel"
+	DashboardServiceSetExchangeLabelProcedure = "/nox.dashboard.v1.DashboardService/SetExchangeLabel"
 	// DashboardServiceSetExchangeWebsiteProcedure is the fully-qualified name of the DashboardService's
 	// SetExchangeWebsite RPC.
-	DashboardServiceSetExchangeWebsiteProcedure = "/arb.dashboard.v1.DashboardService/SetExchangeWebsite"
+	DashboardServiceSetExchangeWebsiteProcedure = "/nox.dashboard.v1.DashboardService/SetExchangeWebsite"
 	// DashboardServiceBrokerSymbolsProcedure is the fully-qualified name of the DashboardService's
 	// BrokerSymbols RPC.
-	DashboardServiceBrokerSymbolsProcedure = "/arb.dashboard.v1.DashboardService/BrokerSymbols"
+	DashboardServiceBrokerSymbolsProcedure = "/nox.dashboard.v1.DashboardService/BrokerSymbols"
 	// DashboardServiceSetBrokerAccountAliasProcedure is the fully-qualified name of the
 	// DashboardService's SetBrokerAccountAlias RPC.
-	DashboardServiceSetBrokerAccountAliasProcedure = "/arb.dashboard.v1.DashboardService/SetBrokerAccountAlias"
+	DashboardServiceSetBrokerAccountAliasProcedure = "/nox.dashboard.v1.DashboardService/SetBrokerAccountAlias"
 	// DashboardServiceSetBrokerAccountIsRealProcedure is the fully-qualified name of the
 	// DashboardService's SetBrokerAccountIsReal RPC.
-	DashboardServiceSetBrokerAccountIsRealProcedure = "/arb.dashboard.v1.DashboardService/SetBrokerAccountIsReal"
+	DashboardServiceSetBrokerAccountIsRealProcedure = "/nox.dashboard.v1.DashboardService/SetBrokerAccountIsReal"
 	// DashboardServiceSetBrokerDisabledProcedure is the fully-qualified name of the DashboardService's
 	// SetBrokerDisabled RPC.
-	DashboardServiceSetBrokerDisabledProcedure = "/arb.dashboard.v1.DashboardService/SetBrokerDisabled"
+	DashboardServiceSetBrokerDisabledProcedure = "/nox.dashboard.v1.DashboardService/SetBrokerDisabled"
 	// DashboardServiceSetBrokerCommissionProcedure is the fully-qualified name of the
 	// DashboardService's SetBrokerCommission RPC.
-	DashboardServiceSetBrokerCommissionProcedure = "/arb.dashboard.v1.DashboardService/SetBrokerCommission"
+	DashboardServiceSetBrokerCommissionProcedure = "/nox.dashboard.v1.DashboardService/SetBrokerCommission"
 	// DashboardServiceSetBrokerWebsiteProcedure is the fully-qualified name of the DashboardService's
 	// SetBrokerWebsite RPC.
-	DashboardServiceSetBrokerWebsiteProcedure = "/arb.dashboard.v1.DashboardService/SetBrokerWebsite"
+	DashboardServiceSetBrokerWebsiteProcedure = "/nox.dashboard.v1.DashboardService/SetBrokerWebsite"
 	// DashboardServiceListSymbolMappingsProcedure is the fully-qualified name of the DashboardService's
 	// ListSymbolMappings RPC.
-	DashboardServiceListSymbolMappingsProcedure = "/arb.dashboard.v1.DashboardService/ListSymbolMappings"
+	DashboardServiceListSymbolMappingsProcedure = "/nox.dashboard.v1.DashboardService/ListSymbolMappings"
 	// DashboardServiceSaveSymbolMappingProcedure is the fully-qualified name of the DashboardService's
 	// SaveSymbolMapping RPC.
-	DashboardServiceSaveSymbolMappingProcedure = "/arb.dashboard.v1.DashboardService/SaveSymbolMapping"
+	DashboardServiceSaveSymbolMappingProcedure = "/nox.dashboard.v1.DashboardService/SaveSymbolMapping"
 	// DashboardServiceDeleteSymbolMappingProcedure is the fully-qualified name of the
 	// DashboardService's DeleteSymbolMapping RPC.
-	DashboardServiceDeleteSymbolMappingProcedure = "/arb.dashboard.v1.DashboardService/DeleteSymbolMapping"
+	DashboardServiceDeleteSymbolMappingProcedure = "/nox.dashboard.v1.DashboardService/DeleteSymbolMapping"
 	// DashboardServiceListMappingSuggestionsProcedure is the fully-qualified name of the
 	// DashboardService's ListMappingSuggestions RPC.
-	DashboardServiceListMappingSuggestionsProcedure = "/arb.dashboard.v1.DashboardService/ListMappingSuggestions"
+	DashboardServiceListMappingSuggestionsProcedure = "/nox.dashboard.v1.DashboardService/ListMappingSuggestions"
 	// DashboardServiceListCanonicalsProcedure is the fully-qualified name of the DashboardService's
 	// ListCanonicals RPC.
-	DashboardServiceListCanonicalsProcedure = "/arb.dashboard.v1.DashboardService/ListCanonicals"
+	DashboardServiceListCanonicalsProcedure = "/nox.dashboard.v1.DashboardService/ListCanonicals"
 	// DashboardServiceAutoMapBrokerProcedure is the fully-qualified name of the DashboardService's
 	// AutoMapBroker RPC.
-	DashboardServiceAutoMapBrokerProcedure = "/arb.dashboard.v1.DashboardService/AutoMapBroker"
+	DashboardServiceAutoMapBrokerProcedure = "/nox.dashboard.v1.DashboardService/AutoMapBroker"
 	// DashboardServiceListSwapCombosProcedure is the fully-qualified name of the DashboardService's
 	// ListSwapCombos RPC.
-	DashboardServiceListSwapCombosProcedure = "/arb.dashboard.v1.DashboardService/ListSwapCombos"
+	DashboardServiceListSwapCombosProcedure = "/nox.dashboard.v1.DashboardService/ListSwapCombos"
 	// DashboardServiceListMatrixUniverseProcedure is the fully-qualified name of the DashboardService's
 	// ListMatrixUniverse RPC.
-	DashboardServiceListMatrixUniverseProcedure = "/arb.dashboard.v1.DashboardService/ListMatrixUniverse"
+	DashboardServiceListMatrixUniverseProcedure = "/nox.dashboard.v1.DashboardService/ListMatrixUniverse"
 	// DashboardServiceStreamUpdatesProcedure is the fully-qualified name of the DashboardService's
 	// StreamUpdates RPC.
-	DashboardServiceStreamUpdatesProcedure = "/arb.dashboard.v1.DashboardService/StreamUpdates"
+	DashboardServiceStreamUpdatesProcedure = "/nox.dashboard.v1.DashboardService/StreamUpdates"
 	// DashboardServiceHealthProcedure is the fully-qualified name of the DashboardService's Health RPC.
-	DashboardServiceHealthProcedure = "/arb.dashboard.v1.DashboardService/Health"
+	DashboardServiceHealthProcedure = "/nox.dashboard.v1.DashboardService/Health"
 	// DashboardServiceGetFrontConfigProcedure is the fully-qualified name of the DashboardService's
 	// GetFrontConfig RPC.
-	DashboardServiceGetFrontConfigProcedure = "/arb.dashboard.v1.DashboardService/GetFrontConfig"
+	DashboardServiceGetFrontConfigProcedure = "/nox.dashboard.v1.DashboardService/GetFrontConfig"
 	// DashboardServiceGetStrategyLedgerProcedure is the fully-qualified name of the DashboardService's
 	// GetStrategyLedger RPC.
-	DashboardServiceGetStrategyLedgerProcedure = "/arb.dashboard.v1.DashboardService/GetStrategyLedger"
+	DashboardServiceGetStrategyLedgerProcedure = "/nox.dashboard.v1.DashboardService/GetStrategyLedger"
 	// DashboardServiceGetWatchlistProcedure is the fully-qualified name of the DashboardService's
 	// GetWatchlist RPC.
-	DashboardServiceGetWatchlistProcedure = "/arb.dashboard.v1.DashboardService/GetWatchlist"
+	DashboardServiceGetWatchlistProcedure = "/nox.dashboard.v1.DashboardService/GetWatchlist"
 	// DashboardServiceSetWatchlistProcedure is the fully-qualified name of the DashboardService's
 	// SetWatchlist RPC.
-	DashboardServiceSetWatchlistProcedure = "/arb.dashboard.v1.DashboardService/SetWatchlist"
+	DashboardServiceSetWatchlistProcedure = "/nox.dashboard.v1.DashboardService/SetWatchlist"
 	// DashboardServiceAskAnalystProcedure is the fully-qualified name of the DashboardService's
 	// AskAnalyst RPC.
-	DashboardServiceAskAnalystProcedure = "/arb.dashboard.v1.DashboardService/AskAnalyst"
+	DashboardServiceAskAnalystProcedure = "/nox.dashboard.v1.DashboardService/AskAnalyst"
 	// DashboardServiceAppendAnalystNoteProcedure is the fully-qualified name of the DashboardService's
 	// AppendAnalystNote RPC.
-	DashboardServiceAppendAnalystNoteProcedure = "/arb.dashboard.v1.DashboardService/AppendAnalystNote"
+	DashboardServiceAppendAnalystNoteProcedure = "/nox.dashboard.v1.DashboardService/AppendAnalystNote"
 	// DashboardServiceGenerateKbReportProcedure is the fully-qualified name of the DashboardService's
 	// GenerateKbReport RPC.
-	DashboardServiceGenerateKbReportProcedure = "/arb.dashboard.v1.DashboardService/GenerateKbReport"
+	DashboardServiceGenerateKbReportProcedure = "/nox.dashboard.v1.DashboardService/GenerateKbReport"
 	// DashboardServiceGenerateRetroReportProcedure is the fully-qualified name of the
 	// DashboardService's GenerateRetroReport RPC.
-	DashboardServiceGenerateRetroReportProcedure = "/arb.dashboard.v1.DashboardService/GenerateRetroReport"
+	DashboardServiceGenerateRetroReportProcedure = "/nox.dashboard.v1.DashboardService/GenerateRetroReport"
 	// DashboardServiceListReportsProcedure is the fully-qualified name of the DashboardService's
 	// ListReports RPC.
-	DashboardServiceListReportsProcedure = "/arb.dashboard.v1.DashboardService/ListReports"
+	DashboardServiceListReportsProcedure = "/nox.dashboard.v1.DashboardService/ListReports"
 	// DashboardServiceGetReportProcedure is the fully-qualified name of the DashboardService's
 	// GetReport RPC.
-	DashboardServiceGetReportProcedure = "/arb.dashboard.v1.DashboardService/GetReport"
+	DashboardServiceGetReportProcedure = "/nox.dashboard.v1.DashboardService/GetReport"
 	// DashboardServiceGetAiSettingsProcedure is the fully-qualified name of the DashboardService's
 	// GetAiSettings RPC.
-	DashboardServiceGetAiSettingsProcedure = "/arb.dashboard.v1.DashboardService/GetAiSettings"
+	DashboardServiceGetAiSettingsProcedure = "/nox.dashboard.v1.DashboardService/GetAiSettings"
 	// DashboardServiceSetAiSettingsProcedure is the fully-qualified name of the DashboardService's
 	// SetAiSettings RPC.
-	DashboardServiceSetAiSettingsProcedure = "/arb.dashboard.v1.DashboardService/SetAiSettings"
+	DashboardServiceSetAiSettingsProcedure = "/nox.dashboard.v1.DashboardService/SetAiSettings"
 	// DashboardServiceGetCexScanSnapshotProcedure is the fully-qualified name of the DashboardService's
 	// GetCexScanSnapshot RPC.
-	DashboardServiceGetCexScanSnapshotProcedure = "/arb.dashboard.v1.DashboardService/GetCexScanSnapshot"
+	DashboardServiceGetCexScanSnapshotProcedure = "/nox.dashboard.v1.DashboardService/GetCexScanSnapshot"
 	// DashboardServiceGetFinanceOverviewProcedure is the fully-qualified name of the DashboardService's
 	// GetFinanceOverview RPC.
-	DashboardServiceGetFinanceOverviewProcedure = "/arb.dashboard.v1.DashboardService/GetFinanceOverview"
+	DashboardServiceGetFinanceOverviewProcedure = "/nox.dashboard.v1.DashboardService/GetFinanceOverview"
 	// DashboardServiceExecuteSpotCarryDemoProcedure is the fully-qualified name of the
 	// DashboardService's ExecuteSpotCarryDemo RPC.
-	DashboardServiceExecuteSpotCarryDemoProcedure = "/arb.dashboard.v1.DashboardService/ExecuteSpotCarryDemo"
+	DashboardServiceExecuteSpotCarryDemoProcedure = "/nox.dashboard.v1.DashboardService/ExecuteSpotCarryDemo"
 	// DashboardServiceListSpotCarryDemoProcedure is the fully-qualified name of the DashboardService's
 	// ListSpotCarryDemo RPC.
-	DashboardServiceListSpotCarryDemoProcedure = "/arb.dashboard.v1.DashboardService/ListSpotCarryDemo"
+	DashboardServiceListSpotCarryDemoProcedure = "/nox.dashboard.v1.DashboardService/ListSpotCarryDemo"
 	// DashboardServiceListPaperSpotCarryProcedure is the fully-qualified name of the DashboardService's
 	// ListPaperSpotCarry RPC.
-	DashboardServiceListPaperSpotCarryProcedure = "/arb.dashboard.v1.DashboardService/ListPaperSpotCarry"
+	DashboardServiceListPaperSpotCarryProcedure = "/nox.dashboard.v1.DashboardService/ListPaperSpotCarry"
 	// DashboardServiceListAutotradeAllowRulesProcedure is the fully-qualified name of the
 	// DashboardService's ListAutotradeAllowRules RPC.
-	DashboardServiceListAutotradeAllowRulesProcedure = "/arb.dashboard.v1.DashboardService/ListAutotradeAllowRules"
+	DashboardServiceListAutotradeAllowRulesProcedure = "/nox.dashboard.v1.DashboardService/ListAutotradeAllowRules"
 	// DashboardServiceSetAutotradeAllowRuleEnabledProcedure is the fully-qualified name of the
 	// DashboardService's SetAutotradeAllowRuleEnabled RPC.
-	DashboardServiceSetAutotradeAllowRuleEnabledProcedure = "/arb.dashboard.v1.DashboardService/SetAutotradeAllowRuleEnabled"
+	DashboardServiceSetAutotradeAllowRuleEnabledProcedure = "/nox.dashboard.v1.DashboardService/SetAutotradeAllowRuleEnabled"
 	// DashboardServiceAddAutotradeAllowRuleProcedure is the fully-qualified name of the
 	// DashboardService's AddAutotradeAllowRule RPC.
-	DashboardServiceAddAutotradeAllowRuleProcedure = "/arb.dashboard.v1.DashboardService/AddAutotradeAllowRule"
+	DashboardServiceAddAutotradeAllowRuleProcedure = "/nox.dashboard.v1.DashboardService/AddAutotradeAllowRule"
 	// DashboardServiceDeleteAutotradeAllowRuleProcedure is the fully-qualified name of the
 	// DashboardService's DeleteAutotradeAllowRule RPC.
-	DashboardServiceDeleteAutotradeAllowRuleProcedure = "/arb.dashboard.v1.DashboardService/DeleteAutotradeAllowRule"
+	DashboardServiceDeleteAutotradeAllowRuleProcedure = "/nox.dashboard.v1.DashboardService/DeleteAutotradeAllowRule"
 	// DashboardServiceGetCapitalCoverageProcedure is the fully-qualified name of the DashboardService's
 	// GetCapitalCoverage RPC.
-	DashboardServiceGetCapitalCoverageProcedure = "/arb.dashboard.v1.DashboardService/GetCapitalCoverage"
+	DashboardServiceGetCapitalCoverageProcedure = "/nox.dashboard.v1.DashboardService/GetCapitalCoverage"
 	// DashboardServiceGetCapitalMapProcedure is the fully-qualified name of the DashboardService's
 	// GetCapitalMap RPC.
-	DashboardServiceGetCapitalMapProcedure = "/arb.dashboard.v1.DashboardService/GetCapitalMap"
+	DashboardServiceGetCapitalMapProcedure = "/nox.dashboard.v1.DashboardService/GetCapitalMap"
 	// DashboardServiceGetCexFinanceProcedure is the fully-qualified name of the DashboardService's
 	// GetCexFinance RPC.
-	DashboardServiceGetCexFinanceProcedure = "/arb.dashboard.v1.DashboardService/GetCexFinance"
+	DashboardServiceGetCexFinanceProcedure = "/nox.dashboard.v1.DashboardService/GetCexFinance"
 	// DashboardServiceListCarryGraduationsProcedure is the fully-qualified name of the
 	// DashboardService's ListCarryGraduations RPC.
-	DashboardServiceListCarryGraduationsProcedure = "/arb.dashboard.v1.DashboardService/ListCarryGraduations"
+	DashboardServiceListCarryGraduationsProcedure = "/nox.dashboard.v1.DashboardService/ListCarryGraduations"
 	// DashboardServiceApproveCarryGraduationProcedure is the fully-qualified name of the
 	// DashboardService's ApproveCarryGraduation RPC.
-	DashboardServiceApproveCarryGraduationProcedure = "/arb.dashboard.v1.DashboardService/ApproveCarryGraduation"
+	DashboardServiceApproveCarryGraduationProcedure = "/nox.dashboard.v1.DashboardService/ApproveCarryGraduation"
 	// DashboardServiceRejectCarryGraduationProcedure is the fully-qualified name of the
 	// DashboardService's RejectCarryGraduation RPC.
-	DashboardServiceRejectCarryGraduationProcedure = "/arb.dashboard.v1.DashboardService/RejectCarryGraduation"
+	DashboardServiceRejectCarryGraduationProcedure = "/nox.dashboard.v1.DashboardService/RejectCarryGraduation"
 	// DashboardServiceListVenueExposureCapsProcedure is the fully-qualified name of the
 	// DashboardService's ListVenueExposureCaps RPC.
-	DashboardServiceListVenueExposureCapsProcedure = "/arb.dashboard.v1.DashboardService/ListVenueExposureCaps"
+	DashboardServiceListVenueExposureCapsProcedure = "/nox.dashboard.v1.DashboardService/ListVenueExposureCaps"
 	// DashboardServiceSetVenueExposureCapProcedure is the fully-qualified name of the
 	// DashboardService's SetVenueExposureCap RPC.
-	DashboardServiceSetVenueExposureCapProcedure = "/arb.dashboard.v1.DashboardService/SetVenueExposureCap"
+	DashboardServiceSetVenueExposureCapProcedure = "/nox.dashboard.v1.DashboardService/SetVenueExposureCap"
 	// DashboardServiceListXAssetAllowCombosProcedure is the fully-qualified name of the
 	// DashboardService's ListXAssetAllowCombos RPC.
-	DashboardServiceListXAssetAllowCombosProcedure = "/arb.dashboard.v1.DashboardService/ListXAssetAllowCombos"
+	DashboardServiceListXAssetAllowCombosProcedure = "/nox.dashboard.v1.DashboardService/ListXAssetAllowCombos"
 	// DashboardServiceListXAssetPendingEntriesProcedure is the fully-qualified name of the
 	// DashboardService's ListXAssetPendingEntries RPC.
-	DashboardServiceListXAssetPendingEntriesProcedure = "/arb.dashboard.v1.DashboardService/ListXAssetPendingEntries"
+	DashboardServiceListXAssetPendingEntriesProcedure = "/nox.dashboard.v1.DashboardService/ListXAssetPendingEntries"
 	// DashboardServiceUpsertXAssetAllowComboProcedure is the fully-qualified name of the
 	// DashboardService's UpsertXAssetAllowCombo RPC.
-	DashboardServiceUpsertXAssetAllowComboProcedure = "/arb.dashboard.v1.DashboardService/UpsertXAssetAllowCombo"
+	DashboardServiceUpsertXAssetAllowComboProcedure = "/nox.dashboard.v1.DashboardService/UpsertXAssetAllowCombo"
 	// DashboardServiceResumeXAssetComboProcedure is the fully-qualified name of the DashboardService's
 	// ResumeXAssetCombo RPC.
-	DashboardServiceResumeXAssetComboProcedure = "/arb.dashboard.v1.DashboardService/ResumeXAssetCombo"
+	DashboardServiceResumeXAssetComboProcedure = "/nox.dashboard.v1.DashboardService/ResumeXAssetCombo"
 	// DashboardServicePreviewXAssetComboRiskProcedure is the fully-qualified name of the
 	// DashboardService's PreviewXAssetComboRisk RPC.
-	DashboardServicePreviewXAssetComboRiskProcedure = "/arb.dashboard.v1.DashboardService/PreviewXAssetComboRisk"
+	DashboardServicePreviewXAssetComboRiskProcedure = "/nox.dashboard.v1.DashboardService/PreviewXAssetComboRisk"
 	// DashboardServiceListAccountMarginStatusProcedure is the fully-qualified name of the
 	// DashboardService's ListAccountMarginStatus RPC.
-	DashboardServiceListAccountMarginStatusProcedure = "/arb.dashboard.v1.DashboardService/ListAccountMarginStatus"
+	DashboardServiceListAccountMarginStatusProcedure = "/nox.dashboard.v1.DashboardService/ListAccountMarginStatus"
 	// DashboardServiceListAppConfigProcedure is the fully-qualified name of the DashboardService's
 	// ListAppConfig RPC.
-	DashboardServiceListAppConfigProcedure = "/arb.dashboard.v1.DashboardService/ListAppConfig"
+	DashboardServiceListAppConfigProcedure = "/nox.dashboard.v1.DashboardService/ListAppConfig"
 	// DashboardServiceUpdateAppConfigProcedure is the fully-qualified name of the DashboardService's
 	// UpdateAppConfig RPC.
-	DashboardServiceUpdateAppConfigProcedure = "/arb.dashboard.v1.DashboardService/UpdateAppConfig"
+	DashboardServiceUpdateAppConfigProcedure = "/nox.dashboard.v1.DashboardService/UpdateAppConfig"
 	// DashboardServiceSelfRestartProcedure is the fully-qualified name of the DashboardService's
 	// SelfRestart RPC.
-	DashboardServiceSelfRestartProcedure = "/arb.dashboard.v1.DashboardService/SelfRestart"
+	DashboardServiceSelfRestartProcedure = "/nox.dashboard.v1.DashboardService/SelfRestart"
 	// DashboardServiceListEmployeesProcedure is the fully-qualified name of the DashboardService's
 	// ListEmployees RPC.
-	DashboardServiceListEmployeesProcedure = "/arb.dashboard.v1.DashboardService/ListEmployees"
+	DashboardServiceListEmployeesProcedure = "/nox.dashboard.v1.DashboardService/ListEmployees"
 	// DashboardServiceListProposalsProcedure is the fully-qualified name of the DashboardService's
 	// ListProposals RPC.
-	DashboardServiceListProposalsProcedure = "/arb.dashboard.v1.DashboardService/ListProposals"
+	DashboardServiceListProposalsProcedure = "/nox.dashboard.v1.DashboardService/ListProposals"
 	// DashboardServiceAckProposalProcedure is the fully-qualified name of the DashboardService's
 	// AckProposal RPC.
-	DashboardServiceAckProposalProcedure = "/arb.dashboard.v1.DashboardService/AckProposal"
+	DashboardServiceAckProposalProcedure = "/nox.dashboard.v1.DashboardService/AckProposal"
 	// DashboardServiceListPersonalPositionsProcedure is the fully-qualified name of the
 	// DashboardService's ListPersonalPositions RPC.
-	DashboardServiceListPersonalPositionsProcedure = "/arb.dashboard.v1.DashboardService/ListPersonalPositions"
+	DashboardServiceListPersonalPositionsProcedure = "/nox.dashboard.v1.DashboardService/ListPersonalPositions"
 	// DashboardServiceListDCIOrdersProcedure is the fully-qualified name of the DashboardService's
 	// ListDCIOrders RPC.
-	DashboardServiceListDCIOrdersProcedure = "/arb.dashboard.v1.DashboardService/ListDCIOrders"
+	DashboardServiceListDCIOrdersProcedure = "/nox.dashboard.v1.DashboardService/ListDCIOrders"
 	// DashboardServiceListAppSecretsProcedure is the fully-qualified name of the DashboardService's
 	// ListAppSecrets RPC.
-	DashboardServiceListAppSecretsProcedure = "/arb.dashboard.v1.DashboardService/ListAppSecrets"
+	DashboardServiceListAppSecretsProcedure = "/nox.dashboard.v1.DashboardService/ListAppSecrets"
 	// DashboardServiceUpdateAppSecretProcedure is the fully-qualified name of the DashboardService's
 	// UpdateAppSecret RPC.
-	DashboardServiceUpdateAppSecretProcedure = "/arb.dashboard.v1.DashboardService/UpdateAppSecret"
+	DashboardServiceUpdateAppSecretProcedure = "/nox.dashboard.v1.DashboardService/UpdateAppSecret"
 )
 
-// DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
+// DashboardServiceClient is a client for the nox.dashboard.v1.DashboardService service.
 type DashboardServiceClient interface {
 	// 快照类
 	ListLatestQuotes(context.Context, *connect.Request[dashboardv1.ListQuotesRequest]) (*connect.Response[dashboardv1.ListQuotesResponse], error)
@@ -511,7 +511,7 @@ type DashboardServiceClient interface {
 	UpdateAppSecret(context.Context, *connect.Request[dashboardv1.UpdateAppSecretRequest]) (*connect.Response[dashboardv1.UpdateAppSecretResponse], error)
 }
 
-// NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
+// NewDashboardServiceClient constructs a client for the nox.dashboard.v1.DashboardService service.
 // By default, it uses the Connect protocol with the binary Protobuf Codec, asks for gzipped
 // responses, and sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the
 // connect.WithGRPC() or connect.WithGRPCWeb() options.
@@ -1278,543 +1278,543 @@ type dashboardServiceClient struct {
 	updateAppSecret              *connect.Client[dashboardv1.UpdateAppSecretRequest, dashboardv1.UpdateAppSecretResponse]
 }
 
-// ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
+// ListLatestQuotes calls nox.dashboard.v1.DashboardService.ListLatestQuotes.
 func (c *dashboardServiceClient) ListLatestQuotes(ctx context.Context, req *connect.Request[dashboardv1.ListQuotesRequest]) (*connect.Response[dashboardv1.ListQuotesResponse], error) {
 	return c.listLatestQuotes.CallUnary(ctx, req)
 }
 
-// ListLatestFacts calls arb.dashboard.v1.DashboardService.ListLatestFacts.
+// ListLatestFacts calls nox.dashboard.v1.DashboardService.ListLatestFacts.
 func (c *dashboardServiceClient) ListLatestFacts(ctx context.Context, req *connect.Request[dashboardv1.ListLatestFactsRequest]) (*connect.Response[dashboardv1.ListLatestFactsResponse], error) {
 	return c.listLatestFacts.CallUnary(ctx, req)
 }
 
-// ListOpportunities calls arb.dashboard.v1.DashboardService.ListOpportunities.
+// ListOpportunities calls nox.dashboard.v1.DashboardService.ListOpportunities.
 func (c *dashboardServiceClient) ListOpportunities(ctx context.Context, req *connect.Request[dashboardv1.ListOpportunitiesRequest]) (*connect.Response[dashboardv1.ListOpportunitiesResponse], error) {
 	return c.listOpportunities.CallUnary(ctx, req)
 }
 
-// ListAlerts calls arb.dashboard.v1.DashboardService.ListAlerts.
+// ListAlerts calls nox.dashboard.v1.DashboardService.ListAlerts.
 func (c *dashboardServiceClient) ListAlerts(ctx context.Context, req *connect.Request[dashboardv1.ListAlertsRequest]) (*connect.Response[dashboardv1.ListAlertsResponse], error) {
 	return c.listAlerts.CallUnary(ctx, req)
 }
 
-// ListSourceHealth calls arb.dashboard.v1.DashboardService.ListSourceHealth.
+// ListSourceHealth calls nox.dashboard.v1.DashboardService.ListSourceHealth.
 func (c *dashboardServiceClient) ListSourceHealth(ctx context.Context, req *connect.Request[dashboardv1.ListSourceHealthRequest]) (*connect.Response[dashboardv1.ListSourceHealthResponse], error) {
 	return c.listSourceHealth.CallUnary(ctx, req)
 }
 
-// ListFacts calls arb.dashboard.v1.DashboardService.ListFacts.
+// ListFacts calls nox.dashboard.v1.DashboardService.ListFacts.
 func (c *dashboardServiceClient) ListFacts(ctx context.Context, req *connect.Request[dashboardv1.ListFactsRequest]) (*connect.Response[dashboardv1.ListFactsResponse], error) {
 	return c.listFacts.CallUnary(ctx, req)
 }
 
-// AckAlert calls arb.dashboard.v1.DashboardService.AckAlert.
+// AckAlert calls nox.dashboard.v1.DashboardService.AckAlert.
 func (c *dashboardServiceClient) AckAlert(ctx context.Context, req *connect.Request[dashboardv1.AckAlertRequest]) (*connect.Response[dashboardv1.AckAlertResponse], error) {
 	return c.ackAlert.CallUnary(ctx, req)
 }
 
-// AckAll calls arb.dashboard.v1.DashboardService.AckAll.
+// AckAll calls nox.dashboard.v1.DashboardService.AckAll.
 func (c *dashboardServiceClient) AckAll(ctx context.Context, req *connect.Request[dashboardv1.AckAllRequest]) (*connect.Response[dashboardv1.AckAllResponse], error) {
 	return c.ackAll.CallUnary(ctx, req)
 }
 
-// ListUnacked calls arb.dashboard.v1.DashboardService.ListUnacked.
+// ListUnacked calls nox.dashboard.v1.DashboardService.ListUnacked.
 func (c *dashboardServiceClient) ListUnacked(ctx context.Context, req *connect.Request[dashboardv1.ListUnackedRequest]) (*connect.Response[dashboardv1.ListUnackedResponse], error) {
 	return c.listUnacked.CallUnary(ctx, req)
 }
 
-// DeleteAlerts calls arb.dashboard.v1.DashboardService.DeleteAlerts.
+// DeleteAlerts calls nox.dashboard.v1.DashboardService.DeleteAlerts.
 func (c *dashboardServiceClient) DeleteAlerts(ctx context.Context, req *connect.Request[dashboardv1.DeleteAlertsRequest]) (*connect.Response[dashboardv1.DeleteAlertsResponse], error) {
 	return c.deleteAlerts.CallUnary(ctx, req)
 }
 
-// ClearAckedAlerts calls arb.dashboard.v1.DashboardService.ClearAckedAlerts.
+// ClearAckedAlerts calls nox.dashboard.v1.DashboardService.ClearAckedAlerts.
 func (c *dashboardServiceClient) ClearAckedAlerts(ctx context.Context, req *connect.Request[dashboardv1.ClearAckedAlertsRequest]) (*connect.Response[dashboardv1.ClearAckedAlertsResponse], error) {
 	return c.clearAckedAlerts.CallUnary(ctx, req)
 }
 
-// ListKnowledgeEntries calls arb.dashboard.v1.DashboardService.ListKnowledgeEntries.
+// ListKnowledgeEntries calls nox.dashboard.v1.DashboardService.ListKnowledgeEntries.
 func (c *dashboardServiceClient) ListKnowledgeEntries(ctx context.Context, req *connect.Request[dashboardv1.ListKnowledgeEntriesRequest]) (*connect.Response[dashboardv1.ListKnowledgeEntriesResponse], error) {
 	return c.listKnowledgeEntries.CallUnary(ctx, req)
 }
 
-// ExecuteOpportunity calls arb.dashboard.v1.DashboardService.ExecuteOpportunity.
+// ExecuteOpportunity calls nox.dashboard.v1.DashboardService.ExecuteOpportunity.
 func (c *dashboardServiceClient) ExecuteOpportunity(ctx context.Context, req *connect.Request[dashboardv1.ExecuteOpportunityRequest]) (*connect.Response[dashboardv1.ExecuteOpportunityResponse], error) {
 	return c.executeOpportunity.CallUnary(ctx, req)
 }
 
-// ClosePosition calls arb.dashboard.v1.DashboardService.ClosePosition.
+// ClosePosition calls nox.dashboard.v1.DashboardService.ClosePosition.
 func (c *dashboardServiceClient) ClosePosition(ctx context.Context, req *connect.Request[dashboardv1.ClosePositionRequest]) (*connect.Response[dashboardv1.ClosePositionResponse], error) {
 	return c.closePosition.CallUnary(ctx, req)
 }
 
-// BackfillSwapHistory calls arb.dashboard.v1.DashboardService.BackfillSwapHistory.
+// BackfillSwapHistory calls nox.dashboard.v1.DashboardService.BackfillSwapHistory.
 func (c *dashboardServiceClient) BackfillSwapHistory(ctx context.Context, req *connect.Request[dashboardv1.BackfillSwapHistoryRequest]) (*connect.Response[dashboardv1.BackfillSwapHistoryReply], error) {
 	return c.backfillSwapHistory.CallUnary(ctx, req)
 }
 
-// ListPositions calls arb.dashboard.v1.DashboardService.ListPositions.
+// ListPositions calls nox.dashboard.v1.DashboardService.ListPositions.
 func (c *dashboardServiceClient) ListPositions(ctx context.Context, req *connect.Request[dashboardv1.ListPositionsRequest]) (*connect.Response[dashboardv1.ListPositionsResponse], error) {
 	return c.listPositions.CallUnary(ctx, req)
 }
 
-// ListBrokerPositions calls arb.dashboard.v1.DashboardService.ListBrokerPositions.
+// ListBrokerPositions calls nox.dashboard.v1.DashboardService.ListBrokerPositions.
 func (c *dashboardServiceClient) ListBrokerPositions(ctx context.Context, req *connect.Request[dashboardv1.ListBrokerPositionsRequest]) (*connect.Response[dashboardv1.ListBrokerPositionsResponse], error) {
 	return c.listBrokerPositions.CallUnary(ctx, req)
 }
 
-// CloseBrokerPosition calls arb.dashboard.v1.DashboardService.CloseBrokerPosition.
+// CloseBrokerPosition calls nox.dashboard.v1.DashboardService.CloseBrokerPosition.
 func (c *dashboardServiceClient) CloseBrokerPosition(ctx context.Context, req *connect.Request[dashboardv1.CloseBrokerPositionRequest]) (*connect.Response[dashboardv1.CloseBrokerPositionResponse], error) {
 	return c.closeBrokerPosition.CallUnary(ctx, req)
 }
 
-// CloseBrokerPositions calls arb.dashboard.v1.DashboardService.CloseBrokerPositions.
+// CloseBrokerPositions calls nox.dashboard.v1.DashboardService.CloseBrokerPositions.
 func (c *dashboardServiceClient) CloseBrokerPositions(ctx context.Context, req *connect.Request[dashboardv1.CloseBrokerPositionsRequest]) (*connect.Response[dashboardv1.CloseBrokerPositionsResponse], error) {
 	return c.closeBrokerPositions.CallUnary(ctx, req)
 }
 
-// OpenProbe calls arb.dashboard.v1.DashboardService.OpenProbe.
+// OpenProbe calls nox.dashboard.v1.DashboardService.OpenProbe.
 func (c *dashboardServiceClient) OpenProbe(ctx context.Context, req *connect.Request[dashboardv1.OpenProbeRequest]) (*connect.Response[dashboardv1.OpenProbeResponse], error) {
 	return c.openProbe.CallUnary(ctx, req)
 }
 
-// ListProbes calls arb.dashboard.v1.DashboardService.ListProbes.
+// ListProbes calls nox.dashboard.v1.DashboardService.ListProbes.
 func (c *dashboardServiceClient) ListProbes(ctx context.Context, req *connect.Request[dashboardv1.ListProbesRequest]) (*connect.Response[dashboardv1.ListProbesResponse], error) {
 	return c.listProbes.CallUnary(ctx, req)
 }
 
-// ApproveProbe calls arb.dashboard.v1.DashboardService.ApproveProbe.
+// ApproveProbe calls nox.dashboard.v1.DashboardService.ApproveProbe.
 func (c *dashboardServiceClient) ApproveProbe(ctx context.Context, req *connect.Request[dashboardv1.ApproveProbeRequest]) (*connect.Response[dashboardv1.ApproveProbeResponse], error) {
 	return c.approveProbe.CallUnary(ctx, req)
 }
 
-// RejectProbe calls arb.dashboard.v1.DashboardService.RejectProbe.
+// RejectProbe calls nox.dashboard.v1.DashboardService.RejectProbe.
 func (c *dashboardServiceClient) RejectProbe(ctx context.Context, req *connect.Request[dashboardv1.RejectProbeRequest]) (*connect.Response[dashboardv1.RejectProbeResponse], error) {
 	return c.rejectProbe.CallUnary(ctx, req)
 }
 
-// ListProbeProposals calls arb.dashboard.v1.DashboardService.ListProbeProposals.
+// ListProbeProposals calls nox.dashboard.v1.DashboardService.ListProbeProposals.
 func (c *dashboardServiceClient) ListProbeProposals(ctx context.Context, req *connect.Request[dashboardv1.ListProbeProposalsRequest]) (*connect.Response[dashboardv1.ListProbeProposalsResponse], error) {
 	return c.listProbeProposals.CallUnary(ctx, req)
 }
 
-// ListAccounts calls arb.dashboard.v1.DashboardService.ListAccounts.
+// ListAccounts calls nox.dashboard.v1.DashboardService.ListAccounts.
 func (c *dashboardServiceClient) ListAccounts(ctx context.Context, req *connect.Request[dashboardv1.ListAccountsRequest]) (*connect.Response[dashboardv1.ListAccountsResponse], error) {
 	return c.listAccounts.CallUnary(ctx, req)
 }
 
-// TrxAccountRefresh calls arb.dashboard.v1.DashboardService.TrxAccountRefresh.
+// TrxAccountRefresh calls nox.dashboard.v1.DashboardService.TrxAccountRefresh.
 func (c *dashboardServiceClient) TrxAccountRefresh(ctx context.Context, req *connect.Request[dashboardv1.TrxAccountRefreshRequest]) (*connect.Response[dashboardv1.TrxAccountRefreshResponse], error) {
 	return c.trxAccountRefresh.CallUnary(ctx, req)
 }
 
-// GetTrxYieldRadar calls arb.dashboard.v1.DashboardService.GetTrxYieldRadar.
+// GetTrxYieldRadar calls nox.dashboard.v1.DashboardService.GetTrxYieldRadar.
 func (c *dashboardServiceClient) GetTrxYieldRadar(ctx context.Context, req *connect.Request[dashboardv1.GetTrxYieldRadarRequest]) (*connect.Response[dashboardv1.GetTrxYieldRadarResponse], error) {
 	return c.getTrxYieldRadar.CallUnary(ctx, req)
 }
 
-// GetTrxYieldCurve calls arb.dashboard.v1.DashboardService.GetTrxYieldCurve.
+// GetTrxYieldCurve calls nox.dashboard.v1.DashboardService.GetTrxYieldCurve.
 func (c *dashboardServiceClient) GetTrxYieldCurve(ctx context.Context, req *connect.Request[dashboardv1.GetTrxYieldCurveRequest]) (*connect.Response[dashboardv1.GetTrxYieldCurveResponse], error) {
 	return c.getTrxYieldCurve.CallUnary(ctx, req)
 }
 
-// AddDailyIncome calls arb.dashboard.v1.DashboardService.AddDailyIncome.
+// AddDailyIncome calls nox.dashboard.v1.DashboardService.AddDailyIncome.
 func (c *dashboardServiceClient) AddDailyIncome(ctx context.Context, req *connect.Request[dashboardv1.AddDailyIncomeRequest]) (*connect.Response[dashboardv1.AddDailyIncomeResponse], error) {
 	return c.addDailyIncome.CallUnary(ctx, req)
 }
 
-// ListDailyIncome calls arb.dashboard.v1.DashboardService.ListDailyIncome.
+// ListDailyIncome calls nox.dashboard.v1.DashboardService.ListDailyIncome.
 func (c *dashboardServiceClient) ListDailyIncome(ctx context.Context, req *connect.Request[dashboardv1.ListDailyIncomeRequest]) (*connect.Response[dashboardv1.ListDailyIncomeResponse], error) {
 	return c.listDailyIncome.CallUnary(ctx, req)
 }
 
-// GetPnlAnchor calls arb.dashboard.v1.DashboardService.GetPnlAnchor.
+// GetPnlAnchor calls nox.dashboard.v1.DashboardService.GetPnlAnchor.
 func (c *dashboardServiceClient) GetPnlAnchor(ctx context.Context, req *connect.Request[dashboardv1.GetPnlAnchorRequest]) (*connect.Response[dashboardv1.GetPnlAnchorResponse], error) {
 	return c.getPnlAnchor.CallUnary(ctx, req)
 }
 
-// ResetPnlAnchor calls arb.dashboard.v1.DashboardService.ResetPnlAnchor.
+// ResetPnlAnchor calls nox.dashboard.v1.DashboardService.ResetPnlAnchor.
 func (c *dashboardServiceClient) ResetPnlAnchor(ctx context.Context, req *connect.Request[dashboardv1.ResetPnlAnchorRequest]) (*connect.Response[dashboardv1.ResetPnlAnchorResponse], error) {
 	return c.resetPnlAnchor.CallUnary(ctx, req)
 }
 
-// ListKBEntries calls arb.dashboard.v1.DashboardService.ListKBEntries.
+// ListKBEntries calls nox.dashboard.v1.DashboardService.ListKBEntries.
 func (c *dashboardServiceClient) ListKBEntries(ctx context.Context, req *connect.Request[dashboardv1.ListKBEntriesRequest]) (*connect.Response[dashboardv1.ListKBEntriesResponse], error) {
 	return c.listKBEntries.CallUnary(ctx, req)
 }
 
-// GetKBEntry calls arb.dashboard.v1.DashboardService.GetKBEntry.
+// GetKBEntry calls nox.dashboard.v1.DashboardService.GetKBEntry.
 func (c *dashboardServiceClient) GetKBEntry(ctx context.Context, req *connect.Request[dashboardv1.GetKBEntryRequest]) (*connect.Response[dashboardv1.GetKBEntryResponse], error) {
 	return c.getKBEntry.CallUnary(ctx, req)
 }
 
-// ListVerificationStats calls arb.dashboard.v1.DashboardService.ListVerificationStats.
+// ListVerificationStats calls nox.dashboard.v1.DashboardService.ListVerificationStats.
 func (c *dashboardServiceClient) ListVerificationStats(ctx context.Context, req *connect.Request[dashboardv1.ListVerificationStatsRequest]) (*connect.Response[dashboardv1.ListVerificationStatsResponse], error) {
 	return c.listVerificationStats.CallUnary(ctx, req)
 }
 
-// SearchBroker calls arb.dashboard.v1.DashboardService.SearchBroker.
+// SearchBroker calls nox.dashboard.v1.DashboardService.SearchBroker.
 func (c *dashboardServiceClient) SearchBroker(ctx context.Context, req *connect.Request[dashboardv1.SearchBrokerRequest]) (*connect.Response[dashboardv1.SearchBrokerResponse], error) {
 	return c.searchBroker.CallUnary(ctx, req)
 }
 
-// AddBroker calls arb.dashboard.v1.DashboardService.AddBroker.
+// AddBroker calls nox.dashboard.v1.DashboardService.AddBroker.
 func (c *dashboardServiceClient) AddBroker(ctx context.Context, req *connect.Request[dashboardv1.AddBrokerRequest]) (*connect.Response[dashboardv1.AddBrokerResponse], error) {
 	return c.addBroker.CallUnary(ctx, req)
 }
 
-// RemoveBroker calls arb.dashboard.v1.DashboardService.RemoveBroker.
+// RemoveBroker calls nox.dashboard.v1.DashboardService.RemoveBroker.
 func (c *dashboardServiceClient) RemoveBroker(ctx context.Context, req *connect.Request[dashboardv1.RemoveBrokerRequest]) (*connect.Response[dashboardv1.RemoveBrokerResponse], error) {
 	return c.removeBroker.CallUnary(ctx, req)
 }
 
-// UpdateBrokerCredentials calls arb.dashboard.v1.DashboardService.UpdateBrokerCredentials.
+// UpdateBrokerCredentials calls nox.dashboard.v1.DashboardService.UpdateBrokerCredentials.
 func (c *dashboardServiceClient) UpdateBrokerCredentials(ctx context.Context, req *connect.Request[dashboardv1.UpdateBrokerCredentialsRequest]) (*connect.Response[dashboardv1.UpdateBrokerCredentialsResponse], error) {
 	return c.updateBrokerCredentials.CallUnary(ctx, req)
 }
 
-// ListBrokerAccounts calls arb.dashboard.v1.DashboardService.ListBrokerAccounts.
+// ListBrokerAccounts calls nox.dashboard.v1.DashboardService.ListBrokerAccounts.
 func (c *dashboardServiceClient) ListBrokerAccounts(ctx context.Context, req *connect.Request[dashboardv1.ListBrokerAccountsRequest]) (*connect.Response[dashboardv1.ListBrokerAccountsResponse], error) {
 	return c.listBrokerAccounts.CallUnary(ctx, req)
 }
 
-// VerifyAccount calls arb.dashboard.v1.DashboardService.VerifyAccount.
+// VerifyAccount calls nox.dashboard.v1.DashboardService.VerifyAccount.
 func (c *dashboardServiceClient) VerifyAccount(ctx context.Context, req *connect.Request[dashboardv1.VerifyAccountRequest]) (*connect.Response[dashboardv1.VerifyAccountResponse], error) {
 	return c.verifyAccount.CallUnary(ctx, req)
 }
 
-// ListExchanges calls arb.dashboard.v1.DashboardService.ListExchanges.
+// ListExchanges calls nox.dashboard.v1.DashboardService.ListExchanges.
 func (c *dashboardServiceClient) ListExchanges(ctx context.Context, req *connect.Request[dashboardv1.ListExchangesRequest]) (*connect.Response[dashboardv1.ListExchangesResponse], error) {
 	return c.listExchanges.CallUnary(ctx, req)
 }
 
-// AddExchange calls arb.dashboard.v1.DashboardService.AddExchange.
+// AddExchange calls nox.dashboard.v1.DashboardService.AddExchange.
 func (c *dashboardServiceClient) AddExchange(ctx context.Context, req *connect.Request[dashboardv1.AddExchangeRequest]) (*connect.Response[dashboardv1.AddExchangeResponse], error) {
 	return c.addExchange.CallUnary(ctx, req)
 }
 
-// RemoveExchange calls arb.dashboard.v1.DashboardService.RemoveExchange.
+// RemoveExchange calls nox.dashboard.v1.DashboardService.RemoveExchange.
 func (c *dashboardServiceClient) RemoveExchange(ctx context.Context, req *connect.Request[dashboardv1.RemoveExchangeRequest]) (*connect.Response[dashboardv1.RemoveExchangeResponse], error) {
 	return c.removeExchange.CallUnary(ctx, req)
 }
 
-// SetExchangeLabel calls arb.dashboard.v1.DashboardService.SetExchangeLabel.
+// SetExchangeLabel calls nox.dashboard.v1.DashboardService.SetExchangeLabel.
 func (c *dashboardServiceClient) SetExchangeLabel(ctx context.Context, req *connect.Request[dashboardv1.SetExchangeLabelRequest]) (*connect.Response[dashboardv1.SetExchangeLabelResponse], error) {
 	return c.setExchangeLabel.CallUnary(ctx, req)
 }
 
-// SetExchangeWebsite calls arb.dashboard.v1.DashboardService.SetExchangeWebsite.
+// SetExchangeWebsite calls nox.dashboard.v1.DashboardService.SetExchangeWebsite.
 func (c *dashboardServiceClient) SetExchangeWebsite(ctx context.Context, req *connect.Request[dashboardv1.SetExchangeWebsiteRequest]) (*connect.Response[dashboardv1.SetExchangeWebsiteResponse], error) {
 	return c.setExchangeWebsite.CallUnary(ctx, req)
 }
 
-// BrokerSymbols calls arb.dashboard.v1.DashboardService.BrokerSymbols.
+// BrokerSymbols calls nox.dashboard.v1.DashboardService.BrokerSymbols.
 func (c *dashboardServiceClient) BrokerSymbols(ctx context.Context, req *connect.Request[dashboardv1.BrokerSymbolsRequest]) (*connect.Response[dashboardv1.BrokerSymbolsResponse], error) {
 	return c.brokerSymbols.CallUnary(ctx, req)
 }
 
-// SetBrokerAccountAlias calls arb.dashboard.v1.DashboardService.SetBrokerAccountAlias.
+// SetBrokerAccountAlias calls nox.dashboard.v1.DashboardService.SetBrokerAccountAlias.
 func (c *dashboardServiceClient) SetBrokerAccountAlias(ctx context.Context, req *connect.Request[dashboardv1.SetBrokerAccountAliasRequest]) (*connect.Response[dashboardv1.SetBrokerAccountAliasResponse], error) {
 	return c.setBrokerAccountAlias.CallUnary(ctx, req)
 }
 
-// SetBrokerAccountIsReal calls arb.dashboard.v1.DashboardService.SetBrokerAccountIsReal.
+// SetBrokerAccountIsReal calls nox.dashboard.v1.DashboardService.SetBrokerAccountIsReal.
 func (c *dashboardServiceClient) SetBrokerAccountIsReal(ctx context.Context, req *connect.Request[dashboardv1.SetBrokerAccountIsRealRequest]) (*connect.Response[dashboardv1.SetBrokerAccountIsRealResponse], error) {
 	return c.setBrokerAccountIsReal.CallUnary(ctx, req)
 }
 
-// SetBrokerDisabled calls arb.dashboard.v1.DashboardService.SetBrokerDisabled.
+// SetBrokerDisabled calls nox.dashboard.v1.DashboardService.SetBrokerDisabled.
 func (c *dashboardServiceClient) SetBrokerDisabled(ctx context.Context, req *connect.Request[dashboardv1.SetBrokerDisabledRequest]) (*connect.Response[dashboardv1.SetBrokerDisabledResponse], error) {
 	return c.setBrokerDisabled.CallUnary(ctx, req)
 }
 
-// SetBrokerCommission calls arb.dashboard.v1.DashboardService.SetBrokerCommission.
+// SetBrokerCommission calls nox.dashboard.v1.DashboardService.SetBrokerCommission.
 func (c *dashboardServiceClient) SetBrokerCommission(ctx context.Context, req *connect.Request[dashboardv1.SetBrokerCommissionRequest]) (*connect.Response[dashboardv1.SetBrokerCommissionResponse], error) {
 	return c.setBrokerCommission.CallUnary(ctx, req)
 }
 
-// SetBrokerWebsite calls arb.dashboard.v1.DashboardService.SetBrokerWebsite.
+// SetBrokerWebsite calls nox.dashboard.v1.DashboardService.SetBrokerWebsite.
 func (c *dashboardServiceClient) SetBrokerWebsite(ctx context.Context, req *connect.Request[dashboardv1.SetBrokerWebsiteRequest]) (*connect.Response[dashboardv1.SetBrokerWebsiteResponse], error) {
 	return c.setBrokerWebsite.CallUnary(ctx, req)
 }
 
-// ListSymbolMappings calls arb.dashboard.v1.DashboardService.ListSymbolMappings.
+// ListSymbolMappings calls nox.dashboard.v1.DashboardService.ListSymbolMappings.
 func (c *dashboardServiceClient) ListSymbolMappings(ctx context.Context, req *connect.Request[dashboardv1.ListSymbolMappingsRequest]) (*connect.Response[dashboardv1.ListSymbolMappingsResponse], error) {
 	return c.listSymbolMappings.CallUnary(ctx, req)
 }
 
-// SaveSymbolMapping calls arb.dashboard.v1.DashboardService.SaveSymbolMapping.
+// SaveSymbolMapping calls nox.dashboard.v1.DashboardService.SaveSymbolMapping.
 func (c *dashboardServiceClient) SaveSymbolMapping(ctx context.Context, req *connect.Request[dashboardv1.SaveSymbolMappingRequest]) (*connect.Response[dashboardv1.SaveSymbolMappingResponse], error) {
 	return c.saveSymbolMapping.CallUnary(ctx, req)
 }
 
-// DeleteSymbolMapping calls arb.dashboard.v1.DashboardService.DeleteSymbolMapping.
+// DeleteSymbolMapping calls nox.dashboard.v1.DashboardService.DeleteSymbolMapping.
 func (c *dashboardServiceClient) DeleteSymbolMapping(ctx context.Context, req *connect.Request[dashboardv1.DeleteSymbolMappingRequest]) (*connect.Response[dashboardv1.DeleteSymbolMappingResponse], error) {
 	return c.deleteSymbolMapping.CallUnary(ctx, req)
 }
 
-// ListMappingSuggestions calls arb.dashboard.v1.DashboardService.ListMappingSuggestions.
+// ListMappingSuggestions calls nox.dashboard.v1.DashboardService.ListMappingSuggestions.
 func (c *dashboardServiceClient) ListMappingSuggestions(ctx context.Context, req *connect.Request[dashboardv1.ListMappingSuggestionsRequest]) (*connect.Response[dashboardv1.ListMappingSuggestionsResponse], error) {
 	return c.listMappingSuggestions.CallUnary(ctx, req)
 }
 
-// ListCanonicals calls arb.dashboard.v1.DashboardService.ListCanonicals.
+// ListCanonicals calls nox.dashboard.v1.DashboardService.ListCanonicals.
 func (c *dashboardServiceClient) ListCanonicals(ctx context.Context, req *connect.Request[dashboardv1.ListCanonicalsRequest]) (*connect.Response[dashboardv1.ListCanonicalsResponse], error) {
 	return c.listCanonicals.CallUnary(ctx, req)
 }
 
-// AutoMapBroker calls arb.dashboard.v1.DashboardService.AutoMapBroker.
+// AutoMapBroker calls nox.dashboard.v1.DashboardService.AutoMapBroker.
 func (c *dashboardServiceClient) AutoMapBroker(ctx context.Context, req *connect.Request[dashboardv1.AutoMapBrokerRequest]) (*connect.Response[dashboardv1.AutoMapBrokerResponse], error) {
 	return c.autoMapBroker.CallUnary(ctx, req)
 }
 
-// ListSwapCombos calls arb.dashboard.v1.DashboardService.ListSwapCombos.
+// ListSwapCombos calls nox.dashboard.v1.DashboardService.ListSwapCombos.
 func (c *dashboardServiceClient) ListSwapCombos(ctx context.Context, req *connect.Request[dashboardv1.ListSwapCombosRequest]) (*connect.Response[dashboardv1.ListSwapCombosResponse], error) {
 	return c.listSwapCombos.CallUnary(ctx, req)
 }
 
-// ListMatrixUniverse calls arb.dashboard.v1.DashboardService.ListMatrixUniverse.
+// ListMatrixUniverse calls nox.dashboard.v1.DashboardService.ListMatrixUniverse.
 func (c *dashboardServiceClient) ListMatrixUniverse(ctx context.Context, req *connect.Request[dashboardv1.ListMatrixUniverseRequest]) (*connect.Response[dashboardv1.ListMatrixUniverseResponse], error) {
 	return c.listMatrixUniverse.CallUnary(ctx, req)
 }
 
-// StreamUpdates calls arb.dashboard.v1.DashboardService.StreamUpdates.
+// StreamUpdates calls nox.dashboard.v1.DashboardService.StreamUpdates.
 func (c *dashboardServiceClient) StreamUpdates(ctx context.Context, req *connect.Request[dashboardv1.StreamUpdatesRequest]) (*connect.ServerStreamForClient[dashboardv1.StreamUpdatesResponse], error) {
 	return c.streamUpdates.CallServerStream(ctx, req)
 }
 
-// Health calls arb.dashboard.v1.DashboardService.Health.
+// Health calls nox.dashboard.v1.DashboardService.Health.
 func (c *dashboardServiceClient) Health(ctx context.Context, req *connect.Request[dashboardv1.HealthRequest]) (*connect.Response[dashboardv1.HealthResponse], error) {
 	return c.health.CallUnary(ctx, req)
 }
 
-// GetFrontConfig calls arb.dashboard.v1.DashboardService.GetFrontConfig.
+// GetFrontConfig calls nox.dashboard.v1.DashboardService.GetFrontConfig.
 func (c *dashboardServiceClient) GetFrontConfig(ctx context.Context, req *connect.Request[dashboardv1.GetFrontConfigRequest]) (*connect.Response[dashboardv1.GetFrontConfigResponse], error) {
 	return c.getFrontConfig.CallUnary(ctx, req)
 }
 
-// GetStrategyLedger calls arb.dashboard.v1.DashboardService.GetStrategyLedger.
+// GetStrategyLedger calls nox.dashboard.v1.DashboardService.GetStrategyLedger.
 func (c *dashboardServiceClient) GetStrategyLedger(ctx context.Context, req *connect.Request[dashboardv1.GetStrategyLedgerRequest]) (*connect.Response[dashboardv1.GetStrategyLedgerResponse], error) {
 	return c.getStrategyLedger.CallUnary(ctx, req)
 }
 
-// GetWatchlist calls arb.dashboard.v1.DashboardService.GetWatchlist.
+// GetWatchlist calls nox.dashboard.v1.DashboardService.GetWatchlist.
 func (c *dashboardServiceClient) GetWatchlist(ctx context.Context, req *connect.Request[dashboardv1.GetWatchlistRequest]) (*connect.Response[dashboardv1.GetWatchlistResponse], error) {
 	return c.getWatchlist.CallUnary(ctx, req)
 }
 
-// SetWatchlist calls arb.dashboard.v1.DashboardService.SetWatchlist.
+// SetWatchlist calls nox.dashboard.v1.DashboardService.SetWatchlist.
 func (c *dashboardServiceClient) SetWatchlist(ctx context.Context, req *connect.Request[dashboardv1.SetWatchlistRequest]) (*connect.Response[dashboardv1.SetWatchlistResponse], error) {
 	return c.setWatchlist.CallUnary(ctx, req)
 }
 
-// AskAnalyst calls arb.dashboard.v1.DashboardService.AskAnalyst.
+// AskAnalyst calls nox.dashboard.v1.DashboardService.AskAnalyst.
 func (c *dashboardServiceClient) AskAnalyst(ctx context.Context, req *connect.Request[dashboardv1.AskAnalystRequest]) (*connect.ServerStreamForClient[dashboardv1.AskAnalystResponse], error) {
 	return c.askAnalyst.CallServerStream(ctx, req)
 }
 
-// AppendAnalystNote calls arb.dashboard.v1.DashboardService.AppendAnalystNote.
+// AppendAnalystNote calls nox.dashboard.v1.DashboardService.AppendAnalystNote.
 func (c *dashboardServiceClient) AppendAnalystNote(ctx context.Context, req *connect.Request[dashboardv1.AppendAnalystNoteRequest]) (*connect.Response[dashboardv1.AppendAnalystNoteResponse], error) {
 	return c.appendAnalystNote.CallUnary(ctx, req)
 }
 
-// GenerateKbReport calls arb.dashboard.v1.DashboardService.GenerateKbReport.
+// GenerateKbReport calls nox.dashboard.v1.DashboardService.GenerateKbReport.
 func (c *dashboardServiceClient) GenerateKbReport(ctx context.Context, req *connect.Request[dashboardv1.GenerateKbReportRequest]) (*connect.Response[dashboardv1.GenerateKbReportResponse], error) {
 	return c.generateKbReport.CallUnary(ctx, req)
 }
 
-// GenerateRetroReport calls arb.dashboard.v1.DashboardService.GenerateRetroReport.
+// GenerateRetroReport calls nox.dashboard.v1.DashboardService.GenerateRetroReport.
 func (c *dashboardServiceClient) GenerateRetroReport(ctx context.Context, req *connect.Request[dashboardv1.GenerateRetroReportRequest]) (*connect.Response[dashboardv1.GenerateRetroReportResponse], error) {
 	return c.generateRetroReport.CallUnary(ctx, req)
 }
 
-// ListReports calls arb.dashboard.v1.DashboardService.ListReports.
+// ListReports calls nox.dashboard.v1.DashboardService.ListReports.
 func (c *dashboardServiceClient) ListReports(ctx context.Context, req *connect.Request[dashboardv1.ListReportsRequest]) (*connect.Response[dashboardv1.ListReportsResponse], error) {
 	return c.listReports.CallUnary(ctx, req)
 }
 
-// GetReport calls arb.dashboard.v1.DashboardService.GetReport.
+// GetReport calls nox.dashboard.v1.DashboardService.GetReport.
 func (c *dashboardServiceClient) GetReport(ctx context.Context, req *connect.Request[dashboardv1.GetReportRequest]) (*connect.Response[dashboardv1.GetReportResponse], error) {
 	return c.getReport.CallUnary(ctx, req)
 }
 
-// GetAiSettings calls arb.dashboard.v1.DashboardService.GetAiSettings.
+// GetAiSettings calls nox.dashboard.v1.DashboardService.GetAiSettings.
 func (c *dashboardServiceClient) GetAiSettings(ctx context.Context, req *connect.Request[dashboardv1.GetAiSettingsRequest]) (*connect.Response[dashboardv1.GetAiSettingsResponse], error) {
 	return c.getAiSettings.CallUnary(ctx, req)
 }
 
-// SetAiSettings calls arb.dashboard.v1.DashboardService.SetAiSettings.
+// SetAiSettings calls nox.dashboard.v1.DashboardService.SetAiSettings.
 func (c *dashboardServiceClient) SetAiSettings(ctx context.Context, req *connect.Request[dashboardv1.SetAiSettingsRequest]) (*connect.Response[dashboardv1.SetAiSettingsResponse], error) {
 	return c.setAiSettings.CallUnary(ctx, req)
 }
 
-// GetCexScanSnapshot calls arb.dashboard.v1.DashboardService.GetCexScanSnapshot.
+// GetCexScanSnapshot calls nox.dashboard.v1.DashboardService.GetCexScanSnapshot.
 func (c *dashboardServiceClient) GetCexScanSnapshot(ctx context.Context, req *connect.Request[dashboardv1.GetCexScanSnapshotRequest]) (*connect.Response[dashboardv1.GetCexScanSnapshotResponse], error) {
 	return c.getCexScanSnapshot.CallUnary(ctx, req)
 }
 
-// GetFinanceOverview calls arb.dashboard.v1.DashboardService.GetFinanceOverview.
+// GetFinanceOverview calls nox.dashboard.v1.DashboardService.GetFinanceOverview.
 func (c *dashboardServiceClient) GetFinanceOverview(ctx context.Context, req *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error) {
 	return c.getFinanceOverview.CallUnary(ctx, req)
 }
 
-// ExecuteSpotCarryDemo calls arb.dashboard.v1.DashboardService.ExecuteSpotCarryDemo.
+// ExecuteSpotCarryDemo calls nox.dashboard.v1.DashboardService.ExecuteSpotCarryDemo.
 func (c *dashboardServiceClient) ExecuteSpotCarryDemo(ctx context.Context, req *connect.Request[dashboardv1.ExecuteSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ExecuteSpotCarryDemoResponse], error) {
 	return c.executeSpotCarryDemo.CallUnary(ctx, req)
 }
 
-// ListSpotCarryDemo calls arb.dashboard.v1.DashboardService.ListSpotCarryDemo.
+// ListSpotCarryDemo calls nox.dashboard.v1.DashboardService.ListSpotCarryDemo.
 func (c *dashboardServiceClient) ListSpotCarryDemo(ctx context.Context, req *connect.Request[dashboardv1.ListSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ListSpotCarryDemoResponse], error) {
 	return c.listSpotCarryDemo.CallUnary(ctx, req)
 }
 
-// ListPaperSpotCarry calls arb.dashboard.v1.DashboardService.ListPaperSpotCarry.
+// ListPaperSpotCarry calls nox.dashboard.v1.DashboardService.ListPaperSpotCarry.
 func (c *dashboardServiceClient) ListPaperSpotCarry(ctx context.Context, req *connect.Request[dashboardv1.ListPaperSpotCarryRequest]) (*connect.Response[dashboardv1.ListPaperSpotCarryResponse], error) {
 	return c.listPaperSpotCarry.CallUnary(ctx, req)
 }
 
-// ListAutotradeAllowRules calls arb.dashboard.v1.DashboardService.ListAutotradeAllowRules.
+// ListAutotradeAllowRules calls nox.dashboard.v1.DashboardService.ListAutotradeAllowRules.
 func (c *dashboardServiceClient) ListAutotradeAllowRules(ctx context.Context, req *connect.Request[dashboardv1.ListAutotradeAllowRulesRequest]) (*connect.Response[dashboardv1.ListAutotradeAllowRulesResponse], error) {
 	return c.listAutotradeAllowRules.CallUnary(ctx, req)
 }
 
 // SetAutotradeAllowRuleEnabled calls
-// arb.dashboard.v1.DashboardService.SetAutotradeAllowRuleEnabled.
+// nox.dashboard.v1.DashboardService.SetAutotradeAllowRuleEnabled.
 func (c *dashboardServiceClient) SetAutotradeAllowRuleEnabled(ctx context.Context, req *connect.Request[dashboardv1.SetAutotradeAllowRuleEnabledRequest]) (*connect.Response[dashboardv1.SetAutotradeAllowRuleEnabledResponse], error) {
 	return c.setAutotradeAllowRuleEnabled.CallUnary(ctx, req)
 }
 
-// AddAutotradeAllowRule calls arb.dashboard.v1.DashboardService.AddAutotradeAllowRule.
+// AddAutotradeAllowRule calls nox.dashboard.v1.DashboardService.AddAutotradeAllowRule.
 func (c *dashboardServiceClient) AddAutotradeAllowRule(ctx context.Context, req *connect.Request[dashboardv1.AddAutotradeAllowRuleRequest]) (*connect.Response[dashboardv1.AddAutotradeAllowRuleResponse], error) {
 	return c.addAutotradeAllowRule.CallUnary(ctx, req)
 }
 
-// DeleteAutotradeAllowRule calls arb.dashboard.v1.DashboardService.DeleteAutotradeAllowRule.
+// DeleteAutotradeAllowRule calls nox.dashboard.v1.DashboardService.DeleteAutotradeAllowRule.
 func (c *dashboardServiceClient) DeleteAutotradeAllowRule(ctx context.Context, req *connect.Request[dashboardv1.DeleteAutotradeAllowRuleRequest]) (*connect.Response[dashboardv1.DeleteAutotradeAllowRuleResponse], error) {
 	return c.deleteAutotradeAllowRule.CallUnary(ctx, req)
 }
 
-// GetCapitalCoverage calls arb.dashboard.v1.DashboardService.GetCapitalCoverage.
+// GetCapitalCoverage calls nox.dashboard.v1.DashboardService.GetCapitalCoverage.
 func (c *dashboardServiceClient) GetCapitalCoverage(ctx context.Context, req *connect.Request[dashboardv1.GetCapitalCoverageRequest]) (*connect.Response[dashboardv1.GetCapitalCoverageResponse], error) {
 	return c.getCapitalCoverage.CallUnary(ctx, req)
 }
 
-// GetCapitalMap calls arb.dashboard.v1.DashboardService.GetCapitalMap.
+// GetCapitalMap calls nox.dashboard.v1.DashboardService.GetCapitalMap.
 func (c *dashboardServiceClient) GetCapitalMap(ctx context.Context, req *connect.Request[dashboardv1.GetCapitalMapRequest]) (*connect.Response[dashboardv1.GetCapitalMapResponse], error) {
 	return c.getCapitalMap.CallUnary(ctx, req)
 }
 
-// GetCexFinance calls arb.dashboard.v1.DashboardService.GetCexFinance.
+// GetCexFinance calls nox.dashboard.v1.DashboardService.GetCexFinance.
 func (c *dashboardServiceClient) GetCexFinance(ctx context.Context, req *connect.Request[dashboardv1.GetCexFinanceRequest]) (*connect.Response[dashboardv1.GetCexFinanceResponse], error) {
 	return c.getCexFinance.CallUnary(ctx, req)
 }
 
-// ListCarryGraduations calls arb.dashboard.v1.DashboardService.ListCarryGraduations.
+// ListCarryGraduations calls nox.dashboard.v1.DashboardService.ListCarryGraduations.
 func (c *dashboardServiceClient) ListCarryGraduations(ctx context.Context, req *connect.Request[dashboardv1.ListCarryGraduationsRequest]) (*connect.Response[dashboardv1.ListCarryGraduationsResponse], error) {
 	return c.listCarryGraduations.CallUnary(ctx, req)
 }
 
-// ApproveCarryGraduation calls arb.dashboard.v1.DashboardService.ApproveCarryGraduation.
+// ApproveCarryGraduation calls nox.dashboard.v1.DashboardService.ApproveCarryGraduation.
 func (c *dashboardServiceClient) ApproveCarryGraduation(ctx context.Context, req *connect.Request[dashboardv1.ApproveCarryGraduationRequest]) (*connect.Response[dashboardv1.ApproveCarryGraduationResponse], error) {
 	return c.approveCarryGraduation.CallUnary(ctx, req)
 }
 
-// RejectCarryGraduation calls arb.dashboard.v1.DashboardService.RejectCarryGraduation.
+// RejectCarryGraduation calls nox.dashboard.v1.DashboardService.RejectCarryGraduation.
 func (c *dashboardServiceClient) RejectCarryGraduation(ctx context.Context, req *connect.Request[dashboardv1.RejectCarryGraduationRequest]) (*connect.Response[dashboardv1.RejectCarryGraduationResponse], error) {
 	return c.rejectCarryGraduation.CallUnary(ctx, req)
 }
 
-// ListVenueExposureCaps calls arb.dashboard.v1.DashboardService.ListVenueExposureCaps.
+// ListVenueExposureCaps calls nox.dashboard.v1.DashboardService.ListVenueExposureCaps.
 func (c *dashboardServiceClient) ListVenueExposureCaps(ctx context.Context, req *connect.Request[dashboardv1.ListVenueExposureCapsRequest]) (*connect.Response[dashboardv1.ListVenueExposureCapsResponse], error) {
 	return c.listVenueExposureCaps.CallUnary(ctx, req)
 }
 
-// SetVenueExposureCap calls arb.dashboard.v1.DashboardService.SetVenueExposureCap.
+// SetVenueExposureCap calls nox.dashboard.v1.DashboardService.SetVenueExposureCap.
 func (c *dashboardServiceClient) SetVenueExposureCap(ctx context.Context, req *connect.Request[dashboardv1.SetVenueExposureCapRequest]) (*connect.Response[dashboardv1.SetVenueExposureCapResponse], error) {
 	return c.setVenueExposureCap.CallUnary(ctx, req)
 }
 
-// ListXAssetAllowCombos calls arb.dashboard.v1.DashboardService.ListXAssetAllowCombos.
+// ListXAssetAllowCombos calls nox.dashboard.v1.DashboardService.ListXAssetAllowCombos.
 func (c *dashboardServiceClient) ListXAssetAllowCombos(ctx context.Context, req *connect.Request[dashboardv1.ListXAssetAllowCombosRequest]) (*connect.Response[dashboardv1.ListXAssetAllowCombosResponse], error) {
 	return c.listXAssetAllowCombos.CallUnary(ctx, req)
 }
 
-// ListXAssetPendingEntries calls arb.dashboard.v1.DashboardService.ListXAssetPendingEntries.
+// ListXAssetPendingEntries calls nox.dashboard.v1.DashboardService.ListXAssetPendingEntries.
 func (c *dashboardServiceClient) ListXAssetPendingEntries(ctx context.Context, req *connect.Request[dashboardv1.ListXAssetPendingEntriesRequest]) (*connect.Response[dashboardv1.ListXAssetPendingEntriesResponse], error) {
 	return c.listXAssetPendingEntries.CallUnary(ctx, req)
 }
 
-// UpsertXAssetAllowCombo calls arb.dashboard.v1.DashboardService.UpsertXAssetAllowCombo.
+// UpsertXAssetAllowCombo calls nox.dashboard.v1.DashboardService.UpsertXAssetAllowCombo.
 func (c *dashboardServiceClient) UpsertXAssetAllowCombo(ctx context.Context, req *connect.Request[dashboardv1.UpsertXAssetAllowComboRequest]) (*connect.Response[dashboardv1.UpsertXAssetAllowComboResponse], error) {
 	return c.upsertXAssetAllowCombo.CallUnary(ctx, req)
 }
 
-// ResumeXAssetCombo calls arb.dashboard.v1.DashboardService.ResumeXAssetCombo.
+// ResumeXAssetCombo calls nox.dashboard.v1.DashboardService.ResumeXAssetCombo.
 func (c *dashboardServiceClient) ResumeXAssetCombo(ctx context.Context, req *connect.Request[dashboardv1.ResumeXAssetComboRequest]) (*connect.Response[dashboardv1.ResumeXAssetComboResponse], error) {
 	return c.resumeXAssetCombo.CallUnary(ctx, req)
 }
 
-// PreviewXAssetComboRisk calls arb.dashboard.v1.DashboardService.PreviewXAssetComboRisk.
+// PreviewXAssetComboRisk calls nox.dashboard.v1.DashboardService.PreviewXAssetComboRisk.
 func (c *dashboardServiceClient) PreviewXAssetComboRisk(ctx context.Context, req *connect.Request[dashboardv1.PreviewXAssetComboRiskRequest]) (*connect.Response[dashboardv1.PreviewXAssetComboRiskResponse], error) {
 	return c.previewXAssetComboRisk.CallUnary(ctx, req)
 }
 
-// ListAccountMarginStatus calls arb.dashboard.v1.DashboardService.ListAccountMarginStatus.
+// ListAccountMarginStatus calls nox.dashboard.v1.DashboardService.ListAccountMarginStatus.
 func (c *dashboardServiceClient) ListAccountMarginStatus(ctx context.Context, req *connect.Request[dashboardv1.ListAccountMarginStatusRequest]) (*connect.Response[dashboardv1.ListAccountMarginStatusResponse], error) {
 	return c.listAccountMarginStatus.CallUnary(ctx, req)
 }
 
-// ListAppConfig calls arb.dashboard.v1.DashboardService.ListAppConfig.
+// ListAppConfig calls nox.dashboard.v1.DashboardService.ListAppConfig.
 func (c *dashboardServiceClient) ListAppConfig(ctx context.Context, req *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error) {
 	return c.listAppConfig.CallUnary(ctx, req)
 }
 
-// UpdateAppConfig calls arb.dashboard.v1.DashboardService.UpdateAppConfig.
+// UpdateAppConfig calls nox.dashboard.v1.DashboardService.UpdateAppConfig.
 func (c *dashboardServiceClient) UpdateAppConfig(ctx context.Context, req *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error) {
 	return c.updateAppConfig.CallUnary(ctx, req)
 }
 
-// SelfRestart calls arb.dashboard.v1.DashboardService.SelfRestart.
+// SelfRestart calls nox.dashboard.v1.DashboardService.SelfRestart.
 func (c *dashboardServiceClient) SelfRestart(ctx context.Context, req *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error) {
 	return c.selfRestart.CallUnary(ctx, req)
 }
 
-// ListEmployees calls arb.dashboard.v1.DashboardService.ListEmployees.
+// ListEmployees calls nox.dashboard.v1.DashboardService.ListEmployees.
 func (c *dashboardServiceClient) ListEmployees(ctx context.Context, req *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error) {
 	return c.listEmployees.CallUnary(ctx, req)
 }
 
-// ListProposals calls arb.dashboard.v1.DashboardService.ListProposals.
+// ListProposals calls nox.dashboard.v1.DashboardService.ListProposals.
 func (c *dashboardServiceClient) ListProposals(ctx context.Context, req *connect.Request[dashboardv1.ListProposalsRequest]) (*connect.Response[dashboardv1.ListProposalsResponse], error) {
 	return c.listProposals.CallUnary(ctx, req)
 }
 
-// AckProposal calls arb.dashboard.v1.DashboardService.AckProposal.
+// AckProposal calls nox.dashboard.v1.DashboardService.AckProposal.
 func (c *dashboardServiceClient) AckProposal(ctx context.Context, req *connect.Request[dashboardv1.AckProposalRequest]) (*connect.Response[dashboardv1.AckProposalResponse], error) {
 	return c.ackProposal.CallUnary(ctx, req)
 }
 
-// ListPersonalPositions calls arb.dashboard.v1.DashboardService.ListPersonalPositions.
+// ListPersonalPositions calls nox.dashboard.v1.DashboardService.ListPersonalPositions.
 func (c *dashboardServiceClient) ListPersonalPositions(ctx context.Context, req *connect.Request[dashboardv1.ListPersonalPositionsRequest]) (*connect.Response[dashboardv1.ListPersonalPositionsResponse], error) {
 	return c.listPersonalPositions.CallUnary(ctx, req)
 }
 
-// ListDCIOrders calls arb.dashboard.v1.DashboardService.ListDCIOrders.
+// ListDCIOrders calls nox.dashboard.v1.DashboardService.ListDCIOrders.
 func (c *dashboardServiceClient) ListDCIOrders(ctx context.Context, req *connect.Request[dashboardv1.ListDCIOrdersRequest]) (*connect.Response[dashboardv1.ListDCIOrdersResponse], error) {
 	return c.listDCIOrders.CallUnary(ctx, req)
 }
 
-// ListAppSecrets calls arb.dashboard.v1.DashboardService.ListAppSecrets.
+// ListAppSecrets calls nox.dashboard.v1.DashboardService.ListAppSecrets.
 func (c *dashboardServiceClient) ListAppSecrets(ctx context.Context, req *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error) {
 	return c.listAppSecrets.CallUnary(ctx, req)
 }
 
-// UpdateAppSecret calls arb.dashboard.v1.DashboardService.UpdateAppSecret.
+// UpdateAppSecret calls nox.dashboard.v1.DashboardService.UpdateAppSecret.
 func (c *dashboardServiceClient) UpdateAppSecret(ctx context.Context, req *connect.Request[dashboardv1.UpdateAppSecretRequest]) (*connect.Response[dashboardv1.UpdateAppSecretResponse], error) {
 	return c.updateAppSecret.CallUnary(ctx, req)
 }
 
-// DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
+// DashboardServiceHandler is an implementation of the nox.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
 	ListLatestQuotes(context.Context, *connect.Request[dashboardv1.ListQuotesRequest]) (*connect.Response[dashboardv1.ListQuotesResponse], error)
@@ -2620,7 +2620,7 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("UpdateAppSecret")),
 		connect.WithHandlerOptions(opts...),
 	)
-	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return "/nox.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
 			dashboardServiceListLatestQuotesHandler.ServeHTTP(w, r)
@@ -2846,429 +2846,429 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 type UnimplementedDashboardServiceHandler struct{}
 
 func (UnimplementedDashboardServiceHandler) ListLatestQuotes(context.Context, *connect.Request[dashboardv1.ListQuotesRequest]) (*connect.Response[dashboardv1.ListQuotesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListLatestQuotes is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListLatestQuotes is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListLatestFacts(context.Context, *connect.Request[dashboardv1.ListLatestFactsRequest]) (*connect.Response[dashboardv1.ListLatestFactsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListLatestFacts is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListLatestFacts is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListOpportunities(context.Context, *connect.Request[dashboardv1.ListOpportunitiesRequest]) (*connect.Response[dashboardv1.ListOpportunitiesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListOpportunities is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListOpportunities is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListAlerts(context.Context, *connect.Request[dashboardv1.ListAlertsRequest]) (*connect.Response[dashboardv1.ListAlertsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListAlerts is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListAlerts is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListSourceHealth(context.Context, *connect.Request[dashboardv1.ListSourceHealthRequest]) (*connect.Response[dashboardv1.ListSourceHealthResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListSourceHealth is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListSourceHealth is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListFacts(context.Context, *connect.Request[dashboardv1.ListFactsRequest]) (*connect.Response[dashboardv1.ListFactsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListFacts is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListFacts is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AckAlert(context.Context, *connect.Request[dashboardv1.AckAlertRequest]) (*connect.Response[dashboardv1.AckAlertResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AckAlert is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.AckAlert is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AckAll(context.Context, *connect.Request[dashboardv1.AckAllRequest]) (*connect.Response[dashboardv1.AckAllResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AckAll is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.AckAll is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListUnacked(context.Context, *connect.Request[dashboardv1.ListUnackedRequest]) (*connect.Response[dashboardv1.ListUnackedResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListUnacked is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListUnacked is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) DeleteAlerts(context.Context, *connect.Request[dashboardv1.DeleteAlertsRequest]) (*connect.Response[dashboardv1.DeleteAlertsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.DeleteAlerts is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.DeleteAlerts is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ClearAckedAlerts(context.Context, *connect.Request[dashboardv1.ClearAckedAlertsRequest]) (*connect.Response[dashboardv1.ClearAckedAlertsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ClearAckedAlerts is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ClearAckedAlerts is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListKnowledgeEntries(context.Context, *connect.Request[dashboardv1.ListKnowledgeEntriesRequest]) (*connect.Response[dashboardv1.ListKnowledgeEntriesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListKnowledgeEntries is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListKnowledgeEntries is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ExecuteOpportunity(context.Context, *connect.Request[dashboardv1.ExecuteOpportunityRequest]) (*connect.Response[dashboardv1.ExecuteOpportunityResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ExecuteOpportunity is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ExecuteOpportunity is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ClosePosition(context.Context, *connect.Request[dashboardv1.ClosePositionRequest]) (*connect.Response[dashboardv1.ClosePositionResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ClosePosition is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ClosePosition is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) BackfillSwapHistory(context.Context, *connect.Request[dashboardv1.BackfillSwapHistoryRequest]) (*connect.Response[dashboardv1.BackfillSwapHistoryReply], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.BackfillSwapHistory is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.BackfillSwapHistory is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListPositions(context.Context, *connect.Request[dashboardv1.ListPositionsRequest]) (*connect.Response[dashboardv1.ListPositionsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPositions is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListPositions is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListBrokerPositions(context.Context, *connect.Request[dashboardv1.ListBrokerPositionsRequest]) (*connect.Response[dashboardv1.ListBrokerPositionsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListBrokerPositions is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListBrokerPositions is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) CloseBrokerPosition(context.Context, *connect.Request[dashboardv1.CloseBrokerPositionRequest]) (*connect.Response[dashboardv1.CloseBrokerPositionResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.CloseBrokerPosition is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.CloseBrokerPosition is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) CloseBrokerPositions(context.Context, *connect.Request[dashboardv1.CloseBrokerPositionsRequest]) (*connect.Response[dashboardv1.CloseBrokerPositionsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.CloseBrokerPositions is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.CloseBrokerPositions is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) OpenProbe(context.Context, *connect.Request[dashboardv1.OpenProbeRequest]) (*connect.Response[dashboardv1.OpenProbeResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.OpenProbe is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.OpenProbe is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListProbes(context.Context, *connect.Request[dashboardv1.ListProbesRequest]) (*connect.Response[dashboardv1.ListProbesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListProbes is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListProbes is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ApproveProbe(context.Context, *connect.Request[dashboardv1.ApproveProbeRequest]) (*connect.Response[dashboardv1.ApproveProbeResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ApproveProbe is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ApproveProbe is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) RejectProbe(context.Context, *connect.Request[dashboardv1.RejectProbeRequest]) (*connect.Response[dashboardv1.RejectProbeResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.RejectProbe is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.RejectProbe is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListProbeProposals(context.Context, *connect.Request[dashboardv1.ListProbeProposalsRequest]) (*connect.Response[dashboardv1.ListProbeProposalsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListProbeProposals is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListProbeProposals is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListAccounts(context.Context, *connect.Request[dashboardv1.ListAccountsRequest]) (*connect.Response[dashboardv1.ListAccountsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListAccounts is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListAccounts is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) TrxAccountRefresh(context.Context, *connect.Request[dashboardv1.TrxAccountRefreshRequest]) (*connect.Response[dashboardv1.TrxAccountRefreshResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.TrxAccountRefresh is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.TrxAccountRefresh is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetTrxYieldRadar(context.Context, *connect.Request[dashboardv1.GetTrxYieldRadarRequest]) (*connect.Response[dashboardv1.GetTrxYieldRadarResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetTrxYieldRadar is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetTrxYieldRadar is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetTrxYieldCurve(context.Context, *connect.Request[dashboardv1.GetTrxYieldCurveRequest]) (*connect.Response[dashboardv1.GetTrxYieldCurveResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetTrxYieldCurve is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetTrxYieldCurve is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AddDailyIncome(context.Context, *connect.Request[dashboardv1.AddDailyIncomeRequest]) (*connect.Response[dashboardv1.AddDailyIncomeResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AddDailyIncome is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.AddDailyIncome is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListDailyIncome(context.Context, *connect.Request[dashboardv1.ListDailyIncomeRequest]) (*connect.Response[dashboardv1.ListDailyIncomeResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListDailyIncome is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListDailyIncome is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetPnlAnchor(context.Context, *connect.Request[dashboardv1.GetPnlAnchorRequest]) (*connect.Response[dashboardv1.GetPnlAnchorResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetPnlAnchor is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetPnlAnchor is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ResetPnlAnchor(context.Context, *connect.Request[dashboardv1.ResetPnlAnchorRequest]) (*connect.Response[dashboardv1.ResetPnlAnchorResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ResetPnlAnchor is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ResetPnlAnchor is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListKBEntries(context.Context, *connect.Request[dashboardv1.ListKBEntriesRequest]) (*connect.Response[dashboardv1.ListKBEntriesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListKBEntries is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListKBEntries is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetKBEntry(context.Context, *connect.Request[dashboardv1.GetKBEntryRequest]) (*connect.Response[dashboardv1.GetKBEntryResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetKBEntry is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetKBEntry is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListVerificationStats(context.Context, *connect.Request[dashboardv1.ListVerificationStatsRequest]) (*connect.Response[dashboardv1.ListVerificationStatsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListVerificationStats is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListVerificationStats is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SearchBroker(context.Context, *connect.Request[dashboardv1.SearchBrokerRequest]) (*connect.Response[dashboardv1.SearchBrokerResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SearchBroker is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SearchBroker is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AddBroker(context.Context, *connect.Request[dashboardv1.AddBrokerRequest]) (*connect.Response[dashboardv1.AddBrokerResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AddBroker is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.AddBroker is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) RemoveBroker(context.Context, *connect.Request[dashboardv1.RemoveBrokerRequest]) (*connect.Response[dashboardv1.RemoveBrokerResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.RemoveBroker is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.RemoveBroker is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) UpdateBrokerCredentials(context.Context, *connect.Request[dashboardv1.UpdateBrokerCredentialsRequest]) (*connect.Response[dashboardv1.UpdateBrokerCredentialsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.UpdateBrokerCredentials is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.UpdateBrokerCredentials is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListBrokerAccounts(context.Context, *connect.Request[dashboardv1.ListBrokerAccountsRequest]) (*connect.Response[dashboardv1.ListBrokerAccountsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListBrokerAccounts is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListBrokerAccounts is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) VerifyAccount(context.Context, *connect.Request[dashboardv1.VerifyAccountRequest]) (*connect.Response[dashboardv1.VerifyAccountResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.VerifyAccount is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.VerifyAccount is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListExchanges(context.Context, *connect.Request[dashboardv1.ListExchangesRequest]) (*connect.Response[dashboardv1.ListExchangesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListExchanges is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListExchanges is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AddExchange(context.Context, *connect.Request[dashboardv1.AddExchangeRequest]) (*connect.Response[dashboardv1.AddExchangeResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AddExchange is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.AddExchange is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) RemoveExchange(context.Context, *connect.Request[dashboardv1.RemoveExchangeRequest]) (*connect.Response[dashboardv1.RemoveExchangeResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.RemoveExchange is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.RemoveExchange is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SetExchangeLabel(context.Context, *connect.Request[dashboardv1.SetExchangeLabelRequest]) (*connect.Response[dashboardv1.SetExchangeLabelResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetExchangeLabel is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SetExchangeLabel is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SetExchangeWebsite(context.Context, *connect.Request[dashboardv1.SetExchangeWebsiteRequest]) (*connect.Response[dashboardv1.SetExchangeWebsiteResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetExchangeWebsite is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SetExchangeWebsite is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) BrokerSymbols(context.Context, *connect.Request[dashboardv1.BrokerSymbolsRequest]) (*connect.Response[dashboardv1.BrokerSymbolsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.BrokerSymbols is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.BrokerSymbols is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SetBrokerAccountAlias(context.Context, *connect.Request[dashboardv1.SetBrokerAccountAliasRequest]) (*connect.Response[dashboardv1.SetBrokerAccountAliasResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetBrokerAccountAlias is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SetBrokerAccountAlias is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SetBrokerAccountIsReal(context.Context, *connect.Request[dashboardv1.SetBrokerAccountIsRealRequest]) (*connect.Response[dashboardv1.SetBrokerAccountIsRealResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetBrokerAccountIsReal is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SetBrokerAccountIsReal is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SetBrokerDisabled(context.Context, *connect.Request[dashboardv1.SetBrokerDisabledRequest]) (*connect.Response[dashboardv1.SetBrokerDisabledResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetBrokerDisabled is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SetBrokerDisabled is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SetBrokerCommission(context.Context, *connect.Request[dashboardv1.SetBrokerCommissionRequest]) (*connect.Response[dashboardv1.SetBrokerCommissionResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetBrokerCommission is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SetBrokerCommission is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SetBrokerWebsite(context.Context, *connect.Request[dashboardv1.SetBrokerWebsiteRequest]) (*connect.Response[dashboardv1.SetBrokerWebsiteResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetBrokerWebsite is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SetBrokerWebsite is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListSymbolMappings(context.Context, *connect.Request[dashboardv1.ListSymbolMappingsRequest]) (*connect.Response[dashboardv1.ListSymbolMappingsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListSymbolMappings is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListSymbolMappings is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SaveSymbolMapping(context.Context, *connect.Request[dashboardv1.SaveSymbolMappingRequest]) (*connect.Response[dashboardv1.SaveSymbolMappingResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SaveSymbolMapping is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SaveSymbolMapping is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) DeleteSymbolMapping(context.Context, *connect.Request[dashboardv1.DeleteSymbolMappingRequest]) (*connect.Response[dashboardv1.DeleteSymbolMappingResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.DeleteSymbolMapping is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.DeleteSymbolMapping is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListMappingSuggestions(context.Context, *connect.Request[dashboardv1.ListMappingSuggestionsRequest]) (*connect.Response[dashboardv1.ListMappingSuggestionsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListMappingSuggestions is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListMappingSuggestions is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListCanonicals(context.Context, *connect.Request[dashboardv1.ListCanonicalsRequest]) (*connect.Response[dashboardv1.ListCanonicalsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListCanonicals is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListCanonicals is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AutoMapBroker(context.Context, *connect.Request[dashboardv1.AutoMapBrokerRequest]) (*connect.Response[dashboardv1.AutoMapBrokerResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AutoMapBroker is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.AutoMapBroker is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListSwapCombos(context.Context, *connect.Request[dashboardv1.ListSwapCombosRequest]) (*connect.Response[dashboardv1.ListSwapCombosResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListSwapCombos is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListSwapCombos is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListMatrixUniverse(context.Context, *connect.Request[dashboardv1.ListMatrixUniverseRequest]) (*connect.Response[dashboardv1.ListMatrixUniverseResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListMatrixUniverse is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListMatrixUniverse is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) StreamUpdates(context.Context, *connect.Request[dashboardv1.StreamUpdatesRequest], *connect.ServerStream[dashboardv1.StreamUpdatesResponse]) error {
-	return connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.StreamUpdates is not implemented"))
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.StreamUpdates is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) Health(context.Context, *connect.Request[dashboardv1.HealthRequest]) (*connect.Response[dashboardv1.HealthResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.Health is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.Health is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetFrontConfig(context.Context, *connect.Request[dashboardv1.GetFrontConfigRequest]) (*connect.Response[dashboardv1.GetFrontConfigResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetFrontConfig is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetFrontConfig is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetStrategyLedger(context.Context, *connect.Request[dashboardv1.GetStrategyLedgerRequest]) (*connect.Response[dashboardv1.GetStrategyLedgerResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetStrategyLedger is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetStrategyLedger is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetWatchlist(context.Context, *connect.Request[dashboardv1.GetWatchlistRequest]) (*connect.Response[dashboardv1.GetWatchlistResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetWatchlist is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetWatchlist is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SetWatchlist(context.Context, *connect.Request[dashboardv1.SetWatchlistRequest]) (*connect.Response[dashboardv1.SetWatchlistResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetWatchlist is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SetWatchlist is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AskAnalyst(context.Context, *connect.Request[dashboardv1.AskAnalystRequest], *connect.ServerStream[dashboardv1.AskAnalystResponse]) error {
-	return connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AskAnalyst is not implemented"))
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.AskAnalyst is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AppendAnalystNote(context.Context, *connect.Request[dashboardv1.AppendAnalystNoteRequest]) (*connect.Response[dashboardv1.AppendAnalystNoteResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AppendAnalystNote is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.AppendAnalystNote is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GenerateKbReport(context.Context, *connect.Request[dashboardv1.GenerateKbReportRequest]) (*connect.Response[dashboardv1.GenerateKbReportResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GenerateKbReport is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GenerateKbReport is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GenerateRetroReport(context.Context, *connect.Request[dashboardv1.GenerateRetroReportRequest]) (*connect.Response[dashboardv1.GenerateRetroReportResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GenerateRetroReport is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GenerateRetroReport is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListReports(context.Context, *connect.Request[dashboardv1.ListReportsRequest]) (*connect.Response[dashboardv1.ListReportsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListReports is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListReports is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetReport(context.Context, *connect.Request[dashboardv1.GetReportRequest]) (*connect.Response[dashboardv1.GetReportResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetReport is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetReport is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetAiSettings(context.Context, *connect.Request[dashboardv1.GetAiSettingsRequest]) (*connect.Response[dashboardv1.GetAiSettingsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetAiSettings is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetAiSettings is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SetAiSettings(context.Context, *connect.Request[dashboardv1.SetAiSettingsRequest]) (*connect.Response[dashboardv1.SetAiSettingsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetAiSettings is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SetAiSettings is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetCexScanSnapshot(context.Context, *connect.Request[dashboardv1.GetCexScanSnapshotRequest]) (*connect.Response[dashboardv1.GetCexScanSnapshotResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCexScanSnapshot is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetCexScanSnapshot is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetFinanceOverview(context.Context, *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetFinanceOverview is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetFinanceOverview is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ExecuteSpotCarryDemo(context.Context, *connect.Request[dashboardv1.ExecuteSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ExecuteSpotCarryDemoResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ExecuteSpotCarryDemo is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ExecuteSpotCarryDemo is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListSpotCarryDemo(context.Context, *connect.Request[dashboardv1.ListSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ListSpotCarryDemoResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListSpotCarryDemo is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListSpotCarryDemo is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListPaperSpotCarry(context.Context, *connect.Request[dashboardv1.ListPaperSpotCarryRequest]) (*connect.Response[dashboardv1.ListPaperSpotCarryResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPaperSpotCarry is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListPaperSpotCarry is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListAutotradeAllowRules(context.Context, *connect.Request[dashboardv1.ListAutotradeAllowRulesRequest]) (*connect.Response[dashboardv1.ListAutotradeAllowRulesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListAutotradeAllowRules is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListAutotradeAllowRules is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SetAutotradeAllowRuleEnabled(context.Context, *connect.Request[dashboardv1.SetAutotradeAllowRuleEnabledRequest]) (*connect.Response[dashboardv1.SetAutotradeAllowRuleEnabledResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetAutotradeAllowRuleEnabled is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SetAutotradeAllowRuleEnabled is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AddAutotradeAllowRule(context.Context, *connect.Request[dashboardv1.AddAutotradeAllowRuleRequest]) (*connect.Response[dashboardv1.AddAutotradeAllowRuleResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AddAutotradeAllowRule is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.AddAutotradeAllowRule is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) DeleteAutotradeAllowRule(context.Context, *connect.Request[dashboardv1.DeleteAutotradeAllowRuleRequest]) (*connect.Response[dashboardv1.DeleteAutotradeAllowRuleResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.DeleteAutotradeAllowRule is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.DeleteAutotradeAllowRule is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetCapitalCoverage(context.Context, *connect.Request[dashboardv1.GetCapitalCoverageRequest]) (*connect.Response[dashboardv1.GetCapitalCoverageResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCapitalCoverage is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetCapitalCoverage is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetCapitalMap(context.Context, *connect.Request[dashboardv1.GetCapitalMapRequest]) (*connect.Response[dashboardv1.GetCapitalMapResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCapitalMap is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetCapitalMap is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetCexFinance(context.Context, *connect.Request[dashboardv1.GetCexFinanceRequest]) (*connect.Response[dashboardv1.GetCexFinanceResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCexFinance is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetCexFinance is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListCarryGraduations(context.Context, *connect.Request[dashboardv1.ListCarryGraduationsRequest]) (*connect.Response[dashboardv1.ListCarryGraduationsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListCarryGraduations is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListCarryGraduations is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ApproveCarryGraduation(context.Context, *connect.Request[dashboardv1.ApproveCarryGraduationRequest]) (*connect.Response[dashboardv1.ApproveCarryGraduationResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ApproveCarryGraduation is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ApproveCarryGraduation is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) RejectCarryGraduation(context.Context, *connect.Request[dashboardv1.RejectCarryGraduationRequest]) (*connect.Response[dashboardv1.RejectCarryGraduationResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.RejectCarryGraduation is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.RejectCarryGraduation is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListVenueExposureCaps(context.Context, *connect.Request[dashboardv1.ListVenueExposureCapsRequest]) (*connect.Response[dashboardv1.ListVenueExposureCapsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListVenueExposureCaps is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListVenueExposureCaps is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SetVenueExposureCap(context.Context, *connect.Request[dashboardv1.SetVenueExposureCapRequest]) (*connect.Response[dashboardv1.SetVenueExposureCapResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetVenueExposureCap is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SetVenueExposureCap is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListXAssetAllowCombos(context.Context, *connect.Request[dashboardv1.ListXAssetAllowCombosRequest]) (*connect.Response[dashboardv1.ListXAssetAllowCombosResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListXAssetAllowCombos is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListXAssetAllowCombos is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListXAssetPendingEntries(context.Context, *connect.Request[dashboardv1.ListXAssetPendingEntriesRequest]) (*connect.Response[dashboardv1.ListXAssetPendingEntriesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListXAssetPendingEntries is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListXAssetPendingEntries is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) UpsertXAssetAllowCombo(context.Context, *connect.Request[dashboardv1.UpsertXAssetAllowComboRequest]) (*connect.Response[dashboardv1.UpsertXAssetAllowComboResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.UpsertXAssetAllowCombo is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.UpsertXAssetAllowCombo is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ResumeXAssetCombo(context.Context, *connect.Request[dashboardv1.ResumeXAssetComboRequest]) (*connect.Response[dashboardv1.ResumeXAssetComboResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ResumeXAssetCombo is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ResumeXAssetCombo is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) PreviewXAssetComboRisk(context.Context, *connect.Request[dashboardv1.PreviewXAssetComboRiskRequest]) (*connect.Response[dashboardv1.PreviewXAssetComboRiskResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.PreviewXAssetComboRisk is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.PreviewXAssetComboRisk is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListAccountMarginStatus(context.Context, *connect.Request[dashboardv1.ListAccountMarginStatusRequest]) (*connect.Response[dashboardv1.ListAccountMarginStatusResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListAccountMarginStatus is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListAccountMarginStatus is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListAppConfig is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListAppConfig is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.UpdateAppConfig is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.UpdateAppConfig is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SelfRestart is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SelfRestart is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListEmployees is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListEmployees is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListProposals(context.Context, *connect.Request[dashboardv1.ListProposalsRequest]) (*connect.Response[dashboardv1.ListProposalsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListProposals is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListProposals is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AckProposal(context.Context, *connect.Request[dashboardv1.AckProposalRequest]) (*connect.Response[dashboardv1.AckProposalResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AckProposal is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.AckProposal is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListPersonalPositions(context.Context, *connect.Request[dashboardv1.ListPersonalPositionsRequest]) (*connect.Response[dashboardv1.ListPersonalPositionsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPersonalPositions is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListPersonalPositions is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListDCIOrders(context.Context, *connect.Request[dashboardv1.ListDCIOrdersRequest]) (*connect.Response[dashboardv1.ListDCIOrdersResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListDCIOrders is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListDCIOrders is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListAppSecrets(context.Context, *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListAppSecrets is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListAppSecrets is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) UpdateAppSecret(context.Context, *connect.Request[dashboardv1.UpdateAppSecretRequest]) (*connect.Response[dashboardv1.UpdateAppSecretResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.UpdateAppSecret is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.UpdateAppSecret is not implemented"))
 }

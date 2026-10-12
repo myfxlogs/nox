@@ -12,7 +12,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/platform/notional"
+	"nox/internal/platform/notional"
 )
 
 // writeOpenNotional 开仓腿结果→positions.notional_usd（D-032 R1）。

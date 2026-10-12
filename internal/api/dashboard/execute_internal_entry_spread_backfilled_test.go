@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // d327FakeExecutor 双腿假执行器：PlaceOrder 恒按预设价 FILLED（LegResult.Price→legs.price_actual）。

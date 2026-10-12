@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 )
 
 // dailySystemPrompt 日报 AI 约束：数字已在 prompt，只写判断不长篇。
-const dailySystemPrompt = `你是 ARB 系统的日结员。用户消息里 fenced 块中的数字由 Go 确定性计算——禁止改动、重算或复述时写错。
+const dailySystemPrompt = `你是 NOX 系统的日结员。用户消息里 fenced 块中的数字由 Go 确定性计算——禁止改动、重算或复述时写错。
 只输出一段「今日小结」正文（3-5 句，无标题无列表）：值得记的事、异常、明日关注点。不输出其他任何内容。`
 
 // GenerateDaily 生成日报。窗口=昨日北京时间全天 [BJ 00:00, BJ 24:00)（D-510：00:30 BJ 触发

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // d007WatchSvc 复用 d580 全闸夹具 + refreshTopic 接线 + 缩短合批窗。

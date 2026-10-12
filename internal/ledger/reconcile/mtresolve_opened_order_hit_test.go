@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/data/venue"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/venue"
+	"nox/internal/store/pgstore"
 )
 
 // T-I1a 持仓在场：venue 持仓含 ticket → 按持仓权威字段回填（price=OpenPrice, qty=Volume, fee=|Commission|）。

@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/data/keydomain"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/data/keydomain"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 )
 
 // TestD565_AllocRisk_LeverageUnknown T2：venue 杠杆读败 → risk=unknown +
@@ -81,7 +81,7 @@ func TestD565_ComboPoolVerdict_StaleSnap(t *testing.T) {
 // TestD565_MarginFloor_SkippedLegCount T6：OPEN 腿报价缺→跳腿+判定明细透出计数；
 // 有报价腿计入分母，无报价腿不静默漏算。
 func TestD565_MarginFloor_SkippedLegCount(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_SERVICE_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE positions, position_legs RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)

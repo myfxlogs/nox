@@ -4,10 +4,10 @@
 package exchange
 
 import (
-	"arb/internal/platform/httpx"
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"nox/internal/platform/httpx"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -39,7 +39,7 @@ func wsDataServer(t *testing.T, every time.Duration) (string, *atomic.Int64) {
 	return "ws" + strings.TrimPrefix(srv.URL, "http"), n
 }
 
-// TestD541_S0_DirectMode ARB_GATE_WS_MODE=direct：强制原生直连——urls=native、
+// TestD541_S0_DirectMode NOX_GATE_WS_MODE=direct：强制原生直连——urls=native、
 // 单候选零代理件（per-venue 止血，okx/binance 装配不动）。
 func TestD541_S0_DirectMode(t *testing.T) {
 	SetProxyEndpoints(ProxyEndpoints{CexWSBase: "wss://192.229.85.35:8443", GateWSMode: "direct"})

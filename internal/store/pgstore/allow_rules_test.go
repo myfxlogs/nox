@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"arb/migrations"
+	"nox/migrations"
 )
 
 func TestD443_LoadAutotradeAllowRules(t *testing.T) {

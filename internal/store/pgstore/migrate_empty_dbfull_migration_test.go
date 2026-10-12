@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 // S3.3：安全测试库 migration 可重复验证。
@@ -37,7 +37,7 @@ func TestMigrate_EmptyDBFullMigration(t *testing.T) {
 	}
 
 	// 推导空库 DSN（保留 pgx 参数——pgstore.New 用 pgxpool，认 pool 参数）
-	emptyDSN := swapDBName(testutil.TestDSN(t, "ARB_TEST_PG_DSN"), emptyDB)
+	emptyDSN := swapDBName(testutil.TestDSN(t, "NOX_TEST_PG_DSN"), emptyDB)
 
 	// pgstore.New + Migrate（从空库执行全量 migration）
 	s, err := New(ctx, emptyDSN)
@@ -96,7 +96,7 @@ func TestMigrate_EmptyDBFullMigration(t *testing.T) {
 
 // TestMigrate_Idempotent：对已 migrate 的库再跑 Migrate 无错误（幂等）。
 func TestMigrate_Idempotent(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 
 	s, err := New(ctx, dsn)
@@ -105,7 +105,7 @@ func TestMigrate_Idempotent(t *testing.T) {
 	}
 	defer s.Close()
 
-	// arb_test 已 migrate（testStore/prepareTestSchema 已跑），再跑一次应无错误
+	// nox_test 已 migrate（testStore/prepareTestSchema 已跑），再跑一次应无错误
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate 幂等再跑失败: %v", err)
 	}

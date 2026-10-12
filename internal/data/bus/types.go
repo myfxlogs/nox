@@ -3,7 +3,7 @@ package bus
 import (
 	"time"
 
-	"arb/internal/data/keydomain"
+	"nox/internal/data/keydomain"
 )
 
 // Quote 是 CFD 和加密行情的公共抽象（§1.1）。

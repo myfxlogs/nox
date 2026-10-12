@@ -7,15 +7,15 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 // ①OPEN 腿 FAILED → fail_reason 落 venue 拒因原文（≤512B 截尾不截头）。
 func TestD208_OpenLegFailReason(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	conn := seedConn(t, testutil.TestDSN(t, "ARB_EXEC_TEST_PG_DSN"))
+	conn := seedConn(t, testutil.TestDSN(t, "NOX_EXEC_TEST_PG_DSN"))
 	var posID int64
 	if err := conn.QueryRow(ctx, `INSERT INTO positions (opportunity_id, type, status) VALUES ('opp-d208','CROSS_VENUE','OPEN') RETURNING id`).Scan(&posID); err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestD208_OpenLegFailReason(t *testing.T) {
 func TestD208_FailedCloseAttemptRow(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	conn := seedConn(t, testutil.TestDSN(t, "ARB_EXEC_TEST_PG_DSN"))
+	conn := seedConn(t, testutil.TestDSN(t, "NOX_EXEC_TEST_PG_DSN"))
 	var posID int64
 	if err := conn.QueryRow(ctx, `INSERT INTO positions (opportunity_id, type, status) VALUES ('opp-d208b','CROSS_VENUE','CLOSING') RETURNING id`).Scan(&posID); err != nil {
 		t.Fatal(err)

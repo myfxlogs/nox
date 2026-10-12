@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/keydomain"
-	"arb/internal/platform/combo"
-	"arb/internal/platform/safego"
-	"arb/internal/platform/usdnotional"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/keydomain"
+	"nox/internal/platform/combo"
+	"nox/internal/platform/safego"
+	"nox/internal/platform/usdnotional"
+	"nox/internal/store/pgstore"
 )
 
 // marginGuardStore guard 取数面（*pgstore.Store 原生实现，测试可 fake）。
@@ -36,8 +36,8 @@ type MarginGuard struct {
 	qbus  *bus.QuoteBus
 	csOf  func(venueKey, venueSymbol string) (float64, error) // = Service.legContractSizeOf
 
-	urgentCooldown time.Duration // ARB_MARGIN_URGENT_COOLDOWN（默认 30min，R0-S1）
-	warnCooldown   time.Duration // ARB_MARGIN_WARN_COOLDOWN（默认 6h）
+	urgentCooldown time.Duration // NOX_MARGIN_URGENT_COOLDOWN（默认 30min，R0-S1）
+	warnCooldown   time.Duration // NOX_MARGIN_WARN_COOLDOWN（默认 6h）
 
 	mu           sync.Mutex
 	urgentStreak map[string]int // urgent 去抖：同 venue 连续 urgent tick 数（SSOT：连续 2 tick 才发）

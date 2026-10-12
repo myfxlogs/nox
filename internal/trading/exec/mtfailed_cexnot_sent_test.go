@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // d084SeqExec 顺序记录执行器（PlaceOrder 调用序入共享 seq；fail=true 返拒绝）。

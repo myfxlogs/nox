@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // PgStoreAdapter 包装 pgstore.Store 实现 trxvote.Store 接口。

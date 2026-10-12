@@ -6,7 +6,7 @@ package exec
 import (
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func d334Rows(vals []float64) []pgstore.FactPoint {

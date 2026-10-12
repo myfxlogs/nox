@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/risk/gate"
+	"nox/internal/data/bus"
+	"nox/internal/risk/gate"
 )
 
 // newCSResolver 构造 (venueKey,venueSymbol)→CS 的 resolver（D-190 R1：cfg 路径注入）。

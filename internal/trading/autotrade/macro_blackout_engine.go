@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/macro"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/macro"
+	"nox/internal/store/pgstore"
 )
 
 // macroBJLoc 禁区 reason 的 BJ 时刻坐标（macro/gate 包同值独立定义——包间不互引）。
@@ -41,7 +41,7 @@ func (e *Engine) positionCanonical(ctx context.Context, p *pgstore.Position) str
 // 查询失败推迟只会冻结常规退出）。
 func (e *Engine) macroBlackoutActive(ctx context.Context, canonical string) (bool, string) {
 	minutes := e.cfg.MacroBlackoutMin
-	if v, ok, err := e.store.AppConfigInt64(ctx, "ARB_MACRO_BLACKOUT_MIN"); err != nil {
+	if v, ok, err := e.store.AppConfigInt64(ctx, "NOX_MACRO_BLACKOUT_MIN"); err != nil {
 		return false, "" // fail-open
 	} else if ok {
 		minutes = int(v)
@@ -50,7 +50,7 @@ func (e *Engine) macroBlackoutActive(ctx context.Context, canonical string) (boo
 		return false, ""
 	}
 	base := e.cfg.MacroBlackoutCurrencies
-	if v, ok, err := e.store.AppConfigString(ctx, "ARB_MACRO_BLACKOUT_CURRENCIES"); err != nil {
+	if v, ok, err := e.store.AppConfigString(ctx, "NOX_MACRO_BLACKOUT_CURRENCIES"); err != nil {
 		return false, ""
 	} else if ok && strings.TrimSpace(v) != "" {
 		base = v

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"connectrpc.com/connect"
 )
@@ -69,7 +69,7 @@ func TestPendingQuote_覆盖最新(t *testing.T) {
 	}
 }
 
-// TestSetWatchlist_缓存即时生效_未知拒绝_双维 D-090 返修包① R1（DSN-gated，ARB_TEST_PG_SERVICE_DSN）：
+// TestSetWatchlist_缓存即时生效_未知拒绝_双维 D-090 返修包① R1（DSN-gated，NOX_TEST_PG_SERVICE_DSN）：
 // SetWatchlist 全程持锁——校验未知 canonical 整单拒绝（FailedPrecondition）+ 写库 + 同锁内更新缓存。
 // 缓存即时生效：SetWatchlist 后 watchlistHitQuote 立即反映新清单（含 venue 过滤）。
 // venues 不强校验：存非法 venue 不报错（设计 §9 裁定）。

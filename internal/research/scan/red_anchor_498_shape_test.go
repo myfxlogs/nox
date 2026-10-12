@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // d410Opts cfd 轨装配参数（缺省值同 wire：feeBps=5.0 与 cfg.XAssetCexFeeBps 缺省同源）。

@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/platform/combo"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/platform/combo"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // swapFactsWatchdog swapArb facts 饥荒看门狗周期：mt_swap 1h 采集 ×2 容忍。
@@ -63,7 +63,7 @@ func swapQuoteGates(qLong, qShort bus.Quote, now time.Time, cfg gate.Config) (sp
 		return 0, true, "blind leg ask<=0" // spreadBps 无意义（除零 fail-closed）
 	}
 	spreadBps = (qShort.Bid - qLong.Ask) / qLong.Ask * 10000
-	// 修复⑪B N6：入场成本容忍 env 化（ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS，默认 -3）
+	// 修复⑪B N6：入场成本容忍 env 化（NOX_SWAPARB_ENTRY_SPREAD_MIN_BPS，默认 -3）
 	if spreadBps < cfg.EntrySpreadMinBps {
 		return spreadBps, true, "spreadBps below min"
 	}

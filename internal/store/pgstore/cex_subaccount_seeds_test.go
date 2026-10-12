@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	"arb/migrations"
+	"nox/migrations"
 )
 
 // TestCexSubaccountSeeds_Idempotent D-363 S4：种子幂等——Migrate 后同 venue+type 各 1 行；

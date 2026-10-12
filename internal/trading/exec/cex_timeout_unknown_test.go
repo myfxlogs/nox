@@ -12,7 +12,7 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // d414ErrExecutor PlaceOrder 恒注入错；CloseOrder 记录调用（MT 路径）。

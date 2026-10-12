@@ -10,8 +10,8 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
 )
 
 // handleFuturesDispatch D-570 包C：futures 连接多频道分派（channel 字段路由；

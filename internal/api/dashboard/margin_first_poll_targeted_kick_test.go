@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/trading/exec"
 )
 
 func TestD071_MarginFirstPollTargetedKick(t *testing.T) {

@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/data/macro"
-	"arb/internal/research/scan"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/data/macro"
+	"nox/internal/research/scan"
+	"nox/internal/store/pgstore"
 )
 
 // fundingFactMaxAge D-027 在线判据——funding facts 流供体最大龄（mark-price WS
@@ -53,7 +53,7 @@ func stage1Checks(ctx context.Context, d Deps, since time.Time, windowOK bool, e
 	rows := []StageCheck{}
 	if !windowOK || ev == nil {
 		return []StageCheck{
-			{Label: "纸面观测窗已配置", OK: false, Data: "窗起点未配置（ARB_PAPER_WINDOW_START）"},
+			{Label: "纸面观测窗已配置", OK: false, Data: "窗起点未配置（NOX_PAPER_WINDOW_START）"},
 		}
 	}
 	// 日期制判据（窗 ≥7 天/组合在仓 ≥5d）撤销——Stage 1 改条件制，
@@ -104,9 +104,9 @@ func stage1Checks(ctx context.Context, d Deps, since time.Time, windowOK bool, e
 			Label: "窗内净额非负", OK: comboNet >= 0 && len(malformed) == 0, Data: netData})
 	}
 	// 条件制——白名单实盘组合（D-056 四元组）当前 active 行连续存活
-	// ≥ARB_STAGE1_MIN_ROW_HOURS（热读缺省 48）且 accrued>0；退出过的行不计
+	// ≥NOX_STAGE1_MIN_ROW_HOURS（热读缺省 48）且 accrued>0；退出过的行不计
 	//（只查 active）。每个白名单组合都命中才 ✅（fail-closed 覆盖全组合域）。
-	minRowHours := cfgIntDef(ctx, d, "ARB_STAGE1_MIN_ROW_HOURS", stage1MinRowHoursDefault)
+	minRowHours := cfgIntDef(ctx, d, "NOX_STAGE1_MIN_ROW_HOURS", stage1MinRowHoursDefault)
 	active, aerr := d.Store.ListActivePaperSpotCarry(ctx)
 	switch {
 	case perr != nil:
@@ -145,9 +145,9 @@ func stage1Checks(ctx context.Context, d Deps, since time.Time, windowOK bool, e
 			Label: "目标组合纸面行存活", OK: allOK && len(malformed) == 0,
 			Data: fmt.Sprintf("%s（需存活 ≥%dh 且计息>0）", strings.Join(parts, " "), minRowHours)})
 	}
-	// 开仓时点——now 距最近一次 MT 周开盘 ≥ ARB_STAGE1_OPEN_WARMUP_H
+	// 开仓时点——now 距最近一次 MT 周开盘 ≥ NOX_STAGE1_OPEN_WARMUP_H
 	// （热读缺省 2）且当前不在财历禁区（D-053 复用：BlackoutCurrencySet+
-	// MacroHighEventsIn，窗=ARB_MACRO_BLACKOUT_MIN 热读缺省 15）。仅就绪表显示项，
+	// MacroHighEventsIn，窗=NOX_MACRO_BLACKOUT_MIN 热读缺省 15）。仅就绪表显示项，
 	// 不进引擎。会话表缺/查询失败/禁区查询失败 → fail-closed 不 ✅。
 	rows = append(rows, stage1OpenTimingCheck(ctx, d, pairs, now))
 	incidents, err := d.Store.IncidentCountSince(ctx, since)
@@ -203,7 +203,7 @@ func stage1Checks(ctx context.Context, d Deps, since time.Time, windowOK bool, e
 
 // stage1OpenTimingCheck D-061 ②「开仓时点」行（周开盘暖场+财历禁区，显示项）。
 func stage1OpenTimingCheck(ctx context.Context, d Deps, pairs []pgstore.XAssetRealCombo, now time.Time) StageCheck {
-	warmup := cfgIntDef(ctx, d, "ARB_STAGE1_OPEN_WARMUP_H", stage1OpenWarmupDefault)
+	warmup := cfgIntDef(ctx, d, "NOX_STAGE1_OPEN_WARMUP_H", stage1OpenWarmupDefault)
 	row := StageCheck{Label: "开仓时点", OK: false}
 	startMin, ok, err := d.Store.MinWeekdaySessionStartMin(ctx, fact.KindTradeSession, 1) // 周一
 	if err != nil {
@@ -225,8 +225,8 @@ func stage1OpenTimingCheck(ctx context.Context, d Deps, pairs []pgstore.XAssetRe
 	if elapsed < time.Duration(warmup)*time.Hour {
 		return row
 	}
-	// 财历禁区：币种集=ARB_MACRO_BLACKOUT_CURRENCIES（热读缺省 USD）∪ 白名单各 canonical 两半。
-	base := cfgStrDef(ctx, d, "ARB_MACRO_BLACKOUT_CURRENCIES", "USD")
+	// 财历禁区：币种集=NOX_MACRO_BLACKOUT_CURRENCIES（热读缺省 USD）∪ 白名单各 canonical 两半。
+	base := cfgStrDef(ctx, d, "NOX_MACRO_BLACKOUT_CURRENCIES", "USD")
 	curs := map[string]bool{}
 	for _, c := range macro.BlackoutCurrencySet(base, "") {
 		curs[c] = true
@@ -240,7 +240,7 @@ func stage1OpenTimingCheck(ctx context.Context, d Deps, pairs []pgstore.XAssetRe
 	for c := range curs {
 		list = append(list, c)
 	}
-	win := cfgIntDef(ctx, d, "ARB_MACRO_BLACKOUT_MIN", 15)
+	win := cfgIntDef(ctx, d, "NOX_MACRO_BLACKOUT_MIN", 15)
 	evs, err := d.Store.MacroHighEventsIn(ctx, now.Add(-time.Duration(win)*time.Minute), now.Add(time.Duration(win)*time.Minute), list)
 	if err != nil {
 		row.Data += "；禁区查询失败:" + err.Error()

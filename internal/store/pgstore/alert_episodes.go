@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/platform/alerttext"
+	"nox/internal/platform/alerttext"
 )
 
 // cfgAlertEpisodes episode 状态键（app_config value=alertEpisodeDoc JSON）。
-const cfgAlertEpisodes = "ARB_ALERT_EPISODES"
+const cfgAlertEpisodes = "NOX_ALERT_EPISODES"
 
 const (
 	episodeOpen  = "open"

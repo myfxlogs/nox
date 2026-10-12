@@ -1,6 +1,6 @@
 // d492_allowrules_admin_test.go —— D-492 A1–A7 断言锚：Add/DeleteAutotradeAllowRule
 // （kind/value 校验+simulated 服务端推导+幂等去重+disabled 复用+审计+kickConfig）
-// + ApproveCarryGraduationResponse.venue_gap_keys 纯 key 透出。库面锚需 ARB_TEST_PG_DSN。
+// + ApproveCarryGraduationResponse.venue_gap_keys 纯 key 透出。库面锚需 NOX_TEST_PG_DSN。
 package dashboard
 
 import (
@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )
@@ -19,7 +19,7 @@ import (
 // d492Store 真库 + d492 前缀清扫（rules/exchange_configs/broker_accounts/alerts）。
 func d492Store(t *testing.T) (*pgstore.Store, *Service, *int) {
 	t.Helper()
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `
 		DELETE FROM autotrade_allow_rules WHERE value LIKE 'd492%' OR value LIKE '492%';

@@ -10,7 +10,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // spreadVerdict/fundingVerdict D-508 S8：原前端硬编码阈值（50bps / 年化10%）后端收编。

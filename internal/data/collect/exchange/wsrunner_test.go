@@ -4,11 +4,11 @@
 package exchange
 
 import (
-	"arb/internal/platform/httpx"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"nox/internal/platform/httpx"
 	"strings"
 	"sync/atomic"
 	"testing"

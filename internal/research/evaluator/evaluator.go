@@ -3,11 +3,11 @@
 package evaluator
 
 import (
-	"arb/internal/data/keydomain"
 	"fmt"
+	"nox/internal/data/keydomain"
 	"time"
 
-	"arb/internal/research/detector"
+	"nox/internal/research/detector"
 )
 
 // Rating 三档判定（§6.3）。
@@ -26,7 +26,7 @@ type Config struct {
 	DetectorFreshnessTTL time.Duration
 	OpportunityTTL       time.Duration
 	GrabMinNetAnnualized float64 // grab 档门槛（百分点，D-036，替代硬编码 4.5）
-	// 息差型回本周期上门（ARB_FUNDING_MAX_BREAKEVEN_DAYS，缺省 1.0）。
+	// 息差型回本周期上门（NOX_FUNDING_MAX_BREAKEVEN_DAYS，缺省 1.0）。
 	// breakevenDays > 此值 → NetBps 置负，使下游 funding_min% 过滤自然淘汰（不加新淘汰通道）。
 	// 0 = 不启用（回本门关闭）。
 	FundingMaxBreakevenDays float64

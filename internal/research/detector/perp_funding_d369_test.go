@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // TestPerpFunding_SimPairBypass D-369 S3：非白名单 canonical（ONDO）双腿均已知 sim →

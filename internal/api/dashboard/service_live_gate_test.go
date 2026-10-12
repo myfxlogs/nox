@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // setupLiveGateServiceStore 构造真库 store + broker_accounts 种子 is_real。

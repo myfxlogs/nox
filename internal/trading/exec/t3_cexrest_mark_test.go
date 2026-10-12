@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/infra/dephealth"
-	"arb/internal/platform/httpx"
+	"nox/internal/infra/dephealth"
+	"nox/internal/platform/httpx"
 )
 
 func depRowExec(key string) (dephealth.Row, bool) {

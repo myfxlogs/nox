@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/research/detector"
+	"nox/internal/research/detector"
 )
 
 // xassetCand 构造 XASSET_CARRY 候选：买 XAUUSD@3001157:mt5 卖 PAXGUSDT@binance:perp。

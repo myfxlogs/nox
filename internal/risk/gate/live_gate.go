@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // LiveGateCheckResult D-195 §3.2：LiveGate 8 条检查结果。

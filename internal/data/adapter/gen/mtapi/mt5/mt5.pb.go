@@ -15693,7 +15693,7 @@ const file_mtapi_mt5_mt5_proto_rawDesc = "" +
 	"\rOnMarketWatch\x12\x1d.mt5grpc.OnMarketWatchRequest\x1a\x1b.mt5grpc.OnMarketWatchReply0\x01\x12M\n" +
 	"\rOnTickHistory\x12\x1d.mt5grpc.OnTickHistoryRequest\x1a\x1b.mt5grpc.OnTickHistoryReply0\x01\x128\n" +
 	"\x06OnMail\x12\x16.mt5grpc.OnMailRequest\x1a\x14.mt5grpc.OnMailReply0\x01\x12e\n" +
-	"\x15OnOpenedOrdersTickets\x12%.mt5grpc.OnOpenedOrdersTicketsRequest\x1a#.mt5grpc.OnOpenedOrdersTicketsReply0\x01B(Z&arb/internal/data/adapter/gen/mtapi/mt5;mt5b\x06proto3"
+	"\x15OnOpenedOrdersTickets\x12%.mt5grpc.OnOpenedOrdersTicketsRequest\x1a#.mt5grpc.OnOpenedOrdersTicketsReply0\x01B-Z+nox/internal/data/adapter/gen/mtapi/mt5;mt5b\x06proto3"
 
 var (
 	file_mtapi_mt5_mt5_proto_rawDescOnce sync.Once

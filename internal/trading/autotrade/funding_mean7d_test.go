@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // d027SeedFunding 按日序列播种 funding facts（vals[i]=i 天前年化 %，每天 n 条均匀撒开）。

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"arb/internal/data/keydomain"
+	"nox/internal/data/keydomain"
 
 	"github.com/jackc/pgx/v5"
 )

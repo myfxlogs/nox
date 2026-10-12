@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/normalize"
+	"nox/internal/data/normalize"
 )
 
 // 用例①：mock symbols 源 → BackfillRuleMappings → store 出现 source='rule' 行（DSN 集成）。

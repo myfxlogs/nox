@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/risk/gate"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/risk/gate"
 )
 
 // TestD180_SwapRateFor_SettledHit 实测命中——settled 7d 内有样本 → 换算 bps 返回。

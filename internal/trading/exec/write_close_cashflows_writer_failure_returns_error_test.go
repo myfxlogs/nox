@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // TestWriteCloseCashflows_WriterFailure_ReturnsError P0-2：cashflowWriter 返回 error → writeCloseCashflows 返回 error。

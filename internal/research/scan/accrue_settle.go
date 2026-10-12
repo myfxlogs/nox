@@ -9,8 +9,8 @@ import (
 	"math"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // PaperFactSource 结算对齐累积的 facts/映射/tick 窄读面（*pgstore.Store 原生实现）。

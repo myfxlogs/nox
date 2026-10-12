@@ -1,18 +1,18 @@
 // d515_seal_test.go —— D-515 A3/A4：boot 自封幂等+MASTER_KEY 缺位 fail-closed。
-// 需 ARB_TEST_PG_DSN（_test 库）。ARB_MASTER_KEY 由测试注入（testkey，禁区不越——生成归业主）。
+// 需 NOX_TEST_PG_DSN（_test 库）。NOX_MASTER_KEY 由测试注入（testkey，禁区不越——生成归业主）。
 package pgstore
 
 import (
 	"context"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 func d515Store(t *testing.T) (*Store, context.Context) {
 	t.Helper()
 	ctx := context.Background()
-	s, err := New(ctx, testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := New(ctx, testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore new: %v", err)
 	}
@@ -28,7 +28,7 @@ func d515Store(t *testing.T) (*Store, context.Context) {
 
 func TestD515_BootSealIdempotent(t *testing.T) {
 	s, ctx := d515Store(t)
-	t.Setenv("ARB_MASTER_KEY", "testkey-d515")
+	t.Setenv("NOX_MASTER_KEY", "testkey-d515")
 	id, err := insertPlainRow(ctx, s)
 	if err != nil {
 		t.Fatalf("seed: %v", err)
@@ -62,7 +62,7 @@ func TestD515_BootSealIdempotent(t *testing.T) {
 func TestD515_MasterKeyMissingFatal(t *testing.T) {
 	s, ctx := d515Store(t)
 	// 无 MASTER_KEY + 明文行 → SealExchangeKeys 错（boot fatal 路径）。
-	t.Setenv("ARB_MASTER_KEY", "")
+	t.Setenv("NOX_MASTER_KEY", "")
 	if _, err := insertPlainRow(ctx, s); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -70,16 +70,16 @@ func TestD515_MasterKeyMissingFatal(t *testing.T) {
 		t.Fatal("missing master key + pending rows should fail")
 	}
 	// enc 行存在 + 无 key → ListExchangeConfigs 错（读面 fail-closed）。
-	t.Setenv("ARB_MASTER_KEY", "testkey-d515")
+	t.Setenv("NOX_MASTER_KEY", "testkey-d515")
 	if _, err := s.SealExchangeKeys(ctx); err != nil {
 		t.Fatalf("seal: %v", err)
 	}
-	t.Setenv("ARB_MASTER_KEY", "")
+	t.Setenv("NOX_MASTER_KEY", "")
 	if _, err := s.ListExchangeConfigs(ctx); err == nil {
 		t.Fatal("enc rows + missing key should fail closed")
 	}
 	// 错 key 解密失败。
-	t.Setenv("ARB_MASTER_KEY", "other-key")
+	t.Setenv("NOX_MASTER_KEY", "other-key")
 	if _, err := s.ListExchangeConfigs(ctx); err == nil {
 		t.Fatal("wrong key should fail")
 	}

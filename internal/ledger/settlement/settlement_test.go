@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // fakeDeps 测试用 settlement.Deps 实现。

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // FactEmitHeartbeat 未变值重发心拍上限（1 次/120s）。对拍 5min REST 轮询旧档的

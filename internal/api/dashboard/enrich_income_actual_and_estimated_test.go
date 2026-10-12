@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -130,7 +130,7 @@ func TestD375_Enrich_MixedXAssetComposition(t *testing.T) {
 // （computeEntryNotional：两 FILLED 腿 50000×0.2=2×10000=20000；ExpectedNetBps=10%×1y → 应得 2000，
 // income 实收 100 → 达成 5%）。
 func TestD375_AttainmentUsesIncome(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_SERVICE_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
 	s := &Service{store: st}
 	pb := &v1.Position{
 		Id: 600, OpportunityId: "XASSET_CARRY:BTCUSDT:277842155:mt5:binance:perp",
@@ -155,7 +155,7 @@ func TestD375_AttainmentUsesIncome(t *testing.T) {
 // TestD375_AnnotateCEXSwap_IncomeSource 锚5：annotateCEXSwap bp.Swap=0 腿兜底源=income 实收
 // 非 estimated cashflow；venue 实报（≠0）真值优先不动。
 func TestD375_AnnotateCEXSwap_IncomeSource(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_SERVICE_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx,
 		`TRUNCATE income_events, positions, position_legs RESTART IDENTITY CASCADE`); err != nil {

@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"time"
 
-	"arb/internal/platform/safego"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/safego"
+	"nox/internal/store/pgstore"
 )
 
 // httpTimeout 采集客户端超时（不复用 cfg.Client——那是 cex-proxy 通道）。
@@ -33,7 +33,7 @@ type Notifier interface {
 }
 
 // Deps 调度依赖（Now 测试注入）。
-// 热读化：Enabled 改 getter——每班唤醒首判（ARB_MACRO_ENABLED 热闸：
+// 热读化：Enabled 改 getter——每班唤醒首判（NOX_MACRO_ENABLED 热闸：
 // false=当班跳过不杀 goroutine；nil=恒开）。D-120 删 FredKey（FRED 面清退）。
 // Notify/ChatID 摘除——推送收口业主域，财历/actuals 仅 alerts 留痕。
 // ⑤：Notify/ChatID 恢复——日历日报按票面恢复直推（actuals 仍 info 留痕不推）。

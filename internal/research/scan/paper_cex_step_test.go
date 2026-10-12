@@ -7,7 +7,7 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // StepPaperCexCarry 测试用全 pass（Open→AccrueExit 顺序同原合成函数）。

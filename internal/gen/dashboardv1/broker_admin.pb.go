@@ -3061,7 +3061,7 @@ type MatrixSymbolRow struct {
 	Group            string                 `protobuf:"bytes,2,opt,name=group,proto3" json:"group,omitempty"`                                          // broker 分组；"" = 未分组（MT4）；归并行 = 跨组商品
 	CoverageTotal    int32                  `protobuf:"varint,3,opt,name=coverage_total,json=coverageTotal,proto3" json:"coverage_total,omitempty"`    // 应配齐集大小 = connected 账号中存在 (symbol,group) 者
 	CoverageMapped   int32                  `protobuf:"varint,4,opt,name=coverage_mapped,json=coverageMapped,proto3" json:"coverage_mapped,omitempty"` // 其中已映射数量
-	State            MatrixState            `protobuf:"varint,5,opt,name=state,proto3,enum=arb.dashboard.v1.MatrixState" json:"state,omitempty"`       // 后端按 coverage 计算
+	State            MatrixState            `protobuf:"varint,5,opt,name=state,proto3,enum=nox.dashboard.v1.MatrixState" json:"state,omitempty"`       // 后端按 coverage 计算
 	ContractMin      float64                `protobuf:"fixed64,6,opt,name=contract_min,json=contractMin,proto3" json:"contract_min,omitempty"`         // 跨账号合约区间（0=全未知）
 	ContractMax      float64                `protobuf:"fixed64,7,opt,name=contract_max,json=contractMax,proto3" json:"contract_max,omitempty"`
 	MappedCanonicals []string               `protobuf:"bytes,8,rep,name=mapped_canonicals,json=mappedCanonicals,proto3" json:"mapped_canonicals,omitempty"` // 去重映射到的 canonical（通常 1 个；>1 = 冲突信号）
@@ -3760,12 +3760,12 @@ func (*GetFrontConfigRequest) Descriptor() ([]byte, []int) {
 
 type GetFrontConfigResponse struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
-	NotifyMinNetBps   float64                `protobuf:"fixed64,1,opt,name=notify_min_net_bps,json=notifyMinNetBps,proto3" json:"notify_min_net_bps,omitempty"`       // ARB_NOTIFY_MIN_NET_BPS（机会推送提醒门槛 bps）
-	FreshnessTtlSec   int32                  `protobuf:"varint,2,opt,name=freshness_ttl_sec,json=freshnessTtlSec,proto3" json:"freshness_ttl_sec,omitempty"`          // ARB_DETECTOR_FRESHNESS_TTL（报价陈旧排除 TTL 秒）
-	EntrySpreadMinBps float64                `protobuf:"fixed64,3,opt,name=entry_spread_min_bps,json=entrySpreadMinBps,proto3" json:"entry_spread_min_bps,omitempty"` // ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS（入场成本容忍 bps）
-	MinNetSwapBps     float64                `protobuf:"fixed64,4,opt,name=min_net_swap_bps,json=minNetSwapBps,proto3" json:"min_net_swap_bps,omitempty"`             // ARB_AUTOTRADE_MIN_NET_SWAP_BPS（swap 套利最低净 swap bps）
-	RevalidateAbsBps  float64                `protobuf:"fixed64,5,opt,name=revalidate_abs_bps,json=revalidateAbsBps,proto3" json:"revalidate_abs_bps,omitempty"`      // ARB_REVALIDATE_ABS_BPS（复核劣化绝对阈值 bps）
-	RevalidateRelPct  float64                `protobuf:"fixed64,6,opt,name=revalidate_rel_pct,json=revalidateRelPct,proto3" json:"revalidate_rel_pct,omitempty"`      // ARB_REVALIDATE_REL_PCT（复核劣化相对阈值 %）
+	NotifyMinNetBps   float64                `protobuf:"fixed64,1,opt,name=notify_min_net_bps,json=notifyMinNetBps,proto3" json:"notify_min_net_bps,omitempty"`       // NOX_NOTIFY_MIN_NET_BPS（机会推送提醒门槛 bps）
+	FreshnessTtlSec   int32                  `protobuf:"varint,2,opt,name=freshness_ttl_sec,json=freshnessTtlSec,proto3" json:"freshness_ttl_sec,omitempty"`          // NOX_DETECTOR_FRESHNESS_TTL（报价陈旧排除 TTL 秒）
+	EntrySpreadMinBps float64                `protobuf:"fixed64,3,opt,name=entry_spread_min_bps,json=entrySpreadMinBps,proto3" json:"entry_spread_min_bps,omitempty"` // NOX_SWAPARB_ENTRY_SPREAD_MIN_BPS（入场成本容忍 bps）
+	MinNetSwapBps     float64                `protobuf:"fixed64,4,opt,name=min_net_swap_bps,json=minNetSwapBps,proto3" json:"min_net_swap_bps,omitempty"`             // NOX_AUTOTRADE_MIN_NET_SWAP_BPS（swap 套利最低净 swap bps）
+	RevalidateAbsBps  float64                `protobuf:"fixed64,5,opt,name=revalidate_abs_bps,json=revalidateAbsBps,proto3" json:"revalidate_abs_bps,omitempty"`      // NOX_REVALIDATE_ABS_BPS（复核劣化绝对阈值 bps）
+	RevalidateRelPct  float64                `protobuf:"fixed64,6,opt,name=revalidate_rel_pct,json=revalidateRelPct,proto3" json:"revalidate_rel_pct,omitempty"`      // NOX_REVALIDATE_REL_PCT（复核劣化相对阈值 %）
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -4027,7 +4027,7 @@ var File_dashboardv1_broker_admin_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_broker_admin_proto_rawDesc = "" +
 	"\n" +
-	"\x1edashboardv1/broker_admin.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x0f\n" +
+	"\x1edashboardv1/broker_admin.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x0f\n" +
 	"\rHealthRequest\"O\n" +
 	"\x0eHealthResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x13\n" +
@@ -4041,9 +4041,9 @@ const file_dashboardv1_broker_admin_proto_rawDesc = "" +
 	"\x06access\x18\x02 \x01(\tR\x06access\"l\n" +
 	"\rBrokerCompany\x12!\n" +
 	"\fcompany_name\x18\x01 \x01(\tR\vcompanyName\x128\n" +
-	"\aservers\x18\x02 \x03(\v2\x1e.arb.dashboard.v1.BrokerServerR\aservers\"U\n" +
+	"\aservers\x18\x02 \x03(\v2\x1e.nox.dashboard.v1.BrokerServerR\aservers\"U\n" +
 	"\x14SearchBrokerResponse\x12=\n" +
-	"\tcompanies\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.BrokerCompanyR\tcompanies\"\xbd\x02\n" +
+	"\tcompanies\x18\x01 \x03(\v2\x1f.nox.dashboard.v1.BrokerCompanyR\tcompanies\"\xbd\x02\n" +
 	"\x10AddBrokerRequest\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1a\n" +
 	"\bplatform\x18\x02 \x01(\x05R\bplatform\x12\x12\n" +
@@ -4096,7 +4096,7 @@ const file_dashboardv1_broker_admin_proto_rawDesc = "" +
 	"\b_is_realJ\x04\b\a\x10\b\"\x1b\n" +
 	"\x19ListBrokerAccountsRequest\"Y\n" +
 	"\x1aListBrokerAccountsResponse\x12;\n" +
-	"\baccounts\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.BrokerAccountR\baccounts\"\x92\x02\n" +
+	"\baccounts\x18\x01 \x03(\v2\x1f.nox.dashboard.v1.BrokerAccountR\baccounts\"\x92\x02\n" +
 	"\x0eExchangeConfig\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05venue\x18\x02 \x01(\tR\x05venue\x12\x1d\n" +
@@ -4111,7 +4111,7 @@ const file_dashboardv1_broker_admin_proto_rawDesc = "" +
 	"\awebsite\x18\t \x01(\tR\awebsite\"\x16\n" +
 	"\x14ListExchangesRequest\"W\n" +
 	"\x15ListExchangesResponse\x12>\n" +
-	"\texchanges\x18\x01 \x03(\v2 .arb.dashboard.v1.ExchangeConfigR\texchanges\"\x8a\x02\n" +
+	"\texchanges\x18\x01 \x03(\v2 .nox.dashboard.v1.ExchangeConfigR\texchanges\"\x8a\x02\n" +
 	"\x12AddExchangeRequest\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1d\n" +
 	"\n" +
@@ -4127,7 +4127,7 @@ const file_dashboardv1_broker_admin_proto_rawDesc = "" +
 	"\tsimulated\x18\b \x01(\bR\tsimulated\x12\x18\n" +
 	"\awebsite\x18\t \x01(\tR\awebsite\"S\n" +
 	"\x13AddExchangeResponse\x12<\n" +
-	"\bexchange\x18\x01 \x01(\v2 .arb.dashboard.v1.ExchangeConfigR\bexchange\"'\n" +
+	"\bexchange\x18\x01 \x01(\v2 .nox.dashboard.v1.ExchangeConfigR\bexchange\"'\n" +
 	"\x15RemoveExchangeRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x18\n" +
 	"\x16RemoveExchangeResponse\"?\n" +
@@ -4165,7 +4165,7 @@ const file_dashboardv1_broker_admin_proto_rawDesc = "" +
 	"\x05group\x18\x02 \x01(\tR\x05group\x12#\n" +
 	"\rcontract_size\x18\x03 \x01(\x01R\fcontractSize\"P\n" +
 	"\x15BrokerSymbolsResponse\x127\n" +
-	"\asymbols\x18\x01 \x03(\v2\x1d.arb.dashboard.v1.SymbolEntryR\asymbols\"J\n" +
+	"\asymbols\x18\x01 \x03(\v2\x1d.nox.dashboard.v1.SymbolEntryR\asymbols\"J\n" +
 	"\x1cSetBrokerAccountAliasRequest\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x14\n" +
 	"\x05alias\x18\x02 \x01(\tR\x05alias\"\x1f\n" +
@@ -4198,7 +4198,7 @@ const file_dashboardv1_broker_admin_proto_rawDesc = "" +
 	"\x19ListSymbolMappingsRequest\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\"Y\n" +
 	"\x1aListSymbolMappingsResponse\x12;\n" +
-	"\bmappings\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.SymbolMappingR\bmappings\"\xa1\x01\n" +
+	"\bmappings\x18\x01 \x03(\v2\x1f.nox.dashboard.v1.SymbolMappingR\bmappings\"\xa1\x01\n" +
 	"\x18SaveSymbolMappingRequest\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12#\n" +
 	"\rbroker_symbol\x18\x02 \x01(\tR\fbrokerSymbol\x12\x1c\n" +
@@ -4220,7 +4220,7 @@ const file_dashboardv1_broker_admin_proto_rawDesc = "" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12\x16\n" +
 	"\x06reason\x18\x06 \x01(\tR\x06reason\"m\n" +
 	"\x1eListMappingSuggestionsResponse\x12K\n" +
-	"\vsuggestions\x18\x01 \x03(\v2).arb.dashboard.v1.SymbolMappingSuggestionR\vsuggestions\"\x17\n" +
+	"\vsuggestions\x18\x01 \x03(\v2).nox.dashboard.v1.SymbolMappingSuggestionR\vsuggestions\"\x17\n" +
 	"\x15ListCanonicalsRequest\"8\n" +
 	"\x16ListCanonicalsResponse\x12\x1e\n" +
 	"\n" +
@@ -4241,11 +4241,11 @@ const file_dashboardv1_broker_admin_proto_rawDesc = "" +
 	"\x05group\x18\x02 \x01(\tR\x05group\x12%\n" +
 	"\x0ecoverage_total\x18\x03 \x01(\x05R\rcoverageTotal\x12'\n" +
 	"\x0fcoverage_mapped\x18\x04 \x01(\x05R\x0ecoverageMapped\x123\n" +
-	"\x05state\x18\x05 \x01(\x0e2\x1d.arb.dashboard.v1.MatrixStateR\x05state\x12!\n" +
+	"\x05state\x18\x05 \x01(\x0e2\x1d.nox.dashboard.v1.MatrixStateR\x05state\x12!\n" +
 	"\fcontract_min\x18\x06 \x01(\x01R\vcontractMin\x12!\n" +
 	"\fcontract_max\x18\a \x01(\x01R\vcontractMax\x12+\n" +
 	"\x11mapped_canonicals\x18\b \x03(\tR\x10mappedCanonicals\x12A\n" +
-	"\baccounts\x18\t \x03(\v2%.arb.dashboard.v1.MatrixSymbolAccountR\baccounts\"\x8d\x01\n" +
+	"\baccounts\x18\t \x03(\v2%.nox.dashboard.v1.MatrixSymbolAccountR\baccounts\"\x8d\x01\n" +
 	"\x0fMatrixGroupStat\x12\x14\n" +
 	"\x05group\x18\x01 \x01(\tR\x05group\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x1a\n" +
@@ -4254,15 +4254,15 @@ const file_dashboardv1_broker_admin_proto_rawDesc = "" +
 	"\amissing\x18\x05 \x01(\x05R\amissing\"\x86\x02\n" +
 	"\x0eMatrixUniverse\x12\x16\n" +
 	"\x06groups\x18\x01 \x03(\tR\x06groups\x12B\n" +
-	"\vgroup_stats\x18\x02 \x03(\v2!.arb.dashboard.v1.MatrixGroupStatR\n" +
+	"\vgroup_stats\x18\x02 \x03(\v2!.nox.dashboard.v1.MatrixGroupStatR\n" +
 	"groupStats\x12;\n" +
-	"\asymbols\x18\x03 \x03(\v2!.arb.dashboard.v1.MatrixSymbolRowR\asymbols\x12;\n" +
-	"\baccounts\x18\x04 \x03(\v2\x1f.arb.dashboard.v1.BrokerAccountR\baccounts\x12\x1e\n" +
+	"\asymbols\x18\x03 \x03(\v2!.nox.dashboard.v1.MatrixSymbolRowR\asymbols\x12;\n" +
+	"\baccounts\x18\x04 \x03(\v2\x1f.nox.dashboard.v1.BrokerAccountR\baccounts\x12\x1e\n" +
 	"\n" +
 	"canonicals\x18\x05 \x03(\tR\n" +
 	"canonicals\"Z\n" +
 	"\x1aListMatrixUniverseResponse\x12<\n" +
-	"\buniverse\x18\x01 \x01(\v2 .arb.dashboard.v1.MatrixUniverseR\buniverse\",\n" +
+	"\buniverse\x18\x01 \x01(\v2 .nox.dashboard.v1.MatrixUniverseR\buniverse\",\n" +
 	"\x14AutoMapBrokerRequest\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\"\xc3\x01\n" +
 	"\x13AutoMapBrokerResult\x12#\n" +
@@ -4273,7 +4273,7 @@ const file_dashboardv1_broker_admin_proto_rawDesc = "" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12\x16\n" +
 	"\x06reason\x18\x06 \x01(\tR\x06reason\"\x8c\x01\n" +
 	"\x15AutoMapBrokerResponse\x12?\n" +
-	"\aresults\x18\x01 \x03(\v2%.arb.dashboard.v1.AutoMapBrokerResultR\aresults\x12\x18\n" +
+	"\aresults\x18\x01 \x03(\v2%.nox.dashboard.v1.AutoMapBrokerResultR\aresults\x12\x18\n" +
 	"\aapplied\x18\x02 \x01(\x05R\aapplied\x12\x18\n" +
 	"\askipped\x18\x03 \x01(\x05R\askipped\"\x17\n" +
 	"\x15ListSwapCombosRequest\"\xe8\x01\n" +
@@ -4291,7 +4291,7 @@ const file_dashboardv1_broker_admin_proto_rawDesc = "" +
 	"\valias_short\x18\a \x01(\tR\n" +
 	"aliasShort\"M\n" +
 	"\x16ListSwapCombosResponse\x123\n" +
-	"\x06combos\x18\x01 \x03(\v2\x1b.arb.dashboard.v1.SwapComboR\x06combos\"\x17\n" +
+	"\x06combos\x18\x01 \x03(\v2\x1b.nox.dashboard.v1.SwapComboR\x06combos\"\x17\n" +
 	"\x15GetFrontConfigRequest\"\xa7\x02\n" +
 	"\x16GetFrontConfigResponse\x12+\n" +
 	"\x12notify_min_net_bps\x18\x01 \x01(\x01R\x0fnotifyMinNetBps\x12*\n" +
@@ -4311,12 +4311,12 @@ const file_dashboardv1_broker_admin_proto_rawDesc = "" +
 	"\ravg_hold_days\x18\x06 \x01(\x01R\vavgHoldDays\x12*\n" +
 	"\x11actual_annual_pct\x18\a \x01(\x01R\x0factualAnnualPct\"\\\n" +
 	"\x19GetStrategyLedgerResponse\x12?\n" +
-	"\aentries\x18\x01 \x03(\v2%.arb.dashboard.v1.StrategyLedgerEntryR\aentries*z\n" +
+	"\aentries\x18\x01 \x03(\v2%.nox.dashboard.v1.StrategyLedgerEntryR\aentries*z\n" +
 	"\vMatrixState\x12\x1c\n" +
 	"\x18MATRIX_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15MATRIX_STATE_COMPLETE\x10\x01\x12\x18\n" +
 	"\x14MATRIX_STATE_PARTIAL\x10\x02\x12\x18\n" +
-	"\x14MATRIX_STATE_MISSING\x10\x03B*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x14MATRIX_STATE_MISSING\x10\x03B*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_broker_admin_proto_rawDescOnce sync.Once
@@ -4333,99 +4333,99 @@ func file_dashboardv1_broker_admin_proto_rawDescGZIP() []byte {
 var file_dashboardv1_broker_admin_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_dashboardv1_broker_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 70)
 var file_dashboardv1_broker_admin_proto_goTypes = []any{
-	(MatrixState)(0),                        // 0: arb.dashboard.v1.MatrixState
-	(*HealthRequest)(nil),                   // 1: arb.dashboard.v1.HealthRequest
-	(*HealthResponse)(nil),                  // 2: arb.dashboard.v1.HealthResponse
-	(*SearchBrokerRequest)(nil),             // 3: arb.dashboard.v1.SearchBrokerRequest
-	(*BrokerServer)(nil),                    // 4: arb.dashboard.v1.BrokerServer
-	(*BrokerCompany)(nil),                   // 5: arb.dashboard.v1.BrokerCompany
-	(*SearchBrokerResponse)(nil),            // 6: arb.dashboard.v1.SearchBrokerResponse
-	(*AddBrokerRequest)(nil),                // 7: arb.dashboard.v1.AddBrokerRequest
-	(*AddBrokerResponse)(nil),               // 8: arb.dashboard.v1.AddBrokerResponse
-	(*RemoveBrokerRequest)(nil),             // 9: arb.dashboard.v1.RemoveBrokerRequest
-	(*RemoveBrokerResponse)(nil),            // 10: arb.dashboard.v1.RemoveBrokerResponse
-	(*UpdateBrokerCredentialsRequest)(nil),  // 11: arb.dashboard.v1.UpdateBrokerCredentialsRequest
-	(*UpdateBrokerCredentialsResponse)(nil), // 12: arb.dashboard.v1.UpdateBrokerCredentialsResponse
-	(*BrokerAccount)(nil),                   // 13: arb.dashboard.v1.BrokerAccount
-	(*ListBrokerAccountsRequest)(nil),       // 14: arb.dashboard.v1.ListBrokerAccountsRequest
-	(*ListBrokerAccountsResponse)(nil),      // 15: arb.dashboard.v1.ListBrokerAccountsResponse
-	(*ExchangeConfig)(nil),                  // 16: arb.dashboard.v1.ExchangeConfig
-	(*ListExchangesRequest)(nil),            // 17: arb.dashboard.v1.ListExchangesRequest
-	(*ListExchangesResponse)(nil),           // 18: arb.dashboard.v1.ListExchangesResponse
-	(*AddExchangeRequest)(nil),              // 19: arb.dashboard.v1.AddExchangeRequest
-	(*AddExchangeResponse)(nil),             // 20: arb.dashboard.v1.AddExchangeResponse
-	(*RemoveExchangeRequest)(nil),           // 21: arb.dashboard.v1.RemoveExchangeRequest
-	(*RemoveExchangeResponse)(nil),          // 22: arb.dashboard.v1.RemoveExchangeResponse
-	(*SetExchangeLabelRequest)(nil),         // 23: arb.dashboard.v1.SetExchangeLabelRequest
-	(*SetExchangeLabelResponse)(nil),        // 24: arb.dashboard.v1.SetExchangeLabelResponse
-	(*SetExchangeWebsiteRequest)(nil),       // 25: arb.dashboard.v1.SetExchangeWebsiteRequest
-	(*SetExchangeWebsiteResponse)(nil),      // 26: arb.dashboard.v1.SetExchangeWebsiteResponse
-	(*VerifyAccountRequest)(nil),            // 27: arb.dashboard.v1.VerifyAccountRequest
-	(*VerifyAccountResponse)(nil),           // 28: arb.dashboard.v1.VerifyAccountResponse
-	(*BrokerSymbolsRequest)(nil),            // 29: arb.dashboard.v1.BrokerSymbolsRequest
-	(*SymbolEntry)(nil),                     // 30: arb.dashboard.v1.SymbolEntry
-	(*BrokerSymbolsResponse)(nil),           // 31: arb.dashboard.v1.BrokerSymbolsResponse
-	(*SetBrokerAccountAliasRequest)(nil),    // 32: arb.dashboard.v1.SetBrokerAccountAliasRequest
-	(*SetBrokerAccountAliasResponse)(nil),   // 33: arb.dashboard.v1.SetBrokerAccountAliasResponse
-	(*SetBrokerAccountIsRealRequest)(nil),   // 34: arb.dashboard.v1.SetBrokerAccountIsRealRequest
-	(*SetBrokerAccountIsRealResponse)(nil),  // 35: arb.dashboard.v1.SetBrokerAccountIsRealResponse
-	(*SetBrokerDisabledRequest)(nil),        // 36: arb.dashboard.v1.SetBrokerDisabledRequest
-	(*SetBrokerDisabledResponse)(nil),       // 37: arb.dashboard.v1.SetBrokerDisabledResponse
-	(*SetBrokerCommissionRequest)(nil),      // 38: arb.dashboard.v1.SetBrokerCommissionRequest
-	(*SetBrokerCommissionResponse)(nil),     // 39: arb.dashboard.v1.SetBrokerCommissionResponse
-	(*SetBrokerWebsiteRequest)(nil),         // 40: arb.dashboard.v1.SetBrokerWebsiteRequest
-	(*SetBrokerWebsiteResponse)(nil),        // 41: arb.dashboard.v1.SetBrokerWebsiteResponse
-	(*SymbolMapping)(nil),                   // 42: arb.dashboard.v1.SymbolMapping
-	(*ListSymbolMappingsRequest)(nil),       // 43: arb.dashboard.v1.ListSymbolMappingsRequest
-	(*ListSymbolMappingsResponse)(nil),      // 44: arb.dashboard.v1.ListSymbolMappingsResponse
-	(*SaveSymbolMappingRequest)(nil),        // 45: arb.dashboard.v1.SaveSymbolMappingRequest
-	(*SaveSymbolMappingResponse)(nil),       // 46: arb.dashboard.v1.SaveSymbolMappingResponse
-	(*DeleteSymbolMappingRequest)(nil),      // 47: arb.dashboard.v1.DeleteSymbolMappingRequest
-	(*DeleteSymbolMappingResponse)(nil),     // 48: arb.dashboard.v1.DeleteSymbolMappingResponse
-	(*ListMappingSuggestionsRequest)(nil),   // 49: arb.dashboard.v1.ListMappingSuggestionsRequest
-	(*SymbolMappingSuggestion)(nil),         // 50: arb.dashboard.v1.SymbolMappingSuggestion
-	(*ListMappingSuggestionsResponse)(nil),  // 51: arb.dashboard.v1.ListMappingSuggestionsResponse
-	(*ListCanonicalsRequest)(nil),           // 52: arb.dashboard.v1.ListCanonicalsRequest
-	(*ListCanonicalsResponse)(nil),          // 53: arb.dashboard.v1.ListCanonicalsResponse
-	(*ListMatrixUniverseRequest)(nil),       // 54: arb.dashboard.v1.ListMatrixUniverseRequest
-	(*MatrixSymbolAccount)(nil),             // 55: arb.dashboard.v1.MatrixSymbolAccount
-	(*MatrixSymbolRow)(nil),                 // 56: arb.dashboard.v1.MatrixSymbolRow
-	(*MatrixGroupStat)(nil),                 // 57: arb.dashboard.v1.MatrixGroupStat
-	(*MatrixUniverse)(nil),                  // 58: arb.dashboard.v1.MatrixUniverse
-	(*ListMatrixUniverseResponse)(nil),      // 59: arb.dashboard.v1.ListMatrixUniverseResponse
-	(*AutoMapBrokerRequest)(nil),            // 60: arb.dashboard.v1.AutoMapBrokerRequest
-	(*AutoMapBrokerResult)(nil),             // 61: arb.dashboard.v1.AutoMapBrokerResult
-	(*AutoMapBrokerResponse)(nil),           // 62: arb.dashboard.v1.AutoMapBrokerResponse
-	(*ListSwapCombosRequest)(nil),           // 63: arb.dashboard.v1.ListSwapCombosRequest
-	(*SwapCombo)(nil),                       // 64: arb.dashboard.v1.SwapCombo
-	(*ListSwapCombosResponse)(nil),          // 65: arb.dashboard.v1.ListSwapCombosResponse
-	(*GetFrontConfigRequest)(nil),           // 66: arb.dashboard.v1.GetFrontConfigRequest
-	(*GetFrontConfigResponse)(nil),          // 67: arb.dashboard.v1.GetFrontConfigResponse
-	(*GetStrategyLedgerRequest)(nil),        // 68: arb.dashboard.v1.GetStrategyLedgerRequest
-	(*StrategyLedgerEntry)(nil),             // 69: arb.dashboard.v1.StrategyLedgerEntry
-	(*GetStrategyLedgerResponse)(nil),       // 70: arb.dashboard.v1.GetStrategyLedgerResponse
+	(MatrixState)(0),                        // 0: nox.dashboard.v1.MatrixState
+	(*HealthRequest)(nil),                   // 1: nox.dashboard.v1.HealthRequest
+	(*HealthResponse)(nil),                  // 2: nox.dashboard.v1.HealthResponse
+	(*SearchBrokerRequest)(nil),             // 3: nox.dashboard.v1.SearchBrokerRequest
+	(*BrokerServer)(nil),                    // 4: nox.dashboard.v1.BrokerServer
+	(*BrokerCompany)(nil),                   // 5: nox.dashboard.v1.BrokerCompany
+	(*SearchBrokerResponse)(nil),            // 6: nox.dashboard.v1.SearchBrokerResponse
+	(*AddBrokerRequest)(nil),                // 7: nox.dashboard.v1.AddBrokerRequest
+	(*AddBrokerResponse)(nil),               // 8: nox.dashboard.v1.AddBrokerResponse
+	(*RemoveBrokerRequest)(nil),             // 9: nox.dashboard.v1.RemoveBrokerRequest
+	(*RemoveBrokerResponse)(nil),            // 10: nox.dashboard.v1.RemoveBrokerResponse
+	(*UpdateBrokerCredentialsRequest)(nil),  // 11: nox.dashboard.v1.UpdateBrokerCredentialsRequest
+	(*UpdateBrokerCredentialsResponse)(nil), // 12: nox.dashboard.v1.UpdateBrokerCredentialsResponse
+	(*BrokerAccount)(nil),                   // 13: nox.dashboard.v1.BrokerAccount
+	(*ListBrokerAccountsRequest)(nil),       // 14: nox.dashboard.v1.ListBrokerAccountsRequest
+	(*ListBrokerAccountsResponse)(nil),      // 15: nox.dashboard.v1.ListBrokerAccountsResponse
+	(*ExchangeConfig)(nil),                  // 16: nox.dashboard.v1.ExchangeConfig
+	(*ListExchangesRequest)(nil),            // 17: nox.dashboard.v1.ListExchangesRequest
+	(*ListExchangesResponse)(nil),           // 18: nox.dashboard.v1.ListExchangesResponse
+	(*AddExchangeRequest)(nil),              // 19: nox.dashboard.v1.AddExchangeRequest
+	(*AddExchangeResponse)(nil),             // 20: nox.dashboard.v1.AddExchangeResponse
+	(*RemoveExchangeRequest)(nil),           // 21: nox.dashboard.v1.RemoveExchangeRequest
+	(*RemoveExchangeResponse)(nil),          // 22: nox.dashboard.v1.RemoveExchangeResponse
+	(*SetExchangeLabelRequest)(nil),         // 23: nox.dashboard.v1.SetExchangeLabelRequest
+	(*SetExchangeLabelResponse)(nil),        // 24: nox.dashboard.v1.SetExchangeLabelResponse
+	(*SetExchangeWebsiteRequest)(nil),       // 25: nox.dashboard.v1.SetExchangeWebsiteRequest
+	(*SetExchangeWebsiteResponse)(nil),      // 26: nox.dashboard.v1.SetExchangeWebsiteResponse
+	(*VerifyAccountRequest)(nil),            // 27: nox.dashboard.v1.VerifyAccountRequest
+	(*VerifyAccountResponse)(nil),           // 28: nox.dashboard.v1.VerifyAccountResponse
+	(*BrokerSymbolsRequest)(nil),            // 29: nox.dashboard.v1.BrokerSymbolsRequest
+	(*SymbolEntry)(nil),                     // 30: nox.dashboard.v1.SymbolEntry
+	(*BrokerSymbolsResponse)(nil),           // 31: nox.dashboard.v1.BrokerSymbolsResponse
+	(*SetBrokerAccountAliasRequest)(nil),    // 32: nox.dashboard.v1.SetBrokerAccountAliasRequest
+	(*SetBrokerAccountAliasResponse)(nil),   // 33: nox.dashboard.v1.SetBrokerAccountAliasResponse
+	(*SetBrokerAccountIsRealRequest)(nil),   // 34: nox.dashboard.v1.SetBrokerAccountIsRealRequest
+	(*SetBrokerAccountIsRealResponse)(nil),  // 35: nox.dashboard.v1.SetBrokerAccountIsRealResponse
+	(*SetBrokerDisabledRequest)(nil),        // 36: nox.dashboard.v1.SetBrokerDisabledRequest
+	(*SetBrokerDisabledResponse)(nil),       // 37: nox.dashboard.v1.SetBrokerDisabledResponse
+	(*SetBrokerCommissionRequest)(nil),      // 38: nox.dashboard.v1.SetBrokerCommissionRequest
+	(*SetBrokerCommissionResponse)(nil),     // 39: nox.dashboard.v1.SetBrokerCommissionResponse
+	(*SetBrokerWebsiteRequest)(nil),         // 40: nox.dashboard.v1.SetBrokerWebsiteRequest
+	(*SetBrokerWebsiteResponse)(nil),        // 41: nox.dashboard.v1.SetBrokerWebsiteResponse
+	(*SymbolMapping)(nil),                   // 42: nox.dashboard.v1.SymbolMapping
+	(*ListSymbolMappingsRequest)(nil),       // 43: nox.dashboard.v1.ListSymbolMappingsRequest
+	(*ListSymbolMappingsResponse)(nil),      // 44: nox.dashboard.v1.ListSymbolMappingsResponse
+	(*SaveSymbolMappingRequest)(nil),        // 45: nox.dashboard.v1.SaveSymbolMappingRequest
+	(*SaveSymbolMappingResponse)(nil),       // 46: nox.dashboard.v1.SaveSymbolMappingResponse
+	(*DeleteSymbolMappingRequest)(nil),      // 47: nox.dashboard.v1.DeleteSymbolMappingRequest
+	(*DeleteSymbolMappingResponse)(nil),     // 48: nox.dashboard.v1.DeleteSymbolMappingResponse
+	(*ListMappingSuggestionsRequest)(nil),   // 49: nox.dashboard.v1.ListMappingSuggestionsRequest
+	(*SymbolMappingSuggestion)(nil),         // 50: nox.dashboard.v1.SymbolMappingSuggestion
+	(*ListMappingSuggestionsResponse)(nil),  // 51: nox.dashboard.v1.ListMappingSuggestionsResponse
+	(*ListCanonicalsRequest)(nil),           // 52: nox.dashboard.v1.ListCanonicalsRequest
+	(*ListCanonicalsResponse)(nil),          // 53: nox.dashboard.v1.ListCanonicalsResponse
+	(*ListMatrixUniverseRequest)(nil),       // 54: nox.dashboard.v1.ListMatrixUniverseRequest
+	(*MatrixSymbolAccount)(nil),             // 55: nox.dashboard.v1.MatrixSymbolAccount
+	(*MatrixSymbolRow)(nil),                 // 56: nox.dashboard.v1.MatrixSymbolRow
+	(*MatrixGroupStat)(nil),                 // 57: nox.dashboard.v1.MatrixGroupStat
+	(*MatrixUniverse)(nil),                  // 58: nox.dashboard.v1.MatrixUniverse
+	(*ListMatrixUniverseResponse)(nil),      // 59: nox.dashboard.v1.ListMatrixUniverseResponse
+	(*AutoMapBrokerRequest)(nil),            // 60: nox.dashboard.v1.AutoMapBrokerRequest
+	(*AutoMapBrokerResult)(nil),             // 61: nox.dashboard.v1.AutoMapBrokerResult
+	(*AutoMapBrokerResponse)(nil),           // 62: nox.dashboard.v1.AutoMapBrokerResponse
+	(*ListSwapCombosRequest)(nil),           // 63: nox.dashboard.v1.ListSwapCombosRequest
+	(*SwapCombo)(nil),                       // 64: nox.dashboard.v1.SwapCombo
+	(*ListSwapCombosResponse)(nil),          // 65: nox.dashboard.v1.ListSwapCombosResponse
+	(*GetFrontConfigRequest)(nil),           // 66: nox.dashboard.v1.GetFrontConfigRequest
+	(*GetFrontConfigResponse)(nil),          // 67: nox.dashboard.v1.GetFrontConfigResponse
+	(*GetStrategyLedgerRequest)(nil),        // 68: nox.dashboard.v1.GetStrategyLedgerRequest
+	(*StrategyLedgerEntry)(nil),             // 69: nox.dashboard.v1.StrategyLedgerEntry
+	(*GetStrategyLedgerResponse)(nil),       // 70: nox.dashboard.v1.GetStrategyLedgerResponse
 	(*timestamppb.Timestamp)(nil),           // 71: google.protobuf.Timestamp
 }
 var file_dashboardv1_broker_admin_proto_depIdxs = []int32{
-	4,  // 0: arb.dashboard.v1.BrokerCompany.servers:type_name -> arb.dashboard.v1.BrokerServer
-	5,  // 1: arb.dashboard.v1.SearchBrokerResponse.companies:type_name -> arb.dashboard.v1.BrokerCompany
-	71, // 2: arb.dashboard.v1.BrokerAccount.created_at:type_name -> google.protobuf.Timestamp
-	13, // 3: arb.dashboard.v1.ListBrokerAccountsResponse.accounts:type_name -> arb.dashboard.v1.BrokerAccount
-	71, // 4: arb.dashboard.v1.ExchangeConfig.created_at:type_name -> google.protobuf.Timestamp
-	16, // 5: arb.dashboard.v1.ListExchangesResponse.exchanges:type_name -> arb.dashboard.v1.ExchangeConfig
-	16, // 6: arb.dashboard.v1.AddExchangeResponse.exchange:type_name -> arb.dashboard.v1.ExchangeConfig
-	30, // 7: arb.dashboard.v1.BrokerSymbolsResponse.symbols:type_name -> arb.dashboard.v1.SymbolEntry
-	42, // 8: arb.dashboard.v1.ListSymbolMappingsResponse.mappings:type_name -> arb.dashboard.v1.SymbolMapping
-	50, // 9: arb.dashboard.v1.ListMappingSuggestionsResponse.suggestions:type_name -> arb.dashboard.v1.SymbolMappingSuggestion
-	0,  // 10: arb.dashboard.v1.MatrixSymbolRow.state:type_name -> arb.dashboard.v1.MatrixState
-	55, // 11: arb.dashboard.v1.MatrixSymbolRow.accounts:type_name -> arb.dashboard.v1.MatrixSymbolAccount
-	57, // 12: arb.dashboard.v1.MatrixUniverse.group_stats:type_name -> arb.dashboard.v1.MatrixGroupStat
-	56, // 13: arb.dashboard.v1.MatrixUniverse.symbols:type_name -> arb.dashboard.v1.MatrixSymbolRow
-	13, // 14: arb.dashboard.v1.MatrixUniverse.accounts:type_name -> arb.dashboard.v1.BrokerAccount
-	58, // 15: arb.dashboard.v1.ListMatrixUniverseResponse.universe:type_name -> arb.dashboard.v1.MatrixUniverse
-	61, // 16: arb.dashboard.v1.AutoMapBrokerResponse.results:type_name -> arb.dashboard.v1.AutoMapBrokerResult
-	64, // 17: arb.dashboard.v1.ListSwapCombosResponse.combos:type_name -> arb.dashboard.v1.SwapCombo
-	69, // 18: arb.dashboard.v1.GetStrategyLedgerResponse.entries:type_name -> arb.dashboard.v1.StrategyLedgerEntry
+	4,  // 0: nox.dashboard.v1.BrokerCompany.servers:type_name -> nox.dashboard.v1.BrokerServer
+	5,  // 1: nox.dashboard.v1.SearchBrokerResponse.companies:type_name -> nox.dashboard.v1.BrokerCompany
+	71, // 2: nox.dashboard.v1.BrokerAccount.created_at:type_name -> google.protobuf.Timestamp
+	13, // 3: nox.dashboard.v1.ListBrokerAccountsResponse.accounts:type_name -> nox.dashboard.v1.BrokerAccount
+	71, // 4: nox.dashboard.v1.ExchangeConfig.created_at:type_name -> google.protobuf.Timestamp
+	16, // 5: nox.dashboard.v1.ListExchangesResponse.exchanges:type_name -> nox.dashboard.v1.ExchangeConfig
+	16, // 6: nox.dashboard.v1.AddExchangeResponse.exchange:type_name -> nox.dashboard.v1.ExchangeConfig
+	30, // 7: nox.dashboard.v1.BrokerSymbolsResponse.symbols:type_name -> nox.dashboard.v1.SymbolEntry
+	42, // 8: nox.dashboard.v1.ListSymbolMappingsResponse.mappings:type_name -> nox.dashboard.v1.SymbolMapping
+	50, // 9: nox.dashboard.v1.ListMappingSuggestionsResponse.suggestions:type_name -> nox.dashboard.v1.SymbolMappingSuggestion
+	0,  // 10: nox.dashboard.v1.MatrixSymbolRow.state:type_name -> nox.dashboard.v1.MatrixState
+	55, // 11: nox.dashboard.v1.MatrixSymbolRow.accounts:type_name -> nox.dashboard.v1.MatrixSymbolAccount
+	57, // 12: nox.dashboard.v1.MatrixUniverse.group_stats:type_name -> nox.dashboard.v1.MatrixGroupStat
+	56, // 13: nox.dashboard.v1.MatrixUniverse.symbols:type_name -> nox.dashboard.v1.MatrixSymbolRow
+	13, // 14: nox.dashboard.v1.MatrixUniverse.accounts:type_name -> nox.dashboard.v1.BrokerAccount
+	58, // 15: nox.dashboard.v1.ListMatrixUniverseResponse.universe:type_name -> nox.dashboard.v1.MatrixUniverse
+	61, // 16: nox.dashboard.v1.AutoMapBrokerResponse.results:type_name -> nox.dashboard.v1.AutoMapBrokerResult
+	64, // 17: nox.dashboard.v1.ListSwapCombosResponse.combos:type_name -> nox.dashboard.v1.SwapCombo
+	69, // 18: nox.dashboard.v1.GetStrategyLedgerResponse.entries:type_name -> nox.dashboard.v1.StrategyLedgerEntry
 	19, // [19:19] is the sub-list for method output_type
 	19, // [19:19] is the sub-list for method input_type
 	19, // [19:19] is the sub-list for extension type_name

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // D-508 S9 域 topic 常量——写源与前端订阅同名。

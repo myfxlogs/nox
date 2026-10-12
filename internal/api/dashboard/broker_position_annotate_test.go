@@ -3,7 +3,7 @@ package dashboard
 import (
 	"testing"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // TestAnnotateWithIndex_Hit 命中：broker ticket 在索引中 → position_id + order_id 标注。
