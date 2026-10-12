@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestD516_RealOnlyConfigs fail-closed 闸：simulated=t 行剔除且 warn-once 不重复刷日志；

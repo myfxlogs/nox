@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // d548SeedActive 播一条 active cfd 纸面行（venue_a=MT 账户、venue_b=CEX、symbol=canonical）。

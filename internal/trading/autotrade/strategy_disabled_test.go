@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestStrategyDisabledCheck_Pattern 验证判死策略停扫模式（D-077 修复⑪B N9）。

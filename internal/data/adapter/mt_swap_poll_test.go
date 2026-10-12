@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
 	"google.golang.org/grpc"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // fakeMT5Client 只实现 SwapFacts 用到的 SymbolParams + AccountSummary（S6 返修）。

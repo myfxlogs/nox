@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/store/pgstore"
 	"connectrpc.com/connect"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/store/pgstore"
 )
 
 // fakeCapGaps 计数 fake（A4 计数断言用）。

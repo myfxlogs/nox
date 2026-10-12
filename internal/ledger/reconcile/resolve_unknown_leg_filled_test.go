@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // —— fake OrderStatusQuerier ——

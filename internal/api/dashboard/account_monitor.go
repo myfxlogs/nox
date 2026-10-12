@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/keydomain"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/keydomain"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/store/pgstore"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // acctVenueState 单个账户查询源的状态（在线 + 最近成功快照）。

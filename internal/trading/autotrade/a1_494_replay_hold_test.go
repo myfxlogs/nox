@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // d378bCfg 灾难带测试标准 cfg（494 型：band=max(40,4×noise)；debounce 2；新鲜度 5min）。
@@ -29,7 +29,7 @@ func d378bCfg() gate.Config {
 // （exec_drift 零漂移不截胡）。legs buy 100/sell=100×(1−anchor/1e4)。
 func d378bSeedXAsset(t *testing.T, anchor, noise float64) (*pgstore.Store, int64, *Engine) {
 	t.Helper()
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx,
 		`TRUNCATE facts, positions, position_legs, position_evals CASCADE`); err != nil {

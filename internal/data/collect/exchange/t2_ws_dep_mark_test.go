@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/infra/dephealth"
+	"nox/internal/infra/dephealth"
 
 	"github.com/gorilla/websocket"
 )

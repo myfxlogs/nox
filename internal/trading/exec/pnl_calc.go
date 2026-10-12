@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // canonicalFromOppID 从 opportunity_id 解析 canonical（格式 PREFIX:SYMBOL:...）。

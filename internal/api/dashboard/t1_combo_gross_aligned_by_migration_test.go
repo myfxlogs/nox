@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )
@@ -18,7 +18,7 @@ import (
 // —— T1：0159 迁移修正——real 行 2×notional≤gross + okx:unified→okx:perp 重键名（幂等）。
 
 func TestD547_T1_ComboGrossAlignedByMigration(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	// 干跑锚：自锁行（2×notional>gross）+幽灵键按生产形态先播（0159 未跑时它们在场）。
 	if _, err := st.Pool().Exec(ctx, `

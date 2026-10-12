@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // d434CS stub：CEX 返 ct_val、MT 返合约规格（仅回落路径/MT 路径消费）。

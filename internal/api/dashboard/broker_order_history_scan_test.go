@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 
-	v1 "arb/internal/gen/dashboardv1"
 	"connectrpc.com/connect"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // TestComputeUsdLotDay 基本换算。

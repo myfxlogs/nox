@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func d207Order() pgstore.FilledDCIOrder {

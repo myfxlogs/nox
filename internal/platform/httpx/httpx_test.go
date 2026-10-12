@@ -134,8 +134,8 @@ func TestFailoverRT_DisabledWhenBackupEmpty(t *testing.T) {
 	}
 }
 
-// A4（D5 host 对表化）：ARB_OKX_PROXY_URL 与 ARB_CEX_WS_BASE host 的传输错
-// 均回退 ARB_CEX_WS_BASE_BACKUP；ws:// 基址 env 归一 http 匹配口径。
+// A4（D5 host 对表化）：NOX_OKX_PROXY_URL 与 NOX_CEX_WS_BASE host 的传输错
+// 均回退 NOX_CEX_WS_BASE_BACKUP；ws:// 基址 env 归一 http 匹配口径。
 func TestFailoverRT_HostTable(t *testing.T) {
 	var backHits int
 	back := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

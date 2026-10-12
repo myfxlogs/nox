@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // 单测：CS-miss 聚合告警 + upsert 仅填 NULL + 覆盖率四态。

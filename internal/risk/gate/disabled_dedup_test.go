@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // gate disabled stdout 1h 去重 + 启动首跑聚合输入测试（真库 DSN-gated）。

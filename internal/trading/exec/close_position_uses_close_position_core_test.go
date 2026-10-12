@@ -13,8 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // TestClosePosition_UsesClosePositionCore T2：ClosePosition 走 closePositionCore（非旧重复逻辑）。

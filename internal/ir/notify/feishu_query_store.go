@@ -7,7 +7,7 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // FeishuQueryStore 飞书查询数据源接口（pgstore 适配器实现）。

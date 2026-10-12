@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 // D-389/D-392 锚 C：migration 双注册实证——schema_migrations 有 123/124 +
-// 两表可选 + 成员访问器往返（漏注册则表不存在）。需 ARB_TEST_PG_DSN，未设置时 skip。
+// 两表可选 + 成员访问器往返（漏注册则表不存在）。需 NOX_TEST_PG_DSN，未设置时 skip。
 func TestD389_RadarDigestState(t *testing.T) {
 	ctx := context.Background()
-	s, err := New(ctx, testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := New(ctx, testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}

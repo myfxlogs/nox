@@ -9,8 +9,8 @@ import (
 	"sort"
 	"time"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
-	"arb/internal/data/fact"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
+	"nox/internal/data/fact"
 
 	"google.golang.org/grpc/metadata"
 )

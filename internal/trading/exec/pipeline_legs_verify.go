@@ -1,12 +1,12 @@
 package exec
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"fmt"
+	"nox/internal/data/keydomain"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // checkResidualLegs 平仓后按 ticket 回读各 venue 在仓订单，返回残留腿描述（D-077 修复⑩ G1）。

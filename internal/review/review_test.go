@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // fakeStore 实现 Store 接口的测试替身。

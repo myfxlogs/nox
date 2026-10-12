@@ -42,7 +42,7 @@ func (s *Store) NetRealizedSince(ctx context.Context, since time.Time, excludeIn
 }
 
 // IncidentBlockerID 未 ack 事故仓最小 id（0=无）。谓词=incidentGatePredicate（D-032 R1）：
-// LEGGED + 有成交腿的 FAILED + 事故族 CLOSED 覆盖；ack 游标=ARB_RISK_INCIDENT_ACK_ID，
+// LEGGED + 有成交腿的 FAILED + 事故族 CLOSED 覆盖；ack 游标=NOX_RISK_INCIDENT_ACK_ID，
 // 决策席归档 D# 后推 id 放行。
 func (s *Store) IncidentBlockerID(ctx context.Context, ackID int64) (int64, error) {
 	var id *int64

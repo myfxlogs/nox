@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	v1 "arb/internal/gen/dashboardv1"
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // serverGroup D-150 ② 平台分组键=server 首段（首个 '-' 前）。

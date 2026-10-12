@@ -9,10 +9,10 @@ import (
 	"math"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/data/keydomain"
-	"arb/internal/platform/usdnotional"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/data/keydomain"
+	"nox/internal/platform/usdnotional"
+	"nox/internal/store/pgstore"
 )
 
 // swapDeviationBetweenPct D-165 S1/S2 同源纯函数（复制避免跨包依赖，与 gate_checks.go 注释一致）。

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/venue"
+	"nox/internal/data/bus"
+	"nox/internal/data/venue"
 )
 
 // TestD036_MarginEstimateFormula 估算式双径 + 空态语义。

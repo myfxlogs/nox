@@ -5,7 +5,7 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // Deps 结算依赖（注入面，调用方装配）。
@@ -33,7 +33,7 @@ type Deps interface {
 	AggregateStrategyStatsByEnvironmentFamily(ctx context.Context, strategies []string, environment string) (pgstore.AggregateStat, error)
 	// DisableStrategy 禁用策略（淘汰）。
 	DisableStrategy(ctx context.Context, strategy, reason string) error
-	// AppConfigFloat D-180：淘汰证据 Zσ 热读（app_config ARB_ELIM_ZSIGMA，种子径）。
+	// AppConfigFloat D-180：淘汰证据 Zσ 热读（app_config NOX_ELIM_ZSIGMA，种子径）。
 	AppConfigFloat(ctx context.Context, key string) (float64, bool, error)
 	// InsertAlert 写告警（D-268 告警点 4：结算时策略淘汰告警）。
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error

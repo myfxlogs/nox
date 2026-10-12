@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // d076StaleCombo 两 frac 俱已知（gate perp 杠杆实读 10x、MT init_margin_rate 0.02），

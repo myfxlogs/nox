@@ -7,8 +7,8 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 )
 
 // 默认路径（容器内 /kn 映射宿主仓库根；Deps 字段可覆盖便于测试指 tmpdir）。

@@ -7,8 +7,8 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // ExecuteOpportunityInternal 执行机会的核心逻辑（D-070 抽取，供 RPC 和 autotrade engine 复用）。

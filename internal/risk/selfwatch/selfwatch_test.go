@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/research/scan"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/research/scan"
+	"nox/internal/store/pgstore"
 )
 
 type fakeStore struct {
@@ -183,8 +183,8 @@ func greenStore() *fakeStore {
 	return &fakeStore{
 		cfg: map[string]string{
 			cfgPaperWindowStart:        "2026-10-03T01:59Z",
-			"ARB_RISK_INCIDENT_ACK_ID": "507",
-			"ARB_MAKER_TIMEOUT":        "20s",
+			"NOX_RISK_INCIDENT_ACK_ID": "507",
+			"NOX_MAKER_TIMEOUT":        "20s",
 		},
 		factTs:   map[string]time.Time{"funding": tNow.Add(-30 * time.Minute)},
 		factCnt:  map[string]int{"trade_session": 978},
@@ -211,7 +211,7 @@ func TestD033_DailyReportAllGreen(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"【ARB 自盯日报】", "起点 2026-10-03T01:59Z", "窗内净额 $3.0000",
+		"【NOX 自盯日报】", "起点 2026-10-03T01:59Z", "窗内净额 $3.0000",
 		"本窗结构（多 CFD 空 perp）在仓 3 行", "窗内退出 1 行",
 		"计息缺数据 0 行", "计息停滞 0 行", "逐日净额", "全部纸面在仓：CFD 12 行·7 品种｜CEX 8 行·5 品种",
 		"✅ 目标组合纸面行存活", "✅ 开仓时点", "✅ 窗内净额非负", "✅ 期间零事故仓",
@@ -342,7 +342,7 @@ func TestD033_AnomalyWarns(t *testing.T) {
 
 func TestD033_AnomalyMacroStale(t *testing.T) {
 	st := greenStore()
-	st.cfg["ARB_MACRO_ENABLED"] = "true"
+	st.cfg["NOX_MACRO_ENABLED"] = "true"
 	st.macroMax = ptrT(tNow.Add(-72 * time.Hour)) // 落库停滞 72h > 48h 阈
 	d := testDeps(st, goodEval(), tNow)
 	CheckAnomalies(context.Background(), d)

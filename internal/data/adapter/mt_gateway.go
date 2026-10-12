@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/infra/dephealth"
+	"nox/internal/infra/dephealth"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"

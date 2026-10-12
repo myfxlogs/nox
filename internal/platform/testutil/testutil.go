@@ -12,9 +12,9 @@
 // 数百次是 D-350 两轮复审假红的连接层根因 amplifier）；S2 normalizeDSN 追加
 // connect_timeout=5（连接类故障 120s 挂死→5s 快败）；S3 逐包库名（env 指向共享 *_test
 // 基名时改写 <基名>_<包tag>+幂等建库——多包/多席并行零互踩，-p 1 从纪律降级为非必要；
-// 泛化：判定从 arb_test 精确名放宽为一切 _test 结尾基名，收编 service/exec 共享基名
+// 泛化：判定从 nox_test 精确名放宽为一切 _test 结尾基名，收编 service/exec 共享基名
 // 漏网通道——本机并行跑时全消费方共库互踩；ci.yml 四显式建库行变冗余但无害零改动兼容）。
-// 席位隔离：D560 panic 实证=多席共享 arb_test_<包> 库竞争（非测试顺序依赖）——
+// 席位隔离：D560 panic 实证=多席共享 nox_test_<包> 库竞争（非测试顺序依赖）——
 // tag 再追加席位段 <包tag>_<seattag>（SeatTag 派生），两施工位并发跑测试各写各库；
 // pgstore restore/migrate 固定名辅助库同席后缀（SeatTag 导出供其派生名额）。
 package testutil
@@ -41,23 +41,23 @@ import (
 // 缺省真跑不弱化 D-207（loud-FAIL 防「没跑像过了」的 SKIP）——测试照跑非跳过；
 // 未知 envVar（无缺省映射）仍走原 Fatalf/Skip 口径。
 var defaultTestDSN = map[string]string{
-	"ARB_TEST_PG_DSN":           "postgres://arb:arb@127.0.0.1:5434/arb_test",
-	"ARB_TEST_PG_SERVICE_DSN":   "postgres://arb:arb@127.0.0.1:5434/arb_service_test",
-	"ARB_EXEC_TEST_PG_DSN":      "postgres://arb:arb@127.0.0.1:5434/arb_exec_test",
-	"ARB_RECONCILE_TEST_PG_DSN": "postgres://arb:arb@127.0.0.1:5434/arb_reconcile_test",
+	"NOX_TEST_PG_DSN":           "postgres://arb:arb@127.0.0.1:5434/nox_test",
+	"NOX_TEST_PG_SERVICE_DSN":   "postgres://arb:arb@127.0.0.1:5434/nox_service_test",
+	"NOX_EXEC_TEST_PG_DSN":      "postgres://arb:arb@127.0.0.1:5434/nox_exec_test",
+	"NOX_RECONCILE_TEST_PG_DSN": "postgres://arb:arb@127.0.0.1:5434/nox_reconcile_test",
 }
 
 // TestDSN 测试用 DSN 门禁：envVar 未设→缺省独立测试实例 5434（D-021；缺省映射见
 // defaultTestDSN，未知 envVar 无缺省→Fatalf D-207 loud-FAIL / 显式逃生门
-// ARB_TEST_ALLOW_SKIP_DSN=1 才 Skipf）；指向非测试库→Fatalf 拒绝。
-// envVar 如 "ARB_TEST_PG_DSN" / "ARB_EXEC_TEST_PG_DSN"。
+// NOX_TEST_ALLOW_SKIP_DSN=1 才 Skipf）；指向非测试库→Fatalf 拒绝。
+// envVar 如 "NOX_TEST_PG_DSN" / "NOX_EXEC_TEST_PG_DSN"。
 //
 // 返回值经 DSN 规范化（追加而非覆盖，已有则跳过）：
 //   - 无 options= → 追加 options=-c%20lock_timeout=5s（62 个 TRUNCATE 位点一处兜底，
 //     pgx 认 URL options 参数已实证：SHOW lock_timeout=3s 实测通过）
 //   - 追加 connect_timeout=5（D-351 S2：连接类故障从 pgx 回退链 120s 挂死变 5s 快败）
-//   - db 名以 _test 结尾的共享基名（arb_test/arb_service_test/arb_exec_test/任意基名）→
-//     改写 <基名>_<调用方包tag> 并幂等建库（D-351 S3 逐包隔离；D-373 泛化——此前仅 arb_test
+//   - db 名以 _test 结尾的共享基名（nox_test/nox_service_test/nox_exec_test/任意基名）→
+//     改写 <基名>_<调用方包tag> 并幂等建库（D-351 S3 逐包隔离；D-373 泛化——此前仅 nox_test
 //     精确名改写，service/exec 共享基名漏网=本机并行跑时全消费方共库 TRUNCATE 互踩；显式命名
 //     的库（不以 _test 结尾）=调用方自担隔离责任。ci.yml 四显式建库行变冗余但无害，零改动兼容）
 //
@@ -71,10 +71,10 @@ func TestDSN(t *testing.T, envVar string) string {
 	if dsn == "" {
 		def, ok := defaultTestDSN[envVar]
 		if !ok {
-			if os.Getenv("ARB_TEST_ALLOW_SKIP_DSN") == "1" {
-				t.Skipf("%s 未设置（ARB_TEST_ALLOW_SKIP_DSN=1 逃生门启用，自觉跳过 DB 测试）", envVar)
+			if os.Getenv("NOX_TEST_ALLOW_SKIP_DSN") == "1" {
+				t.Skipf("%s 未设置（NOX_TEST_ALLOW_SKIP_DSN=1 逃生门启用，自觉跳过 DB 测试）", envVar)
 			}
-			t.Fatalf("D-207：%s 未设置且无缺省映射（假绿之源：D-189/D-190 三轮返修实证「没跑」长得像「过了」）。设 %s=<测试库 DSN> 或显式 ARB_TEST_ALLOW_SKIP_DSN=1 自觉跳过", envVar, envVar)
+			t.Fatalf("D-207：%s 未设置且无缺省映射（假绿之源：D-189/D-190 三轮返修实证「没跑」长得像「过了」）。设 %s=<测试库 DSN> 或显式 NOX_TEST_ALLOW_SKIP_DSN=1 自觉跳过", envVar, envVar)
 		}
 		dsn = def // D-021：缺省独立测试实例 5434（基名固定映射）
 	}
@@ -125,10 +125,10 @@ func normalizeDSN(dsn string) string {
 }
 
 // perPkgDSN D-351 S3 + D-373 泛化 + D-016 席位段：db 名以 _test 结尾的共享基名
-// （arb_test / arb_service_test / arb_exec_test / 任意未来基名）→ 改写 <基名>_<tag>（逐包隔离）
+// （nox_test / nox_service_test / nox_exec_test / 任意未来基名）→ 改写 <基名>_<tag>（逐包隔离）
 // ——tag 可含席位段（<包tag>_<seattag>，TestDSN 组装），多席并发同包测试各写各库。
-// 已 tag 名（arb_test_scan，后缀非 _test）幂等不再追加；显式命名的库（不以 _test 结尾，
-// 如 arb_test_local）=调用方自担隔离责任；空 tag（调用方推导失败）原样不动。
+// 已 tag 名（nox_test_scan，后缀非 _test）幂等不再追加；显式命名的库（不以 _test 结尾，
+// 如 nox_test_local）=调用方自担隔离责任；空 tag（调用方推导失败）原样不动。
 // Postgres 标识符 63 字节上限：超长时先截 tag 段保基名完整（防服务端静默截断致建库/连库名错位）。
 func perPkgDSN(dsn, tag string) (string, bool) {
 	u, err := url.Parse(dsn)
@@ -160,7 +160,7 @@ func callerPackageTag() string {
 			return ""
 		}
 		if fn := runtime.FuncForPC(pc); fn != nil &&
-			strings.HasPrefix(fn.Name(), "arb/internal/platform/testutil") &&
+			strings.HasPrefix(fn.Name(), "nox/internal/platform/testutil") &&
 			!strings.HasSuffix(file, "_test.go") {
 			continue // testutil/testutil-storetest 内部包装链帧（非测试源）
 		}
@@ -190,12 +190,12 @@ var (
 )
 
 // SeatTag D-016 测试库多席隔离的会话标签（导出供固定名辅助库派生名额——pgstore
-// restore/migrate 临时库同席位后缀）。env ARB_TEST_SEAT 显式优先；缺省从测试进程
+// restore/migrate 临时库同席位后缀）。env NOX_TEST_SEAT 显式优先；缺省从测试进程
 // cwd（go test 置为包目录）上溯 go.mod 取仓根目录名：worktree 名即天然席位
 // （/opt/arb-wt/d016-test-green → d016_test_green；/opt/arb 部署树 → arb）。
 // 同席跨 run 同名复用（不按 run 增殖）；推导失败=空串（回落共享名，与既有行为等价）。
 func SeatTag() string {
-	if s := strings.TrimSpace(os.Getenv("ARB_TEST_SEAT")); s != "" {
+	if s := strings.TrimSpace(os.Getenv("NOX_TEST_SEAT")); s != "" {
 		return sanitizeTag(s)
 	}
 	seatTagOnce.Do(func() {

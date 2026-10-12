@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // DefaultTronscanBase 是 TRONSCAN API 基址（免认证，与 TronLink 投票页 APR 同源）。

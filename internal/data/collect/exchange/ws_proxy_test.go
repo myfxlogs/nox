@@ -1,11 +1,11 @@
 package exchange
 
 import (
-	"arb/internal/platform/httpx"
 	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"nox/internal/platform/httpx"
 	"strings"
 	"testing"
 	"time"
@@ -13,7 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// ARB_CEX_WS_BASE 置位 → 三所端点改经 cex-proxy 前缀路径。
+// NOX_CEX_WS_BASE 置位 → 三所端点改经 cex-proxy 前缀路径。
 func TestWSViaProxy_Proxied(t *testing.T) {
 	SetProxyEndpoints(ProxyEndpoints{CexWSBase: "wss://192.229.85.35:8443"})
 	defer SetProxyEndpoints(ProxyEndpoints{})
@@ -30,7 +30,7 @@ func TestWSViaProxy_Proxied(t *testing.T) {
 	}
 }
 
-// ARB_CEX_WS_BASE 空 → 原样直连（默认行为不变）。
+// NOX_CEX_WS_BASE 空 → 原样直连（默认行为不变）。
 func TestWSViaProxy_Direct(t *testing.T) {
 	SetProxyEndpoints(ProxyEndpoints{})
 	defer SetProxyEndpoints(ProxyEndpoints{})
@@ -88,7 +88,7 @@ func TestWSConstructors_Direct(t *testing.T) {
 	}
 }
 
-// 双基址有序候选：ARB_CEX_WS_BASE 主 + ARB_CEX_WS_BASE_BACKUP 备（主在前）；
+// 双基址有序候选：NOX_CEX_WS_BASE 主 + NOX_CEX_WS_BASE_BACKUP 备（主在前）；
 // 直连模式（双空）→ [native]。
 func TestWSViaProxyURLs_OrderedCandidates(t *testing.T) {
 	SetProxyEndpoints(ProxyEndpoints{CexWSBase: "wss://proxy-a:8443", CexWSBaseBackup: "https://proxy-b:8443/"})
@@ -172,7 +172,7 @@ func TestBinanceUserWS_BackupWSURL(t *testing.T) {
 	}
 }
 
-// A5（D4）：gate 私有流主端拨失败 → host 换 ARB_CEX_WS_BASE_BACKUP 重试一次；
+// A5（D4）：gate 私有流主端拨失败 → host 换 NOX_CEX_WS_BASE_BACKUP 重试一次；
 // env 空 → 单 dial 零额外尝试（计数断言=零行为变化面）。
 func TestGatePrivateWS_DialFailover(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

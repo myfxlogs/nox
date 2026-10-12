@@ -8,15 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 )
 
 // d350Store DSN 测试库（scan 包 helper：走 storetest.SharedStore 共享池，D-351 S1；
 // 行级隔离由本 helper 的 TRUNCATE 自持）。
 func d350Store(t *testing.T) *pgstore.Store {
 	t.Helper()
-	s := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	s := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	if _, err := s.Pool().Exec(context.Background(),
 		`TRUNCATE fin_carry_universe, fin_cex_universe, paper_spot_carry, carry_graduations RESTART IDENTITY`); err != nil {
 		t.Fatalf("TRUNCATE: %v", err)

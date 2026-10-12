@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/adapter"
-	"arb/internal/data/fact"
+	"nox/internal/data/adapter"
+	"nox/internal/data/fact"
 )
 
 // SwapFacts 聚合全部运行中/静态适配器的 swap facts（§3.6）。

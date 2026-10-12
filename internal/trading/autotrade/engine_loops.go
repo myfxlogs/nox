@@ -11,7 +11,7 @@ import (
 )
 
 // positionFallbackInterval D-107 P4→D-004 P1#4：现为退出评估饥荒看门狗周期旧值（10min）。
-// D-378a S3 起默认 60s 配置化（ARB_POSITION_EVAL_SEC→cfg.PositionFallbackInterval）；
+// D-378a S3 起默认 60s 配置化（NOX_POSITION_EVAL_SEC→cfg.PositionFallbackInterval）；
 // 本常量保留为 ≤0 防呆回退值。包级 var 测试可覆写（marginReconnectBackoff 先例）。
 var positionFallbackInterval = 10 * time.Minute
 

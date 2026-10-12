@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 func TestD029R2_AttachTriggersSessionsKick(t *testing.T) {

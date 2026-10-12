@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// isTestDB dsn 的 db 名必须含 "_test"（arb_test/arb_exec_test/arb_service_test）；
+// isTestDB dsn 的 db 名必须含 "_test"（nox_test/nox_exec_test/nox_service_test）；
 // 生产 db=arb 不含 → false（fail-closed，防测试 TRUNCATE 生产表）。
 func isTestDB(dsn string) bool {
 	cfg, err := pgx.ParseConfig(dsn)

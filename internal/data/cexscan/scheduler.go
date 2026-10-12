@@ -8,14 +8,14 @@ import (
 	"net/http"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/data/venue"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/config"
-	"arb/internal/platform/httpx"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/data/venue"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/config"
+	"nox/internal/platform/httpx"
+	"nox/internal/store/pgstore"
 )
 
 // Scanner CEX 只读扫描器调度器。

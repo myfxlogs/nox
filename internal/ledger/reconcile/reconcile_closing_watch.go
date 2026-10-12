@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // closingStuckTimeout D-159 W2a R3-6：CLOSING 超 30min 未完成=卡住（平仓 I/O 失败或残量未归零）。
@@ -76,11 +76,11 @@ func closingNakedLegs(legs []pgstore.PositionLeg) []pgstore.PositionLeg {
 // 超 crit 阈→critical（每循环）。阈值 app_config 热读（seed-once 0201 落种）；
 // 行缺/读败→降级不判（门禁由既有 closingStuckAlert 覆盖，不造新缺省值）。
 func (r *Reconciler) closingNakedCheck(ctx context.Context, p *pgstore.Position, now time.Time) {
-	warnSec, ok, err := r.store.AppConfigInt64(ctx, "ARB_CLOSING_NAKED_WARN_SEC")
+	warnSec, ok, err := r.store.AppConfigInt64(ctx, "NOX_CLOSING_NAKED_WARN_SEC")
 	if err != nil || !ok || warnSec <= 0 {
 		return
 	}
-	critSec, _, _ := r.store.AppConfigInt64(ctx, "ARB_CLOSING_NAKED_CRIT_SEC")
+	critSec, _, _ := r.store.AppConfigInt64(ctx, "NOX_CLOSING_NAKED_CRIT_SEC")
 	if critSec <= warnSec {
 		critSec = 0 // 未配/非法序→critical 层不生效（warn 层独立可用）
 	}

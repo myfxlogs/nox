@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // d090SeqExec 平仓序执行器：CloseOrder（MT 腿）/PlaceOrder（CEX 腿）调用序入 seq；

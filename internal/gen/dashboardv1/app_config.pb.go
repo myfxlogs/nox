@@ -423,7 +423,7 @@ var File_dashboardv1_app_config_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_app_config_proto_rawDesc = "" +
 	"\n" +
-	"\x1cdashboardv1/app_config.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9c\x03\n" +
+	"\x1cdashboardv1/app_config.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9c\x03\n" +
 	"\fAppConfigKey\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x14\n" +
@@ -443,15 +443,15 @@ const file_dashboardv1_app_config_proto_rawDesc = "" +
 	"groupLabel\"\x16\n" +
 	"\x14ListAppConfigRequest\"K\n" +
 	"\x15ListAppConfigResponse\x122\n" +
-	"\x04keys\x18\x01 \x03(\v2\x1e.arb.dashboard.v1.AppConfigKeyR\x04keys\"T\n" +
+	"\x04keys\x18\x01 \x03(\v2\x1e.nox.dashboard.v1.AppConfigKeyR\x04keys\"T\n" +
 	"\x16UpdateAppConfigRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12\x12\n" +
 	"\x04note\x18\x03 \x01(\tR\x04note\"K\n" +
 	"\x17UpdateAppConfigResponse\x120\n" +
-	"\x03key\x18\x01 \x01(\v2\x1e.arb.dashboard.v1.AppConfigKeyR\x03key\"\x14\n" +
+	"\x03key\x18\x01 \x01(\v2\x1e.nox.dashboard.v1.AppConfigKeyR\x03key\"\x14\n" +
 	"\x12SelfRestartRequest\"\x15\n" +
-	"\x13SelfRestartResponseB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x13SelfRestartResponseB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_app_config_proto_rawDescOnce sync.Once
@@ -467,19 +467,19 @@ func file_dashboardv1_app_config_proto_rawDescGZIP() []byte {
 
 var file_dashboardv1_app_config_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_dashboardv1_app_config_proto_goTypes = []any{
-	(*AppConfigKey)(nil),            // 0: arb.dashboard.v1.AppConfigKey
-	(*ListAppConfigRequest)(nil),    // 1: arb.dashboard.v1.ListAppConfigRequest
-	(*ListAppConfigResponse)(nil),   // 2: arb.dashboard.v1.ListAppConfigResponse
-	(*UpdateAppConfigRequest)(nil),  // 3: arb.dashboard.v1.UpdateAppConfigRequest
-	(*UpdateAppConfigResponse)(nil), // 4: arb.dashboard.v1.UpdateAppConfigResponse
-	(*SelfRestartRequest)(nil),      // 5: arb.dashboard.v1.SelfRestartRequest
-	(*SelfRestartResponse)(nil),     // 6: arb.dashboard.v1.SelfRestartResponse
+	(*AppConfigKey)(nil),            // 0: nox.dashboard.v1.AppConfigKey
+	(*ListAppConfigRequest)(nil),    // 1: nox.dashboard.v1.ListAppConfigRequest
+	(*ListAppConfigResponse)(nil),   // 2: nox.dashboard.v1.ListAppConfigResponse
+	(*UpdateAppConfigRequest)(nil),  // 3: nox.dashboard.v1.UpdateAppConfigRequest
+	(*UpdateAppConfigResponse)(nil), // 4: nox.dashboard.v1.UpdateAppConfigResponse
+	(*SelfRestartRequest)(nil),      // 5: nox.dashboard.v1.SelfRestartRequest
+	(*SelfRestartResponse)(nil),     // 6: nox.dashboard.v1.SelfRestartResponse
 	(*timestamppb.Timestamp)(nil),   // 7: google.protobuf.Timestamp
 }
 var file_dashboardv1_app_config_proto_depIdxs = []int32{
-	7, // 0: arb.dashboard.v1.AppConfigKey.updated_at:type_name -> google.protobuf.Timestamp
-	0, // 1: arb.dashboard.v1.ListAppConfigResponse.keys:type_name -> arb.dashboard.v1.AppConfigKey
-	0, // 2: arb.dashboard.v1.UpdateAppConfigResponse.key:type_name -> arb.dashboard.v1.AppConfigKey
+	7, // 0: nox.dashboard.v1.AppConfigKey.updated_at:type_name -> google.protobuf.Timestamp
+	0, // 1: nox.dashboard.v1.ListAppConfigResponse.keys:type_name -> nox.dashboard.v1.AppConfigKey
+	0, // 2: nox.dashboard.v1.UpdateAppConfigResponse.key:type_name -> nox.dashboard.v1.AppConfigKey
 	3, // [3:3] is the sub-list for method output_type
 	3, // [3:3] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name

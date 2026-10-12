@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func (c *EarnCollector) collectGateDCI(ctx context.Context) ([]pgstore.CexDCIQuote, error) {

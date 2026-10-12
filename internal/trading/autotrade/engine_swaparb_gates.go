@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/keydomain"
-	"arb/internal/platform/combo"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/keydomain"
+	"nox/internal/platform/combo"
+	"nox/internal/store/pgstore"
 )
 
 // legSpreadTooWide D-159 W4a R7：两腿 bid-ask spread 宽度门禁纯函数。

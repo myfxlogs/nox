@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/httpx"
+	"nox/internal/platform/httpx"
 )
 
 func TestD183_ParseBinanceDCI(t *testing.T) {

@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/ir/inboxfmt"
-	"arb/internal/platform/analyst"
-	"arb/internal/review/kbreport"
-	"arb/internal/store/pgstore"
 	"gopkg.in/yaml.v3"
+	"nox/internal/ir/inboxfmt"
+	"nox/internal/platform/analyst"
+	"nox/internal/review/kbreport"
+	"nox/internal/store/pgstore"
 )
 
 // weeklySystemPrompt 周报 AI 约束：节标题照抄，数字不改，§5 后必须跟 sysretro-suggestions 块。
-const weeklySystemPrompt = `你是 ARB 系统的周复盘员。用户消息里 fenced 块中的数字由 Go 确定性计算——禁止改动、重算或复述时写错。
+const weeklySystemPrompt = `你是 NOX 系统的周复盘员。用户消息里 fenced 块中的数字由 Go 确定性计算——禁止改动、重算或复述时写错。
 按以下五个二级标题逐节输出（标题照抄，每节 2-4 句叙事判断，不复述表格）：
 ## 交易成败归因
 ## 纸面交易复盘
@@ -50,10 +50,10 @@ func GenerateWeekly(ctx context.Context, deps Deps) (string, error) {
 		kbDelta = fmt.Sprintf("(kb scan err: %v)", err)
 	}
 	zSigma, zLim := 2.0, 2.0
-	if v, ok, cerr := deps.Store.AppConfigFloat(ctx, "ARB_ELIM_ZSIGMA"); cerr == nil && ok && v > 0 {
+	if v, ok, cerr := deps.Store.AppConfigFloat(ctx, "NOX_ELIM_ZSIGMA"); cerr == nil && ok && v > 0 {
 		zSigma = v
 	}
-	if v, ok, cerr := deps.Store.AppConfigFloat(ctx, "ARB_RETRO_DEP_Z"); cerr == nil && ok && v > 0 {
+	if v, ok, cerr := deps.Store.AppConfigFloat(ctx, "NOX_RETRO_DEP_Z"); cerr == nil && ok && v > 0 {
 		zLim = v
 	}
 	statsBlock := renderWeeklyStats(w, kbDelta, zSigma, zLim)

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // setupLiveGateStore 构造真库 store：autotrade_state=RUNNING + broker_accounts 种子 is_real。

@@ -2,7 +2,7 @@
 package adapter
 
 import (
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // SwapMode 语义化 swap 模式（MT4/MT5 原始值映射到此枚举后统一换算）。

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // d193BaseDeps 构造一个 SWAPARB CLOSED 持仓的 fakeDeps（complete+actual 路径用）。

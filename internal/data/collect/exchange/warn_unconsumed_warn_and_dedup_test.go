@@ -3,11 +3,11 @@
 package exchange
 
 import (
-	"arb/internal/data/venue"
 	"bytes"
 	"context"
 	"encoding/json"
 	"log"
+	"nox/internal/data/venue"
 	"testing"
 	"time"
 )

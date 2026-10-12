@@ -13,15 +13,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/platform/httpx"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/platform/httpx"
+	"nox/internal/trading/exec"
 
-	"arb/internal/data/collect/exchange"
-	"arb/internal/data/venue"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/platform/safego"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/collect/exchange"
+	"nox/internal/data/venue"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/platform/safego"
+	"nox/internal/store/pgstore"
 )
 
 // CexStreamSinks 流写口集合（*pgstore.Store 全实现）。

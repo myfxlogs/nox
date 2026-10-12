@@ -12,16 +12,16 @@ import (
 
 	"connectrpc.com/connect"
 
-	dashv1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/config"
-	"arb/internal/platform/cryptoutil"
-	"arb/internal/platform/testutil/storetest"
+	dashv1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/config"
+	"nox/internal/platform/cryptoutil"
+	"nox/internal/platform/testutil/storetest"
 )
 
 func d545Svc(t *testing.T) (*Service, *config.SecretResolver) {
 	t.Helper()
-	t.Setenv("ARB_MASTER_KEY", "d545-test-master-key")
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	t.Setenv("NOX_MASTER_KEY", "d545-test-master-key")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	if err := st.DeleteAppSecret(context.Background(), "TRONGRID_API_KEY"); err != nil {
 		t.Fatalf("cleanup key: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestD545_T2_UpdateSecretCipherAndHotResolve(t *testing.T) {
 	}
 	// 非白名单拒。
 	if _, err := svc.UpdateAppSecret(ctx, connect.NewRequest(&dashv1.UpdateAppSecretRequest{
-		Key: "ARB_MASTER_KEY", Value: "v", Note: "n"})); err == nil {
+		Key: "NOX_MASTER_KEY", Value: "v", Note: "n"})); err == nil {
 		t.Fatal("白名单外键应被拒")
 	}
 

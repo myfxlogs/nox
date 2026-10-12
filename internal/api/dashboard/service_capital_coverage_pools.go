@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // trxPoolRow ①TRX：余额=(balance_sun+tron_power)/1e6×USD 价（D-356-R1 口径锚）；

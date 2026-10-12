@@ -6,7 +6,7 @@ import (
 )
 
 // TestWatchlist D-090 S1 + 返修包① R1：建表迁移 / Get 空=空 / Set 全量替换幂等 / 顺序保持 / venues 读写往返 / NULL=全部。
-// DSN-gated：无 ARB_TEST_PG_DSN 跳过（go test ./... 无 PG 环境仍全过）。
+// DSN-gated：无 NOX_TEST_PG_DSN 跳过（go test ./... 无 PG 环境仍全过）。
 func TestWatchlist(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

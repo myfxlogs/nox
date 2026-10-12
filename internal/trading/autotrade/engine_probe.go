@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // probeEvalResult probe 评估结果。

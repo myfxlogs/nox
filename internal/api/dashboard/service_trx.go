@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // RollupTrxDailyIncome 日终 rollup（SSOT §5）：从 fin_trx_* 表汇总当日收入写入 position_daily_income(source='auto')。

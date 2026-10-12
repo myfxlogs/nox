@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // LiveGate 检查测试（DSN-gated 真库）。D-120：capital 面三条退役，
@@ -16,7 +16,7 @@ import (
 
 func testLiveGateStore(t *testing.T) *pgstore.Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	s, err := pgstore.New(ctx, dsn)
 	if err != nil {

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // TestD511_GateRunUsesSpecURLs gate.Run 双连接落 spot/futures 两 fake server——

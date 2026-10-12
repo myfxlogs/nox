@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // GateContractMeta Gate 合约元数据轮询器（日频）。

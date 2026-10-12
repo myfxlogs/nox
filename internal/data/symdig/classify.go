@@ -7,9 +7,9 @@ import (
 	"log"
 	"strings"
 
-	"arb/internal/data/fact"
-	"arb/internal/research/scan"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/research/scan"
+	"nox/internal/store/pgstore"
 )
 
 // 分类标签（findings.klass 值域）。

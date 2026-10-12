@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/research/detector"
+	"nox/internal/research/detector"
 )
 
 // breakevenGateCfg D-133 T2 测试配置：FundingMaxBreakevenDays=1.0。

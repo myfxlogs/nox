@@ -238,7 +238,7 @@ var File_dashboardv1_employee_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_employee_proto_rawDesc = "" +
 	"\n" +
-	"\x1adashboardv1/employee.proto\x12\x10arb.dashboard.v1\"\x92\x02\n" +
+	"\x1adashboardv1/employee.proto\x12\x10nox.dashboard.v1\"\x92\x02\n" +
 	"\bEmployee\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x12\n" +
@@ -255,8 +255,8 @@ const file_dashboardv1_employee_proto_rawDesc = "" +
 	"\x06status\x18\v \x01(\tR\x06status\"\x16\n" +
 	"\x14ListEmployeesRequest\"h\n" +
 	"\x15ListEmployeesResponse\x128\n" +
-	"\temployees\x18\x01 \x03(\v2\x1a.arb.dashboard.v1.EmployeeR\temployees\x12\x15\n" +
-	"\x06now_ts\x18\x02 \x01(\x03R\x05nowTsB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\temployees\x18\x01 \x03(\v2\x1a.nox.dashboard.v1.EmployeeR\temployees\x12\x15\n" +
+	"\x06now_ts\x18\x02 \x01(\x03R\x05nowTsB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_employee_proto_rawDescOnce sync.Once
@@ -272,12 +272,12 @@ func file_dashboardv1_employee_proto_rawDescGZIP() []byte {
 
 var file_dashboardv1_employee_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_dashboardv1_employee_proto_goTypes = []any{
-	(*Employee)(nil),              // 0: arb.dashboard.v1.Employee
-	(*ListEmployeesRequest)(nil),  // 1: arb.dashboard.v1.ListEmployeesRequest
-	(*ListEmployeesResponse)(nil), // 2: arb.dashboard.v1.ListEmployeesResponse
+	(*Employee)(nil),              // 0: nox.dashboard.v1.Employee
+	(*ListEmployeesRequest)(nil),  // 1: nox.dashboard.v1.ListEmployeesRequest
+	(*ListEmployeesResponse)(nil), // 2: nox.dashboard.v1.ListEmployeesResponse
 }
 var file_dashboardv1_employee_proto_depIdxs = []int32{
-	0, // 0: arb.dashboard.v1.ListEmployeesResponse.employees:type_name -> arb.dashboard.v1.Employee
+	0, // 0: nox.dashboard.v1.ListEmployeesResponse.employees:type_name -> nox.dashboard.v1.Employee
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name

@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // d328SeedManualFixture 建 RUNNING state + XASSET_CARRY 机会行 + qbus 双腿报价 + allowlist/regime 注入。

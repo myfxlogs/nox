@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/infra/dephealth"
-	"arb/internal/platform/httpx"
-	"arb/internal/platform/safego"
+	"nox/internal/data/bus"
+	"nox/internal/infra/dephealth"
+	"nox/internal/platform/httpx"
+	"nox/internal/platform/safego"
 
 	"github.com/gorilla/websocket"
 )

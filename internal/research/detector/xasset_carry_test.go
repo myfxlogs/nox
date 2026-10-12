@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
 )
 
 // fakeEquiv 测试用 AssetEquivSource（裁 5：detector 不查库，注入内存视图）。

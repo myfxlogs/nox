@@ -9,7 +9,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/platform/safego"
+	"nox/internal/platform/safego"
 )
 
 // Run 阻塞至 ctx 取消（三路子 goroutine 经 safego 托管）。

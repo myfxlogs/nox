@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func TestD532_BandWithLegWritesCanonical(t *testing.T) {

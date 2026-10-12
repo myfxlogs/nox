@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // anomalyDedupWindow 同键告警去重窗（票面=1h）。
@@ -104,10 +104,10 @@ func checkMacroBlackout(ctx context.Context, d Deps, now time.Time, warn func(st
 	}
 }
 
-// checkMacroCalendar ③财历拉取失败（ARB_MACRO_ENABLED=false=显式停用 → 不查）；
+// checkMacroCalendar ③财历拉取失败（NOX_MACRO_ENABLED=false=显式停用 → 不查）；
 // 信号=macro_event.created_at 最新时点（成功拉取才落新行）。
 func checkMacroCalendar(ctx context.Context, d Deps, now time.Time, warn func(string, ...any)) {
-	v, ok, err := d.Store.AppConfigString(ctx, "ARB_MACRO_ENABLED")
+	v, ok, err := d.Store.AppConfigString(ctx, "NOX_MACRO_ENABLED")
 	if err != nil {
 		log.Printf("[selfwatch] macro enabled read: %v", err)
 		return
@@ -121,7 +121,7 @@ func checkMacroCalendar(ctx context.Context, d Deps, now time.Time, warn func(st
 		return
 	}
 	if !has {
-		warn("[自盯] 财历表空（ARB_MACRO_ENABLED=true 但零行）")
+		warn("[自盯] 财历表空（NOX_MACRO_ENABLED=true 但零行）")
 		return
 	}
 	if lag := now.Sub(ts); lag > macroCalendarStale {
@@ -159,7 +159,7 @@ func checkFundingFresh(ctx context.Context, d Deps, now time.Time, warn func(str
 	}
 }
 
-// checkAnalystRO analyst 只读链路探针（D-059 ②）：经热读 ARB_AI_PG_DSN SELECT 1，
+// checkAnalystRO analyst 只读链路探针（D-059 ②）：经热读 NOX_AI_PG_DSN SELECT 1，
 // 失败→warn（本次断链靠 LLM 自觉写进报告才被发现——降级不得无声）。
 // err 文本过 redactPassword：keyword= 与 URL scheme://user:pass@ 两形态均打码
 // （R2 ②：pgx parse 错误透 DSN 原文，仅 keyword 打码不命中 URL 形态）。

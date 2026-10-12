@@ -9,7 +9,7 @@ import (
 	"log"
 	"strings"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // logClosed D-249 S1 第3项：CLOSED 翻译点记录（腿级摘要）。

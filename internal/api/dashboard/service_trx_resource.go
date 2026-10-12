@@ -3,8 +3,8 @@
 package dashboard
 
 import (
-	"arb/internal/portfolio/trxvote"
-	"arb/internal/store/pgstore"
+	"nox/internal/portfolio/trxvote"
+	"nox/internal/store/pgstore"
 )
 
 // bandwidthStatus 计算剩余带宽状态：剩余=(FreeNetLimit-FreeNetUsed)+(NetLimit-NetUsed)。

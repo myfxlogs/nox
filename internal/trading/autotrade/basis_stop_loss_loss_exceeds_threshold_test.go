@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // seedSwapPositionWithEntry D-180 S3：建一条 SWAPARB 持仓 + 双腿 + expected_entry_spread_bps 基准。

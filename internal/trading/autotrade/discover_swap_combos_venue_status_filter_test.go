@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 func d388Seed(t *testing.T, s *pgstore.Store, longStatus, shortStatus string) {

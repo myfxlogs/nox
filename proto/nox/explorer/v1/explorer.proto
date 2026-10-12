@@ -4,9 +4,9 @@
 // 不进 dashboard/Connect/TS 面）。
 syntax = "proto3";
 
-package arb.explorer.v1;
+package nox.explorer.v1;
 
-option go_package = "arb/internal/gen/explorerv1;explorerv1";
+option go_package = "nox/internal/gen/nox/explorer/v1;explorerv1";
 
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
@@ -37,7 +37,7 @@ message ProbeProposal {
   string side = 5;
   // qty 单腿数量（必填且 >0；MT=手数，CEX=张/币数 venue 口径。optional=缺字段检测）。
   optional double qty = 6;
-  // notional_usd 名义预算 USD（必填 >0 且 ≤ ARB_PROBE_MAX_NOTIONAL；optional=缺字段检测）。
+  // notional_usd 名义预算 USD（必填 >0 且 ≤ NOX_PROBE_MAX_NOTIONAL；optional=缺字段检测）。
   optional double notional_usd = 7;
   // expected_cost_usd 预期成本 USD（必填 ≥0；手续费/价差/滑点合计预估；optional=缺字段检测）。
   optional double expected_cost_usd = 8;

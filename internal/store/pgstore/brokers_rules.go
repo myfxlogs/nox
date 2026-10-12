@@ -7,7 +7,7 @@ import (
 	"log"
 	"strings"
 
-	"arb/internal/data/normalize"
+	"nox/internal/data/normalize"
 )
 
 // BackfillRuleMappings 规则库自动补录（D-140 S1）。

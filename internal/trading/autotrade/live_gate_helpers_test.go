@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func setupLiveGateStore(t *testing.T, venueLong, venueShort string, longReal, shortReal bool) *pgstore.Store {

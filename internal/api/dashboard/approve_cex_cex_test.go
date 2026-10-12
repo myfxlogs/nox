@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // d555CexFixture 双CEX 毕业行夹具：A=gate:spot（买腿）× B=binance:perp（卖腿），

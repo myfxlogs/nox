@@ -278,7 +278,7 @@ type GetTrxYieldRadarResponse struct {
 	EnergyApr_30D  float64                `protobuf:"fixed64,2,opt,name=energy_apr_30d,json=energyApr30d,proto3" json:"energy_apr_30d,omitempty"`       // 30d 能量租金年化 %
 	VoteAprCurrent float64                `protobuf:"fixed64,3,opt,name=vote_apr_current,json=voteAprCurrent,proto3" json:"vote_apr_current,omitempty"` // 当前投票 APR %（最新 fin_trx_vote_apr.current_rate）
 	VoteApr_30DAvg float64                `protobuf:"fixed64,4,opt,name=vote_apr_30d_avg,json=voteApr30dAvg,proto3" json:"vote_apr_30d_avg,omitempty"`  // 30d 投票 APR 均值 %
-	FloorPct       float64                `protobuf:"fixed64,5,opt,name=floor_pct,json=floorPct,proto3" json:"floor_pct,omitempty"`                     // floor 告警阈值 %（ARB_TRX_ENERGY_RATE_FLOOR_PCT）
+	FloorPct       float64                `protobuf:"fixed64,5,opt,name=floor_pct,json=floorPct,proto3" json:"floor_pct,omitempty"`                     // floor 告警阈值 %（NOX_TRX_ENERGY_RATE_FLOOR_PCT）
 	SampleDays_7D  int32                  `protobuf:"varint,6,opt,name=sample_days_7d,json=sampleDays7d,proto3" json:"sample_days_7d,omitempty"`        // 7d 实际样本天数（冷启动 <7 时前端显示「样本不足」）
 	SampleDays_30D int32                  `protobuf:"varint,7,opt,name=sample_days_30d,json=sampleDays30d,proto3" json:"sample_days_30d,omitempty"`     // 30d 实际样本天数
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`                    // 数据更新时间
@@ -1199,7 +1199,7 @@ var File_dashboardv1_trx_cex_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_trx_cex_proto_rawDesc = "" +
 	"\n" +
-	"\x19dashboardv1/trx_cex.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19dashboardv1/account.proto\"\x1a\n" +
+	"\x19dashboardv1/trx_cex.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19dashboardv1/account.proto\"\x1a\n" +
 	"\x18TrxAccountRefreshRequest\"\xde\x04\n" +
 	"\x19TrxAccountRefreshResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x18\n" +
@@ -1254,7 +1254,7 @@ const file_dashboardv1_trx_cex_proto_rawDesc = "" +
 	"\x05price\x18\x05 \x01(\x01R\x05price\x12&\n" +
 	"\x0fdaily_total_usd\x18\x06 \x01(\x01R\rdailyTotalUsdJ\x04\b\x04\x10\x05\"\xdb\x03\n" +
 	"\x18GetTrxYieldCurveResponse\x12<\n" +
-	"\x06points\x18\x01 \x03(\v2$.arb.dashboard.v1.TrxYieldCurvePointR\x06points\x12#\n" +
+	"\x06points\x18\x01 \x03(\v2$.nox.dashboard.v1.TrxYieldCurvePointR\x06points\x12#\n" +
 	"\rannualized_7d\x18\x02 \x01(\x01R\fannualized7d\x12%\n" +
 	"\x0eannualized_30d\x18\x03 \x01(\x01R\rannualized30d\x12#\n" +
 	"\rcurrent_price\x18\x04 \x01(\x01R\fcurrentPrice\x12,\n" +
@@ -1266,11 +1266,11 @@ const file_dashboardv1_trx_cex_proto_rawDesc = "" +
 	"\x10\vJ\x04\b\v\x10\f\"\x1b\n" +
 	"\x19GetCexScanSnapshotRequest\"\xd2\x02\n" +
 	"\x1aGetCexScanSnapshotResponse\x12<\n" +
-	"\tearn_aprs\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.CexEarnAPRRowR\bearnAprs\x128\n" +
-	"\aspreads\x18\x02 \x03(\v2\x1e.arb.dashboard.v1.CexSpreadRowR\aspreads\x12;\n" +
-	"\bfundings\x18\x03 \x03(\v2\x1f.arb.dashboard.v1.CexFundingRowR\bfundings\x12;\n" +
-	"\bbalances\x18\x04 \x03(\v2\x1f.arb.dashboard.v1.CexBalanceRowR\bbalances\x12B\n" +
-	"\tjudgments\x18\x05 \x03(\v2$.arb.dashboard.v1.CexEarnJudgmentRowR\tjudgments\"\xc1\x01\n" +
+	"\tearn_aprs\x18\x01 \x03(\v2\x1f.nox.dashboard.v1.CexEarnAPRRowR\bearnAprs\x128\n" +
+	"\aspreads\x18\x02 \x03(\v2\x1e.nox.dashboard.v1.CexSpreadRowR\aspreads\x12;\n" +
+	"\bfundings\x18\x03 \x03(\v2\x1f.nox.dashboard.v1.CexFundingRowR\bfundings\x12;\n" +
+	"\bbalances\x18\x04 \x03(\v2\x1f.nox.dashboard.v1.CexBalanceRowR\bbalances\x12B\n" +
+	"\tjudgments\x18\x05 \x03(\v2$.nox.dashboard.v1.CexEarnJudgmentRowR\tjudgments\"\xc1\x01\n" +
 	"\x12CexEarnJudgmentRow\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x10\n" +
 	"\x03ccy\x18\x02 \x01(\tR\x03ccy\x12!\n" +
@@ -1314,7 +1314,7 @@ const file_dashboardv1_trx_cex_proto_rawDesc = "" +
 	"\vfree_margin\x18\x05 \x01(\x01R\n" +
 	"freeMargin\x12\x1b\n" +
 	"\tvenue_key\x18\x06 \x01(\tR\bvenueKey\x125\n" +
-	"\bholdings\x18\a \x03(\v2\x19.arb.dashboard.v1.HoldingR\bholdingsB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\bholdings\x18\a \x03(\v2\x19.nox.dashboard.v1.HoldingR\bholdingsB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_trx_cex_proto_rawDescOnce sync.Once
@@ -1330,34 +1330,34 @@ func file_dashboardv1_trx_cex_proto_rawDescGZIP() []byte {
 
 var file_dashboardv1_trx_cex_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_dashboardv1_trx_cex_proto_goTypes = []any{
-	(*TrxAccountRefreshRequest)(nil),   // 0: arb.dashboard.v1.TrxAccountRefreshRequest
-	(*TrxAccountRefreshResponse)(nil),  // 1: arb.dashboard.v1.TrxAccountRefreshResponse
-	(*GetTrxYieldRadarRequest)(nil),    // 2: arb.dashboard.v1.GetTrxYieldRadarRequest
-	(*GetTrxYieldRadarResponse)(nil),   // 3: arb.dashboard.v1.GetTrxYieldRadarResponse
-	(*GetTrxYieldCurveRequest)(nil),    // 4: arb.dashboard.v1.GetTrxYieldCurveRequest
-	(*TrxYieldCurvePoint)(nil),         // 5: arb.dashboard.v1.TrxYieldCurvePoint
-	(*GetTrxYieldCurveResponse)(nil),   // 6: arb.dashboard.v1.GetTrxYieldCurveResponse
-	(*GetCexScanSnapshotRequest)(nil),  // 7: arb.dashboard.v1.GetCexScanSnapshotRequest
-	(*GetCexScanSnapshotResponse)(nil), // 8: arb.dashboard.v1.GetCexScanSnapshotResponse
-	(*CexEarnJudgmentRow)(nil),         // 9: arb.dashboard.v1.CexEarnJudgmentRow
-	(*CexEarnAPRRow)(nil),              // 10: arb.dashboard.v1.CexEarnAPRRow
-	(*CexSpreadRow)(nil),               // 11: arb.dashboard.v1.CexSpreadRow
-	(*CexFundingRow)(nil),              // 12: arb.dashboard.v1.CexFundingRow
-	(*CexBalanceRow)(nil),              // 13: arb.dashboard.v1.CexBalanceRow
+	(*TrxAccountRefreshRequest)(nil),   // 0: nox.dashboard.v1.TrxAccountRefreshRequest
+	(*TrxAccountRefreshResponse)(nil),  // 1: nox.dashboard.v1.TrxAccountRefreshResponse
+	(*GetTrxYieldRadarRequest)(nil),    // 2: nox.dashboard.v1.GetTrxYieldRadarRequest
+	(*GetTrxYieldRadarResponse)(nil),   // 3: nox.dashboard.v1.GetTrxYieldRadarResponse
+	(*GetTrxYieldCurveRequest)(nil),    // 4: nox.dashboard.v1.GetTrxYieldCurveRequest
+	(*TrxYieldCurvePoint)(nil),         // 5: nox.dashboard.v1.TrxYieldCurvePoint
+	(*GetTrxYieldCurveResponse)(nil),   // 6: nox.dashboard.v1.GetTrxYieldCurveResponse
+	(*GetCexScanSnapshotRequest)(nil),  // 7: nox.dashboard.v1.GetCexScanSnapshotRequest
+	(*GetCexScanSnapshotResponse)(nil), // 8: nox.dashboard.v1.GetCexScanSnapshotResponse
+	(*CexEarnJudgmentRow)(nil),         // 9: nox.dashboard.v1.CexEarnJudgmentRow
+	(*CexEarnAPRRow)(nil),              // 10: nox.dashboard.v1.CexEarnAPRRow
+	(*CexSpreadRow)(nil),               // 11: nox.dashboard.v1.CexSpreadRow
+	(*CexFundingRow)(nil),              // 12: nox.dashboard.v1.CexFundingRow
+	(*CexBalanceRow)(nil),              // 13: nox.dashboard.v1.CexBalanceRow
 	(*timestamppb.Timestamp)(nil),      // 14: google.protobuf.Timestamp
-	(*Holding)(nil),                    // 15: arb.dashboard.v1.Holding
+	(*Holding)(nil),                    // 15: nox.dashboard.v1.Holding
 }
 var file_dashboardv1_trx_cex_proto_depIdxs = []int32{
-	14, // 0: arb.dashboard.v1.TrxAccountRefreshResponse.fetched_at:type_name -> google.protobuf.Timestamp
-	14, // 1: arb.dashboard.v1.GetTrxYieldRadarResponse.updated_at:type_name -> google.protobuf.Timestamp
-	14, // 2: arb.dashboard.v1.TrxYieldCurvePoint.day:type_name -> google.protobuf.Timestamp
-	5,  // 3: arb.dashboard.v1.GetTrxYieldCurveResponse.points:type_name -> arb.dashboard.v1.TrxYieldCurvePoint
-	10, // 4: arb.dashboard.v1.GetCexScanSnapshotResponse.earn_aprs:type_name -> arb.dashboard.v1.CexEarnAPRRow
-	11, // 5: arb.dashboard.v1.GetCexScanSnapshotResponse.spreads:type_name -> arb.dashboard.v1.CexSpreadRow
-	12, // 6: arb.dashboard.v1.GetCexScanSnapshotResponse.fundings:type_name -> arb.dashboard.v1.CexFundingRow
-	13, // 7: arb.dashboard.v1.GetCexScanSnapshotResponse.balances:type_name -> arb.dashboard.v1.CexBalanceRow
-	9,  // 8: arb.dashboard.v1.GetCexScanSnapshotResponse.judgments:type_name -> arb.dashboard.v1.CexEarnJudgmentRow
-	15, // 9: arb.dashboard.v1.CexBalanceRow.holdings:type_name -> arb.dashboard.v1.Holding
+	14, // 0: nox.dashboard.v1.TrxAccountRefreshResponse.fetched_at:type_name -> google.protobuf.Timestamp
+	14, // 1: nox.dashboard.v1.GetTrxYieldRadarResponse.updated_at:type_name -> google.protobuf.Timestamp
+	14, // 2: nox.dashboard.v1.TrxYieldCurvePoint.day:type_name -> google.protobuf.Timestamp
+	5,  // 3: nox.dashboard.v1.GetTrxYieldCurveResponse.points:type_name -> nox.dashboard.v1.TrxYieldCurvePoint
+	10, // 4: nox.dashboard.v1.GetCexScanSnapshotResponse.earn_aprs:type_name -> nox.dashboard.v1.CexEarnAPRRow
+	11, // 5: nox.dashboard.v1.GetCexScanSnapshotResponse.spreads:type_name -> nox.dashboard.v1.CexSpreadRow
+	12, // 6: nox.dashboard.v1.GetCexScanSnapshotResponse.fundings:type_name -> nox.dashboard.v1.CexFundingRow
+	13, // 7: nox.dashboard.v1.GetCexScanSnapshotResponse.balances:type_name -> nox.dashboard.v1.CexBalanceRow
+	9,  // 8: nox.dashboard.v1.GetCexScanSnapshotResponse.judgments:type_name -> nox.dashboard.v1.CexEarnJudgmentRow
+	15, // 9: nox.dashboard.v1.CexBalanceRow.holdings:type_name -> nox.dashboard.v1.Holding
 	10, // [10:10] is the sub-list for method output_type
 	10, // [10:10] is the sub-list for method input_type
 	10, // [10:10] is the sub-list for extension type_name

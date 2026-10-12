@@ -5,8 +5,8 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // LegSwapDiagnosis D-193-A 扩包 S3：leg_swapAmount 诊断结果（只读探针用）。

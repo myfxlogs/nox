@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // FactTripleDayResolver 从 facts 表读 triple_swap_day（D-077 V2）。

@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // covTestStore 覆盖率测试夹具库：TRUNCATE 本包触面全部源表（其余测试同库隔离）。

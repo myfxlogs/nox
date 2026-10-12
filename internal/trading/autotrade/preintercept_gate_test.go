@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/api/dashboard"
-	"arb/internal/data/bus"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/api/dashboard"
+	"nox/internal/data/bus"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // d311SeedXAssetPosition 建 XASSET_CARRY 持仓+双腿。

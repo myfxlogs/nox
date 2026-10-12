@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 func mkSwap(canon, venue, sym string, val float64) mtSwap {

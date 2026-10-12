@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // comboAccumulator 当日 combo 累积器（D-080 S4 write-behind，R2 重构）。

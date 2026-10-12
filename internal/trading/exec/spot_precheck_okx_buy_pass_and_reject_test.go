@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // === S2 spot 现金预检 ===

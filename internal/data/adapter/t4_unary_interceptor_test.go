@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"arb/internal/infra/dephealth"
+	"nox/internal/infra/dephealth"
 
 	"google.golang.org/grpc"
 )

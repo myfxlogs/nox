@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// systemSettingsTestStore 连接 ARB_TEST_PG_DSN 测试库，TRUNCATE system_settings 隔离数据。
+// systemSettingsTestStore 连接 NOX_TEST_PG_DSN 测试库，TRUNCATE system_settings 隔离数据。
 func systemSettingsTestStore(t *testing.T) *Store {
 	t.Helper()
 	s := sharedTestStore(t)

@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/venue"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/venue"
+	"nox/internal/store/pgstore"
 
 	"github.com/gorilla/websocket"
 )

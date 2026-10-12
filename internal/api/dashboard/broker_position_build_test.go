@@ -3,7 +3,7 @@ package dashboard
 import (
 	"testing"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // TestCexCanonical D-311 R6④：CEX 符号→canonical 派生镜像采集器归一规则。

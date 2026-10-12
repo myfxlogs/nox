@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // TestD034_FundingMeanSaturdayOpen 瞬时=0 + 窗内均值 28.6：

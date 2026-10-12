@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// tableHealthTestStore 连接 ARB_TEST_PG_DSN，迁移后隔离。
+// tableHealthTestStore 连接 NOX_TEST_PG_DSN，迁移后隔离。
 func tableHealthTestStore(t *testing.T) *Store {
 	t.Helper()
 	s := sharedTestStore(t)

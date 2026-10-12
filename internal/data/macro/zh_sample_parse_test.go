@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestD053_ZhSampleParse ①：zh 端点固定样本解析——中文事件名原样入库、none∧三空→holiday

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // seedSettleFacts 给 (venue, symbol) 种 8h UTC 网格的结算边界事实：

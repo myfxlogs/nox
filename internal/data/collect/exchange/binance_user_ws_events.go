@@ -9,8 +9,8 @@ import (
 	"math"
 	"strings"
 
-	"arb/internal/data/venue"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/venue"
+	"nox/internal/store/pgstore"
 )
 
 // handleFrame 用户流事件分派：先落审计表（失败 warn 仍更缓存，R3）再更新缓存/sink。

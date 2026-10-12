@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // 休眠轨（D-191R7）：go 休眠提案→带因拒单非市况文案。

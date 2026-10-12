@@ -1,4 +1,4 @@
-// WS 代理化拨号公共件（止血·D-511 前导）：ARB_CEX_WS_BASE 置位=三所 WS 全部改经
+// WS 代理化拨号公共件（止血·D-511 前导）：NOX_CEX_WS_BASE 置位=三所 WS 全部改经
 // cex-proxy（如 wss://<cex-proxy域名>，token 握口头+CA 信任与 httpx.Client 同源）；
 // 空=原生直连（默认行为不变）。
 // 路由前缀在 tools/cex-proxy config 注册：/okxws（strip）→ws.okx.com、
@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/platform/httpx"
+	"nox/internal/platform/httpx"
 
 	"github.com/gorilla/websocket"
 )

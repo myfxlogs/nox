@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // dciUnderlyings 起步覆盖面（托管 carry 线 BTC+ETH，票面钦定）。

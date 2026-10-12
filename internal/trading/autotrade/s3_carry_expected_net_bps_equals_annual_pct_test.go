@@ -7,8 +7,8 @@ package autotrade
 import (
 	"testing"
 
-	"arb/internal/review/verification"
-	"arb/internal/store/pgstore"
+	"nox/internal/review/verification"
+	"nox/internal/store/pgstore"
 )
 
 // TestD256A_S3_CarryExpectedNetBpsEqualsAnnualPct CARRY 开仓 meta 的 NetBps==AnnualPct（年化值）。

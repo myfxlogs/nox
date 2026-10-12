@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // aliasStub 闭包（gate 测试注入形态）。

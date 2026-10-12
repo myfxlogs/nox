@@ -8,7 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	dashv1 "arb/internal/gen/dashboardv1"
+	dashv1 "nox/internal/gen/dashboardv1"
 )
 
 func (s *Service) ListEmployees(ctx context.Context, _ *connect.Request[dashv1.ListEmployeesRequest]) (*connect.Response[dashv1.ListEmployeesResponse], error) {

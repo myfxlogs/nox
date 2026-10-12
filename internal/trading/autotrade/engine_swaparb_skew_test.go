@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // TestLegSpreadTooWide_LegSpreadTooWide D-159 W4a R7 S4：long spread=60 bps > 50 → skip。

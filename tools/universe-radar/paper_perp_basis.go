@@ -7,7 +7,7 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // perpTickBasis D-474b S1：两腿 mark（mid）价差 bps=(px_sell−px_buy)/mid×1e4，

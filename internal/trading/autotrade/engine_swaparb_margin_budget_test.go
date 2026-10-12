@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/api/dashboard"
-	"arb/internal/data/bus"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/risk/gate"
-	"arb/internal/trading/exec"
+	"nox/internal/api/dashboard"
+	"nox/internal/data/bus"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/risk/gate"
+	"nox/internal/trading/exec"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // mockAcctQuerier 受控账户查询器（autotrade 测试用，同 dashboard.fakeAccountQuerier）。

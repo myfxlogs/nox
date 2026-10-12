@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"log"
 
-	"arb/internal/risk/gate"
-	"arb/internal/trading/exec"
+	"nox/internal/risk/gate"
+	"nox/internal/trading/exec"
 )
 
 // swapArbAllowList/swapArbDenyList 读侧：快照优先；nil（零值 Engine 直构测试路径）回退 cfg。

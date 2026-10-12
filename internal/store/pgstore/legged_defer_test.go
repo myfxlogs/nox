@@ -10,7 +10,7 @@ import (
 func TestD175_LeggedDeferralRoundtrip(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `DELETE FROM app_config WHERE key='ARB_LEGGED_DEFERRALS'`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM app_config WHERE key='NOX_LEGGED_DEFERRALS'`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 	if err := s.DeferLeggedAlert(ctx, 508, 1, 2); err != nil {

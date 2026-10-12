@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 func TestD472_MarginWarnThrottled(t *testing.T) {
-	st, err := pgstore.New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	st, err := pgstore.New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 func d109WS(baseURL string, client *http.Client, degradedFn func(string) bool, sink *[]fact.Fact) *BinanceMarketWS {

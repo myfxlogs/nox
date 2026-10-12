@@ -13,7 +13,7 @@ func d047ProbeStore(t *testing.T) *Store {
 	ctx := context.Background()
 	for _, q := range []string{
 		`TRUNCATE position_cashflows, position_settlements, position_legs, positions CASCADE`,
-		`DELETE FROM app_config WHERE key LIKE 'ARB_PROBE%'`,
+		`DELETE FROM app_config WHERE key LIKE 'NOX_PROBE%'`,
 	} {
 		if _, err := s.pool.Exec(ctx, q); err != nil {
 			t.Fatalf("clean: %v", err)

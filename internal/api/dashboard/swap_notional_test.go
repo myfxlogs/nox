@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/platform/usdnotional"
+	"nox/internal/data/bus"
+	"nox/internal/platform/usdnotional"
 )
 
 // TestSwapArbRatio_Default ratio=0.5 生效（保留抗单余地）。

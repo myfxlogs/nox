@@ -3,9 +3,9 @@ package dashboard
 import (
 	"testing"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 func TestBuildMatrixUniverse_DedupAndGroupOrder(t *testing.T) {

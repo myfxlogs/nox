@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // ControlPlane 执行控制面测试（DSN-gated 真库）。

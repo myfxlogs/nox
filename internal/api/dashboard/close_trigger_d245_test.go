@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 )
 
 func TestD245_LogCloseTrigger_DashboardEntry(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	t.Cleanup(func() {
 		_, _ = st.Pool().Exec(ctx, `DELETE FROM autotrade_logs WHERE reason='manual_rpc' AND opportunity_id='D-245-opp-dash'`)

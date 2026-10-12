@@ -7,9 +7,9 @@ package adapter
 import (
 	"testing"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
-	"arb/internal/data/bus"
 	"context"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
+	"nox/internal/data/bus"
 	"time"
 )
 

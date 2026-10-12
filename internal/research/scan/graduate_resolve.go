@@ -5,8 +5,8 @@ package scan
 import (
 	"fmt"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/store/pgstore"
 )
 
 // SymbolMapEntry broker_symbol_map 行的解析投影（调用方自 store.ListSymbolMappings 转换，

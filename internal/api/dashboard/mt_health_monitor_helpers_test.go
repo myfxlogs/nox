@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // D-136 修复②：isMTWeekendQuietWindow MT 周末休市静默窗（Fri 20:55 UTC → Sun 22:10 UTC）。

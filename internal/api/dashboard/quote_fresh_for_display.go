@@ -14,7 +14,7 @@ package dashboard
 import (
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // quotePulseHardCap 脉冲续命上限（票面③钦定 ≤30min——超此连脉冲也救不回，防

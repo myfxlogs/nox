@@ -13,7 +13,7 @@ import (
 // TestAccountCollector_HookPanicRecover hook panic → Poll 不崩溃，正常返回。
 // 红绿锚：hook panic 不得拖垮采集主循环。
 func TestAccountCollector_HookPanicRecover(t *testing.T) {
-	st := newTestStore(t) // DSN-gated（ARB_TEST_PG_DSN）
+	st := newTestStore(t) // DSN-gated（NOX_TEST_PG_DSN）
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {

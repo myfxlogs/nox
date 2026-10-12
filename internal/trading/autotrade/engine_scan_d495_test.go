@@ -1,5 +1,5 @@
 // engine_scan_d495_test.go —— D-495 S3/S7②：scanAndClose 前置全腿可平性闸 +
-// suspend 转场 warn 去重。需 ARB_TEST_PG_DSN。
+// suspend 转场 warn 去重。需 NOX_TEST_PG_DSN。
 package autotrade
 
 import (
@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 func d495Engine(t *testing.T) (*Engine, *pgstore.Store) {
 	t.Helper()
 	ctx := context.Background()
-	s, err := pgstore.New(ctx, testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := pgstore.New(ctx, testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}

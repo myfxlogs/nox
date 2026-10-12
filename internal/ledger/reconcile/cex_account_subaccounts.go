@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // Account 子账户分派（D-363 S2）：venue_type=funding/earn 先于交易账户 venue 分派。

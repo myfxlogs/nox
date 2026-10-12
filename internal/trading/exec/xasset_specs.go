@@ -2,7 +2,7 @@
 // engine 热重载 ReloadXAssetAllowCombos 同源禁复制；exec→pgstore 既有依赖方向合法）。
 package exec
 
-import "arb/internal/store/pgstore"
+import "nox/internal/store/pgstore"
 
 // XAssetSpecsFromRows pgstore 白名单行映射为 exec spec（结构同构零信息损失约束同
 // pgstore.XAssetAllowRow）。D-367 S3 加载期校验（fail-closed 零信任）规则单点在此：

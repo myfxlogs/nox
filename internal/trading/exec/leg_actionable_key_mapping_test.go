@@ -1,6 +1,6 @@
 // d495_leg_actionable_test.go —— D-495 S7：腿可平性闸五场景。
 // T1 单元 mock：键域分流+暗/亮/trade_mode 否决/冷启动单值（无 DSN）。
-// T2-T4 DSN（ARB_EXEC_TEST_PG_DSN）：close gating 一暗一亮零发单不翻态 /
+// T2-T4 DSN（NOX_EXEC_TEST_PG_DSN）：close gating 一暗一亮零发单不翻态 /
 // ResumeClose 暗腿跳过幂等+残留降级 warn / force 覆盖可平。
 package exec
 
@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // --- T1：LegActionable 单元（mock store） ---

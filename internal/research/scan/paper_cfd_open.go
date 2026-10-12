@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // cfdSkipCounts D-050 ②：发现段跳过原因计数（log 口径，cooldown=flap+data_lost 合并；

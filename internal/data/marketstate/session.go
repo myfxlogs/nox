@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // Window 周会话窗（UTC 坐标）：wday=UTC 周几（起点日），start/end=UTC 分钟

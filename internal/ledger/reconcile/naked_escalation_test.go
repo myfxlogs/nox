@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func d208Pos(stuckFor time.Duration) *pgstore.Position {
@@ -30,7 +30,7 @@ func d208Legs() map[int64][]*pgstore.PositionLeg {
 func TestD208_NakedEscalation(t *testing.T) {
 	fs := newFakeStore()
 	fs.legs = d208Legs()
-	fs.cfg = map[string]int64{"ARB_CLOSING_NAKED_WARN_SEC": 1800, "ARB_CLOSING_NAKED_CRIT_SEC": 7200}
+	fs.cfg = map[string]int64{"NOX_CLOSING_NAKED_WARN_SEC": 1800, "NOX_CLOSING_NAKED_CRIT_SEC": 7200}
 	r := &Reconciler{store: fs, nakedAlertHour: map[int64]int64{}}
 	now := time.Now()
 
@@ -73,7 +73,7 @@ func TestD208_NakedSkips(t *testing.T) {
 		t.Fatalf("阈值未配应降级零告警: %+v", fs.alerts)
 	}
 	// 全腿已平 → 无裸腿不告警。
-	fs.cfg = map[string]int64{"ARB_CLOSING_NAKED_WARN_SEC": 60}
+	fs.cfg = map[string]int64{"NOX_CLOSING_NAKED_WARN_SEC": 60}
 	fs.legs[208] = append(fs.legs[208], &pgstore.PositionLeg{
 		LegNo: 1, Phase: "CLOSE", Venue: "3001157:mt5", Symbol: "XAUUSDm", Status: "FILLED"})
 	r.closingNakedCheck(context.Background(), d208Pos(10*time.Hour), time.Now())

@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package arb.dashboard.v1;
+package nox.dashboard.v1;
 
-option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
 
 import "google/protobuf/timestamp.proto";
 

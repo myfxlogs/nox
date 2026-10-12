@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 const (

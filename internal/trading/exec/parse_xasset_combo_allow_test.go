@@ -9,14 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 // d311ExecStore 真库桩（checkXAssetComboAllow 需 GetOpportunity 读 canonical_sell）。
 func d311ExecStore(t *testing.T) *pgstore.Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_EXEC_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_EXEC_TEST_PG_DSN")
 	ctx := context.Background()
 	s, err := pgstore.New(ctx, dsn)
 	if err != nil {

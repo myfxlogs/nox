@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/analyst"
+	"nox/internal/platform/analyst"
 )
 
 // writeEntry 写人造条目（frontmatter + 正文可选 falsifies_when 节）。

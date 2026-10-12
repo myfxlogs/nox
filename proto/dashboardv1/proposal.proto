@@ -1,7 +1,7 @@
 syntax = "proto3";
-package arb.dashboard.v1;
+package nox.dashboard.v1;
 
-option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
 
 // D-189：提案执行台看板 RPC（提案实体行实况；执行=飞书 go 口令径）。
 message Proposal {

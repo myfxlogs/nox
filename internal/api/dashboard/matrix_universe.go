@@ -4,8 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 type matrixRowBuilder struct {

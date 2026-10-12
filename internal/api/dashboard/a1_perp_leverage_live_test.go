@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // d572Svc 腿池判定夹具：gate 池=活账本（avail 可调）；MT5 池=快照+init_margin_rate fact；

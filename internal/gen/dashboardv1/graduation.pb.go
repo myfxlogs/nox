@@ -537,7 +537,7 @@ func (x *GraduationRiskReport) GetFieldGrades() []*FieldEvidence {
 type FieldEvidence struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Field         string                 `protobuf:"bytes,1,opt,name=field,proto3" json:"field,omitempty"`
-	Grade         EvidenceGrade          `protobuf:"varint,2,opt,name=grade,proto3,enum=arb.dashboard.v1.EvidenceGrade" json:"grade,omitempty"`
+	Grade         EvidenceGrade          `protobuf:"varint,2,opt,name=grade,proto3,enum=nox.dashboard.v1.EvidenceGrade" json:"grade,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2654,7 +2654,7 @@ var File_dashboardv1_graduation_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\n" +
-	"\x1cdashboardv1/graduation.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd5\a\n" +
+	"\x1cdashboardv1/graduation.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd5\a\n" +
 	"\x12CarryGraduationRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x19\n" +
 	"\bpaper_id\x18\x02 \x01(\x03R\apaperId\x12\x14\n" +
@@ -2682,7 +2682,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x10expected_periods\x18\x13 \x01(\x03H\x06R\x0fexpectedPeriods\x88\x01\x01\x12*\n" +
 	"\x0ecoverage_ratio\x18\x14 \x01(\x01H\aR\rcoverageRatio\x88\x01\x01\x12+\n" +
 	"\x0fmin_accrued_usd\x18\x15 \x01(\x01H\bR\rminAccruedUsd\x88\x01\x01\x12?\n" +
-	"\x04risk\x18\x16 \x01(\v2&.arb.dashboard.v1.GraduationRiskReportH\tR\x04risk\x88\x01\x01\x12!\n" +
+	"\x04risk\x18\x16 \x01(\v2&.nox.dashboard.v1.GraduationRiskReportH\tR\x04risk\x88\x01\x01\x12!\n" +
 	"\fentry_window\x18\x17 \x01(\tR\ventryWindowB\v\n" +
 	"\t_mt_venueB\x13\n" +
 	"\x11_last_funding_annB\v\n" +
@@ -2712,7 +2712,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x14GraduationRiskReport\x12&\n" +
 	"\fnotional_usd\x18\x01 \x01(\x01H\x00R\vnotionalUsd\x88\x01\x01\x12'\n" +
 	"\x0fnotional_source\x18\x02 \x01(\tR\x0enotionalSource\x127\n" +
-	"\x04legs\x18\x03 \x03(\v2#.arb.dashboard.v1.GraduationRiskLegR\x04legs\x12$\n" +
+	"\x04legs\x18\x03 \x03(\v2#.nox.dashboard.v1.GraduationRiskLegR\x04legs\x12$\n" +
 	"\vcapital_usd\x18\x04 \x01(\x01H\x01R\n" +
 	"capitalUsd\x88\x01\x01\x121\n" +
 	"\x14recommended_leverage\x18\x05 \x01(\x01R\x13recommendedLeverage\x12#\n" +
@@ -2724,7 +2724,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	" \x01(\x01H\x05R\x0froundtripFeeUsd\x88\x01\x01\x12%\n" +
 	"\x0emin_executable\x18\v \x03(\tR\rminExecutable\x12\x12\n" +
 	"\x04gaps\x18\f \x03(\tR\x04gaps\x12B\n" +
-	"\ffield_grades\x18\r \x03(\v2\x1f.arb.dashboard.v1.FieldEvidenceR\vfieldGradesB\x0f\n" +
+	"\ffield_grades\x18\r \x03(\v2\x1f.nox.dashboard.v1.FieldEvidenceR\vfieldGradesB\x0f\n" +
 	"\r_notional_usdB\x0e\n" +
 	"\f_capital_usdB\x17\n" +
 	"\x15_liq_distance_pct_estB\x19\n" +
@@ -2733,7 +2733,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x12_roundtrip_fee_usd\"\\\n" +
 	"\rFieldEvidence\x12\x14\n" +
 	"\x05field\x18\x01 \x01(\tR\x05field\x125\n" +
-	"\x05grade\x18\x02 \x01(\x0e2\x1f.arb.dashboard.v1.EvidenceGradeR\x05grade\"\x1e\n" +
+	"\x05grade\x18\x02 \x01(\x0e2\x1f.nox.dashboard.v1.EvidenceGradeR\x05grade\"\x1e\n" +
 	"\x1cListXAssetAllowCombosRequest\"\xa2\b\n" +
 	"\x13XAssetAllowComboRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12#\n" +
@@ -2773,10 +2773,10 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"_simulatedB\r\n" +
 	"\v_margin_usd\"Z\n" +
 	"\x1dListXAssetAllowCombosResponse\x129\n" +
-	"\x04rows\x18\x01 \x03(\v2%.arb.dashboard.v1.XAssetAllowComboRowR\x04rows\"!\n" +
+	"\x04rows\x18\x01 \x03(\v2%.nox.dashboard.v1.XAssetAllowComboRowR\x04rows\"!\n" +
 	"\x1fListXAssetPendingEntriesRequest\"_\n" +
 	" ListXAssetPendingEntriesResponse\x12;\n" +
-	"\x04rows\x18\x01 \x03(\v2'.arb.dashboard.v1.XAssetPendingEntryRowR\x04rows\"\x88\t\n" +
+	"\x04rows\x18\x01 \x03(\v2'.nox.dashboard.v1.XAssetPendingEntryRowR\x04rows\"\x88\t\n" +
 	"\x15XAssetPendingEntryRow\x12\x19\n" +
 	"\bcombo_id\x18\x01 \x01(\x03R\acomboId\x12\x1f\n" +
 	"\vcombo_label\x18\x02 \x01(\tR\n" +
@@ -2861,7 +2861,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x1ePreviewXAssetComboRiskResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12?\n" +
-	"\x04risk\x18\x03 \x01(\v2&.arb.dashboard.v1.GraduationRiskReportH\x00R\x04risk\x88\x01\x01B\a\n" +
+	"\x04risk\x18\x03 \x01(\v2&.nox.dashboard.v1.GraduationRiskReportH\x00R\x04risk\x88\x01\x01B\a\n" +
 	"\x05_risk\"\x8e\x04\n" +
 	"\x13VenueExposureCapRow\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x17\n" +
@@ -2883,7 +2883,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\rallow_enabled\x18\x0e \x01(\bR\fallowEnabled\"\x1e\n" +
 	"\x1cListVenueExposureCapsRequest\"Z\n" +
 	"\x1dListVenueExposureCapsResponse\x129\n" +
-	"\x04rows\x18\x01 \x03(\v2%.arb.dashboard.v1.VenueExposureCapRowR\x04rows\"\x80\x01\n" +
+	"\x04rows\x18\x01 \x03(\v2%.nox.dashboard.v1.VenueExposureCapRowR\x04rows\"\x80\x01\n" +
 	"\x1aSetVenueExposureCapRequest\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x17\n" +
 	"\acap_usd\x18\x02 \x01(\x01R\x06capUsd\x12\x18\n" +
@@ -2894,7 +2894,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x05error\x18\x02 \x01(\tR\x05error\"\x1d\n" +
 	"\x1bListCarryGraduationsRequest\"X\n" +
 	"\x1cListCarryGraduationsResponse\x128\n" +
-	"\x04rows\x18\x01 \x03(\v2$.arb.dashboard.v1.CarryGraduationRowR\x04rows\"\x80\x03\n" +
+	"\x04rows\x18\x01 \x03(\v2$.nox.dashboard.v1.CarryGraduationRowR\x04rows\"\x80\x03\n" +
 	"\x1dApproveCarryGraduationRequest\x12#\n" +
 	"\rgraduation_id\x18\x01 \x01(\x03R\fgraduationId\x12 \n" +
 	"\fmax_long_qty\x18\x02 \x01(\x01R\n" +
@@ -2930,7 +2930,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\rest_alloc_pct\x18\f \x01(\x01R\vestAllocPct\x12!\n" +
 	"\fsizing_notes\x18\r \x03(\tR\vsizingNotes\x12$\n" +
 	"\x0evenue_gap_keys\x18\x0e \x03(\tR\fvenueGapKeys\x12=\n" +
-	"\tleg_pools\x18\x0f \x03(\v2 .arb.dashboard.v1.GradLegPoolRowR\blegPools\x12$\n" +
+	"\tleg_pools\x18\x0f \x03(\v2 .nox.dashboard.v1.GradLegPoolRowR\blegPools\x12$\n" +
 	"\x0ealloc_base_usd\x18\x10 \x01(\x01R\fallocBaseUsd\x12\x1d\n" +
 	"\n" +
 	"risk_level\x18\x11 \x01(\tR\triskLevel\x12.\n" +
@@ -2965,7 +2965,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x10EVIDENCE_GRADE_A\x10\x01\x12\x14\n" +
 	"\x10EVIDENCE_GRADE_B\x10\x02\x12\x14\n" +
 	"\x10EVIDENCE_GRADE_C\x10\x03\x12\x14\n" +
-	"\x10EVIDENCE_GRADE_D\x10\x04B*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x10EVIDENCE_GRADE_D\x10\x04B*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_graduation_proto_rawDescOnce sync.Once
@@ -2982,54 +2982,54 @@ func file_dashboardv1_graduation_proto_rawDescGZIP() []byte {
 var file_dashboardv1_graduation_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_dashboardv1_graduation_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_dashboardv1_graduation_proto_goTypes = []any{
-	(EvidenceGrade)(0),                       // 0: arb.dashboard.v1.EvidenceGrade
-	(*CarryGraduationRow)(nil),               // 1: arb.dashboard.v1.CarryGraduationRow
-	(*GraduationRiskLeg)(nil),                // 2: arb.dashboard.v1.GraduationRiskLeg
-	(*GraduationRiskReport)(nil),             // 3: arb.dashboard.v1.GraduationRiskReport
-	(*FieldEvidence)(nil),                    // 4: arb.dashboard.v1.FieldEvidence
-	(*ListXAssetAllowCombosRequest)(nil),     // 5: arb.dashboard.v1.ListXAssetAllowCombosRequest
-	(*XAssetAllowComboRow)(nil),              // 6: arb.dashboard.v1.XAssetAllowComboRow
-	(*ListXAssetAllowCombosResponse)(nil),    // 7: arb.dashboard.v1.ListXAssetAllowCombosResponse
-	(*ListXAssetPendingEntriesRequest)(nil),  // 8: arb.dashboard.v1.ListXAssetPendingEntriesRequest
-	(*ListXAssetPendingEntriesResponse)(nil), // 9: arb.dashboard.v1.ListXAssetPendingEntriesResponse
-	(*XAssetPendingEntryRow)(nil),            // 10: arb.dashboard.v1.XAssetPendingEntryRow
-	(*UpsertXAssetAllowComboRequest)(nil),    // 11: arb.dashboard.v1.UpsertXAssetAllowComboRequest
-	(*UpsertXAssetAllowComboResponse)(nil),   // 12: arb.dashboard.v1.UpsertXAssetAllowComboResponse
-	(*ResumeXAssetComboRequest)(nil),         // 13: arb.dashboard.v1.ResumeXAssetComboRequest
-	(*ResumeXAssetComboResponse)(nil),        // 14: arb.dashboard.v1.ResumeXAssetComboResponse
-	(*PreviewXAssetComboRiskRequest)(nil),    // 15: arb.dashboard.v1.PreviewXAssetComboRiskRequest
-	(*PreviewXAssetComboRiskResponse)(nil),   // 16: arb.dashboard.v1.PreviewXAssetComboRiskResponse
-	(*VenueExposureCapRow)(nil),              // 17: arb.dashboard.v1.VenueExposureCapRow
-	(*ListVenueExposureCapsRequest)(nil),     // 18: arb.dashboard.v1.ListVenueExposureCapsRequest
-	(*ListVenueExposureCapsResponse)(nil),    // 19: arb.dashboard.v1.ListVenueExposureCapsResponse
-	(*SetVenueExposureCapRequest)(nil),       // 20: arb.dashboard.v1.SetVenueExposureCapRequest
-	(*SetVenueExposureCapResponse)(nil),      // 21: arb.dashboard.v1.SetVenueExposureCapResponse
-	(*ListCarryGraduationsRequest)(nil),      // 22: arb.dashboard.v1.ListCarryGraduationsRequest
-	(*ListCarryGraduationsResponse)(nil),     // 23: arb.dashboard.v1.ListCarryGraduationsResponse
-	(*ApproveCarryGraduationRequest)(nil),    // 24: arb.dashboard.v1.ApproveCarryGraduationRequest
-	(*ApproveCarryGraduationResponse)(nil),   // 25: arb.dashboard.v1.ApproveCarryGraduationResponse
-	(*GradLegPoolRow)(nil),                   // 26: arb.dashboard.v1.GradLegPoolRow
-	(*RejectCarryGraduationRequest)(nil),     // 27: arb.dashboard.v1.RejectCarryGraduationRequest
-	(*RejectCarryGraduationResponse)(nil),    // 28: arb.dashboard.v1.RejectCarryGraduationResponse
+	(EvidenceGrade)(0),                       // 0: nox.dashboard.v1.EvidenceGrade
+	(*CarryGraduationRow)(nil),               // 1: nox.dashboard.v1.CarryGraduationRow
+	(*GraduationRiskLeg)(nil),                // 2: nox.dashboard.v1.GraduationRiskLeg
+	(*GraduationRiskReport)(nil),             // 3: nox.dashboard.v1.GraduationRiskReport
+	(*FieldEvidence)(nil),                    // 4: nox.dashboard.v1.FieldEvidence
+	(*ListXAssetAllowCombosRequest)(nil),     // 5: nox.dashboard.v1.ListXAssetAllowCombosRequest
+	(*XAssetAllowComboRow)(nil),              // 6: nox.dashboard.v1.XAssetAllowComboRow
+	(*ListXAssetAllowCombosResponse)(nil),    // 7: nox.dashboard.v1.ListXAssetAllowCombosResponse
+	(*ListXAssetPendingEntriesRequest)(nil),  // 8: nox.dashboard.v1.ListXAssetPendingEntriesRequest
+	(*ListXAssetPendingEntriesResponse)(nil), // 9: nox.dashboard.v1.ListXAssetPendingEntriesResponse
+	(*XAssetPendingEntryRow)(nil),            // 10: nox.dashboard.v1.XAssetPendingEntryRow
+	(*UpsertXAssetAllowComboRequest)(nil),    // 11: nox.dashboard.v1.UpsertXAssetAllowComboRequest
+	(*UpsertXAssetAllowComboResponse)(nil),   // 12: nox.dashboard.v1.UpsertXAssetAllowComboResponse
+	(*ResumeXAssetComboRequest)(nil),         // 13: nox.dashboard.v1.ResumeXAssetComboRequest
+	(*ResumeXAssetComboResponse)(nil),        // 14: nox.dashboard.v1.ResumeXAssetComboResponse
+	(*PreviewXAssetComboRiskRequest)(nil),    // 15: nox.dashboard.v1.PreviewXAssetComboRiskRequest
+	(*PreviewXAssetComboRiskResponse)(nil),   // 16: nox.dashboard.v1.PreviewXAssetComboRiskResponse
+	(*VenueExposureCapRow)(nil),              // 17: nox.dashboard.v1.VenueExposureCapRow
+	(*ListVenueExposureCapsRequest)(nil),     // 18: nox.dashboard.v1.ListVenueExposureCapsRequest
+	(*ListVenueExposureCapsResponse)(nil),    // 19: nox.dashboard.v1.ListVenueExposureCapsResponse
+	(*SetVenueExposureCapRequest)(nil),       // 20: nox.dashboard.v1.SetVenueExposureCapRequest
+	(*SetVenueExposureCapResponse)(nil),      // 21: nox.dashboard.v1.SetVenueExposureCapResponse
+	(*ListCarryGraduationsRequest)(nil),      // 22: nox.dashboard.v1.ListCarryGraduationsRequest
+	(*ListCarryGraduationsResponse)(nil),     // 23: nox.dashboard.v1.ListCarryGraduationsResponse
+	(*ApproveCarryGraduationRequest)(nil),    // 24: nox.dashboard.v1.ApproveCarryGraduationRequest
+	(*ApproveCarryGraduationResponse)(nil),   // 25: nox.dashboard.v1.ApproveCarryGraduationResponse
+	(*GradLegPoolRow)(nil),                   // 26: nox.dashboard.v1.GradLegPoolRow
+	(*RejectCarryGraduationRequest)(nil),     // 27: nox.dashboard.v1.RejectCarryGraduationRequest
+	(*RejectCarryGraduationResponse)(nil),    // 28: nox.dashboard.v1.RejectCarryGraduationResponse
 	(*timestamppb.Timestamp)(nil),            // 29: google.protobuf.Timestamp
 }
 var file_dashboardv1_graduation_proto_depIdxs = []int32{
-	3,  // 0: arb.dashboard.v1.CarryGraduationRow.risk:type_name -> arb.dashboard.v1.GraduationRiskReport
-	2,  // 1: arb.dashboard.v1.GraduationRiskReport.legs:type_name -> arb.dashboard.v1.GraduationRiskLeg
-	4,  // 2: arb.dashboard.v1.GraduationRiskReport.field_grades:type_name -> arb.dashboard.v1.FieldEvidence
-	0,  // 3: arb.dashboard.v1.FieldEvidence.grade:type_name -> arb.dashboard.v1.EvidenceGrade
-	29, // 4: arb.dashboard.v1.XAssetAllowComboRow.pool_updated_at:type_name -> google.protobuf.Timestamp
-	29, // 5: arb.dashboard.v1.XAssetAllowComboRow.breaker_resume_at:type_name -> google.protobuf.Timestamp
-	6,  // 6: arb.dashboard.v1.ListXAssetAllowCombosResponse.rows:type_name -> arb.dashboard.v1.XAssetAllowComboRow
-	10, // 7: arb.dashboard.v1.ListXAssetPendingEntriesResponse.rows:type_name -> arb.dashboard.v1.XAssetPendingEntryRow
-	29, // 8: arb.dashboard.v1.XAssetPendingEntryRow.breaker_resume_at:type_name -> google.protobuf.Timestamp
-	3,  // 9: arb.dashboard.v1.PreviewXAssetComboRiskResponse.risk:type_name -> arb.dashboard.v1.GraduationRiskReport
-	29, // 10: arb.dashboard.v1.VenueExposureCapRow.updated_at:type_name -> google.protobuf.Timestamp
-	29, // 11: arb.dashboard.v1.VenueExposureCapRow.live_updated_at:type_name -> google.protobuf.Timestamp
-	17, // 12: arb.dashboard.v1.ListVenueExposureCapsResponse.rows:type_name -> arb.dashboard.v1.VenueExposureCapRow
-	1,  // 13: arb.dashboard.v1.ListCarryGraduationsResponse.rows:type_name -> arb.dashboard.v1.CarryGraduationRow
-	26, // 14: arb.dashboard.v1.ApproveCarryGraduationResponse.leg_pools:type_name -> arb.dashboard.v1.GradLegPoolRow
-	29, // 15: arb.dashboard.v1.GradLegPoolRow.updated_at:type_name -> google.protobuf.Timestamp
+	3,  // 0: nox.dashboard.v1.CarryGraduationRow.risk:type_name -> nox.dashboard.v1.GraduationRiskReport
+	2,  // 1: nox.dashboard.v1.GraduationRiskReport.legs:type_name -> nox.dashboard.v1.GraduationRiskLeg
+	4,  // 2: nox.dashboard.v1.GraduationRiskReport.field_grades:type_name -> nox.dashboard.v1.FieldEvidence
+	0,  // 3: nox.dashboard.v1.FieldEvidence.grade:type_name -> nox.dashboard.v1.EvidenceGrade
+	29, // 4: nox.dashboard.v1.XAssetAllowComboRow.pool_updated_at:type_name -> google.protobuf.Timestamp
+	29, // 5: nox.dashboard.v1.XAssetAllowComboRow.breaker_resume_at:type_name -> google.protobuf.Timestamp
+	6,  // 6: nox.dashboard.v1.ListXAssetAllowCombosResponse.rows:type_name -> nox.dashboard.v1.XAssetAllowComboRow
+	10, // 7: nox.dashboard.v1.ListXAssetPendingEntriesResponse.rows:type_name -> nox.dashboard.v1.XAssetPendingEntryRow
+	29, // 8: nox.dashboard.v1.XAssetPendingEntryRow.breaker_resume_at:type_name -> google.protobuf.Timestamp
+	3,  // 9: nox.dashboard.v1.PreviewXAssetComboRiskResponse.risk:type_name -> nox.dashboard.v1.GraduationRiskReport
+	29, // 10: nox.dashboard.v1.VenueExposureCapRow.updated_at:type_name -> google.protobuf.Timestamp
+	29, // 11: nox.dashboard.v1.VenueExposureCapRow.live_updated_at:type_name -> google.protobuf.Timestamp
+	17, // 12: nox.dashboard.v1.ListVenueExposureCapsResponse.rows:type_name -> nox.dashboard.v1.VenueExposureCapRow
+	1,  // 13: nox.dashboard.v1.ListCarryGraduationsResponse.rows:type_name -> nox.dashboard.v1.CarryGraduationRow
+	26, // 14: nox.dashboard.v1.ApproveCarryGraduationResponse.leg_pools:type_name -> nox.dashboard.v1.GradLegPoolRow
+	29, // 15: nox.dashboard.v1.GradLegPoolRow.updated_at:type_name -> google.protobuf.Timestamp
 	16, // [16:16] is the sub-list for method output_type
 	16, // [16:16] is the sub-list for method input_type
 	16, // [16:16] is the sub-list for extension type_name

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/venue"
+	"nox/internal/data/venue"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // TestD094_EventReductionAsOf 事件归约锚：帧 patch 两帧同仓（pnl 变化）→ Snapshot

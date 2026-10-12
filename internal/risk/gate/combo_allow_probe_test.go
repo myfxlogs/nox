@@ -4,7 +4,7 @@ package gate
 import (
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestComboAllowVerdict_ProbeNotCounted D-181 S2：probe 仓不计 MAX_ACTIVE_COMBOS。

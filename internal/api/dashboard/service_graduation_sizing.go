@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/keydomain"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 // allocSizing 资金分配折算结果（写库值+互算回显+审计注记单源产出）。
@@ -106,7 +106,7 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 	}
 	// 安全线闸口径不变——占小池净值比（equity 口径；与回显的可用基准比分轨）。
 	if equityPct := allocUSD / minPool; equityPct > cap {
-		return res, fmt.Sprintf("占小池净值 %.1f%% 超安全线（上限 %.0f%%，同待入场区档位判据 ARB_CROSS_NOTIONAL_EQUITY_CAP；逃生=显式上限模式）", equityPct*100, cap*100)
+		return res, fmt.Sprintf("占小池净值 %.1f%% 超安全线（上限 %.0f%%，同待入场区档位判据 NOX_CROSS_NOTIONAL_EQUITY_CAP；逃生=显式上限模式）", equityPct*100, cap*100)
 	}
 	// ④ perLot 折算（USDPerLotForLeg 复用；报价/CS/FX 缺 → fail-closed）
 	notional := allocUSD / 2 // L=1 最坏占用：两腿资金占用上界≈2×腿名义

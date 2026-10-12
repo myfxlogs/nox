@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
 )
 
 // FundingHedgeDetector 检测现货 vs 永续的 funding rate 套利（§5.2）。

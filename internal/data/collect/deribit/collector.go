@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // DefaultBaseURL Deribit public API。

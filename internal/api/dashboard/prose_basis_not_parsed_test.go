@@ -10,8 +10,8 @@ import (
 
 	"connectrpc.com/connect"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 // #20 假歧义实证回归：basis 散文含「段 XTZUSDT」（LLM 段落标签）但结构化

@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/analyst"
-	"arb/internal/review/kbreport"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/analyst"
+	"nox/internal/review/kbreport"
 
 	"connectrpc.com/connect"
 )

@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // mql5URL 隐藏 POST 端点（参数化仅为可测；生产传 mql5URL 常量）。

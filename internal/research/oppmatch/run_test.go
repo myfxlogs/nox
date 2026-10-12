@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 // TestD187_RunOnceRealStore：真测试库首扫——≥1 提案或缺口（票面验收同型），
 // 二轮幂等（缺口已 requested 零再推）。
 func TestD187_RunOnceRealStore(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	st, err := pgstore.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func TestD187_RunOnceRealStore(t *testing.T) {
 
 // TestD189_RunOnceProposalRows：提案实体化——稳定 id 告警+同模板不重开+过期并入扫描拍。
 func TestD189_RunOnceProposalRows(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	st, err := pgstore.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func TestD189_RunOnceProposalRows(t *testing.T) {
 
 // TestD193_Sentinel：venue 悬空自检+缺口自动收口/复开（真库扫描拍径）。
 func TestD193_Sentinel(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	st, err := pgstore.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -202,7 +202,7 @@ func TestD193_EvalCondTri(t *testing.T) {
 // TestD204_DormantTrack：休眠轨锚——dormant 约束行在账→扫描零新提案+存量 proposed 翻 deferred。
 // （迁移 0199 种子 covered_call@binance 休眠行随 boot 落库——真账口径锚。）
 func TestD204_DormantTrack(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	st, err := pgstore.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatal(err)

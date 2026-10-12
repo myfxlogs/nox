@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 
-	"arb/internal/data/adapter"
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
-	v1 "arb/internal/gen/dashboardv1"
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"nox/internal/data/adapter"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // AddBroker 验证并持久化账号，成功后动态启动适配器。

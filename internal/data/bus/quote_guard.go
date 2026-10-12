@@ -10,7 +10,7 @@ import (
 	"sort"
 	"sync"
 
-	"arb/internal/platform/safego"
+	"nox/internal/platform/safego"
 )
 
 // SymbolMappingStore quoteGuard 所需的 store 接口（避免直接依赖 pgstore）。

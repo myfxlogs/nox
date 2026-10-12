@@ -1,17 +1,17 @@
 package dashboard
 
 import (
-	"arb/internal/data/keydomain"
 	"errors"
 	"fmt"
 	"log"
 	"math"
+	"nox/internal/data/keydomain"
 	"strconv"
 	"strings"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // checkTradability F5 执行预检：MT 腿（venueKey 后缀 :mt5/:mt4）查 trade_mode，

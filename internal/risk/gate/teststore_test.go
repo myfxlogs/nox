@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 // testAccumStore 单测专用 store（复用 pgstore testStore 的 DSN 约定；
 // 原件随 accumulator_test 留 autotrade——gate 域测试同型复刻，D-212 拆搬）。
 func testAccumStore(t *testing.T) *pgstore.Store {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	s, err := pgstore.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)

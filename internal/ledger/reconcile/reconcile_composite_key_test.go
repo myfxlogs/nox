@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/venue"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/venue"
+	"nox/internal/store/pgstore"
 )
 
 // TestReconcileCompositeKey A6：两账户相同 ticket，复合 key 不串仓。

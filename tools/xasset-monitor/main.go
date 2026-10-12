@@ -16,21 +16,21 @@ import (
 	"os"
 	"strings"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/platform/httpx"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/platform/httpx"
+	"nox/internal/store/pgstore"
 )
 
 // configureHttpxProxy D-145：httpx.Client 代理 CA+token 注入——唯一权威=
-// app_config ARB_BINANCE_PROXY_CA + app_secrets ARB_BINANCE_PROXY_TOKEN（env 读径封死；
+// app_config NOX_BINANCE_PROXY_CA + app_secrets NOX_BINANCE_PROXY_TOKEN（env 读径封死；
 // 读败→空值注入降级运行，代理调用失败处自现错）。
 func configureHttpxProxy(ctx context.Context, st *pgstore.Store) {
 	var caPath, token string
 	if rows, err := st.LoadAppConfig(ctx); err == nil {
-		caPath = rows["ARB_BINANCE_PROXY_CA"]
+		caPath = rows["NOX_BINANCE_PROXY_CA"]
 	}
 	if secrets, err := st.LoadAppSecrets(ctx); err == nil {
-		token = secrets["ARB_BINANCE_PROXY_TOKEN"]
+		token = secrets["NOX_BINANCE_PROXY_TOKEN"]
 	}
 	httpx.Configure(caPath, token, nil)
 }
@@ -67,7 +67,7 @@ func run(ctx context.Context) (err error) {
 	defer func() { reportFatal(ctx, st, err) }()
 
 	// S5→D-144：监控簿三源派生（白名单∪universe 达标行∪active 纸面仓）×
-	// ticks 在流 MT 账户动态枚举——ARB_XASSET_EXNESS_VENUE env 删除（钉死单账户
+	// ticks 在流 MT 账户动态枚举——NOX_XASSET_EXNESS_VENUE env 删除（钉死单账户
 	// 致跨账户借用失真/新 broker 零覆盖，实证见 STATE D-144 行）。
 	combos, uni, demand, accts, equiv, err := loadDerivationInputs(ctx, st)
 	if err != nil {

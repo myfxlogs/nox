@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // d015OpenPos 构造 OPEN 仓 + 单 OPEN FILLED 腿（venue/symbol/side 可控）。

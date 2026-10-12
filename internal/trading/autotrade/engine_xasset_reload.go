@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log"
 
-	"arb/internal/trading/exec"
+	"nox/internal/trading/exec"
 )
 
 // xassetSpecs 白名单读侧：热重载指针优先；nil（零值 Engine 直构的测试路径）回退 cfg

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // checkTradeMode MT 腿 trade_mode 判定（D-004 P1#2）：判定时刻即时探针取值，

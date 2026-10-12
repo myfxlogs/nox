@@ -7,8 +7,8 @@
 package verification
 
 import (
-	"arb/internal/data/keydomain"
 	"math"
+	"nox/internal/data/keydomain"
 	"strings"
 )
 

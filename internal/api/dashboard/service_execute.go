@@ -7,11 +7,11 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/platform/safego"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/platform/safego"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"connectrpc.com/connect"
 )
@@ -205,7 +205,7 @@ func (s *Service) checkLiveGate(ctx context.Context, venueBuy, venueSell string)
 			return fmt.Sprintf("实盘开关检查：venue %s 实盘标记未知（null）", venueKey)
 		}
 		if *isReal {
-			return fmt.Sprintf("实盘交易开关关闭（ARB_LIVE_TRADE=false，venueKey=%s 为实盘账户）", venueKey)
+			return fmt.Sprintf("实盘交易开关关闭（NOX_LIVE_TRADE=false，venueKey=%s 为实盘账户）", venueKey)
 		}
 	}
 	return ""

@@ -5,8 +5,8 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // PGStore pgstore.Store 适配（NewCarryUniverseStore 装配）。

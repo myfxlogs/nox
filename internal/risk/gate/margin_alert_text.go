@@ -16,8 +16,8 @@ import (
 	"strconv"
 	"strings"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/platform/errclass"
+	"nox/internal/data/keydomain"
+	"nox/internal/platform/errclass"
 )
 
 // venueTypeCN 账户类型中文名（与前端 VENUE_TYPE_CN 同词表；DB CHECK 闭集防漂移）。

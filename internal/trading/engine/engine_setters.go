@@ -5,7 +5,7 @@ package engine
 import (
 	"context"
 
-	"arb/internal/research/detector"
+	"nox/internal/research/detector"
 )
 
 // SetAssetEquiv 注入标的等价类视图（D-300 裁 5 单实例共享）。
@@ -15,7 +15,7 @@ func (e *Engine) SetAssetEquiv(v AssetEquivView) {
 }
 
 // SetExcludeCanonicals 注入检测产出排除集合（D-072 资金提醒弹窗提示词 B1）。
-// 复用 ARB_AUTOTRADE_EXCLUDE_CANONICALS（执行层+检测层双用途，P3 单一真相）；nil/空 = 不排除。
+// 复用 NOX_AUTOTRADE_EXCLUDE_CANONICALS（执行层+检测层双用途，P3 单一真相）；nil/空 = 不排除。
 // main 在 config 加载后注入；命中 canonical 的机会不入库（从源头消除假机会）。
 func (e *Engine) SetExcludeCanonicals(set map[string]bool) {
 	e.excludeCanonicals = set

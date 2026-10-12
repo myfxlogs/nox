@@ -8,8 +8,8 @@ import (
 	"math"
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 func f64(v float64) *float64 { return &v }

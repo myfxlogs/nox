@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/trading/exec"
+	"nox/internal/trading/exec"
 )
 
 // 验收锚 A1/A3/A7/A8（A2/A4/A5/A6 在 exec 包）。

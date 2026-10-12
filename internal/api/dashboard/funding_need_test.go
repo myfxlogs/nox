@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // TestFundingNeedToProto 验证 FundingNeedNotice → proto 信封字段映射（D-072 case 10）。

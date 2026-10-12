@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // d340r2Quotes 双腿报价+CS stub（与 T3 同形）：buy XPTUSD@3001157 ask=4000 +

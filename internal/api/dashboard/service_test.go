@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // TestResolveLegs 验证 resolveLegs 从 qbus 取双腿 broker 原生符号（D-051 修②）：

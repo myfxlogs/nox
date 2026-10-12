@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // ParityInput computeAllParity 的入参（可测性，无 IO）。

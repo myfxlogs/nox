@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func (c *EarnCollector) okxSignPath(path string) func(*http.Request) {

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/ledger/reconcile"
-	"arb/internal/store/pgstore"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/store/pgstore"
 )
 
 // T1 判据纯函数：transferable>$500 且>avail×0.5→true；零边界全 false。

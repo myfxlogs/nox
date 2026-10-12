@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/ledger/reconcile"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/ledger/reconcile"
 )
 
 // fakeHealthStore 健康监控 fake store（D-104 P0 单测）。

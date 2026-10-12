@@ -10,9 +10,9 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 )
 
 // Store symdig 依赖面（pgstore.Store 实现；测试 fake）。
@@ -35,7 +35,7 @@ type Deps struct {
 	Now       func() time.Time
 	ReportDir string
 	InboxPath string
-	MaxTokens int // D-530：LLM 单轮输出上限；0=ARB_SYMDIG_MAX_TOKENS env，再缺省 8192
+	MaxTokens int // D-530：LLM 单轮输出上限；0=NOX_SYMDIG_MAX_TOKENS env，再缺省 8192
 }
 
 // analystRunner 复用 sysretro/kbreport 同形态 runner seam（analyst.RunWithSpecs）。

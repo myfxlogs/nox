@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestD209_ExecuteInternal_DormantReject 执行侧防御锚——XAU@okx 类休眠键命中→FAILED 带键；

@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 // fakeIncomeSink T1 用内存 sink：记录 InsertIncomeEvents 收到的行，匹配行为可注入。
@@ -131,7 +131,7 @@ func TestD334ab_BinanceIncome_CursorFromSink(t *testing.T) {
 // 且第二轮 inserted=0（ON CONFLICT (venue,account_id,tran_id) DO NOTHING）。
 // 红=摘 DO NOTHING → 第二轮唯一约束报错/重写。
 func TestD334ab_BinanceIncome_IdempotentDSN(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	st, err := pgstore.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)

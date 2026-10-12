@@ -7,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	"arb/migrations"
+	"nox/migrations"
 )
 
 func TestD338_LoadXAssetAllowCombos(t *testing.T) {

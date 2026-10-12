@@ -18,10 +18,10 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/infra/dephealth"
-	"arb/internal/platform/safego"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/infra/dephealth"
+	"nox/internal/platform/safego"
+	"nox/internal/store/pgstore"
 
 	"github.com/gorilla/websocket"
 )
@@ -74,7 +74,7 @@ type OKXPrivateWS struct {
 	hooks       OKXPrivateHooks
 	dialer      *websocket.Dialer
 	proxyHeader http.Header // 代理模式=X-Proxy-Token 握口头；直连=nil
-	wsURLs      []string    // 有序候选（cex-proxy 双端点 failover；[0]=主端，ARB_CEX_WS_BASE 置位→经 /okxws）
+	wsURLs      []string    // 有序候选（cex-proxy 双端点 failover；[0]=主端，NOX_CEX_WS_BASE 置位→经 /okxws）
 	now         func() time.Time
 	// ctValFor D-477 S3（GAP-B4）：okx 合约面值解析器注入——构造点经 resolveExchangeBaseURL
 	// 取与 executor 同一 baseURL 源（离线/代理拓扑下不再双源分叉）。nil=跳过换算保持张数+warn。

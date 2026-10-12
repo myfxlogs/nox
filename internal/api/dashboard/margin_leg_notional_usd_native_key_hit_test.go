@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // TestD481_MarginLegNotionalUSD_NativeKeyHit 错位场景（pos502 同构）：

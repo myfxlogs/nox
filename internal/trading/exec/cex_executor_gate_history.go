@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"arb/internal/platform/signutil"
+	"nox/internal/platform/signutil"
 )
 
 // GateTradeHistory CEX 成交历史兜底读口（gate 专属可选接口，D-577）。

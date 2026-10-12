@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"testing"
 
-	"arb/internal/risk/gate"
+	"nox/internal/risk/gate"
 )
 
 // 策略名用真实 CHECK 约束允许值（PERP_FUNDING 判杀 / SWAPARB 不杀）。

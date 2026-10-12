@@ -1,7 +1,7 @@
 // swap_diag_probe_test.go —— WP0 诊断探针（D-060 设计前置事实采集，跑完即弃或并入 G2 工具）。
 // 对全部 MT5 venue × 已映射符号 dump SymbolParams 原始值：TradeMode / SwapType / SwapLong /
 // SwapShort / Point / ContractSize，并按 mt_swap.go 现行归类标注采集器会怎么处理（emit/emit0/skip）。
-// 仅当 ARB_SWAP_PROBE=1 且 ARB_DEMO_PG_DSN 设置时运行，只读不下单。
+// 仅当 NOX_SWAP_PROBE=1 且 NOX_DEMO_PG_DSN 设置时运行，只读不下单。
 package dashboard
 
 import (
@@ -9,18 +9,18 @@ import (
 	"os"
 	"testing"
 
-	"arb/internal/data/adapter"
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/adapter"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
+	"nox/internal/store/pgstore"
 )
 
 func TestSwapDiagProbe(t *testing.T) {
-	if os.Getenv("ARB_SWAP_PROBE") != "1" {
-		t.Skip("ARB_SWAP_PROBE=1 才跑（只读 SymbolParams 诊断）")
+	if os.Getenv("NOX_SWAP_PROBE") != "1" {
+		t.Skip("NOX_SWAP_PROBE=1 才跑（只读 SymbolParams 诊断）")
 	}
-	dsn := os.Getenv("ARB_DEMO_PG_DSN")
+	dsn := os.Getenv("NOX_DEMO_PG_DSN")
 	if dsn == "" {
-		t.Skip("ARB_DEMO_PG_DSN 未设置")
+		t.Skip("NOX_DEMO_PG_DSN 未设置")
 	}
 
 	ctx := context.Background()

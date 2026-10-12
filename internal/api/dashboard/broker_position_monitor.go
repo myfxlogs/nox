@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/collect/exchange"
-	"arb/internal/data/keydomain"
-	"arb/internal/data/venue"
+	"nox/internal/data/bus"
+	"nox/internal/data/collect/exchange"
+	"nox/internal/data/keydomain"
+	"nox/internal/data/venue"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // venueState 单个 venue 的持仓视图状态（在线 + 持仓集 + 显示缓存）。

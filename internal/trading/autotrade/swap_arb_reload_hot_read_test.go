@@ -6,14 +6,14 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 func TestD515_SwapArbReloadHotRead(t *testing.T) {
 	ctx := context.Background()
-	st, err := pgstore.New(ctx, testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	st, err := pgstore.New(ctx, testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore new: %v", err)
 	}

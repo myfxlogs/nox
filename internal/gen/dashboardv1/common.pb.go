@@ -131,14 +131,14 @@ var File_dashboardv1_common_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_common_proto_rawDesc = "" +
 	"\n" +
-	"\x18dashboardv1/common.proto\x12\x10arb.dashboard.v1\":\n" +
+	"\x18dashboardv1/common.proto\x12\x10nox.dashboard.v1\":\n" +
 	"\n" +
 	"Pagination\x12\x14\n" +
 	"\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\x05R\x06offset\"0\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05errorB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x05error\x18\x02 \x01(\tR\x05errorB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_common_proto_rawDescOnce sync.Once
@@ -154,8 +154,8 @@ func file_dashboardv1_common_proto_rawDescGZIP() []byte {
 
 var file_dashboardv1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_dashboardv1_common_proto_goTypes = []any{
-	(*Pagination)(nil), // 0: arb.dashboard.v1.Pagination
-	(*Envelope)(nil),   // 1: arb.dashboard.v1.Envelope
+	(*Pagination)(nil), // 0: nox.dashboard.v1.Pagination
+	(*Envelope)(nil),   // 1: nox.dashboard.v1.Envelope
 }
 var file_dashboardv1_common_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type

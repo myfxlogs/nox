@@ -6,8 +6,8 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/ledger/settlement"
-	"arb/internal/store/pgstore"
+	"nox/internal/ledger/settlement"
+	"nox/internal/store/pgstore"
 )
 
 // settleDeps 把 pgstore.Store 适配为 settlement.Deps（复制 cmd/settleonce 桥接——

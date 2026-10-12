@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 func d539Pipeline(s *pgstore.Store, placed, mtClosed *int32, orders map[string][]OpenedOrder, drainAfter int) *Pipeline {

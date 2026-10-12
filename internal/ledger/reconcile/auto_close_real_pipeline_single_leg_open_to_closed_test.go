@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/venue"
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/data/venue"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // pipelineCloser 用真实 Pipeline 实现 Closer 接口（auto_close 端到端测试用）。
@@ -34,10 +34,10 @@ func (c *pipelineCloser) ClaimClose(ctx context.Context, posID int64) error {
 	return c.store.ClaimClose(ctx, posID)
 }
 
-// reconcileTestStore 连接 ARB_RECONCILE_TEST_PG_DSN 指定的专用测试库（未设置时跳过）。
+// reconcileTestStore 连接 NOX_RECONCILE_TEST_PG_DSN 指定的专用测试库（未设置时跳过）。
 func reconcileTestStore(t *testing.T) *pgstore.Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_RECONCILE_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_RECONCILE_TEST_PG_DSN")
 	ctx := context.Background()
 	s, err := pgstore.New(ctx, dsn)
 	if err != nil {

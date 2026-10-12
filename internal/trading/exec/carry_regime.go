@@ -7,12 +7,12 @@ package exec
 // 仅约束收入腿、支出腿豁免），窗口内任一样本破 floor 即拒，样本不足 fail-closed。
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"fmt"
+	"nox/internal/data/keydomain"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // FundingWindowQuerier funding 预测流窗口查询（pgstore.Store 实现，D-328 S1）。

@@ -6,8 +6,8 @@ package dashboard
 import (
 	"time"
 
-	"arb/internal/data/adapter"
-	"arb/internal/data/venue"
+	"nox/internal/data/adapter"
+	"nox/internal/data/venue"
 )
 
 // Set* 晚接目标（D-581）：接线方调用，Lock 写目标；adapter 持有 dispatch* 免时序。

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // xassetDormantSkip canonical×venue 粒度休眠判——键形 xasset_carry:XAU@okx（非 venue 对：

@@ -9,19 +9,19 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 func settleRefSetup(t *testing.T) (*Service, *pgstore.Store) {
 	t.Helper()
 	ctx := context.Background()
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	t.Cleanup(func() {
 		_, _ = st.Pool().Exec(ctx, `TRUNCATE facts, opportunities`)
 	})

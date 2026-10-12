@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/data/marketstate"
+	"nox/internal/data/keydomain"
+	"nox/internal/data/marketstate"
 )
 
 // classifyAge 按阈值分类三态。age<=0（无数据）→ crit（从未采集=异常）。

@@ -5,14 +5,14 @@
 package dashboard
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"log"
+	"nox/internal/data/keydomain"
 	"strings"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // zeroSettlementMinSpan 零检测最小跨度（48h=跨过 ≥1 个结算时刻，防新仓早写）。

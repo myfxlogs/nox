@@ -3,7 +3,7 @@
 // 覆盖域扩至上游验证域：派生源=enabled 白名单 ∪ active 纸面仓 ∪ fin_carry_universe
 // 达标行（cfd 结构 note=” net∈[8,300]，与 openCfdDiscovery 开仓域同口径）——授权域/
 // 发现域/在仓域三源并集，白名单缩编簿不塌（10-02→10-04 塌缩事故根修）。
-// mt_venue 集=ticks 在流 MT 账户动态枚举（ARB_XASSET_EXNESS_VENUE env 删除；各账户
+// mt_venue 集=ticks 在流 MT 账户动态枚举（NOX_XASSET_EXNESS_VENUE env 删除；各账户
 // 独立采样禁借用——XAUUSD 点差 3001157≈0.24 vs 15032313≈0.15-0.21 实锤失真）。
 // 派生键=消费端权威口径 scan.CfdBookSpecs/cfdPairCandidates 同源：
 // pair=cexCanonical+"-"+TrimSuffix(mtCanonical,"USD")，class 行经 asset_equiv 实解析。
@@ -11,9 +11,9 @@
 package main
 
 import (
-	"arb/internal/data/keydomain"
-	"arb/internal/research/scan"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/research/scan"
+	"nox/internal/store/pgstore"
 
 	"sort"
 	"strings"

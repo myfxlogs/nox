@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // failingDeps 包装 fakeDeps，让指定方法返回 error。

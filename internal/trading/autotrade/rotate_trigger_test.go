@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/api/dashboard"
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/api/dashboard"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 const (
@@ -340,7 +340,7 @@ func TestD406_RotateMissingCarry(t *testing.T) {
 	}
 }
 
-// TestD406_RotateConfigDefault env 三处同步回归：config 默认 ARB_ROTATE_MAX_PER_DAY=1。
+// TestD406_RotateConfigDefault env 三处同步回归：config 默认 NOX_ROTATE_MAX_PER_DAY=1。
 func TestD406_RotateConfigDefault(t *testing.T) {
 	// envInt 默认 1 的断言走 config 包测试惯例——此处锚 Engine 侧语义：
 	// maxPerDay≤0 = 不限（0 关闭日限）。

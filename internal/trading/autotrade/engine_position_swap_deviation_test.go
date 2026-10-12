@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // seedSwapDeviationPosition 构造 OPEN 持仓 + legs（带 price_actual）+ facts + swap snapshots。

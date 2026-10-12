@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/combo"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/combo"
+	"nox/internal/store/pgstore"
 )
 
 // TestBuildCooldownSet_WithinCooldown 冷却内 → ComboKey 入集（跳过）。

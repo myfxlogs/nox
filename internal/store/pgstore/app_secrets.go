@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/platform/cryptoutil"
+	"nox/internal/platform/cryptoutil"
 )
 
-// LoadAppSecrets 全表解密读出 KV。表非空且 ARB_MASTER_KEY 缺 → error（fail-closed）；
+// LoadAppSecrets 全表解密读出 KV。表非空且 NOX_MASTER_KEY 缺 → error（fail-closed）；
 // 单行解密失败 → error（错 key/篡改=配置不可用）。错误串只带 key 名不带值。
 func (s *Store) LoadAppSecrets(ctx context.Context) (map[string]string, error) {
 	rows, err := s.pool.Query(ctx, `SELECT key, value_enc FROM app_secrets`)
@@ -32,7 +32,7 @@ func (s *Store) LoadAppSecrets(ctx context.Context) (map[string]string, error) {
 			keyReady = true
 			if key == nil {
 				rows.Close()
-				return nil, fmt.Errorf("app_secrets non-empty but ARB_MASTER_KEY missing (fail-closed)")
+				return nil, fmt.Errorf("app_secrets non-empty but NOX_MASTER_KEY missing (fail-closed)")
 			}
 		}
 		v, err := cryptoutil.Open(key, enc)

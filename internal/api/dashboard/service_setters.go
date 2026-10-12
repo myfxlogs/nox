@@ -6,11 +6,11 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/keydomain"
-	"arb/internal/research/econ"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/data/keydomain"
+	"nox/internal/research/econ"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // SetBalanceLedger D-542：注入活账本（与 cex 私有流同实例；装配一次，nil 安全）。

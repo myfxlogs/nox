@@ -9,9 +9,9 @@ import (
 	"log"
 	"math"
 
-	"arb/internal/platform/combo"
-	"arb/internal/platform/usdnotional"
-	"arb/internal/trading/exec"
+	"nox/internal/platform/combo"
+	"nox/internal/platform/usdnotional"
+	"nox/internal/trading/exec"
 )
 
 // ExecuteMeanRevert D-070 均值回归直接执行（绕过 detector，autotrade engine 专用）。

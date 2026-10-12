@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // FullInventory 全币种盘点结果（usdt_equity=USDT 标 1:1 和；holdings 全币种带价）。

@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/trading/exec"
 )
 
 // setupMeanRevertService 构造 DSN-gated store（RUNNING）+ QuoteBus（AUDJPY 报价，USDJPY 可选）+ fake pipeline。

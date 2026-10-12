@@ -11,7 +11,7 @@
 > `https://cex.myfxlogs.org`（CF 隧道→代理机 loopback:8443，D-522 收编）；
 > 裸 IP:8443 已被代理机 iptables 对外 DROP（仅 lo 放行，9-27 加固）。
 > **客户端禁写裸 IP**——D-538 化石端点教训：写死 `192.229.85.35:8443` 的调用方（fossil-allow：引证化石本体）
-> 全线 EOF。TLS 由 CF 边缘终结走系统 CA 链，`ARB_BINANCE_PROXY_CA` pin 仅
+> 全线 EOF。TLS 由 CF 边缘终结走系统 CA 链，`NOX_BINANCE_PROXY_CA` pin 仅
 > 无 CF 裸连场景需要。
 
 ## 支持的 CEX
@@ -119,11 +119,11 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
 
 - `.env` 权威键（appConfig 白名单可管，**禁脚本/代码硬编码覆盖**——D-538 教训）：
   ```
-  ARB_BINANCE_PROXY_TOKEN=<代理令牌>
+  NOX_BINANCE_PROXY_TOKEN=<代理令牌>
   BINANCE_PROXY_URL=https://cex.myfxlogs.org
-  ARB_OKX_PROXY_URL=https://cex.myfxlogs.org
-  ARB_CEX_WS_BASE=wss://cex.myfxlogs.org     # okx/binance WS 代理基址（+_BACKUP 可选；gate 常态直连不走代理——VPS1 IP 被 gate 封禁，D-541 终局）
-  # ARB_BINANCE_PROXY_CA=/opt/arb/...       # 仅自签裸连场景需要；CF 域名走系统 CA
+  NOX_OKX_PROXY_URL=https://cex.myfxlogs.org
+  NOX_CEX_WS_BASE=wss://cex.myfxlogs.org     # okx/binance WS 代理基址（+_BACKUP 可选；gate 常态直连不走代理——VPS1 IP 被 gate 封禁，D-541 终局）
+  # NOX_BINANCE_PROXY_CA=/opt/arb/...       # 仅自签裸连场景需要；CF 域名走系统 CA
   ```
 - `exchange_configs.base_url` 同样只写域名（生产现值）：binance=
   `https://cex.myfxlogs.org/fapi` 与 `/api`；okx=`https://cex.myfxlogs.org`；
@@ -138,4 +138,4 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
 - 请求带各 CEX 的 API key 头；密钥 HMAC 永不离开 arb 侧。
 - WS 代理面：okx/binance 经本代理（握手一样过 `X-Proxy-Token` 闸——token 不泄往
   CEX 原生域，见 D-541 止血约束）；gate 9-28 终局改常态直连（VPS1 IP 被 gate 封禁），
-  `/gatespotws`·`/v4/ws` 路由保留备 ARB_GATE_WS_MODE=proxy 回切。
+  `/gatespotws`·`/v4/ws` 路由保留备 NOX_GATE_WS_MODE=proxy 回切。

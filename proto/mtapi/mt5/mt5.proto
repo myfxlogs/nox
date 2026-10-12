@@ -1,6 +1,6 @@
 syntax = "proto3";
 package mt5grpc;
-option go_package = "arb/internal/adapter/gen/mtapi/mt5;mt5";
+option go_package = "nox/internal/data/adapter/gen/mtapi/mt5;mt5";
 import "google/protobuf/timestamp.proto";
 
 service Connection {

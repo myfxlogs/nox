@@ -4,7 +4,7 @@
 package autotrade
 
 import (
-	"arb/internal/risk/gate"
+	"nox/internal/risk/gate"
 	"strings"
 	"sync"
 	"testing"

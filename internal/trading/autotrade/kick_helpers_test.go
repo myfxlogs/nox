@@ -6,8 +6,8 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/risk/gate"
+	"nox/internal/data/bus"
+	"nox/internal/risk/gate"
 )
 
 // newKickTestEngine 构造带 DB store 的 Engine（空表，scanAndClose/stateMachineTick 快速返回）。

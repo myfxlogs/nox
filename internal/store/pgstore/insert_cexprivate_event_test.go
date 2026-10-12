@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 // TestInsertCEXPrivateEvent_D450：审计表落行+字段回读（0136 migration 生效）。
 func TestInsertCEXPrivateEvent_D450(t *testing.T) {
-	s, err := New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatal(err)
 	}

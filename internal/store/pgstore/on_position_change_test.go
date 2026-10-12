@@ -6,11 +6,11 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 func TestD469b_OnPositionChange(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	s, err := New(ctx, dsn)
 	if err != nil {

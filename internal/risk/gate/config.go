@@ -6,8 +6,8 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/trading/exec"
 )
 
 // Config 自动交易引擎配置（D-070/D-072）。
@@ -51,14 +51,14 @@ type Config struct {
 	// Environment 执行环境固定值（'demo'/'live'）。开仓前校验 venue 的 is_real 与此值一致。
 	// 空 = 未配置（不检查，回退旧行为）。
 	Environment string
-	// LIVE 人工开关（ARB_LIVE_TRADE，默认 false）。
+	// LIVE 人工开关（NOX_LIVE_TRADE，默认 false）。
 	// is_real=true 账户 + LiveTrade=false → 拒绝开仓（Gate.Submit + 手动 RPC 同源）。
 	// is_real=false（demo）不受限制。切换=改 env+重启+审计日志（无 RPC）。
 	LiveTrade bool
 	// LiveGate 检查器（LIVE 模式导出门）。nil=LIVE 直接拒绝（fail-closed）。
 	LiveGateChecker *LiveGateChecker
 	// MtQuoteStaleMin D-029 ②：MT 报价新鲜度阈值（分钟）——周表说开市时动态闭市判定
-	//（龄 >N=闭）。≤0=未配置 fail-closed 判闭（无动态佐证不判开；部署须配 ARB_MT_QUOTE_STALE_MIN）。
+	//（龄 >N=闭）。≤0=未配置 fail-closed 判闭（无动态佐证不判开；部署须配 NOX_MT_QUOTE_STALE_MIN）。
 	MtQuoteStaleMin int
 
 	// MacroBlackoutMin/MacroBlackoutCurrencies D-053 ③：高影响财历事件执行禁区——
@@ -84,23 +84,23 @@ type Config struct {
 	Quotes *bus.QuoteBus
 
 	// §3.3/§4.2 swap/funding 退出参数
-	MinNetSwapBps         float64 // discoverSwapCombos 最低净 swap（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）
-	SwapArbExitBps        float64 // SWAPARB/CARRY 退出净 swap bps（ARB_SWAPARB_EXIT_NET_BPS，默认 0）
-	FundingExitPct        float64 // FUNDING_HEDGE/PERP_FUNDING 退出净年化（ARB_FUNDING_EXIT_NET_PCT，默认 0）
-	CarryMinNetAnnualized float64 // D-187：netSwap 年化 ≥ 此值 → strategy="CARRY"（ARB_CARRY_MIN_NET_ANNUALIZED，默认 4.0）
+	MinNetSwapBps         float64 // discoverSwapCombos 最低净 swap（NOX_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）
+	SwapArbExitBps        float64 // SWAPARB/CARRY 退出净 swap bps（NOX_SWAPARB_EXIT_NET_BPS，默认 0）
+	FundingExitPct        float64 // FUNDING_HEDGE/PERP_FUNDING 退出净年化（NOX_FUNDING_EXIT_NET_PCT，默认 0）
+	CarryMinNetAnnualized float64 // D-187：netSwap 年化 ≥ 此值 → strategy="CARRY"（NOX_CARRY_MIN_NET_ANNUALIZED，默认 4.0）
 	// PERP_FUNDING 平仓规则重构——持有下限 + 连续去抖
-	PerpFundMinHold      time.Duration // ARB_PERPFUNDING_MIN_HOLD 默认 8h；0=不限
-	PerpFundExitDebounce int           // ARB_PERPFUNDING_EXIT_DEBOUNCE 默认 3；0/1=单次即平
+	PerpFundMinHold      time.Duration // NOX_PERPFUNDING_MIN_HOLD 默认 8h；0=不限
+	PerpFundExitDebounce int           // NOX_PERPFUNDING_EXIT_DEBOUNCE 默认 3；0/1=单次即平
 
 	// 修复⑪B N6：入场成本容忍+陈旧度 env 化
-	EntrySpreadMinBps float64       // SWAPARB 入场 spreadBps 下限（ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS，默认 -3）
-	FreshnessTTL      time.Duration // 报价陈旧排除（复用 ARB_DETECTOR_FRESHNESS_TTL，默认 120s）
-	// 单腿 bid-ask spread 宽度上限（bps），>0 才校验，0=不校验（ARB_SWAPARB_MAX_LEG_SPREAD_BPS，默认 50）。
+	EntrySpreadMinBps float64       // SWAPARB 入场 spreadBps 下限（NOX_SWAPARB_ENTRY_SPREAD_MIN_BPS，默认 -3）
+	FreshnessTTL      time.Duration // 报价陈旧排除（复用 NOX_DETECTOR_FRESHNESS_TTL，默认 120s）
+	// 单腿 bid-ask spread 宽度上限（bps），>0 才校验，0=不校验（NOX_SWAPARB_MAX_LEG_SPREAD_BPS，默认 50）。
 	SwapArbMaxLegSpreadBps float64 // 任一腿 spread 过宽=流动性异常/报价不一致 → skip
 
 	// 入场价差/基差上限（bps），>0 才校验，0=不校验。
-	EntrySpreadMaxBps float64 // ARB_SWAPARB_ENTRY_SPREAD_MAX_BPS（默认 30）
-	EntryBasisMaxBps  float64 // ARB_SWAPARB_ENTRY_BASIS_MAX_BPS（默认 30）
+	EntrySpreadMaxBps float64 // NOX_SWAPARB_ENTRY_SPREAD_MAX_BPS（默认 30）
+	EntryBasisMaxBps  float64 // NOX_SWAPARB_ENTRY_BASIS_MAX_BPS（默认 30）
 
 	// 基差止损阈值（bps），PnL_bps < -BasisStopBps → 平仓（默认 4）。
 	BasisStopBps float64
@@ -113,11 +113,11 @@ type Config struct {
 	// 集中度上限（同 venue×symbol 活跃腿数 < 此值才放行；默认 2）。
 	MaxLegsPerSymbol int
 
-	// swap facts 新鲜度门禁（fail-closed，ARB_SWAP_FACT_MAX_AGE，默认 2h）。
+	// swap facts 新鲜度门禁（fail-closed，NOX_SWAP_FACT_MAX_AGE，默认 2h）。
 	// discoverSwapCombos 使用 lf/sf 前查 now−f.Ts > SwapFactMaxAge → 跳过该 fact + 计数日志。
 	SwapFactMaxAge time.Duration
 
-	// B：组合平仓后重入冷却（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，默认 7）
+	// B：组合平仓后重入冷却（NOX_SWAPARB_REENTRY_COOLDOWN_DAYS，默认 7）
 	ReentryCooldownDays int
 
 	// gate 止损重进冷却——同 ComboKey stop/manual 平仓后窗口内拒绝自动重进
@@ -152,7 +152,7 @@ type Config struct {
 
 	// D-032/D-030 风控硬线。
 	// RiskDD30USD：30d 滚动账本净额停机线（每笔 CLOSED 结算后 Σ net_realized_usd
-	// 含事故仓 ≤ 此值 → 自动 KillSwitch；装配自 ARB_RISK_DD30_USD 缺省 -300）。
+	// 含事故仓 ≤ 此值 → 自动 KillSwitch；装配自 NOX_RISK_DD30_USD 缺省 -300）。
 	RiskDD30USD float64
 	// RiskIncidentAckID：事故仓停新开 ack 游标 env/boot 兜底（DB 行权威，
 	// gate 直读 app_config 热生效）。
@@ -168,7 +168,7 @@ type Config struct {
 	// ProbeEvalDays probe 评估等待天数（calendar days，默认 3 ≈ 2 结算日）。
 	ProbeEvalDays int
 
-	// 轮转比较器日限（ARB_ROTATE_MAX_PER_DAY，默认 1；<=0=不启用日限——逃生阀）。
+	// 轮转比较器日限（NOX_ROTATE_MAX_PER_DAY，默认 1；<=0=不启用日限——逃生阀）。
 	RotateMaxPerDay int
 
 	// 组合保证金预算观察版告警（只告警不拦截）。

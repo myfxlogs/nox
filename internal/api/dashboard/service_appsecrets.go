@@ -12,18 +12,18 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	dashv1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/config"
-	"arb/internal/platform/cryptoutil"
-	"arb/internal/store/pgstore"
+	dashv1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/config"
+	"nox/internal/platform/cryptoutil"
+	"nox/internal/store/pgstore"
 )
 
 // hotSecretKeys 热更白名单 v1（D-545 §3）：Get 热读消费点已改造=即改即效；
 // 其余密钥可管但 hot=false「重启生效」（构造期绑死键，不伪造热更）。
-// D-095：ARB_AUTH_TOKEN 消费点（auth.Interceptor）已改 resolver 热读 → 入列。
+// D-095：NOX_AUTH_TOKEN 消费点（auth.Interceptor）已改 resolver 热读 → 入列。
 var hotSecretKeys = map[string]bool{
 	"TRONGRID_API_KEY": true,
-	"ARB_AUTH_TOKEN":   true,
+	"NOX_AUTH_TOKEN":   true,
 }
 
 // SetSecretResolver 注入热读缓存（nil=未装配：List 仍可用，Update 仅写库不 panic）。
@@ -88,7 +88,7 @@ func (s *Service) UpdateAppSecret(ctx context.Context, req *connect.Request[dash
 	} else {
 		mk, ok := cryptoutil.MasterKey()
 		if !ok || mk == nil {
-			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("主密钥 ARB_MASTER_KEY 未配置，无法写密钥"))
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("主密钥 NOX_MASTER_KEY 未配置，无法写密钥"))
 		}
 		enc, err := cryptoutil.Seal(mk, val)
 		if err != nil {

@@ -1,6 +1,6 @@
 // service_probe_approve.go —— D-048②：LLM 探针提案审批 RPC。
 // ApproveProbe：proposed→approved（CAS）→ 以提案契约调 D-047 OpenProbe（同一守卫链，
-// 含 ARB_PROBE_RPC_ENABLED——审批面不复制不削弱任何守卫）→ 成→running+关联仓，
+// 含 NOX_PROBE_RPC_ENABLED——审批面不复制不削弱任何守卫）→ 成→running+关联仓，
 // OpenProbe 拒（FAILED/err）→ 回 proposed + warn 告警。
 // RejectProbe：proposed→rejected（CAS，理由落 gate_note）；绝不动仓绝不下单。
 // 恰好一次：approve CAS 只有一并发者成功→OpenProbe 只调一次；重复 approve（状态已迁）
@@ -14,9 +14,9 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"

@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // SubscribeOrderProfit 覆盖（D-099）：返回 OK（subsOPErr 时返回 err），计数供断言。

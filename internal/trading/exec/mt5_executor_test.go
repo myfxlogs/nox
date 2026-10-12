@@ -3,7 +3,7 @@ package exec
 import (
 	"testing"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // TestMT5CloseOrder_CloseLotsPreferred 验证 OrderClose 返回 Lots=0（全平后剩余）+ CloseLots=0.05 时，

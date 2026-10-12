@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // A12③④：contract_info 帧（update+all 同路）→ onContractInfo 逐合约回调；

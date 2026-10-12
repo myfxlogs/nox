@@ -4,8 +4,8 @@ package reconcile
 import (
 	"strings"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
-	"arb/internal/data/keydomain"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
+	"nox/internal/data/keydomain"
 )
 
 // accountSummaryToInfo 从 MT5 AccountSummary 映射账户视图（D-053）。

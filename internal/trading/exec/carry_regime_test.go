@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // mkRows 构造升序采样点（时间间隔 5min，ts 以 base 起步）。

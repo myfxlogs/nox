@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // paperIntervalQuerier 行窗判定所需窄读面（PaperStore/PaperWindowStore 同签名满足）。

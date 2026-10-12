@@ -14,7 +14,7 @@ import (
 type Store struct {
 	pool        *pgxpool.Pool
 	alertPaused bool // D-069：暂停全部告警写入（demo 阶段避免刷屏）
-	// 同键去重窗（0=缺省 30min；env ARB_ALERT_DEDUP_WINDOW 装配层解析注入——D-412 F4 形态）。
+	// 同键去重窗（0=缺省 30min；env NOX_ALERT_DEDUP_WINDOW 装配层解析注入——D-412 F4 形态）。
 	alertDedupWindow time.Duration
 	// 告警写入后回调（main.go 注入 alertTopic.Publish 触发实时推送）。
 	// nil = 未接线（测试直接构造 Store）→ 不回调，InsertAlert 仍正常写 DB。

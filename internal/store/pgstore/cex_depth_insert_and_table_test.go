@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/migrations"
+	"nox/migrations"
 )
 
 func TestD420_CexDepth_InsertAndTable(t *testing.T) {

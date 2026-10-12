@@ -2,7 +2,7 @@
 // OpenProbe：守卫链（任一不过→拒并落 alerts warn）→ bm.PlaceOrder 开单腿 →
 // positions(type='PROBE')+position_legs 落账。
 // 守卫序：输入形参 → venue 白名单 → 控制面（KillSwitch/mode）→ 事故闸 →
-// 报价+名义（≤ ARB_PROBE_MAX_NOTIONAL）→ 在途 ≤2 → 权益纪律。全 fail-closed。
+// 报价+名义（≤ NOX_PROBE_MAX_NOTIONAL）→ 在途 ≤2 → 权益纪律。全 fail-closed。
 // ExpireDueProbes：posMon 唤醒入口（定时器仅唤醒不携数据，决策查 DB 实时态）。
 package dashboard
 
@@ -13,11 +13,11 @@ import (
 	"regexp"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/platform/notional"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/platform/notional"
+	"nox/internal/store/pgstore"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -111,7 +111,7 @@ func (s *Service) OpenProbe(ctx context.Context, req *connect.Request[v1.OpenPro
 	cfg := s.acv.running
 	// 守卫⓪（R1② 第一道）：探针 RPC 总开关（acv 热读 running 视图；缺省 false）。
 	if !cfg.ProbeRPCEnabled {
-		return s.probeReject(ctx, r, "探针通道未启用（ARB_PROBE_RPC_ENABLED=false）")
+		return s.probeReject(ctx, r, "探针通道未启用（NOX_PROBE_RPC_ENABLED=false）")
 	}
 
 	// 守卫①：venue 须在 autotrade_allow_rules 启用集（kind='venue'，simulated=env demo）。
@@ -133,7 +133,7 @@ func (s *Service) OpenProbe(ctx context.Context, req *connect.Request[v1.OpenPro
 
 	// 守卫③：事故闸（D-032：∃ id>ack 游标事故仓 → 拒开；与 gate_incident 同谓词）。
 	ackID := int64(cfg.RiskIncidentAckID)
-	if v, ok, aerr := s.store.AppConfigInt64(ctx, "ARB_RISK_INCIDENT_ACK_ID"); aerr != nil {
+	if v, ok, aerr := s.store.AppConfigInt64(ctx, "NOX_RISK_INCIDENT_ACK_ID"); aerr != nil {
 		return s.probeReject(ctx, r, fmt.Sprintf("incident ack 读取失败: %v", aerr))
 	} else if ok {
 		ackID = v
@@ -176,7 +176,7 @@ func (s *Service) OpenProbe(ctx context.Context, req *connect.Request[v1.OpenPro
 	}
 	notionalUSD := notional.LegUSD(r.GetQty(), cs, q.Mid(), fx)
 
-	// 守卫⑤：名义 ≤ ARB_PROBE_MAX_NOTIONAL（app_config 链，缺省 1000）。
+	// 守卫⑤：名义 ≤ NOX_PROBE_MAX_NOTIONAL（app_config 链，缺省 1000）。
 	if maxN := cfg.ProbeMaxNotionalUSD; maxN > 0 && notionalUSD > maxN {
 		return s.probeReject(ctx, r, fmt.Sprintf("名义 $%.2f > 上限 $%.2f", notionalUSD, maxN))
 	}

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // setupAutotradeStateStore 构造真库 store + autotrade_state 种子（state 可空=TRUNCATE）。

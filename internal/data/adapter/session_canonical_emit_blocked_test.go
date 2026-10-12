@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // d083SessionDays 7 日周表夹具：周一全天窗（0-1440）、周二 08:00-10:00（服务器本地）。

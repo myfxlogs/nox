@@ -2324,7 +2324,7 @@ var File_dashboardv1_ops_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_ops_proto_rawDesc = "" +
 	"\n" +
-	"\x15dashboardv1/ops.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"x\n" +
+	"\x15dashboardv1/ops.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"x\n" +
 	"\x1bExecuteSpotCarryDemoRequest\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x16\n" +
 	"\x06symbol\x18\x02 \x01(\tR\x06symbol\x12\x12\n" +
@@ -2342,7 +2342,7 @@ const file_dashboardv1_ops_proto_rawDesc = "" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x19\n" +
 	"\bpaper_id\x18\x03 \x01(\x03R\apaperId\x126\n" +
-	"\x04legs\x18\x04 \x03(\v2\".arb.dashboard.v1.SpotCarryDemoLegR\x04legs\x12\x1d\n" +
+	"\x04legs\x18\x04 \x03(\v2\".nox.dashboard.v1.SpotCarryDemoLegR\x04legs\x12\x1d\n" +
 	"\n" +
 	"spot_price\x18\x05 \x01(\x01R\tspotPrice\x12\x1d\n" +
 	"\n" +
@@ -2362,7 +2362,7 @@ const file_dashboardv1_ops_proto_rawDesc = "" +
 	" \x01(\tR\x04note\"\x1a\n" +
 	"\x18ListSpotCarryDemoRequest\"S\n" +
 	"\x19ListSpotCarryDemoResponse\x126\n" +
-	"\x04rows\x18\x01 \x03(\v2\".arb.dashboard.v1.SpotCarryDemoRowR\x04rows\"\x1b\n" +
+	"\x04rows\x18\x01 \x03(\v2\".nox.dashboard.v1.SpotCarryDemoRowR\x04rows\"\x1b\n" +
 	"\x19ListPaperSpotCarryRequest\"\xc8\a\n" +
 	"\x11PaperSpotCarryRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x14\n" +
@@ -2414,8 +2414,8 @@ const file_dashboardv1_ops_proto_rawDesc = "" +
 	"\ravg_exit_days\x18\b \x01(\x01R\vavgExitDays\x120\n" +
 	"\x14notional_holding_usd\x18\t \x01(\x01R\x12notionalHoldingUsd\"\x92\x01\n" +
 	"\x1aListPaperSpotCarryResponse\x127\n" +
-	"\x04rows\x18\x01 \x03(\v2#.arb.dashboard.v1.PaperSpotCarryRowR\x04rows\x12;\n" +
-	"\x06tracks\x18\x02 \x03(\v2#.arb.dashboard.v1.PaperTrackSummaryR\x06tracks\"\x85\x03\n" +
+	"\x04rows\x18\x01 \x03(\v2#.nox.dashboard.v1.PaperSpotCarryRowR\x04rows\x12;\n" +
+	"\x06tracks\x18\x02 \x03(\v2#.nox.dashboard.v1.PaperTrackSummaryR\x06tracks\"\x85\x03\n" +
 	"\x15AutotradeAllowRuleRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x14\n" +
@@ -2434,7 +2434,7 @@ const file_dashboardv1_ops_proto_rawDesc = "" +
 	"\tacct_mode\x18\r \x01(\tR\bacctMode\" \n" +
 	"\x1eListAutotradeAllowRulesRequest\"`\n" +
 	"\x1fListAutotradeAllowRulesResponse\x12=\n" +
-	"\x05rules\x18\x01 \x03(\v2'.arb.dashboard.v1.AutotradeAllowRuleRowR\x05rules\"c\n" +
+	"\x05rules\x18\x01 \x03(\v2'.nox.dashboard.v1.AutotradeAllowRuleRowR\x05rules\"c\n" +
 	"#SetAutotradeAllowRuleEnabledRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\x12\x12\n" +
@@ -2479,7 +2479,7 @@ const file_dashboardv1_ops_proto_rawDesc = "" +
 	"\vbalance_ccy\x18\v \x01(\tR\n" +
 	"balanceCcy\"\xc7\x02\n" +
 	"\x1aGetCapitalCoverageResponse\x128\n" +
-	"\x04rows\x18\x01 \x03(\v2$.arb.dashboard.v1.CapitalCoverageRowR\x04rows\x12\x1b\n" +
+	"\x04rows\x18\x01 \x03(\v2$.nox.dashboard.v1.CapitalCoverageRowR\x04rows\x12\x1b\n" +
 	"\ttotal_usd\x18\x02 \x01(\x01R\btotalUsd\x12%\n" +
 	"\x0eproductive_usd\x18\x03 \x01(\x01R\rproductiveUsd\x12!\n" +
 	"\fcoverage_pct\x18\x04 \x01(\x01R\vcoveragePct\x12!\n" +
@@ -2502,12 +2502,12 @@ const file_dashboardv1_ops_proto_rawDesc = "" +
 	"\x04note\x18\b \x01(\tR\x04note\"\xa6\x01\n" +
 	"\x0eCapitalMapTier\x12\x12\n" +
 	"\x04tier\x18\x01 \x01(\tR\x04tier\x126\n" +
-	"\x05nodes\x18\x02 \x03(\v2 .arb.dashboard.v1.CapitalMapNodeR\x05nodes\x12\x17\n" +
+	"\x05nodes\x18\x02 \x03(\v2 .nox.dashboard.v1.CapitalMapNodeR\x05nodes\x12\x17\n" +
 	"\ahas_usd\x18\x03 \x01(\bR\x06hasUsd\x12\x1b\n" +
 	"\ttotal_usd\x18\x04 \x01(\x01R\btotalUsd\x12\x12\n" +
 	"\x04note\x18\x05 \x01(\tR\x04note\"\xb1\x01\n" +
 	"\x15GetCapitalMapResponse\x126\n" +
-	"\x05tiers\x18\x01 \x03(\v2 .arb.dashboard.v1.CapitalMapTierR\x05tiers\x12!\n" +
+	"\x05tiers\x18\x01 \x03(\v2 .nox.dashboard.v1.CapitalMapTierR\x05tiers\x12!\n" +
 	"\fgenerated_at\x18\x02 \x01(\tR\vgeneratedAt\x12!\n" +
 	"\fcaliber_note\x18\x03 \x01(\tR\vcaliberNote\x12\x1a\n" +
 	"\bdegraded\x18\x04 \x01(\bR\bdegraded\"\x16\n" +
@@ -2535,10 +2535,10 @@ const file_dashboardv1_ops_proto_rawDesc = "" +
 	"\vusdt_equity\x18\x05 \x01(\x01R\n" +
 	"usdtEquity\x12#\n" +
 	"\rinventory_usd\x18\x06 \x01(\x01R\finventoryUsd\x12?\n" +
-	"\bholdings\x18\a \x03(\v2#.arb.dashboard.v1.CexFinanceHoldingR\bholdings\x126\n" +
-	"\x05flows\x18\b \x03(\v2 .arb.dashboard.v1.CexFinanceFlowR\x05flows\"X\n" +
+	"\bholdings\x18\a \x03(\v2#.nox.dashboard.v1.CexFinanceHoldingR\bholdings\x126\n" +
+	"\x05flows\x18\b \x03(\v2 .nox.dashboard.v1.CexFinanceFlowR\x05flows\"X\n" +
 	"\x15GetCexFinanceResponse\x12?\n" +
-	"\baccounts\x18\x01 \x03(\v2#.arb.dashboard.v1.CexAccountFinanceR\baccountsB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\baccounts\x18\x01 \x03(\v2#.nox.dashboard.v1.CexAccountFinanceR\baccountsB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_ops_proto_rawDescOnce sync.Once
@@ -2554,52 +2554,52 @@ func file_dashboardv1_ops_proto_rawDescGZIP() []byte {
 
 var file_dashboardv1_ops_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_dashboardv1_ops_proto_goTypes = []any{
-	(*ExecuteSpotCarryDemoRequest)(nil),          // 0: arb.dashboard.v1.ExecuteSpotCarryDemoRequest
-	(*SpotCarryDemoLeg)(nil),                     // 1: arb.dashboard.v1.SpotCarryDemoLeg
-	(*ExecuteSpotCarryDemoResponse)(nil),         // 2: arb.dashboard.v1.ExecuteSpotCarryDemoResponse
-	(*SpotCarryDemoRow)(nil),                     // 3: arb.dashboard.v1.SpotCarryDemoRow
-	(*ListSpotCarryDemoRequest)(nil),             // 4: arb.dashboard.v1.ListSpotCarryDemoRequest
-	(*ListSpotCarryDemoResponse)(nil),            // 5: arb.dashboard.v1.ListSpotCarryDemoResponse
-	(*ListPaperSpotCarryRequest)(nil),            // 6: arb.dashboard.v1.ListPaperSpotCarryRequest
-	(*PaperSpotCarryRow)(nil),                    // 7: arb.dashboard.v1.PaperSpotCarryRow
-	(*PaperTrackSummary)(nil),                    // 8: arb.dashboard.v1.PaperTrackSummary
-	(*ListPaperSpotCarryResponse)(nil),           // 9: arb.dashboard.v1.ListPaperSpotCarryResponse
-	(*AutotradeAllowRuleRow)(nil),                // 10: arb.dashboard.v1.AutotradeAllowRuleRow
-	(*ListAutotradeAllowRulesRequest)(nil),       // 11: arb.dashboard.v1.ListAutotradeAllowRulesRequest
-	(*ListAutotradeAllowRulesResponse)(nil),      // 12: arb.dashboard.v1.ListAutotradeAllowRulesResponse
-	(*SetAutotradeAllowRuleEnabledRequest)(nil),  // 13: arb.dashboard.v1.SetAutotradeAllowRuleEnabledRequest
-	(*SetAutotradeAllowRuleEnabledResponse)(nil), // 14: arb.dashboard.v1.SetAutotradeAllowRuleEnabledResponse
-	(*AddAutotradeAllowRuleRequest)(nil),         // 15: arb.dashboard.v1.AddAutotradeAllowRuleRequest
-	(*AddAutotradeAllowRuleResponse)(nil),        // 16: arb.dashboard.v1.AddAutotradeAllowRuleResponse
-	(*DeleteAutotradeAllowRuleRequest)(nil),      // 17: arb.dashboard.v1.DeleteAutotradeAllowRuleRequest
-	(*DeleteAutotradeAllowRuleResponse)(nil),     // 18: arb.dashboard.v1.DeleteAutotradeAllowRuleResponse
-	(*GetCapitalCoverageRequest)(nil),            // 19: arb.dashboard.v1.GetCapitalCoverageRequest
-	(*CapitalCoverageRow)(nil),                   // 20: arb.dashboard.v1.CapitalCoverageRow
-	(*GetCapitalCoverageResponse)(nil),           // 21: arb.dashboard.v1.GetCapitalCoverageResponse
-	(*GetCapitalMapRequest)(nil),                 // 22: arb.dashboard.v1.GetCapitalMapRequest
-	(*CapitalMapNode)(nil),                       // 23: arb.dashboard.v1.CapitalMapNode
-	(*CapitalMapTier)(nil),                       // 24: arb.dashboard.v1.CapitalMapTier
-	(*GetCapitalMapResponse)(nil),                // 25: arb.dashboard.v1.GetCapitalMapResponse
-	(*GetCexFinanceRequest)(nil),                 // 26: arb.dashboard.v1.GetCexFinanceRequest
-	(*CexFinanceHolding)(nil),                    // 27: arb.dashboard.v1.CexFinanceHolding
-	(*CexFinanceFlow)(nil),                       // 28: arb.dashboard.v1.CexFinanceFlow
-	(*CexAccountFinance)(nil),                    // 29: arb.dashboard.v1.CexAccountFinance
-	(*GetCexFinanceResponse)(nil),                // 30: arb.dashboard.v1.GetCexFinanceResponse
+	(*ExecuteSpotCarryDemoRequest)(nil),          // 0: nox.dashboard.v1.ExecuteSpotCarryDemoRequest
+	(*SpotCarryDemoLeg)(nil),                     // 1: nox.dashboard.v1.SpotCarryDemoLeg
+	(*ExecuteSpotCarryDemoResponse)(nil),         // 2: nox.dashboard.v1.ExecuteSpotCarryDemoResponse
+	(*SpotCarryDemoRow)(nil),                     // 3: nox.dashboard.v1.SpotCarryDemoRow
+	(*ListSpotCarryDemoRequest)(nil),             // 4: nox.dashboard.v1.ListSpotCarryDemoRequest
+	(*ListSpotCarryDemoResponse)(nil),            // 5: nox.dashboard.v1.ListSpotCarryDemoResponse
+	(*ListPaperSpotCarryRequest)(nil),            // 6: nox.dashboard.v1.ListPaperSpotCarryRequest
+	(*PaperSpotCarryRow)(nil),                    // 7: nox.dashboard.v1.PaperSpotCarryRow
+	(*PaperTrackSummary)(nil),                    // 8: nox.dashboard.v1.PaperTrackSummary
+	(*ListPaperSpotCarryResponse)(nil),           // 9: nox.dashboard.v1.ListPaperSpotCarryResponse
+	(*AutotradeAllowRuleRow)(nil),                // 10: nox.dashboard.v1.AutotradeAllowRuleRow
+	(*ListAutotradeAllowRulesRequest)(nil),       // 11: nox.dashboard.v1.ListAutotradeAllowRulesRequest
+	(*ListAutotradeAllowRulesResponse)(nil),      // 12: nox.dashboard.v1.ListAutotradeAllowRulesResponse
+	(*SetAutotradeAllowRuleEnabledRequest)(nil),  // 13: nox.dashboard.v1.SetAutotradeAllowRuleEnabledRequest
+	(*SetAutotradeAllowRuleEnabledResponse)(nil), // 14: nox.dashboard.v1.SetAutotradeAllowRuleEnabledResponse
+	(*AddAutotradeAllowRuleRequest)(nil),         // 15: nox.dashboard.v1.AddAutotradeAllowRuleRequest
+	(*AddAutotradeAllowRuleResponse)(nil),        // 16: nox.dashboard.v1.AddAutotradeAllowRuleResponse
+	(*DeleteAutotradeAllowRuleRequest)(nil),      // 17: nox.dashboard.v1.DeleteAutotradeAllowRuleRequest
+	(*DeleteAutotradeAllowRuleResponse)(nil),     // 18: nox.dashboard.v1.DeleteAutotradeAllowRuleResponse
+	(*GetCapitalCoverageRequest)(nil),            // 19: nox.dashboard.v1.GetCapitalCoverageRequest
+	(*CapitalCoverageRow)(nil),                   // 20: nox.dashboard.v1.CapitalCoverageRow
+	(*GetCapitalCoverageResponse)(nil),           // 21: nox.dashboard.v1.GetCapitalCoverageResponse
+	(*GetCapitalMapRequest)(nil),                 // 22: nox.dashboard.v1.GetCapitalMapRequest
+	(*CapitalMapNode)(nil),                       // 23: nox.dashboard.v1.CapitalMapNode
+	(*CapitalMapTier)(nil),                       // 24: nox.dashboard.v1.CapitalMapTier
+	(*GetCapitalMapResponse)(nil),                // 25: nox.dashboard.v1.GetCapitalMapResponse
+	(*GetCexFinanceRequest)(nil),                 // 26: nox.dashboard.v1.GetCexFinanceRequest
+	(*CexFinanceHolding)(nil),                    // 27: nox.dashboard.v1.CexFinanceHolding
+	(*CexFinanceFlow)(nil),                       // 28: nox.dashboard.v1.CexFinanceFlow
+	(*CexAccountFinance)(nil),                    // 29: nox.dashboard.v1.CexAccountFinance
+	(*GetCexFinanceResponse)(nil),                // 30: nox.dashboard.v1.GetCexFinanceResponse
 	(*timestamppb.Timestamp)(nil),                // 31: google.protobuf.Timestamp
 }
 var file_dashboardv1_ops_proto_depIdxs = []int32{
-	1,  // 0: arb.dashboard.v1.ExecuteSpotCarryDemoResponse.legs:type_name -> arb.dashboard.v1.SpotCarryDemoLeg
-	3,  // 1: arb.dashboard.v1.ListSpotCarryDemoResponse.rows:type_name -> arb.dashboard.v1.SpotCarryDemoRow
-	7,  // 2: arb.dashboard.v1.ListPaperSpotCarryResponse.rows:type_name -> arb.dashboard.v1.PaperSpotCarryRow
-	8,  // 3: arb.dashboard.v1.ListPaperSpotCarryResponse.tracks:type_name -> arb.dashboard.v1.PaperTrackSummary
-	31, // 4: arb.dashboard.v1.AutotradeAllowRuleRow.acct_updated_at:type_name -> google.protobuf.Timestamp
-	10, // 5: arb.dashboard.v1.ListAutotradeAllowRulesResponse.rules:type_name -> arb.dashboard.v1.AutotradeAllowRuleRow
-	20, // 6: arb.dashboard.v1.GetCapitalCoverageResponse.rows:type_name -> arb.dashboard.v1.CapitalCoverageRow
-	23, // 7: arb.dashboard.v1.CapitalMapTier.nodes:type_name -> arb.dashboard.v1.CapitalMapNode
-	24, // 8: arb.dashboard.v1.GetCapitalMapResponse.tiers:type_name -> arb.dashboard.v1.CapitalMapTier
-	27, // 9: arb.dashboard.v1.CexAccountFinance.holdings:type_name -> arb.dashboard.v1.CexFinanceHolding
-	28, // 10: arb.dashboard.v1.CexAccountFinance.flows:type_name -> arb.dashboard.v1.CexFinanceFlow
-	29, // 11: arb.dashboard.v1.GetCexFinanceResponse.accounts:type_name -> arb.dashboard.v1.CexAccountFinance
+	1,  // 0: nox.dashboard.v1.ExecuteSpotCarryDemoResponse.legs:type_name -> nox.dashboard.v1.SpotCarryDemoLeg
+	3,  // 1: nox.dashboard.v1.ListSpotCarryDemoResponse.rows:type_name -> nox.dashboard.v1.SpotCarryDemoRow
+	7,  // 2: nox.dashboard.v1.ListPaperSpotCarryResponse.rows:type_name -> nox.dashboard.v1.PaperSpotCarryRow
+	8,  // 3: nox.dashboard.v1.ListPaperSpotCarryResponse.tracks:type_name -> nox.dashboard.v1.PaperTrackSummary
+	31, // 4: nox.dashboard.v1.AutotradeAllowRuleRow.acct_updated_at:type_name -> google.protobuf.Timestamp
+	10, // 5: nox.dashboard.v1.ListAutotradeAllowRulesResponse.rules:type_name -> nox.dashboard.v1.AutotradeAllowRuleRow
+	20, // 6: nox.dashboard.v1.GetCapitalCoverageResponse.rows:type_name -> nox.dashboard.v1.CapitalCoverageRow
+	23, // 7: nox.dashboard.v1.CapitalMapTier.nodes:type_name -> nox.dashboard.v1.CapitalMapNode
+	24, // 8: nox.dashboard.v1.GetCapitalMapResponse.tiers:type_name -> nox.dashboard.v1.CapitalMapTier
+	27, // 9: nox.dashboard.v1.CexAccountFinance.holdings:type_name -> nox.dashboard.v1.CexFinanceHolding
+	28, // 10: nox.dashboard.v1.CexAccountFinance.flows:type_name -> nox.dashboard.v1.CexFinanceFlow
+	29, // 11: nox.dashboard.v1.GetCexFinanceResponse.accounts:type_name -> nox.dashboard.v1.CexAccountFinance
 	12, // [12:12] is the sub-list for method output_type
 	12, // [12:12] is the sub-list for method input_type
 	12, // [12:12] is the sub-list for extension type_name

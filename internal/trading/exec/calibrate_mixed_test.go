@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 // TestD422_CalibrateMixed 混合仓（MT FILLED + CEX FILLED）：
@@ -155,7 +155,7 @@ func TestD422_CloseCashflowFeeMerge(t *testing.T) {
 
 // TestD422_OpenLegFeeCashflow OPEN 腿 fee>0 → 同点写 kind=commission −feeUSD 现金流（入场费入账）。
 func TestD422_OpenLegFeeCashflow(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_EXEC_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_EXEC_TEST_PG_DSN")
 	s := testStore(t)
 	conn := seedConn(t, dsn)
 	ctx := context.Background()
@@ -188,7 +188,7 @@ func TestD422_OpenLegFeeCashflow(t *testing.T) {
 // TestD422_R1_OpenCloseFeeCoexist R1 锚：同日同腿 OPEN 费（tag="open"）与 CLOSE 佣金
 // （tag=""）双落不互吞；各自重试幂等不双计；quality='actual'（D-425 实采值）。
 func TestD422_R1_OpenCloseFeeCoexist(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_EXEC_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_EXEC_TEST_PG_DSN")
 	s := testStore(t)
 	conn := seedConn(t, dsn)
 	ctx := context.Background()

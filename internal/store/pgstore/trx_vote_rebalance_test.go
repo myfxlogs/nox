@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// trxVoteRebalanceTestStore 连接 ARB_TEST_PG_DSN 测试库，TRUNCATE fin_trx_vote_rebalance 隔离数据。
+// trxVoteRebalanceTestStore 连接 NOX_TEST_PG_DSN 测试库，TRUNCATE fin_trx_vote_rebalance 隔离数据。
 func trxVoteRebalanceTestStore(t *testing.T) *Store {
 	t.Helper()
 	s := sharedTestStore(t)

@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"arb/internal/platform/usdnotional"
+	"nox/internal/platform/usdnotional"
 )
 
 // USDPerLotForLeg 返回指定腿（canonical + venueKey + price side）1 手的 USD 名义额。
@@ -117,7 +117,7 @@ func (s *Service) SwapMinNotionalUSD(canonical, venueLong, venueShort string) (f
 }
 
 // SwapArbNotional 从 broker 余额推导 swap 套利名义额（D-072 §3.3，业主不限额决策；S6 加 ratio 系数；D-097 R2 sizing 口径）。
-// notional = min(equityLong, equityShort) × ratio（ratio = ARB_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）；
+// notional = min(equityLong, equityShort) × ratio（ratio = NOX_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）；
 // 不限额=无绝对上限；ratio=单组合资金使用率，保留抗单余地（单腿裸露承受力）。
 // ratio=0（未接线测试）等价 ratio=1 旧行为；ratio=1 等价旧行为（100% 资金使用率）。
 // D-097 R2：第三条 fail-closed 改 sizing 口径——minEq×ratio < minNotional → skip（缩放后名义至少够 1 个最小手）。

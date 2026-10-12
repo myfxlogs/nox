@@ -1,7 +1,7 @@
 package dashboard
 
 import (
-	"arb/internal/data/venue"
+	"nox/internal/data/venue"
 	"sync"
 	"sync/atomic"
 	"testing"

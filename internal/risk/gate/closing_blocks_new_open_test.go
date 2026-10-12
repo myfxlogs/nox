@@ -2,7 +2,7 @@
 // #505 gate 腿 13:36 起裸露（仓 CLOSING）→ 14:58 #506 应被拒而非照常开仓。
 // R1 修订：venue 降级集合撤离开仓判定（集合留 reconciler 观测——残腿清零后
 // 陈旧降级标记若进闸 = 永久误拦）；闸只认 CLOSING∪LEGGED 实存。
-// 需要 test-pg2 DSN（ARB_TEST_PG_DSN）。
+// 需要 test-pg2 DSN（NOX_TEST_PG_DSN）。
 package gate
 
 import (

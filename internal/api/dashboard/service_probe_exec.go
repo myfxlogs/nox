@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/keydomain"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/data/keydomain"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"

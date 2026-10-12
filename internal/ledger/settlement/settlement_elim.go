@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log"
 
-	"arb/internal/review/mmm"
-	"arb/internal/store/pgstore"
+	"nox/internal/review/mmm"
+	"nox/internal/store/pgstore"
 )
 
 // runElimination 淘汰检查（D-261 S5 从 SettleAt 拆出；R4 复原被裁的决策理由四行）。
@@ -68,10 +68,10 @@ func runElimination(ctx context.Context, deps Deps, p *pgstore.Position, elim El
 }
 
 // elimEvidenceSuffix D-180 S①：判死 reason 追加 B.12 证据字段（与 autotrade 同式）。
-// Zσ 走 app_config ARB_ELIM_ZSIGMA 热读（默认 2）；Deps 不实现/读败回落默认。
+// Zσ 走 app_config NOX_ELIM_ZSIGMA 热读（默认 2）；Deps 不实现/读败回落默认。
 func elimEvidenceSuffix(ctx context.Context, deps Deps, total int, winRate float64) string {
 	z := 2.0
-	if v, ok, err := deps.AppConfigFloat(ctx, "ARB_ELIM_ZSIGMA"); err == nil && ok && v > 0 {
+	if v, ok, err := deps.AppConfigFloat(ctx, "NOX_ELIM_ZSIGMA"); err == nil && ok && v > 0 {
 		z = v
 	}
 	return mmm.ElimEvidence(total, winRate, 0.30, z)

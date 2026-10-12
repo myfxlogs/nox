@@ -9,7 +9,7 @@ package dashboard
 import (
 	"context"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // symMarginSpec venue 原生符号保证金规格（SymbolParams 派生，reconcile 时点缓存）。

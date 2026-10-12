@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/platform/safego"
+	"nox/internal/data/fact"
+	"nox/internal/platform/safego"
 )
 
 // Sink 接收轮询产出，写入存储层。

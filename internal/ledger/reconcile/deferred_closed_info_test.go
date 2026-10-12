@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // deferFake 实现 leggedDeferralStore（reconcile.Store 之外可选面）。

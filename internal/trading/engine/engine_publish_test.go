@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/research/detector"
-	"arb/internal/research/evaluator"
-	"arb/internal/store/pgstore"
+	"nox/internal/research/detector"
+	"nox/internal/research/evaluator"
+	"nox/internal/store/pgstore"
 )
 
 func pubTestEngine(store *fakeOppStore) *Engine {

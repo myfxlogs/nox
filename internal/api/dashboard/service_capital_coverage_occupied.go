@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"strings"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/portfolio/capitalview"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/portfolio/capitalview"
 )
 
 // venueOcc D-127：账户占用聚合（占用=venue 净值中真被保证金占用的子集，USDT/USD 同视账户口径）。

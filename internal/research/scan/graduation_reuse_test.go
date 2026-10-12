@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestD555S3_GraduationReuse S3：双CEX（long_spot_short_perp）纸面行走**同一**

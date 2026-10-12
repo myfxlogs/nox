@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // fakeFlattenExecutor 按 side 返回 FILLED 或 FAILED（模拟一腿成交一腿拒单）。

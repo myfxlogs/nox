@@ -4,8 +4,8 @@
 package dashboard
 
 import (
-	"arb/internal/data/venue"
 	"context"
+	"nox/internal/data/venue"
 	"testing"
 	"time"
 )

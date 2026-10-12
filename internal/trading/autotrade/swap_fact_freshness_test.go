@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/risk/gate"
+	"nox/internal/data/fact"
+	"nox/internal/risk/gate"
 )
 
 // TestDiscoverSwapCombos_FreshnessGate_FreshPass D-104 P0：新鲜 facts 通过门禁。

@@ -15,9 +15,9 @@ import (
 	"sort"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/platform/httpx"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/platform/httpx"
+	"nox/internal/store/pgstore"
 )
 
 // kline binance fapi /fapi/v1/klines 行（5m）。

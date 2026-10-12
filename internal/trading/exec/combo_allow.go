@@ -19,7 +19,7 @@ type ComboAllowSpec struct {
 	MaxGrossExposureUSD float64
 }
 
-// ParseComboAllow 解析 ARB_SWAPARB_ALLOW_COMBOS（分号分隔记录，
+// ParseComboAllow 解析 NOX_SWAPARB_ALLOW_COMBOS（分号分隔记录，
 // 每条 `canonical|venueLong|venueShort|maxLongQty|maxShortQty|maxGrossExposureUSD`）。
 // 空字符串 → 返回 nil（RUNNING 下 fail-closed，由 gate 层判定）。
 // 解析失败的条目跳过（不阻断其他条目）。
@@ -103,7 +103,7 @@ type XAssetComboAllowSpec struct {
 	MarginUSD     *float64 // D-010：组合保证金总预算（双腿占用和；与 NotionalUSD 互斥）
 }
 
-// ParseXAssetComboAllow 解析 ARB_XASSET_ALLOW_COMBOS（分号分隔记录，每条
+// ParseXAssetComboAllow 解析 NOX_XASSET_ALLOW_COMBOS（分号分隔记录，每条
 // `canonicalBuy|canonicalSell|venueBuy|venueSell|maxLongQty|maxShortQty|maxGrossUSD`，七段）。
 // 空字符串 → 返回 nil（XASSET_CARRY 全拒——零信任显式白名单语义，调用方无条件检查）。
 // 解析失败的条目跳过（不阻断其他条目）。

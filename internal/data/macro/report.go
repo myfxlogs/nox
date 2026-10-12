@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // bjLoc 北京时区（渲染与调度共用；tzdata 缺失回退 FixedZone+8）。

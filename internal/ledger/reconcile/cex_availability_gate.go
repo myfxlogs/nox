@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"arb/internal/platform/signutil"
+	"nox/internal/platform/signutil"
 )
 
 // === Gate ===

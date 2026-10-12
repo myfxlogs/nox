@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// TestParseComboAllow D-159 W1a R1：解析 ARB_SWAPARB_ALLOW_COMBOS。
+// TestParseComboAllow D-159 W1a R1：解析 NOX_SWAPARB_ALLOW_COMBOS。
 func TestParseComboAllow(t *testing.T) {
 	tests := []struct {
 		name string

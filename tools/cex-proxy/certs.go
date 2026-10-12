@@ -36,7 +36,7 @@ func ensureCerts(sans string) (certFile, keyFile string, err error) {
 	}
 	caTpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(time.Now().UnixNano()),
-		Subject:               pkix.Name{CommonName: "arb cex-proxy CA"},
+		Subject:               pkix.Name{CommonName: "nox cex-proxy CA"},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
@@ -58,7 +58,7 @@ func ensureCerts(sans string) (certFile, keyFile string, err error) {
 	}
 	leafTpl := &x509.Certificate{
 		SerialNumber: big.NewInt(time.Now().UnixNano() + 1),
-		Subject:      pkix.Name{CommonName: "arb cex-proxy"},
+		Subject:      pkix.Name{CommonName: "nox cex-proxy"},
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(10 * 365 * 24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature,

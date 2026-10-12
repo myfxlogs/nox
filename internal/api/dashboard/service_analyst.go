@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )

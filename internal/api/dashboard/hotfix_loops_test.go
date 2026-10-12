@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // hotfixExchStore 可变配置 fake（querier 缓存测试：改配置触发重建）。

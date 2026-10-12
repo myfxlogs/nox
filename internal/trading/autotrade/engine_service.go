@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/portfolio/capitalview"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/portfolio/capitalview"
+	"nox/internal/store/pgstore"
 )
 
 // engineService D-508 S7b：autotrade 对 dashboard.Service 的窄接口解绑——

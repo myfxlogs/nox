@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/data/normalize"
+	"nox/internal/data/normalize"
 )
 
 // 单测：UpsertSymbolMappingCSOnly 仅填 NULL + 覆盖率四态。
-// 需 ARB_TEST_PG_DSN，未设置时 skip。
+// 需 NOX_TEST_PG_DSN，未设置时 skip。
 
 // 用例①：upsert 仅填 NULL 行（已有非 NULL CS 不覆盖）
 func TestUpsertCSOnlyFillsNull(t *testing.T) {

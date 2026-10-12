@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // fakeDemoPaperStore demoPaperStore 三方法 fake（insertErr/promoteErr 驱动分支）。

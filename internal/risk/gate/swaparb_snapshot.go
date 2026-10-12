@@ -5,7 +5,7 @@ package gate
 import (
 	"sync/atomic"
 
-	"arb/internal/trading/exec"
+	"nox/internal/trading/exec"
 )
 
 // SwapArbComboSnapshot allow/deny 双轨快照（指针整体替换）。

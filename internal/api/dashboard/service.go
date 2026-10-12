@@ -7,15 +7,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/platform/config"
-	"arb/internal/portfolio/capitalview"
-	"arb/internal/research/econ"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/platform/config"
+	"nox/internal/portfolio/capitalview"
+	"nox/internal/research/econ"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // Service 实现 DashboardServiceHandler 接口。
@@ -71,17 +71,17 @@ type Service struct {
 	settler Settler
 	// freshTTL 报价陈旧 TTL（复用 config.DetectorFreshnessTTL，G3）——个人持仓快照展示路径拒绝陈旧帧。
 	freshTTL time.Duration
-	// liqMMR 理论强平维持保证金率（config.ARB_LIQ_MMR，缺省 0.005）——个人持仓强平价理论值计算用。
+	// liqMMR 理论强平维持保证金率（config.NOX_LIQ_MMR，缺省 0.005）——个人持仓强平价理论值计算用。
 	liqMMR float64
-	// fundingDropRatio 资金费急降预警比例（config.ARB_FUNDING_DROP_RATIO，缺省 0.5）——§11 翻负/急降预警用。
+	// fundingDropRatio 资金费急降预警比例（config.NOX_FUNDING_DROP_RATIO，缺省 0.5）——§11 翻负/急降预警用。
 	fundingDropRatio float64
-	// swapArbEquityUseRatio swap 套利名义额资金使用率系数（config.ARB_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）——S6 抗单余地。
+	// swapArbEquityUseRatio swap 套利名义额资金使用率系数（config.NOX_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）——S6 抗单余地。
 	// notional = min(equity) × ratio；ratio=1 等价旧行为。0 = 未接线（测试，等价 ratio=1 旧行为）。
 	swapArbEquityUseRatio float64
-	// swapArbBareCap swap 套利单腿裸露上限系数（config.ARB_SWAPARB_BARE_CAP，缺省 1.0）——D-097 R2。
+	// swapArbBareCap swap 套利单腿裸露上限系数（config.NOX_SWAPARB_BARE_CAP，缺省 1.0）——D-097 R2。
 	// notional 若 > minEq×BareCap 则 cap 到 minEq×BareCap（只 cap 不 skip）。0 或负=不 cap（等价旧行为）。
 	swapArbBareCap float64
-	// swapArbVenueExposureCap 单 venue SWAPARB 合计裸露上限系数（config.ARB_SWAPARB_VENUE_EXPOSURE_CAP，缺省 2.0）——D-132 T1。
+	// swapArbVenueExposureCap 单 venue SWAPARB 合计裸露上限系数（config.NOX_SWAPARB_VENUE_EXPOSURE_CAP，缺省 2.0）——D-132 T1。
 	// 新开仓时若任一腿 venue 现有 SWAPARB 活仓合计名义 + 新仓名义 > venue equity × cap → skip。0 = 不启用。
 	swapArbVenueExposureCap float64
 	// oppTopic 新机会推送广播（D-050）：engine 新插入发布 → StreamUpdates 扇出 case 2。nil = 未接线（测试直接构造 Service）。
@@ -254,7 +254,7 @@ type Service struct {
 	econEntryFn func(ctx context.Context, venueBuy, venueSell, canonBuy, canonSell string, legNotionalUSD float64) (float64, bool)
 	// D-249 S3：scheduler kick 注入（on-open 触发采集补轮；nil=未接线→handler no-op）。
 	kickFn func(string)
-	// D-258 S3：TRX 能量租金率 floor 告警阈值（ARB_TRX_ENERGY_RATE_FLOOR_PCT，默认 8.0；0=禁用）。
+	// D-258 S3：TRX 能量租金率 floor 告警阈值（NOX_TRX_ENERGY_RATE_FLOOR_PCT，默认 8.0；0=禁用）。
 	trxFloorPct float64
 	// D-348：财务总览聚合 15s TTL 缓存（整体响应缓存，无失效钩子；同 D-331 语义）。
 	financeMu       sync.Mutex

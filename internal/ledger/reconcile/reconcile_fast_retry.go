@@ -13,8 +13,8 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // fastRetryInterval 密集重试 tick（~30s；窗口内每 tick 扫一轮 CLOSING）。

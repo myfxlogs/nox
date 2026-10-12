@@ -4,8 +4,8 @@ import (
 	"context"
 	"log"
 
-	"arb/internal/data/adapter"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/adapter"
+	"nox/internal/store/pgstore"
 )
 
 // unitSensitiveSet D-594：单位敏感 canonical 集——DB 派生（任一标定行 scale≠1）

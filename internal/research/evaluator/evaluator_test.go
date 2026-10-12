@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/research/detector"
+	"nox/internal/research/detector"
 )
 
 func baseCfg() Config {

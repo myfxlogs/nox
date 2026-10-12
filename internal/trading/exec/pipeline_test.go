@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // revalidateBus 构造含双腿报价（同一 canonical）的 QuoteBus。

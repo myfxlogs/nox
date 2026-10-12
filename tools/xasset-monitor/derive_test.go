@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 // d552RealCombos 真仓 xasset_allow_combos enabled 行投影（2026-09-28 生产实拉，
@@ -110,7 +110,7 @@ func TestD552_RealFiveRowsDerive(t *testing.T) {
 // loadDerivationInputs 必须回读 venue_key_* 生成列（D-496 键域权威口径）——
 // SELECT 裸列 venue_buy/sell 的历史形态在此直接红（返 "3001157"/"gate"）。
 func TestD552_LoadDerivationInputsDeliversKeyedColumns(t *testing.T) {
-	s, err := pgstore.New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := pgstore.New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}

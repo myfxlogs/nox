@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // d325Count 按 kind+symbol 计数（countFacts 只按 kind，双发断言需细分 symbol）。

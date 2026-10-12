@@ -7,10 +7,10 @@ import (
 	"context"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // prefetchTripleSwapDays D-118：从活跃持仓的 OPEN legs 提取 venue 列表，批量查 facts 表 triple_swap_day。

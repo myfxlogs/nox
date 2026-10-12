@@ -22,10 +22,10 @@ import (
 	"log"
 	"time"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
-	"arb/internal/data/collect"
-	"arb/internal/data/fact"
-	"arb/internal/data/keydomain"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
+	"nox/internal/data/collect"
+	"nox/internal/data/fact"
+	"nox/internal/data/keydomain"
 )
 
 // marginFirstRetryBackoff 首采失败递增重试退避序列（3 次封顶，成功后停）。

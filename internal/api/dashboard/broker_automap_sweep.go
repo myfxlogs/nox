@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // autoMapSweepInterval 目录重识别周期（D-148）：商目录漂移/alias 表长进/归一规则修复

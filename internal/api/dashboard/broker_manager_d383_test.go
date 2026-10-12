@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 )
 
 func d383BMStore(t *testing.T) *pgstore.Store {
 	t.Helper()
-	st := storetest.SharedStore(t, "ARB_TEST_PG_SERVICE_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
 	if _, err := st.Pool().Exec(context.Background(),
 		`TRUNCATE broker_symbol_map`); err != nil {
 		t.Fatalf("TRUNCATE broker_symbol_map: %v", err)

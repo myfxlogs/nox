@@ -4,7 +4,7 @@ package detector
 import (
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 func stale(q bus.Quote, now time.Time, ttl time.Duration) bool {

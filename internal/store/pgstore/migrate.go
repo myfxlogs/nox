@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"arb/migrations"
 	"github.com/jackc/pgx/v5"
+	"nox/migrations"
 )
 
 // migrationFiles 按版本号顺序执行；新增版本在此追加。
@@ -171,7 +171,7 @@ var migrationFiles = []struct {
 	{170, migrations.BrokerSwapFreeSQL, false},                // D-014 S1：broker_accounts.swap_free 旗标列 + taker_fee_bps（R1：169 撞号改 170）
 	{171, migrations.MakerFeeEnableSQL, false},                // D-018 后段：exchange_configs.maker_fee_bps + app_config maker 启用键
 	{172, migrations.IncidentExitKindCleanupSQL, false},       // D-032 R1：清零成交 FAILED 误打的 legged_unwind
-	{173, migrations.PaperWindowStartSQL, false},              // D-033①：app_config 播种 ARB_PAPER_WINDOW_START
+	{173, migrations.PaperWindowStartSQL, false},              // D-033①：app_config 播种 NOX_PAPER_WINDOW_START
 	{174, migrations.DropOpportunitiesTickSQL, false},         // D-040②：opportunities_tick 死表 DROP（零引用，已备份）
 	{175, migrations.ProbePositionsSQL, false},                // D-047①：positions +decision_ref/auto_close_at（PROBE 单腿探针）
 	{176, migrations.ProbeLLMLoopSQL, false},                  // D-048①②：explorer_proposals 探针提案契约+审批流转列
@@ -202,6 +202,7 @@ var migrationFiles = []struct {
 	{188, migrations.OppTemplateSQL, false},                   // D-185：机会模板册（fin_opp_template+cond）
 	{1000, migrations.BaselineSQL, true},                      // D-214：生产 schema 压平基线（marker，见上方注释）
 	{1001, migrations.EmployeeDeptElevenSQL, false},           // D-220：dept 十一部化
+	{1002, migrations.EnvKeysNoxSQL, false},                   // D-230：app_config/app_secrets 键名 ARB_→NOX_
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

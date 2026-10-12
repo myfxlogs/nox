@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // comboAllowGate D-159 W1a R1 精确组合门禁（SWAPARB/CARRY 共用）。D-479 S1 自 gate.go

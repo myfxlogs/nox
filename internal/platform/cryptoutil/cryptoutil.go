@@ -1,5 +1,5 @@
 // Package cryptoutil D-515 §2：AES-256-GCM 密钥封解（nonce‖ct 拼接）。
-// key=env ARB_MASTER_KEY 任意长度口令 → SHA-256 归一 32B；nonce 每密文随机。
+// key=env NOX_MASTER_KEY 任意长度口令 → SHA-256 归一 32B；nonce 每密文随机。
 // 先例：架构设计 §2.10（enc 列形态）；轮换协议=docs/runbook-秘密轮换.md（D-514 T5）。
 package cryptoutil
 
@@ -12,10 +12,10 @@ import (
 	"os"
 )
 
-// MasterKey ARB_MASTER_KEY 归一化 32B key（空 env → nil,false——fail-closed 由调用方判）。
+// MasterKey NOX_MASTER_KEY 归一化 32B key（空 env → nil,false——fail-closed 由调用方判）。
 // 引导件：app_secrets 解密钥放 PG=钥匙锁柜——必须留 env。
 func MasterKey() ([]byte, bool) {
-	k := os.Getenv("ARB_MASTER_KEY")
+	k := os.Getenv("NOX_MASTER_KEY")
 	if k == "" {
 		return nil, false
 	}

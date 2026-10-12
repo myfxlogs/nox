@@ -23,7 +23,7 @@ func stage2Checks(ctx context.Context, d Deps, since time.Time, now time.Time) [
 	if err != nil {
 		row1 = StageCheck{Label: "近 30 天真金账本", OK: false, Data: "查询失败:" + err.Error()}
 	}
-	ack, _, aerr := d.Store.AppConfigInt64(ctx, "ARB_RISK_INCIDENT_ACK_ID")
+	ack, _, aerr := d.Store.AppConfigInt64(ctx, "NOX_RISK_INCIDENT_ACK_ID")
 	blocked, berr := int64(0), error(nil)
 	if aerr == nil {
 		blocked, berr = d.Store.IncidentBlockerID(ctx, ack)
@@ -38,7 +38,7 @@ func stage2Checks(ctx context.Context, d Deps, since time.Time, now time.Time) [
 		row2.Data = fmt.Sprintf("已确认到 #%d｜待确认 %d 仓", ack, blocked)
 	}
 	makerOn := false
-	if v, ok, merr := d.Store.AppConfigString(ctx, "ARB_MAKER_TIMEOUT"); merr == nil && ok {
+	if v, ok, merr := d.Store.AppConfigString(ctx, "NOX_MAKER_TIMEOUT"); merr == nil && ok {
 		if dv, derr := time.ParseDuration(v); derr == nil {
 			makerOn = dv > 0
 		}

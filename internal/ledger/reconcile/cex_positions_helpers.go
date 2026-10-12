@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/platform/signutil"
+	"nox/internal/platform/signutil"
 )
 
 // gateQuantoMultiplier D-121：查 Gate 合约规格 quanto_multiplier（每张合约代表的基础币数量）。

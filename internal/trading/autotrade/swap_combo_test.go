@@ -3,7 +3,7 @@ package autotrade
 import (
 	"testing"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // TestSwapComboVenueKey_MT4Src fact.Src=mt4 → venueKey 拼 :mt4（D-077 修复⑪B N2）。

@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 func TestD245_LogCloseTrigger_EngineEntry(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	st, err := pgstore.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("pgstore: %v", err)

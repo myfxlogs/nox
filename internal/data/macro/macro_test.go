@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestD528_MQL5UserAgentUA 铁律锚：UA==Mozilla/5.0 且不带 Referer/XRW/Origin 三头。

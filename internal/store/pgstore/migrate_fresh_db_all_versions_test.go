@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 // TestMigrate_FreshDB_AllVersions D-508 S6：分割器拆除（pgx simple protocol 整批）
@@ -27,7 +27,7 @@ func TestMigrate_FreshDB_AllVersions(t *testing.T) {
 			t.Fatalf("%s: %v\n%s", c, err, out)
 		}
 	}
-	dsn := stripPgxParams(swapDBName(testutil.TestDSN(t, "ARB_TEST_PG_DSN"), db))
+	dsn := stripPgxParams(swapDBName(testutil.TestDSN(t, "NOX_TEST_PG_DSN"), db))
 	s, err := New(ctx, dsn)
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)

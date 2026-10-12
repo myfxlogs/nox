@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 // fakeAcctStore orderEventStore mock：计数落库行 + keys/insert 失败注入。

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/api/dashboard"
-	"arb/internal/data/bus"
-	"arb/internal/risk/gate"
+	"nox/internal/api/dashboard"
+	"nox/internal/data/bus"
+	"nox/internal/risk/gate"
 )
 
 // setupFundingNeedEngine 构造带 DB store 的 Engine（autotrade_state 已设为指定 state）+ topic。

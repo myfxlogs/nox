@@ -6,8 +6,8 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 )
 
 var d543SeedKeys = map[string]float64{
@@ -20,7 +20,7 @@ var d543SeedKeys = map[string]float64{
 
 // A1/A2① 种子行经迁移落库：五键在场、enabled、cap 值=稿定取整；二跑迁移幂等零变化。
 func TestD543_SeedRowsMigratedIdempotent(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil { // 二跑：isApplied 跳过+ON CONFLICT 双保险
 		t.Fatalf("re-migrate: %v", err)

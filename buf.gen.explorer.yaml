@@ -8,4 +8,4 @@ plugins:
 inputs:
   - directory: proto
     paths:
-      - proto/arb/explorer
+      - proto/nox/explorer

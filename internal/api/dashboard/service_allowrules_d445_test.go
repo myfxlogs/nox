@@ -1,5 +1,5 @@
 // service_allowrules_d445_test.go —— D-445 T1/T1b：venue 行实时资金列透传（Snapshot 主源，
-// D-447：同源 poll 产物，测试先 Refresh 一次暖缓存）+流帧较新者规则双向锚。需 ARB_TEST_PG_DSN。
+// D-447：同源 poll 产物，测试先 Refresh 一次暖缓存）+流帧较新者规则双向锚。需 NOX_TEST_PG_DSN。
 package dashboard
 
 import (
@@ -7,16 +7,16 @@ import (
 	"testing"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/platform/testutil/storetest"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/platform/testutil/storetest"
 
 	"connectrpc.com/connect"
 )
 
 func d445Fixture(t *testing.T) (*Service, *AccountMonitor, *fakeAccountQuerier) {
 	t.Helper()
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx,
 		`DELETE FROM autotrade_allow_rules WHERE value ILIKE 'd445%'`); err != nil {

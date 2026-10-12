@@ -7,7 +7,7 @@ import (
 	"errors"
 	"testing"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 func TestMT5TradeModeNow_ReturnsMode(t *testing.T) {

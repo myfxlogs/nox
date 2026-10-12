@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/keydomain"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/data/keydomain"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // ② R1：事故谓词细化——零成交 FAILED 是干净终态不拦（#503/#504 形态）；

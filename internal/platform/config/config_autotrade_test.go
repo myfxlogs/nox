@@ -7,13 +7,13 @@ import (
 
 // TestLoad_AutotradeDefaults D-072 默认值校验。
 func TestLoad_AutotradeDefaults(t *testing.T) {
-	os.Unsetenv("ARB_AUTOTRADE_ALLOW_VENUES")
-	os.Unsetenv("ARB_AUTOTRADE_ALLOW_CANONICALS")
-	os.Unsetenv("ARB_AUTOTRADE_EXCLUDE_CANONICALS")
-	os.Unsetenv("ARB_MEANREVERT_THRESHOLDS")
-	os.Unsetenv("ARB_AUTOTRADE_MIN_NET_SWAP_BPS")
-	os.Unsetenv("ARB_SWAPARB_EXIT_NET_BPS")
-	os.Unsetenv("ARB_FUNDING_EXIT_NET_PCT")
+	os.Unsetenv("NOX_AUTOTRADE_ALLOW_VENUES")
+	os.Unsetenv("NOX_AUTOTRADE_ALLOW_CANONICALS")
+	os.Unsetenv("NOX_AUTOTRADE_EXCLUDE_CANONICALS")
+	os.Unsetenv("NOX_MEANREVERT_THRESHOLDS")
+	os.Unsetenv("NOX_AUTOTRADE_MIN_NET_SWAP_BPS")
+	os.Unsetenv("NOX_SWAPARB_EXIT_NET_BPS")
+	os.Unsetenv("NOX_FUNDING_EXIT_NET_PCT")
 
 	c := Load()
 	// AllowVenues/AllowCanonicals 已表化 autotrade_allow_rules，env 停读——断言零消费语义。
@@ -40,9 +40,9 @@ func TestLoad_AutotradeDefaults(t *testing.T) {
 
 // TestLoad_AutotradeEnvOverride env 覆盖校验。
 func TestLoad_AutotradeEnvOverride(t *testing.T) {
-	t.Setenv("ARB_AUTOTRADE_ALLOW_VENUES", "111:mt5,222:mt5") // D-443：env 已停读——断言不生效
-	t.Setenv("ARB_MEANREVERT_THRESHOLDS", "BTCUSDT:100,ETHUSDT:50")
-	t.Setenv("ARB_AUTOTRADE_MIN_NET_SWAP_BPS", "0.5")
+	t.Setenv("NOX_AUTOTRADE_ALLOW_VENUES", "111:mt5,222:mt5") // D-443：env 已停读——断言不生效
+	t.Setenv("NOX_MEANREVERT_THRESHOLDS", "BTCUSDT:100,ETHUSDT:50")
+	t.Setenv("NOX_AUTOTRADE_MIN_NET_SWAP_BPS", "0.5")
 
 	c := Load()
 	if len(c.AutoTradeAllowVenues) != 0 {
@@ -58,8 +58,8 @@ func TestLoad_AutotradeEnvOverride(t *testing.T) {
 
 // TestEnvStringSet 空字符串返回空 set。
 func TestEnvStringSet(t *testing.T) {
-	t.Setenv("ARB_TEST_EMPTY_SET", "")
-	m := envStringSet("ARB_TEST_EMPTY_SET", "default1,default2")
+	t.Setenv("NOX_TEST_EMPTY_SET", "")
+	m := envStringSet("NOX_TEST_EMPTY_SET", "default1,default2")
 	if len(m) != 2 {
 		t.Errorf("empty env should fall back to default, got %v", m)
 	}
@@ -67,8 +67,8 @@ func TestEnvStringSet(t *testing.T) {
 
 // TestEnvFloatMap 空字符串返回空 map。
 func TestEnvFloatMap(t *testing.T) {
-	t.Setenv("ARB_TEST_EMPTY_MAP", "")
-	m := envFloatMap("ARB_TEST_EMPTY_MAP", "A:1.0,B:2.0")
+	t.Setenv("NOX_TEST_EMPTY_MAP", "")
+	m := envFloatMap("NOX_TEST_EMPTY_MAP", "A:1.0,B:2.0")
 	if len(m) != 2 || m["A"] != 1.0 {
 		t.Errorf("empty env should fall back to default, got %v", m)
 	}

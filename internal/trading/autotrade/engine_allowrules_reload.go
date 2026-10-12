@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"log"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // allowRules venue/canonical 白名单快照（指针整体替换）。

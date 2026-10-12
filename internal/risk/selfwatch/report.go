@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/research/scan"
+	"nox/internal/research/scan"
 )
 
 // paperWindowStructure 观测窗结构（=paper_window_report.sh 固定结构）。
@@ -119,7 +119,7 @@ func BuildDaily(ctx context.Context, d Deps) (*DailyReport, error) {
 	return rep, nil
 }
 
-// paperWindowStart 窗起点=app_config ARB_PAPER_WINDOW_START（迁移 0173 播种）；
+// paperWindowStart 窗起点=app_config NOX_PAPER_WINDOW_START（迁移 0173 播种）；
 // 行缺 → env 兜底 → 双缺 ok=false（fail-closed：不误报）。
 func paperWindowStart(ctx context.Context, d Deps) (time.Time, bool, error) {
 	v, ok, err := d.Store.AppConfigString(ctx, cfgPaperWindowStart)
@@ -143,9 +143,9 @@ func paperWindowStart(ctx context.Context, d Deps) (time.Time, bool, error) {
 // renderDaily 文案渲染（快照测试锚——数字行+条件表全在单函数拼装）。
 func renderDaily(ctx context.Context, d Deps, since time.Time, ok bool, ev *scan.PaperWindowEval, rep *DailyReport, now time.Time) (string, error) {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("【ARB 自盯日报】%s BJ\n", now.In(bj).Format("01-02 15:04")))
+	b.WriteString(fmt.Sprintf("【NOX 自盯日报】%s BJ\n", now.In(bj).Format("01-02 15:04")))
 	if !ok {
-		b.WriteString("⚠️ 纸面观测窗起点未配置（ARB_PAPER_WINDOW_START）——日报无法生成\n")
+		b.WriteString("⚠️ 纸面观测窗起点未配置（NOX_PAPER_WINDOW_START）——日报无法生成\n")
 	} else {
 		age := now.Sub(since).Hours() / 24
 		b.WriteString(fmt.Sprintf("■ 纸面观测窗（%s）｜起点 %s｜已观测 %.1f 天\n",

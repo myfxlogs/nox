@@ -6,7 +6,7 @@ import (
 )
 
 // DB 集成测试：ListProductGroups 众数聚合 + product_group 配对场景。
-// 需 ARB_TEST_PG_DSN，未设置时 skip（testStore 门禁）。
+// 需 NOX_TEST_PG_DSN，未设置时 skip（testStore 门禁）。
 // 覆盖 470 事故根因：同 canonical BRENT 但 FxPro=cfd_spot × PXBT=cfd_leverage → 不同 product_group 被滤。
 
 // 用例①：同 product_group 通过——两 venue 同 canonical 同 product_group。

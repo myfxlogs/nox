@@ -6,15 +6,15 @@
 package dashboard
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"fmt"
+	"nox/internal/data/keydomain"
 	"strings"
 	"time"
 
-	"arb/internal/data/fact"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 // riskTickMaxAge dossier 价格源 staleness 闸（B-012：与 paperCfdMonitorMaxAge 同口径 5min）。

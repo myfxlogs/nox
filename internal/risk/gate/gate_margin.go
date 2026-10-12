@@ -12,8 +12,8 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/platform/errclass"
-	"arb/internal/portfolio/capitalview"
+	"nox/internal/platform/errclass"
+	"nox/internal/portfolio/capitalview"
 )
 
 // marginFloorChecker 开户门槛检查器（dashboard.Service 实现；nil=未接线跳过——

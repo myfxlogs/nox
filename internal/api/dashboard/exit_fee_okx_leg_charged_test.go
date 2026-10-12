@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/config"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/config"
+	"nox/internal/store/pgstore"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -86,7 +86,7 @@ func TestD093_ExitFeeMissingKeyWarnOnce(t *testing.T) {
 	}
 }
 
-// TestD093R1_HotSwapViaAppConfigPanel 验收④：app_config 面板写 ARB_EXIT_FEE_BPS_OKX=5 →
+// TestD093R1_HotSwapViaAppConfigPanel 验收④：app_config 面板写 NOX_EXIT_FEE_BPS_OKX=5 →
 // running 视图热换（ExitFeeBpsOKX=5、RunningValue=5、PendingRestart=false）——enrich 下轮
 // 即按新费率，无需重启。
 func TestD093R1_HotSwapViaAppConfigPanel(t *testing.T) {
@@ -94,7 +94,7 @@ func TestD093R1_HotSwapViaAppConfigPanel(t *testing.T) {
 	svc.SetAppConfigView(&config.Config{}, &config.Config{}, map[string]string{})
 	ctx := context.Background()
 	_, err := svc.UpdateAppConfig(ctx, connect.NewRequest(&v1.UpdateAppConfigRequest{
-		Key: "ARB_EXIT_FEE_BPS_OKX", Value: "5", Note: "D-093 R1 热换锚",
+		Key: "NOX_EXIT_FEE_BPS_OKX", Value: "5", Note: "D-093 R1 热换锚",
 	}))
 	if err != nil {
 		t.Fatalf("UpdateAppConfig: %v", err)
@@ -107,7 +107,7 @@ func TestD093R1_HotSwapViaAppConfigPanel(t *testing.T) {
 	for _, r := range rows {
 		db[r.Key] = r
 	}
-	v, err := svc.appConfigView(ctx, "ARB_EXIT_FEE_BPS_OKX", db)
+	v, err := svc.appConfigView(ctx, "NOX_EXIT_FEE_BPS_OKX", db)
 	if err != nil {
 		t.Fatalf("appConfigView: %v", err)
 	}

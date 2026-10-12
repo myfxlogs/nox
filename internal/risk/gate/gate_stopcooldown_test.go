@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/combo"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/combo"
+	"nox/internal/store/pgstore"
 )
 
 // ckStopCooldown 测试组合键（vA/vB demo 腿，AUDJPY）。

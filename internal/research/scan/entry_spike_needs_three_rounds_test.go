@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // eligibleStreak 预灌满轮数的计数器：供既有 D-350/D-354 锚专注闸外机制

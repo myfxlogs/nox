@@ -1,20 +1,20 @@
 // service_allowrules_d504_test.go —— D-504 S2 真库锚：venue 规则指向
 // broker_accounts.is_real=false 户 → 管理面 List 不列；real 户/canonical 规则保留；
-// is_real 未知 venue 保守列出。需 ARB_TEST_PG_DSN。
+// is_real 未知 venue 保守列出。需 NOX_TEST_PG_DSN。
 package dashboard
 
 import (
 	"context"
 	"testing"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/testutil/storetest"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/testutil/storetest"
 
 	"connectrpc.com/connect"
 )
 
 func TestD504_AllowRulesDemoFilter(t *testing.T) {
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `
 		DELETE FROM autotrade_allow_rules WHERE value LIKE 'd504%';

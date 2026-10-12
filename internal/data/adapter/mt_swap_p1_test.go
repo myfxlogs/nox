@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // TestPXBT_SwapTypeZero_OverrideToInPoints D-112→W4a S2：PXBT(1314615) SwapType=0+非零值 → override InPoints → SwapFacts emit。

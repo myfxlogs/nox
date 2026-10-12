@@ -9,8 +9,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 )
 
 // BJTime 北京时区（FixedZone 同 sysretro——禁 LoadLocation，alpine 无 tzdata，D-510 教训）。
@@ -87,7 +87,7 @@ func (d *Deps) fill() {
 		d.Now = time.Now
 	}
 	if d.Rate == nil {
-		d.Rate = analyst.NewRateLimiter(10) // ARB_EXPLORER_RATE_PER_HOUR 缺省 10，独立桶不占前端 analyst 配额
+		d.Rate = analyst.NewRateLimiter(10) // NOX_EXPLORER_RATE_PER_HOUR 缺省 10，独立桶不占前端 analyst 配额
 	}
 }
 

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/ledger/reconcile"
+	"nox/internal/data/bus"
+	"nox/internal/ledger/reconcile"
 )
 
 type fakeVenueAvail struct {

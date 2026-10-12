@@ -6,17 +6,17 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/adapter"
-	"arb/internal/data/fact"
-	"arb/internal/data/keydomain"
-	"arb/internal/data/marketstate"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/platform/safego"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/adapter"
+	"nox/internal/data/fact"
+	"nox/internal/data/keydomain"
+	"nox/internal/data/marketstate"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/platform/safego"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
 	"google.golang.org/grpc/metadata"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // startAdapter 平台分发：构造适配器 → 连接 → 订阅 → 注册执行器/querier。

@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"arb/internal/platform/config"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/config"
+	"nox/internal/store/pgstore"
 )
 
 // mockOKXEarnServer 模拟 OKX Savings lending-rate-summary。

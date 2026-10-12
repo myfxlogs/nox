@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/platform/analyst"
+	"nox/internal/platform/analyst"
 )
 
 // ProbeCallerForAnalyst 返回当问解析 AI 配置的探针闭包——每调 resolveAiConfig

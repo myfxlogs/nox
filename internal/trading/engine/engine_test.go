@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/research/evaluator"
+	"nox/internal/research/evaluator"
 )
 
 // testCommissionResolver 复刻 main 装配的分档逻辑（D-036 per-venue：CFD 账号值/CEX 逐所 taker，回退默认）。

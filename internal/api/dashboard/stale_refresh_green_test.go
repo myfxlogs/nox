@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // d178Querier 静态查询器：计数+可控成败（gate venue 端到端锚的按需回读源）。

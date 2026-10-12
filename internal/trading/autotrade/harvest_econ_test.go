@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // d014StubSvc 只钉 econ 需要的 USDPerLotForLeg（qty=1 腿 → 腿名义 $4160，#505 $4160/0.01手 同款）。

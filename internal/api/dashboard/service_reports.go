@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/analyst"
-	"arb/internal/review/sysretro"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/analyst"
+	"nox/internal/review/sysretro"
 
 	"connectrpc.com/connect"
 )

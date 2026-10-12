@@ -1,5 +1,5 @@
 // d513_explorer_test.go —— D-513 S3 查询层验收：离散度口径/闲置标记/state 幂等/提案 dedupe。
-// 需 ARB_TEST_PG_DSN（_test 库，逐包隔离）。
+// 需 NOX_TEST_PG_DSN（_test 库，逐包隔离）。
 package pgstore
 
 import (
@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 func d513Store(t *testing.T) (*Store, context.Context) {
 	t.Helper()
 	ctx := context.Background()
-	s, err := New(ctx, testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := New(ctx, testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore new: %v", err)
 	}

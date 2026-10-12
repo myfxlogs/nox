@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/platform/httpx"
+	"nox/internal/platform/httpx"
 )
 
 // D-127 P2：binance:perp stepSize 权威化。

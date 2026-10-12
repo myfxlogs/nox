@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/risk/gate"
+	"nox/internal/data/bus"
+	"nox/internal/risk/gate"
 )
 
 // newD469CEngine 构造事件化测试 Engine：qbus + MeanRevertThresh + kick chans（免 DB——

@@ -6,7 +6,7 @@ import (
 )
 
 // TestDisasterSL D-146 S1：MT 灾难止损价计算（broker 端 SL，下单即带）。
-// 语义：距离=名义的 ARB_MT_DISASTER_SL_PCT（默认 2.0%）。
+// 语义：距离=名义的 NOX_MT_DISASTER_SL_PCT（默认 2.0%）。
 // 多腿 SL = entry × (1 - pct)（入场价下方）；空腿 SL = entry × (1 + pct)（入场价上方）。
 // pct ≤ 0 = 禁用返回 0；entry ≤ 0 = 无效返回 0。
 func TestDisasterSL(t *testing.T) {

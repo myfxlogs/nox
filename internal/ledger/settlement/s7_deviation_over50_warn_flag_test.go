@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func d475aDeps(cashflows float64, accrued float64) *fakeDeps {

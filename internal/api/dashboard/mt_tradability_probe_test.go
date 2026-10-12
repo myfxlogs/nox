@@ -1,5 +1,5 @@
 // mt_tradability_probe_test.go —— MT5 符号可交易性只读探测（D-051 CFD 闭环辅助）。
-// 仅当 ARB_DEMO_ORDER=1 且 ARB_DEMO_PG_DSN 设置时运行；对每个 MT5 venue 连适配器查
+// 仅当 NOX_DEMO_ORDER=1 且 NOX_DEMO_PG_DSN 设置时运行；对每个 MT5 venue 连适配器查
 // SymbolParams.SymGroup.TradeMode（MT5 SYMBOL_TRADE_MODE：0=DISABLED,1=LONGONLY,
 // 2=SHORTONLY,3=CLOSEONLY,4=FULLACCESS——D-060 F6 修为全枚举），只读不下单——
 // 用于确认哪个 venue 的 BTC 符号真正可双向交易
@@ -12,18 +12,18 @@ import (
 	"os"
 	"testing"
 
-	"arb/internal/data/adapter"
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/adapter"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
+	"nox/internal/store/pgstore"
 )
 
 func TestMTTradabilityProbe(t *testing.T) {
-	if os.Getenv("ARB_DEMO_ORDER") != "1" {
-		t.Skip("ARB_DEMO_ORDER=1 才跑（手动 gate，只读 SymbolParams 探测）")
+	if os.Getenv("NOX_DEMO_ORDER") != "1" {
+		t.Skip("NOX_DEMO_ORDER=1 才跑（手动 gate，只读 SymbolParams 探测）")
 	}
-	dsn := os.Getenv("ARB_DEMO_PG_DSN")
+	dsn := os.Getenv("NOX_DEMO_PG_DSN")
 	if dsn == "" {
-		t.Skip("ARB_DEMO_PG_DSN 未设置")
+		t.Skip("NOX_DEMO_PG_DSN 未设置")
 	}
 
 	ctx := context.Background()

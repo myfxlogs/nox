@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 // d591CacheFile 写 exchangeInfo 缓存文件（fetchedAt 偏移可负=过期）。
@@ -44,7 +44,7 @@ func d591CacheFile(t *testing.T, dir string, age time.Duration, syms map[string]
 // 未覆盖第二符号诚实零值；exchangeInfo 走新鲜缓存零 REST。
 func TestD591_RadarBinanceReads(t *testing.T) {
 	ctx := context.Background()
-	s, err := pgstore.New(ctx, testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := pgstore.New(ctx, testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestD591_RadarExchangeInfoCacheFallback(t *testing.T) {
 // 换算对（年化×ivlSec），interval 日轮 25h 窗，未覆盖字段诚实零值。
 func TestD591R3_RadarGateReadsDB(t *testing.T) {
 	ctx := context.Background()
-	s, err := pgstore.New(ctx, testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := pgstore.New(ctx, testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestD591R3_RadarGateReadsDB(t *testing.T) {
 // funding 读 facts；未覆盖符号 funding 零值。
 func TestD591R3_RadarOkxCacheAndDB(t *testing.T) {
 	ctx := context.Background()
-	s, err := pgstore.New(ctx, testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := pgstore.New(ctx, testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}

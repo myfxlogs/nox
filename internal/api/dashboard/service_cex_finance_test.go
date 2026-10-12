@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/collect/exchange"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/collect/exchange"
+	"nox/internal/store/pgstore"
 )
 
 // TestFilterIOAccounts_SameKeyDedup R1 S1 锚：binance 3+okx 4=7 配置同两把 key →

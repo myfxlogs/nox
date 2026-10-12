@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/data/keydomain"
+	"nox/internal/data/fact"
+	"nox/internal/data/keydomain"
 
 	"github.com/jackc/pgx/v5"
 )

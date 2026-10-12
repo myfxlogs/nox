@@ -89,12 +89,12 @@ func TestLoadDefaults(t *testing.T) {
 
 // TestLoadEnvOverride env 覆盖须生效。
 func TestLoadEnvOverride(t *testing.T) {
-	t.Setenv("ARB_CROSS_MIN_GROSS_BPS_CEX", "0.5")
-	t.Setenv("ARB_CROSS_MIN_GROSS_BPS_CFD", "1.5")
-	t.Setenv("ARB_COMMISSION_CFD_BPS", "0.6")
-	t.Setenv("ARB_DETECTOR_FRESHNESS_TTL", "90s")
-	t.Setenv("ARB_LIQ_MMR", "0.01")
-	t.Setenv("ARB_COMMISSION_CEX_TAKER_BPS", "3.0") // D-145：env 覆盖默认 5.0
+	t.Setenv("NOX_CROSS_MIN_GROSS_BPS_CEX", "0.5")
+	t.Setenv("NOX_CROSS_MIN_GROSS_BPS_CFD", "1.5")
+	t.Setenv("NOX_COMMISSION_CFD_BPS", "0.6")
+	t.Setenv("NOX_DETECTOR_FRESHNESS_TTL", "90s")
+	t.Setenv("NOX_LIQ_MMR", "0.01")
+	t.Setenv("NOX_COMMISSION_CEX_TAKER_BPS", "3.0") // D-145：env 覆盖默认 5.0
 	c := Load()
 	if c.CrossVenueMinGrossBpsCEX != 0.5 {
 		t.Errorf("CrossVenueMinGrossBpsCEX = %v, want 0.5", c.CrossVenueMinGrossBpsCEX)
@@ -125,7 +125,7 @@ func TestLoadEnvOverride(t *testing.T) {
 
 // TestLoadTakerEnvOverride 逐交易所 taker env 覆盖。
 func TestLoadTakerEnvOverride(t *testing.T) {
-	t.Setenv("ARB_COMMISSION_TAKER_GATE", "5.0")
+	t.Setenv("NOX_COMMISSION_TAKER_GATE", "5.0")
 	c := Load()
 	if c.CommissionTaker["gate"] != 5.0 {
 		t.Errorf("CommissionTaker[gate] = %v, want 5.0", c.CommissionTaker["gate"])
@@ -154,8 +154,8 @@ func TestCommissionTaker_DefaultIs5(t *testing.T) {
 
 // TestLoadEnvInvalid 非法值回退默认（不崩溃）。
 func TestLoadEnvInvalid(t *testing.T) {
-	t.Setenv("ARB_SLIPPAGE_BPS", "not-a-number")
-	t.Setenv("ARB_OPPORTUNITY_TTL", "xyz")
+	t.Setenv("NOX_SLIPPAGE_BPS", "not-a-number")
+	t.Setenv("NOX_OPPORTUNITY_TTL", "xyz")
 	c := Load()
 	if c.SlippageBps != 0.3 {
 		t.Errorf("SlippageBps = %v, want default 0.3 (D-070)", c.SlippageBps)
@@ -168,8 +168,8 @@ func TestLoadEnvInvalid(t *testing.T) {
 // TestLoadDefaults_AIModelEmpty D-591 S7：AI 模型缺省为空（禁硬编码型号名兜底——
 // DB ai_settings.model 与 env 双空时 LLM 段 fail-closed 禁用，不静默跑 glm-4.6）。
 func TestLoadDefaults_AIModelEmpty(t *testing.T) {
-	os.Unsetenv("ARB_AI_MODEL") // 走真缺省路径（envStr=LookupEnv 语义）
-	t.Cleanup(func() { os.Unsetenv("ARB_AI_MODEL") })
+	os.Unsetenv("NOX_AI_MODEL") // 走真缺省路径（envStr=LookupEnv 语义）
+	t.Cleanup(func() { os.Unsetenv("NOX_AI_MODEL") })
 	c := Load()
 	if c.AIModel != "" {
 		t.Errorf("AIModel = %q, want 空（硬编码兜底已退役）", c.AIModel)

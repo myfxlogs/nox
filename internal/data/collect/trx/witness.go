@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // ---------- WitnessCollector（24h） ----------

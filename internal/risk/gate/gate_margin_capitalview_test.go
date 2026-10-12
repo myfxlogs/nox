@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/platform/testutil"
-	"arb/internal/portfolio/capitalview"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/platform/testutil"
+	"nox/internal/portfolio/capitalview"
+	"nox/internal/store/pgstore"
 )
 
 // fakeMarginFloor 计数 fake：判定本体恒过（Src 闸行为由 gate 层独立断言）。
@@ -68,7 +68,7 @@ func (f *d549r1FakeQuerier) VenueKey() string { return "binance:perp" }
 
 func capTestGate(t *testing.T, v *capitalview.View) (*Gate, *fakeMarginFloor) {
 	t.Helper()
-	st, err := pgstore.New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	st, err := pgstore.New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("store: %v", err)
 	}

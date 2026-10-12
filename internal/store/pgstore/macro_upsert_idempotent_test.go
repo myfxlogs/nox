@@ -1,5 +1,5 @@
 // macro_d528_test.go —— D-528 S9 A1：macro_event upsert 幂等锚（D-120 清退 cot/fred 段）（同批两写行数不变）。
-// 需 ARB_TEST_PG_DSN（_test 库，逐包隔离）。
+// 需 NOX_TEST_PG_DSN（_test 库，逐包隔离）。
 package pgstore
 
 import (
@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 func TestD528_MacroUpsertIdempotent(t *testing.T) {
-	s, err := New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	s, err := New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

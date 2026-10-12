@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"arb/internal/platform/analyst"
+	"nox/internal/platform/analyst"
 )
 
 // fundToolSpecs D-201：三枚专用工具 + query_ro（Description 带核心表迷你 schema 摘要）。
@@ -174,7 +174,7 @@ func (t *feishuQueryTools) execOrdersRecent(ctx context.Context, call analyst.To
 func (t *feishuQueryTools) execQueryRO(ctx context.Context, call analyst.ToolCall) (analyst.ToolResult, []analyst.Citation, error) {
 	dsn, err := t.store.AIReadOnlyDSN(ctx)
 	if err != nil {
-		return analyst.ToolResult{ToolUseID: call.ID, Content: "读 ARB_AI_PG_DSN 失败: " + err.Error(), IsError: true}, nil, nil
+		return analyst.ToolResult{ToolUseID: call.ID, Content: "读 NOX_AI_PG_DSN 失败: " + err.Error(), IsError: true}, nil, nil
 	}
 	return (&analyst.Tools{ReadOnlyDSN: dsn}).Execute(ctx, call)
 }

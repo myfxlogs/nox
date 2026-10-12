@@ -21,10 +21,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/infra/dephealth"
-	"arb/internal/platform/httpx"
-	"arb/internal/platform/safego"
+	"nox/internal/data/bus"
+	"nox/internal/infra/dephealth"
+	"nox/internal/platform/httpx"
+	"nox/internal/platform/safego"
 
 	"github.com/gorilla/websocket"
 )
@@ -142,7 +142,7 @@ func (g *GatePrivateWS) runOnce(ctx context.Context) error {
 	}
 	conn, err := g.dial(ctx, g.WSURL())
 	if err != nil && ctx.Err() == nil {
-		// D4：cex-proxy 双端点回退——主 URL 拨失败换 ARB_CEX_WS_BASE_BACKUP host
+		// D4：cex-proxy 双端点回退——主 URL 拨失败换 NOX_CEX_WS_BASE_BACKUP host
 		// 重试一次（path 不变，同 binance backupWSURL 模式；env 空=零行为变化）。
 		if alt := swapURLHost(g.WSURL(), ep.CexWSBaseBackup); alt != "" {
 			log.Printf("[gate-ws] dial %s failed: %v（试备用端点 %s）", g.WSURL(), err, alt)

@@ -13,10 +13,10 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/keydomain"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/keydomain"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 // acctFrameWriteInterval 同 venue 快照落库合流窗（帧率风暴吸收；终值 pending 补写不丢）。

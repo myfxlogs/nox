@@ -5,8 +5,8 @@ package collect
 import (
 	"context"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
 )
 
 // QuoteSource 是订阅式报价源（MT4/MT5，§3.2）。

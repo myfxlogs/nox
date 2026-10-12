@@ -26,10 +26,10 @@ func ValidateStartupToken(token, allowEmpty string) error {
 		return nil
 	}
 	if allowEmpty == "true" {
-		log.Printf("[auth] WARNING: ARB_ALLOW_EMPTY_AUTH=true — auth disabled (local debug only, DO NOT use in production)")
+		log.Printf("[auth] WARNING: NOX_ALLOW_EMPTY_AUTH=true — auth disabled (local debug only, DO NOT use in production)")
 		return nil
 	}
-	return errors.New("ARB_AUTH_TOKEN is empty (app_secrets row and env fallback both unset) and ARB_ALLOW_EMPTY_AUTH is not 'true' — refusing to start (set it via app_secrets panel or env, or explicitly allow empty auth for local debug)")
+	return errors.New("NOX_AUTH_TOKEN is empty (app_secrets row and env fallback both unset) and NOX_ALLOW_EMPTY_AUTH is not 'true' — refusing to start (set it via app_secrets panel or env, or explicitly allow empty auth for local debug)")
 }
 
 // Interceptor 校验 Authorization: Bearer $token（§13.5）。
@@ -77,7 +77,7 @@ func (i *Interceptor) check(h http.Header) error {
 		token = i.tokenFn()
 	}
 	if token == "" {
-		return errors.New("auth token not configured (ARB_AUTH_TOKEN empty)")
+		return errors.New("auth token not configured (NOX_AUTH_TOKEN empty)")
 	}
 	auth := h.Get("Authorization")
 	if auth == "" {

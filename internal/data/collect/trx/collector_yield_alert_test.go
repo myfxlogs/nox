@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // seedRentalAndAccount 注入 7d rental 数据 + 账户快照。

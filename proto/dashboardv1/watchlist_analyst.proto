@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package arb.dashboard.v1;
+package nox.dashboard.v1;
 
-option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
 
 
 // ==== watchlist_analyst.proto —— D-508 S10 自 dashboard.proto 按域拆出（纯搬家：消息名/字段号/RPC 契约零漂移）。 ====

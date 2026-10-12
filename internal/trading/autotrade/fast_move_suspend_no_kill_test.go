@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // d111Cfg 在 d378b 基准上开快行情闸（25bps/90s）。

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/trading/exec"
 )
 
 // d574Svc 裸 Service（pipeline nil → 首个闸即 FAILED）。

@@ -11,8 +11,8 @@ import (
 	"sort"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // Store 扫描依赖（pgstore.Store 实现；LatestFacts 返回 fact.Fact 含 venue/symbol/value）。
@@ -60,7 +60,7 @@ type ScanResult struct {
 	Skipped int // join 失败（MT symbol 无映射/CEX symbol 无法 canonical 化）行计数
 }
 
-// F4：读口龄期闸常量（env 可选 ARB_UNIVERSE_FUNDING_MAX_AGE / ARB_UNIVERSE_SWAP_MAX_AGE
+// F4：读口龄期闸常量（env 可选 NOX_UNIVERSE_FUNDING_MAX_AGE / NOX_UNIVERSE_SWAP_MAX_AGE
 // 覆盖，wire 装配层解析——D-407 先例 scan 层不读 env）。
 const (
 	UniverseFundingMaxAge = 24 * time.Hour

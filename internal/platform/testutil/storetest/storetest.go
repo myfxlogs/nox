@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 var (

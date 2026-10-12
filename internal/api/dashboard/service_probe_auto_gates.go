@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/store/pgstore"
 )
 
 // probePremiseSeg 单条 premise 判定（D-176 结构化入参——散文 basis 降级纯人读）。

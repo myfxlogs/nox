@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/api/dashboard"
-	"arb/internal/data/bus"
-	"arb/internal/platform/testutil"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/api/dashboard"
+	"nox/internal/data/bus"
+	"nox/internal/platform/testutil"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // mkOpenEntry 构造内存缓存行（legs 手工给，绕 DB——quoteExitHit 零 DB 语义本身被测）。

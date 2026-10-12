@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // fakeScanStore 受控 store（facts 行+映射表+落库计数+universe 雷达表）。

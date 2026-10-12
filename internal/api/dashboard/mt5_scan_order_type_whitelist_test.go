@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // T-I4a MT5：Balance=100/Credit=101/未知枚举记录不入结果；Buy/Sell 正常行不受影响。

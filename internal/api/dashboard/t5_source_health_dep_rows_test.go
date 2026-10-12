@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/infra/dephealth"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/infra/dephealth"
 
 	"connectrpc.com/connect"
 )

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log"
 
-	"arb/internal/data/fact"
-	"arb/internal/data/venue"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/trading/exec"
+	"nox/internal/data/fact"
+	"nox/internal/data/venue"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/trading/exec"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // attach 记录 running 并刷新 querier 集合；随后 kick swap 轮询（D-060 F2：attach 即补一轮，

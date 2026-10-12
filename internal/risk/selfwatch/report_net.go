@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/research/scan"
+	"nox/internal/research/scan"
 )
 
 // dailyNetLine 逐日净额行：app_config 快照差分（prev 缺=首日基线记 0 增量并播种）。

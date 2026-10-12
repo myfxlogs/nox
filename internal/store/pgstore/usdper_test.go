@@ -8,7 +8,7 @@ import (
 
 // TestUSDPer 七直盘推导全覆盖（D-087 返修包②）。
 // 插假 ticks 行验：GBP→GBPUSD bid、AUD→AUDUSD bid、CHF→1/USDCHF bid、JPY→1/USDJPY bid。
-// DSN-gated：无 ARB_TEST_PG_DSN 跳过（go test ./... 无 PG 环境仍全过）。
+// DSN-gated：无 NOX_TEST_PG_DSN 跳过（go test ./... 无 PG 环境仍全过）。
 func TestUSDPer(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

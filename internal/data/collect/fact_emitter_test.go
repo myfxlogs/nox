@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 // fakeSink 记录每次调用（批内 facts 拷贝）。
@@ -58,9 +58,9 @@ func TestFactEmitter_DedupAndHeartbeat(t *testing.T) {
 	}
 }
 
-// TestFactEmitter_RealSink 真库链路：同值节流+值变入库（ARB_TEST_PG_DSN 门控）。
+// TestFactEmitter_RealSink 真库链路：同值节流+值变入库（NOX_TEST_PG_DSN 门控）。
 func TestFactEmitter_RealSink(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	st, err := pgstore.New(ctx, dsn)
 	if err != nil {

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/ir/notify"
-	"arb/internal/store/pgstore"
+	"nox/internal/ir/notify"
+	"nox/internal/store/pgstore"
 )
 
 func launchPtr(t time.Time) *time.Time {

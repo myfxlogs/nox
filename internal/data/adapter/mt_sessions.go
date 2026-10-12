@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
-	"arb/internal/data/fact"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
+	"nox/internal/data/fact"
 )
 
 const sessionsPerCallTimeout = 3 * time.Second

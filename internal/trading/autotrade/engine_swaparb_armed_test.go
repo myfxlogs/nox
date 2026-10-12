@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // TestSwapQuoteGates_Matrix quote 依赖门禁纯函数表驱动（盲腿/陈旧/腿宽/基差/价差上下限/全过）。

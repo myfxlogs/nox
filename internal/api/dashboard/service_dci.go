@@ -7,7 +7,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	dashv1 "arb/internal/gen/dashboardv1"
+	dashv1 "nox/internal/gen/dashboardv1"
 )
 
 func (s *Service) ListPersonalPositions(ctx context.Context, req *connect.Request[dashv1.ListPersonalPositionsRequest]) (*connect.Response[dashv1.ListPersonalPositionsResponse], error) {

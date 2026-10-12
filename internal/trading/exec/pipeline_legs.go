@@ -1,12 +1,12 @@
 package exec
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"errors"
 	"fmt"
 	"log"
 	"math"
+	"nox/internal/data/keydomain"
 	"strings"
 )
 
@@ -145,7 +145,7 @@ func (p *Pipeline) Revalidate(canonical, canonicalSell, venueBuy, venueSell, opp
 		return false
 	}
 	currentBps := spread / mid * 10000
-	// 双阈值：max(absBps 绝对, relPct% 相对)（D-077 修复⑪B N4：env 化 ARB_REVALIDATE_ABS_BPS/ARB_REVALIDATE_REL_PCT）
+	// 双阈值：max(absBps 绝对, relPct% 相对)（D-077 修复⑪B N4：env 化 NOX_REVALIDATE_ABS_BPS/NOX_REVALIDATE_REL_PCT）
 	absThreshold := p.revalidateAbsBps
 	relThreshold := math.Abs(originalGrossBps) * p.revalidateRelPct / 100.0
 	threshold := math.Max(absThreshold, relThreshold)

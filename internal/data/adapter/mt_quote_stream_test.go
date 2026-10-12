@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // --- fakeMT5Client 补覆盖（D-100 OnQuote 流测试） ---

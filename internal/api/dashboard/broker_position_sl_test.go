@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/venue"
+	"nox/internal/data/bus"
+	"nox/internal/data/venue"
 )
 
 // TestBrokerPositionToProto_SLPassthrough D-155：MT 持仓 broker 端 SL 值透传。

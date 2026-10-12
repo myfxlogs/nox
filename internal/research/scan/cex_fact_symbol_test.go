@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // A0：raw→facts 键纯函数锚——三 venue 实形全覆盖。

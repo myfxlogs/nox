@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/migrations"
+	"nox/migrations"
 )
 
 // assetEquivTestStore 复用 testStore 基建（prepareTestSchema 全量迁移含 0097 种子）。

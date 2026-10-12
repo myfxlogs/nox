@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/ledger/swapledger"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/ledger/swapledger"
+	"nox/internal/store/pgstore"
 
-	mt5pb "arb/internal/data/adapter/gen/mtapi/mt5"
+	mt5pb "nox/internal/data/adapter/gen/mtapi/mt5"
 )
 
 // d342StubStore swapledger.Store 最小桩——LatestFacts 回吐 emit 产物，cashflow 记录供断言。

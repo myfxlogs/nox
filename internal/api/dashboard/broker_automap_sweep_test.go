@@ -3,7 +3,7 @@ package dashboard
 import (
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestD149_EquivSeedTargets：venue 已映射 canonical ∈ 既有 class 域→产种子行；

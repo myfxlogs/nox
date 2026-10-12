@@ -5,7 +5,7 @@ package dashboard
 import (
 	"context"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // healthKey SourceHealth 行键（WS 源=source url 段；空回退 venue）。

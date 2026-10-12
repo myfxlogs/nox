@@ -7,9 +7,9 @@ import (
 	"context"
 	"log"
 
-	"arb/internal/data/keydomain"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/portfolio/capitalview"
+	"nox/internal/data/keydomain"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/portfolio/capitalview"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"

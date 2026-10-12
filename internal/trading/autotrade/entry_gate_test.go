@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/api/dashboard"
-	"arb/internal/data/bus"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/api/dashboard"
+	"nox/internal/data/bus"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 func d335SeedRegime(t *testing.T, s *pgstore.Store) {

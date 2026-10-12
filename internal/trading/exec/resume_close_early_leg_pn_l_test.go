@@ -8,8 +8,8 @@ import (
 	"math"
 	"testing"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // d408Truncate 清仓相关表（本 fixture 独占）。

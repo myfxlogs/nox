@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"log"
 
-	"arb/internal/data/keydomain"
+	"nox/internal/data/keydomain"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"connectrpc.com/connect"
 )

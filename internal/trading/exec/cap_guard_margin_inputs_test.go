@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 func d010Pipeline(t *testing.T, marginUSD *float64, fracFor func(ctx context.Context, vk, sym string, sell bool) (float64, bool)) (*Pipeline, string) {

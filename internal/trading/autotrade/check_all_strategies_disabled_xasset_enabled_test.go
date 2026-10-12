@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // insertXAssetElimFixture 插入 n 笔 XASSET_CARRY CLOSED 仓位+settlements（净值由 realized 给出）。

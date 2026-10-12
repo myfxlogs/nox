@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 )
 
 // TestComboAllowVerdict_EmptyAllowlist D-159 W1a R1：空 allowlist + autoAllow=false → fail-closed。

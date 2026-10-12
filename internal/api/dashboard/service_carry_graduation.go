@@ -6,18 +6,18 @@
 package dashboard
 
 import (
-	"arb/internal/data/keydomain"
 	"context"
 	"errors"
 	"fmt"
 	"log"
+	"nox/internal/data/keydomain"
 	"strconv"
 	"strings"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/research/scan"
-	"arb/internal/store/pgstore"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/research/scan"
+	"nox/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )

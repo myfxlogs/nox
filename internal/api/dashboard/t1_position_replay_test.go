@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/testutil/storetest"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/testutil/storetest"
+	"nox/internal/store/pgstore"
 )
 
 // d571cFixture DSN 真库 svc+posMon+四域 topic（bpm/acctMon nil=enrich 诚实缺省）。
@@ -25,7 +25,7 @@ type d571cFixture struct {
 
 func d571cSetup(t *testing.T) *d571cFixture {
 	t.Helper()
-	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	svc := &Service{store: st, qbus: bus.New()}
 	f := &d571cFixture{
 		st:   st,

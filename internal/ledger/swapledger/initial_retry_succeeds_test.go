@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // d108RetryStore 复用 nonSettleStubStore 骨架，ListOpenPositionsByType 前 failN 次失败

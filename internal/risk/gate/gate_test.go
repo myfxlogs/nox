@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/platform/combo"
-	"arb/internal/platform/errclass"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/combo"
+	"nox/internal/platform/errclass"
+	"nox/internal/store/pgstore"
 )
 
 // TestGateDecision_AllPass 全部通过（D-072 §3.1）。

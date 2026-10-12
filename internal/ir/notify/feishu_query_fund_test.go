@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 )
 
 func fundTools(s *fakeQueryStore) *feishuQueryTools { return &feishuQueryTools{store: s} }
@@ -77,7 +77,7 @@ func TestD201_QueryROGate(t *testing.T) {
 		t.Fatalf("分号未拒：%v %s", r.IsError, r.Content)
 	}
 	r, _, _ = tk.Execute(ctx, analyst.ToolCall{ID: "c", Name: "query_ro", Input: `{"sql":"SELECT 1"}`})
-	if !r.IsError || !strings.Contains(r.Content, "ARB_AI_PG_DSN") {
+	if !r.IsError || !strings.Contains(r.Content, "NOX_AI_PG_DSN") {
 		t.Fatalf("缺 DSN 未如实报：%v %s", r.IsError, r.Content)
 	}
 }

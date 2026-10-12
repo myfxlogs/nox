@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/store/pgstore"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/exec"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // fakeAccountQuerier 受控账户查询器（D-053 monitor 测试）：acct/err 可随时切换。

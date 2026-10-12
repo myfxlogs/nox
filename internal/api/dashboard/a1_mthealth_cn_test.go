@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 	"time"
 )
 

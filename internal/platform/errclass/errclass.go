@@ -7,7 +7,7 @@ package errclass
 import (
 	"strings"
 
-	"arb/internal/data/keydomain"
+	"nox/internal/data/keydomain"
 )
 
 // Action 分类调用方应如何响应 MT4/MT5 错误。

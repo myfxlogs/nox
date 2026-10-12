@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/testutil"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/testutil"
+	"nox/internal/store/pgstore"
 )
 
 // d580ReadySvc 造「七闸全过」的 XASSET_CARRY 组合 905（MT 买腿×perp 卖腿正向）。
@@ -20,7 +20,7 @@ import (
 // monitor 行+快照+MT 保证金率 fact+perp 杠杆缝全就位，仅差 qbus 报价由用例自喂。
 func d580ReadySvc(t *testing.T) *Service {
 	t.Helper()
-	st, err := pgstore.New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	st, err := pgstore.New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatal(err)
 	}

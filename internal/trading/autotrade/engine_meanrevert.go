@@ -7,8 +7,8 @@ import (
 	"sort"
 	"time"
 
-	"arb/internal/platform/combo"
-	"arb/internal/risk/gate"
+	"nox/internal/platform/combo"
+	"nox/internal/risk/gate"
 )
 
 // meanRevertLoop D-072 均值回归扫描：venue 对与阈值从 env 读取（§3.4 外部化）。
@@ -17,7 +17,7 @@ func (e *Engine) meanRevertLoop(ctx context.Context) {
 		return
 	}
 	if len(e.cfg.MeanRevertThresh) == 0 {
-		log.Println("[autotrade] meanRevertLoop: no thresholds configured (ARB_MEANREVERT_THRESHOLDS empty)")
+		log.Println("[autotrade] meanRevertLoop: no thresholds configured (NOX_MEANREVERT_THRESHOLDS empty)")
 		return
 	}
 	// venue 对从 AllowVenues 提取（前两个；D-443 热读 holder，sort 确定性语义不变）
@@ -28,7 +28,7 @@ func (e *Engine) meanRevertLoop(ctx context.Context) {
 	}
 	sort.Strings(venues)
 	if len(venues) < 2 {
-		log.Println("[autotrade] meanRevertLoop: need >=2 allow venues (ARB_AUTOTRADE_ALLOW_VENUES)")
+		log.Println("[autotrade] meanRevertLoop: need >=2 allow venues (NOX_AUTOTRADE_ALLOW_VENUES)")
 		return
 	}
 	venueA, venueB := venues[0], venues[1]

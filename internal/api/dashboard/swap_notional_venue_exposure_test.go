@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/store/pgstore"
 )
 
 // mockUSDPerLotForLeg 构造 usdPerLotOf 回调：固定 canonical+venue → usdPerLot（ok=true）。

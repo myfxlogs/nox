@@ -3,7 +3,7 @@ package engine
 import (
 	"testing"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // TestNetStoreGate D-085 息差家族净门槛 + D-078 CROSS_VENUE 回归。

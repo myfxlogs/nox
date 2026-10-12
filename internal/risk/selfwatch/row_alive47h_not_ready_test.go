@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // d061AliveRow 白名单组合（stage1Pair 四元组）的 active 纸面行。

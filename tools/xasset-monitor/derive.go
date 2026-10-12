@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/research/scan"
-	"arb/internal/store/pgstore"
+	"nox/internal/research/scan"
+	"nox/internal/store/pgstore"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"

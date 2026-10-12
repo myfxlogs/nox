@@ -5,11 +5,11 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 func TestD471_ComboAdmin(t *testing.T) {
-	st, err := New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	st, err := New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}

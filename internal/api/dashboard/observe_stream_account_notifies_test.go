@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/ledger/reconcile"
-	"arb/internal/trading/exec"
+	"nox/internal/data/bus"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/trading/exec"
 )
 
 // TestD568_ObserveStreamAccountNotifies T2a：MT5 余额帧 → fundsHook 触发。

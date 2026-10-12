@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"arb/internal/platform/analyst"
+	"nox/internal/platform/analyst"
 )
 
 func (t *feishuQueryTools) execTodayIncome(ctx context.Context, call analyst.ToolCall) (analyst.ToolResult, []analyst.Citation, error) {

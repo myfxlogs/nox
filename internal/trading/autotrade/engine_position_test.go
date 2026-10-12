@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // seedSwapPosition 建一条 SWAPARB 持仓 + 双腿（BUY vA:mt5 / SELL vB:mt5），oppID canonical=AUDJPY。

@@ -1,6 +1,6 @@
 package analyst
 
-// rate.go 令牌桶限流（ARB_ANALYST_RATE_PER_HOUR，默认 20 问/小时）。
+// rate.go 令牌桶限流（NOX_ANALYST_RATE_PER_HOUR，默认 20 问/小时）。
 // 超限报 resource_exhausted（service 层转 connect 错误码）。
 
 import (

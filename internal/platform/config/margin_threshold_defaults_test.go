@@ -11,10 +11,10 @@ import (
 // TestD067_MarginThresholdDefaults 清掉 margin env 后缺省值断言（t.Setenv 空串=缺省，
 // 自动还原；envDur 解析失败回落 def）。
 func TestD067_MarginThresholdDefaults(t *testing.T) {
-	t.Setenv("ARB_MT_HEALTH_MARGIN_WARN", "")
-	t.Setenv("ARB_MT_HEALTH_MARGIN_CRIT", "")
-	t.Setenv("ARB_MT_HEALTH_FACT_WARN", "")
-	t.Setenv("ARB_MT_HEALTH_FACT_CRIT", "")
+	t.Setenv("NOX_MT_HEALTH_MARGIN_WARN", "")
+	t.Setenv("NOX_MT_HEALTH_MARGIN_CRIT", "")
+	t.Setenv("NOX_MT_HEALTH_FACT_WARN", "")
+	t.Setenv("NOX_MT_HEALTH_FACT_CRIT", "")
 
 	c := loadMTData()
 	if c.HealthMarginWarn != 24*time.Hour {

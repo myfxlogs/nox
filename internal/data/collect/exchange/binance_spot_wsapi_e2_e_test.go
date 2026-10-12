@@ -15,7 +15,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 // wsapiFakeServer 起 ws-api 假服务端：对 start 回 listenKey、ping/stop 回空 result，

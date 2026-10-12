@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/fact"
+	"nox/internal/store/pgstore"
 )
 
 // d049Store BRENT×BZUSDT(gate) 场景：UKOILm 规格 swap_long=0 / swap_short=−16，

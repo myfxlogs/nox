@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"arb/internal/trading/exec"
+	"nox/internal/trading/exec"
 )
 
 func TestD423_EntryGateFailClosed(t *testing.T) {

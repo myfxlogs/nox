@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/research/scan"
+	"nox/internal/research/scan"
 )
 
 type fakeNotify struct{ sends []string }

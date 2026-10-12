@@ -5,15 +5,15 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/infra/dephealth"
-	"arb/internal/platform/safego"
+	"nox/internal/data/bus"
+	"nox/internal/infra/dephealth"
+	"nox/internal/platform/safego"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 
-	"arb/internal/data/collect/exchange"
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"nox/internal/data/collect/exchange"
 )
 
 // --- 快照类 ---

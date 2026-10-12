@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/platform/safego"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/platform/safego"
+	"nox/internal/store/pgstore"
 )
 
 // Monitor 订阅 OPEN/LEGGED 持仓涉及的报价事件，实时重算平仓净收益。
@@ -22,11 +22,11 @@ type Monitor struct {
 	mu          sync.Mutex
 	positions   map[int64]*pgstore.Position // 缓存 OPEN/LEGGED 持仓
 	lastAlert   map[int64]time.Time         // position → 上次告警时间
-	throttle    time.Duration               // 同 key 告警冷却（ARB_ALERT_RESEND_INTERVAL，默认 10m）
+	throttle    time.Duration               // 同 key 告警冷却（NOX_ALERT_RESEND_INTERVAL，默认 10m）
 	closeBpsThr float64                     // 建议平仓阈值（净收益 bps 降至此值以下时告警）
 }
 
-// New 创建持仓监控器。resendInterval = 同持仓同类告警冷却（ARB_ALERT_RESEND_INTERVAL，默认 10m）。
+// New 创建持仓监控器。resendInterval = 同持仓同类告警冷却（NOX_ALERT_RESEND_INTERVAL，默认 10m）。
 func New(b *bus.QuoteBus, store *pgstore.Store, closeBpsThreshold float64, resendInterval time.Duration) *Monitor {
 	if resendInterval <= 0 {
 		resendInterval = 10 * time.Minute

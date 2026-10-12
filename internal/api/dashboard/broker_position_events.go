@@ -10,8 +10,8 @@ import (
 	"sort"
 	"time"
 
-	"arb/internal/data/venue"
-	v1 "arb/internal/gen/dashboardv1"
+	"nox/internal/data/venue"
+	v1 "nox/internal/gen/dashboardv1"
 
 	"google.golang.org/protobuf/proto"
 )

@@ -6,7 +6,7 @@
 //
 // 用法（复审方执行）：
 //
-//	ARB_PG_DSN="postgres://arb:arb@arb-postgres:5432/arb?sslmode=disable" \
+//	NOX_PG_DSN="postgres://arb:arb@arb-postgres:5432/arb?sslmode=disable" \
 //	  go run ./cmd/settleonce -pos=479
 package main
 
@@ -18,10 +18,10 @@ import (
 	"os"
 	"time"
 
-	"arb/internal/ledger/settleadapter"
-	"arb/internal/ledger/settlement"
-	"arb/internal/portfolio/lifecycle"
-	"arb/internal/store/pgstore"
+	"nox/internal/ledger/settleadapter"
+	"nox/internal/ledger/settlement"
+	"nox/internal/portfolio/lifecycle"
+	"nox/internal/store/pgstore"
 )
 
 func runSettleOnce() {
@@ -31,9 +31,9 @@ func runSettleOnce() {
 	if *posID <= 0 {
 		log.Fatal("-pos 必填（position ID）")
 	}
-	dsn := os.Getenv("ARB_PG_DSN") // D-145 引导件：连库前必需
+	dsn := os.Getenv("NOX_PG_DSN") // D-145 引导件：连库前必需
 	if dsn == "" {
-		log.Fatal("ARB_PG_DSN 未设置")
+		log.Fatal("NOX_PG_DSN 未设置")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

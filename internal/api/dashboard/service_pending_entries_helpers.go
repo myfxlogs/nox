@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/portfolio/capitalview"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/portfolio/capitalview"
+	"nox/internal/store/pgstore"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // comboTier D-478 S4→D-010 S4：安全档位（服务端算，前端只渲染）——裸腿名义顶。

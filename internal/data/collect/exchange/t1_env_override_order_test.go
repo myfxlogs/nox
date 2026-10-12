@@ -3,10 +3,10 @@
 package exchange
 
 import (
-	"arb/internal/platform/httpx"
 	"context"
 	"errors"
 	"net/url"
+	"nox/internal/platform/httpx"
 	"strings"
 	"testing"
 )

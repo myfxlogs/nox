@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const cfgLeggedDeferrals = "ARB_LEGGED_DEFERRALS"
+const cfgLeggedDeferrals = "NOX_LEGGED_DEFERRALS"
 
 // LeggedDeferral 一条延迟判定的裸露登记。
 type LeggedDeferral struct {

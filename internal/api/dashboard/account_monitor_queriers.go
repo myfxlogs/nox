@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/ledger/reconcile"
-	"arb/internal/store/pgstore"
+	"nox/internal/ledger/reconcile"
+	"nox/internal/store/pgstore"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // binanceProxyBase D-145 env 收口：BINANCE_PROXY_URL 缺省回退值由装配层注入

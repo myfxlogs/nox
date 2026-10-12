@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/platform/testutil"
+	"nox/internal/platform/testutil"
 )
 
 // 备份恢复完整性测试（§10.1 场景 17）。
@@ -20,18 +20,18 @@ import (
 // 注意：TestDSN 返回值经 normalizeDSN 追加了 pgx 专用参数（pool_max_conns/
 // pool_min_conns/options），psql/pg_dump 不认识 → 传给 psql 前必须 stripPgxParams。
 
-// adminDSN 推导：从 ARB_TEST_PG_DSN 替换 dbname 为 postgres（有 CREATE DATABASE 权限）。
+// adminDSN 推导：从 NOX_TEST_PG_DSN 替换 dbname 为 postgres（有 CREATE DATABASE 权限）。
 // 剥离 pgx 专用参数（pool_max_conns/pool_min_conns/options），psql 不认识。
 func adminDSN(t *testing.T) string {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	return stripPgxParams(swapDBName(dsn, "postgres"))
 }
 
 // psqlDSN 剥离 pgx 专用参数后返回 psql 可用的源库 DSN。
 func psqlDSN(t *testing.T) string {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	return stripPgxParams(dsn)
 }
 
@@ -64,7 +64,7 @@ func stripPgxParams(dsn string) string {
 // 起带席位后缀——多席并发跑备份测试不互踩固定名临时库；脚本侧 TEST_DB 同步派生）。
 var restoreTestDBName = "arb_restore_test_" + testutil.SeatTag()
 
-// setupRestoreTestDB 建临时库并恢复 ARB_TEST_PG_DSN 的 dump，返回临时库 psql DSN + 清理函数。
+// setupRestoreTestDB 建临时库并恢复 NOX_TEST_PG_DSN 的 dump，返回临时库 psql DSN + 清理函数。
 func setupRestoreTestDB(t *testing.T) (testDSN string) {
 	t.Helper()
 	srcDSN := psqlDSN(t)

@@ -9,7 +9,7 @@ import (
 
 func TestD517_WSViaProxy_FstreamRoutes(t *testing.T) {
 	// 置空 = 直连模式（native 端点原样返回）。
-	os.Unsetenv("ARB_CEX_WS_BASE")
+	os.Unsetenv("NOX_CEX_WS_BASE")
 	cases := []struct {
 		name       string
 		proxyPath  string

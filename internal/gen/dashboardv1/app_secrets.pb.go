@@ -310,7 +310,7 @@ var File_dashboardv1_app_secrets_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_app_secrets_proto_rawDesc = "" +
 	"\n" +
-	"\x1ddashboardv1/app_secrets.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xeb\x01\n" +
+	"\x1ddashboardv1/app_secrets.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xeb\x01\n" +
 	"\fAppSecretKey\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05group\x18\x02 \x01(\tR\x05group\x12\x1b\n" +
@@ -323,13 +323,13 @@ const file_dashboardv1_app_secrets_proto_rawDesc = "" +
 	"\x04desc\x18\b \x01(\tR\x04desc\"\x17\n" +
 	"\x15ListAppSecretsRequest\"L\n" +
 	"\x16ListAppSecretsResponse\x122\n" +
-	"\x04keys\x18\x01 \x03(\v2\x1e.arb.dashboard.v1.AppSecretKeyR\x04keys\"T\n" +
+	"\x04keys\x18\x01 \x03(\v2\x1e.nox.dashboard.v1.AppSecretKeyR\x04keys\"T\n" +
 	"\x16UpdateAppSecretRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12\x12\n" +
 	"\x04note\x18\x03 \x01(\tR\x04note\"K\n" +
 	"\x17UpdateAppSecretResponse\x120\n" +
-	"\x03key\x18\x01 \x01(\v2\x1e.arb.dashboard.v1.AppSecretKeyR\x03keyB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x03key\x18\x01 \x01(\v2\x1e.nox.dashboard.v1.AppSecretKeyR\x03keyB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_app_secrets_proto_rawDescOnce sync.Once
@@ -345,17 +345,17 @@ func file_dashboardv1_app_secrets_proto_rawDescGZIP() []byte {
 
 var file_dashboardv1_app_secrets_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_dashboardv1_app_secrets_proto_goTypes = []any{
-	(*AppSecretKey)(nil),            // 0: arb.dashboard.v1.AppSecretKey
-	(*ListAppSecretsRequest)(nil),   // 1: arb.dashboard.v1.ListAppSecretsRequest
-	(*ListAppSecretsResponse)(nil),  // 2: arb.dashboard.v1.ListAppSecretsResponse
-	(*UpdateAppSecretRequest)(nil),  // 3: arb.dashboard.v1.UpdateAppSecretRequest
-	(*UpdateAppSecretResponse)(nil), // 4: arb.dashboard.v1.UpdateAppSecretResponse
+	(*AppSecretKey)(nil),            // 0: nox.dashboard.v1.AppSecretKey
+	(*ListAppSecretsRequest)(nil),   // 1: nox.dashboard.v1.ListAppSecretsRequest
+	(*ListAppSecretsResponse)(nil),  // 2: nox.dashboard.v1.ListAppSecretsResponse
+	(*UpdateAppSecretRequest)(nil),  // 3: nox.dashboard.v1.UpdateAppSecretRequest
+	(*UpdateAppSecretResponse)(nil), // 4: nox.dashboard.v1.UpdateAppSecretResponse
 	(*timestamppb.Timestamp)(nil),   // 5: google.protobuf.Timestamp
 }
 var file_dashboardv1_app_secrets_proto_depIdxs = []int32{
-	5, // 0: arb.dashboard.v1.AppSecretKey.updated_at:type_name -> google.protobuf.Timestamp
-	0, // 1: arb.dashboard.v1.ListAppSecretsResponse.keys:type_name -> arb.dashboard.v1.AppSecretKey
-	0, // 2: arb.dashboard.v1.UpdateAppSecretResponse.key:type_name -> arb.dashboard.v1.AppSecretKey
+	5, // 0: nox.dashboard.v1.AppSecretKey.updated_at:type_name -> google.protobuf.Timestamp
+	0, // 1: nox.dashboard.v1.ListAppSecretsResponse.keys:type_name -> nox.dashboard.v1.AppSecretKey
+	0, // 2: nox.dashboard.v1.UpdateAppSecretResponse.key:type_name -> nox.dashboard.v1.AppSecretKey
 	3, // [3:3] is the sub-list for method output_type
 	3, // [3:3] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name

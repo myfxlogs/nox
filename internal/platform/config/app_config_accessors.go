@@ -106,7 +106,7 @@ func fmapv(g func(*Config) *map[string]float64) AppCfgMeta {
 			return sb.String()
 		}, ""}
 }
-func takerG(venue string) AppCfgMeta { // ARB_COMMISSION_TAKER_*：venue 键位映射特例
+func takerG(venue string) AppCfgMeta { // NOX_COMMISSION_TAKER_*：venue 键位映射特例
 	return AppCfgMeta{"number",
 		func(c *Config, v string) error {
 			f, err := strconv.ParseFloat(v, 64)

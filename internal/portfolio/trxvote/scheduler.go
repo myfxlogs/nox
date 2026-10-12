@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/platform/safego"
+	"nox/internal/platform/safego"
 )
 
 // AccountDetail 账户投票详情——读面本地域结构（D-117：与 gotron proto 解耦，

@@ -3,7 +3,7 @@
 // 三读侧同此映射禁复制（D-367 XAssetSpecsFromRows 先例）。
 package exec
 
-import "arb/internal/store/pgstore"
+import "nox/internal/store/pgstore"
 
 // SwapArbSpecsFromRows 表行 → spec 列表（NULL → 0；enabled 过滤在 SQL 层）。
 func SwapArbSpecsFromRows(rows []pgstore.SwapArbAllowRow) []ComboAllowSpec {

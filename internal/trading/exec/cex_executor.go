@@ -9,8 +9,8 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/platform/httpx"
+	"nox/internal/data/keydomain"
+	"nox/internal/platform/httpx"
 )
 
 // CEXExecutor 是 Binance/OKX REST 签名下单执行器（§13.2）。
@@ -52,7 +52,7 @@ type CEXExecutor struct {
 	// okx swap sz 单位=张数，o.Qty 是基础币数量 → sz=qty/ctVal。
 	// AlertFn 平仓被拒时 critical 告警（main 注入 store.InsertAlert；nil=不告警，测试用）。
 	AlertFn          func(posID *int64, level, msg string)
-	marginReservePct float64 // D-415 ARB_MARGIN_RESERVE_PCT 安全垫（缺省 0.20）
+	marginReservePct float64 // D-415 NOX_MARGIN_RESERVE_PCT 安全垫（缺省 0.20）
 
 	// 强平距离预检参数（SetLiqGuards 注入；缺省 0=关闸/0.5=cross 占比上限）。
 	minLiqDistPct          float64
@@ -71,7 +71,7 @@ const defaultMarginReservePct = 0.20
 
 // 缺省档：cross 名义/权益占比上限。minLiqDistPct 零值=关闸（struct 零值即缺省）。
 // gate 杠杆无缺省——缺失/非正=fail-closed 拒开（phantom 杠杆静默兜底=违规）。
-const DefaultCrossNotionalEquityCap = 0.5 // D-472 S4：ARB_CROSS_NOTIONAL_EQUITY_CAP 缺省档
+const DefaultCrossNotionalEquityCap = 0.5 // D-472 S4：NOX_CROSS_NOTIONAL_EQUITY_CAP 缺省档
 
 // NewCEXExecutor 创建 CEX 执行器。
 // baseURL 为 venue 根（binance 走代理 fapi 风格需已含 /demo 路径；okx 实盘域名）。

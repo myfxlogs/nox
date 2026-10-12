@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package arb.dashboard.v1;
+package nox.dashboard.v1;
 
-option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
 
 // ==== common.proto —— D-508 S10 公共件（新增 RPC 复用锚点）。 ====
 // 注：既有 inline 分页/回执字段对（limit+offset / ok+error）未嵌入收编——嵌入会使外层

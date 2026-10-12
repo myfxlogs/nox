@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
-// trxTestStore 创建测试 store（ARB_TEST_PG_SERVICE_DSN，TRUNCATE 全库）。
+// trxTestStore 创建测试 store（NOX_TEST_PG_SERVICE_DSN，TRUNCATE 全库）。
 // D-212 CI 红根因修复：改为包级单例 pool（serviceTestStoreSingleInit），避免每测试 New 独立 pool
 // 累积连接耗尽 pg 服务端 max_connections → Acquire 卡住 → 30s 超时 flaky。
 func trxTestStore(t *testing.T) *pgstore.Store {

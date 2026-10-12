@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 func d104Deps(st *fakeStore) Deps {

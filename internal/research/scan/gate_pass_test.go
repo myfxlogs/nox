@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // d051Store 真库+本票夹具域清空（D51% 前缀隔离——d410 清理不覆盖本前缀）。

@@ -3,7 +3,7 @@ package dashboard
 import (
 	"context"
 
-	"arb/internal/store/pgstore"
+	"nox/internal/store/pgstore"
 )
 
 // GateChecker D-195-A：执行控制面检查接口（避免 dashboard→autotrade 循环依赖）。

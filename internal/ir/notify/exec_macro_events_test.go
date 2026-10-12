@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 )
 
 // fake 补面：D-528 两方法（feishu_query_test.go 的 fakeQueryStore 扩展）。

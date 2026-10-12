@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 func TestFactCacheTradeModes(t *testing.T) {

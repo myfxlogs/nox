@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 func TestCheckTradeMode_Matrix(t *testing.T) {

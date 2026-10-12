@@ -3,9 +3,9 @@ package autotrade
 import (
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // New 创建自动交易引擎（从 engine.go 提取避免超 300 行）。

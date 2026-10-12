@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // d555s2Cand 带价候选（S2 形态；S1 无价构造用既有 d555Cand）。

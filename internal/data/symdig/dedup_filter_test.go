@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/platform/analyst"
-	"arb/internal/store/pgstore"
+	"nox/internal/platform/analyst"
+	"nox/internal/store/pgstore"
 )
 
 func d530Deps(t *testing.T, st *fakeStore, run analystRunner) Deps {

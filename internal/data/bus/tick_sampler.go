@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/platform/safego"
+	"nox/internal/platform/safego"
 )
 
 // TickSampler 订阅 QuoteBus 并按节流间隔采样写入 ticks 表。

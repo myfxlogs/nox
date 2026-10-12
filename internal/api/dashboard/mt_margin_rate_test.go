@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // TestEffMTMarginRate_S1b：实测新鲜→实测值；实测<下限→抬下限仍实测；缺行/超窗/读败→(0.05,未实测)。

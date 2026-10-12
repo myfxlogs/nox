@@ -9,8 +9,8 @@ import (
 	"log"
 	"strings"
 
-	"arb/internal/risk/gate"
-	"arb/internal/store/pgstore"
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 )
 
 // gapText 缺口→业主请求文案（投资人域动作四型：开户/凭据/权限/资金划转/约束喂入）。

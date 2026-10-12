@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/fact"
+	"nox/internal/data/fact"
 )
 
 // d374Row 构造 cfd 结构 UniverseRow（note 默认 clean 空串）。

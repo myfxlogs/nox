@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 func d393Now() time.Time { return time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC) }

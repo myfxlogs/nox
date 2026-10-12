@@ -8,9 +8,9 @@ import (
 	"syscall"
 	"time"
 
-	dashv1 "arb/internal/gen/dashboardv1"
-	"arb/internal/platform/config"
-	"arb/internal/store/pgstore"
+	dashv1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/config"
+	"nox/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -125,13 +125,13 @@ func (s *Service) UpdateAppConfig(ctx context.Context, req *connect.Request[dash
 	if err := s.store.UpsertAppConfig(ctx, key, val, note); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	// D-545：ARB_MACRO_ENABLED 借密钥轨热推——写库成功即同步 resolver，当班闸即效免重启。
-	if key == "ARB_MACRO_ENABLED" && s.secRes != nil {
+	// D-545：NOX_MACRO_ENABLED 借密钥轨热推——写库成功即同步 resolver，当班闸即效免重启。
+	if key == "NOX_MACRO_ENABLED" && s.secRes != nil {
 		s.secRes.Set(key, val)
 	}
 	// D-093 R1：出场费率=app_config 明文热轨——写库成功即热换 running 视图（scoped 本键，
 	// 不动其他键 pendingRestart 语义），enrich 下一轮按新费率，免重启。
-	if key == "ARB_EXIT_FEE_BPS_OKX" && s.acv.running != nil {
+	if key == "NOX_EXIT_FEE_BPS_OKX" && s.acv.running != nil {
 		c2 := *s.acv.running
 		if err := meta.Set(&c2, val); err == nil {
 			s.acv.running = &c2

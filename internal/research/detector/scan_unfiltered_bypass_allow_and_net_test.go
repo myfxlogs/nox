@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
+	"nox/internal/data/bus"
 )
 
 func d051Snapshot(now time.Time) map[string]map[string]bus.Quote {

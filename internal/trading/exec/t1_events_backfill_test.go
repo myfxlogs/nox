@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // d577Seed 播种 CLOSING position + gate:perp OPEN leg（XAU_USDT SELL 10 张，quanto=1）。

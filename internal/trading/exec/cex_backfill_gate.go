@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"time"
 
-	"arb/internal/data/keydomain"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/keydomain"
+	"nox/internal/store/pgstore"
 )
 
 // GateFill gate futures usertrade/my_trades 行（WS 帧与 REST 同形子集）。

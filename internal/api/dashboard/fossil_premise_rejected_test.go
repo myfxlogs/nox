@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/data/bus"
-	"arb/internal/data/fact"
-	"arb/internal/platform/config"
-	"arb/internal/store/pgstore"
+	"nox/internal/data/bus"
+	"nox/internal/data/fact"
+	"nox/internal/platform/config"
+	"nox/internal/store/pgstore"
 	"strings"
 
-	v1 "arb/internal/gen/dashboardv1"
+	v1 "nox/internal/gen/dashboardv1"
 )
 
 // d163Svc 在 d047Svc 基建上补机审配置（cap 键 + qbus CAPUSDT 鲜帧）。
@@ -172,7 +172,7 @@ func TestD163_ContractViolation_Rejected(t *testing.T) {
 	}
 }
 
-// cap：expected_cost 超 ARB_PROBE_MAX_COST → 拒；在途 ≥ARB_PROBE_MAX_OPEN → 拒。
+// cap：expected_cost 超 NOX_PROBE_MAX_COST → 拒；在途 ≥NOX_PROBE_MAX_OPEN → 拒。
 func TestD163_CapViolation_Rejected(t *testing.T) {
 	svc, st := d163Svc(t)
 	now := time.Now()
@@ -231,7 +231,7 @@ func TestD163_LegNotTrading_Rejected(t *testing.T) {
 	}
 }
 
-// 主闸 ARB_PROBE_RPC_ENABLED=false → 整机审不跑（提案留 proposed，零 warn 零动作）。
+// 主闸 NOX_PROBE_RPC_ENABLED=false → 整机审不跑（提案留 proposed，零 warn 零动作）。
 func TestD163_MasterGateOff_NoAdjudication(t *testing.T) {
 	svc, st := d163Svc(t)
 	svc.acv.running.ProbeRPCEnabled = false

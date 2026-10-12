@@ -5,11 +5,11 @@
 package mt5connect
 
 import (
-	mt5 "arb/internal/data/adapter/gen/mtapi/mt5"
 	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
 	http "net/http"
+	mt5 "nox/internal/data/adapter/gen/mtapi/mt5"
 	strings "strings"
 )
 
