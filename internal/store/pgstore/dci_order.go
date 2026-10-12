@@ -64,7 +64,7 @@ func (s *Store) FinishDCIOrder(ctx context.Context, id int64, status, response s
 
 // ListDCIQuotes 报价面选档（D-191-R8 序错修：strike 界+6h 时效窗下推 SQL，
 // apy DESC LIMIT 作用于达标集——原 LIMIT50 先截断残集滤恒空+旧帧竞争）。
-// D-191-R13 候选集去重：内层 DISTINCT ON (product_ref) 每品取最新帧（ts DESC），
+// 候选集去重：内层 DISTINCT ON (product_ref) 每品取最新帧（ts DESC），
 // 外层再 apy DESC——同品旧版行零竞争、NULL 字段旧帧不挤档；ts 窗不收。
 // strikeBound>0 时按 optType 方向过滤（PUT→strike≤bound、CALL→strike≥bound，
 // strike 缺=不达标）；=0 不带界。

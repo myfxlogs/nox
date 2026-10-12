@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// D-195-B：position_legs attempt 字段 + Position intent 字段 CRUD 测试（DSN-gated 真库）。
+// position_legs attempt 字段 + Position intent 字段 CRUD 测试（DSN-gated 真库）。
 
 func testAttemptStore(t *testing.T) *Store {
 	t.Helper()

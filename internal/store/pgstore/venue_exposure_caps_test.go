@@ -1,6 +1,6 @@
 package pgstore
 
-// D-475a S1/T 验收：fin_venue_exposure_caps upsert 幂等+list 回读+CHECK 负值拒；
+// S1/T 验收：fin_venue_exposure_caps upsert 幂等+list 回读+CHECK 负值拒；
 // paper_spot_carry accrue_ticks/min_accrued_usd 列读写（S5 同源迁移）。
 
 import (

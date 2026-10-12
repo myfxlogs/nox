@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// D-173 DB 集成测试：ListProductGroups 众数聚合 + product_group 配对场景。
+// DB 集成测试：ListProductGroups 众数聚合 + product_group 配对场景。
 // 需 ARB_TEST_PG_DSN，未设置时 skip（testStore 门禁）。
 // 覆盖 470 事故根因：同 canonical BRENT 但 FxPro=cfd_spot × PXBT=cfd_leverage → 不同 product_group 被滤。
 

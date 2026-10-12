@@ -1,13 +1,13 @@
 package main
 
-// D-335R1 T1/T2：monitor Exness 腿参数化——每对取各自 exSym 报价；
+// T1/T2：monitor Exness 腿参数化——每对取各自 exSym 报价；
 // 无新鲜 tick 逐对 skip（禁止任何腿顶替）；量级卫生断言 |esp|<1000bps。
 import (
 	"context"
 	"testing"
 
+	"arb/internal/platform/testutil"
 	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

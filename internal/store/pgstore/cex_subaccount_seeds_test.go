@@ -66,7 +66,7 @@ func TestCexSubaccountSeeds_Idempotent(t *testing.T) {
 
 // TestD130_BinanceEarnSeed D-130 返修回归锚：0182 重放 → binance:earn 行出
 // （凭据复制 spot real 行）且 binance:funding 行摘除；幂等重放行数不变。
-// D-133 域1 追加：0183 counter-migration 摘除 binance:earn（业主令理财面不纳入）——
+// 域1 追加：0183 counter-migration 摘除 binance:earn（业主令理财面不纳入）——
 // 0182+0183 连放后 earn 行归零，0183 幂等可重放。
 func TestD130_BinanceEarnSeed(t *testing.T) {
 	s := testStore(t)
@@ -102,7 +102,7 @@ func TestD130_BinanceEarnSeed(t *testing.T) {
 		`SELECT COUNT(*) FROM exchange_configs WHERE venue='binance' AND venue_type='earn'`).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("重放后 earn 行=%d err=%v, want 1（幂等）", n, err)
 	}
-	// D-133：0183 摘除 binance:earn（新环境先播种再删=净零；幂等重放仍 0 行）；
+	// 0183 摘除 binance:earn（新环境先播种再删=净零；幂等重放仍 0 行）；
 	// okx:earn 不受影响（earn 机制在域——先种一行验证不被误删）。
 	if _, err := s.pool.Exec(ctx,
 		`INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated)

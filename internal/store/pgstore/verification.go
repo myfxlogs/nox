@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"arb/internal/verification"
+	"arb/internal/review/verification"
 )
 
 // VerificationStat 对应 verification_stats 表（D-086）。
@@ -95,7 +95,7 @@ func (s *Store) UpdateVerificationStatForPosition(ctx context.Context, p *Positi
 		}
 	}
 
-	// D-087 §3.4 typed 新签名：netBps + swapBpsDaily 按字段取值
+	// §3.4 typed 新签名：netBps + swapBpsDaily 按字段取值
 	netBps := p.ExpectedNetBps
 	swapBpsDaily := 0.0
 	if p.ExpectedSwapBpsDaily != nil {

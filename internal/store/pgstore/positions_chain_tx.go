@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"arb/internal/keydomain"
+	"arb/internal/data/keydomain"
 
 	"github.com/jackc/pgx/v5"
 )
 
-// D-249 S5 审计 P1-8：CreatePosition 链事务包裹——CreatePosition + 全部 Legs 在单事务内原子执行。
+// 审计 P1-8：CreatePosition 链事务包裹——CreatePosition + 全部 Legs 在单事务内原子执行。
 // 从 positions.go 提取（文件超 300 行软警告），事务化内核函数供 CreatePositionWithLegs 复用。
 
 // CreatePositionWithLegs CreatePosition + 全部 Legs 在单事务内原子执行。

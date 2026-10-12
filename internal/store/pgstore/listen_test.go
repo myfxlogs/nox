@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/testutil"
+	"arb/internal/platform/testutil"
 )
 
 // 端到端：LISTEN 成功兜底调用 → DisableStrategy/EnableStrategy 触发 NOTIFY →

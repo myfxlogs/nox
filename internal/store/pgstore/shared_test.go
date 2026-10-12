@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"arb/internal/testutil"
+	"arb/internal/platform/testutil"
 )
 
 var (

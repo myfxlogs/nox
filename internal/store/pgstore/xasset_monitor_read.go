@@ -1,5 +1,5 @@
-// D-335 S2：XASSET 入口安全边际闸读接口（monitor 单源：entry+noise 同行读）。
-// D-423：查询键三元组化（pair, cex_venue, mt_venue）——跨 venue 借用他所簿统计=伪安全
+// XASSET 入口安全边际闸读接口（monitor 单源：entry+noise 同行读）。
+// 查询键三元组化（pair, cex_venue, mt_venue）——跨 venue 借用他所簿统计=伪安全
 // 边际/伪收割线；调用方按仓/机会的 venue 直查，查不到=诚实缺（fail-closed 不借用）。
 package pgstore
 
@@ -42,7 +42,7 @@ func (s *Store) LatestXAssetEntryGate(ctx context.Context, pair, cexVenue, mtVen
 // EnsureEntryGateSnapshot 写自开仓时点之前最新行，capture 必须与该行同源配对；
 // |Δt| 最近行会取到开仓后样本=跨样本混配，498 实证 capture 转负→line 比锚宽误杀）。
 // 行龄>maxGap（opened_at−rowTs）/无行 → ok=false（调用方回退代理路径，不用错尺度）。
-// D-423：查询键三元组化（pair,cexVenue,mtVenue）。
+// 查询键三元组化（pair,cexVenue,mtVenue）。
 func (s *Store) XAssetMonitorRowNear(ctx context.Context, pair, cexVenue, mtVenue string, ts time.Time, maxGap time.Duration) (entrySpreadBps float64, ok bool, err error) {
 	var rowTs time.Time
 	err = s.pool.QueryRow(ctx, `
@@ -84,7 +84,7 @@ func (s *Store) HasXAssetMonitorRow(ctx context.Context, pair, cexVenue, mtVenue
 // EnsureEntryGateSnapshot D-341 S1：开仓学习样本锚——两写点（D-327 同位）后调用，
 // 读开仓时点 monitor 最新行落 positions.entry_noise_bps/entry_harvest_floor_bps（IS NULL 幂等）。
 // monitor 缺行/未成噪 → 不写（学习锚 NULL=诚实缺样本，收割出口走 NULL 不触发语义）。
-// D-423：按 (pair,cexVenue,mtVenue) 三元组查——venue 键不可得传空串=自然 miss 不写。
+// 按 (pair,cexVenue,mtVenue) 三元组查——venue 键不可得传空串=自然 miss 不写。
 func (s *Store) EnsureEntryGateSnapshot(ctx context.Context, posID int64, pair, cexVenue, mtVenue string, maxAge time.Duration) error {
 	entry, noise, floor, hasFloor, ok, err := s.LatestXAssetEntryGate(ctx, pair, cexVenue, mtVenue, maxAge)
 	if err != nil || !ok {
@@ -115,7 +115,7 @@ func (s *Store) UpdatePositionExitKind(ctx context.Context, posID int64, kind st
 }
 
 // ExitKindFromReason D-341 S3：close reason 前缀 → exit_kind（logCloseTrigger 单映射点）。
-// D-013 ③：返回值全部走权威常量；legged_unwind/incident_close 不经此函数（终态归因覆盖写）。
+// ③：返回值全部走权威常量；legged_unwind/incident_close 不经此函数（终态归因覆盖写）。
 func ExitKindFromReason(reason string) string {
 	switch {
 	case strings.HasPrefix(reason, "disaster"): // D-378b：置于 contains 族前——reason 串含 basis/carry/stop 子串会被截胡

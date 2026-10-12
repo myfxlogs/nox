@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 
-	"arb/internal/notional"
+	"arb/internal/platform/notional"
 
 	"github.com/jackc/pgx/v5"
 )

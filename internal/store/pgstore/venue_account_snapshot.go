@@ -1,6 +1,6 @@
 // venue_account_snapshot.go —— D-358 S2：CEX/MT 账户余额快照落库（喂 D-356 覆盖率面板）。
 // 币种核证结论见 migration 0111 头注：原币混合（MT 原币直传/CEX USDT）——列 _raw+currency。
-// D-405 S1：buffer_multiple 列（CEX 距强平缓冲倍数=equity/MMR，写时归一；NULL=未采）；
+// buffer_multiple 列（CEX 距强平缓冲倍数=equity/MMR，写时归一；NULL=未采）；
 // snapHook 写口钩子（D-405 S3 marginGuard 搭车点：三写口收敛单钩，同步调用由 guard 内部异步化）。
 package pgstore
 
@@ -34,7 +34,7 @@ func (s *Store) SetVenueSnapshotHook(fn func(ctx context.Context, snaps []VenueA
 
 // InsertVenueAccountSnapshots 批量落账户快照（单 SQL 多行 VALUES；空切片 no-op）。
 // append 语义：扫描即周期任务，无需去重（D-358 §S2）。
-// D-405 S3：成功落库后同步触发 snapHook（marginGuard 事件驱动评估挂点，
+// 成功落库后同步触发 snapHook（marginGuard 事件驱动评估挂点，
 // 覆盖 scheduler/mt_event/okx_event 三写口）。
 func (s *Store) InsertVenueAccountSnapshots(ctx context.Context, snaps []VenueAccountSnapshot) error {
 	if len(snaps) == 0 {
@@ -67,7 +67,7 @@ func (s *Store) InsertVenueAccountSnapshots(ctx context.Context, snaps []VenueAc
 }
 
 // VenueAccountLatest 每 venue 最新快照（D-359 覆盖率面板行）。
-// D-405：补 balance/free_margin/buffer 三列（marginGuard + ListAccountMarginStatus 同源消费）。
+// 补 balance/free_margin/buffer 三列（marginGuard + ListAccountMarginStatus 同源消费）。
 type VenueAccountLatest struct {
 	Venue          string
 	VenueType      string
@@ -80,7 +80,7 @@ type VenueAccountLatest struct {
 }
 
 // LatestVenueAccountSnapshots 每 (venue, venue_type) 最新一行（DISTINCT ON 双键，
-// D-358fix：同 venue 双 type 如 okx spot/perp 是两个独立资金池，折叠成一行=漏行）。
+// 同 venue 双 type 如 okx spot/perp 是两个独立资金池，折叠成一行=漏行）。
 // 空表 → 空 nil 切片（调用方回退「未采」占位）。
 func (s *Store) LatestVenueAccountSnapshots(ctx context.Context) ([]VenueAccountLatest, error) {
 	rows, err := s.pool.Query(ctx, `

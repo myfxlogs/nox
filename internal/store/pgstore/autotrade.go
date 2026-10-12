@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"arb/internal/keydomain"
+	"arb/internal/data/keydomain"
 	"time"
 )
 
@@ -67,7 +67,7 @@ func (s *Store) CountComboStopLosses(ctx context.Context, windowDays int) (map[s
 }
 
 // StrategyStat 对应 strategy_stats 表（D-070）。
-// D-154 起淘汰判定 v2 不读本表累计列（total/wins/avg/win_rate），仅 disabled/disabled_reason（启停载体）。
+// 起淘汰判定 v2 不读本表累计列（total/wins/avg/win_rate），仅 disabled/disabled_reason（启停载体）。
 // 累计列仍由 UpdateStrategyStat 写，仅供显示层滚动统计——非淘汰真相源（P3）。
 type StrategyStat struct {
 	Strategy       string
@@ -113,9 +113,9 @@ func (s *Store) GetStrategyStat(ctx context.Context, strategy string) (*Strategy
 
 // AggregateStrategyStats 实时聚合策略全量平仓净值（D-154 S1 淘汰判定 v2 真相源）。
 // 替代 strategy_stats 累计列——position_settlements 实时聚合，覆盖 LEGGED/skip 等不入 stat 的平仓。
-// D-193-A：net 改读 settlement.net_realized_usd（正式净 PNL），legacy 行 fallback realized_usd。
+// net 改读 settlement.net_realized_usd（正式净 PNL），legacy 行 fallback realized_usd。
 // realized_pnl IS NOT NULL = 可判定口径（LEGGED 历史清理仓 realized NULL 不计入）。
-// D-323 S1：stats_status 过滤（COALESCE NULL→applied=legacy 兼容）——skipped/retryable/pending
+// stats_status 过滤（COALESCE NULL→applied=legacy 兼容）——skipped/retryable/pending
 // 行出局，统计层只消费数据质量过关的结算（D-193-A 原意闭环）。
 // 0 笔时 total=0、wins=0、avg=0、median=0（COALESCE 兜底 NULL→0，调用方按 0 处理 → 小样本判据 median<0 永不成立 → 不杀）。
 func (s *Store) AggregateStrategyStats(ctx context.Context, strategy string) (AggregateStat, error) {
@@ -143,7 +143,7 @@ func (s *Store) AggregateStrategyStats(ctx context.Context, strategy string) (Ag
 }
 
 // UpdateStrategyStat 平仓后更新策略统计（win=realizedPnl>0）。
-// D-154 起：累计列仅供显示层滚动统计，淘汰判定 v2 不读本表（改 AggregateStrategyStats 实时聚合）。
+// 起：累计列仅供显示层滚动统计，淘汰判定 v2 不读本表（改 AggregateStrategyStats 实时聚合）。
 func (s *Store) UpdateStrategyStat(ctx context.Context, strategy string, realizedPnl float64) error {
 	win := 0
 	if realizedPnl > 0 {
@@ -213,7 +213,7 @@ func (s *Store) ListDisabledStrategies(ctx context.Context) (map[string]bool, er
 }
 
 // DailyRealizedPnl 返回当日已平仓持仓的累计净 PNL（风控：单日亏损停机）。
-// D-193-A 扩包（决策 9）：与 AggregateStrategyStats（autotrade.go:98）同构——
+// 扩包（决策 9）：与 AggregateStrategyStats（autotrade.go:98）同构——
 // LEFT JOIN position_settlements + COALESCE 三级 fallback（net_realized_usd → realized_usd → realized_pnl）。
 // 禁止 actual-only 过滤——这是单日亏损停机风控，缺数据静默归零=哑数据击穿风控（D-223 R1 同型）。
 // 无 settlement 行/legacy 行经 fallback 覆盖。
@@ -235,7 +235,7 @@ func (s *Store) DailyRealizedPnl(ctx context.Context) (float64, error) {
 }
 
 // GetPnlAnchor 返回盈亏统计起点（F4，stats_anchor 单行表）。
-// D-193-A 扩包（决策 9）：累计已实现口径=SUM(net_realized_usd)（RealizedPnlSinceAnchor 同构）。
+// 扩包（决策 9）：累计已实现口径=SUM(net_realized_usd)（RealizedPnlSinceAnchor 同构）。
 // 本函数只读 stats_anchor 表无 SQL 可改，仅注释口径顺带对齐。
 func (s *Store) GetPnlAnchor(ctx context.Context) (time.Time, error) {
 	var anchor time.Time
@@ -247,7 +247,7 @@ func (s *Store) GetPnlAnchor(ctx context.Context) (time.Time, error) {
 }
 
 // RealizedPnlSinceAnchor 返回 closed_at >= anchor 的累计已实现盈亏（F4 后端口径）。
-// D-193-A 扩包（决策 9）：与 AggregateStrategyStats/DailyRealizedPnl 同构——
+// 扩包（决策 9）：与 AggregateStrategyStats/DailyRealizedPnl 同构——
 // LEFT JOIN position_settlements + COALESCE 三级 fallback。禁止 actual-only 过滤（风控哑数据击穿）。
 func (s *Store) RealizedPnlSinceAnchor(ctx context.Context) (float64, error) {
 	anchor, err := s.GetPnlAnchor(ctx)

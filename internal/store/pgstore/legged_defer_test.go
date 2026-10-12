@@ -1,4 +1,4 @@
-// D-175 锚：app_config 登记态往返——Defer→List 携字段→Clear 幂等。
+// 锚：app_config 登记态往返——Defer→List 携字段→Clear 幂等。
 // 重启不丢锚：态在 store 非内存（跨 Defer/List 无共享结构体，直读落库文档）。
 package pgstore
 

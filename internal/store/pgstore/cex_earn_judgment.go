@@ -1,4 +1,4 @@
-// D-273 S5：earn APR 判断结果 CRUD（fin_cex_earn_judgment）。
+// earn APR 判断结果 CRUD（fin_cex_earn_judgment）。
 // 本文件只依赖 pgstd 标准库+pgx，不导入 cexscan（依赖环防护，审计 P1-1）。
 package pgstore
 

@@ -1,5 +1,5 @@
-// D-258 S1：能量租金率序列查询（区间和+区间最早 ts）。
-// D-278 S1/S4：净收益率日曲线三成分日序列+累积未对冲收益（rental+vote_claim）。
+// 能量租金率序列查询（区间和+区间最早 ts）。
+// S1/S4：净收益率日曲线三成分日序列+累积未对冲收益（rental+vote_claim）。
 package pgstore
 
 import (

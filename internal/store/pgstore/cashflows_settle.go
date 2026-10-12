@@ -10,13 +10,13 @@ import (
 // 投影轨——incomeRows>0 时整体替换不计入；incomeRows=0 时回落旧语义（按行 quality 计入）。
 // hasFundingLeg=仓位有 FILLED OPEN 的 :perp 腿；fundingDue=持仓≥0.5d（跨≥1 funding 窗，
 // 证据缺失才可判 unknown；短持无证据=合理零）。quality 语义同 SumCashflowsNetWithQuality。
-// D-599 S2：position.fees_usd 非 NULL（净额口径已含费）→ commission 现金流行不计入，
+// position.fees_usd 非 NULL（净额口径已含费）→ commission 现金流行不计入，
 // 防「realized_pnl 净额 − 同费现金流」双扣；legacy 仓（fees_usd NULL）仍计入（费只活在
 // cashflows 里，排除=漏计）。SumCashflowsNet/WithQuality 同规则。
 func (s *Store) SumCashflowsNetForSettle(ctx context.Context, posID int64, hasFundingLeg, fundingDue bool) (sum float64, quality string, err error) {
-	// D-013 ②：commission 无条件计入——realized_pnl/net_realized_usd 改走
+	// ②：commission 无条件计入——realized_pnl/net_realized_usd 改走
 	// PositionNetUSD 单源（价差+全量现金流），本函数退回「现金流组件」纯口径；
-	// D-599 的 fees_usd 条件排除随之失效（双扣防线的职责已由单源接管）。
+	// 的 fees_usd 条件排除随之失效（双扣防线的职责已由单源接管）。
 	rows, err := s.pool.Query(ctx,
 		`SELECT kind, COALESCE(amount_usd, 0), COALESCE(quality, 'actual')
 		 FROM position_cashflows

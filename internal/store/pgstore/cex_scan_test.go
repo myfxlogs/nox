@@ -1,4 +1,4 @@
-// D-271 S1 测试：fin_cex_earn_apr + fin_cex_spread Store 方法（DSN 真实夹具）。
+// 测试：fin_cex_earn_apr + fin_cex_spread Store 方法（DSN 真实夹具）。
 package pgstore
 
 import (

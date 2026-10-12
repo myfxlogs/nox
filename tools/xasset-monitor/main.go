@@ -1,4 +1,4 @@
-// D-299 PAXG-XAU 跨市场套利监控脚本（独立工具，cron 调度）。
+// PAXG-XAU 跨市场套利监控脚本（独立工具，cron 调度）。
 // 9-16 业主并存裁定：PAXG+XAUT 两对都监控（XAUTUSDT=Tether Gold 永续，funding 当前更高）。
 //
 // 流程：拉 Binance 黄金代币合约 bid/ask + funding rate（走 cex-proxy，httpx.Client 自动注入 CA+token）
@@ -16,8 +16,8 @@ import (
 	"os"
 	"strings"
 
-	"arb/internal/httpx"
-	"arb/internal/keydomain"
+	"arb/internal/data/keydomain"
+	"arb/internal/platform/httpx"
 	"arb/internal/store/pgstore"
 )
 
@@ -62,11 +62,11 @@ func run(ctx context.Context) (err error) {
 	}
 	defer st.Close()
 	configureHttpxProxy(ctx, st) // D-145：代理 CA+token 注入（app_config/app_secrets 唯一权威）
-	// D-558 S2：named-return defer 单点捕获——启动/执行致命错统一进 reportFatal
+	// named-return defer 单点捕获——启动/执行致命错统一进 reportFatal
 	// （alerts critical + app_secrets 飞书直推 + 30min 去重；pair skip 不进此通道）。
 	defer func() { reportFatal(ctx, st, err) }()
 
-	// D-472 S5→D-144：监控簿三源派生（白名单∪universe 达标行∪active 纸面仓）×
+	// S5→D-144：监控簿三源派生（白名单∪universe 达标行∪active 纸面仓）×
 	// ticks 在流 MT 账户动态枚举——ARB_XASSET_EXNESS_VENUE env 删除（钉死单账户
 	// 致跨账户借用失真/新 broker 零覆盖，实证见 STATE D-144 行）。
 	combos, uni, demand, accts, equiv, err := loadDerivationInputs(ctx, st)
@@ -83,7 +83,7 @@ func run(ctx context.Context) (err error) {
 // runPairs S2：逐对取各自 exSym 报价（无新鲜 tick → 该对 skip+warn 逐对 fail-open，
 // 9-16 业主并存裁定）——禁止任何腿顶替、禁止跨账户借用（D-144：各账户独立采样，
 // p.mtVenueKey 携带该对所属账户）。返回首个 pair 失败错误（skip 非失败）。
-// D-423：mt_venue 落库键=venue_key 形（"15032313:mt5"）；按 cexVenue 路由报价源。
+// mt_venue 落库键=venue_key 形（"15032313:mt5"）；按 cexVenue 路由报价源。
 func runPairs(ctx context.Context, st *pgstore.Store, pairs []monitorPair) error {
 	var firstErr error
 	var stills []string // D-160：簿面静止 pair 汇总（当轮至多一条 warn）
@@ -95,7 +95,7 @@ func runPairs(ctx context.Context, st *pgstore.Store, pairs []monitorPair) error
 			continue // S2：逐对 skip，禁止顶替腿
 		}
 		if err := runPair(ctx, st, p, p.mtVenueKey, exBid, exAsk); err != nil {
-			// D-160：stale 命中二次判定——venue 活性锚成立=簿面静止降 warn
+			// stale 命中二次判定——venue 活性锚成立=簿面静止降 warn
 			// （stale 价不落簿=D-591 指标纯洁不动）；锚死/超帽/无行=dead 走原链。
 			var sde *staleDataErr
 			if errors.As(err, &sde) && classifyStale(ctx, st.Pool(), sde) == "still" {
@@ -128,13 +128,13 @@ func runPair(ctx context.Context, st *pgstore.Store, p monitorPair, mtVenue stri
 	var periodsPerDay int
 	var err error
 	if p.cexVenue == "okx:perp" {
-		// D-423：OKX 公开行情路由（api/v5/market/ticker + public/funding-rate，无鉴权不走 proxy）。
+		// OKX 公开行情路由（api/v5/market/ticker + public/funding-rate，无鉴权不走 proxy）。
 		bid, ask, fundingRate, periodsPerDay, err = fetchOkxGoldFn(ctx, st.Pool(), sym)
 		if err != nil {
 			return fmt.Errorf("fetch okx %s: %w", sym, err)
 		}
 	} else if p.cexVenue == "gate:perp" {
-		// D-462：Gate 公开行情路由（api/v4/futures/usdt tickers+contracts，无鉴权不走 proxy）。
+		// Gate 公开行情路由（api/v4/futures/usdt tickers+contracts，无鉴权不走 proxy）。
 		bid, ask, fundingRate, periodsPerDay, err = fetchGateGoldFn(ctx, st.Pool(), sym)
 		if err != nil {
 			return fmt.Errorf("fetch gate %s: %w", sym, err)
@@ -149,7 +149,7 @@ func runPair(ctx context.Context, st *pgstore.Store, p monitorPair, mtVenue stri
 	// 算指标（口径分离 D1）。
 	entrySpread := (bid - exAsk) / exAsk * 10000
 	exitSpread := (ask - exBid) / exBid * 10000
-	// D-462：三 venue VIP0 maker 费率同为 0.02%×2=4bps（binance 单 C 档；gate fee 表
+	// 三 venue VIP0 maker 费率同为 0.02%×2=4bps（binance 单 C 档；gate fee 表
 	// gate.com/announcements/article/101365 VIP0 maker 0.0200%）→ 常量化共享。
 	const cexMakerCostBps = 4.0
 	exnessSpread := (exAsk - exBid) / exAsk * 10000
@@ -160,10 +160,10 @@ func runPair(ctx context.Context, st *pgstore.Store, p monitorPair, mtVenue stri
 	trackingErr := math.Abs(tokenMid-xauMid) / xauMid * 10000
 	equivAnnual := entryNet/100 + fundingAnnualPct
 
-	// D-335 S1：noise_bps=trailing 24h 摆幅半径 (max−min)/2（含当前行；样本 <12 → NULL）。
-	// D-423：样本按 (pair,cex_venue,mt_venue) 三元组隔离——跨 venue 簿统计=借用伪半径。
+	// noise_bps=trailing 24h 摆幅半径 (max−min)/2（含当前行；样本 <12 → NULL）。
+	// 样本按 (pair,cex_venue,mt_venue) 三元组隔离——跨 venue 簿统计=借用伪半径。
 	noiseBps := computeNoiseBps(append(trailing24hEntries(ctx, st.Pool(), pair, p.cexVenue, mtVenue), entrySpread))
-	// D-341 S1：harvest_floor=min(q25, entry−MIN_CAPTURE)——trailing 全深序列（含当前行）。
+	// harvest_floor=min(q25, entry−MIN_CAPTURE)——trailing 全深序列（含当前行）。
 	harvestFloor := computeHarvestFloor(append(trailingAllEntries(ctx, st.Pool(), pair, p.cexVenue, mtVenue), entrySpread))
 
 	rec := &pgstore.XassetMonitor{
@@ -191,7 +191,7 @@ func runPair(ctx context.Context, st *pgstore.Store, p monitorPair, mtVenue stri
 	log.Printf("xasset-monitor: pair=%s entry_spread=%.2fbps entry_net=%.2fbps funding_annual=%.2f%% tracking_err=%.2fbps equiv_annual=%.2f%%",
 		rec.Pair, entrySpread, entryNet, fundingAnnualPct, trackingErr, equivAnnual)
 
-	// D-147：逐 tick 市场状态阈值推送摘除（业主令——常态读数非业主事件；
+	// 逐 tick 市场状态阈值推送摘除（业主令——常态读数非业主事件；
 	// 簿指标照常落库供面板/毕业链消费，fatal 故障走 pushFatalFeishu 保留）。
 	return nil
 }

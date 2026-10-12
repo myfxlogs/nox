@@ -39,7 +39,7 @@ func (s *Store) LastCMCPriceFetchedAt(ctx context.Context) (time.Time, error) {
 
 // LastCMCPriceStatusAndFetchedAt 返回 fin_cmc_prices 最近一条 src + market_status + fetched_at
 // （v1.2 R'-1：watchdog×门控互作修复——休市 status=closed 时跳过 stale 判定；
-// D-225 v2.1：加 src 返回——watchdog src 感知阈值 cmc_ws=10min / rest=5min）。
+// v2.1：加 src 返回——watchdog src 感知阈值 cmc_ws=10min / rest=5min）。
 // 空表返回 ErrNoRows（与 LastCMCPriceFetchedAt 行为一致）。
 func (s *Store) LastCMCPriceStatusAndFetchedAt(ctx context.Context) (string, string, time.Time, error) {
 	var src, status string
@@ -53,7 +53,7 @@ func (s *Store) LastCMCPriceStatusAndFetchedAt(ctx context.Context) (string, str
 }
 
 // LastCMCPriceMidWithTime 返回 fin_cmc_prices 指定 instrument 最近一条 mid_price + fetched_at（D-208 v2：新鲜度判定用）。
-// D-225 v2.1：加 mid_price IS NOT NULL 过滤——WS 行 bid/mid 为 NULL，不污染 mid 查询（D-208 个人监控线保护）。
+// v2.1：加 mid_price IS NOT NULL 过滤——WS 行 bid/mid 为 NULL，不污染 mid 查询（D-208 个人监控线保护）。
 func (s *Store) LastCMCPriceMidWithTime(ctx context.Context, instrumentID string) (float64, time.Time, error) {
 	var v float64
 	var t time.Time

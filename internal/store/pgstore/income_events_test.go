@@ -1,6 +1,6 @@
 package pgstore
 
-// D-334ab T3：income 行→OPEN 仓腿匹配三态——唯一命中（填 position_id/leg_no）、
+// income 行→OPEN 仓腿匹配三态——唯一命中（填 position_id/leg_no）、
 // 多义（不猜 NULL）、零命中（NULL）；插入幂等见 collect/exchange T2（约束在本表 DDL）。
 import (
 	"context"

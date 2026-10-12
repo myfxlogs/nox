@@ -1,4 +1,4 @@
-// D-208 NULL-case 回归测试（D-209 S2 欠账）：
+// NULL-case 回归测试（D-209 S2 欠账）：
 // personal_positions 插入 cmc_instrument_id=NULL 行（staking 型）+ 非 NULL 行（short_hedge），
 // 走 ListPersonalPositions 扫描路径断言不炸、两行返回（2026-09-03 生产 500 的正反弹）。
 package pgstore

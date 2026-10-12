@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"arb/internal/notional"
+	"arb/internal/platform/notional"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -148,7 +148,7 @@ func (s *Store) CanonicalContractProfile(ctx context.Context, canonical string) 
 // ContractSizeByCanonical 返回 venue 侧该 canonical 映射的合约规格（D-062 显示层 USD 派生）。
 // 取该 venue+canonical 行的 contract_size（D-061 对称桶保证同 canonical 跨 venue CS 一致，
 // 故 venue_buy 侧即代表）。ok=false = 未映射/CS 未知（NULL），调用方回退 0。
-// D-087 §3.1：入口处 notional.VenueAccount 归一 venue 键（"277842155:mt5"→"277842155"），
+// §3.1：入口处 notional.VenueAccount 归一 venue 键（"277842155:mt5"→"277842155"），
 // 全部消费方（verification/显示层/pipeline 装配）一次修好。
 func (s *Store) ContractSizeByCanonical(ctx context.Context, venue, canonical string) (float64, bool, error) {
 	venue = notional.VenueAccount(venue)

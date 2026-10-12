@@ -9,15 +9,15 @@ import (
 	"strings"
 	"testing"
 
-	"arb/internal/testutil"
+	"arb/internal/platform/testutil"
 )
 
-// D-195-C3 S2：备份恢复完整性测试（§10.1 场景 17）。
+// 备份恢复完整性测试（§10.1 场景 17）。
 // 用 pg_dump + restore 到临时库 arb_restore_test，比对 positions/cashflows/settlements
 // 行数和内容一致 + cashflows 幂等键无重复。
 // 不依赖 scripts/restore_test.sh（测试自包含，CI 友好）。
 //
-// D-207 注意：TestDSN 返回值经 normalizeDSN 追加了 pgx 专用参数（pool_max_conns/
+// 注意：TestDSN 返回值经 normalizeDSN 追加了 pgx 专用参数（pool_max_conns/
 // pool_min_conns/options），psql/pg_dump 不认识 → 传给 psql 前必须 stripPgxParams。
 
 // adminDSN 推导：从 ARB_TEST_PG_DSN 替换 dbname 为 postgres（有 CREATE DATABASE 权限）。

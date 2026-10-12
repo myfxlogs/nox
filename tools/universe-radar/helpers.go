@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/notify"
+	"arb/internal/ir/notify"
 	"arb/internal/store/pgstore"
 )
 

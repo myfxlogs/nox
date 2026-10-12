@@ -22,7 +22,7 @@ var (
 
 const (
 	// maxLines 索引行数硬顶（同 maxBytes 先例随条目量结构性上浮；2026-10-07 200→260：
-	// D-111 条目入库达 196 条/201 行触顶，260 覆盖 ~255 条，grep 检索面仍廉价）。
+	// 条目入库达 196 条/201 行触顶，260 覆盖 ~255 条，grep 检索面仍廉价）。
 	maxLines = 260
 	// maxBytes 索引字节硬顶（grep 检索面预算）。2026-08-23 8192→10240：条目增至 25 条后
 	// 结构性触顶（25×~330B），削条目内容迁就顶=削足适履；25% 上浮仍为廉价 grep 面，30 条内免再动。
@@ -229,7 +229,7 @@ func gen() error {
 			return err
 		}
 	}
-	// D-173：技能清单同幂等写（独立于索引预算——清单规模随标签数上浮）。
+	// 技能清单同幂等写（独立于索引预算——清单规模随标签数上浮）。
 	skills := renderSkillsIndex(entries)
 	se, err := os.ReadFile(skillsIndexFile)
 	if err == nil && bytes.Equal(se, skills) {
@@ -255,7 +255,7 @@ func genCheck() error {
 	if !bytes.Equal(existing, output) {
 		return fmt.Errorf("index out of date")
 	}
-	// D-173：技能清单同受 --check 校验。
+	// 技能清单同受 --check 校验。
 	skills := renderSkillsIndex(entries)
 	se, err := os.ReadFile(skillsIndexFile)
 	if err != nil {

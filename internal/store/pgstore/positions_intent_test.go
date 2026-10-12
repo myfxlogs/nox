@@ -22,7 +22,7 @@ func TestPositionIntentFields_Migration0048(t *testing.T) {
 		t.Fatalf("truncate positions: %v", err)
 	}
 	t.Cleanup(func() {
-		// D-159 W1a：race ×3 并发测试隔离——本测试插多种状态行，测后清表防残留影响其他测试。
+		// race ×3 并发测试隔离——本测试插多种状态行，测后清表防残留影响其他测试。
 		_, _ = s.pool.Exec(context.Background(), `TRUNCATE positions CASCADE`)
 	})
 

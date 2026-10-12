@@ -36,7 +36,7 @@ func (s *Store) AggregateStrategyStatsByEnvironment(ctx context.Context, strateg
 }
 
 // DailyRealizedPnlByEnvironment D-195-B：按 environment 过滤的 DailyRealizedPnl 变体。
-// D-193-A 扩包（决策 9）：与 DailyRealizedPnl 同构——LEFT JOIN + COALESCE 三级 fallback。
+// 扩包（决策 9）：与 DailyRealizedPnl 同构——LEFT JOIN + COALESCE 三级 fallback。
 func (s *Store) DailyRealizedPnlByEnvironment(ctx context.Context, environment string) (float64, error) {
 	var sum *float64
 	err := s.pool.QueryRow(ctx, fmt.Sprintf(`

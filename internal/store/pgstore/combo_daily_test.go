@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// D-111: ListComboDaily 排序修复（DESC）集成测试（DSN-gated）。
+// ListComboDaily 排序修复（DESC）集成测试（DSN-gated）。
 
 func TestListComboDaily_DescOrder(t *testing.T) {
 	s := testStore(t)

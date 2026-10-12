@@ -252,7 +252,7 @@ func TestWSRoutePrefixes(t *testing.T) {
 	if h := <-seen["fstream"]; h.path != "/ws/abc123key" {
 		t.Fatalf("fstream 不应 strip，got path=%q", h.path)
 	}
-	// D-517 三路由：/public /market /private → fstream 不 strip（D-516：demofws 删除）。
+	// 三路由：/public /market /private → fstream 不 strip（D-516：demofws 删除）。
 	for _, p := range []string{"/public/ws", "/market/ws", "/private/ws/keyZ"} {
 		if got := get(p); got != "fstream" {
 			t.Fatalf("%s 应命中 fstream 上游，got %q", p, got)

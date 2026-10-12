@@ -9,7 +9,7 @@ import (
 )
 
 // ListPositions 分页返回持仓。
-// D-106：status="ACTIVE" 特殊值 → WHERE status IN (OPEN/OPENING/LEGGED/CLOSING)（在仓 Tab）；
+// status="ACTIVE" 特殊值 → WHERE status IN (OPEN/OPENING/LEGGED/CLOSING)（在仓 Tab）；
 // 排序改 ORDER BY COALESCE(closed_at, opened_at) DESC NULLS LAST（历史视图默认序，OPEN 行排前）。
 func (s *Store) ListPositions(ctx context.Context, status string, limit, offset int) ([]Position, error) {
 	if limit <= 0 {
@@ -41,7 +41,7 @@ func (s *Store) ListPositions(ctx context.Context, status string, limit, offset 
 }
 
 // scanPositions 公共行扫描（ListPositions 两条路径共用）。
-// D-189 P0-4：含 closing_started_at + uncertainty_reason。
+// P0-4：含 closing_started_at + uncertainty_reason。
 func scanPositions(rows pgx.Rows) ([]Position, error) {
 	var out []Position
 	for rows.Next() {
@@ -59,7 +59,7 @@ func scanPositions(rows pgx.Rows) ([]Position, error) {
 }
 
 // CountPositions 返回符合筛选条件的持仓总数（D-069 分页控件用）。
-// D-106：status="ACTIVE" 同 ListPositions 映射 4 活跃态。
+// status="ACTIVE" 同 ListPositions 映射 4 活跃态。
 func (s *Store) CountPositions(ctx context.Context, status string) (int, error) {
 	var n int
 	var err error
@@ -77,8 +77,8 @@ func (s *Store) CountPositions(ctx context.Context, status string) (int, error) 
 }
 
 // ListActivePositions 返回所有活跃态持仓（OPENING/OPEN/LEGGED/CLOSING）。
-// D-080 R1：gate 防重改 DB 实时派生——替代内存 openCombos 集，治手动路径旁路。
-// D-159 W1a R2：UNKNOWN position 用 CLOSING+uncertainty_reason 识别（不新增 DB 枚举），CLOSING 已在列。
+// gate 防重改 DB 实时派生——替代内存 openCombos 集，治手动路径旁路。
+// UNKNOWN position 用 CLOSING+uncertainty_reason 识别（不新增 DB 枚举），CLOSING 已在列。
 // 行数=MaxPositions 量级，成本≈COUNT；返回行供 gate 派生 combo.FromOppID 匹配。
 func (s *Store) ListActivePositions(ctx context.Context) ([]Position, error) {
 	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, notional_usd, closing_started_at, uncertainty_reason
@@ -113,7 +113,7 @@ func (s *Store) CountOpenPositions(ctx context.Context) (int, error) {
 
 // CountLiveOpenPositions 返回真金（environment='live'，0148：demo/legacy_demo 不算）
 // 在仓持仓数（OPEN/OPENING/LEGGED/CLOSING——平仓闭合前仍属在仓，D-106 在仓域）。
-// D-102：selfwatch Stage 1 段「已启动」判定用。
+// selfwatch Stage 1 段「已启动」判定用。
 func (s *Store) CountLiveOpenPositions(ctx context.Context) (int, error) {
 	q := `SELECT count(*) FROM positions
 		WHERE environment = 'live' AND status IN ('OPEN','OPENING','LEGGED','CLOSING')`
@@ -124,7 +124,7 @@ func (s *Store) CountLiveOpenPositions(ctx context.Context) (int, error) {
 
 // HasOpenPositionByOpportunity 返回该机会是否已有未平仓持仓（D-058 幂等防重复执行）。
 // CLOSED/FAILED 不在列 → 已闭合/已失败的机会可重入（再执行是新的执行意图，非重复提交）。
-// D-159 W1a R2：UNKNOWN position（CLOSING+uncertainty_reason）计入防重——人工确认前禁止重入防双开仓；
+// UNKNOWN position（CLOSING+uncertainty_reason）计入防重——人工确认前禁止重入防双开仓；
 // 正常 CLOSING（uncertainty_reason IS NULL）不计入（平仓中可重开是既有行为，不破坏现有流程）。
 func (s *Store) HasOpenPositionByOpportunity(ctx context.Context, opportunityID string) (bool, error) {
 	var one int
@@ -200,10 +200,10 @@ type EnvNotional struct {
 }
 
 // ActiveNotionalByEnv 活跃仓（OPEN/OPENING/LEGGED/CLOSING）Σ notional_usd 按 environment。
-// D-360 S4：仅 live（demo/纸面=噪声不入覆盖率面板，PositionsPage 纸面区不动）。
+// 仅 live（demo/纸面=噪声不入覆盖率面板，PositionsPage 纸面区不动）。
 // 零活跃仓 → 空切片（调用方出「零持仓」行）。
 func (s *Store) ActiveNotionalByEnv(ctx context.Context) ([]EnvNotional, error) {
-	// D-512 T8：旧 NULL 行标 legacy_demo（0148）后，聚合显式只认 live——
+	// 旧 NULL 行标 legacy_demo（0148）后，聚合显式只认 live——
 	// COALESCE 回退值改 legacy_demo（NULL 行不再静默计入 live 覆盖率面板）。
 	rows, err := s.pool.Query(ctx, `
 		SELECT COALESCE(environment, 'legacy_demo'), COALESCE(SUM(notional_usd), 0)

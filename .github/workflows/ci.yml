@@ -8,7 +8,6 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
     # 修复⑭ S6：注入 postgres service，DSN 集成测试在 CI 真跑（CI 绿=集成绿）。
-    # 双库隔离（D-058）：pgstore 测试 DROP SCHEMA public CASCADE，exec/dashboard 各用专用库避免并发 DDL 竞态。
     services:
       postgres:
         image: postgres:16
@@ -41,52 +40,18 @@ jobs:
       - run: go mod download
       - run: go build ./...
       - run: go vet ./...
-      # D-514 T1：分层方向门禁与 pre-commit 同令（internal/* import 白名单冻结）。
+      # D-514 T1：分层方向门禁与 pre-commit 同令（D-212 部门目录白名单冻结）。
       - run: ./scripts/check_import_direction.sh
-      # gofmt 全树 sweep（D-234 批 1）：与 pre-commit 同口径，豁免 docs/cmc/证据/ 历史快照。
+      # gofmt 全树 sweep。
       - run: |
-          UNFMT=$(gofmt -l . | grep -v '^docs/cmc/证据/' || true)
+          UNFMT=$(gofmt -l . || true)
           if [ -n "$UNFMT" ]; then
             echo "FAIL: gofmt 漂移: $UNFMT —— gofmt -w 后重试" >&2
             exit 1
           fi
-      # 快速面：无 DSN 的全包测试（DSN 集成测试缺变量自动 skip）+ -race 竞态检测。
-      # D-177 CI 修复：ulimit -n 提高到 hard limit（GitHub Actions 默认 soft=1024，
-      # race detector + pgxpool MaxConns=10 在 dashboard 29 处 pgstore.New 下 fd 紧张，
-      # 间歇性 EBADF——golang/go#65857 finalizer race 在 fd 压力下更易触发）。
-      # D-207：DB 测试 DSN 缺失不再静默 SKIP（假绿之源）——此步无 DSN，设 ARB_TEST_ALLOW_SKIP_DSN=1
-      # 自觉跳过 DB 测试；集成面①②③有 DSN 真跑。
-      # D-255 CI flake 修复：排除有专用步骤的包（dashboard/exec/reconcile/pgstore/autotrade/
-      # cmd.core/analyst/cmc/trx/position）——这些包在集成面①②③④有 DSN 专用步骤真跑，
-      # 在 ./... 并行扫描中重复跑只会加剧 race detector fd/调度压力（dashboard 两次 flake 实证：
-      # TestD236_LiveStateSingleAccessor EBADF + TestOrderTopicToKickWiring 45s 超时）。
-      - run: |
-          SWEEP_PKGS=$(go list ./... | grep -vE '/(internal/store/pgstore|internal/autotrade|cmd/core|internal/analyst|internal/collect/cmc|internal/collect/trx|internal/position|internal/exec|internal/dashboard|internal/reconcile)$')
-          ulimit -n $(ulimit -Hn) && ARB_TEST_ALLOW_SKIP_DSN=1 go test -race -count=1 $SWEEP_PKGS
-      # 修复⑭ S6：建双隔离测试库（arb_test 已由 service POSTGRES_DB 建；补 arb_exec_test + arb_service_test）。
-      # D-058：exec 必须独立库（pgstore 的 DROP SCHEMA 并发 DDL 竞态）；dashboard investment_records_test
-      # 用 ARB_TEST_PG_SERVICE_DSN 专用库（与 pgstore 隔离，避免并行 TRUNCATE 竞态）。
-      - run: |
-          psql "postgres://postgres:test@localhost:5434/postgres" -c "CREATE DATABASE arb_exec_test" || true
-          psql "postgres://postgres:test@localhost:5434/postgres" -c "CREATE DATABASE arb_service_test" || true
-          psql "postgres://postgres:test@localhost:5434/postgres" -c "CREATE DATABASE arb_reconcile_test" || true
-      # 集成面①：ARB_TEST_PG_DSN 共库（arb_test），-p 1 串行包进程避免 DROP SCHEMA 并发。
-      # 包清单实测（grep -rl ARB_TEST_PG_DSN）：pgstore/autotrade/cmd.core/analyst/
-      # collect.cmc/collect.trx/position（8 包；dashboard 用 SERVICE_DSN 见面③，reconcile 用
-      # ARB_RECONCILE_TEST_PG_DSN + integration tag 见面④）。
-      # pool_min_conns=0&pool_max_conns=2：CI 小池降 fd 压力（D-177 race detector EBADF 根因修复，
-      # pgstore.New 已支持 DSN 覆盖池参数）。cmd/core 测试编译需 web/dist（CI 已先 npm build）。
-      - run: ulimit -n $(ulimit -Hn) && ARB_TEST_PG_DSN="postgres://postgres:test@localhost:5434/arb_test?pool_min_conns=0&pool_max_conns=2" go test -race -count=1 -p 1 ./internal/store/pgstore/ ./internal/autotrade/ ./cmd/core/ ./internal/analyst/ ./internal/collect/cmc/ ./internal/collect/trx/ ./internal/position/
-      # 集成面②：ARB_EXEC_TEST_PG_DSN 专用库（arb_exec_test），独立库可并行无需 -p 1。
-      # exec 测试用 pgx.Connect（单连接非池），不加 pool 参数（server 会拒）。
-      - run: ulimit -n $(ulimit -Hn) && ARB_EXEC_TEST_PG_DSN="postgres://postgres:test@localhost:5434/arb_exec_test" go test -race -count=1 ./internal/exec/
-      # 集成面③：dashboard 包专用库（arb_service_test）。
-      # dashboard 包内 8 测试文件：2 个用 ARB_TEST_PG_SERVICE_DSN（investment_records/watchlist），
-      # 6 个用 ARB_TEST_PG_DSN（autotrade_state/execute_meanrevert/live_gate/swap_deviation/broker_*）。
-      # D-189/D-190 引入测试时用错变量名——此处同时传两个 DSN 指向同一库，避免 6 测试 FAIL。
-      # demo 测试（ARB_DEMO_PG_DSN + ARB_DEMO_ORDER=1）需连真实 demo venue，不在 CI 跑（缺 env 自动 skip）。
-      - run: ulimit -n $(ulimit -Hn) && ARB_TEST_PG_SERVICE_DSN="postgres://postgres:test@localhost:5434/arb_service_test?pool_min_conns=0&pool_max_conns=2" ARB_TEST_PG_DSN="postgres://postgres:test@localhost:5434/arb_service_test?pool_min_conns=0&pool_max_conns=2" go test -race -count=1 ./internal/dashboard/
-      # 集成面④：reconcile integration tags（D-234 批 1 P1-11：ARB_RECONCILE_TEST_PG_DSN 专用库）。
-      # reconcile 专用变量只被 //go:build integration 文件消费（d189_r1r2_integration_test.go）。
-      - run: ulimit -n $(ulimit -Hn) && ARB_RECONCILE_TEST_PG_DSN="postgres://postgres:test@localhost:5434/arb_reconcile_test" go test -race -count=1 -tags integration ./internal/reconcile/
+      # 测试面：go test ./... 全量（DSN 注入 5434，缺 DSN 的 skip 语义不变）。
+      # ulimit -n 提 hard limit（race detector + pgxpool fd 压力先例 D-177/D-255）。
+      - run: ulimit -n $(ulimit -Hn) && ARB_TEST_PG_DSN="postgres://postgres:test@localhost:5434/arb_test?pool_min_conns=0&pool_max_conns=2" go test ./... -count=1
+      # -race：M2.1 数据部目录（后续 M2.x 每票追加各自部门目录）。
+      - run: ulimit -n $(ulimit -Hn) && ARB_TEST_PG_DSN="postgres://postgres:test@localhost:5434/arb_test?pool_min_conns=0&pool_max_conns=2" go test -race -count=1 ./internal/data/...
       - run: ./scripts/check-lines.sh

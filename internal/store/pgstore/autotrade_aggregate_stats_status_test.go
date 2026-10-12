@@ -1,6 +1,6 @@
 package pgstore
 
-// D-323：结算聚合 stats_status 过滤锚（T1-T4）——D-193-A 设计意图「统计层不消费 estimated」
+// 结算聚合 stats_status 过滤锚（T1-T4）——D-193-A 设计意图「统计层不消费 estimated」
 // 的落地证明：applied+NULL(legacy) 计入、skipped/retryable/pending 出局。
 // 先红后绿：对现行码（无过滤）T1/T3/T4 红（skipped 行计入）；T2 恒绿（兼容锚，防过滤写成等值比较）。
 

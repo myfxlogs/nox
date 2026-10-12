@@ -186,7 +186,7 @@ func (s *Store) CreatePositionWithCapGuard(ctx context.Context, p *Position, can
 			return 0, fmt.Errorf("canonical 聚簇超限：%s 在途 $%.0f+本次 $%.0f > cap $%.0f", c, sum, proposedUSD, capUSD)
 		}
 	}
-	// D-009 S4→D-010：venue 保证金实占 cap（执行路径接闸——展示闸6 与执行闸同源
+	// S4→D-010：venue 保证金实占 cap（执行路径接闸——展示闸6 与执行闸同源
 	// 同判据，外单不入系统敞口域）。venueSum 锁后执行：行集合读的是已提交状态
 	// （同窗兄弟的 position.notional_usd+腿行在锁序下可见），TOCTOU 收口与 canonical 同构。
 	vseen := map[string]bool{}

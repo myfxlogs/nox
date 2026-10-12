@@ -126,7 +126,7 @@ func (s *Store) RetroDailyStats(ctx context.Context, start, end time.Time) (*Ret
 		FROM positions`, start, end).Scan(&d.OpenedToday, &d.ClosedToday); err != nil {
 		return nil, err
 	}
-	// D-468 S4：毕业建议窗口计数（持续零产出→次日日报可见）。
+	// 毕业建议窗口计数（持续零产出→次日日报可见）。
 	if err := s.pool.QueryRow(ctx, `
 		SELECT count(*) FROM carry_graduations WHERE created_at >= $1 AND created_at < $2`,
 		start, end).Scan(&d.GraduationsToday); err != nil {

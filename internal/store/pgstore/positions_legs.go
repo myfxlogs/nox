@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/keydomain"
+	"arb/internal/data/keydomain"
 )
 
 // PositionLeg 对应 position_legs 表（§2.11）。
@@ -25,7 +25,7 @@ type PositionLeg struct {
 	PriceActual   *float64
 	OrderID       string
 	Status        string
-	// D-195-B §4.2：attempt 字段扩展。
+	// §4.2：attempt 字段扩展。
 	AttemptNo       int16    // 1=首次尝试；>1=重试
 	ParentAttemptID *int64   // nil = 首次尝试；非 nil = 重试关联原 attempt
 	ClientOrderID   string   // 确定性客户端订单号（venue 支持时携带）
@@ -56,9 +56,9 @@ func (l PositionLeg) EffectiveQty() float64 {
 }
 
 // CreatePosition 建 position 记录，返回 ID。
-// D-087 §3.3：opened_at = now()（holdDays 计算依赖，原 NULL 兜底 min(leg ts) 仍保留作冗余）。
-// D-179 S2：notional_usd 列同步（p.NotionalUSD 非 nil 时落盘，nil=NULL 向后兼容）。
-// D-195-B：request_id/dedup_key/environment 写入（空字符串→NULL，避免触发唯一约束）。
+// §3.3：opened_at = now()（holdDays 计算依赖，原 NULL 兜底 min(leg ts) 仍保留作冗余）。
+// notional_usd 列同步（p.NotionalUSD 非 nil 时落盘，nil=NULL 向后兼容）。
+// request_id/dedup_key/environment 写入（空字符串→NULL，避免触发唯一约束）。
 
 // CreatePositionLeg 写入单腿记录（D-159 W1a R3-1 原子领取防重）。
 // ON CONFLICT (position_id, leg_no, phase) DO NOTHING：并发对账+手动平仓重复写 CLOSE leg 时
@@ -85,7 +85,7 @@ func (s *Store) CreatePositionLeg(ctx context.Context, leg *PositionLeg) error {
 		return err
 	}
 	leg.ID = legID
-	// D-013 ①：终态腿（FILLED/EXTERNAL）落库即写 leg:<id> commission 行，全写入点同源。
+	// ①：终态腿（FILLED/EXTERNAL）落库即写 leg:<id> commission 行，全写入点同源。
 	return s.EnsureLegCommissionCashflow(ctx, *leg, nil)
 }
 

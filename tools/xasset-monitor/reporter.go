@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"log"
 
-	"arb/internal/alerttext"
-	"arb/internal/notify"
+	"arb/internal/ir/notify"
+	"arb/internal/platform/alerttext"
 	"arb/internal/store/pgstore"
 )
 
@@ -39,7 +39,7 @@ func reportFatal(ctx context.Context, st *pgstore.Store, err error) {
 		log.Printf("xasset-monitor: fatal 未持久化（无 store）: %v", err)
 		return
 	}
-	// D-592 S2：直推旁路同 key 对齐——飞书推送判定与 insertAlert 漏斗共用归一键
+	// 直推旁路同 key 对齐——飞书推送判定与 insertAlert 漏斗共用归一键
 	// （原前缀式对异型 fatal 过抑制；仅改查重，文案链不动）。
 	msg := "xasset-monitor " + alerttext.VenueErrCN(err.Error())
 	dup := hasRecentSameKeyAlert(ctx, st, "critical", msg)

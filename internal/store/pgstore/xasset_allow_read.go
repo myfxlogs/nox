@@ -1,4 +1,4 @@
-// D-338 S2：XASSET 白名单表加载器（env 类目错置勘正——风险政策数据入表，boot 一次性加载无热加载）。
+// XASSET 白名单表加载器（env 类目错置勘正——风险政策数据入表，boot 一次性加载无热加载）。
 // environment 过滤下沉 SQL：simulated=true 仅 demo / false 仅 real / NULL 两域通用（exchange_configs 习惯）。
 // 加载失败 → 调用方 startup fatal（fail-closed：白名单读不出=不开）；零行 → 合法态（XASSET 全拒=零信任，同 env 空串）。
 package pgstore
@@ -49,7 +49,7 @@ func (s *Store) LoadXAssetAllowCombos(ctx context.Context, environment string) (
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	// D-512 T9：冷却叠加层（clean 保留 / cooling 拒入 / expired 自动复资格）。
+	// 冷却叠加层（clean 保留 / cooling 拒入 / expired 自动复资格）。
 	kept, _, err := s.ApplyComboCooldown(ctx, out, time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("combo cooldown: %w", err)

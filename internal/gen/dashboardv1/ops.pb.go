@@ -454,7 +454,7 @@ func (x *ListSpotCarryDemoResponse) GetRows() []*SpotCarryDemoRow {
 	return nil
 }
 
-// D-352 S1：纸面轨前端卡行（active/demo/近 14 天 exited；数值后端算，前端零信任）。
+// 纸面轨前端卡行（active/demo/近 14 天 exited；数值后端算，前端零信任）。
 type ListPaperSpotCarryRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -508,17 +508,17 @@ type PaperSpotCarryRow struct {
 	ExitTs          string                 `protobuf:"bytes,13,opt,name=exit_ts,json=exitTs,proto3" json:"exit_ts,omitempty"`             // RFC3339，空=未退出
 	ExitReason      string                 `protobuf:"bytes,14,opt,name=exit_reason,json=exitReason,proto3" json:"exit_reason,omitempty"` // normalized / age_7d / promoted_demo
 	Note            string                 `protobuf:"bytes,15,opt,name=note,proto3" json:"note,omitempty"`
-	// D-354 S3：盈亏视图（基差=mark/index 近似；成本 0.30% 常量预估；NULL=诚实缺显「—」）
+	// 盈亏视图（基差=mark/index 近似；成本 0.30% 常量预估；NULL=诚实缺显「—」）
 	EntryBasisBps  *float64 `protobuf:"fixed64,16,opt,name=entry_basis_bps,json=entryBasisBps,proto3,oneof" json:"entry_basis_bps,omitempty"`    // 开仓基差快照（存量行 NULL）
 	LastBasisBps   *float64 `protobuf:"fixed64,17,opt,name=last_basis_bps,json=lastBasisBps,proto3,oneof" json:"last_basis_bps,omitempty"`       // 当前基差
 	BasisPnlUsd    *float64 `protobuf:"fixed64,18,opt,name=basis_pnl_usd,json=basisPnlUsd,proto3,oneof" json:"basis_pnl_usd,omitempty"`          // 基差浮盈（short: qty×(entry−last)/1e4；long 反号）
 	TotalPnlUsd    *float64 `protobuf:"fixed64,19,opt,name=total_pnl_usd,json=totalPnlUsd,proto3,oneof" json:"total_pnl_usd,omitempty"`          // 净浮盈=accrued+basis_pnl−qty×0.003（basis 缺→null）
 	RetPct         float64  `protobuf:"fixed64,20,opt,name=ret_pct,json=retPct,proto3" json:"ret_pct,omitempty"`                                 // 累计收益率%=accrued/qty×100
 	RealizedAnnPct *float64 `protobuf:"fixed64,21,opt,name=realized_ann_pct,json=realizedAnnPct,proto3,oneof" json:"realized_ann_pct,omitempty"` // 实收年化%=accrued/qty×365/days×100（days=0→null）
-	// D-393：DB 列透出（scanPaperSpotCarry 空串→spot_carry 归一，服务层直接信任）。
+	// DB 列透出（scanPaperSpotCarry 空串→spot_carry 归一，服务层直接信任）。
 	Structure string  `protobuf:"bytes,22,opt,name=structure,proto3" json:"structure,omitempty"`                  // spot_carry / perp_perp / long_cfd_short_perp / short_cfd_long_perp
 	MtVenue   *string `protobuf:"bytes,23,opt,name=mt_venue,json=mtVenue,proto3,oneof" json:"mt_venue,omitempty"` // cfd 行 MT 腿 venue；spot/perp_perp 恒 NULL（前端「—」）
-	// D-474b S1：往返费估计透出——perp_perp 存量行（est_fee IS NULL）前端徽标「观测轨」。
+	// 往返费估计透出——perp_perp 存量行（est_fee IS NULL）前端徽标「观测轨」。
 	EstRoundTripFeeUsd *float64 `protobuf:"fixed64,24,opt,name=est_round_trip_fee_usd,json=estRoundTripFeeUsd,proto3,oneof" json:"est_round_trip_fee_usd,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
@@ -722,7 +722,7 @@ func (x *PaperSpotCarryRow) GetEstRoundTripFeeUsd() float64 {
 	return 0
 }
 
-// D-393：轨级汇总（行源=卡片同批 papers，exited=同 14d 窗口行；零新查询）。
+// 轨级汇总（行源=卡片同批 papers，exited=同 14d 窗口行；零新查询）。
 type PaperTrackSummary struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	Structure           string                 `protobuf:"bytes,1,opt,name=structure,proto3" json:"structure,omitempty"` // spot_carry/perp_perp/long_cfd_short_perp/short_cfd_long_perp
@@ -891,7 +891,7 @@ type AutotradeAllowRuleRow struct {
 	Enabled   bool                   `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	Simulated bool                   `protobuf:"varint,5,opt,name=simulated,proto3" json:"simulated,omitempty"` // live 引擎只读 simulated=false
 	Note      string                 `protobuf:"bytes,6,opt,name=note,proto3" json:"note,omitempty"`
-	// D-445：venue 实时资金列（余额=已结算实现钱；净值=余额+浮动）。
+	// venue 实时资金列（余额=已结算实现钱；净值=余额+浮动）。
 	Balance       float64                `protobuf:"fixed64,7,opt,name=balance,proto3" json:"balance,omitempty"` // has_account=false 时 0 无意义
 	Equity        float64                `protobuf:"fixed64,8,opt,name=equity,proto3" json:"equity,omitempty"`
 	Currency      string                 `protobuf:"bytes,9,opt,name=currency,proto3" json:"currency,omitempty"`

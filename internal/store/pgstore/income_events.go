@@ -12,7 +12,7 @@ import (
 )
 
 // IncomeEvent income_events 行（PositionID/LegNo=匹配命中才非 nil）。
-// D-496 F1：账户身份=exchange_config_id（FK→exchange_configs.id，同 venue 多账户区分）；
+// F1：账户身份=exchange_config_id（FK→exchange_configs.id，同 venue 多账户区分）；
 // (Venue,VenueType) 为 R1/R2 通道型标注列。
 type IncomeEvent struct {
 	Venue      string
@@ -108,7 +108,7 @@ func (s *Store) SumIncomeWindow(ctx context.Context, venue, symbol string, from,
 // MatchOpenLegForIncome income 行→OPEN 仓腿匹配：venue+symbol 在活跃仓（四态，同
 // positions_active_dedup_key_idx 口径）OPEN 腿中**唯一命中**才返回 (posID, legNo, 1)；
 // 零命中 → (0,0,0)；多义 → (last, hits>1)——调用方按 hits==1 才采信（不猜，venue 侧可重查）。
-// D-362 S5：env=demo/live 环境一致性——sim 配置事件只配 environment='demo' 腿、
+// env=demo/live 环境一致性——sim 配置事件只配 environment='demo' 腿、
 // real 只配 live（NULL 归 live）；venue 传全形（"binance:perp"=position_legs.venue 口径）。
 func (s *Store) MatchOpenLegForIncome(ctx context.Context, venue, symbol, env string) (posID int64, legNo int16, hits int, err error) {
 	rows, err := s.pool.Query(ctx, `

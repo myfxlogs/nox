@@ -1,4 +1,4 @@
-// D-249 S3：fin_trx_vote_apr_top 表存储层（全 SR top5 年化持久化，身份争议逐 SR 复核）。
+// fin_trx_vote_apr_top 表存储层（全 SR top5 年化持久化，身份争议逐 SR 复核）。
 package pgstore
 
 import (

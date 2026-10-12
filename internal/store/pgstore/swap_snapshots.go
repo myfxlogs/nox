@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/fact"
-	"arb/internal/keydomain"
+	"arb/internal/data/fact"
+	"arb/internal/data/keydomain"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -23,7 +23,7 @@ type SwapSnapshot struct {
 }
 
 // InsertSwapSnapshot 写入 swap 累计值快照。
-// D-189 P0-1：venue 必须是完整 venueKey（如 "vA:mt5"），与 position_legs.venue 同口径；
+// P0-1：venue 必须是完整 venueKey（如 "vA:mt5"），与 position_legs.venue 同口径；
 // facts.venue 是 bare venue，两者不可混用。
 func (s *Store) InsertSwapSnapshot(ctx context.Context, posID int64, venue string, swapUSD float64, ts time.Time) error {
 	vk := keydomain.Parse(venue) // D-496：venueKey 拆裸键+通道型
@@ -34,7 +34,7 @@ func (s *Store) InsertSwapSnapshot(ctx context.Context, posID int64, venue strin
 }
 
 // LatestSwapSnapshot 取指定持仓+venue 的最新一条快照。无行返回 pgx.ErrNoRows。
-// D-189 P0-1：venue 是完整 venueKey（如 "vA:mt5"），禁止传 bare venue。
+// P0-1：venue 是完整 venueKey（如 "vA:mt5"），禁止传 bare venue。
 func (s *Store) LatestSwapSnapshot(ctx context.Context, posID int64, venue string) (SwapSnapshot, error) {
 	var snap SwapSnapshot
 	err := s.pool.QueryRow(ctx,
@@ -53,7 +53,7 @@ func (s *Store) LatestSwapSnapshot(ctx context.Context, posID int64, venue strin
 }
 
 // LatestSwapSnapshotBefore 取 before 之前最新一条快照（对账用：昨日末条）。
-// D-189 P0-1：venue 是完整 venueKey（如 "vA:mt5"），禁止传 bare venue。
+// P0-1：venue 是完整 venueKey（如 "vA:mt5"），禁止传 bare venue。
 func (s *Store) LatestSwapSnapshotBefore(ctx context.Context, posID int64, venue string, before time.Time) (SwapSnapshot, error) {
 	var snap SwapSnapshot
 	err := s.pool.QueryRow(ctx,
@@ -73,7 +73,7 @@ func (s *Store) LatestSwapSnapshotBefore(ctx context.Context, posID int64, venue
 
 // DailySwapAccrued 当日 swap 增量 = 今日末条 swap_usd - 昨日末条 swap_usd。
 // day 为 UTC 日期。无快照或今日无新快照（今日末条 ts <= day_start）返回 ok=false。
-// D-189 P0-1：venue 是完整 venueKey（如 "vA:mt5"），禁止传 bare venue。
+// P0-1：venue 是完整 venueKey（如 "vA:mt5"），禁止传 bare venue。
 func (s *Store) DailySwapAccrued(ctx context.Context, posID int64, venue string, day time.Time) (float64, bool, error) {
 	dayStart := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC)
 	today, err := s.LatestSwapSnapshot(ctx, posID, venue)
@@ -98,7 +98,7 @@ func (s *Store) DailySwapAccrued(ctx context.Context, posID int64, venue string,
 
 // HasNonZeroSwapHistory D-165 S3：查该 venue 是否有 swap_usd != 0 的历史记录（不限 posID）。
 // 用于 swap facts 零值校验：facts=0 但 broker 实际收 swap → 规格声明与实际不一致 → fail-closed。
-// D-189 P0-1：venue 是完整 venueKey（如 "vA:mt5"），禁止传 bare venue。
+// P0-1：venue 是完整 venueKey（如 "vA:mt5"），禁止传 bare venue。
 func (s *Store) HasNonZeroSwapHistory(ctx context.Context, venue string) (bool, error) {
 	var has bool
 	err := s.pool.QueryRow(ctx,
@@ -158,7 +158,7 @@ func (s *Store) ListAllSwapSnapshots(ctx context.Context) ([]SwapSnapshot, error
 func (s *Store) FactExistsAt(ctx context.Context, kind, venue, symbol string, ts time.Time) (bool, error) {
 	var exists bool
 	err := s.pool.QueryRow(ctx,
-		// D-496 R4：symbol NULL=非品种域；传 '' 匹配 NULL 行（NOT DISTINCT FROM）。
+		// symbol NULL=非品种域；传 '' 匹配 NULL 行（NOT DISTINCT FROM）。
 		`SELECT EXISTS(SELECT 1 FROM facts WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND symbol IS NOT DISTINCT FROM NULLIF($3,'') AND ts = $4)`,
 		kind, venue, symbol, ts).Scan(&exists)
 	if err != nil {

@@ -158,7 +158,7 @@ func (s *Store) InsertCexRadar(ctx context.Context, rows []CexRadarRow, now time
 }
 
 // PruneCexRadar 滚动清理：删除 ts 早于 keepDays 前的快照行。
-// D-152 接线 janitor 日轮（keepDays=14）；本体改走 pruneTTL 轨——分批删+
+// 接线 janitor 日轮（keepDays=14）；本体改走 pruneTTL 轨——分批删+
 // (venue,symbol) 组终值卫兵（停发 symbol 末帧永存，读侧只消费最新扫描不受影响）。
 func (s *Store) PruneCexRadar(ctx context.Context, keepDays int) error {
 	_, err := s.pruneTTL(ctx, "fin_cex_radar", "ts", []string{"venue", "symbol"},

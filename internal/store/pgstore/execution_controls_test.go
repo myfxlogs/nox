@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// D-195-A：execution_controls CRUD 测试（DSN-gated 真库）。
+// execution_controls CRUD 测试（DSN-gated 真库）。
 
 func testExecutionControlsStore(t *testing.T) *Store {
 	t.Helper()

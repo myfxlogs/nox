@@ -1,4 +1,4 @@
-// D-300 S1 测试：asset_equiv 表 + AssetEquivProvider 缓存（DSN 真实夹具 + fake lister）。
+// 测试：asset_equiv 表 + AssetEquivProvider 缓存（DSN 真实夹具 + fake lister）。
 package pgstore
 
 import (

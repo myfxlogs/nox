@@ -1,4 +1,4 @@
-// D-212 S1 测试：跨源聚合 store 方法（SumDailyIncomeByRange/SumCMCOvernightByRange/ListHedgeFlowPage）。
+// 测试：跨源聚合 store 方法（SumDailyIncomeByRange/SumCMCOvernightByRange/ListHedgeFlowPage）。
 package pgstore
 
 import (
@@ -101,7 +101,7 @@ func TestListHedgeFlowPage_CrossSourceTimeOrder(t *testing.T) {
 	if err := s.UpsertCMCHistory(ctx, 1, cmcTxs); err != nil {
 		t.Fatalf("UpsertCMCHistory: %v", err)
 	}
-	// D-212 R2：SELL_TRADE 不返回 → 4 条倒序：t5 t3 c2 t1（c4 被过滤）
+	// SELL_TRADE 不返回 → 4 条倒序：t5 t3 c2 t1（c4 被过滤）
 	items, err := s.ListHedgeFlowPage(ctx, "", 10, 0)
 	if err != nil {
 		t.Fatalf("ListHedgeFlowPage: %v", err)

@@ -9,14 +9,14 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/alerttext"
+	"arb/internal/platform/alerttext"
 )
 
 // Alert 对应 alerts 表（§2.5）。
 type Alert struct {
 	ID     int64
 	RuleID *int64
-	// D-411：position_id 持仓级告警关联（NULL=非持仓告警；与 rule_id 两语义分列）。
+	// position_id 持仓级告警关联（NULL=非持仓告警；与 rule_id 两语义分列）。
 	PositionID *int64
 	RuleName   string
 	Ts         time.Time
@@ -26,8 +26,8 @@ type Alert struct {
 }
 
 // InsertAlert 写入告警（§2.5）。
-// D-069：alertPaused=true 时静默丢弃（demo 阶段避免刷屏）。
-// D-114：写入成功后回调 alertHook（main.go 注入 alertTopic.Publish → StreamUpdates case 3 实时推送）。
+// alertPaused=true 时静默丢弃（demo 阶段避免刷屏）。
+// 写入成功后回调 alertHook（main.go 注入 alertTopic.Publish → StreamUpdates case 3 实时推送）。
 // 用 INSERT...RETURNING 取回完整 Alert 对象（含 id/ts），回调传完整对象。
 func (s *Store) InsertAlert(ctx context.Context, ruleID *int64, level, message string) error {
 	return s.insertAlert(ctx, ruleID, nil, level, message)
@@ -60,7 +60,7 @@ func (s *Store) insertAlert(ctx context.Context, ruleID, posID *int64, level, me
 	if s.alertPaused {
 		return nil
 	}
-	// D-592 S1：同键窗口抑制（DB 实查非进程内存——cron 批处理进程态活不过一轮，
+	// 同键窗口抑制（DB 实查非进程内存——cron 批处理进程态活不过一轮，
 	// KB cron-monitor-state-persistence）；漏斗单点=不插行即同抑 topic/feishu 通道。
 	// fail-open：dedup 查询出错放行原路径（止血票不引新丢告警面）。
 	w := s.alertDedupWindow
@@ -73,14 +73,14 @@ func (s *Store) insertAlert(ctx context.Context, ruleID, posID *int64, level, me
 	if derr != nil {
 		log.Printf("[pgstore] alert dedup query fail (fail-open): %v", derr)
 	} else if dup {
-		// D-592 R1 分级：warn/info 全抑制（不插行不推）；critical 照常落库保审计
+		// 分级：warn/info 全抑制（不插行不推）；critical 照常落库保审计
 		// （残腿 position=N 资金路径事件零痕迹=审计丢失实证），仅跳 topic/feishu 推送。
 		if level != "critical" {
 			return nil
 		}
 		suppressPush = true
 	}
-	// D-496：rules/rule_id 已删——ruleID 参数保留签名兼容、恒不落库。
+	// rules/rule_id 已删——ruleID 参数保留签名兼容、恒不落库。
 	q := `INSERT INTO alerts (position_id, level, message) VALUES ($1, $2, $3)
 		RETURNING id, ts, level, message, acked`
 	var a Alert
@@ -90,7 +90,7 @@ func (s *Store) insertAlert(ctx context.Context, ruleID, posID *int64, level, me
 	if err != nil {
 		return fmt.Errorf("insert alert: %w", err)
 	}
-	// D-114：写入后回调（main.go 注入 alertTopic.Publish → StreamUpdates case 3 实时推送）。
+	// 写入后回调（main.go 注入 alertTopic.Publish → StreamUpdates case 3 实时推送）。
 	// fire-and-forget：回调失败不影响写入（同 oppTopic 模式）。nil = 未接线（测试）。
 	if s.alertHook != nil && !suppressPush {
 		s.alertHook(a)
@@ -182,7 +182,7 @@ func (s *Store) DeleteAlerts(ctx context.Context, ids []int64) (int64, error) {
 
 // AlertExistsByFragment 检查告警历史中是否已存在含 fragment 的行（D-265 事件盯梢去重）。
 // fragment = 公告唯一标识（FileLink 或 URL），用于 LIKE 匹配。
-// D-508 S3：LIKE 加 7d 时界——全表扫历史告警随体量退化，去重窗口 7d 足够盖公告重推周期。
+// LIKE 加 7d 时界——全表扫历史告警随体量退化，去重窗口 7d 足够盖公告重推周期。
 func (s *Store) AlertExistsByFragment(ctx context.Context, fragment string) (bool, error) {
 	var count int
 	err := s.pool.QueryRow(ctx,

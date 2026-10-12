@@ -13,7 +13,7 @@ import (
 var ErrTerminalState = errors.New("position is in terminal state (CLOSED/FAILED), cannot update")
 
 // ErrClaimFailed 原子领取平仓权失败（position 非 OPEN/LEGGED 态，已被领取或非可平）。
-// D-159 W1a R3-1：ClaimClose 只允许 OPEN/LEGGED→CLOSING，其他状态（OPENING/CLOSING/CLOSED/FAILED）→ ErrClaimFailed。
+// R3-1：ClaimClose 只允许 OPEN/LEGGED→CLOSING，其他状态（OPENING/CLOSING/CLOSED/FAILED）→ ErrClaimFailed。
 var ErrClaimFailed = errors.New("position not in claimable state (OPEN/LEGGED), close claim failed")
 
 // Position 对应 positions 表（§2.11）。
@@ -54,7 +54,7 @@ func (s *Store) CreatePosition(ctx context.Context, p *Position) (int64, error) 
 	if p.Environment != "" {
 		env = p.Environment
 	}
-	// D-047：decision_ref/auto_close_at 仅 PROBE 仓填（nil→NULL，非探针路径零漂移）。
+	// decision_ref/auto_close_at 仅 PROBE 仓填（nil→NULL，非探针路径零漂移）。
 	var decisionRef, autoCloseAt interface{}
 	if p.DecisionRef != nil {
 		decisionRef = *p.DecisionRef
@@ -82,11 +82,11 @@ func (s *Store) UpdatePositionNotional(ctx context.Context, id int64, notional f
 }
 
 // UpdatePositionStatus 更新持仓状态。
-// D-077 修复⑩ G4：终态不可逆守卫——CLOSED/FAILED 不可回退（WHERE NOT IN）。
+// 修复⑩ G4：终态不可逆守卫——CLOSED/FAILED 不可回退（WHERE NOT IN）。
 // 返回 ErrTerminalState 表示 0 行受影响（已是终态，晚写拦截）。
-// D-189 P0-4：进入 CLOSING 时写 closing_started_at=COALESCE(closing_started_at, now())（保留首次时间，ResumeClose 重入不覆盖）。
+// P0-4：进入 CLOSING 时写 closing_started_at=COALESCE(closing_started_at, now())（保留首次时间，ResumeClose 重入不覆盖）。
 func (s *Store) UpdatePositionStatus(ctx context.Context, id int64, status string) error {
-	// D-060 实施修正②：去掉 updated_at——positions 表无此列，原 SQL 恒报错且被调用方
+	// 实施修正②：去掉 updated_at——positions 表无此列，原 SQL 恒报错且被调用方
 	// `_ =` 吞掉 → 所有 position 状态转换静默失败（position #2 卡 OPENING 实证）。
 	var q string
 	if status == "CLOSING" {
@@ -108,7 +108,7 @@ func (s *Store) UpdatePositionStatus(ctx context.Context, id int64, status strin
 // ClaimClose D-159 W1a R3-1：原子领取平仓权。
 // 只有 OPEN/LEGGED → CLOSING 成功（RowsAffected=1）；其他状态（OPENING/CLOSING/CLOSED/FAILED）→ ErrClaimFailed。
 // 防并发对账+手动平仓重复领取：CLOSING→CLOSING 被拒（只允许从 OPEN/LEGGED 进入 CLOSING）。
-// D-189 P0-4：进入 CLOSING 时写 closing_started_at=COALESCE(closing_started_at, now())（保留首次时间）。
+// P0-4：进入 CLOSING 时写 closing_started_at=COALESCE(closing_started_at, now())（保留首次时间）。
 func (s *Store) ClaimClose(ctx context.Context, id int64) error {
 	q := `UPDATE positions SET status = 'CLOSING', closing_started_at = COALESCE(closing_started_at, now()) WHERE id = $1 AND status IN ('OPEN','LEGGED')`
 	ct, err := s.pool.Exec(ctx, q, id)
@@ -160,10 +160,10 @@ func (s *Store) UpdateExpectedEntrySpreadBps(ctx context.Context, id int64, bps 
 // ClosePosition 平仓回填（D-159 W1a R3-1 原子领取）。
 // WHERE status NOT IN ('CLOSED','FAILED') 守卫：终态不可回退，并发对账+手动平仓重复调用
 // 只第一次生效（RowsAffected=0 返回 ErrTerminalState），防重复 CLOSED + 重复 realized_pnl 覆盖。
-// D-599 S2：realized_pnl 语义=净额（价差−fees_usd）；fees_usd/feeQuality 同原子写入
+// realized_pnl 语义=净额（价差−fees_usd）；fees_usd/feeQuality 同原子写入
 // （feesUSD=nil+quality="none"=无费信息，NULL 不填 0）。
 func (s *Store) ClosePosition(ctx context.Context, id int64, realizedPnl float64, feesUSD *float64, feeQuality string) error {
-	// D-070 修复：positions 表无 updated_at 列（D-060 同类 bug），去掉 updated_at = now()
+	// 修复：positions 表无 updated_at 列（D-060 同类 bug），去掉 updated_at = now()
 	q := `UPDATE positions SET status = 'CLOSED', realized_pnl = $1, fees_usd = $2, fee_quality = NULLIF($3,''), closed_at = now() WHERE id = $4 AND status NOT IN ('CLOSED','FAILED')`
 	ct, err := s.pool.Exec(ctx, q, realizedPnl, feesUSD, feeQuality, id)
 	if err != nil {

@@ -11,9 +11,9 @@ import (
 	"sort"
 	"time"
 
-	"arb/internal/fact"
-	"arb/internal/keydomain"
-	"arb/internal/scan"
+	"arb/internal/data/fact"
+	"arb/internal/data/keydomain"
+	"arb/internal/research/scan"
 	"arb/internal/store/pgstore"
 )
 
@@ -152,7 +152,7 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 			EntryFundingAnn: p.NetAnn, QtyUSD: scan.PaperQtyUSD, Structure: "perp_perp",
 			EstRoundTripFeeUSD: scan.PaperPerpPerpFeeUSD(ctx, st, p.ShortVenue, p.LongVenue, scan.PaperQtyUSD), // D-474a S2
 		}
-		// D-474b S1：开仓 basis=两腿 mark 价差（tick 缺/陈旧 → NULL 缺账诚实缺，不降级常数）。
+		// 开仓 basis=两腿 mark 价差（tick 缺/陈旧 → NULL 缺账诚实缺，不降级常数）。
 		if b := perpTickBasis(ctx, st, p.ShortVenue, p.ShortSym, p.LongVenue, p.LongSym, now); b != nil {
 			r.EntryBasisBps, r.LastBasisBps = b, b
 		}
@@ -165,7 +165,7 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 		opened = append(opened, p.Canon)
 	}
 	// ②③ 重算+退出（仅 perp_perp 行；spot/cfd 行各轨自理不触碰）
-	// D-474a S1：双腿各自结算边界逐期实率（共同前缀=min 水位）；S4：缺席不计时，
+	// 双腿各自结算边界逐期实率（共同前缀=min 水位）；S4：缺席不计时，
 	// 连缺 perpMissExitRounds 轮 → data_lost；S3：signedNet<0 → 当轮退 adverse。
 	fundByKey, symByVenueCanon := buildFundIndex(rows)
 	noFactWarn := 0
@@ -209,7 +209,7 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 		}
 		signedNet := *fs - *fl          // 方向入场固定，重算可转负（反噬即衰减，诚实记账）
 		recalc := p.LastAccrueTs == nil // D-474a S1 存量回迁哨兵
-		// D-474b S1：每轮现算两腿 mark 价差 → last_basis（缺 tick→nil，accrue 写 NULL 诚实缺；
+		// 每轮现算两腿 mark 价差 → last_basis（缺 tick→nil，accrue 写 NULL 诚实缺；
 		// 退出收敛=entry 对本轮 last 冻结，同 cfd 轨 paperExitConvergence 口径）。
 		lastBasis := perpTickBasis(ctx, st, shortVenue, shortSym, longVenue, longSym, now)
 		accruedAdd, settledTo, aok, aerr := scan.AccruePaperLegs(ctx, st, []scan.PaperLegAccrue{
@@ -241,7 +241,7 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 			}
 			continue
 		}
-		// D-474a S3：signedNet 翻负 → 当轮退 adverse（不等 streak）。
+		// signedNet 翻负 → 当轮退 adverse（不等 streak）。
 		if signedNet < 0 {
 			if err := st.ExitPaperSpotCarry(ctx, p.ID, "adverse", scan.PaperExitConvergence(p, lastBasis)); err != nil {
 				return opened, exited, fmt.Errorf("perp paper step: exit adverse %d: %w", p.ID, err)

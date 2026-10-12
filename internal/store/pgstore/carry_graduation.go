@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/keydomain"
+	"arb/internal/data/keydomain"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"

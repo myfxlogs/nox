@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/errclass"
+	"arb/internal/platform/errclass"
 )
 
 // PositionEval position_evals 一行（评估当刻 basis/anchor/fill 同刻并置）。

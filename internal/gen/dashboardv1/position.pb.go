@@ -726,7 +726,7 @@ func (x *ClosePositionResponse) GetMessage() string {
 	return ""
 }
 
-// D-181 S1：BackfillSwapHistory——手动回溯 venue swap 历史→facts（src=order_history）。
+// BackfillSwapHistory——手动回溯 venue swap 历史→facts（src=order_history）。
 type BackfillSwapHistoryRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Venue         string                 `protobuf:"bytes,1,opt,name=venue,proto3" json:"venue,omitempty"` // venueKey 如 "61585565:mt5"
@@ -2438,7 +2438,7 @@ type HedgeLegSpot struct {
 	QtyLiquid float64                `protobuf:"fixed64,3,opt,name=qty_liquid,json=qtyLiquid,proto3" json:"qty_liquid,omitempty"`   // 流动余额（fin_trx_account.balance_sun ÷ 1e6）
 	PnlVsBase float64                `protobuf:"fixed64,4,opt,name=pnl_vs_base,json=pnlVsBase,proto3" json:"pnl_vs_base,omitempty"` // 对冲镜像=−空单平台自报 PnL（现货购价未知，镜像近似）
 	Stake     *HedgeStake            `protobuf:"bytes,5,opt,name=stake,proto3" json:"stake,omitempty"`                              // 质押明细 energy+bandwidth
-	// D-231 S3：投票收益率（fin_trx_vote_apr 最新行透传，只渲染不运算）
+	// 投票收益率（fin_trx_vote_apr 最新行透传，只渲染不运算）
 	VoteAprCurrent float64                `protobuf:"fixed64,6,opt,name=vote_apr_current,json=voteAprCurrent,proto3" json:"vote_apr_current,omitempty"` // 当前投票票数加权平均年化 %
 	VoteAprMax     float64                `protobuf:"fixed64,7,opt,name=vote_apr_max,json=voteAprMax,proto3" json:"vote_apr_max,omitempty"`             // 市场最高年化 %（producer=true 降序第一）
 	VoteAprMaxSr   string                 `protobuf:"bytes,8,opt,name=vote_apr_max_sr,json=voteAprMaxSr,proto3" json:"vote_apr_max_sr,omitempty"`       // 最高年化 SR 名
@@ -2757,7 +2757,7 @@ type HedgeAccounts struct {
 	CmcCash         float64                `protobuf:"fixed64,5,opt,name=cmc_cash,json=cmcCash,proto3" json:"cmc_cash,omitempty"`                         // fin_cmc_account_summary.total_cash_balance
 	CmcEquity       float64                `protobuf:"fixed64,6,opt,name=cmc_equity,json=cmcEquity,proto3" json:"cmc_equity,omitempty"`                   // fin_cmc_account_summary.total_account_value
 	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`                     // 最近更新时间（取 TRX/CMC 较新者）
-	// D-278 S5：地址资源显示（剩余带宽/能量，后端算好前端零计算）
+	// 地址资源显示（剩余带宽/能量，后端算好前端零计算）
 	NetLimit        float64 `protobuf:"fixed64,8,opt,name=net_limit,json=netLimit,proto3" json:"net_limit,omitempty"`                     // 带宽上限（BP，链上 sun 原值直接透传，不 ÷1e6）
 	NetUsed         float64 `protobuf:"fixed64,9,opt,name=net_used,json=netUsed,proto3" json:"net_used,omitempty"`                        // 已用带宽（BP，链上 sun 原值直接透传）
 	FreeNetLimit    float64 `protobuf:"fixed64,10,opt,name=free_net_limit,json=freeNetLimit,proto3" json:"free_net_limit,omitempty"`      // 免费带宽上限（BP，链上 sun 原值直接透传）

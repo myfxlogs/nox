@@ -1,4 +1,4 @@
-// D-271 CEX 只读扫描器 Store：理财 APR + 跨所价差 CRUD。
+// CEX 只读扫描器 Store：理财 APR + 跨所价差 CRUD。
 package pgstore
 
 import (
@@ -55,7 +55,7 @@ func (s *Store) InsertCexEarnAPR(ctx context.Context, r *CexEarnAPR) error {
 
 // LatestCexEarnAPRs 每所每币种最新一行（语义=DISTINCT ON venue, ccy ORDER BY ts DESC；D-121 跳扫描实现）。
 func (s *Store) LatestCexEarnAPRs(ctx context.Context) ([]CexEarnAPR, error) {
-	// D-121：同 facts 跳扫描——127 万行全索引序扫 9.97s（生产 EXPLAIN ANALYZE 实证）
+	// 同 facts 跳扫描——127 万行全索引序扫 9.97s（生产 EXPLAIN ANALYZE 实证）
 	// 改递归 CTE 组键跳扫 + LATERAL 每组取最新=114ms。venue/ccy 均 NOT NULL 无需 NULL 补面。
 	rows, err := s.pool.Query(ctx, `
 		WITH RECURSIVE t AS (

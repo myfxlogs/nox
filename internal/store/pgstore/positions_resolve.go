@@ -19,7 +19,7 @@ func (s *Store) ListUnknownLegs(ctx context.Context, limit int) ([]PositionLeg, 
 }
 
 // ResolveLegFill UNKNOWN 腿消解为 FILLED：回填权威价/量/费（幂等——只从 UNKNOWN 迁移）。
-// D-013 R1 ①：消解转 FILLED 也是终态腿产生点——回读腿补 leg:<id> commission 行（幂等）。
+// ①：消解转 FILLED 也是终态腿产生点——回读腿补 leg:<id> commission 行（幂等）。
 func (s *Store) ResolveLegFill(ctx context.Context, legID int64, price, qty, feeUSD float64) error {
 	q := `UPDATE position_legs SET status = 'FILLED', price_actual = $2,
 		filled_qty = $3, avg_fill_price = $2, fee_usd = NULLIF($4::float8, 0)

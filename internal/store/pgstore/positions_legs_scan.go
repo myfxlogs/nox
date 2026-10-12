@@ -5,7 +5,7 @@ import (
 )
 
 // legSelectColumns D-195-B：position_legs 统一 SELECT 列（含 attempt 字段）。
-// D-496：venue 读 venue_key 生成列（对外仍复合键，调用方零改动）；account 死列已删，
+// venue 读 venue_key 生成列（对外仍复合键，调用方零改动）；account 死列已删，
 // 结构字段保留恒 ”。
 const legSelectColumns = `id, position_id, leg_no, phase, venue_key AS venue, ''::text AS account, symbol, side, qty,
 		price_expected, price_actual, order_id, status,

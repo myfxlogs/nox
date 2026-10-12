@@ -1,6 +1,6 @@
 package main
 
-// D-307 S4：归一/分诊/diff 纯函数层（不碰 IO，注入假 rows+假腿集可单测）。
+// 归一/分诊/diff 纯函数层（不碰 IO，注入假 rows+假腿集可单测）。
 //
 // 事件语义（设计 §4）：
 //   - NEW / DELISTED / RELISTED / NEW_CLASS / HEDGE_APPEARED = 一次性转移事件（落事件+告警）；
@@ -223,9 +223,9 @@ type divPair struct {
 }
 
 // divergences 同 canonical 跨所 funding 分化候选：|ann_i−ann_j|≥divPct 且两侧 vol≥volMinUSD。
-// D-374 A 面：canonical 分组内任一侧非空 Class ∈ classFilteredKinds → 全部 pair 跳过，
+// A 面：canonical 分组内任一侧非空 Class ∈ classFilteredKinds → 全部 pair 跳过，
 // canonical 计入 classFiltered 返回（digest 汇总渲染）；双侧矛盾取非空侧=宁可信其有。
-// D-376 S1：重构为 divPair 返回（event 文案/纸面开仓/分层分流共用源）——canonical 分组与
+// 重构为 divPair 返回（event 文案/纸面开仓/分层分流共用源）——canonical 分组与
 // class 过滤逻辑逐字节保留；short=funding 高侧（NetAnn 恒正），event 渲染走 divEvent。
 func divergences(rows []normRow, divPct, volMinUSD float64) (pairs []divPair, classFiltered []string) {
 	byCanon := make(map[string][]normRow)

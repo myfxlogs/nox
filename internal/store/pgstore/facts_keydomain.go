@@ -5,7 +5,7 @@ package pgstore
 import (
 	"context"
 
-	"arb/internal/keydomain"
+	"arb/internal/data/keydomain"
 )
 
 // mtVenueTypes broker_accounts venue→venue_type（facts 裸账号号的通道型反解表；

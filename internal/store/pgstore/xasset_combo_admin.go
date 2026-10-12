@@ -29,7 +29,7 @@ type XAssetComboAdminRow struct {
 }
 
 // ListXAssetAllowCombosAll 全量行（含禁用；管理面渲染用，不过滤 env/enabled）。
-// D-504 S1：demo 域残留收管理面——simulated=t 死行不列（物理行留库=授权痕迹；
+// demo 域残留收管理面——simulated=t 死行不列（物理行留库=授权痕迹；
 // 列可空 NULL 视同非 demo 行）。
 func (s *Store) ListXAssetAllowCombosAll(ctx context.Context) ([]XAssetComboAdminRow, error) {
 	rows, err := s.pool.Query(ctx, `

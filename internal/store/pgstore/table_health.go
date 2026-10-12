@@ -19,7 +19,7 @@ var tableHealthQueries = map[string]string{
 	"cex_spread":           "SELECT max(ts) FROM fin_cex_spread",
 	"funding_hist_binance": "SELECT max(ts) FROM facts WHERE kind='funding_history' AND venue='binance'",
 	"trx_account":          "SELECT max(fetched_at) FROM fin_trx_account",
-	// D-315：day 是 DATE（日粒度），新鲜基准=覆盖期末 day+1d 的 00:00（健康 age<24h，
+	// day 是 DATE（日粒度），新鲜基准=覆盖期末 day+1d 的 00:00（健康 age<24h，
 	// 漏写一日 >24h 越线）——旧码取行标签起点 max(day)，健康日 age 落 24-48h 假 critical。
 	"daily_income": "SELECT max(day)::timestamp + interval '1 day' FROM position_daily_income",
 }
@@ -27,7 +27,7 @@ var tableHealthQueries = map[string]string{
 // TableMaxTs 返回监控项 name 对应表的最新时间戳（D-301a S1）。
 // 白名单未命中 → error（防绕过白名单注入外部表名）。
 // 空表 → 零值时间（调用方视为 crit）。只读查询，无写。
-// D-301a 退回修复：空表 max() 返回 NULL，pgx 不能 Scan NULL→time.Time 零值，
+// 退回修复：空表 max() 返回 NULL，pgx 不能 Scan NULL→time.Time 零值，
 // 改用 pgtype.Timestamp 接收，Valid=false 时返回零值 time + nil error。
 func (s *Store) TableMaxTs(ctx context.Context, name string) (time.Time, error) {
 	q, ok := tableHealthQueries[name]

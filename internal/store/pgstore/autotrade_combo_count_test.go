@@ -1,4 +1,4 @@
-// D-256-A S4 热修测试：CountComboStopLosses 的 reason 过滤按生产真实落盘格式验证。
+// 热修测试：CountComboStopLosses 的 reason 过滤按生产真实落盘格式验证。
 // 缺陷背景（9-8 483 实证）：CLOSE_TRIGGER 落库 reason 带 "exit: " 前缀（engine_scan.go
 // logCloseTrigger 调用侧拼接），原 LIKE 'basis loss%'/'net swap%' 前缀匹配=0 命中。
 // 本测试用真实格式夹具锁行为：exit: basis loss / exit: net swap 计数，manual 不计。

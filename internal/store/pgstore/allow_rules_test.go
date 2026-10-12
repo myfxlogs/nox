@@ -1,6 +1,6 @@
 package pgstore
 
-// D-443 T1：autotrade_allow_rules 加载器——kind 分流两 map + enabled/simulated 过滤 +
+// autotrade_allow_rules 加载器——kind 分流两 map + enabled/simulated 过滤 +
 // 空集非 nil（venue 空=全拒 / canonical 空=全放行 D-122）。
 import (
 	"context"

@@ -1,4 +1,4 @@
-// D-335 S1：noise_bps 噪声半径计算（自 main.go 拆出保行预算）。
+// noise_bps 噪声半径计算（自 main.go 拆出保行预算）。
 package main
 
 import (

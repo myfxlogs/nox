@@ -1,4 +1,4 @@
-// D-269 S1：TRX 投票收益优化器 Store 方法（fin_trx_vote_rebalance 表）。
+// TRX 投票收益优化器 Store 方法（fin_trx_vote_rebalance 表）。
 package pgstore
 
 import (

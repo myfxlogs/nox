@@ -21,7 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// D-200：个人持仓+DCI 订单看板读面（只读；提案 RPC 复用 ListProposals 零新面）。
+// 个人持仓+DCI 订单看板读面（只读；提案 RPC 复用 ListProposals 零新面）。
 type PersonalPositionRow struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`

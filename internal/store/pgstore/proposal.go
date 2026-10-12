@@ -6,7 +6,7 @@ package pgstore
 import (
 	"context"
 
-	"arb/internal/keydomain"
+	"arb/internal/data/keydomain"
 	"encoding/json"
 	"strings"
 	"time"

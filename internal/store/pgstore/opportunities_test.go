@@ -24,7 +24,7 @@ func oppTest(id, typ string) *Opportunity {
 }
 
 // TestUpsertOpportunity_InsertedFlag 插入 → true；同 id 再 upsert（刷新）→ false；新 id → true。
-// D-050 xmax=0 技巧回归锁：仅新插入才返回 true，供站内推送判定。
+// xmax=0 技巧回归锁：仅新插入才返回 true，供站内推送判定。
 func TestUpsertOpportunity_InsertedFlag(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

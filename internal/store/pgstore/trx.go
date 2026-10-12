@@ -1,4 +1,4 @@
-// D-211 TRX 质押监控 P1：fin_trx_* 3 表持久化（SSOT §3）。
+// TRX 质押监控 P1：fin_trx_* 3 表持久化（SSOT §3）。
 // 3 写入 + 3 查询方法，挂在 *Store 上复用 s.pool。
 package pgstore
 

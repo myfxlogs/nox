@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/testutil"
+	"arb/internal/platform/testutil"
 )
 
 func TestD189_ProposalLifecycle(t *testing.T) {

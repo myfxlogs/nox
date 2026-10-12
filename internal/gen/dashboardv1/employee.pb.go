@@ -21,7 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// D-190：员工花名册看板 RPC（编制实况=在职/死亡/任务中）。
+// 员工花名册看板 RPC（编制实况=在职/死亡/任务中）。
 type Employee struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`

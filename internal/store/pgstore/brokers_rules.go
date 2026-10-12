@@ -7,7 +7,7 @@ import (
 	"log"
 	"strings"
 
-	"arb/internal/normalize"
+	"arb/internal/data/normalize"
 )
 
 // BackfillRuleMappings 规则库自动补录（D-140 S1）。
@@ -32,7 +32,7 @@ func (s *Store) BackfillRuleMappings(ctx context.Context, venue string, brokerSy
 		if mapped[sym] {
 			continue // 幂等：已有映射跳过
 		}
-		// D-176 反污染护栏：拒绝含 . 的 broker_symbol（股票代码格式，
+		// 反污染护栏：拒绝含 . 的 broker_symbol（股票代码格式，
 		// normalize regex 误匹配的常见模式）。CFD 合法符号不含点号（EURUSD/XAGUSDm/US30_x10m 均无点号）；
 		// 含点号的是股票/ETF（CLNE.NAS/GOLD.NYSE-24/HSIC.O）。
 		if strings.Contains(sym, ".") {

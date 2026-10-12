@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/cryptoutil"
+	"arb/internal/platform/cryptoutil"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -40,7 +40,7 @@ func (s *Store) InsertExchangeConfig(ctx context.Context, c *ExchangeConfig) err
 }
 
 // ListExchangeConfigs 全量交易所配置（按创建时间序）。
-// D-515：enc 列存在 → 解密回填 APIKey/APISecret/Passphrase（读面全走解密，明文列恒空）；
+// enc 列存在 → 解密回填 APIKey/APISecret/Passphrase（读面全走解密，明文列恒空）；
 // enc 行存在但 ARB_MASTER_KEY 缺失/解失败 → error 上抛（fail-closed，调用方 boot fatal）。
 func (s *Store) ListExchangeConfigs(ctx context.Context) ([]ExchangeConfig, error) {
 	rows, err := s.pool.Query(ctx, `

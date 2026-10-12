@@ -15,8 +15,8 @@ import (
 	"sort"
 	"time"
 
-	"arb/internal/httpx"
-	"arb/internal/keydomain"
+	"arb/internal/data/keydomain"
+	"arb/internal/platform/httpx"
 	"arb/internal/store/pgstore"
 )
 
@@ -97,7 +97,7 @@ func alignSpread(ticks []tickBucket, klines []kline) ([]float64, int) {
 }
 
 // RunBackfill D-341 S5 主流程：Exness ticks 桶化 × binance klines 对齐 → 逐行写 src='backfill'。
-// D-423：cexVenue/mtVenue 显式落行（回填源=binance fapi 簿，venue 标签照实）。
+// cexVenue/mtVenue 显式落行（回填源=binance fapi 簿，venue 标签照实）。
 func RunBackfill(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, exnessVenue, sym, pair, exSym, cexVenue, mtVenue string, since time.Time) (int, error) {
 	rows, err := st.Pool().Query(ctx,
 		`SELECT ts, (bid+ask)/2 FROM ticks WHERE venue=$1 AND symbol=$2 AND ts > $3 ORDER BY ts`, exnessVenue, exSym, since)
@@ -149,9 +149,9 @@ func runBackfillMode(ctx context.Context, dsn string) (err error) {
 		return fmt.Errorf("connect pg: %w", err)
 	}
 	defer st.Close()
-	// D-558 S2：与 run() 同款 named-return defer 单点捕获 fatal 上报。
+	// 与 run() 同款 named-return defer 单点捕获 fatal 上报。
 	defer func() { reportFatal(ctx, st, err) }()
-	// D-145：端点唯一权威=app_config 行（env 读径封死）。
+	// 端点唯一权威=app_config 行（env 读径封死）。
 	proxyURL, err := binanceProxyURL(ctx, st)
 	if err != nil {
 		return err

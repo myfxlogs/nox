@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/keydomain"
+	"arb/internal/data/keydomain"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -20,7 +20,7 @@ type Cashflow struct {
 	Venue      string
 	AmountUSD  float64
 	Ts         time.Time
-	// D-193-A 事实身份字段（设计 §3.5）
+	// 事实身份字段（设计 §3.5）
 	AccountID       *int64
 	RawCurrency     *string // D-193 审计 P1-2：字段名对齐设计 §3.5
 	RawAmount       *float64
@@ -36,7 +36,7 @@ type Cashflow struct {
 }
 
 // InsertCashflow 写入现金流。
-// D-159 W3a R5：加 legNo 参数（per-leg 幂等键前置）。
+// 加 legNo 参数（per-leg 幂等键前置）。
 // legNo 是 position_legs.leg_no（int16，从 0 开始，0 是有效第一腿，写 0 不是 NULL）。
 func (s *Store) InsertCashflow(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error {
 	vk := keydomain.Parse(venue) // D-496：venue 传 venueKey 复合键，落库拆两列
@@ -47,7 +47,7 @@ func (s *Store) InsertCashflow(ctx context.Context, posID int64, legNo int16, ki
 }
 
 // ListCashflows 返回指定持仓的现金流（§13.7 复盘合算：realized_pnl + Σcashflows）。
-// D-193-A：扫描新事实身份字段（指针容错 legacy 行 NULL）。
+// 扫描新事实身份字段（指针容错 legacy 行 NULL）。
 func (s *Store) ListCashflows(ctx context.Context, posID int64) ([]Cashflow, error) {
 	q := `SELECT id, position_id, leg_no, kind, venue_key AS venue, amount_usd, ts,
 			account_id, raw_currency, raw_amount, fx_rate, fx_source, event_key,
@@ -110,7 +110,7 @@ func (s *Store) HasCashflowByEventKey(ctx context.Context, posID int64, eventKey
 // SumCashflowsNet 返回指定持仓 swap+funding+commission 现金流的 USD 合计（D-127 P4 返修①）。
 // settlement.Settle 用此值算 net = realized + cashflowsNet，修正淘汰/复盘口径漏计息差/手续费的缺陷。
 // commission 写入时已带负号（pipeline_legs.go:190 -fill.Commission），SUM 自动减 → 等价 swap+funding−commission。
-// D-193-A：只统计 quality='actual' 或 quality IS NULL（legacy 兼容）的现金流；
+// 只统计 quality='actual' 或 quality IS NULL（legacy 兼容）的现金流；
 // quality='estimated'/'unknown' 的现金流不进入正式实际收益统计。
 // 无匹配行 → 返回 0（不影响 net）。
 func (s *Store) SumCashflowsNet(ctx context.Context, posID int64) (float64, error) {
@@ -144,12 +144,12 @@ func (s *Store) SumPositionCarryActual(ctx context.Context, posID int64) (float6
 }
 
 // InsertCashflowFull D-193-A：完整字段写入（事实幂等键 event_key + 调用方按证据等级传 quality）。
-// D-193-A 扩包（决策 3）：quality 由调用方按证据等级传入——公式路径传 'estimated'，
+// 扩包（决策 3）：quality 由调用方按证据等级传入——公式路径传 'estimated'，
 // 对拍金额匹配后升 'actual'，不匹配置 'unknown'。本函数不强制 quality=actual。
 // event_key 为事实幂等键；ON CONFLICT(event_key) DO NOTHING。
 // 返回 won=true 表示新插入，won=false 表示已存在（幂等成功）。
 //
-// D-193 审计 P1-14 正负号约定（设计 §3.5 硬约束）：
+// 审计 P1-14 正负号约定（设计 §3.5 硬约束）：
 // amount_usd 正负号按实际现金流方向保存——swap/funding 按实收（正=收入），
 // commission 按实付（负=支出，与现有 pipeline_legs.go:190 -fill.Commission 口径一致）。
 // 调用方传入的 amount_usd 必须已带正确正负号，本函数不做符号翻转。
@@ -186,8 +186,8 @@ func (s *Store) SumCashflowsNetWithQuality(ctx context.Context, posID int64) (su
 	// 逐行读 quality 决定聚合质量（actual/estimated/unknown），SUM 只统计 actual+legacy。
 	// legacy 行 quality IS NULL → 视作 actual（兼容旧数据，D-193 §3.6 legacy 标记在 settlement 侧）。
 	var hasUnknown, hasEstimated bool
-	// D-013 ②：commission 无条件计入（同 SumCashflowsNetForSettle 口径——
-	// D-599 的 fees_usd 双扣排除由 PositionNetUSD 单源接管，不再需要）。
+	// ②：commission 无条件计入（同 SumCashflowsNetForSettle 口径——
+	// 的 fees_usd 双扣排除由 PositionNetUSD 单源接管，不再需要）。
 	rows, err := s.pool.Query(ctx,
 		`SELECT COALESCE(amount_usd, 0), COALESCE(quality, 'actual')
 		 FROM position_cashflows

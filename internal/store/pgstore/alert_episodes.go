@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/alerttext"
+	"arb/internal/platform/alerttext"
 )
 
 // cfgAlertEpisodes episode 状态键（app_config value=alertEpisodeDoc JSON）。

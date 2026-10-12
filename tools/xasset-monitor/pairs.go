@@ -1,6 +1,6 @@
 // pairs.go D-423→D-472 S5→D-144：监控对清单派生（硬编码 9 行 vs xasset_allow_combos
 // 双真相源漂移实证——okx XPT/XPD 簿缺席告警 9-25 实发——重写为白名单表派生）。
-// D-144 覆盖域扩至上游验证域：派生源=enabled 白名单 ∪ active 纸面仓 ∪ fin_carry_universe
+// 覆盖域扩至上游验证域：派生源=enabled 白名单 ∪ active 纸面仓 ∪ fin_carry_universe
 // 达标行（cfd 结构 note=” net∈[8,300]，与 openCfdDiscovery 开仓域同口径）——授权域/
 // 发现域/在仓域三源并集，白名单缩编簿不塌（10-02→10-04 塌缩事故根修）。
 // mt_venue 集=ticks 在流 MT 账户动态枚举（ARB_XASSET_EXNESS_VENUE env 删除；各账户
@@ -11,8 +11,8 @@
 package main
 
 import (
-	"arb/internal/keydomain"
-	"arb/internal/scan"
+	"arb/internal/data/keydomain"
+	"arb/internal/research/scan"
 	"arb/internal/store/pgstore"
 
 	"sort"
@@ -107,7 +107,7 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdD
 		return "", false
 	}
 
-	// D-144：mt venue 集——ticks 在流账户 ∪ enabled 组合 MT 腿（venue 键全集；
+	// mt venue 集——ticks 在流账户 ∪ enabled 组合 MT 腿（venue 键全集；
 	// demand 行 venue 各自绑定不入全集——其 pair 键含账户实解析 canonical 不外溢）。
 	acctType := map[string]string{} // bare → vtype
 	acctSyms := map[string][]string{}
@@ -207,7 +207,7 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdD
 			emit(monitorPair{cexVenue: cexVenue, sym: sym, pair: cexCanon + "-" + bare, exSym: mtCanon, mtVenueKey: v})
 		}
 	}
-	// D-144 上游域：universe 达标行∪active 纸面仓——按其自带 (mt,cex) 绑账户派生，
+	// 上游域：universe 达标行∪active 纸面仓——按其自带 (mt,cex) 绑账户派生，
 	// pair 键经 scan.CfdBookSpecs 实解析（与 insertCfdPaper 候选键同源）。
 	for _, d := range demand {
 		name := d.mtVenue + "×" + d.cexVenue + "|" + d.canonical

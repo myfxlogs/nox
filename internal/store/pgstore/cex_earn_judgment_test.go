@@ -1,4 +1,4 @@
-// D-273 S5：判断结果 upsert 去重 + Latest 读取测试（P2-5 承重墙：ON CONFLICT 三列必须与唯一索引对齐）。
+// 判断结果 upsert 去重 + Latest 读取测试（P2-5 承重墙：ON CONFLICT 三列必须与唯一索引对齐）。
 package pgstore
 
 import (

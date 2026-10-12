@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/fact"
+	"arb/internal/data/fact"
 )
 
 func settleAvgsTestStore(t *testing.T) *Store {

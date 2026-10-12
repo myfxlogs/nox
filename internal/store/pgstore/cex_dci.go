@@ -20,7 +20,7 @@ type CexDCIQuote struct {
 	APY        float64
 	ProductRef string
 	OrderRef   string // D-191-R10：申购 orderId 参（采集面解析入库；缺行=不可申购参数）
-	// D-191-R11：申购量界（NULL=venue 未给行——decimal 缺=跳次档）。
+	// 申购量界（NULL=venue 未给行——decimal 缺=跳次档）。
 	MinAmount       *float64
 	MaxAmount       *float64
 	PurchaseDecimal *int

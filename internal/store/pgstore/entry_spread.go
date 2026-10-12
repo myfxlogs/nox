@@ -1,6 +1,6 @@
 package pgstore
 
-// D-327 S1：entry spread 基准计算与补写（XASSET_CARRY 开仓 meta 写入点与 boot 回填共用）。
+// entry spread 基准计算与补写（XASSET_CARRY 开仓 meta 写入点与 boot 回填共用）。
 // 独立成文保 positions.go ≤300 行门禁。
 
 import "context"

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/keydomain"
+	"arb/internal/data/keydomain"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -39,7 +39,7 @@ type Opportunity struct {
 // 返回 inserted=true 表示本次是新插入（首次出现），false 表示刷新既有行（D-050 站内推送判定）。
 // PostgreSQL UPSERT 技巧：RETURNING (xmax = 0) —— 本语句实际执行 INSERT（新行）时 xmax=0，
 // 触发 ON CONFLICT DO UPDATE（刷新既有行）时 xmax≠0。
-// D-080：id=组合键（6 段，无时间戳），同组合每 tick 刷新同行（last_seen=now()）。
+// id=组合键（6 段，无时间戳），同组合每 tick 刷新同行（last_seen=now()）。
 func (s *Store) UpsertOpportunity(ctx context.Context, o *Opportunity) (bool, error) {
 	q := `INSERT INTO opportunities (
 			id, type, canonical, canonical_sell, asset_class, venue_buy, venue_type_buy, venue_sell, venue_type_sell, price_buy, price_sell,

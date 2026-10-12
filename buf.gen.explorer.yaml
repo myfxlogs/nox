@@ -1,0 +1,11 @@
+# D-513 探矿员 LLM 提案 schema 生成——Go 单件（protojson 严格模式契约用，非 RPC）。
+#   buf generate --template buf.gen.explorer.yaml
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: internal/gen
+    opt: paths=source_relative
+inputs:
+  - directory: proto
+    paths:
+      - proto/arb/explorer

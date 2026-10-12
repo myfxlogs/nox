@@ -27,7 +27,7 @@ type DailyIncome struct {
 
 // AddDailyIncome upsert 一条每日收益记录：同 day 重复 → 覆盖（支持同日纠错），返回 id。
 // price/pnlUSD 为 nil = 写 NULL（无报价时后端传 nil，不写 0 冒充现价）。
-// D-211 F1：INSERT 与 ON CONFLICT DO UPDATE 两处均 stamp source='manual'（手工纠错盖章）。
+// F1：INSERT 与 ON CONFLICT DO UPDATE 两处均 stamp source='manual'（手工纠错盖章）。
 func (s *Store) AddDailyIncome(ctx context.Context, day time.Time, energyTrx, votingTrx, interestUSD float64, price, pnlUSD *float64, note string) (int64, error) {
 	var id int64
 	err := s.pool.QueryRow(ctx, `

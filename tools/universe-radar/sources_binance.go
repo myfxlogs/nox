@@ -184,7 +184,7 @@ func (b binance) fundingIntervals(ctx context.Context) (map[string]int, error) {
 }
 
 // latestFacts 批查 venue kind 最新值（src 非空则锚定；funding_interval 落点 src 异构不过滤）。
-// D-591 R3：泛化 venue 参数供 okx/gate 读库化共用。
+// 泛化 venue 参数供 okx/gate 读库化共用。
 func latestFacts(ctx context.Context, pool *pgxpool.Pool, venue, kind string, srcs []string, maxAge string) map[string]float64 {
 	q := `SELECT DISTINCT ON (symbol) symbol, value FROM facts
 		WHERE kind=$1 AND venue=$2 AND ts > now()-$3::interval`

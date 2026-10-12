@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/scan"
+	"arb/internal/research/scan"
 	"arb/internal/store/pgstore"
 
 	"github.com/jackc/pgx/v5"
@@ -27,7 +27,7 @@ const mtStreamWindow = "10 minutes"
 // + asset_equiv（class 键实解析）。
 func loadDerivationInputs(ctx context.Context, st *pgstore.Store) ([]allowComboRow, []universeRow, []cfdDemandRow, []mtAcct, []pgstore.AssetEquivEntry, error) {
 	var combos []allowComboRow
-	// D-552 S1：SELECT venue_key_* 生成列（D-496 键域权威口径）——裸列 venue_buy/sell
+	// SELECT venue_key_* 生成列（D-496 键域权威口径）——裸列 venue_buy/sell
 	// 在拆列后=裸号/裸名（"3001157"/"gate"），IsMTKey 全 false → mt×cex 组合误判同所
 	// 拒采 → monitor 簿停写 49h（回归实证见 derive_test T3）。
 	rows, err := st.Pool().Query(ctx, `SELECT canonical_buy, venue_key_buy, canonical_sell, venue_key_sell
@@ -67,7 +67,7 @@ func loadDerivationInputs(ctx context.Context, st *pgstore.Store) ([]allowComboR
 		return nil, nil, nil, nil, nil, fmt.Errorf("universe rows: %w", err)
 	}
 
-	// D-144 上游域①：fin_carry_universe 达标行（开仓域同阈，scan 常数单源）。
+	// 上游域①：fin_carry_universe 达标行（开仓域同阈，scan 常数单源）。
 	carryRows, err := st.Pool().Query(ctx, `SELECT canonical, mt_venue, cex_venue
 		FROM fin_carry_universe
 		WHERE structure IN ('long_cfd_short_perp','short_cfd_long_perp')
@@ -95,7 +95,7 @@ func loadDerivationInputs(ctx context.Context, st *pgstore.Store) ([]allowComboR
 		return nil, nil, nil, nil, nil, fmt.Errorf("carry universe rows: %w", err)
 	}
 
-	// D-144 上游域②：active cfd 纸面仓所需三元组（venue_a=mt 裸名/venue_b=cex 裸名）。
+	// 上游域②：active cfd 纸面仓所需三元组（venue_a=mt 裸名/venue_b=cex 裸名）。
 	paperRows, err := st.Pool().Query(ctx, `SELECT symbol, venue_a, venue_b
 		FROM paper_spot_carry
 		WHERE status = 'active' AND structure IN ('long_cfd_short_perp','short_cfd_long_perp')`)
@@ -155,7 +155,7 @@ func loadDerivationInputs(ctx context.Context, st *pgstore.Store) ([]allowComboR
 	return combos, uni, demand, accts, equiv, nil
 }
 
-// D-591 S2/S3/S5 读库三件套（模板=D-582 fetchBinanceGold；reuse-existing-stream-before-new-path）。
+// S2/S3/S5 读库三件套（模板=D-582 fetchBinanceGold；reuse-existing-stream-before-new-path）。
 
 // goldStaleTicks ticks 陈旧守门（S5 定标：6h 实测行间隔 binance p100=118s/gate p99=74s/
 // okx p99=61s——120s 覆盖正常节奏；flap 窗真停顿报错=应有行为，禁为少报错放宽）。
@@ -164,7 +164,7 @@ const goldStaleTicks = 120 * time.Second
 // readGoldTicks 读最新 perp tick（venue×symbol 隔离；venue_type='perp' 过滤——perp/spot 行混存）。
 func readGoldTicks(ctx context.Context, pool *pgxpool.Pool, venue, symbol string) (bid, ask float64, err error) {
 	var ts time.Time
-	// D-160：stale/无行 → *staleDataErr 类型化（上游分级簿面静止 vs 真断流）。
+	// stale/无行 → *staleDataErr 类型化（上游分级簿面静止 vs 真断流）。
 	err = pool.QueryRow(ctx, `
 		SELECT bid, ask, ts FROM ticks
 		WHERE venue=$1 AND venue_type='perp' AND symbol=$2
@@ -221,7 +221,7 @@ func readGoldFunding(ctx context.Context, pool *pgxpool.Pool, venue string, srcs
 		}
 		return 0, 0, fmt.Errorf("facts funding_interval %s: %w", symbol, err)
 	}
-	// D-591 R1：interval=近静态元数据（gate 日轮+各所 boot/帧内写），守门按写源节奏定标 25h；
+	// interval=近静态元数据（gate 日轮+各所 boot/帧内写），守门按写源节奏定标 25h；
 	// funding rate 动态数据守门 15m 不动（stale-data-propagates-wrong-judgments 两边各安其位）。
 	if age := time.Since(its); age > goldStaleInterval {
 		return 0, 0, &staleDataErr{kind: "funding_interval", venue: venue, symbol: symbol, age: age}
@@ -240,7 +240,7 @@ func fetchBinanceGold(ctx context.Context, pool *pgxpool.Pool, symbol string) (b
 	if bid, ask, err = readGoldTicks(ctx, pool, "binance", symbol); err != nil {
 		return 0, 0, 0, 0, err
 	}
-	// D-109 修补：binance funding src 白名单——WS 原生+binance_rest_markprice（死流窗
+	// 修补：binance funding src 白名单——WS 原生+binance_rest_markprice（死流窗
 	// REST 看门狗落点）。只认这两源：backfill/他 src 仍不借用（cross-source 纪律不变）。
 	if fundingRate, periodsPerDay, err = readGoldFunding(ctx, pool, "binance", []string{"binance_ws_markprice", "binance_rest_markprice"}, symbol); err != nil {
 		return 0, 0, 0, 0, err

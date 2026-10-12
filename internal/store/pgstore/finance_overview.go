@@ -33,7 +33,7 @@ type FinanceFlow struct {
 }
 
 // FinancePnlByEnv 已实现 PnL 按环境分层（status=CLOSED；environment NULL=legacy real 链路——
-// D-195-B 前旧链路无环境列，D-348 锚：NULL 桶合计=设计 real 桶 −3169.94）。
+// 前旧链路无环境列，D-348 锚：NULL 桶合计=设计 real 桶 −3169.94）。
 func (s *Store) FinancePnlByEnv(ctx context.Context) ([]FinancePnlEnv, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT COALESCE(environment, 'real') AS env,

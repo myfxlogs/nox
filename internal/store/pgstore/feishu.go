@@ -1,4 +1,4 @@
-// D-264 飞告警推送目标存取（单行表 feishu_push_target）+ InsertAlert 推送钩子。
+// 飞告警推送目标存取（单行表 feishu_push_target）+ InsertAlert 推送钩子。
 package pgstore
 
 import (
@@ -27,7 +27,7 @@ func (s *Store) FeishuChatID(ctx context.Context) (string, error) {
 }
 
 // FeishuTarget 读推送目标 chat_id+open_id（空=未绑定）。
-// D-270：确认流程需同时读 open_id 做发送者校验。
+// 确认流程需同时读 open_id 做发送者校验。
 func (s *Store) FeishuTarget(ctx context.Context) (chatID, openID string, err error) {
 	err = s.pool.QueryRow(ctx,
 		`SELECT chat_id, open_id FROM feishu_push_target WHERE id = 1`).Scan(&chatID, &openID)

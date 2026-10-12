@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// D-110 P2: position_swap_snapshots 集成测试（DSN-gated）。
+// position_swap_snapshots 集成测试（DSN-gated）。
 // 参考 investment_records_test.go 的 testStore 模式。
 
 func testSwapSnapshotStore(t *testing.T) *Store {

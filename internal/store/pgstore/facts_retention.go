@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/fact"
+	"arb/internal/data/fact"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -26,7 +26,7 @@ func (s *Store) LatestFactsByKindSince(ctx context.Context, kind string, since t
 	if !since.IsZero() {
 		sinceArg = &since
 	}
-	// D-121：DISTINCT ON 全索引序扫改为 loose index scan（递归 CTE 跳组）。
+	// DISTINCT ON 全索引序扫改为 loose index scan（递归 CTE 跳组）。
 	// 生产实证：funding kind 238 万行 DISTINCT ON=32s；跳扫描=组数×index seek=69ms。
 	// 非空组走 (kind,venue,symbol,ts) 索引 ROW>ROW 寻址；NULL-symbol 组（行排序在 venue 尾、
 	// ROW>ROW 不可达）走 0180 部分索引枚举 venue。语义与 DISTINCT ON(venue,symbol) ORDER BY ts DESC 等价。

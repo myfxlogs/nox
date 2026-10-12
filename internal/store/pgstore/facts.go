@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/fact"
-	"arb/internal/keydomain"
+	"arb/internal/data/fact"
+	"arb/internal/data/keydomain"
 
 	"github.com/jackc/pgx/v5"
 )
 
 // InsertFacts 批量写入 facts（§2.2）。
-// D-496 键域宪法落地（R1/R2/R4）：venue 复合键拆 (venue,venue_type) 两列；
+// 键域宪法落地（R1/R2/R4）：venue 复合键拆 (venue,venue_type) 两列；
 // 裸 venue 按域推导类型（MT 账号号→注册处 venue_type 反解；CEX 名→perp；cmc→”非通道）；
 // symbol=” 或与 venue 同值（历史账号级挪用）→ NULL=非品种域。
 func (s *Store) InsertFacts(ctx context.Context, facts []fact.Fact) error {
@@ -46,11 +46,11 @@ func (s *Store) DeleteFactsBySrc(ctx context.Context, src, venue string) error {
 }
 
 // LatestFacts 返回每 (kind, venue, symbol) 的最新事实（§8.2 ListLatestFacts）。
-// D-496 F2 两族契约：symbol 严格相等——品种级 fact（symbol 非 NULL）与账号级 fact
+// F2 两族契约：symbol 严格相等——品种级 fact（symbol 非 NULL）与账号级 fact
 // （symbol IS NULL，R4 归位）是两类事实，显式 symbol 查询不混入账号级行；
 // 账号级取数走 symbol=” 通配分支（$3=” 命中全部，含 NULL 行）或专用裸 venue 查询。
 func (s *Store) LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error) {
-	// D-508 S3：venue/venue_key OR 分支拆两路——按入参键形选单列谓词，planner 可命中前缀索引。
+	// venue/venue_key OR 分支拆两路——按入参键形选单列谓词，planner 可命中前缀索引。
 	venuePred := `($2 = '' OR venue = $2)`
 	if venue != "" && keydomain.Parse(venue).Type != "" {
 		venuePred = `venue_key = $2`
@@ -79,7 +79,7 @@ func (s *Store) LatestFacts(ctx context.Context, kind, venue, symbol string) ([]
 }
 
 // FactsSince 返回某 (kind, venue, symbol) 自 since 起的 facts 历史行（ts 升序）。
-// D-474a S1：结算边界逐期实率取数面（funding_history / swap_long·short 窗内序列）。
+// 结算边界逐期实率取数面（funding_history / swap_long·short 窗内序列）。
 func (s *Store) FactsSince(ctx context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT kind, venue, COALESCE(symbol,'') AS symbol, value, unit, ts, src
@@ -203,7 +203,7 @@ type FactPoint struct {
 }
 
 // FundingPredWindow 返回 funding 预测流在 [since, ∞) 的全部样本（ts 升序）。
-// D-328 S1：carry 入口持久性闸数据源——kind='funding' 预测流实时入库且 facts 留全史
+// carry 入口持久性闸数据源——kind='funding' 预测流实时入库且 facts 留全史
 // （funding_history 结算史是 24h 批量，结算后最长一天才入库，不可用于入场时点判定）。
 func (s *Store) FundingPredWindow(ctx context.Context, venue, symbol string, since time.Time) ([]FactPoint, error) {
 	rows, err := s.pool.Query(ctx,
@@ -226,7 +226,7 @@ func (s *Store) FundingPredWindow(ctx context.Context, venue, symbol string, sin
 }
 
 // LatestTickMid 指定 venue+symbol 最近 bid/ask 中间价（D-359 TRX USD 价三级 fallback 末级）。
-// D-508 S13：补 venue 过滤——同 canonical 多 venue 并行采样时取错 venue 价即脏锚。
+// 补 venue 过滤——同 canonical 多 venue 并行采样时取错 venue 价即脏锚。
 // 无行/非正价 → false（诚实缺，不猜）。
 func (s *Store) LatestTickMid(ctx context.Context, venue, symbol string) (float64, bool) {
 	var v float64
@@ -260,4 +260,24 @@ func (s *Store) FactsWindowStats(ctx context.Context, kind, venue, symbol string
 		return 0, ErrNoFactsInWindow
 	}
 	return *mean, nil
+}
+
+// TicksWindow ticks 窗口读面（信号计算与回放门数据源；ts 升序）。
+func (s *Store) TicksWindow(ctx context.Context, venue, symbol string, since time.Time) ([]TickRow, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT ts, venue, symbol, bid, ask, venue_type FROM ticks
+		WHERE (venue = $1 OR venue_key = $1) AND symbol = $2 AND ts >= $3 ORDER BY ts`, venue, symbol, since)
+	if err != nil {
+		return nil, fmt.Errorf("ticks window: %w", err)
+	}
+	defer rows.Close()
+	var out []TickRow
+	for rows.Next() {
+		var r TickRow
+		if err := rows.Scan(&r.Ts, &r.Venue, &r.Symbol, &r.Bid, &r.Ask, &r.VenueType); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

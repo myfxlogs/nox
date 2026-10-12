@@ -412,7 +412,7 @@ type DashboardServiceClient interface {
 	ListProbeProposals(context.Context, *connect.Request[dashboardv1.ListProbeProposalsRequest]) (*connect.Response[dashboardv1.ListProbeProposalsResponse], error)
 	ListAccounts(context.Context, *connect.Request[dashboardv1.ListAccountsRequest]) (*connect.Response[dashboardv1.ListAccountsResponse], error)
 	// 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
-	// D-063：ListPersonalPositions RPC 随 personal 渲染面退役拆除（D-212 后零读者；表保留 TRX 域自用）。
+	// ListPersonalPositions RPC 随 personal 渲染面退役拆除（D-212 后零读者；表保留 TRX 域自用）。
 	GetHedgeStructure(context.Context, *connect.Request[dashboardv1.GetHedgeStructureRequest]) (*connect.Response[dashboardv1.GetHedgeStructureResponse], error)
 	ListHedgeFlow(context.Context, *connect.Request[dashboardv1.ListHedgeFlowRequest]) (*connect.Response[dashboardv1.ListHedgeFlowResponse], error)
 	TrxAccountRefresh(context.Context, *connect.Request[dashboardv1.TrxAccountRefreshRequest]) (*connect.Response[dashboardv1.TrxAccountRefreshResponse], error)
@@ -454,7 +454,7 @@ type DashboardServiceClient interface {
 	ListMappingSuggestions(context.Context, *connect.Request[dashboardv1.ListMappingSuggestionsRequest]) (*connect.Response[dashboardv1.ListMappingSuggestionsResponse], error)
 	ListCanonicals(context.Context, *connect.Request[dashboardv1.ListCanonicalsRequest]) (*connect.Response[dashboardv1.ListCanonicalsResponse], error)
 	AutoMapBroker(context.Context, *connect.Request[dashboardv1.AutoMapBrokerRequest]) (*connect.Response[dashboardv1.AutoMapBrokerResponse], error)
-	// D-140 S3：swap 组合列表（basis_bps 只展示不动排序）
+	// swap 组合列表（basis_bps 只展示不动排序）
 	ListSwapCombos(context.Context, *connect.Request[dashboardv1.ListSwapCombosRequest]) (*connect.Response[dashboardv1.ListSwapCombosResponse], error)
 	// Matrix 全景（D-045：全符号跨全账号映射/报价巡检）
 	ListMatrixUniverse(context.Context, *connect.Request[dashboardv1.ListMatrixUniverseRequest]) (*connect.Response[dashboardv1.ListMatrixUniverseResponse], error)
@@ -472,75 +472,75 @@ type DashboardServiceClient interface {
 	// 分析员（D-091 前端分析员，server streaming + 收件箱 append）
 	AskAnalyst(context.Context, *connect.Request[dashboardv1.AskAnalystRequest]) (*connect.ServerStreamForClient[dashboardv1.AskAnalystResponse], error)
 	AppendAnalystNote(context.Context, *connect.Request[dashboardv1.AppendAnalystNoteRequest]) (*connect.Response[dashboardv1.AppendAnalystNoteResponse], error)
-	// D-442 S4：KB 元分析报告手动补跑（周 ticker 之外的调试/验证入口）
+	// KB 元分析报告手动补跑（周 ticker 之外的调试/验证入口）
 	GenerateKbReport(context.Context, *connect.Request[dashboardv1.GenerateKbReportRequest]) (*connect.Response[dashboardv1.GenerateKbReportResponse], error)
-	// D-457：系统复盘报告——手动触发 + 报告列表/正文读取（前端报告页）
+	// 系统复盘报告——手动触发 + 报告列表/正文读取（前端报告页）
 	GenerateRetroReport(context.Context, *connect.Request[dashboardv1.GenerateRetroReportRequest]) (*connect.Response[dashboardv1.GenerateRetroReportResponse], error)
 	ListReports(context.Context, *connect.Request[dashboardv1.ListReportsRequest]) (*connect.Response[dashboardv1.ListReportsResponse], error)
 	GetReport(context.Context, *connect.Request[dashboardv1.GetReportRequest]) (*connect.Response[dashboardv1.GetReportResponse], error)
-	// D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
+	// 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
 	GetAiSettings(context.Context, *connect.Request[dashboardv1.GetAiSettingsRequest]) (*connect.Response[dashboardv1.GetAiSettingsResponse], error)
 	SetAiSettings(context.Context, *connect.Request[dashboardv1.SetAiSettingsRequest]) (*connect.Response[dashboardv1.SetAiSettingsResponse], error)
-	// D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
-	// D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
+	// 逆回购提醒配置 DB 化（前端可改免重启）
+	// CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
 	GetCexScanSnapshot(context.Context, *connect.Request[dashboardv1.GetCexScanSnapshotRequest]) (*connect.Response[dashboardv1.GetCexScanSnapshotResponse], error)
-	// D-292：价格提醒规则前端管理（CRUD；引擎 30s 重载自动生效，无通知机制）
+	// 价格提醒规则前端管理（CRUD；引擎 30s 重载自动生效，无通知机制）
 	ListPriceAlertRules(context.Context, *connect.Request[dashboardv1.ListPriceAlertRulesRequest]) (*connect.Response[dashboardv1.ListPriceAlertRulesResponse], error)
 	CreatePriceAlertRule(context.Context, *connect.Request[dashboardv1.CreatePriceAlertRuleRequest]) (*connect.Response[dashboardv1.CreatePriceAlertRuleResponse], error)
 	UpdatePriceAlertRule(context.Context, *connect.Request[dashboardv1.UpdatePriceAlertRuleRequest]) (*connect.Response[dashboardv1.UpdatePriceAlertRuleResponse], error)
 	DeletePriceAlertRule(context.Context, *connect.Request[dashboardv1.DeletePriceAlertRuleRequest]) (*connect.Response[dashboardv1.DeletePriceAlertRuleResponse], error)
-	// D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
+	// 财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
 	GetFinanceOverview(context.Context, *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error)
-	// D-350 阶段③：spot-carry demo 手动实测（双腿原子：先现货后永续，失败回滚已成交腿）。
+	// 阶段③：spot-carry demo 手动实测（双腿原子：先现货后永续，失败回滚已成交腿）。
 	ExecuteSpotCarryDemo(context.Context, *connect.Request[dashboardv1.ExecuteSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ExecuteSpotCarryDemoResponse], error)
 	ListSpotCarryDemo(context.Context, *connect.Request[dashboardv1.ListSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ListSpotCarryDemoResponse], error)
-	// D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
+	// 纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
 	ListPaperSpotCarry(context.Context, *connect.Request[dashboardv1.ListPaperSpotCarryRequest]) (*connect.Response[dashboardv1.ListPaperSpotCarryResponse], error)
-	// D-444：autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；D-492 起增删走 UI）
+	// autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；D-492 起增删走 UI）
 	ListAutotradeAllowRules(context.Context, *connect.Request[dashboardv1.ListAutotradeAllowRulesRequest]) (*connect.Response[dashboardv1.ListAutotradeAllowRulesResponse], error)
 	SetAutotradeAllowRuleEnabled(context.Context, *connect.Request[dashboardv1.SetAutotradeAllowRuleEnabledRequest]) (*connect.Response[dashboardv1.SetAutotradeAllowRuleEnabledResponse], error)
-	// D-492：白名单增删 UI 管理——simulated 服务端推导（禁前端传）+幂等去重+审计+kickConfig 热载。
+	// 白名单增删 UI 管理——simulated 服务端推导（禁前端传）+幂等去重+审计+kickConfig 热载。
 	AddAutotradeAllowRule(context.Context, *connect.Request[dashboardv1.AddAutotradeAllowRuleRequest]) (*connect.Response[dashboardv1.AddAutotradeAllowRuleResponse], error)
 	DeleteAutotradeAllowRule(context.Context, *connect.Request[dashboardv1.DeleteAutotradeAllowRuleRequest]) (*connect.Response[dashboardv1.DeleteAutotradeAllowRuleResponse], error)
-	// D-441：日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
+	// 日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
 	ListIntraTrades(context.Context, *connect.Request[dashboardv1.ListIntraTradesRequest]) (*connect.Response[dashboardv1.ListIntraTradesResponse], error)
 	IntraTrackStats(context.Context, *connect.Request[dashboardv1.IntraTrackStatsRequest]) (*connect.Response[dashboardv1.IntraTrackStatsResponse], error)
-	// D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
+	// 资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
 	GetCapitalCoverage(context.Context, *connect.Request[dashboardv1.GetCapitalCoverageRequest]) (*connect.Response[dashboardv1.GetCapitalCoverageResponse], error)
-	// D-546：资金全景账三档树（binance 六面钱包；只读全景面，sizing 基准不动）。
+	// 资金全景账三档树（binance 六面钱包；只读全景面，sizing 基准不动）。
 	GetCapitalMap(context.Context, *connect.Request[dashboardv1.GetCapitalMapRequest]) (*connect.Response[dashboardv1.GetCapitalMapResponse], error)
-	// D-365：CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
+	// CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
 	GetCexFinance(context.Context, *connect.Request[dashboardv1.GetCexFinanceRequest]) (*connect.Response[dashboardv1.GetCexFinanceResponse], error)
-	// D-403：验证毕业链——扫描→验证→实盘三段接通（建议列表/业主授权/拒绝）。
+	// 验证毕业链——扫描→验证→实盘三段接通（建议列表/业主授权/拒绝）。
 	ListCarryGraduations(context.Context, *connect.Request[dashboardv1.ListCarryGraduationsRequest]) (*connect.Response[dashboardv1.ListCarryGraduationsResponse], error)
 	ApproveCarryGraduation(context.Context, *connect.Request[dashboardv1.ApproveCarryGraduationRequest]) (*connect.Response[dashboardv1.ApproveCarryGraduationResponse], error)
 	RejectCarryGraduation(context.Context, *connect.Request[dashboardv1.RejectCarryGraduationRequest]) (*connect.Response[dashboardv1.RejectCarryGraduationResponse], error)
-	// D-475a S6：venue 敞口闸（fin_venue_exposure_caps）读/写；Set→kickConfig 即时生效。
+	// venue 敞口闸（fin_venue_exposure_caps）读/写；Set→kickConfig 即时生效。
 	ListVenueExposureCaps(context.Context, *connect.Request[dashboardv1.ListVenueExposureCapsRequest]) (*connect.Response[dashboardv1.ListVenueExposureCapsResponse], error)
 	SetVenueExposureCap(context.Context, *connect.Request[dashboardv1.SetVenueExposureCapRequest]) (*connect.Response[dashboardv1.SetVenueExposureCapResponse], error)
-	// D-471 S3：xasset 组合白名单管理面（不再裸 SQL）+ 加行前风险预览。
+	// xasset 组合白名单管理面（不再裸 SQL）+ 加行前风险预览。
 	ListXAssetAllowCombos(context.Context, *connect.Request[dashboardv1.ListXAssetAllowCombosRequest]) (*connect.Response[dashboardv1.ListXAssetAllowCombosResponse], error)
-	// D-478 S3：待入场区——enabled 组合−在持仓=挂单集，按序探闸给第一个拦路原因+安全档位。
+	// 待入场区——enabled 组合−在持仓=挂单集，按序探闸给第一个拦路原因+安全档位。
 	ListXAssetPendingEntries(context.Context, *connect.Request[dashboardv1.ListXAssetPendingEntriesRequest]) (*connect.Response[dashboardv1.ListXAssetPendingEntriesResponse], error)
 	UpsertXAssetAllowCombo(context.Context, *connect.Request[dashboardv1.UpsertXAssetAllowComboRequest]) (*connect.Response[dashboardv1.UpsertXAssetAllowComboResponse], error)
-	// D-560 S3：熔断暂停「我已处理·立即重试」——清该组合全部熔断态。
+	// 熔断暂停「我已处理·立即重试」——清该组合全部熔断态。
 	ResumeXAssetCombo(context.Context, *connect.Request[dashboardv1.ResumeXAssetComboRequest]) (*connect.Response[dashboardv1.ResumeXAssetComboResponse], error)
 	PreviewXAssetComboRisk(context.Context, *connect.Request[dashboardv1.PreviewXAssetComboRiskRequest]) (*connect.Response[dashboardv1.PreviewXAssetComboRiskResponse], error)
-	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
+	// 账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
 	// + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
 	ListAccountMarginStatus(context.Context, *connect.Request[dashboardv1.ListAccountMarginStatusRequest]) (*connect.Response[dashboardv1.ListAccountMarginStatusResponse], error)
-	// D-523：app_config 键管理面（SettingsPage）+自杀重启生效通道。
+	// app_config 键管理面（SettingsPage）+自杀重启生效通道。
 	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
 	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
 	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
-	// D-190：员工花名册看板（daemon 编制实况：在职/死亡/任务中）。
+	// 员工花名册看板（daemon 编制实况：在职/死亡/任务中）。
 	ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error)
-	// D-189：提案执行台——提案实体行实况+业主拒批回执（执行=飞书 go 口令径）。
+	// 提案执行台——提案实体行实况+业主拒批回执（执行=飞书 go 口令径）。
 	ListProposals(context.Context, *connect.Request[dashboardv1.ListProposalsRequest]) (*connect.Response[dashboardv1.ListProposalsResponse], error)
 	AckProposal(context.Context, *connect.Request[dashboardv1.AckProposalRequest]) (*connect.Response[dashboardv1.AckProposalResponse], error)
 	ListPersonalPositions(context.Context, *connect.Request[dashboardv1.ListPersonalPositionsRequest]) (*connect.Response[dashboardv1.ListPersonalPositionsResponse], error)
 	ListDCIOrders(context.Context, *connect.Request[dashboardv1.ListDCIOrdersRequest]) (*connect.Response[dashboardv1.ListDCIOrdersResponse], error)
-	// D-545：app_secrets 密钥管理面（值永不回传；Update 空值=删行+热更同步）。
+	// app_secrets 密钥管理面（值永不回传；Update 空值=删行+热更同步）。
 	ListAppSecrets(context.Context, *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error)
 	UpdateAppSecret(context.Context, *connect.Request[dashboardv1.UpdateAppSecretRequest]) (*connect.Response[dashboardv1.UpdateAppSecretResponse], error)
 }
@@ -1978,7 +1978,7 @@ type DashboardServiceHandler interface {
 	ListProbeProposals(context.Context, *connect.Request[dashboardv1.ListProbeProposalsRequest]) (*connect.Response[dashboardv1.ListProbeProposalsResponse], error)
 	ListAccounts(context.Context, *connect.Request[dashboardv1.ListAccountsRequest]) (*connect.Response[dashboardv1.ListAccountsResponse], error)
 	// 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
-	// D-063：ListPersonalPositions RPC 随 personal 渲染面退役拆除（D-212 后零读者；表保留 TRX 域自用）。
+	// ListPersonalPositions RPC 随 personal 渲染面退役拆除（D-212 后零读者；表保留 TRX 域自用）。
 	GetHedgeStructure(context.Context, *connect.Request[dashboardv1.GetHedgeStructureRequest]) (*connect.Response[dashboardv1.GetHedgeStructureResponse], error)
 	ListHedgeFlow(context.Context, *connect.Request[dashboardv1.ListHedgeFlowRequest]) (*connect.Response[dashboardv1.ListHedgeFlowResponse], error)
 	TrxAccountRefresh(context.Context, *connect.Request[dashboardv1.TrxAccountRefreshRequest]) (*connect.Response[dashboardv1.TrxAccountRefreshResponse], error)
@@ -2020,7 +2020,7 @@ type DashboardServiceHandler interface {
 	ListMappingSuggestions(context.Context, *connect.Request[dashboardv1.ListMappingSuggestionsRequest]) (*connect.Response[dashboardv1.ListMappingSuggestionsResponse], error)
 	ListCanonicals(context.Context, *connect.Request[dashboardv1.ListCanonicalsRequest]) (*connect.Response[dashboardv1.ListCanonicalsResponse], error)
 	AutoMapBroker(context.Context, *connect.Request[dashboardv1.AutoMapBrokerRequest]) (*connect.Response[dashboardv1.AutoMapBrokerResponse], error)
-	// D-140 S3：swap 组合列表（basis_bps 只展示不动排序）
+	// swap 组合列表（basis_bps 只展示不动排序）
 	ListSwapCombos(context.Context, *connect.Request[dashboardv1.ListSwapCombosRequest]) (*connect.Response[dashboardv1.ListSwapCombosResponse], error)
 	// Matrix 全景（D-045：全符号跨全账号映射/报价巡检）
 	ListMatrixUniverse(context.Context, *connect.Request[dashboardv1.ListMatrixUniverseRequest]) (*connect.Response[dashboardv1.ListMatrixUniverseResponse], error)
@@ -2038,75 +2038,75 @@ type DashboardServiceHandler interface {
 	// 分析员（D-091 前端分析员，server streaming + 收件箱 append）
 	AskAnalyst(context.Context, *connect.Request[dashboardv1.AskAnalystRequest], *connect.ServerStream[dashboardv1.AskAnalystResponse]) error
 	AppendAnalystNote(context.Context, *connect.Request[dashboardv1.AppendAnalystNoteRequest]) (*connect.Response[dashboardv1.AppendAnalystNoteResponse], error)
-	// D-442 S4：KB 元分析报告手动补跑（周 ticker 之外的调试/验证入口）
+	// KB 元分析报告手动补跑（周 ticker 之外的调试/验证入口）
 	GenerateKbReport(context.Context, *connect.Request[dashboardv1.GenerateKbReportRequest]) (*connect.Response[dashboardv1.GenerateKbReportResponse], error)
-	// D-457：系统复盘报告——手动触发 + 报告列表/正文读取（前端报告页）
+	// 系统复盘报告——手动触发 + 报告列表/正文读取（前端报告页）
 	GenerateRetroReport(context.Context, *connect.Request[dashboardv1.GenerateRetroReportRequest]) (*connect.Response[dashboardv1.GenerateRetroReportResponse], error)
 	ListReports(context.Context, *connect.Request[dashboardv1.ListReportsRequest]) (*connect.Response[dashboardv1.ListReportsResponse], error)
 	GetReport(context.Context, *connect.Request[dashboardv1.GetReportRequest]) (*connect.Response[dashboardv1.GetReportResponse], error)
-	// D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
+	// 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
 	GetAiSettings(context.Context, *connect.Request[dashboardv1.GetAiSettingsRequest]) (*connect.Response[dashboardv1.GetAiSettingsResponse], error)
 	SetAiSettings(context.Context, *connect.Request[dashboardv1.SetAiSettingsRequest]) (*connect.Response[dashboardv1.SetAiSettingsResponse], error)
-	// D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
-	// D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
+	// 逆回购提醒配置 DB 化（前端可改免重启）
+	// CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
 	GetCexScanSnapshot(context.Context, *connect.Request[dashboardv1.GetCexScanSnapshotRequest]) (*connect.Response[dashboardv1.GetCexScanSnapshotResponse], error)
-	// D-292：价格提醒规则前端管理（CRUD；引擎 30s 重载自动生效，无通知机制）
+	// 价格提醒规则前端管理（CRUD；引擎 30s 重载自动生效，无通知机制）
 	ListPriceAlertRules(context.Context, *connect.Request[dashboardv1.ListPriceAlertRulesRequest]) (*connect.Response[dashboardv1.ListPriceAlertRulesResponse], error)
 	CreatePriceAlertRule(context.Context, *connect.Request[dashboardv1.CreatePriceAlertRuleRequest]) (*connect.Response[dashboardv1.CreatePriceAlertRuleResponse], error)
 	UpdatePriceAlertRule(context.Context, *connect.Request[dashboardv1.UpdatePriceAlertRuleRequest]) (*connect.Response[dashboardv1.UpdatePriceAlertRuleResponse], error)
 	DeletePriceAlertRule(context.Context, *connect.Request[dashboardv1.DeletePriceAlertRuleRequest]) (*connect.Response[dashboardv1.DeletePriceAlertRuleResponse], error)
-	// D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
+	// 财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
 	GetFinanceOverview(context.Context, *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error)
-	// D-350 阶段③：spot-carry demo 手动实测（双腿原子：先现货后永续，失败回滚已成交腿）。
+	// 阶段③：spot-carry demo 手动实测（双腿原子：先现货后永续，失败回滚已成交腿）。
 	ExecuteSpotCarryDemo(context.Context, *connect.Request[dashboardv1.ExecuteSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ExecuteSpotCarryDemoResponse], error)
 	ListSpotCarryDemo(context.Context, *connect.Request[dashboardv1.ListSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ListSpotCarryDemoResponse], error)
-	// D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
+	// 纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
 	ListPaperSpotCarry(context.Context, *connect.Request[dashboardv1.ListPaperSpotCarryRequest]) (*connect.Response[dashboardv1.ListPaperSpotCarryResponse], error)
-	// D-444：autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；D-492 起增删走 UI）
+	// autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；D-492 起增删走 UI）
 	ListAutotradeAllowRules(context.Context, *connect.Request[dashboardv1.ListAutotradeAllowRulesRequest]) (*connect.Response[dashboardv1.ListAutotradeAllowRulesResponse], error)
 	SetAutotradeAllowRuleEnabled(context.Context, *connect.Request[dashboardv1.SetAutotradeAllowRuleEnabledRequest]) (*connect.Response[dashboardv1.SetAutotradeAllowRuleEnabledResponse], error)
-	// D-492：白名单增删 UI 管理——simulated 服务端推导（禁前端传）+幂等去重+审计+kickConfig 热载。
+	// 白名单增删 UI 管理——simulated 服务端推导（禁前端传）+幂等去重+审计+kickConfig 热载。
 	AddAutotradeAllowRule(context.Context, *connect.Request[dashboardv1.AddAutotradeAllowRuleRequest]) (*connect.Response[dashboardv1.AddAutotradeAllowRuleResponse], error)
 	DeleteAutotradeAllowRule(context.Context, *connect.Request[dashboardv1.DeleteAutotradeAllowRuleRequest]) (*connect.Response[dashboardv1.DeleteAutotradeAllowRuleResponse], error)
-	// D-441：日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
+	// 日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
 	ListIntraTrades(context.Context, *connect.Request[dashboardv1.ListIntraTradesRequest]) (*connect.Response[dashboardv1.ListIntraTradesResponse], error)
 	IntraTrackStats(context.Context, *connect.Request[dashboardv1.IntraTrackStatsRequest]) (*connect.Response[dashboardv1.IntraTrackStatsResponse], error)
-	// D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
+	// 资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
 	GetCapitalCoverage(context.Context, *connect.Request[dashboardv1.GetCapitalCoverageRequest]) (*connect.Response[dashboardv1.GetCapitalCoverageResponse], error)
-	// D-546：资金全景账三档树（binance 六面钱包；只读全景面，sizing 基准不动）。
+	// 资金全景账三档树（binance 六面钱包；只读全景面，sizing 基准不动）。
 	GetCapitalMap(context.Context, *connect.Request[dashboardv1.GetCapitalMapRequest]) (*connect.Response[dashboardv1.GetCapitalMapResponse], error)
-	// D-365：CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
+	// CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
 	GetCexFinance(context.Context, *connect.Request[dashboardv1.GetCexFinanceRequest]) (*connect.Response[dashboardv1.GetCexFinanceResponse], error)
-	// D-403：验证毕业链——扫描→验证→实盘三段接通（建议列表/业主授权/拒绝）。
+	// 验证毕业链——扫描→验证→实盘三段接通（建议列表/业主授权/拒绝）。
 	ListCarryGraduations(context.Context, *connect.Request[dashboardv1.ListCarryGraduationsRequest]) (*connect.Response[dashboardv1.ListCarryGraduationsResponse], error)
 	ApproveCarryGraduation(context.Context, *connect.Request[dashboardv1.ApproveCarryGraduationRequest]) (*connect.Response[dashboardv1.ApproveCarryGraduationResponse], error)
 	RejectCarryGraduation(context.Context, *connect.Request[dashboardv1.RejectCarryGraduationRequest]) (*connect.Response[dashboardv1.RejectCarryGraduationResponse], error)
-	// D-475a S6：venue 敞口闸（fin_venue_exposure_caps）读/写；Set→kickConfig 即时生效。
+	// venue 敞口闸（fin_venue_exposure_caps）读/写；Set→kickConfig 即时生效。
 	ListVenueExposureCaps(context.Context, *connect.Request[dashboardv1.ListVenueExposureCapsRequest]) (*connect.Response[dashboardv1.ListVenueExposureCapsResponse], error)
 	SetVenueExposureCap(context.Context, *connect.Request[dashboardv1.SetVenueExposureCapRequest]) (*connect.Response[dashboardv1.SetVenueExposureCapResponse], error)
-	// D-471 S3：xasset 组合白名单管理面（不再裸 SQL）+ 加行前风险预览。
+	// xasset 组合白名单管理面（不再裸 SQL）+ 加行前风险预览。
 	ListXAssetAllowCombos(context.Context, *connect.Request[dashboardv1.ListXAssetAllowCombosRequest]) (*connect.Response[dashboardv1.ListXAssetAllowCombosResponse], error)
-	// D-478 S3：待入场区——enabled 组合−在持仓=挂单集，按序探闸给第一个拦路原因+安全档位。
+	// 待入场区——enabled 组合−在持仓=挂单集，按序探闸给第一个拦路原因+安全档位。
 	ListXAssetPendingEntries(context.Context, *connect.Request[dashboardv1.ListXAssetPendingEntriesRequest]) (*connect.Response[dashboardv1.ListXAssetPendingEntriesResponse], error)
 	UpsertXAssetAllowCombo(context.Context, *connect.Request[dashboardv1.UpsertXAssetAllowComboRequest]) (*connect.Response[dashboardv1.UpsertXAssetAllowComboResponse], error)
-	// D-560 S3：熔断暂停「我已处理·立即重试」——清该组合全部熔断态。
+	// 熔断暂停「我已处理·立即重试」——清该组合全部熔断态。
 	ResumeXAssetCombo(context.Context, *connect.Request[dashboardv1.ResumeXAssetComboRequest]) (*connect.Response[dashboardv1.ResumeXAssetComboResponse], error)
 	PreviewXAssetComboRisk(context.Context, *connect.Request[dashboardv1.PreviewXAssetComboRiskRequest]) (*connect.Response[dashboardv1.PreviewXAssetComboRiskResponse], error)
-	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
+	// 账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
 	// + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
 	ListAccountMarginStatus(context.Context, *connect.Request[dashboardv1.ListAccountMarginStatusRequest]) (*connect.Response[dashboardv1.ListAccountMarginStatusResponse], error)
-	// D-523：app_config 键管理面（SettingsPage）+自杀重启生效通道。
+	// app_config 键管理面（SettingsPage）+自杀重启生效通道。
 	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
 	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
 	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
-	// D-190：员工花名册看板（daemon 编制实况：在职/死亡/任务中）。
+	// 员工花名册看板（daemon 编制实况：在职/死亡/任务中）。
 	ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error)
-	// D-189：提案执行台——提案实体行实况+业主拒批回执（执行=飞书 go 口令径）。
+	// 提案执行台——提案实体行实况+业主拒批回执（执行=飞书 go 口令径）。
 	ListProposals(context.Context, *connect.Request[dashboardv1.ListProposalsRequest]) (*connect.Response[dashboardv1.ListProposalsResponse], error)
 	AckProposal(context.Context, *connect.Request[dashboardv1.AckProposalRequest]) (*connect.Response[dashboardv1.AckProposalResponse], error)
 	ListPersonalPositions(context.Context, *connect.Request[dashboardv1.ListPersonalPositionsRequest]) (*connect.Response[dashboardv1.ListPersonalPositionsResponse], error)
 	ListDCIOrders(context.Context, *connect.Request[dashboardv1.ListDCIOrdersRequest]) (*connect.Response[dashboardv1.ListDCIOrdersResponse], error)
-	// D-545：app_secrets 密钥管理面（值永不回传；Update 空值=删行+热更同步）。
+	// app_secrets 密钥管理面（值永不回传；Update 空值=删行+热更同步）。
 	ListAppSecrets(context.Context, *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error)
 	UpdateAppSecret(context.Context, *connect.Request[dashboardv1.UpdateAppSecretRequest]) (*connect.Response[dashboardv1.UpdateAppSecretResponse], error)
 }

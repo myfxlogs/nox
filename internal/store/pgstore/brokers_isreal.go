@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"arb/internal/keydomain"
+	"arb/internal/data/keydomain"
 )
 
-// D-144 ① 三态：实盘/demo/未知 标记 store 方法（从 brokers.go 拆出控行数）。
+// ① 三态：实盘/demo/未知 标记 store 方法（从 brokers.go 拆出控行数）。
 
 // SetBrokerAccountIsReal 更新账号实盘标记。isReal=nil → 清除回未知(NULL)。
 func (s *Store) SetBrokerAccountIsReal(ctx context.Context, venue string, isReal *bool) error {

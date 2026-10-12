@@ -13,7 +13,7 @@ HARD=450
 # + docs/ 下的 .go 证据探针文件（//go:build ignore，非生产代码）
 exempt() {
   case "$1" in
-    internal/adapter/gen/*|internal/gen/*|internal/dashboard/gen/*|web/src/gen/*|*_test.go) return 0 ;;
+    internal/adapter/gen/*|internal/data/adapter/gen/*|internal/gen/*|internal/dashboard/gen/*|web/src/gen/*|*_test.go) return 0 ;;
     docs/*.go) return 0 ;;
     # 一次性建库工具（D-274 S2 backfill，2026-09-15 使命已完成 INSERT 已执行；
     # 非 arb-core 生产代码，类 docs/*.go 证据探针。禁新增长期驻留工具到此豁免——Claude 决策席 2026-09-16）

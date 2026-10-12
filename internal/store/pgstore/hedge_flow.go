@@ -1,4 +1,4 @@
-// D-212 对冲工作台：跨源聚合 store 方法（SSOT §2/A4）。
+// 对冲工作台：跨源聚合 store 方法（SSOT §2/A4）。
 // SumCMCOvernightByRange（fin_cmc_history 隔夜息之和）+ ListHedgeFlowPage（UNION ALL 跨源分页）。
 package pgstore
 
@@ -49,7 +49,7 @@ func (s *Store) SumCMCOvernightByRange(ctx context.Context, from, to *time.Time)
 // ListHedgeFlowPage D-212 A4：UNION ALL 跨源分页（fin_trx_txs + fin_cmc_history）按 ts DESC。
 // sourceFilter="" = 全部；'trx'/'cmc' = 单源。limit/offset 后端分页。
 // kind 归一 8 类：TRX 原样（已是 7 类）；CMC OVERNIGHT_SETTLEMENT→overnight、PAYMENTS_IN→deposit，其余→other。
-// D-279：灰尘过滤改用 TronScan 官方 cheat_status——cheat_status=true 不返回（仅查询过滤，入库保留）。
+// 灰尘过滤改用 TronScan 官方 cheat_status——cheat_status=true 不返回（仅查询过滤，入库保留）。
 // R2（9-9 业主问询修复）：①PAYMENTS_IN→deposit（入金 $6,000 误显「其他」）②SELL_TRADE/BUY_TRADE 不进流水卡——
 // CFD 开平仓零现金流（生产实证 amount=0），流水卡职责=资金流；开仓事件由对冲卡空单腿展示，入库保留。
 // 9-16 业主令：vote 行剔除——投票交易零金额零对手方（生产实证 7/7 行 amount_sun=0/counterparty 空），
@@ -59,7 +59,7 @@ func (s *Store) ListHedgeFlowPage(ctx context.Context, sourceFilter string, limi
 		limit = 50
 	}
 	// UNION ALL 两源；CMC kind 用 CASE 归一。sourceFilter 用 WHERE 子句过滤。
-	// D-279：TRX 腿灰尘过滤改用 cheat_status=true 不返回（替代 R1 amount_sun<10000 阈值）。
+	// TRX 腿灰尘过滤改用 cheat_status=true 不返回（替代 R1 amount_sun<10000 阈值）。
 	// R2：CMC 腿排除 SELL_TRADE/BUY_TRADE（非资金流）。
 	rows, err := s.pool.Query(ctx, `
 		SELECT source, ts, kind, amount_value, amount_unit, counterparty, tx_id FROM (

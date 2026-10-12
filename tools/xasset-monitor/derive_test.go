@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"arb/internal/platform/testutil"
 	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
 )
 
 // d552RealCombos 真仓 xasset_allow_combos enabled 行投影（2026-09-28 生产实拉，

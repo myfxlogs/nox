@@ -514,7 +514,7 @@ type GetPnlAnchorResponse struct {
 	RealizedToday       float64                `protobuf:"fixed64,3,opt,name=realized_today,json=realizedToday,proto3" json:"realized_today,omitempty"`                     // D-508 S8：当日已实现（closed_at>=当日零点，DB 时钟口径；前端直读不再聚合）
 	FloatingNetUsd      float64                `protobuf:"fixed64,4,opt,name=floating_net_usd,json=floatingNetUsd,proto3" json:"floating_net_usd,omitempty"`                // D-141：Σ active 仓 close_now_net_usd + Σ 游离腿 close_now_estimate_usd（全平到手口径）
 	FloatingAvailable   bool                   `protobuf:"varint,5,opt,name=floating_available,json=floatingAvailable,proto3" json:"floating_available,omitempty"`          // D-141：false=任一仓/腿净估缺（断流/报价陈旧）→ 前端「—」不冒充 0
-	// D-123：真北行——30d 净年化（selfwatch/stage2 同源 NetRealizedSince(30d)/CapitalBase；
+	// 真北行——30d 净年化（selfwatch/stage2 同源 NetRealizedSince(30d)/CapitalBase；
 	// 前端直读零算）。available=false（CapitalBase 缺/查询败）→ 前端「—」不冒充。
 	NetAnn_30DPct       float64 `protobuf:"fixed64,6,opt,name=net_ann_30d_pct,json=netAnn30dPct,proto3" json:"net_ann_30d_pct,omitempty"`
 	NetAnn_30DAvailable bool    `protobuf:"varint,7,opt,name=net_ann_30d_available,json=netAnn30dAvailable,proto3" json:"net_ann_30d_available,omitempty"`

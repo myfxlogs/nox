@@ -1,6 +1,6 @@
 package main
 
-// D-335 S1/T4：noise_bps=24h 摆幅半径 (max−min)/2；样本 <12 → NULL（<1h 数据不可信）。
+// S1/T4：noise_bps=24h 摆幅半径 (max−min)/2；样本 <12 → NULL（<1h 数据不可信）。
 import "testing"
 
 func TestD335_ComputeNoiseBps(t *testing.T) {

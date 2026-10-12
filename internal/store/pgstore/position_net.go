@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/keydomain"
-	"arb/internal/notional"
+	"arb/internal/data/keydomain"
+	"arb/internal/platform/notional"
 )
 
 // exit_kind 权威全集（D-013 ③）：写入点直写常量，禁字符串反推。

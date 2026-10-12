@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// D-205 CMC 采集器 Phase 1：fin_cmc_* 4 表持久化。
+// CMC 采集器 Phase 1：fin_cmc_* 4 表持久化。
 // 4 写入 + 3 查询方法，挂在 *Store 上复用 s.pool。
 
 // ---------- 结构体 ----------
@@ -73,7 +73,7 @@ func (s *Store) InsertCMCPrice(ctx context.Context, p CMCPrice) error {
 	if src == "" {
 		src = "cmc_rest"
 	}
-	// D-225 v2.1：WS 行 bid/mid=0 → NULL（NULLIF）——LastCMCPriceMidWithTime 的 IS NOT NULL 过滤才生效
+	// v2.1：WS 行 bid/mid=0 → NULL（NULLIF）——LastCMCPriceMidWithTime 的 IS NOT NULL 过滤才生效
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO fin_cmc_prices
 		   (instrument_id, bid_price, ask_price, mid_price, market_status, quote_time, fetched_at, src)

@@ -1,4 +1,4 @@
-// D-211 S1 测试：migration 0068 + store 方法 + F1 锚 + P2-2 vote_claim amount=0。
+// 测试：migration 0068 + store 方法 + F1 锚 + P2-2 vote_claim amount=0。
 package pgstore
 
 import (

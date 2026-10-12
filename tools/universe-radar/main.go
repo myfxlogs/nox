@@ -1,4 +1,4 @@
-// D-307 CEX 全量合约雷达（独立 cron 工具，参照 tools/xasset-monitor 模式）。
+// CEX 全量合约雷达（独立 cron 工具，参照 tools/xasset-monitor 模式）。
 //
 // 每轮：三所全量 perp 枚举+funding/量快照（9 个 HTTP 调用，全部经 cex-proxy 公共端点无凭据）
 // → 归一+对冲腿 join+tier 分诊 → universe diff 事件 → fin_cex_universe upsert +
@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/httpx" // SSOT：自动注入 CA + X-Proxy-Token
+	"arb/internal/platform/httpx" // SSOT：自动注入 CA + X-Proxy-Token
 	"arb/internal/store/pgstore"
 )
 
@@ -62,7 +62,7 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("connect pg: %w", err)
 	}
 	defer st.Close()
-	// D-145：业务配置唯一权威=app_config 行（env 读径封死）。
+	// 业务配置唯一权威=app_config 行（env 读径封死）。
 	cfgRows, err := st.LoadAppConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("app_config 读取失败: %w", err)
@@ -138,7 +138,7 @@ func run(ctx context.Context) error {
 		divSeen[e.Symbol] = true
 		events = append(events, e)
 	}
-	// D-376 B 面：perp×perp 纸面轨步进（radar 1h 轮，streak=2≈2h；见 paper_perp.go 头注）。
+	// B 面：perp×perp 纸面轨步进（radar 1h 轮，streak=2≈2h；见 paper_perp.go 头注）。
 	nonSuspect := append(append([]divPair{}, simPairs...), realPairs...)
 	pOpened, pExited, perr := stepPaperPerpCarry(ctx, st, nonSuspect, rows, divPct, now)
 	if perr != nil {
@@ -189,7 +189,7 @@ func run(ctx context.Context) error {
 	// funding 类统一生效（FUNDING_DIVERGENCE 走自身事件表冷却，venue='multi' 无 universe 行）。
 	var lines []string
 	if !bootstrap {
-		// D-392：digest 成员级边沿状态读出——查询失败=fail-open（视为全新入照推，
+		// digest 成员级边沿状态读出——查询失败=fail-open（视为全新入照推，
 		// digest 是低价值行宁滥勿漏；代价=R0-A4 已声明：DB 故障期间 digest
 		// 可能每轮重推=已接受取舍，触发源从集合不变变 DB 故障）。
 		stored, derr := st.GetRadarDigestMembers(ctx)
@@ -212,21 +212,21 @@ func run(ctx context.Context) error {
 				continue // 冷却内：事件照落库，告警不重发
 			}
 			lines = append(lines, alertLine(e.EventType, byKey[key]))
-			// D-389 R0-A2：冷却戳移到发送成功后（发送失败=信号冷却却未推出=静默丢 24h 前置缺陷收编）。
+			// R0-A2：冷却戳移到发送成功后（发送失败=信号冷却却未推出=静默丢 24h 前置缺陷收编）。
 			touches = append(touches, alertTouch{e.Venue, e.Symbol})
 		}
-		// D-353 S1：事件式——只在状态转移（新进/翻转/跌出）时发声，稳态零报；
+		// 事件式——只在状态转移（新进/翻转/跌出）时发声，稳态零报；
 		// last_alert_ts 24h 冷却保留作 flap 抑制（进出带抖动至多一报/日）。
-		// D-369 S1/S2（R3 拆分）：digest 累加/分流判定/watchlist 写侧 → digest.go
+		// S1/S2（R3 拆分）：digest 累加/分流判定/watchlist 写侧 → digest.go
 		// d369RouteFundingEvents（块体逐字节搬移零行为变更）。
 		d369RouteFundingEvents(ctx, st, rows, old, events, now, fundingMinPct, volMinUSD, &lines, stored, cur, pending, &touches)
-		// D-374 A 面：非币类 canonical divergence 压 digest（class_filtered，成员级边沿）。
+		// A 面：非币类 canonical divergence 压 digest（class_filtered，成员级边沿）。
 		cur["class_filtered"] = classFiltered
 		pushDigestNewMembers(stored["class_filtered"], pending, &lines, "class_filtered", classFiltered,
 			func(m string) string { return m }, now)
-		// D-376 S3：真腿 divergence digest 行+极端 funding suspect 压制行（同款汇总风格；
+		// 真腿 divergence digest 行+极端 funding suspect 压制行（同款汇总风格；
 		// 真腿不做完全静默——digest 保留可见性，行动项=纸面验证轨）。
-		// D-389 R0-A1 裁定选项 (a)：real_leg 集合 hash 键=pair 身份（canon+short×long），
+		// R0-A1 裁定选项 (a)：real_leg 集合 hash 键=pair 身份（canon+short×long），
 		// 不含费率——对已上纸面验证轨的 pair，费率漂移零新增行动项；代价=漂移不再
 		// 重推（行内 @x.x% 数字变化而 pair 不变时不推）=设计取舍非缺陷。
 		// 成员键=pair 身份（canon+short×long），item 含费率（新入成员信息量保留）。
@@ -241,9 +241,9 @@ func run(ctx context.Context) error {
 		pushDigestNewMembers(stored["suspect"], pending, &lines, "suspect", suspectList,
 			func(m string) string { return m }, now)
 		if len(lines) > 0 {
-			// D-389 R0-A3/R2 + D-392 S5：ApplyRadarDigestRun 失败=上抛终止本轮
+			// R0-A3/R2 + D-392 S5：ApplyRadarDigestRun 失败=上抛终止本轮
 			// （不落成员态下轮重试，错误可见——读侧 fail-open + 写侧静默吞错=永久重推）。
-			// D-145：飞书凭据只认 app_secrets（env 已退役——与 xasset-monitor 同轨）；
+			// 飞书凭据只认 app_secrets（env 已退役——与 xasset-monitor 同轨）；
 			// 读取失败=凭据空串→sendRadarAlert 返 error（调用侧不落状态，下轮重试）。
 			var feishuID, feishuSecret string
 			if secrets, serr := st.LoadAppSecrets(ctx); serr == nil {

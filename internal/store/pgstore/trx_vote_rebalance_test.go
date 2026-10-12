@@ -1,4 +1,4 @@
-// D-269 S1 测试：fin_trx_vote_rebalance Store 方法（DSN 真实夹具）。
+// 测试：fin_trx_vote_rebalance Store 方法（DSN 真实夹具）。
 package pgstore
 
 import (

@@ -1,4 +1,4 @@
-// D-299 PAXG-XAU 跨市场套利监控快照表 CRUD。
+// PAXG-XAU 跨市场套利监控快照表 CRUD。
 package pgstore
 
 import (
@@ -26,7 +26,7 @@ type XassetMonitor struct {
 	NoiseBps         *float64 // D-335 S1：24h 摆幅半径（样本 <12 NULL）
 	HarvestFloorBps  *float64 // D-341 S1：收割线=min(q25, entry−MIN_CAPTURE)（样本 <48 NULL）
 	Src              string   // D-341 S5：live/backfill（默认 live）
-	// D-423：venue 三元组——pair 同标跨 venue 混算=借用他所簿伪统计（空缺=历史单源默认）。
+	// venue 三元组——pair 同标跨 venue 混算=借用他所簿伪统计（空缺=历史单源默认）。
 	CexVenue string // 空→binance:perp（迁移 backfill 同值）
 	MtVenue  string // 空→3001157:mt5
 }

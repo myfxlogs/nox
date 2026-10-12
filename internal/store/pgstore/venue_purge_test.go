@@ -1,9 +1,9 @@
 package pgstore
 
-// D-150 锚点：①venue 有活跃真金仓 → 删除闸拒（CountVenueOpenPositions>0）；
+// 锚点：①venue 有活跃真金仓 → 删除闸拒（CountVenueOpenPositions>0）；
 // ②PurgeVenueData 清采集域（ticks/facts/equiv/universe/monitor）+纸面退出，
 // 审计域（positions/legs）行不动。
-// D-151：PurgeVenueData 劈为 PurgeVenueDerived（同步小表）+PurgeVenueBulk（异步批量）。
+// PurgeVenueData 劈为 PurgeVenueDerived（同步小表）+PurgeVenueBulk（异步批量）。
 
 import (
 	"context"

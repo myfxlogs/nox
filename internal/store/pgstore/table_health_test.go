@@ -1,4 +1,4 @@
-// D-301a S1 测试：TableMaxTs 白名单命中/未命中/error 三态（DSN 真实夹具）。
+// 测试：TableMaxTs 白名单命中/未命中/error 三态（DSN 真实夹具）。
 package pgstore
 
 import (

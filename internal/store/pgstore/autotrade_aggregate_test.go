@@ -11,7 +11,7 @@ import (
 // aggSeq 聚合测试 opp_id 唯一性计数器（避免同纳秒撞 opp_id）。
 var aggSeq int64
 
-// D-154 S5：AggregateStrategyStats 真库测试（DSN-gated，照抄 swap_snapshots_test 模式）。
+// AggregateStrategyStats 真库测试（DSN-gated，照抄 swap_snapshots_test 模式）。
 // fixture 造 5 仓（3 负 2 正含 cashflows 正负），断言 total/wins/avg/median。
 // net 口径 = realized + Σcashflows（swap+funding+commission，commission 带负号）。
 
@@ -27,7 +27,7 @@ func testAggregateStore(t *testing.T) *Store {
 }
 
 // insertAggPosition 插入一条 CLOSED 持仓（realized_pnl 非空）+ settlement 行，返回自增 id。
-// D-193-A：AggregateStrategyStats 改读 position_settlements.net_realized_usd，
+// AggregateStrategyStats 改读 position_settlements.net_realized_usd，
 // fixture 需同步插 settlement 行（net_realized_usd 初始=realized，cashflow 插入时累加）。
 func insertAggPosition(t *testing.T, s *Store, strategy string, realized float64) int64 {
 	t.Helper()
@@ -51,7 +51,7 @@ func insertAggPosition(t *testing.T, s *Store, strategy string, realized float64
 }
 
 // insertAggCashflow 插入一条现金流（amount_usd 带符号）并累加到 settlement.net_realized_usd。
-// D-193-A：AggregateStrategyStats 读 net_realized_usd，cashflow 插入时同步累加保持 net=realized+Σcf 语义。
+// AggregateStrategyStats 读 net_realized_usd，cashflow 插入时同步累加保持 net=realized+Σcf 语义。
 func insertAggCashflow(t *testing.T, s *Store, posID int64, kind string, amount float64) {
 	t.Helper()
 	if _, err := s.pool.Exec(context.Background(),

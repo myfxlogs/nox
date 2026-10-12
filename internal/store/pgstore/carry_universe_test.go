@@ -1,4 +1,4 @@
-// D-345 测试：ReplaceCarryUniverse note 列落库回读（ suspect 门注记不丢）。
+// 测试：ReplaceCarryUniverse note 列落库回读（ suspect 门注记不丢）。
 package pgstore
 
 import (

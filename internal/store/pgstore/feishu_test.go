@@ -1,4 +1,4 @@
-// D-264 测试：feishu_push_target 单行表读写。
+// 测试：feishu_push_target 单行表读写。
 package pgstore
 
 import (

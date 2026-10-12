@@ -1,6 +1,6 @@
 package main
 
-// D-307 S3：venue 全量合约枚举 Source——三所各封装自己的 N 个 HTTP 调用并归一成 Row。
+// venue 全量合约枚举 Source——三所各封装自己的 N 个 HTTP 调用并归一成 Row。
 // 新所接入=实现 Source + allSources 注册一行。全部端点 9-16 经 cex-proxy 实测（公共端点无凭据）。
 // 数字字段兼容字符串/数字（flexFloat/flexInt），nil/解析失败置 0 不炸行。
 // status 归一：各所「在交易中」状态统一为 "TRADING"（binance=TRADING/okx=live/gate=trading

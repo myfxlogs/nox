@@ -86,7 +86,7 @@ func TestD591_GoldReadThreeStates(t *testing.T) {
 		{"binance", "binance_ws_markprice", 10 * time.Second, time.Minute, -1, "funding_interval"},
 		{"okx", "okx_ws_v5", 10 * time.Second, time.Minute, -1, "funding_interval"},
 		{"gate", "gate_ws_futures", 10 * time.Second, time.Minute, -1, "funding_interval"},
-		// D-591 R1：interval 守门定标写源节奏 25h——20h 放行（日轮 gate 常态）/26h 拒。
+		// interval 守门定标写源节奏 25h——20h 放行（日轮 gate 常态）/26h 拒。
 		{"binance", "binance_ws_markprice", 10 * time.Second, time.Minute, 20 * time.Hour, ""},
 		{"okx", "okx_ws_v5", 10 * time.Second, time.Minute, 20 * time.Hour, ""},
 		{"gate", "gate_ws_futures", 10 * time.Second, time.Minute, 20 * time.Hour, ""},

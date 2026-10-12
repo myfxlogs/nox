@@ -11,7 +11,7 @@ import (
 
 // SettlementRow position_settlements 行（D-087 §3.2，返修包② NotionalUsd 改 *float64）。
 // NotionalUsd=nil → INSERT 写 NULL（skipped 行不伪造 0）。
-// D-193-A：净 PNL 字段（PricePnlUsd/CashflowsNetUsd/NetRealizedUsd）+ 完整性状态字段。
+// 净 PNL 字段（PricePnlUsd/CashflowsNetUsd/NetRealizedUsd）+ 完整性状态字段。
 type SettlementRow struct {
 	PositionID    int64
 	Vkey          string
@@ -21,7 +21,7 @@ type SettlementRow struct {
 	HoldDays      float64
 	SkippedReason string
 	SettledAt     time.Time
-	// D-193-A 净 PNL 字段
+	// 净 PNL 字段
 	PricePnlUsd            *float64 // 价格差组件
 	CashflowsNetUsd        *float64 // 现金流组件合计
 	NetRealizedUsd         *float64 // 正式净 PNL
@@ -34,7 +34,7 @@ type SettlementRow struct {
 }
 
 // GetPosition 读单条持仓（D-087 settlement.Settle 用）。不存在→nil, nil。
-// D-189 P0-4：含 closing_started_at + uncertainty_reason（reconcile 超时判定与 UNKNOWN 分流用）。
+// P0-4：含 closing_started_at + uncertainty_reason（reconcile 超时判定与 UNKNOWN 分流用）。
 func (s *Store) GetPosition(ctx context.Context, id int64) (*Position, error) {
 	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, closing_started_at, uncertainty_reason
 		FROM positions WHERE id = $1`
@@ -55,8 +55,8 @@ func (s *Store) GetPosition(ctx context.Context, id int64) (*Position, error) {
 // 返回 won=true 表示本次写入生效（INSERT 新行 或 UPDATE 升级了非 applied 行）；
 // won=false 表示 ON CONFLICT 命中但已是 applied（输家，不重写）。
 // 调用方（Settle）输家直接 return nil，不再走步骤 7/8，防并发双计 verification 样本+strategy_stats。
-// D-193-A：写入净 PNL + 完整性状态字段（stats_status 直接写最终值，无二次 UPDATE）。
-// D-249 S4 批3 第2项：ON CONFLICT DO UPDATE WHERE stats_status<>'applied'——
+// 写入净 PNL + 完整性状态字段（stats_status 直接写最终值，无二次 UPDATE）。
+// 批3 第2项：ON CONFLICT DO UPDATE WHERE stats_status<>'applied'——
 // 消除审计 P1-2 墓碑行（首写 retryable 后重试永远 won=false 静默跳过统计的升级路径缺失）。
 // xmax=0 表示 INSERT（新行，赢家）；xmax<>0 且 WHERE 命中表示 UPDATE（升级，赢家）；
 // xmax<>0 且 WHERE 未命中（已是 applied）→ pgx.ErrNoRows（输家）。
@@ -121,7 +121,7 @@ func (s *Store) HasSettlement(ctx context.Context, posID int64) (bool, error) {
 }
 
 // GetSettlementByPos D-091 分析员 get_entity：读单条 position_settlements 行。不存在→nil, nil。
-// D-193-A：扫描净 PNL + 完整性状态字段（指针/COALESCE 容错 legacy 行 NULL）。
+// 扫描净 PNL + 完整性状态字段（指针/COALESCE 容错 legacy 行 NULL）。
 func (s *Store) GetSettlementByPos(ctx context.Context, posID int64) (*SettlementRow, error) {
 	var r SettlementRow
 	var pnlQuality, completeness, statsStatus, eventKey *string
@@ -156,7 +156,7 @@ func ptrStr(p *string) string {
 
 // ListSettlementsByPosIDs D-106：按 position_id 批量查结算行（ListPositions join 用，单条 SQL IN 防 N+1）。
 // posIDs 空 → 返回空 map（不查库）。返回 map[posID]*SettlementRow；无结算行的 posID 不在 map 中。
-// D-193-A：扫描净 PNL + 完整性状态字段（指针/COALESCE 容错 legacy 行 NULL）。
+// 扫描净 PNL + 完整性状态字段（指针/COALESCE 容错 legacy 行 NULL）。
 func (s *Store) ListSettlementsByPosIDs(ctx context.Context, posIDs []int64) (map[int64]*SettlementRow, error) {
 	out := make(map[int64]*SettlementRow, len(posIDs))
 	if len(posIDs) == 0 {

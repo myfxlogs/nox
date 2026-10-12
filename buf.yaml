@@ -1,0 +1,14 @@
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+  except:
+    # D-508 S7d：dashboard proto 居 proto/dashboardv1 使 source_relative 生成落
+    # internal/gen/dashboardv1；package arb.dashboard.v1 保留（wire 兼容）。
+    # mtapi 既有目录布局本就违此规则（lint 非门禁、历史债未清）。
+    - PACKAGE_DIRECTORY_MATCH
+breaking:
+  use:
+    - FILE

@@ -218,7 +218,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 		if applied {
 			continue
 		}
-		// D-249 S5 审计 P1-6：每个 migration file 在单连接事务内执行（BEGIN/COMMIT），
+		// 审计 P1-6：每个 migration file 在单连接事务内执行（BEGIN/COMMIT），
 		// 防部分失败后 DB 处于"部分应用+未记录"态（0036 RENAME 链最脆弱）。
 		// 事务内含 schema_migrations 记录写入，确保"应用成功+版本记录"原子化。
 		if err := s.applyMigrationTx(ctx, m.version, m.sql); err != nil {
@@ -229,7 +229,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 }
 
 // applyMigrationTx 在单连接事务内执行一个 migration file 的全部语句 + 记录版本号。
-// D-249 S5 审计 P1-6：per-migration 事务包裹——任一语句失败 → ROLLBACK，DB 不留半途残留，
+// 审计 P1-6：per-migration 事务包裹——任一语句失败 → ROLLBACK，DB 不留半途残留，
 // schema_migrations 不记录该版本 → 下次启动可重入重跑（先红：半途残留；后绿：重跑无残留）。
 // 注意：migration SQL 内禁用 BEGIN/COMMIT（0055 已更正）——事务由本方法统一管理，
 // SQL 内嵌 BEGIN 在 pgx 事务内会产生 WARNING 且被忽略，COMMIT 会提前提交外层事务。
@@ -240,7 +240,7 @@ func (s *Store) applyMigrationTx(ctx context.Context, version int, sql string) e
 	}
 	defer tx.Rollback(ctx) // commit 后 no-op
 
-	// D-508 S6：自研分割器拆除——pgx simple protocol 原生支持多语句批
+	// 自研分割器拆除——pgx simple protocol 原生支持多语句批
 	// （tx 内仍原子：整批在同一事务执行，半途失败整体回滚）。
 	if _, err := tx.Exec(ctx, sql, pgx.QueryExecModeSimpleProtocol); err != nil {
 		return fmt.Errorf("migrate v%d: %w\nsql: %s", version, err, truncate(sql, 200))

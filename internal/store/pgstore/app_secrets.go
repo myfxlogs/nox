@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"arb/internal/cryptoutil"
+	"arb/internal/platform/cryptoutil"
 )
 
 // LoadAppSecrets 全表解密读出 KV。表非空且 ARB_MASTER_KEY 缺 → error（fail-closed）；

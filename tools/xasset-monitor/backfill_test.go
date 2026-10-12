@@ -1,6 +1,6 @@
 package main
 
-// D-341 T1（harvest_floor 计算+样本守卫）/T5（ticks×klines 对齐纯函数）。
+// T1（harvest_floor 计算+样本守卫）/T5（ticks×klines 对齐纯函数）。
 import (
 	"testing"
 	"time"
