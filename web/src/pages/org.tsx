@@ -6,7 +6,7 @@ import { onCase } from "../stream";
 import type { Employee } from "../gen/dashboardv1/employee_pb";
 import { tsUnix } from "../components/fmt";
 
-const DEPT_ORDER = ["决策", "数据", "研究", "投资", "交易", "风控", "账本", "复盘", "运营", "IR", "实施"];
+const DEPT_ORDER = ["数据", "研究", "投资", "交易", "风控", "运营", "账本", "复盘", "IR", "运维", "合规"];
 const STATUS_CLS: Record<string, string> = {
   在职: "st-run",
   滞跳: "st-lag",
