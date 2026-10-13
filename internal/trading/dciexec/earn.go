@@ -226,6 +226,12 @@ func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, err
 	if err := e.Store.SetProposalStatus(ctx, p.ID, "executed"); err != nil {
 		return "", fmt.Errorf("提案态机推进: %w", err)
 	}
+	// 成交回执升 warn 同 DCI 腿径——info 级被 feishu 滤噪闸拦不推（earn 成交必达）。
+	if err := e.Store.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
+		"EARN %s 申购成交：%.4f USDT→%s APR %.2f%%（单号 %d）",
+		p.TemplateID, spotFree, pick.ProductID, pick.APR*100, oid)); err != nil {
+		log.Printf("[dciexec] earn 成交回执 alert 落行败: %v", err)
+	}
 	return fmt.Sprintf("%s %s 申购 %.4f USDT→%s（APR %.2f%%）",
 		p.TemplateID, pick.Asset, spotFree, pick.ProductID, pick.APR*100), nil
 }
