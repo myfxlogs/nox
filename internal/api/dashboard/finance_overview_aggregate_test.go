@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"nox/internal/data/bus"
-	"nox/internal/ledger/reconcile"
 
 	v1 "nox/internal/gen/dashboardv1"
 	"nox/internal/store/pgstore"
@@ -60,18 +59,10 @@ func seedFinanceFixtures(t *testing.T, s *pgstore.Store) {
 func TestD348_FinanceOverview_Aggregate(t *testing.T) {
 	s := financeTestStore(t)
 	seedFinanceFixtures(t, s)
-	// 实盘 CFD 账户（777 real connected，equity 100 USD）
-	tr := true
-	if err := s.InsertBrokerAccount(context.Background(), &pgstore.BrokerAccount{Venue: "777", Status: "connected", IsReal: &tr}); err != nil {
-		t.Fatalf("seed broker: %v", err)
-	}
-	m, _, _ := newAcctMonTest(t, &fakeAccountQuerier{key: "777:mt5", acct: &reconcile.AccountInfo{
-		VenueKey: "777:mt5", Venue: "777", VenueType: "mt5", AssetType: "cfd", Currency: "USD", Equity: 100,
-	}})
-	if got := m.Refresh(context.Background()); len(got) != 1 {
-		t.Fatalf("acct snapshot: %d", len(got))
-	}
-	svc := &Service{store: s, acctMon: m, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005}
+	// M4.4②：NAV 单源=fin_venue_account_snapshot 最新池（写口已过滤 real-only）。
+	mustExec(t, s, `INSERT INTO fin_venue_account_snapshot (venue, venue_type, equity_raw, currency, fetched_at)
+		VALUES ('777','mt5',100,'USD',NOW())`)
+	svc := &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005}
 	resp, err := svc.GetFinanceOverview(context.Background(), connect.NewRequest(&v1.GetFinanceOverviewRequest{}))
 	if err != nil {
 		t.Fatalf("GetFinanceOverview: %v", err)
@@ -190,49 +181,23 @@ func TestD348_FinanceOverview_FlowsNullTrackAndNoDoubleCount(t *testing.T) {
 	}
 }
 
-// TestD348_FinanceOverview_EquityRealOnly T3：权益只计实盘——CFD is_real 三态（nil 未知不计）+
-// stopped 不计+CEX simulated=false 才计+非 USD 跳过计数。
+// TestD348_FinanceOverview_EquityRealOnly T3（M4.4②口径改版）：权益读 ComputeNav 单源——
+// fin_venue_account_snapshot 最新池逐 venue 计入，非 USD 池跳过计数（real/demo/simulated/
+// stopped 三态过滤已由快照写口保证，本层锚=USD-only + 逐 venue 最新行）。
 func TestD348_FinanceOverview_EquityRealOnly(t *testing.T) {
 	s := financeTestStore(t)
 	ctx := context.Background()
-	tr, fl := true, false
-	seed := []struct {
-		venue  string
-		status string
-		isReal *bool
-	}{
-		{"777", "connected", &tr}, // 计入
-		{"778", "stopped", &tr},   // stopped 不计
-		{"779", "connected", nil}, // nil 未知不计
-		{"780", "connected", &fl}, // demo 不计
-		{"781", "connected", &tr}, // EUR 非 USD 跳过
-	}
-	for _, b := range seed {
-		if err := s.InsertBrokerAccount(ctx, &pgstore.BrokerAccount{Venue: b.venue, Status: b.status, IsReal: b.isReal}); err != nil {
-			t.Fatalf("seed broker %s: %v", b.venue, err)
-		}
-	}
-	m, _, _ := newAcctMonTest(t, &fakeAccountQuerier{key: "x", acct: &reconcile.AccountInfo{}})
-	accts := []*reconcile.AccountInfo{
-		{VenueKey: "777:mt5", AssetType: "cfd", Currency: "USD", Equity: 100},
-		{VenueKey: "778:mt5", AssetType: "cfd", Currency: "USD", Equity: 200},
-		{VenueKey: "779:mt5", AssetType: "cfd", Currency: "USD", Equity: 400},
-		{VenueKey: "780:mt5", AssetType: "cfd", Currency: "USD", Equity: 800},
-		{VenueKey: "781:mt5", AssetType: "cfd", Currency: "EUR", Equity: 1600},
-		{VenueKey: "binance:spot", AssetType: "cex", Currency: "USD", Equity: 3200, Simulated: true},
-		{VenueKey: "okx:spot", AssetType: "cex", Currency: "USD", Equity: 6400, Simulated: false},
-	}
-	for _, a := range accts {
-		m.AddStatic(&fakeAccountQuerier{key: a.VenueKey, acct: a})
-	}
-	m.Refresh(ctx)
-	svc := &Service{store: s, acctMon: m, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005}
+	mustExec(t, s, `INSERT INTO fin_venue_account_snapshot (venue, venue_type, equity_raw, currency, fetched_at) VALUES
+		('777','mt5',100,'USD',NOW()),
+		('okx','spot',6400,'USD',NOW()),
+		('781','mt5',1600,'EUR',NOW())`)
+	svc := &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005}
 	resp, err := svc.GetFinanceOverview(ctx, connect.NewRequest(&v1.GetFinanceOverviewRequest{}))
 	if err != nil {
 		t.Fatalf("GetFinanceOverview: %v", err)
 	}
-	// 只计 777（real CFD 100）+ okx（CEX 实盘 6400）= 6500
+	// USD 池 100+6400=6500；EUR 池跳过不假换算
 	if got := resp.Msg.TotalEquityUsd; got != 6500 {
-		t.Errorf("total_equity = %v, want 6500（real CFD+CEX 实盘；stopped/nil/demo/simulated/非USD 全排除）", got)
+		t.Errorf("total_equity = %v, want 6500（USD 池合计；EUR 跳过）", got)
 	}
 }

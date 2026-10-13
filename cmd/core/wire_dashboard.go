@@ -18,6 +18,7 @@ import (
 	"nox/internal/platform/config"
 	"nox/internal/platform/httpx"
 	"nox/internal/platform/safego"
+	"nox/internal/portfolio/budget"
 	"nox/internal/research/explorer"
 	"nox/internal/review/deptreport"
 	"nox/internal/review/kbreport"
@@ -160,6 +161,11 @@ func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *
 			Notify: feishu,
 			ChatID: st.FeishuChatID,
 			Beat:   func() { safego.Beat("main:deptreport") },
+			// D-264 M4.4①③：日切钩——fin_nav_daily 幂等落行 + fin_strategy_budget
+			// 配置器重算（确定性零 LLM；boot 首切+每班各一次）。
+			OnDayCut: func(ctx context.Context, dayStart time.Time) error {
+				return budget.DailyCut(ctx, st, time.Now(), dayStart, cfg.AutoTradeMaxNotional)
+			},
 		})
 	})
 

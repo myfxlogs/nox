@@ -38,6 +38,12 @@ func ReportDate(now time.Time) time.Time {
 	return time.Date(bj.Year(), bj.Month(), bj.Day(), 0, 0, 0, 0, time.UTC)
 }
 
+// CutDayStart 日切日=now 当日 BJ 历日零时（UTC 值；fin_nav_daily.day_start 口径）。
+func CutDayStart(now time.Time) time.Time {
+	bj := now.In(BJTime)
+	return time.Date(bj.Year(), bj.Month(), bj.Day(), 0, 0, 0, 0, time.UTC)
+}
+
 // sleepUntil ctx 感知睡眠（var=测试注入点，同 macro 先例）。
 var sleepUntil = func(ctx context.Context, t time.Time) bool {
 	d := time.Until(t)
@@ -58,6 +64,13 @@ var sleepUntil = func(ctx context.Context, t time.Time) bool {
 // （错过班次由次日正常班覆盖，防重启风暴刷 LLM）。
 func Run(ctx context.Context, d Deps) {
 	d.fill()
+	// M4.4①：boot 首切——fin_nav_daily/fin_strategy_budget 幂等落行，
+	// 防「配置器未产行→BudgetChecker 全单拒」的首日窗口。
+	if d.OnDayCut != nil {
+		if err := d.OnDayCut(ctx, CutDayStart(d.Now())); err != nil {
+			log.Printf("[deptreport] day cut boot: %v", err)
+		}
+	}
 	for {
 		next := d.Now().Add(NextDelay(d.Now()))
 		if !sleepUntil(ctx, next) {
@@ -65,6 +78,11 @@ func Run(ctx context.Context, d Deps) {
 		}
 		if d.Beat != nil {
 			d.Beat()
+		}
+		if d.OnDayCut != nil {
+			if err := d.OnDayCut(ctx, CutDayStart(d.Now())); err != nil {
+				log.Printf("[deptreport] day cut: %v", err)
+			}
 		}
 		if d.Enabled != nil && !d.Enabled() {
 			log.Printf("[deptreport] disabled 当班跳过")

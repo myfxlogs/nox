@@ -34,6 +34,9 @@ func (f *fakeStore) RetroDailyStats(context.Context, time.Time, time.Time) (*pgs
 func (f *fakeStore) ExplorerIdleFunds(context.Context, time.Time) ([]pgstore.ExplorerIdlePool, error) {
 	return f.pools, nil
 }
+func (f *fakeStore) ComputeNav(_ context.Context, now time.Time) (*pgstore.NavReport, error) {
+	return pgstore.SumNav(f.pools, now), nil
+}
 func (f *fakeStore) NetRealizedSince(context.Context, time.Time, bool) (float64, error) {
 	return -100.0, nil
 }

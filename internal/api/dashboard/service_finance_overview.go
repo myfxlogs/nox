@@ -9,9 +9,7 @@ import (
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"nox/internal/data/keydomain"
 	v1 "nox/internal/gen/dashboardv1"
-	"nox/internal/store/pgstore"
 )
 
 // financeOverviewTTL 聚合缓存 TTL（D-331 ActiveOpportunityIDs 15s 先例——聚合查询防热路径重压）。
@@ -89,44 +87,17 @@ func (s *Service) buildFinanceOverview(ctx context.Context) (*v1.GetFinanceOverv
 	return resp, nil
 }
 
-// equityTotalUSD Σ实盘权益（在线或快照——AccountMonitor 离线保留最近成功快照，同计入）。
-// 只计实盘：CFD=broker_accounts.is_real 三态（D-144：仅 &true 计入；nil 未知/false demo 不计）
-// 且 status≠stopped；CEX=simulated=false。AccountInfo 本体无 is_real（CFD 零值无意义）——
-// 经 venue_key 前缀 "{venue}:{type}" 接 broker_accounts 映射。非 USD 计价跳过+计数（诚实口径不假换算）。
+// equityTotalUSD —— D-264 M4.4②：改读 pgstore.ComputeNav 单函数（NAV 口径单源，
+// deptreport/fin_nav_daily/配置器同径）。快照表写口已过滤 real-only（D-006 径——
+// cex=!Simulated / cfd=venue∈is_real 键集），本层不重复筛；非 USD 池跳过+计数透传。
 func (s *Service) equityTotalUSD(ctx context.Context) (total float64, skippedNonUSD int) {
-	if s.acctMon == nil {
+	if s.store == nil {
 		return 0, 0 // 未接线（测试）→ 诚实零值
 	}
-	accounts := s.acctMon.Snapshot()
-	if len(accounts) == 0 {
+	nav, err := s.store.ComputeNav(ctx, time.Now())
+	if err != nil {
+		log.Printf("[finance] overview: nav 读取失败，权益按零值报（诚实口径不假数）: %v", err)
 		return 0, 0
 	}
-	brokers, err := s.store.ListBrokerAccounts(ctx)
-	if err != nil {
-		log.Printf("[finance] overview: broker_accounts 读取失败，CFD 权益不计: %v", err)
-		brokers = nil // CEX 侧仍可计（fail-partial，不因 CFD 元数据失败丢弃全部口径）
-	}
-	byVenue := make(map[string]pgstore.BrokerAccount, len(brokers))
-	for _, b := range brokers {
-		byVenue[b.Venue] = b
-	}
-	for _, a := range accounts {
-		if a.Currency != "USD" {
-			skippedNonUSD++
-			continue
-		}
-		if a.AssetType == "cex" {
-			if !a.Simulated {
-				total += a.Equity
-			}
-			continue
-		}
-		venue := keydomain.BareOf(a.VenueKey)
-		b, ok := byVenue[venue]
-		if !ok || b.IsReal == nil || !*b.IsReal || b.Status == "stopped" {
-			continue // nil=未知（未知≠实盘）/demo/stopped 一律不计
-		}
-		total += a.Equity
-	}
-	return total, skippedNonUSD
+	return nav.NavUSD, nav.SkippedNonUSD
 }

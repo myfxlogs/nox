@@ -24,6 +24,7 @@ const DeptCompany = "company"
 type Store interface {
 	RetroDailyStats(ctx context.Context, start, end time.Time) (*pgstore.RetroDaily, error)
 	ExplorerIdleFunds(ctx context.Context, now time.Time) ([]pgstore.ExplorerIdlePool, error)
+	ComputeNav(ctx context.Context, now time.Time) (*pgstore.NavReport, error) // D-264 M4.4②：NAV 单函数
 	NetRealizedSince(ctx context.Context, since time.Time, est bool) (float64, error)
 	ListProposals(ctx context.Context, status string, limit int) ([]pgstore.Proposal, error)
 	ListConditionGaps(ctx context.Context, status string) ([]pgstore.ConditionGap, error)
@@ -65,6 +66,10 @@ type Deps struct {
 	Beat func()
 	// OnReport 可选观察钩（测试/未来看板推送点；行落库后回调，nil=跳过）。
 	OnReport func(r pgstore.DeptReport)
+	// OnDayCut M4.4①：日切钩——Run 每班触发点+boot 首切各调一次
+	// （wire 注 budget.DailyCut：fin_nav_daily 落行+fin_strategy_budget 重算；
+	// nil=不切）。确定性零 LLM，在 Enabled 闸前跑（日报关≠日切关）。
+	OnDayCut func(ctx context.Context, dayStart time.Time) error
 }
 
 func (d *Deps) fill() {

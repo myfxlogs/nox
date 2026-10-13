@@ -34,3 +34,6 @@ var OppEvalSQL string // D-258 M4.1：fin_opp_eval 评估卡（一提案一卡�
 
 //go:embed 1009_strategy_lifecycle.sql
 var StrategyLifecycleSQL string // D-260 M4.2：fin_strategy 状态机+fin_strategy_criteria 判据表+提案 SLA 键
+
+//go:embed 1010_nav_budget.sql
+var NavBudgetSQL string // D-264 M4.4：fin_nav_daily 日切 NAV + fin_strategy_budget 策略预算表

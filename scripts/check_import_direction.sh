@@ -118,6 +118,7 @@ internal/platform/notional -> internal/data/keydomain
 internal/platform/testutil/storetest -> internal/platform/testutil
 internal/platform/testutil/storetest -> internal/store/pgstore
 internal/platform/usdnotional -> internal/data/bus
+internal/portfolio/budget -> internal/store/pgstore
 internal/portfolio/capitalview -> internal/data/bus
 internal/portfolio/capitalview -> internal/data/keydomain
 internal/portfolio/capitalview -> internal/ledger/reconcile
@@ -193,6 +194,7 @@ internal/trading/autotrade -> internal/platform/combo
 internal/trading/autotrade -> internal/platform/errclass
 internal/trading/autotrade -> internal/platform/safego
 internal/trading/autotrade -> internal/platform/usdnotional
+internal/trading/autotrade -> internal/portfolio/budget
 internal/trading/autotrade -> internal/portfolio/capitalview
 internal/trading/autotrade -> internal/portfolio/lifecycle
 internal/trading/autotrade -> internal/research/econ

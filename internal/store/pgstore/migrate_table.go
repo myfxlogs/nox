@@ -203,4 +203,5 @@ var migrationFiles = []struct {
 	{1007, migrations.LLMCallSQL, false},                      // D-246：fin_llm_call 调用账本
 	{1008, migrations.OppEvalSQL, false},                      // D-258 M4.1：fin_opp_eval 评估卡
 	{1009, migrations.StrategyLifecycleSQL, false},            // D-260 M4.2：fin_strategy 状态机+判据表+提案 SLA
+	{1010, migrations.NavBudgetSQL, false},                    // D-264 M4.4：fin_nav_daily+fin_strategy_budget
 }

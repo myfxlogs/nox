@@ -50,11 +50,13 @@ func gather(ctx context.Context, d *Deps, dayStart, dayEnd time.Time) (string, e
 		return "", fmt.Errorf("strategies: %w", err)
 	}
 
-	var nav, idle float64
-	for _, p := range pools {
-		nav += p.Equity
-		idle += p.Balance // 闲置=可动余额面（explorer 同口径；USD 池已归并）
+	// D-264 M4.4②：NAV/闲置 读 pgstore.ComputeNav 单函数（IR/配置器同径，口径单源；
+	// USD-only 过滤内聚——非 USD 池跳过不计不假换算）。
+	navRep, err := d.Store.ComputeNav(ctx, dayEnd)
+	if err != nil {
+		return "", fmt.Errorf("nav: %w", err)
 	}
+	nav, idle := navRep.NavUSD, navRep.IdleUSD
 	var b strings.Builder
 	fmt.Fprintf(&b, "报告日期：%s（北京时间历日）\n\n", dayStart.In(BJTime).Format("2006-01-02"))
 

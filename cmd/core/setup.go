@@ -17,6 +17,7 @@ import (
 	"nox/internal/ledger/swapledger"
 	"nox/internal/platform/config"
 	"nox/internal/platform/safego"
+	"nox/internal/portfolio/budget"
 	"nox/internal/portfolio/lifecycle"
 	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
@@ -187,8 +188,7 @@ func runServices(ctx context.Context, cancel context.CancelFunc, cfg *config.Con
 	}, st, dashSvc, oppTopic, qbus)
 	// D-087 §3.2：注入 settlement.Settle 依赖 + 淘汰判定函数 + 风险族解析器（D-256-A S2）
 	atEngine.SetSettleDeps(settleDeps, newDBEliminator(st), lifecycle.FamilyResolverAdapter)
-	// D-004 P1#2：平仓可平性闸的 MT5 trade_mode 即时探针——经 execReg 取实现
-	// TradeModeProber 的 executor（MT5Executor.SymbolParams 直查，非采集缓存）。
+	// D-004 P1#2：平仓可平性闸 MT5 trade_mode 即时探针——经 execReg 取 TradeModeProber executor（SymbolParams 直查非缓存）。
 	atEngine.SetTradeModeProberResolver(func(vk string) exec.TradeModeProber {
 		if exe, ok := execReg.Get(vk); ok {
 			if prober, ok := exe.(exec.TradeModeProber); ok {
@@ -205,8 +205,7 @@ func runServices(ctx context.Context, cancel context.CancelFunc, cfg *config.Con
 	}
 	// D-182 S1：注入零结算检测器（scanAndClose 周期对活跃仓检测恒零 → settled=0）
 	atEngine.SetZeroSettlementDetector(settlementCollector)
-	// D-017 R1：detector 白名单前置滤接通（延迟绑定收口——本行起 Allow=引擎热重载 holder，
-	// configKick→Reload 后下一帧发现即时反映；此前 boot 窗口=零候选 fail-closed）。
+	// D-017 R1：detector 白名单前置滤接通（延迟绑定收口——本行起 Allow=引擎热重载 holder；Reload 后下帧即反映）。
 	if xassetAllowBind != nil {
 		xassetAllowBind(atEngine)
 	}
@@ -238,15 +237,16 @@ func runServices(ctx context.Context, cancel context.CancelFunc, cfg *config.Con
 	dashSvc.SetEconSources(atEngine.PositionEconPublic, atEngine.EntryBreakevenDaysPublic) // D-014 ④：回本列/pending_entries 与闸同源
 	// D-403 S3：毕业链 approve 依赖接线（engine 先构造后接 setter，SSOT 装配序；热重载 nil=fail-closed）。
 	dashSvc.SetXAssetReloader(atEngine)
-	dashSvc.SetRejectBreaker(atEngine)    // D-560 S3：熔断快照透出+ResumeXAssetCombo 行为
+	dashSvc.SetRejectBreaker(atEngine) // D-560 S3：熔断快照透出+ResumeXAssetCombo 行为
+	// D-264 M4.4④：预算一致性闸挂真实现（fin_strategy_budget 只读；配置器日切独写；行缺/读败 fail-closed）。
+	atEngine.RiskGate().SetBudgetChecker(budget.NewChecker(st))
 	dashSvc.SetRefreshTopic(refreshTopic) // D-508 S9：域刷新通知注入（→case 14）
 	// D-443 S3/S4：venue gap 报告改表活读（60s 热重载后 ≤60s 反映实时态，非启动快照）。
 	dashSvc.SetAllowVenuesSource(func(ctx context.Context) (map[string]bool, error) {
 		v, _, err := st.LoadAutotradeAllowRules(ctx, cfg.Environment == "demo")
 		return v, err
 	})
-	// D-475a S6：旗标执行投影 boot 首载——ListActiveFlags 失败 fatal（fail-closed
-	// 同 allowRules seam；其后 kick/ticker/写旗即踢三触发点续命）。
+	// D-475a S6：旗标执行投影 boot 首载——ListActiveFlags 败 fatal（fail-closed 同 allowRules seam；其后 kick/ticker/写旗三触发点续命）。
 	if err := atEngine.ReloadFlags(ctx); err != nil {
 		allowRulesFatal("[flags] initial load: %v (startup fail-closed)", err)
 	}
