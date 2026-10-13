@@ -334,3 +334,29 @@ Generate 加⑧段「昨日公司日报原文」（`ListDeptReports(date-1)` 复
 ### 验收对照
 
 ①depth 断点=「采集宇宙⊂候选宇宙」结论落；②FAILED 根因=双腿即拒（原因列后建于行，不可复原）+closed_at NULL=设计语义；③修复面 R-A~R-D 留档。**零生产改动、零代码改动、门槛参数未动**。
+
+## cex-depth 采集宇宙对齐 测算+方案（D-278 R-A，票面=测算交裁定再动手）
+
+**测算**（SG 2026-10-13 13:20 实拍）：
+
+| 面 | 数 | 源 |
+|---|---|---|
+| 现采基名 | 5 静态 + 40 动态（fin_carry_universe CFD 域）≈45 | `[cex-depth] universe bases: 40` |
+| 候选实际键集 | **98 基名**（fin_cex_universe TRADING ∩ 近 1h funding 事实基名） | psql 交叉实拍 |
+| 分所 funding 见证基名 | binance 93 / gate 76 / okx 37 | facts kind=funding 1h |
+| **深度未覆盖的候选基名** | **58**（与 `depth_missing≈50/拍` 量级吻合） | 差集实拍 |
+| 目标集每轮调用量（方案 A 分所精集） | 93+76+37=**206 calls/5min**（≈0.7/s 持续） | — |
+| （方案 B 并集粗集） | 98×3≈294 calls/5min（≈1/s；~33% 空打在所未上市符号上=静默跳过） | — |
+
+**venue 限流核查面**（正式权重以 venue 文档为准——修码前复审须核档）：binance `fapi/v1/depth` limit=5 权重 2（IP 2400/min → A 案 186 weight/5min 远低）；okx `/market/books` sz=5 公开档限速（历史实测 ~20 req/2s 充裕）；gate `futures/usdt/order_book` 公开频限宽松。**方案 A/B 均在限内**；串行时延面：206 行×~200ms≈41s < 5min 间隔✓。
+
+**D-004 例外举证**：books 三所皆有 WS 频道（binance `depth`、okx `books`、gate `futures.order_book`）——本采集是**纸面质量闸研究面**（D-420 顶档深度 5min 采样已立的先例，非执行/判定钱径），REST 快照采样语义由该先例背书；扩域不改变数据性质。仍按票面要求留痕（本条即例外记录，编号随本 LOG 条目）。
+
+**方案**（待裁定）：
+- **A（荐）分所精集**：`universeDepthBases` 数据源改「各所近 Nh funding 事实符号→基名」并集（venue 键精准，仅采该所真有 funding 的符号=候选腿真实集合；多余调用零）；新 store 件 `ListFundingWitnessedBases(venue, window)`，collector bases() 按 venue 分组取。206 calls/轮。
+- **B 并集粗集**：同一查询跨所并集喂三所，294 calls/轮实现最简，~33% 空打。
+- **C 上界封顶**：top-N 按 funding 绝对值排序截断（防 funding 事实面膨胀失控——98 现状无须，留作扩容闸门可后加）。
+
+**修点不动项**：白名单 5 基名保留并集；节奏/保留期不动；`depthBase` 归一对双端键义兼容（funding 符号 `XAUUSDT`→基 `XAU` 与 depth symbol 形态同一归一径）。
+
+**验收残留**：获裁后实施 A（或 B/C）→ SG 实拍 `skips depth_missing` 归零。
