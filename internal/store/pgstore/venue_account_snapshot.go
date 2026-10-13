@@ -86,7 +86,7 @@ type VenueAccountLatest struct {
 func (s *Store) LatestVenueAccountSnapshots(ctx context.Context) ([]VenueAccountLatest, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT ON (venue, venue_type, currency) venue, venue_type, balance_raw, equity_raw,
-			free_margin_raw, buffer_multiple, currency, fetched_at
+			free_margin_raw, buffer_multiple, COALESCE(currency,''), fetched_at
 		FROM fin_venue_account_snapshot
 		ORDER BY venue, venue_type, currency, fetched_at DESC`)
 	if err != nil {
@@ -102,5 +102,15 @@ func (s *Store) LatestVenueAccountSnapshots(ctx context.Context) ([]VenueAccount
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// '' 币残影行并入主币行（同池双计防稀释——敞口闸分母口径修）。
+	return collapseBlankCcyPool(out,
+		func(r VenueAccountLatest) (string, string, string) { return r.Venue, r.VenueType, r.Currency },
+		func(r VenueAccountLatest) time.Time { return r.FetchedAt },
+		func(dst *VenueAccountLatest, src VenueAccountLatest) {
+			dst.BalanceRaw, dst.EquityRaw, dst.FreeMarginRaw, dst.BufferMultiple, dst.FetchedAt =
+				src.BalanceRaw, src.EquityRaw, src.FreeMarginRaw, src.BufferMultiple, src.FetchedAt
+		}), nil
 }

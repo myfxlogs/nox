@@ -87,22 +87,57 @@ func balanceCcyFoldable(ccy string) bool {
 // （free_margin_raw 已存=D-405；fm≤0/NULL=未采 fail-closed 不计）。表空/查询失败 → 单行「未采」回退。
 func loadVenueAccountRows(ctx context.Context, pool *pgxpool.Pool) ([]CapitalCoverageRow, venueOcc) {
 	vaRows, err := pool.Query(ctx, `
-		SELECT DISTINCT ON (venue, venue_type, currency) venue, venue_type, equity_raw, free_margin_raw, currency, fetched_at
+		SELECT DISTINCT ON (venue, venue_type, currency) venue, venue_type, equity_raw, free_margin_raw, COALESCE(currency,''), fetched_at
 		FROM fin_venue_account_snapshot
 		ORDER BY venue, venue_type, currency, fetched_at DESC`)
 	if err != nil {
 		return []CapitalCoverageRow{uncollectedRow()}, venueOcc{}
 	}
 	defer vaRows.Close()
-	var out []CapitalCoverageRow
-	var occ venueOcc
+	type snapRow struct {
+		venue, vt, ccy     string
+		equity, freeMargin *float64
+		fetched            time.Time
+	}
+	var snaps []snapRow
 	for vaRows.Next() {
-		var venue, vt, ccy string
-		var equity, freeMargin *float64
-		var fetched time.Time
-		if err := vaRows.Scan(&venue, &vt, &equity, &freeMargin, &ccy, &fetched); err != nil {
+		var r snapRow
+		if err := vaRows.Scan(&r.venue, &r.vt, &r.equity, &r.freeMargin, &r.ccy, &r.fetched); err != nil {
 			return []CapitalCoverageRow{uncollectedRow()}, venueOcc{}
 		}
+		snaps = append(snaps, r)
+	}
+	if err := vaRows.Err(); err != nil {
+		return []CapitalCoverageRow{uncollectedRow()}, venueOcc{}
+	}
+	// '' 币残影行并入主币行（同池双计防稀释——敞口闸分母口径修，与 pgstore 同规）。
+	for i := range snaps {
+		if snaps[i].ccy != "" {
+			continue
+		}
+		named := -1
+		for j := range snaps {
+			if snaps[j].venue == snaps[i].venue && snaps[j].vt == snaps[i].vt && snaps[j].ccy != "" &&
+				(named < 0 || snaps[j].fetched.After(snaps[named].fetched)) {
+				named = j
+			}
+		}
+		if named < 0 {
+			continue
+		}
+		if snaps[i].fetched.After(snaps[named].fetched) {
+			snaps[named].equity, snaps[named].freeMargin, snaps[named].fetched =
+				snaps[i].equity, snaps[i].freeMargin, snaps[i].fetched
+		}
+		snaps[i].ccy = "\x00" // 标记弃行（不落 coverage 行）
+	}
+	var out []CapitalCoverageRow
+	var occ venueOcc
+	for _, s := range snaps {
+		if s.ccy == "\x00" {
+			continue
+		}
+		venue, vt, ccy, equity, freeMargin, fetched := s.venue, s.vt, s.ccy, s.equity, s.freeMargin, s.fetched
 		// D-130 域2①：binance 资金钱包面官方已废除并入现货——行不再枚举。
 		// （earn 面回归：分币快照口径解除 D-133「只统计 USDT」约束，服务端同规。）
 		if venue == "binance" && vt == "funding" {
@@ -150,9 +185,6 @@ func loadVenueAccountRows(ctx context.Context, pool *pgxpool.Pool) ([]CapitalCov
 			row.Note = ageNote + "，净值空"
 		}
 		out = append(out, row)
-	}
-	if err := vaRows.Err(); err != nil {
-		return []CapitalCoverageRow{uncollectedRow()}, venueOcc{}
 	}
 	if len(out) == 0 {
 		return []CapitalCoverageRow{uncollectedRow()}, venueOcc{}

@@ -43,7 +43,7 @@ func (s *Store) CapitalPoolSnapshots(ctx context.Context) ([]CapitalPoolRow, err
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT ON (venue, venue_type, currency)
 			venue, venue_type, COALESCE(equity_raw,0), COALESCE(free_margin_raw,0),
-			currency, COALESCE(src,''), fetched_at
+			COALESCE(currency,''), COALESCE(src,''), fetched_at
 		FROM fin_venue_account_snapshot
 		ORDER BY venue, venue_type, currency, fetched_at DESC`)
 	if err != nil {
@@ -62,6 +62,13 @@ func (s *Store) CapitalPoolSnapshots(ctx context.Context) ([]CapitalPoolRow, err
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	// '' 币残影行并入主币行（同池双计防稀释——敞口闸分母口径修）。
+	pools = collapseBlankCcyPool(pools,
+		func(p CapitalPoolRow) (string, string, string) { return p.Venue, p.VenueType, p.Currency },
+		func(p CapitalPoolRow) time.Time { return p.FetchedAt },
+		func(dst *CapitalPoolRow, src CapitalPoolRow) {
+			dst.Equity, dst.FreeMargin, dst.Src, dst.FetchedAt = src.Equity, src.FreeMargin, src.Src, src.FetchedAt
+		})
 	registered := map[string]bool{}
 	vrows, err := s.pool.Query(ctx, `SELECT venue FROM broker_accounts`)
 	if err != nil {

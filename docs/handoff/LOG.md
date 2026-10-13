@@ -435,3 +435,11 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - `/settings` 页 AI 板块：base_url/model/api_key（password 框+掩码尾4 placeholder 回显，留空=后端不动）/enabled 开关；GetAiSettings/SetAiSettings 既有 RPC 直走零 proto 动；保存后重读掩码清输入框。
 - 零前端运算、api_key 永不回显明文（掩码只进 placeholder 不进 value）。
 - 验收残留：SG 实拍页面对拍 ai_settings 行。
+## 敞口闸分母口径修（部署验收揪出：'' 币残行双计稀释 ~13pt）
+- **病灶**：DISTINCT ON (venue,venue_type,currency) 把 MT5 `currency=''` 老行当独立池——3001157 同权益 ''(4245.51 陈旧)+USD(4247.41) 两行入分母，earn 闸算出 ~34.9%<35% 放行（真 ~48%）。
+- **修**：`snapshot_ccy_norm.go` 通用折叠件 `collapseBlankCcyPool`——同 (venue,venue_type) 组 '' 行并入最新命名币行（'' 较新采其值、币名不丢；纯 '' 组原样保留）；三处读面应用：CapitalPoolSnapshots（敞口闸+资金地图）、ExplorerIdleFunds（idle/NAV/deptreport/explorer 全消费面）、LatestVenueAccountSnapshots（覆盖率）；digest 同规内联实现。查询补 COALESCE(currency,'')。
+- **stale 确权**：陈旧行仍入计量（如实值）——stale≠0 但页面已置灰标时点，语义不动。
+- **前端②**：资金地图只渲主币组（USD/USDT）；非主币池折叠 `其他小币种 ×N` 单行计件不计值（零换算不可求和，行内示原币值）；equity/idle/deployed 全零行不渲。
+- **锚**：TestCollapseBlankCcyPool 四案（''陈旧并入/''较新采值/纯''保留/多命名币earn组不动）。
+- **测试库残留自纠**：前一次 600s 超时 panic 杀测试进程→wait_condition_exposed_test.go 的 cleanup 未跑→gate:perp cap 残留 100000 致 D543 连败两轮（非本票病灶）；手工 UPDATE 归位后全绿。
+- **验收残留**：SG SQL 实拍 3001157 单池单行→重算占比对拍 gate 所见值；earn 提案若再触闸应如实拒 ~48%>35%。

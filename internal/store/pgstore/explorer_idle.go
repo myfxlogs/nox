@@ -34,7 +34,7 @@ func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]Explore
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT ON (venue, venue_type, currency)
 			venue, venue_type, COALESCE(balance_raw,0), COALESCE(equity_raw,0),
-			COALESCE(free_margin_raw,0), currency, fetched_at, COALESCE(buffer_multiple,0)
+			COALESCE(free_margin_raw,0), COALESCE(currency,''), fetched_at, COALESCE(buffer_multiple,0)
 		FROM fin_venue_account_snapshot
 		ORDER BY venue, venue_type, currency, fetched_at DESC`)
 	if err != nil {
@@ -53,6 +53,14 @@ func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]Explore
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	// '' 币残影行并入主币行（同池双计防稀释——敞口闸分母口径修）。
+	pools = collapseBlankCcyPool(pools,
+		func(p ExplorerIdlePool) (string, string, string) { return p.Venue, p.VenueType, p.Currency },
+		func(p ExplorerIdlePool) time.Time { return p.FetchedAt },
+		func(dst *ExplorerIdlePool, src ExplorerIdlePool) {
+			dst.Balance, dst.Equity, dst.FreeMargin, dst.FetchedAt, dst.BufferMultiple =
+				src.Balance, src.Equity, src.FreeMargin, src.FetchedAt, src.BufferMultiple
+		})
 	// 近30d收入（venue_key 归一键优先，裸 venue 兼容——D-496 双键惯例）。
 	// 幽灵池过滤：broker 户（mt4/mt5）须在册——移除户残行打标不入 NAV。
 	registered := map[string]bool{}

@@ -60,8 +60,9 @@ export default function CapitalPage() {
     <main>
       <h2>资金地图 <small style={{ fontSize: 12, color: "#777" }}>算于 {computedAt} · 各币种原值零换算</small></h2>
       {err && <div className="err">{err}</div>}
-      {groups.map((g) => {
-        const live = g.pools.filter((p) => !p.ghost);
+      {/* 主币组照常渲染；非主币折叠——业主令 10-13 小币种口径（计件不计值）。 */}
+      {groups.filter((g) => g.currency === "USD" || g.currency === "USDT").map((g) => {
+        const live = g.pools.filter((p) => !p.ghost && (p.equity !== 0 || p.idle !== 0 || p.deployed !== 0));
         const ghosts = g.pools.filter((p) => p.ghost);
         return (
           <section key={g.currency}>
@@ -81,6 +82,35 @@ export default function CapitalPage() {
           </section>
         );
       })}
+      {(() => {
+        // 业主令 10-13：非主币池折叠单行计件不计值（零换算口径不可求和）。
+        const others = groups
+          .filter((g) => g.currency !== "USD" && g.currency !== "USDT")
+          .flatMap((g) =>
+            g.pools.filter((p) => !p.ghost && (p.equity !== 0 || p.idle !== 0 || p.deployed !== 0))
+          );
+        if (others.length === 0) return null;
+        return (
+          <details>
+            <summary>其他小币种 ×{others.length}（计件不计值——零换算口径不可求和）</summary>
+            <table>
+              <thead><tr><th>池</th><th>类型</th><th>权益（原币）</th><th>状态</th><th>快照时点</th></tr></thead>
+              <tbody>
+                {others.map((p) => (
+                  <tr key={p.venue + ":" + p.venueType + ":" + p.currency}
+                    style={p.stale ? { opacity: 0.45 } : undefined}>
+                    <td>{p.venue}</td>
+                    <td>{p.venueType}</td>
+                    <td>{fmtAmt(p.equity)} {p.currency}</td>
+                    <td>{p.stale ? "陈旧" : p.online ? "在线" : "—"}</td>
+                    <td>{ts(p.updatedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        );
+      })()}
       {groups.length === 0 && !err && <div>无资金池快照</div>}
     </main>
   );
