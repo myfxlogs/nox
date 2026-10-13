@@ -48,8 +48,9 @@ func TestCapitalPools_Build(t *testing.T) {
 	if usd.Equity != 6000 || usd.Deployed != 500 || usd.Idle != 5500 {
 		t.Errorf("USD 组: %+v", usd)
 	}
-	// USDT 组：1045+169+2000+50=3264；deployed=542+169+1000=1711；idle=1553。
-	if usdt.Equity != 3264 || usdt.Deployed != 1711 || usdt.Idle != 1553 {
+	// USDT 组：1045+169+2000+50=3264；deployed=542+169+1000=1711；
+	// idle=equity−池内在跑（DCI 池外锁额不双减，终审 G3）=2095。
+	if usdt.Equity != 3264 || usdt.Deployed != 1711 || usdt.Idle != 2095 {
 		t.Errorf("USDT 组: %+v", usdt)
 	}
 
@@ -75,8 +76,8 @@ func TestCapitalPools_Build(t *testing.T) {
 	if v := byKey["m2:mt5"]; v.dep != 0 || v.idle != 1000 || !v.stale || v.online {
 		t.Errorf("m2 stale: %+v", v)
 	}
-	if v := byKey["cex:spot"]; v.dep != 542 || v.idle != 503 || v.parts != 1 {
-		t.Errorf("cex spot DCI 归因: %+v", v)
+	if v := byKey["cex:spot"]; v.dep != 542 || v.idle != 1045 || v.parts != 1 {
+		t.Errorf("cex spot DCI 池外在跑（idle 不双减）: %+v", v)
 	}
 	if v := byKey["cex:earn"]; v.dep != 169 || v.idle != 0 {
 		t.Errorf("earn 全额在跑: %+v", v)
@@ -91,7 +92,7 @@ func TestCapitalPools_Build(t *testing.T) {
 	for _, g := range r.Groups {
 		for _, p := range g.Pools {
 			if p.Venue == "cex" && p.VenueType == "spot" {
-				if p.DeployedParts[0].Kind != "dci" || p.DeployedParts[0].Ref != "DCI#10" {
+				if p.DeployedParts[0].Kind != "dci" || p.DeployedParts[0].Ref != "DCI#10（池外锁额）" {
 					t.Errorf("dci part: %+v", p.DeployedParts[0])
 				}
 			}

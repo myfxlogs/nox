@@ -120,8 +120,9 @@ func (x *CapitalDeployedPart) GetAmount() float64 {
 	return 0
 }
 
-// CapitalPool 单 venue×venue_type 资金池：equity=快照权益，deployed=在跑归因
-// 合计，idle=equity−deployed（后端算，前端零运算）。
+// CapitalPool 单 venue×venue_type 资金池：equity=快照权益（venue 扣款后余额），
+// deployed=在跑归因合计（池内占用 + 池外锁额如未到期 DCI——锁额已离池，
+// idle=equity−池内在跑，不双减，终审 G3 裁定），后端算前端零运算。
 type CapitalPool struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Venue         string                 `protobuf:"bytes,1,opt,name=venue,proto3" json:"venue,omitempty"`

@@ -401,3 +401,6 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **前端 `/capital`**（nav「资金地图」）：币种卡（权益/闲置/在跑）+池表（在跑明细列策略#仓号/DCI#单号/金额），stale/ghost 置灰标时点，纯渲染零运算。
 - 锚：`TestCapitalPools_Store`（快照/ghost/DCI 窗/腿名义读面）+`TestCapitalPools_Build`（分组/CFD 占用/三源归因/ghost 剔计/stale 判）双绿；机检+npm build 过。
 - 验收留痕（部署后 SG）：USD 组应 5247.63 全闲（3001157+15032313），binance spot 闲 1044.81/跑 542=DCI#10，okx earn 169.45 全额在跑。
+## 资金地图 G3 退回修（DCI 池外在跑）
+- 病灶：idle=equity−deployed 对 DCI 双减——binance spot 快照 equity=venue 扣款后余额，DCI 锁额已离池。
+- 修：deployed 拆「池内在跑（margin/earn/OPEN 腿名义）+池外锁额（DCI）」；idle=equity−池内在跑。锚改 cex:spot 闲 1045/跑 542、明细 ref 标「池外锁额」。

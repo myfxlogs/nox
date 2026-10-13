@@ -80,18 +80,19 @@ func (s *Service) buildCapitalPools(pools []pgstore.CapitalPoolRow, legs []pgsto
 		p.Stale = capitalPoolStale(row.Src, row.FetchedAt, now)
 		p.Online = !p.Stale && row.Src != ""
 		poolKey := row.Venue + ":" + row.VenueType
+		inPool := 0.0 // 池内在跑（占着 equity）；池外锁额（DCI）只入 Deployed 不动 Idle
 		switch {
 		case row.VenueType == "mt4" || row.VenueType == "mt5":
 			// MT 池在跑=占用保证金（equity−free_margin）。
 			if dep := row.Equity - row.FreeMargin; dep > 0 {
-				p.Deployed = dep
+				inPool = dep
 				p.DeployedParts = append(p.DeployedParts, &v1.CapitalDeployedPart{
 					Kind: "margin", Ref: "占用保证金", Amount: dep,
 				})
 			}
 		case row.VenueType == "earn":
 			// earn 池全额即在跑（活期理财仓，D-285 裁定口径）。
-			p.Deployed = row.Equity
+			inPool = row.Equity
 			if row.Equity > 0 {
 				p.DeployedParts = append(p.DeployedParts, &v1.CapitalDeployedPart{
 					Kind: "earn", Ref: fmt.Sprintf("%s earn", row.Venue), Amount: row.Equity,
@@ -102,27 +103,29 @@ func (s *Service) buildCapitalPools(pools []pgstore.CapitalPoolRow, legs []pgsto
 				if l.Amount <= 0 {
 					continue
 				}
-				p.Deployed += l.Amount
+				inPool += l.Amount
 				p.DeployedParts = append(p.DeployedParts, &v1.CapitalDeployedPart{
 					Kind:   "position",
 					Ref:    fmt.Sprintf("%s #%d", l.PosType, l.PositionID),
 					Amount: l.Amount,
 				})
 			}
-			if dciHome[row.Venue] != row.VenueType {
-				break
-			}
-			for _, o := range dciByVenue[row.Venue] {
-				if o.CCY != row.Currency {
-					continue
+			if dciHome[row.Venue] == row.VenueType {
+				for _, o := range dciByVenue[row.Venue] {
+					if o.CCY != row.Currency {
+						continue
+					}
+					// 池外在跑：DCI 锁额已离池（快照 equity=扣款后余额）——
+					// 入 Deployed 不计 inPool，idle 不双减（终审 G3）。
+					p.Deployed += o.Qty
+					p.DeployedParts = append(p.DeployedParts, &v1.CapitalDeployedPart{
+						Kind: "dci", Ref: fmt.Sprintf("DCI#%d（池外锁额）", o.ID), Amount: o.Qty,
+					})
 				}
-				p.Deployed += o.Qty
-				p.DeployedParts = append(p.DeployedParts, &v1.CapitalDeployedPart{
-					Kind: "dci", Ref: fmt.Sprintf("DCI#%d", o.ID), Amount: o.Qty,
-				})
 			}
 		}
-		p.Idle = p.Equity - p.Deployed
+		p.Deployed += inPool
+		p.Idle = p.Equity - inPool
 
 		g := groups[p.Currency]
 		if g == nil {
