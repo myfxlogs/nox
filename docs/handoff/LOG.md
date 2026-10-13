@@ -187,3 +187,17 @@ fail-open 不变。**实证**：SG Generate 补班 11/11 全成+manager 行落�
 **验证**：✅ `go build/vet ./...`=0；`gofmt` 净；check-lines 零警告（setup.go=300 压线）；`go test ./... -count=1` 全绿（dashboard 一例 bad-fd 共享库压力型 flake，隔离复跑绿）；`-race` budget/gate/deptreport/pgstore 绿+dashboard 隔离段绿；env-reads/迁移契约/import 方向全过；pre-commit 十道。锚测：`TestM44_DailyCut`（nav=10000/idle=8000/EUR 跳过/幂等覆盖）、`TestM44_BudgetGate_Submit`（缺席→REJECTED/限额内→EXECUTED/超额→REJECTED）、`TestM44_Derive` 纯函数。
 
 **状态/下一步**：🔄 报审待终审；遗留=①SG 部署验收=`fin_nav_daily` 首行落+`fin_strategy_budget` live 行+IR/日报/配置器同源读实拍；②reserve_pct 约束缺席=0 储备（偏大预算方向——若委员会要 fail-closed 语义后续一行改）。
+
+## 2026-10-13 M4.5 复盘员事件驱动判决书（`a25e96ad` 报审）
+
+**背景/范围**：D-266——`position_reviews` baseline 死表（零 Go 写读面，SG 12 CLOSED/0 覆盖）；`review.Run` 挂点只手动 RPC 一处，自动平仓零复盘；`posChange` 事件底已备、exit_kind 权威枚举在场。
+
+**新增**：`internal/review/posreview/`（posreview.go 事件循环+Sweep、review_one.go 数字面、narrative.go LLM 面）；`pgstore/posreview.go`（`PositionReview`/`ClosedForReviewRow`/`ListClosedWithoutReview`/`UpsertPositionReview`）；`cmd/core/wire_posreview.go`；名册 `main:posreview`→账本。
+
+**修改**：`main_monitors.go` 挂 `wirePosreview`；`check_import_direction.sh` 补 posreview→pgstore/analyst 两边（218/219）。
+
+**关键决策**：①订阅 posChange 而非新定时器——每次 positions 写提交即发，8 个 ClosePosition 调用面结构性全覆盖；缺口查询幂等（已评仓自动出集），kick 风暴=多余空扫可承受。②数字面纯 Go：expected=bps×notional/1e4（双参缺一→NULL），actual=settlement.net_realized（pnl_quality≠actual→NULL+质量痕入 note），cost=fees_usd 直读，risk/expected_cost 无机读源→NULL 禁外推；exit_kind 直读不反推。③LLM 职责收为归因叙事+followup_action——JSON schema 校验（action∈continue|reduce|quarantine|retire），违式/败调重试一次→`llm_failed` 标痕+warn alert fail-visible；建议不落 fin_strategy（判据表独占淘汰权）。④AI 未配=机器 note 纯数字面（`无 AI` 如实标）；`review.Run` 聚合调参径保留互补不替。⑤CallLog role=`reviewer` 落 fin_llm_call；ResolveClient=kbreport 口径零新 env。
+
+**验证**：✅ `go build/vet ./...`=0；`gofmt` 净；check-lines 零警告；`go test ./internal/review/posreview` 六锚全绿（GoFace 数字钉值/质量痕 NULL/LLM 违式→llm_failed+warn/无 AI 机器面/Sweep fail-open/真实 5434 读写往返）；`-race` posreview 绿；env-reads/迁移契约（零迁移——baseline 表复活零 schema 变更）/import 方向过；pre-commit 十道。
+
+**状态/下一步**：🔄 报审待终审；遗留=①SG 部署验收=12 存量补齐+自然平仓 <10min 落行+`fin_llm_call` reviewer 行；②expected_cost/risk 无机读源恒 NULL（票面语义照办——补源后可填）；③`fin_llm_call` reviewer 行仅 LLM 调用时产（AI 缺配零行属正常）。
