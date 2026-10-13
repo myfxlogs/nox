@@ -215,3 +215,17 @@ fail-open 不变。**实证**：SG Generate 补班 11/11 全成+manager 行落�
 **验证**：✅ `go build/vet ./...`=0；`gofmt` 净；`TestM46_RequestBox` 真实 5434 六步锚绿（capital 行入箱+龄→非法态 invalid_argument→fulfilled 翻态+note→幂等复按→出箱）；`TestD186_*` 签名改后绿；`npm run build` 绿；check-lines/import 方向/env-reads/迁移契约全过；pre-commit 十道。
 
 **状态/下一步**：🔄 报审待终审；遗留=①SG 部署验收=投资人页请求箱见 #6/#11+回执一按翻态；②waived 行无 reopen 径（态机不含 waived→open——放弃即终态，票面语义照办）。
+
+## D-255 venue 败因坑表（@a5b6cf6f / STATE@ce158549）
+
+**背景**：fin_dci_order #1–6 六连撞——同一败因（-1102 参数名错→-9000 精度→-9000 报价过期）反复撞 venue，败文躺 response 死字段、reqID 金额浮点尾破幂等、errclass 无 CEX 消费点。
+
+**新增**：迁移 1011 `fin_venue_reject`（venue/op/error_signature/action[fix|suppress|critical]/action_params/hits/expires_at/last_seen）；`errclass.VenueRejectSignature` 签名单源（code 优先取码/无码 msg 归一，数字→#）；`dciexec/pit.go`（查坑动作分派+fix 映射 deposit_decimals）。
+
+**改**：tryLeg——申购前 ListVenueRejects 查坑：fix→按 params 自修复参数重发；suppress/critical→行落 rejected+一次性 critical dedup 告警，零 venue 打面；读败 fail-closed 拒。post 败行 LearnVenueReject 落坑（默认 suppress 24h，hits/last_seen 自增，委员会手改不覆写）。reqID 改 `dci|<腿>|<产品>|<交割日>|<尝试序>`（金额尾出键）。
+
+**决策**：幂等语义收敛——同意图「在途/已成」（pending|filled|settled）挡重发「已受理」；failed|rejected 不挡续执（`DCIOrderOpenIntent`+`DCIOrderIntentCount`，提案绑腿序 `DCIOrderLegCount` 兜底历史无前缀行）。refresh 类败仍走既有一次重提。
+
+**验证**：六锚（签名稳化表测/坑落表/二次零 POST+一次性 critical/fix 映射/读败 fail-closed/reqID 稳定+增序）；D191 幂等/D198 续执回归绿（D198 暴露 propID=nil 尝试序缺口→LegCount 兜底修）；-race dciexec/errclass 绿；门禁全过。
+
+**遗留**：委员会可手写 action=fix+critical 行覆盖默认 suppress（expires_at 控窗）；SG 部署验收=败后坑表有行+二次同败零打面。
