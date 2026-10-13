@@ -159,3 +159,17 @@ D-212 重建系收官段：SG 生产机停旧 arb 全套、以全新 nox 名与�
 fail-open 不变。**实证**：SG Generate 补班 11/11 全成+manager 行落库（1048B）+alert 留痕到达+全表零触发词——D-244 遗留③「完整日频周期」就此闭环。明早 07:05 正常班自动续跑（飞书扇出径未变）。
 
 探针 tools/probe1301 用完即删（一次性诊断件未入库）。
+
+## 2026-10-13 M4.3 风控单入口收口（`26291694` wip/m43 报审）
+
+**背景/范围**：D-262——全仓下单入口枚举分类，position-bearing 收口 `Gate.Submit→intent.Execute→pipeline` 单径。
+
+**新增**：`internal/risk/gate/dci_check.go`（`CheckDCI`/`DCIProposalView` 命名闸）；`internal/risk/gate/budget_check.go`（`BudgetChecker` 接口+`FailClosedBudget` 桩+`SetBudgetChecker`）；`execute_gate_wrap_test.go`、`dci_check_test.go` 锚测；`gate.Submitter` 接口（decision.go）。
+
+**修改**：`ExecuteOpportunity` RPC 改经同闸实例（`autotrade.New` 内接口断言自挂 `SetOrderGate`，跨包零依赖向；闸 nil=fail-closed）；`dciexec.GoProposal` 内联四检面迁 `gate.CheckDCI`；`Gate.Submit` 挂预算闸检点（nil=不消费）；`check_import_direction.sh` 补 `dashboard→risk/gate` 边；全仓入口 `[exec-entry:*]` 标记 13 处（gate×3/gated-body×3/named-gate×1/committee-exempt×2/demo/shared-executor/compute-only 另+service.go、swap_deviation 仅注释提及）。
+
+**关键决策**：①递归规避——`ExecuteOpportunityInternal`/`ExecuteMeanRevert*` 保为「过闸后执行体」，闸挂 RPC 入口而非执行体自身（engine 回调同径复用零双闸）；②DCI 不扭 TradeIntent（腿=venue 申购非订单对）；③`OpenProbe` 分类 committee-exempt（自有守卫链+拒单全量 alert 留痕，腿异构单腿调查仓）；④`bm.PlaceOrder`=传输层非入口，分类责在调用方。
+
+**验证**：✅ `go build/vet ./...`=0；`gofmt` 净；锚测 3 件全绿；`go test` 触碰包（gate/dciexec/autotrade/dashboard/cmd/core）绿；`-race` 同包串行绿；check-lines 零警告；import 方向 215/215；env-reads OK；pre-commit 十道过。⚠ 全量 `go test ./...` 并发跑 autotrade 互踩共享测试库败（已知型，隔离复跑绿——非本票引入）。
+
+**状态/下一步**：🔄 报审待复审合并；遗留=①`fin_strategy_budget` 消费归 M4.4；②SG 部署验收=grep 分类清单实拍+`service_execute_meanrevert` 拒单可见（测试库已锚）。
