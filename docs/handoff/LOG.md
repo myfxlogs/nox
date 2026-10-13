@@ -173,3 +173,17 @@ fail-open 不变。**实证**：SG Generate 补班 11/11 全成+manager 行落�
 **验证**：✅ `go build/vet ./...`=0；`gofmt` 净；锚测 3 件全绿；`go test` 触碰包（gate/dciexec/autotrade/dashboard/cmd/core）绿；`-race` 同包串行绿；check-lines 零警告；import 方向 215/215；env-reads OK；pre-commit 十道过。⚠ 全量 `go test ./...` 并发跑 autotrade 互踩共享测试库败（已知型，隔离复跑绿——非本票引入）。
 
 **状态/下一步**：🔄 报审待复审合并；遗留=①`fin_strategy_budget` 消费归 M4.4；②SG 部署验收=grep 分类清单实拍+`service_execute_meanrevert` 拒单可见（测试库已锚）。
+
+## 2026-10-13 M4.4 NAV 日切 + 资金配置器（`80ffa1cc`+`104dbbda` master 报审）
+
+**背景/范围**：D-264——NAV 无日切无单函数（三消费面各自现算=口径漂移隐患）；策略级预算表缺如，M4.3 预留 `gate.BudgetChecker` 待挂真实现。
+
+**新增**：迁移 `1010_nav_budget.sql`（`fin_nav_daily` day_start PK 一行/天幂等 + `fin_strategy_budget` strategy PK/budget_usd/derived_from jsonb）；`internal/store/pgstore/nav.go`（`NavReport`/`SumNav`/`ComputeNav`/`StrategyBudget`/`GetStrategyBudget`/`UpsertStrategyBudget`/`UpsertNavDaily`/`LatestNavDaily`）；`internal/portfolio/budget/`（`DailyCut` 日切+`Checker` 闸侧只读+`derive` 纯函数，128 行）。
+
+**修改**：`deptreport.Deps` 加 `OnDayCut`/`ComputeNav`——boot 首切+每班先于 Enabled 闸跑（零新定时器；AI 缺配也日切）；`gather.go`/`service_finance_overview.go` 改读 `ComputeNav` 单源（USD-only，非 USD 池跳过不假换算）；`setup.go` 挂 `atEngine.RiskGate().SetBudgetChecker(budget.NewChecker(st))`；`check_import_direction.sh` 补 budget 两边（216/217 边）。
+
+**关键决策**：①日切并入 deptreport 07:05 拍（同数据自然复用，boot 首切堵「配置器未产行→闸全拒」首日窗口）；②推导规则 `budget=min(AutoTradeMaxNotional, nav×(1−reserve_pct)/liveCount)`，reserve 取 `fin_capability_constraint` 机读值（缺席=0 储备），derived_from 留全输入痕审计可复算；③`fin_venue_exposure_caps`/`fin_canonical_exposure_caps` 语义=敞口 cap 与策略预算不同面，未被吸收→保 committee 写径原样（票面条件「如被吸收」未触发）；④IR finance overview 由 acctMon 内存聚合改快照表读——real/demo/stopped 三态过滤下沉快照写口保证，两测试钉值改版锚「USD-only+逐 venue 最新行」。
+
+**验证**：✅ `go build/vet ./...`=0；`gofmt` 净；check-lines 零警告（setup.go=300 压线）；`go test ./... -count=1` 全绿（dashboard 一例 bad-fd 共享库压力型 flake，隔离复跑绿）；`-race` budget/gate/deptreport/pgstore 绿+dashboard 隔离段绿；env-reads/迁移契约/import 方向全过；pre-commit 十道。锚测：`TestM44_DailyCut`（nav=10000/idle=8000/EUR 跳过/幂等覆盖）、`TestM44_BudgetGate_Submit`（缺席→REJECTED/限额内→EXECUTED/超额→REJECTED）、`TestM44_Derive` 纯函数。
+
+**状态/下一步**：🔄 报审待终审；遗留=①SG 部署验收=`fin_nav_daily` 首行落+`fin_strategy_budget` live 行+IR/日报/配置器同源读实拍；②reserve_pct 约束缺席=0 储备（偏大预算方向——若委员会要 fail-closed 语义后续一行改）。
