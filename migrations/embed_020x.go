@@ -49,3 +49,6 @@ var BinanceEarnReseedSQL string // 财务可见性两件套①：binance:earn �
 
 //go:embed 1014_okx_futures.sql
 var OkxFuturesSQL string // gap#11：venue_type 枚举放 'futures'+okx:futures 配置行回种
+
+//go:embed 1015_watch_rule.sql
+var WatchRuleSQL string // 业主视窗两件套 B：通用盯盘规则表

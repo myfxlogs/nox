@@ -265,6 +265,15 @@ const (
 	// DashboardServiceGetCexScanSnapshotProcedure is the fully-qualified name of the DashboardService's
 	// GetCexScanSnapshot RPC.
 	DashboardServiceGetCexScanSnapshotProcedure = "/nox.dashboard.v1.DashboardService/GetCexScanSnapshot"
+	// DashboardServiceListWatchRulesProcedure is the fully-qualified name of the DashboardService's
+	// ListWatchRules RPC.
+	DashboardServiceListWatchRulesProcedure = "/nox.dashboard.v1.DashboardService/ListWatchRules"
+	// DashboardServiceUpsertWatchRuleProcedure is the fully-qualified name of the DashboardService's
+	// UpsertWatchRule RPC.
+	DashboardServiceUpsertWatchRuleProcedure = "/nox.dashboard.v1.DashboardService/UpsertWatchRule"
+	// DashboardServiceDeleteWatchRuleProcedure is the fully-qualified name of the DashboardService's
+	// DeleteWatchRule RPC.
+	DashboardServiceDeleteWatchRuleProcedure = "/nox.dashboard.v1.DashboardService/DeleteWatchRule"
 	// DashboardServiceGetFinanceOverviewProcedure is the fully-qualified name of the DashboardService's
 	// GetFinanceOverview RPC.
 	DashboardServiceGetFinanceOverviewProcedure = "/nox.dashboard.v1.DashboardService/GetFinanceOverview"
@@ -475,6 +484,10 @@ type DashboardServiceClient interface {
 	// D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
 	// D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
 	GetCexScanSnapshot(context.Context, *connect.Request[dashboardv1.GetCexScanSnapshotRequest]) (*connect.Response[dashboardv1.GetCexScanSnapshotResponse], error)
+	// 业主视窗两件套 B：通用盯盘规则 CRUD（评估器 QuoteBus 事件驱动；configKick 生效）
+	ListWatchRules(context.Context, *connect.Request[dashboardv1.ListWatchRulesRequest]) (*connect.Response[dashboardv1.ListWatchRulesResponse], error)
+	UpsertWatchRule(context.Context, *connect.Request[dashboardv1.UpsertWatchRuleRequest]) (*connect.Response[dashboardv1.UpsertWatchRuleResponse], error)
+	DeleteWatchRule(context.Context, *connect.Request[dashboardv1.DeleteWatchRuleRequest]) (*connect.Response[dashboardv1.DeleteWatchRuleResponse], error)
 	// D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
 	GetFinanceOverview(context.Context, *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error)
 	// 资金地图（业主令 10-13 + D-285）：按币种分组的池级 权益/闲置/在跑 归因。
@@ -1009,6 +1022,24 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("GetCexScanSnapshot")),
 			connect.WithClientOptions(opts...),
 		),
+		listWatchRules: connect.NewClient[dashboardv1.ListWatchRulesRequest, dashboardv1.ListWatchRulesResponse](
+			httpClient,
+			baseURL+DashboardServiceListWatchRulesProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListWatchRules")),
+			connect.WithClientOptions(opts...),
+		),
+		upsertWatchRule: connect.NewClient[dashboardv1.UpsertWatchRuleRequest, dashboardv1.UpsertWatchRuleResponse](
+			httpClient,
+			baseURL+DashboardServiceUpsertWatchRuleProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("UpsertWatchRule")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteWatchRule: connect.NewClient[dashboardv1.DeleteWatchRuleRequest, dashboardv1.DeleteWatchRuleResponse](
+			httpClient,
+			baseURL+DashboardServiceDeleteWatchRuleProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("DeleteWatchRule")),
+			connect.WithClientOptions(opts...),
+		),
 		getFinanceOverview: connect.NewClient[dashboardv1.GetFinanceOverviewRequest, dashboardv1.GetFinanceOverviewResponse](
 			httpClient,
 			baseURL+DashboardServiceGetFinanceOverviewProcedure,
@@ -1290,6 +1321,9 @@ type dashboardServiceClient struct {
 	getAiSettings                *connect.Client[dashboardv1.GetAiSettingsRequest, dashboardv1.GetAiSettingsResponse]
 	setAiSettings                *connect.Client[dashboardv1.SetAiSettingsRequest, dashboardv1.SetAiSettingsResponse]
 	getCexScanSnapshot           *connect.Client[dashboardv1.GetCexScanSnapshotRequest, dashboardv1.GetCexScanSnapshotResponse]
+	listWatchRules               *connect.Client[dashboardv1.ListWatchRulesRequest, dashboardv1.ListWatchRulesResponse]
+	upsertWatchRule              *connect.Client[dashboardv1.UpsertWatchRuleRequest, dashboardv1.UpsertWatchRuleResponse]
+	deleteWatchRule              *connect.Client[dashboardv1.DeleteWatchRuleRequest, dashboardv1.DeleteWatchRuleResponse]
 	getFinanceOverview           *connect.Client[dashboardv1.GetFinanceOverviewRequest, dashboardv1.GetFinanceOverviewResponse]
 	getCapitalPools              *connect.Client[dashboardv1.GetCapitalPoolsRequest, dashboardv1.GetCapitalPoolsResponse]
 	executeSpotCarryDemo         *connect.Client[dashboardv1.ExecuteSpotCarryDemoRequest, dashboardv1.ExecuteSpotCarryDemoResponse]
@@ -1715,6 +1749,21 @@ func (c *dashboardServiceClient) GetCexScanSnapshot(ctx context.Context, req *co
 	return c.getCexScanSnapshot.CallUnary(ctx, req)
 }
 
+// ListWatchRules calls nox.dashboard.v1.DashboardService.ListWatchRules.
+func (c *dashboardServiceClient) ListWatchRules(ctx context.Context, req *connect.Request[dashboardv1.ListWatchRulesRequest]) (*connect.Response[dashboardv1.ListWatchRulesResponse], error) {
+	return c.listWatchRules.CallUnary(ctx, req)
+}
+
+// UpsertWatchRule calls nox.dashboard.v1.DashboardService.UpsertWatchRule.
+func (c *dashboardServiceClient) UpsertWatchRule(ctx context.Context, req *connect.Request[dashboardv1.UpsertWatchRuleRequest]) (*connect.Response[dashboardv1.UpsertWatchRuleResponse], error) {
+	return c.upsertWatchRule.CallUnary(ctx, req)
+}
+
+// DeleteWatchRule calls nox.dashboard.v1.DashboardService.DeleteWatchRule.
+func (c *dashboardServiceClient) DeleteWatchRule(ctx context.Context, req *connect.Request[dashboardv1.DeleteWatchRuleRequest]) (*connect.Response[dashboardv1.DeleteWatchRuleResponse], error) {
+	return c.deleteWatchRule.CallUnary(ctx, req)
+}
+
 // GetFinanceOverview calls nox.dashboard.v1.DashboardService.GetFinanceOverview.
 func (c *dashboardServiceClient) GetFinanceOverview(ctx context.Context, req *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error) {
 	return c.getFinanceOverview.CallUnary(ctx, req)
@@ -1990,6 +2039,10 @@ type DashboardServiceHandler interface {
 	// D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
 	// D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
 	GetCexScanSnapshot(context.Context, *connect.Request[dashboardv1.GetCexScanSnapshotRequest]) (*connect.Response[dashboardv1.GetCexScanSnapshotResponse], error)
+	// 业主视窗两件套 B：通用盯盘规则 CRUD（评估器 QuoteBus 事件驱动；configKick 生效）
+	ListWatchRules(context.Context, *connect.Request[dashboardv1.ListWatchRulesRequest]) (*connect.Response[dashboardv1.ListWatchRulesResponse], error)
+	UpsertWatchRule(context.Context, *connect.Request[dashboardv1.UpsertWatchRuleRequest]) (*connect.Response[dashboardv1.UpsertWatchRuleResponse], error)
+	DeleteWatchRule(context.Context, *connect.Request[dashboardv1.DeleteWatchRuleRequest]) (*connect.Response[dashboardv1.DeleteWatchRuleResponse], error)
 	// D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
 	GetFinanceOverview(context.Context, *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error)
 	// 资金地图（业主令 10-13 + D-285）：按币种分组的池级 权益/闲置/在跑 归因。
@@ -2520,6 +2573,24 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("GetCexScanSnapshot")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListWatchRulesHandler := connect.NewUnaryHandler(
+		DashboardServiceListWatchRulesProcedure,
+		svc.ListWatchRules,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListWatchRules")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceUpsertWatchRuleHandler := connect.NewUnaryHandler(
+		DashboardServiceUpsertWatchRuleProcedure,
+		svc.UpsertWatchRule,
+		connect.WithSchema(dashboardServiceMethods.ByName("UpsertWatchRule")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceDeleteWatchRuleHandler := connect.NewUnaryHandler(
+		DashboardServiceDeleteWatchRuleProcedure,
+		svc.DeleteWatchRule,
+		connect.WithSchema(dashboardServiceMethods.ByName("DeleteWatchRule")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceGetFinanceOverviewHandler := connect.NewUnaryHandler(
 		DashboardServiceGetFinanceOverviewProcedure,
 		svc.GetFinanceOverview,
@@ -2876,6 +2947,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceSetAiSettingsHandler.ServeHTTP(w, r)
 		case DashboardServiceGetCexScanSnapshotProcedure:
 			dashboardServiceGetCexScanSnapshotHandler.ServeHTTP(w, r)
+		case DashboardServiceListWatchRulesProcedure:
+			dashboardServiceListWatchRulesHandler.ServeHTTP(w, r)
+		case DashboardServiceUpsertWatchRuleProcedure:
+			dashboardServiceUpsertWatchRuleHandler.ServeHTTP(w, r)
+		case DashboardServiceDeleteWatchRuleProcedure:
+			dashboardServiceDeleteWatchRuleHandler.ServeHTTP(w, r)
 		case DashboardServiceGetFinanceOverviewProcedure:
 			dashboardServiceGetFinanceOverviewHandler.ServeHTTP(w, r)
 		case DashboardServiceGetCapitalPoolsProcedure:
@@ -3261,6 +3338,18 @@ func (UnimplementedDashboardServiceHandler) SetAiSettings(context.Context, *conn
 
 func (UnimplementedDashboardServiceHandler) GetCexScanSnapshot(context.Context, *connect.Request[dashboardv1.GetCexScanSnapshotRequest]) (*connect.Response[dashboardv1.GetCexScanSnapshotResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetCexScanSnapshot is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListWatchRules(context.Context, *connect.Request[dashboardv1.ListWatchRulesRequest]) (*connect.Response[dashboardv1.ListWatchRulesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListWatchRules is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) UpsertWatchRule(context.Context, *connect.Request[dashboardv1.UpsertWatchRuleRequest]) (*connect.Response[dashboardv1.UpsertWatchRuleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.UpsertWatchRule is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) DeleteWatchRule(context.Context, *connect.Request[dashboardv1.DeleteWatchRuleRequest]) (*connect.Response[dashboardv1.DeleteWatchRuleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.DeleteWatchRule is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetFinanceOverview(context.Context, *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error) {

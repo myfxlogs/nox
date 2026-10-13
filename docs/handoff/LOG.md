@@ -466,3 +466,11 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **gap#11 自动收口**：boot 扫描 reconcileGaps 判凭据到位 → requested→fulfilled，零手工。
 - querier 注册日志 `[account] cex querier: okx:futures` 实证；快照归一 `okx:unified` 零双计（trading 账户单行，earn/funding 独立账本）。
 - `fin_condition_gap` 表**清零**——E0 后系统进入「零业主欠账」。
+
+## 2026-10-14 业主视窗两件套（报告中心+盯盘引擎）
+
+- **A 报告中心** `/reports`：部门日报（30 日侧栏+逐部门 markdown 渲染）+ 报告文件列表/正文 + 补跑按钮（GenerateKbReport/GenerateRetroReport）——五 RPC 全消费。极简 md 渲染（标题/列表/表格线），零依赖零运算。
+- **B 盯盘引擎**：`watch_rule` 表（迁移 1015，kind='price' 首期，其他 kind chk 拦=fail-closed）；`internal/risk/watch` 引擎 QuoteBus 通配订阅（`Subscribe("")`）tick 即判——零轮询 ticker（D-004）；stale 守卫（now−q.Time>DetectorFreshnessTTL 不触发）；once 自翻 disabled、repeat cooldown 防抖；触发→InsertAlert warn 穿飞书闸。规则集 configKick 热载（D-469b 同径）。
+- **CRUD**：List/Upsert/DeleteWatchRule RPC（后端校验同 chk 域值）；`List` 附 stale 标（qbus 最新报价超 freshTTL 即标）；mutation 后 kickConfig 即时生效。前端 `/watch` 页（列表+增改表单+启停）。
+- **装配**：`wire_watch.go`（行数门禁拆出）configKick 订阅+Run。
+- **锚**：引擎 3 件（once 触发+自翻/不达阈值+venue 过滤+陈旧 tick 拒触发/repeat cooldown）+`TestWatchRuleCRUD`（1015 表 CRUD+chk 守 kind/op+MarkWatchFired 自翻）。

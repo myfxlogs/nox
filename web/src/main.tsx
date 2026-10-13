@@ -15,6 +15,8 @@ import InvestorPage from "./pages/investor";
 import CapitalPage from "./pages/capital";
 import DciPage from "./pages/dci";
 import SettingsPage from "./pages/settings";
+import ReportsPage from "./pages/reports";
+import WatchPage from "./pages/watch";
 import "./app.css";
 
 const ROUTES: Record<string, { title: string; el: () => React.JSX.Element }> = {
@@ -26,6 +28,8 @@ const ROUTES: Record<string, { title: string; el: () => React.JSX.Element }> = {
   "/investor": { title: "投资人", el: InvestorPage },
   "/capital": { title: "资金地图", el: CapitalPage },
   "/dci": { title: "持仓理财", el: DciPage },
+  "/reports": { title: "报告中心", el: ReportsPage },
+  "/watch": { title: "盯盘", el: WatchPage },
   "/settings": { title: "设置", el: SettingsPage },
 };
 

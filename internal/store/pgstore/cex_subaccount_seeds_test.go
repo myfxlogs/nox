@@ -172,3 +172,43 @@ func TestOkxFuturesSeed(t *testing.T) {
 		t.Error("nonsense venue_type 未撞 chk（枚举放开越界）")
 	}
 }
+
+// TestWatchRuleCRUD 业主视窗 B：1015 表+CRUD+MarkWatchFired once 自翻锚。
+func TestWatchRuleCRUD(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `DELETE FROM watch_rule`); err != nil {
+		t.Fatalf("clean: %v", err)
+	}
+	id, err := s.UpsertWatchRule(ctx, WatchRule{Kind: "price", Subject: "TRXUSDT", Op: "ge",
+		Threshold: 0.3, FireMode: "once", Enabled: true})
+	if err != nil || id == 0 {
+		t.Fatalf("insert: id=%d err=%v", id, err)
+	}
+	// once 触发自翻 disabled
+	if err := s.MarkWatchFired(ctx, id, true); err != nil {
+		t.Fatalf("mark fired: %v", err)
+	}
+	rules, err := s.ListWatchRules(ctx)
+	if err != nil || len(rules) != 1 {
+		t.Fatalf("list: %v %v", rules, err)
+	}
+	if rules[0].Enabled || rules[0].LastFiredAt == nil {
+		t.Errorf("once 触发后 enabled=%v last_fired=%v（应自翻退役留痕）", rules[0].Enabled, rules[0].LastFiredAt)
+	}
+	// chk 守门：非 price kind / 非法 op 撞约束
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO watch_rule (kind, subject, op, threshold) VALUES ('nav','X','eq',1)`); err == nil {
+		t.Error("kind=nav 未撞 chk（首期应 fail-closed）")
+	}
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO watch_rule (kind, subject, op, threshold) VALUES ('price','X','eq',1)`); err == nil {
+		t.Error("op=eq 未撞 chk")
+	}
+	if err := s.DeleteWatchRule(ctx, id); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if err := s.DeleteWatchRule(ctx, id); err == nil {
+		t.Error("重复删应 fail-closed 报错")
+	}
+}

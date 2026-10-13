@@ -180,6 +180,8 @@ internal/risk/selfwatch -> internal/platform/safego
 internal/risk/selfwatch -> internal/research/scan
 internal/risk/selfwatch -> internal/review/sysretro
 internal/risk/selfwatch -> internal/store/pgstore
+internal/risk/watch -> internal/data/bus
+internal/risk/watch -> internal/store/pgstore
 internal/store/pgstore -> internal/data/fact
 internal/store/pgstore -> internal/data/keydomain
 internal/store/pgstore -> internal/data/normalize

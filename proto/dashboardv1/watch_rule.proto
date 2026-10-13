@@ -1,0 +1,27 @@
+syntax = "proto3";
+package nox.dashboard.v1;
+
+option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
+
+// 业主视窗两件套 B：通用盯盘规则 CRUD（watch_rule 表；评估器 QuoteBus 事件驱动）。
+message WatchRule {
+  int64 id = 1;
+  string kind = 2;          // 首期 'price'
+  string subject = 3;       // canonical symbol
+  string venue_key = 4;     // ''=全源
+  string op = 5;            // lt|le|gt|ge
+  double threshold = 6;
+  string fire_mode = 7;     // once|repeat
+  int32 cooldown_sec = 8;
+  string note = 9;
+  bool enabled = 10;
+  int64 last_fired_ts = 11; // unix ts；0=未触发
+  bool stale = 12;          // subject 最新报价超窗（服务侧对 qbus 判）
+}
+
+message ListWatchRulesRequest {}
+message ListWatchRulesResponse { repeated WatchRule rules = 1; }
+message UpsertWatchRuleRequest { WatchRule rule = 1; } // id=0=插入
+message UpsertWatchRuleResponse { int64 id = 1; }
+message DeleteWatchRuleRequest { int64 id = 1; }
+message DeleteWatchRuleResponse {}

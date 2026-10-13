@@ -16,6 +16,7 @@ import "dashboardv1/capital_pools.proto";
 import "dashboardv1/broker_admin.proto";
 import "dashboardv1/graduation.proto";
 import "dashboardv1/market.proto";
+import "dashboardv1/watch_rule.proto";
 import "dashboardv1/ops.proto";
 import "dashboardv1/position.proto";
 import "dashboardv1/stream.proto";
@@ -155,7 +156,10 @@ service DashboardService {
   // D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
   // D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
   rpc GetCexScanSnapshot(GetCexScanSnapshotRequest) returns (GetCexScanSnapshotResponse);
-  // D-292：价格提醒规则前端管理（CRUD；引擎 30s 重载自动生效，无通知机制）
+  // 业主视窗两件套 B：通用盯盘规则 CRUD（评估器 QuoteBus 事件驱动；configKick 生效）
+  rpc ListWatchRules(ListWatchRulesRequest) returns (ListWatchRulesResponse);
+  rpc UpsertWatchRule(UpsertWatchRuleRequest) returns (UpsertWatchRuleResponse);
+  rpc DeleteWatchRule(DeleteWatchRuleRequest) returns (DeleteWatchRuleResponse);
 
   // D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
   rpc GetFinanceOverview(GetFinanceOverviewRequest) returns (GetFinanceOverviewResponse);
