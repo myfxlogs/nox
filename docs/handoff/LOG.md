@@ -493,3 +493,11 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **CRUD**：List/Upsert/DeleteWatchRule RPC（后端校验同 chk 域值）；`List` 附 stale 标（qbus 最新报价超 freshTTL 即标）；mutation 后 kickConfig 即时生效。前端 `/watch` 页（列表+增改表单+启停）。
 - **装配**：`wire_watch.go`（行数门禁拆出）configKick 订阅+Run。
 - **锚**：引擎 3 件（once 触发+自翻/不达阈值+venue 过滤+陈旧 tick 拒触发/repeat cooldown）+`TestWatchRuleCRUD`（1015 表 CRUD+chk 守 kind/op+MarkWatchFired 自翻）。
+
+## 2026-10-14 业主视窗 A/B SG 部署验收 + 僵尸提案修复实证
+
+- **A 报告中心**：`ListDeptReports` 实拍返今日公司日报全文；bundle 含 reports/watch 页，隧道在线。`#/reports` `#/watch` 可用。
+- **B 盯盘引擎**：迁 1015 上库；BTCUSDT lt 999999 once 规则真插→tick 即判→warn alert 落 `盯盘触发#2: BTCUSDT 83187.1 < 999999`+`last_fired_at` 落账+enabled 自翻 f——全链实证，测试规则已清。
+- **僵尸提案修复 @8122698b**：boot 扫描实证 #221 funding_carry/#225 cross_venue_spot `proposed→deferred`（auto 轨无执行器新语义生效），机制缺口闭合。
+- **返修**：proto3 `enabled` 零值陷阱（不带 enabled 建规则=死规则）并入 C 件收口票。
+- **顺带实证**：XAUUSDT SELL 系统外单系统已自动 warn 告警「不追踪，若为收编漏检残余请人工核查」。
