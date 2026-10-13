@@ -10,7 +10,7 @@ func TestListDisabledStrategies(t *testing.T) {
 	s := sharedTestStore(t)
 	ctx := context.Background()
 	prepareTestSchema(t, s)
-	if _, err := s.pool.Exec(ctx, `TRUNCATE strategy_stats`); err != nil {
+	if _, err := s.pool.Exec(ctx, `TRUNCATE strategy_stats, fin_strategy`); err != nil {
 		t.Fatalf("TRUNCATE strategy_stats: %v", err)
 	}
 	// 插入 3 行：2 disabled + 1 enabled
@@ -48,7 +48,7 @@ func TestListDisabledStrategies_EmptyTable(t *testing.T) {
 	s := sharedTestStore(t)
 	ctx := context.Background()
 	prepareTestSchema(t, s)
-	if _, err := s.pool.Exec(ctx, `TRUNCATE strategy_stats`); err != nil {
+	if _, err := s.pool.Exec(ctx, `TRUNCATE strategy_stats, fin_strategy`); err != nil {
 		t.Fatalf("TRUNCATE strategy_stats: %v", err)
 	}
 	got, err := s.ListDisabledStrategies(ctx)

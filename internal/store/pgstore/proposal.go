@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"encoding/json"
+	"fmt"
 	"nox/internal/data/keydomain"
 	"strings"
 	"time"
@@ -187,4 +188,26 @@ func XAssetDormantHit(cons []CapabilityConstraint, canonical string, venues ...s
 		}
 	}
 	return "", false
+}
+
+// ExpireProposalsOverAge D-260 M4.2 提案 SLA：proposed 超龄→expired（幂等重跑安全），
+// 返回过期 id 集供 critical 告警。期限由调用方读 app_config 机读键传入——本函数零字面量。
+func (s *Store) ExpireProposalsOverAge(ctx context.Context, age time.Duration) ([]int64, error) {
+	rows, err := s.pool.Query(ctx, `
+		UPDATE fin_proposal SET status='expired', decided_at=now()
+		WHERE status='proposed' AND created_at < now() - $1::interval
+		RETURNING id`, fmt.Sprintf("%fh", age.Hours()))
+	if err != nil {
+		return nil, fmt.Errorf("expire proposals over age: %w", err)
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan expired proposal: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }

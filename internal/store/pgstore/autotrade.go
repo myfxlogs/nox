@@ -167,51 +167,6 @@ func (s *Store) UpdateStrategyStat(ctx context.Context, strategy string, realize
 	return nil
 }
 
-// DisableStrategy 禁用策略（自动淘汰）。
-func (s *Store) DisableStrategy(ctx context.Context, strategy, reason string) error {
-	_, err := s.pool.Exec(ctx, `
-		INSERT INTO strategy_stats (strategy, disabled, disabled_reason, updated_at)
-		VALUES ($1, true, $2, now())
-		ON CONFLICT (strategy) DO UPDATE SET disabled = true, disabled_reason = $2, updated_at = now()`,
-		strategy, reason)
-	if err != nil {
-		return fmt.Errorf("disable strategy: %w", err)
-	}
-	return nil
-}
-
-// IsStrategyDisabled 检查策略是否被禁用。
-func (s *Store) IsStrategyDisabled(ctx context.Context, strategy string) (bool, error) {
-	var disabled bool
-	err := s.pool.QueryRow(ctx, `SELECT disabled FROM strategy_stats WHERE strategy = $1`, strategy).Scan(&disabled)
-	if err != nil {
-		if err.Error() == "no rows in result set" {
-			return false, nil
-		}
-		return false, fmt.Errorf("check strategy disabled: %w", err)
-	}
-	return disabled, nil
-}
-
-// ListDisabledStrategies 返回所有 disabled=true 的策略名集合。
-// 供 engine 检测层排除 disabled 策略产出的机会（§1 自动淘汰闭环：disable → 不执行 + 不产机会 + 不展示）。
-func (s *Store) ListDisabledStrategies(ctx context.Context) (map[string]bool, error) {
-	rows, err := s.pool.Query(ctx, `SELECT strategy FROM strategy_stats WHERE disabled = true`)
-	if err != nil {
-		return nil, fmt.Errorf("list disabled strategies: %w", err)
-	}
-	defer rows.Close()
-	out := make(map[string]bool)
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("scan disabled strategy: %w", err)
-		}
-		out[name] = true
-	}
-	return out, rows.Err()
-}
-
 // DailyRealizedPnl 返回当日已平仓持仓的累计净 PNL（风控：单日亏损停机）。
 // 扩包（决策 9）：与 AggregateStrategyStats（autotrade.go:98）同构——
 // LEFT JOIN position_settlements + COALESCE 三级 fallback（net_realized_usd → realized_usd → realized_pnl）。
