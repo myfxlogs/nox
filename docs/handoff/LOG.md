@@ -289,3 +289,12 @@ Generate 加⑧段「昨日公司日报原文」（`ListDeptReports(date-1)` 复
 - 锚测：校验器三态+补正重生成径+fail-open 标记三件绿；fakeRunner 缺省正文升合规样例（旧锚调用数=1 不破）。
 - 机检：build/vet/gofmt 净、deptreport 全包+race 绿、check-lines 零警告、import 221/222、迁移契约（零迁移）过。
 - 部署验收：今晚 23:05 UTC 班 company 行全序段齐=契约过（违则在正文见「契约缺段」标）。
+
+## 评估卡证据源补强 @4612b166
+
+- **①earn failure**：`RejectHits(op='earn_redeem', 30d)` 接 `fin_venue_reject`（D-255 坑表）——口径裁「拒绝零资金损耗」（申赎拒绝在资金移动前，同 DCI 口径），证据文 `earn_redeem n败/30d零资金损耗`。
+- **②funding_carry**：fee=`MedianTakerFeeBps`（在册非模拟 perp 所 exchange_configs.taker_fee_bps 中位——venue 实测值域）×双腿 ÷ 按 `MedianHoldHours(['PERP_FUNDING'])` realized 时长账本年化（零行=缺证据不外推）；failure=`LegFailCount(['PERP_FUNDING'])` position_legs FAILED 账本——0 败=零损耗证据项，>0=成本未计价 fail-closed 仍 missing（不估单价，零外推不破）。
+- **③cross_venue_spot**：五项全缺=detector 无报价输出面（gross 源未建）——非证据链病灶，票面裁定留诊断另案。
+- **funding_carry 证据源定位清单**（票面②交付）：fee→exchange_configs.taker_fee_bps（venue 级实测）；持有窗→positions CLOSED PERP_FUNDING (closed_at−opened_at)；failure→position_legs.status='FAILED' join positions.type；slippage→fin_cex_spread；window→facts funding 中位。
+- 锚测：TestEvalCard_EarnFailureSrc / TestEvalCard_FundingFeeSrc / M41_788 三态绿（测试全自隔离种子防共享库串扰）。
+- 部署验收：SG 重跑评估拍后 fin_opp_eval——earn 两模板 failure 出证出 verdict；funding_carry missing 收敛至 [slippage]（perp spread 行在产在→全项出 viable/reject）。
