@@ -105,8 +105,6 @@ func TestWatchEngine_FireOnce(t *testing.T) {
 			t.Fatal("未触发")
 		case <-time.After(5 * time.Millisecond):
 		}
-		fs.mu.Lock()
-		fs.mu.Unlock()
 	}
 	if fs.alertN() != 1 {
 		t.Fatalf("alerts=%d", fs.alertN())
