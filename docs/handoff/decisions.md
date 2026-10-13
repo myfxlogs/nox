@@ -87,3 +87,9 @@
 **执行**：pre-flight FK 闸零出边→单事务全做——CTAS 33 表+TRUNCATE 26+DELETE 谓词 4+nav 锚回插。对拍全绿：全表集 live=0；在途留活 fin_proposal 8/explorer 40/paper active 36/trx pending 427；fin_nav_daily arch=1 live=1（锚在）；fin_dci_order 整表留活（FK 一致性裁，记偏离）。
 **验收**：栈重启零 panic；fin_strategy live 双行在（dci_buy_low/XASSET_CARRY）；gap#11 requested；facts 6,666,903 行零损；proposed 提案 5 在（#222 autoexec 资格保）。
 **E0 起算**：新纪元统计口径自 10-13 15:00 UTC 起；旧账在 arch_e0 schema 可查可逆。
+
+## D-285：币种口径裁定——USDT 即 USDT、USD 即 USD，零换算（业主令 10-13）
+
+**裁定**：财务展示一律按账户原生币种如实呈现，不做 USDT→USD 折算；`SumNav` 的 `SkippedNonUSD` 口径从「缺口」转正为**正确行为**保留。
+**理由**：业主令明确——各币种真实数据各自展示；折算引入的汇率假设比币种分离的代价大。
+**衍生**：财务页（下票）按 currency 分组展示 equity/idle/deployed；NAV 维持 USD-only 语义不改（USDT 池不上 NAV 合计属裁定内）。
