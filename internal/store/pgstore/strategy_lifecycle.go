@@ -7,8 +7,11 @@ package pgstore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // StrategyCriteria 判据行投影（lifecycle.Criterion 逐字段同形——adapter 映射）。
@@ -53,7 +56,7 @@ func (s *Store) ListStrategyCriteria(ctx context.Context, strategy, kind string)
 func (s *Store) SetStrategyState(ctx context.Context, strategy, state, decidedBy string, hits []string) error {
 	var prev string
 	err := s.pool.QueryRow(ctx, `SELECT state FROM fin_strategy WHERE strategy=$1`, strategy).Scan(&prev)
-	if err != nil && err.Error() != "no rows in result set" {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("strategy state read: %w", err)
 	}
 	disabled := state != "live"
@@ -100,7 +103,7 @@ func (s *Store) GetStrategyState(ctx context.Context, strategy string) (string, 
 	var st string
 	err := s.pool.QueryRow(ctx, `SELECT state FROM fin_strategy WHERE strategy=$1`, strategy).Scan(&st)
 	if err != nil {
-		if err.Error() == "no rows in result set" {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return "", false, nil
 		}
 		return "", false, fmt.Errorf("get strategy state: %w", err)
