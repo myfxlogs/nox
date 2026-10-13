@@ -1,23 +1,20 @@
-// employee_dept.go —— D-220 十一部编制枚举（roster 装配改写归 M2.6）。
+// employee_dept.go —— D-246 v3 §4.4：运行面部门标签收七值（六资金域+平台横切）。
 package pgstore
 
-// 部门标签十一值（fin_employee_registry.dept 列口径）。
+// 部门标签七值（fin_employee_registry.dept 列口径）。平台横切非部门、无 KPI/决策权，
+// 仅作运行面归类桶。旧标签映射由迁移 1006 落地：运营→研究、复盘→账本、
+// IR/运维/合规→平台。
 const (
-	DeptData     = "数据" // 采集/链上并入
+	DeptData     = "数据"
 	DeptResearch = "研究"
 	DeptInvest   = "投资"
-	DeptTrade    = "交易" // 旧「执行」
+	DeptTrade    = "交易"
 	DeptRisk     = "风控"
-	DeptOps      = "运营"
 	DeptLedger   = "账本"
-	DeptReview   = "复盘"
-	DeptIR       = "IR" // 旧「通知」
-	DeptInfra    = "运维"
-	DeptComp     = "合规"
+	DeptPlatform = "平台"
 )
 
-// EmployeeDepts 十一部全集（迁移 1001 后 fin_employee_registry.dept 合法值域）。
+// EmployeeDepts 七标签全集（fin_employee_registry.dept 合法值域）。
 var EmployeeDepts = []string{
-	DeptData, DeptResearch, DeptInvest, DeptTrade, DeptRisk, DeptOps,
-	DeptLedger, DeptReview, DeptIR, DeptInfra, DeptComp,
+	DeptData, DeptResearch, DeptInvest, DeptTrade, DeptRisk, DeptLedger, DeptPlatform,
 }

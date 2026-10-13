@@ -50,15 +50,15 @@ func (s *Store) RegisterEmployee(ctx context.Context, e *Employee) error {
 	return err
 }
 
-// EmployeeBeat 心跳：beat_ts=now+running=true（未登记行自动补册 role='未登记'，
-// 装配漏登员工也能浮出花名册——零静默）。
-func (s *Store) EmployeeBeat(ctx context.Context, name string) error {
-	_, err := s.pool.Exec(ctx, `
-		INSERT INTO fin_employee_registry (name, role, running, beat_ts)
-		VALUES ($1,'未登记',true,now())
-		ON CONFLICT (name) DO UPDATE SET running=true, beat_ts=now(), updated_at=now()`,
+// EmployeeBeat 心跳：D-246 v3 §4.4 改只 UPDATE——未注册名不再隐式 INSERT
+// 未登记行（台账只收装配层 Register 实名 daemon）；found=false 由调用方转告警。
+func (s *Store) EmployeeBeat(ctx context.Context, name string) (bool, error) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE fin_employee_registry
+		SET running=true, beat_ts=now(), updated_at=now()
+		WHERE name=$1`,
 		name)
-	return err
+	return tag.RowsAffected() > 0, err
 }
 
 // EmployeeTask 当前任务摘要更新（无行不建——任务属已注册员工）。

@@ -39,8 +39,9 @@ func TestD190_EmployeeRegistry(t *testing.T) {
 		t.Fatalf("未心跳节拍型应离线: %s", got.EmployeeStatus(time.Now()))
 	}
 	// 心跳→在职。
-	if err := s.EmployeeBeat(ctx, e.Name); err != nil {
-		t.Fatal(err)
+	found, err := s.EmployeeBeat(ctx, e.Name)
+	if err != nil || !found {
+		t.Fatalf("已登记名心跳应命中: found=%v err=%v", found, err)
 	}
 	rows, _ = s.ListEmployees(ctx)
 	for i := range rows {
@@ -64,19 +65,16 @@ func TestD190_EmployeeRegistry(t *testing.T) {
 	if got.Exits != 1 || got.Running || got.EmployeeStatus(time.Now()) != "离线" {
 		t.Fatalf("退出面错: %+v", got)
 	}
-	// 未登记员工 Beat 自动补册 role=未登记（装配漏登零静默）。
-	if err := s.EmployeeBeat(ctx, "d190test:ghost"); err != nil {
-		t.Fatal(err)
+	// 未登记员工 Beat：D-246 v3 §4.4 只 UPDATE——不落行、报 found=false 由调用方转告警。
+	found, err = s.EmployeeBeat(ctx, "d190test:ghost")
+	if err != nil || found {
+		t.Fatalf("未登记名应 found=false: found=%v err=%v", found, err)
 	}
 	rows, _ = s.ListEmployees(ctx)
-	var ghost *Employee
 	for i := range rows {
 		if rows[i].Name == "d190test:ghost" {
-			ghost = &rows[i]
+			t.Fatalf("未登记心跳不应落行: %+v", rows[i])
 		}
-	}
-	if ghost == nil || ghost.Role != "未登记" || ghost.EmployeeStatus(time.Now()) != "在职" {
-		t.Fatalf("幽灵员工补册错: %+v", ghost)
 	}
 	s.pool.Exec(ctx, `DELETE FROM fin_employee_registry WHERE name LIKE 'd190test%'`)
 }

@@ -152,7 +152,7 @@ func (l *Ledger) StartLoop(ctx context.Context) {
 
 	// 首轮延迟（等 adapter 就绪），独立 goroutine 跑（不阻塞 ticker loop）。
 	// D-108①：首轮失败同日有界重试（runInitial）——24h ticker 兜不了当日缺口。
-	safego.Go("ledger:initial", func() {
+	safego.GoPlain("ledger:initial", func() {
 		select {
 		case <-ctx.Done():
 			return

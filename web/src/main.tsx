@@ -19,7 +19,7 @@ const ROUTES: Record<string, { title: string; el: () => React.JSX.Element }> = {
   "/positions": { title: "持仓", el: PositionsPage },
   "/accounts": { title: "账户管理", el: AccountsPage },
   "/risk": { title: "风控健康", el: RiskPage },
-  "/org": { title: "公司架构", el: OrgPage },
+  "/org": { title: "运行面", el: OrgPage },
   "/investor": { title: "投资人", el: InvestorPage },
 };
 

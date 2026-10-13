@@ -160,7 +160,7 @@ func startCollectorsAndScanners(ctx context.Context, st *pgstore.Store, cfg *con
 	startCarryUniverseScanner(ctx, st, cfg.TradeModeTTL, cfg, refreshTopic) // D-336 S1：carry 宇宙扫描器（发现层 4h）
 	startKbReporter(ctx, st, cfg)                                           // D-442 S3：KB 元分析周报器（周 ticker 落档）
 	startRetroReporter(ctx, st, cfg)                                        // D-457 S3：系统复盘日结+周复盘双定时器
-	startOppMatch(ctx, st)                                                  // D-187：模板×账本日频匹配→提案/缺口
+	startOppMatch(ctx, st, cfg)                                             // D-187：模板×账本日频匹配→提案/缺口
 	startExplorer(ctx, st, cfg, probeTopic)                                 // D-513 S5：探矿员壳（env 闸缺省关=零 goroutine）
 	startSleepmon(ctx, st, cfg)                                             // D-534 B4：睡钱触发层（BJ 日检 7d 破地板→alert+inbox）
 }

@@ -183,7 +183,7 @@ func (p *Pipeline) runMakerSequence(ctx context.Context, requestID string, posID
 		}
 		wg.Add(1)
 		idx, l := i, scaled
-		safego.Go("pipeline:maker-taker-leg", func() {
+		safego.GoPlain("pipeline:maker-taker-leg", func() {
 			defer wg.Done()
 			coid2 := generateClientOrderID(requestID, posID, int16(idx), 1)
 			results[idx] = p.executeLeg(ctx, l, coid2)

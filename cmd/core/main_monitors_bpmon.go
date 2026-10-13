@@ -84,7 +84,7 @@ func setupBrokerPositionMonitor(a monitorsSetupArgs, bpTopic *bus.Topic[*dashv1.
 	// D-180 S1：结算画像采集器注入 + boot 存量回溯（扫全历史跳变回填 swap_settled facts）。
 	settlementCollector := dashboard.NewSettlementProfileCollector(st)
 	bpMon.SetSettlementProfileCollector(settlementCollector)
-	safego.Go("main:settlementBackfill", func() {
+	safego.GoPlain("main:settlementBackfill", func() {
 		if err := settlementCollector.BackfillFromHistory(ctx); err != nil {
 			log.Printf("[settlement-profile] backfill: %v", err)
 		}

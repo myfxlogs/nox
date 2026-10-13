@@ -235,8 +235,8 @@ func main() {
 	brokerMgr.RuleBackfill = func(ctx context.Context, venue string) {
 		backfillVenueRules(ctx, st, brokerMgr, venue, ruleEng)
 	}
-	safego.Go("main:brokerMgr.StartAll", func() { brokerMgr.StartAll(ctx) })
-	safego.Go("main:ruleBackfill", func() { runRuleBackfill(ctx, st, brokerMgr) })
+	safego.GoPlain("main:brokerMgr.StartAll", func() { brokerMgr.StartAll(ctx) })
+	safego.GoPlain("main:ruleBackfill", func() { runRuleBackfill(ctx, st, brokerMgr) })
 
 	// 7. 执行管线（§13.1）—— D-072 同源：env 驱动，不再硬编码
 	pipeline := newExecPipeline(execReg, st, qbus, cfg, pv)

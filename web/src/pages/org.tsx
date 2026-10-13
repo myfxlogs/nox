@@ -1,4 +1,4 @@
-// org.tsx —— 公司架构页（D-220）：十一部树×名册×在线状态。status 后端算定，零前端计算。
+// org.tsx —— 运行面页（D-246 v3 §4.4）：daemon 台账×运行状态（六资金域+平台横切）。status 后端算定，零前端计算。
 // case14 topic="employees" 接线后自动刷新；未接线如实显示 beat_ts。
 import { useCallback, useEffect, useState } from "react";
 import { client, errText } from "../api";
@@ -6,7 +6,7 @@ import { onCase } from "../stream";
 import type { Employee } from "../gen/dashboardv1/employee_pb";
 import { tsUnix } from "../components/fmt";
 
-const DEPT_ORDER = ["数据", "研究", "投资", "交易", "风控", "运营", "账本", "复盘", "IR", "运维", "合规"];
+const DEPT_ORDER = ["数据", "研究", "投资", "风控", "交易", "账本", "平台"];
 const STATUS_CLS: Record<string, string> = {
   在职: "st-run",
   滞跳: "st-lag",
@@ -49,14 +49,14 @@ export default function OrgPage() {
   return (
     <div>
       {err && <div className="err">{err}</div>}
-      <div className="muted">员工状态由后端算定（在职/滞跳/离线/离职）；共 {emps.length} 人。</div>
+      <div className="muted">daemon 运行态由后端算定（在职/滞跳/离线/离职）；共 {emps.length} 项。</div>
       {depts.map((d) => (
         <div className="dept" key={d}>
           <h3>
-            {d}部<span className="cnt">{byDept.get(d)!.length}人</span>
+            {d}<span className="cnt">{byDept.get(d)!.length}项</span>
           </h3>
           <table>
-            <thead><tr><th>姓名</th><th>角色</th><th>装配点</th><th>节拍s</th><th>running</th><th>任务</th><th>心跳</th><th>状态</th></tr></thead>
+            <thead><tr><th>daemon</th><th>角色</th><th>装配点</th><th>节拍s</th><th>running</th><th>任务</th><th>心跳</th><th>状态</th></tr></thead>
             <tbody>
               {byDept.get(d)!.map((e) => (
                 <tr key={e.name}>

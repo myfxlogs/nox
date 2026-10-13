@@ -89,7 +89,7 @@ func (a *MT5Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote) {
 			continue
 		}
 		// 重订阅挪开流后异步执行——订阅楔形不再阻塞流建立（逐符号失败只记日志）。
-		safego.Go("mt5:resubscribe", func() { a.resubscribeAll(sctx) })
+		safego.GoPlain("mt5:resubscribe", func() { a.resubscribeAll(sctx) })
 		ok := a.consumeQuoteFrames(ctx, stream, ch)
 		streamCancel()
 		a.zfSetCancel(nil)

@@ -36,7 +36,7 @@ func (m *BrokerManager) StartAll(ctx context.Context) {
 		// D-209：boot 路径用 startWithRetry（指数退避），并行化避免慢/失败连接阻塞其他 venue。
 		// AddBroker 手动路径保持一次性 startAdapter（需即时错误反馈）。
 		a := a
-		safego.Go("broker-retry:"+a.Venue, func() {
+		safego.GoPlain("broker-retry:"+a.Venue, func() {
 			m.startWithRetry(ctx, a.Venue, func() error { return m.startAdapter(ctx, &a) })
 		})
 	}
@@ -58,7 +58,7 @@ func (m *BrokerManager) AddBroker(ctx context.Context, a *pgstore.BrokerAccount)
 	}
 	// D-142 ②：异步触发规则库补录（best-effort，失败只 log）；symbolPlan 自动映射 source='manual'，BackfillRuleMappings 补 regex 命中项 source='rule'。
 	if m.RuleBackfill != nil {
-		safego.Go("broker_manager:rule-backfill", func() {
+		safego.GoPlain("broker_manager:rule-backfill", func() {
 			bctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 			m.RuleBackfill(bctx, a.Venue)
@@ -146,7 +146,7 @@ func (m *BrokerManager) RemoveBroker(ctx context.Context, venue string) error {
 // purgeVenueBulkAsync D-151：账号行已删后后台清 ticks/facts 批量观测行。
 // 账号在窗内被重建 → 放弃（残行随新采集覆盖，强清会擦掉新数据）。
 func (m *BrokerManager) purgeVenueBulkAsync(venue string) {
-	safego.Go("broker-purge:"+venue, func() {
+	safego.GoPlain("broker-purge:"+venue, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		exists, err := m.store.BrokerAccountExists(ctx, venue)
