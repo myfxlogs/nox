@@ -129,7 +129,7 @@ func TestD186_ConditionGap(t *testing.T) {
 	if cnt2 != cnt {
 		t.Fatalf("requested 态再请求应零推, %d→%d", cnt, cnt2)
 	}
-	if err := s.ResolveConditionGap(ctx, id, true); err != nil {
+	if _, err := s.ResolveConditionGap(ctx, id, true, "t"); err != nil {
 		t.Fatal(err)
 	}
 	gaps, _ = s.ListConditionGaps(ctx, "fulfilled")

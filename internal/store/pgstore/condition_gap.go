@@ -6,6 +6,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -126,14 +127,45 @@ func (s *Store) ReopenConditionGap(ctx context.Context, id int64) error {
 		"%s %s %s:%s —— %s", prefix, g.TemplateID, g.Kind, g.Subject, g.RequestText))
 }
 
-// ResolveConditionGap 收口（fulfilled=业主已喂条件 / waived=放弃该机会线）。
-func (s *Store) ResolveConditionGap(ctx context.Context, id int64, fulfilled bool) error {
+// ResolveConditionGap 收口（fulfilled=业主已喂条件 / waived=放弃该机会线；
+// note=回执留痕如「投资人页回执」——D-268 M4.6 补参）。
+// applied=false=行已收口/不存在（幂等——双击/重发不炸）。
+func (s *Store) ResolveConditionGap(ctx context.Context, id int64, fulfilled bool, note string) (bool, error) {
 	st := "waived"
 	if fulfilled {
 		st = "fulfilled"
 	}
-	_, err := s.pool.Exec(ctx, `
-		UPDATE fin_condition_gap SET status=$2, resolved_at=now()
-		WHERE id=$1 AND status IN ('open','requested')`, id, st)
-	return err
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE fin_condition_gap SET status=$2, resolved_at=now(), resolve_note=$3
+		WHERE id=$1 AND status IN ('open','requested')`, id, st, note)
+	return tag.RowsAffected() > 0, err
+}
+
+// RequestBoxRow 投资人页请求箱行（requested 集+请求龄——D-268）。
+type RequestBoxRow struct {
+	ConditionGap
+	RequestedAt *time.Time
+}
+
+// ListRequestedGaps 请求箱集：status='requested' 按请求龄最老在前
+// （§4.3 指标④最老请求 age 同源口径）。
+func (s *Store) ListRequestedGaps(ctx context.Context) ([]RequestBoxRow, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id, template_id, kind, subject, qualifier,
+		request_text, status, created_at, requested_at
+		FROM fin_condition_gap WHERE status='requested'
+		ORDER BY COALESCE(requested_at, created_at) ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RequestBoxRow
+	for rows.Next() {
+		var r RequestBoxRow
+		if err := rows.Scan(&r.ID, &r.TemplateID, &r.Kind, &r.Subject, &r.Qualifier,
+			&r.RequestText, &r.Status, &r.CreatedAt, &r.RequestedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

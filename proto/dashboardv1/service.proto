@@ -6,6 +6,7 @@ option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
 
 import "dashboardv1/app_config.proto";
 import "dashboardv1/dept_report.proto";
+import "dashboardv1/request_box.proto";
 import "dashboardv1/employee.proto";
 import "dashboardv1/proposal.proto";
 import "dashboardv1/dci_panel.proto";
@@ -144,6 +145,9 @@ service DashboardService {
   rpc GetReport(GetReportRequest) returns (GetReportResponse);
   // D-244：部门日报→经理摘要读面（dept='manager' 行=公司日报）
   rpc ListDeptReports(ListDeptReportsRequest) returns (ListDeptReportsResponse);
+  // D-268 M4.6：投资人页请求箱回执
+  rpc ListRequestBox(ListRequestBoxRequest) returns (ListRequestBoxResponse);
+  rpc ResolveRequest(ResolveRequestRequest) returns (ResolveRequestResponse);
   // D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
   rpc GetAiSettings(GetAiSettingsRequest) returns (GetAiSettingsResponse);
   rpc SetAiSettings(SetAiSettingsRequest) returns (SetAiSettingsResponse);

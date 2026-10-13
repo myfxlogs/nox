@@ -17,3 +17,10 @@ export function tsUnix(u: bigint | number): string {
   if (!n) return "—";
   return new Date(n * 1000).toLocaleString("zh-CN", { hour12: false });
 }
+
+// fmtAge 请求龄展示（秒→紧凑中文龄；纯渲染格式化）。
+export function fmtAge(sec: number): string {
+  if (sec < 3600) return `${Math.floor(sec / 60)}m`;
+  if (sec < 86400) return `${(sec / 3600).toFixed(1)}h`;
+  return `${(sec / 86400).toFixed(1)}d`;
+}
