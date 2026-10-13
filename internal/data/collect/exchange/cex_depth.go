@@ -39,15 +39,23 @@ func (d DepthQuote) MidDepthUSD() float64 {
 // FetchCexDepths 白名单基名×三所顶档采样（单 venue×symbol 失败跳过）。
 func FetchCexDepths(ctx context.Context, cfg Config, bases []string) []DepthQuote {
 	var out []DepthQuote
+	for _, venue := range []string{VenueBinance, VenueGate, VenueOKX} {
+		out = append(out, FetchCexDepthsVenue(ctx, cfg, venue, bases)...)
+	}
+	return out
+}
+
+// FetchCexDepthsVenue D-280 方案 A：单所×基名集顶档采样——分所精集口径
+// （每所基名集独立，候选腿真实集合天然自对齐；失败符号跳过同惯例）。
+func FetchCexDepthsVenue(ctx context.Context, cfg Config, venue string, bases []string) []DepthQuote {
+	var out []DepthQuote
 	for _, base := range bases {
-		for _, venue := range []string{VenueBinance, VenueGate, VenueOKX} {
-			dq, err := fetchDepth(ctx, cfg, venue, base)
-			if err != nil {
-				log.Printf("[exchange:depth] %s %s: %v (skip)", venue, base, err)
-				continue
-			}
-			out = append(out, dq)
+		dq, err := fetchDepth(ctx, cfg, venue, base)
+		if err != nil {
+			log.Printf("[exchange:depth] %s %s: %v (skip)", venue, base, err)
+			continue
 		}
+		out = append(out, dq)
 	}
 	return out
 }

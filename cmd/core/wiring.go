@@ -185,7 +185,7 @@ func newAlertCooler() *alertcool.Cooler { return alertcool.New(alertcool.Default
 // buildCexFundingCollectors 组装 CEX funding 轮询 + 结算历史采集器（D-178 提取自主函数保 ≤300 行）。
 // D-301a S2：boot 时拉一次 Binance fundingInfo 缓存 per-symbol 结算周期（PAXG/XAUT 4h→6/天），
 // 实时路径与 history 路径共用该表；失败 best-effort 回退 3（8h，D-079 禁静默）。
-func buildCexFundingCollectors(st *pgstore.Store, cexCfg exchange.Config, alertCooler *alertcool.Cooler, depthExtraBases func() []string, intervals *exchange.FundingIntervalCache, cfg *config.Config) []collect.Named {
+func buildCexFundingCollectors(st *pgstore.Store, cexCfg exchange.Config, alertCooler *alertcool.Cooler, depthExtraBases func(venue string) []string, intervals *exchange.FundingIntervalCache, cfg *config.Config) []collect.Named {
 	hr := fundingHistoryResolver(st)
 	binanceFundHist := exchange.NewBinanceFundingHistory(cexCfg, hr)
 	binanceFundHist.SetFundingIntervals(intervals)
@@ -197,7 +197,7 @@ func buildCexFundingCollectors(st *pgstore.Store, cexCfg exchange.Config, alertC
 		{Name: "gate_contract_meta", Interval: 24 * time.Hour, Collector: exchange.NewGateContractMeta(cexCfg)},
 	}
 	// D-420 S2：盘口顶档深度采样（白名单符号 5min 节奏，容量与滑点研究数据前提）；
-	// D-057④/R1：extraBases=CFD 域 universe canonical 经 asset_equiv 解析基名（发现层跟随）。
+	// D-280 方案 A：extraBases=分所 funding 见证符号基名（候选腿真实集合零空打）。
 	cs = append(cs, buildDepthCollector(cexCfg, st, depthExtraBases))
 	// D-508 S3：facts kind 级 TTL + cex_earn_apr 30d 日轮 retention。
 	// D-152 fixup：retention 是批量维护任务非采集源——首轮回填六表存量（~150 万行）

@@ -16,18 +16,20 @@ import (
 )
 
 // cexDepthCollector 深度采集器（fetch→落库→保留期清理）。
-// bases=DepthWhitelistBases ∪ extraBases()——D-057④/R1：动态基名=CFD 域
-// universe 行经 asset_equiv 解析的 CEX canonical（发现层跟随，换轮自动跟采）。
+// bases=DepthWhitelistBases ∪ extraBases(venue)——D-280 方案 A 分所精集：
+// 动态基名=各所 funding 事实见证符号经 carryDepthBase 归一（候选腿真实集合，
+// 零空打）；静态白名单对所全量保采（研究面锚定覆盖不退化）。
 type cexDepthCollector struct {
 	cfg        exchange.Config
 	st         *pgstore.Store
-	extraBases func() []string // nil=仅静态白名单
+	extraBases func(venue string) []string // nil=仅静态白名单
+	venues     []string                    // nil=默认三所
 }
 
 func (c *cexDepthCollector) Kind() string { return "cex_depth" }
 
-// bases 每轮快照：静态白名单 ∪ extraBases()（去重保序；extraBases nil=仅静态）。
-func (c *cexDepthCollector) bases() []string {
+// bases 每轮快照：静态白名单 ∪ extraBases(venue)（去重保序）。
+func (c *cexDepthCollector) bases(venue string) []string {
 	merged := append([]string{}, exchange.DepthWhitelistBases...)
 	if c.extraBases == nil {
 		return merged
@@ -36,7 +38,7 @@ func (c *cexDepthCollector) bases() []string {
 	for _, s := range merged {
 		seen[s] = true
 	}
-	for _, b := range c.extraBases() {
+	for _, b := range c.extraBases(venue) {
 		if !seen[b] {
 			seen[b] = true
 			merged = append(merged, b)
@@ -46,7 +48,14 @@ func (c *cexDepthCollector) bases() []string {
 }
 
 func (c *cexDepthCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
-	quotes := exchange.FetchCexDepths(ctx, c.cfg, c.bases())
+	venues := c.venues
+	if venues == nil {
+		venues = []string{exchange.VenueBinance, exchange.VenueGate, exchange.VenueOKX}
+	}
+	var quotes []exchange.DepthQuote
+	for _, venue := range venues {
+		quotes = append(quotes, exchange.FetchCexDepthsVenue(ctx, c.cfg, venue, c.bases(venue))...)
+	}
 	if len(quotes) == 0 {
 		return nil, nil
 	}
@@ -72,7 +81,7 @@ func (c *cexDepthCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 
 // buildDepthCollector D-420 S2 装配（5min 节奏与 funding 同槽；静态白名单=SSOT
 // SPX500/XPT/XPD/XAU/CLU + extraBases 动态补采位，D-057 universe canonical 注入点）。
-func buildDepthCollector(cfg exchange.Config, st *pgstore.Store, extraBases func() []string) collect.Named {
+func buildDepthCollector(cfg exchange.Config, st *pgstore.Store, extraBases func(venue string) []string) collect.Named {
 	return collect.Named{
 		Name:     "cex_depth",
 		Interval: 5 * time.Minute,
@@ -84,33 +93,36 @@ func buildDepthCollector(cfg exchange.Config, st *pgstore.Store, extraBases func
 	}
 }
 
-// carryUniverseDepthLister universe 深度基名读口（*pgstore.Store 实现；
-// seam 供测试替身——与 d053Store 同先例）。
-type carryUniverseDepthLister interface {
-	ListCfdUniverseDepthBases(ctx context.Context) ([]string, error)
+// fundingWitnessedDepthLister funding 见证符号读口（*pgstore.Store 实现；
+// seam 供测试替身——与 carryUniverseDepthLister 同先例）。
+type fundingWitnessedDepthLister interface {
+	ListFundingWitnessedSymbols(ctx context.Context, venue string, window time.Duration) ([]string, error)
 }
 
-// universeDepthBases D-057④/R1：深度采集动态基名源=fin_carry_universe CFD 域
-// 行 canonical 经 asset_equiv perp 腿解析（SILVER→XAGUSDT 等；读口内收口）→
-// carryDepthBase 剥尾去重保序。读失败 → 仅静态白名单 + log（深度采集是证据面
-// 非判定面，退化不阻断本轮；异常不静默）。
-func universeDepthBases(ctx context.Context, st carryUniverseDepthLister) func() []string {
-	return func() []string {
-		canonicals, err := st.ListCfdUniverseDepthBases(ctx)
+// fundingWitnessWindow funding 见证窗（6h——funding WS 流持续产帧，窗容忍断流抖
+// 动；漏窗=该符号本轮不采→候选 depth_missing fail-closed 同旧语义不放大风险）。
+const fundingWitnessWindow = 6 * time.Hour
+
+// universeDepthBases D-280 方案 A：分所精集——动态基名=各所近 6h funding 见证
+// 符号（symbol→carryDepthBase 基名归一去重保序）。读失败 → 仅静态白名单 + log
+// （深度采集是证据面非判定面，退化不阻断本轮；异常不静默）。
+func universeDepthBases(ctx context.Context, st fundingWitnessedDepthLister) func(venue string) []string {
+	return func(venue string) []string {
+		syms, err := st.ListFundingWitnessedSymbols(ctx, venue, fundingWitnessWindow)
 		if err != nil {
-			log.Printf("[cex-depth] universe bases read: %v（本轮仅静态白名单）", err)
+			log.Printf("[cex-depth] funding witnessed bases %s: %v（本轮仅静态白名单）", venue, err)
 			return nil
 		}
-		out := make([]string, 0, len(canonicals))
+		out := make([]string, 0, len(syms))
 		seen := map[string]bool{}
-		for _, c := range canonicals {
-			b := carryDepthBase(c)
+		for _, sym := range syms {
+			b := carryDepthBase(sym)
 			if b != "" && !seen[b] {
 				seen[b] = true
 				out = append(out, b)
 			}
 		}
-		log.Printf("[cex-depth] universe bases: %d", len(out)) // R1：基名数上限观测（D-058 深度闸数据面）
+		log.Printf("[cex-depth] %s witnessed bases: %d", venue, len(out)) // 基名数上限观测（D-058 同口径）
 		return out
 	}
 }

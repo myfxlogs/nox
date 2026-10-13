@@ -94,39 +94,6 @@ func (s *Store) ReplaceCarryUniverse(ctx context.Context, rows []CarryUniverseRo
 	return nil
 }
 
-// ListCfdUniverseDepthBases D-057 R1：CFD 域 universe 深度采集基名源——
-// fin_carry_universe mt_venue 非空行（mt×cex 组合；CEX×CEX 行不入）canonical 经
-// asset_equiv perp 腿行解析为 CEX canonical（SILVER→XAGUSDT、BRENT→BZUSDT、
-// WTI→CLUSDT；GOLD 类多 equiv 行各出 PAXGUSDT/XAUTUSDT 等），equiv 无行用
-// canonical 原值。DISTINCT+ORDER BY 保序确定性。
-func (s *Store) ListCfdUniverseDepthBases(ctx context.Context) ([]string, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT COALESCE(e.canonical, u.canonical)
-		FROM fin_carry_universe u
-		LEFT JOIN asset_equiv e
-			ON e.asset_class = u.canonical AND e.venue_type = 'perp'
-			AND e.venue = u.cex_venue AND e.enabled
-		-- mt_venue 列 NOT NULL：CEX×CEX 行='(spot)'、全禁行='(all-disabled)' 哨兵，
-		-- 非 '( ' 前缀=真 MT 账号键（3001157 等）。IS NOT NULL 守票面语义，
-		-- NOT LIKE '(%' 落 R1 实意图=仅 mt×cex 行（哨兵行 canonical 为类名/meme，
-		-- 无 equiv 行会直透基名，不排则 CEX×CEX 量照旧灌入）。
-		WHERE u.mt_venue IS NOT NULL AND u.mt_venue NOT LIKE '(%'
-		ORDER BY 1`)
-	if err != nil {
-		return nil, fmt.Errorf("list cfd universe depth bases: %w", err)
-	}
-	defer rows.Close()
-	out := []string{}
-	for rows.Next() {
-		var c string
-		if err := rows.Scan(&c); err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
-}
-
 // ListCfdCarryNetNow D-060①：纸面卡 CFD 行「当前」净 carry 数据源——
 // fin_carry_universe 现快照按 mt_venue|cex_venue|canonical|structure 键投影
 // net_annual_pct（已含 swap 修正；suspect 行不剔——展示面忠实透库值）。

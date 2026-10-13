@@ -360,3 +360,11 @@ Generate 加⑧段「昨日公司日报原文」（`ListDeptReports(date-1)` 复
 **修点不动项**：白名单 5 基名保留并集；节奏/保留期不动；`depthBase` 归一对双端键义兼容（funding 符号 `XAUUSDT`→基 `XAU` 与 depth symbol 形态同一归一径）。
 
 **验收残留**：获裁后实施 A（或 B/C）→ SG 实拍 `skips depth_missing` 归零。
+
+## cex-depth 采集宇宙对齐 方案 A 实施（D-280 裁）
+
+**改**：`ListFundingWitnessedSymbols(venue,6h)` 新读件（facts funding 见证符号，分所）；`universeDepthBases` 改分所签名 `func(venue)[]string`——动态基名=funding 见证 symbol 经 carryDepthBase 归一（静态白名单 5 对所全量保采）；`FetchCexDepthsVenue` 单所采样件新增（FetchCexDepths 旧签名保留委托）；`ListCfdUniverseDepthBases` 旧 CFD 域源零消费面撤（含测试）。节奏 5min/保留 90d 不动。
+
+**验证**：TestListFundingWitnessedSymbols（分所+窗+去重保序+窗外不取）+ D057 测试改分所锚（binance 集不串 okx）全绿；build/vet/gofmt 净；pgstore/exchange/cmd/core 三包测试绿；race 锚绿；check-lines 零警告；import 方向 221/222；env-reads 过。
+
+**部署验收**：SG 拍 `skips` 中 `depth_missing` 趋零（残余=候选腿在所无 funding 证据/venue 未上市——如实缺口）；`[cex-depth] <venue> witnessed bases` 行出三所分计数。
