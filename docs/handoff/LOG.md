@@ -443,3 +443,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **锚**：TestCollapseBlankCcyPool 四案（''陈旧并入/''较新采值/纯''保留/多命名币earn组不动）。
 - **测试库残留自纠**：前一次 600s 超时 panic 杀测试进程→wait_condition_exposed_test.go 的 cleanup 未跑→gate:perp cap 残留 100000 致 D543 连败两轮（非本票病灶）；手工 UPDATE 归位后全绿。
 - **验收残留**：SG SQL 实拍 3001157 单池单行→重算占比对拍 gate 所见值；earn 提案若再触闸应如实拒 ~48%>35%。
+## 2026-10-13 营运日结（E0 新纪元首日）
+- **背景**：E0 归档后首个完整营运日。财务面+经验库面+执行面三件主建，业主令驱动。
+- **交付**：①资金地图页（D-285 零换算口径，G3 修 DCI 池外锁额双减）；②earn 执行接线 `cd0d9b27`（闸序/幂等/坑表全链，cash_mgmt+earn_apr_lending 升 live 成 D-288）；③经验库自动归纳管线（noxkb induct + cron 22:30 UTC，77KB 存量消化，observed 草稿闸）；④财务可见性两件套（binance:earn 子账户 REST 采集 + DCI 面板页）；⑤拒单消费闸（kb: 附行回流告警面 + analyst kb_search 工具，零 Devin 依赖）；⑥AI 设置前端页；⑦敞口闸分母口径修（'' 币残行双计稀释 13pt 病灶）；⑧earn 成交回执 warn alert 补（feishu 滤噪闸语义）。
+- **生产实证**：E0 归档闭合（207MB dump 双副本 sha256 一致）；autoexec 真金三单——DCI#10 BTC PUT @83250 542 filled + earn #13/#14 两笔活期申购 filled（D-286 首承接）；earn 闸如实拒 45.6%>35%（修后归真）；binance:earn 10 币种快照行落地。
+- **病灶修**：迁移 1013 enc 凭据列漏拷（-2014）、induct schema 闸 scope:string 整批拦（宽容反序列化）、earn 成交零推送、敞口闸 '' 币行双计。
+- **AI 基建**：ai_settings 切 SenseNova flash-lite（induct 调用 105s→1.6s）。
+- **遗留**：fin_condition_gap #11 待业主裁；binance:earn USDT 行等 refresh 拍；事件源 stale 语义挂账；listenKey→listenToken 迁移跟踪；github 推送积压在途（代理断）。
