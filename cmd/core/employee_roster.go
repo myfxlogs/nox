@@ -91,6 +91,7 @@ var employeeRoster = []pgstore.Employee{
 	{Name: "wire_trx:dailyRollup", Role: "TRX 日汇总", Dept: "账本", Assembly: "wire_trx.go"},
 	{Name: "main:sysretroDaily", Role: "日复盘", Dept: "账本", Assembly: "main_monitors.go"},
 	{Name: "main:reviewRun", Role: "复盘触发", Dept: "账本", Assembly: "main.go"},
+	{Name: "main:posreview", Role: "复盘员判决书", Dept: "账本", Assembly: "wire_posreview.go"},
 	{Name: "main:sysretroWeekly", Role: "周复盘", Dept: "账本", Assembly: "main_monitors.go"},
 	// 平台域（横切）
 	{Name: "main:sched", Role: "调度", Dept: "平台", Assembly: "main.go"},

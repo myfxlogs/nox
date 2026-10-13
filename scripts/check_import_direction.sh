@@ -147,6 +147,8 @@ internal/research/scan -> internal/store/pgstore
 internal/review -> internal/store/pgstore
 internal/review/deptreport -> internal/platform/analyst
 internal/review/deptreport -> internal/store/pgstore
+internal/review/posreview -> internal/platform/analyst
+internal/review/posreview -> internal/store/pgstore
 internal/review/kbreport -> internal/platform/analyst
 internal/review/kbreport -> internal/store/pgstore
 internal/review/sysretro -> internal/ir/inboxfmt
