@@ -104,3 +104,5 @@
 
 **裁定**：① STATE.md 轮转——完票行 >7 天沉 `docs/handoff/state-archive/`（按纪元分段），工作面只留待领/在途/近 7 日完；② decisions.md 纪元分卷——条目 >200 行或纪元归档时切 `decisions/e<N>.md`，索引每行带卷指针；③ decisions 单行体型闸——编号+日期+结论+一句理由，长取证一律 LOG.md（原规矩回收）。
 **理由**：账本面膨胀=token 成本+漂移面；分卷/轮转保锚不动内容，索引是唯一查询面。
+
+D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验收后由 committee 晋级（decided_by=committee:D-286/D-288）；理由=金钱不眠义务下承接位必须可执行，闸序已实证 fail-closed（首拍即 47.8%>35% 如实拒单）。
