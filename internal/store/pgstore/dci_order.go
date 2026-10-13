@@ -231,3 +231,25 @@ func (s *Store) ListDCIOrders(ctx context.Context, limit int) ([]DCIOrder, error
 	}
 	return out, rows.Err()
 }
+
+// DCIOrderIntentCount D-255③：意图稳定键尝试序——同「腿+产品+交割日」前缀的
+// fin_dci_order 行数+1=新尝试号（proposal_id 无关——wheel 径无绑定也推进，
+// 败单行不再 ON CONFLICT 假「已受理」）。
+func (s *Store) DCIOrderIntentCount(ctx context.Context, reqPrefix string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM fin_dci_order WHERE request_id LIKE $1`,
+		reqPrefix+"|%").Scan(&n)
+	return n, err
+}
+
+// DCIOrderOpenIntent D-255③：同意图（前缀）在途/已成行存在性——
+// pending|filled|settled 挡重发（幂等「已受理」），failed|rejected 不挡新尝试。
+func (s *Store) DCIOrderOpenIntent(ctx context.Context, reqPrefix string) (bool, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM fin_dci_order
+		WHERE request_id LIKE $1 AND status IN ('pending','filled','settled')`,
+		reqPrefix+"|%").Scan(&n)
+	return n > 0, err
+}

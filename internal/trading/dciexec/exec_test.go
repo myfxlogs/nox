@@ -52,6 +52,7 @@ type fakeStore struct {
 	closeN        *int64
 	cfgID         int64
 	incomeEvs     []pgstore.IncomeEvent
+	pits          []pgstore.VenueReject // D-255：坑表种子/学习捕获
 }
 
 // dciListJSON R14 重取产品面测试具——全候选品 canPurchase+orderId 齐帧。
@@ -293,6 +294,44 @@ func (f *fakeStore) RecentDCIOrderByProposal(_ context.Context, propID int64, _ 
 		}
 	}
 	return best, nil
+}
+func (f *fakeStore) InsertAlertDedup(_ context.Context, level, msg string, _ time.Duration) error {
+	f.alerts = append(f.alerts, level+":"+msg)
+	return nil
+}
+func (f *fakeStore) DCIOrderIntentCount(_ context.Context, prefix string) (int, error) {
+	n := 0
+	for k := range f.orders {
+		if strings.HasPrefix(k, prefix+"|") {
+			n++
+		}
+	}
+	return n, nil
+}
+func (f *fakeStore) DCIOrderOpenIntent(_ context.Context, prefix string) (bool, error) {
+	for _, o := range f.orders {
+		if strings.HasPrefix(o.RequestID, prefix+"|") &&
+			(o.Status == "" || o.Status == "pending" || o.Status == "filled" || o.Status == "settled") {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+func (f *fakeStore) ListVenueRejects(context.Context, string, string) ([]pgstore.VenueReject, error) {
+	return f.pits, nil
+}
+func (f *fakeStore) LearnVenueReject(_ context.Context, venue, op, sig string, _ time.Duration) error {
+	for i := range f.pits {
+		if f.pits[i].ErrorSignature == sig {
+			f.pits[i].Hits++
+			return nil
+		}
+	}
+	exp := time.Now().Add(24 * time.Hour)
+	f.pits = append(f.pits, pgstore.VenueReject{
+		Venue: venue, Op: op, ErrorSignature: sig, Action: "suppress", Hits: 1, ExpiresAt: &exp,
+	})
+	return nil
 }
 func (f *fakeStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
 	f.alerts = append(f.alerts, level+": "+msg)

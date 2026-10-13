@@ -4,9 +4,12 @@ package dciexec
 import (
 	"context"
 	"fmt"
-	"nox/internal/risk/gate"
+	"log"
 	"strings"
+	"time"
 
+	"nox/internal/platform/errclass"
+	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 )
 
@@ -92,15 +95,26 @@ func (e *Executor) tryLeg(ctx context.Context, l gate.DCILeg, share float64, ten
 			l.Name, deposit, qty, decOf(*q.MinAmount), amtTxt(q.MinAmount), amtTxt(q.MaxAmount))
 	}
 	now := e.Now()
-	// 返修②：reqID 尾加尝试序号 n（同 proposal_id 该腿订单行数+1）——
-	// 败单行不再 ON CONFLICT 吞续执、二次 go 同市况不再假「已受理」。
+	// D-255③：reqID 意图稳定键（腿+产品+交割日+尝试序）——金额浮点尾不入键
+	// （原 %.8f deposit 入键：金额微差即换键破幂等，同意图反复打 venue）；
+	// 尝试序=同意图前缀行数+1（proposal_id 无关——wheel 径 propID=nil 也推进，
+	// 败单行不再撞键假「已受理」）。
+	intent := fmt.Sprintf("dci|%s|%s|%s", l.Name, q.ProductRef, gate.DelivDay(q))
+	// 同意图在途/已成（pending|filled|settled）→幂等挡重发「已受理」；
+	// failed|rejected 不挡——续执天然走新尝试号。
+	if open, oerr := e.Store.DCIOrderOpenIntent(ctx, intent); oerr == nil && open {
+		return fmt.Sprintf("%s腿已受理（同意图在途——幂等防重）", l.Name), nil
+	}
 	attempt := 1
+	if c, cerr := e.Store.DCIOrderIntentCount(ctx, intent); cerr == nil {
+		attempt = c + 1
+	}
 	if propID != nil {
-		if c, cerr := e.Store.DCIOrderLegCount(ctx, *propID, l.OptType, l.InvestCcy); cerr == nil {
-			attempt = c + 1
+		if c, cerr := e.Store.DCIOrderLegCount(ctx, *propID, l.OptType, l.InvestCcy); cerr == nil && c+1 > attempt {
+			attempt = c + 1 // 提案绑腿序兜底（历史行 reqID 无前缀时期）
 		}
 	}
-	reqID := fmt.Sprintf("dci|%s|%s|%s|%.8f|%d", l.Name, q.ProductRef, gate.DelivDay(q), deposit, attempt)
+	reqID := intent + fmt.Sprintf("|%d", attempt)
 	oid, created, err := e.Store.CreateDCIOrder(ctx, &pgstore.DCIOrder{
 		RequestID: reqID, Venue: "binance", TemplateID: l.Tmpl,
 		ProductRef: q.ProductRef, Underlying: "BTC", OptType: l.OptType, Strike: q.Strike,
@@ -118,6 +132,33 @@ func (e *Executor) tryLeg(ctx context.Context, l gate.DCILeg, share float64, ten
 		return "", e.gap(ctx, l, "runtime", "dual_quote",
 			"系统侧病灶：%s腿产品已下架（%s 重取：%v）", l.Name, q.ProductRef, rerr)
 	}
+	// D-255①②：申购前查坑——active suppress/critical→零 venue 打面抑该腿
+	// （rejected 行留痕+一次性 critical dedup 告警，不逐轮刷）；fix→参数映射
+	// 自修复（如 deposit_decimals）再打面。坑表读败=fail-closed 拒单。
+	pits, perr := e.Store.ListVenueRejects(ctx, "binance", "dci_subscribe")
+	if perr != nil {
+		e.finish(ctx, oid, "rejected", "坑表读败")
+		return "", e.gap(ctx, l, "runtime", "dual_order",
+			"系统侧病灶：%s腿申购前坑表读败（fail-closed 不打 venue）：%v", l.Name, perr)
+	}
+	for i := range pits {
+		p := &pits[i]
+		if !p.Active(now) {
+			continue
+		}
+		if p.Action == "fix" {
+			deposit = applyRejectFix(deposit, p.ActionParams)
+			continue
+		}
+		// suppress/critical：零 venue 打面，行收口 rejected+一次性 critical。
+		e.finish(ctx, oid, "rejected", "坑表抑单:"+p.ErrorSignature)
+		if aerr := e.Store.InsertAlertDedup(ctx, "critical", fmt.Sprintf(
+			"venue 坑表抑单 binance:dci_subscribe:%s（%s腿 hits=%d expires=%s）——同败因不重复打面",
+			p.ErrorSignature, l.Name, p.Hits, pitExpiry(p)), 24*time.Hour); aerr != nil {
+			log.Printf("[dciexec] 坑表抑单 alert: %v", aerr)
+		}
+		return "", fmt.Errorf("%s腿坑表抑单（%s 败因窗内——%s）", l.Name, p.ErrorSignature, pitExpiry(p))
+	}
 	body, err := e.post(ctx, q.ProductRef, orderRef, deposit, now)
 	if isRefreshErr(err) { // 「refresh」类拒因→一次再刷新重提（第二次如实 gap）。
 		if orderRef, rerr = e.refreshOrderRef(ctx, l, q.ProductRef); rerr == nil {
@@ -126,6 +167,11 @@ func (e *Executor) tryLeg(ctx context.Context, l gate.DCILeg, share float64, ten
 	}
 	if err != nil {
 		e.finish(ctx, oid, "failed", err.Error())
+		// D-255①：败因自动落坑——二次触发零 venue 打面（suppress 窗 24h）。
+		if lerr := e.Store.LearnVenueReject(ctx, "binance", "dci_subscribe",
+			errclass.VenueRejectSignature(err.Error()), 24*time.Hour); lerr != nil {
+			log.Printf("[dciexec] 坑表落行败: %v", lerr)
+		}
 		if venueErrKind(err) == "permission" {
 			return "", e.gap(ctx, l, "permission", "dual_order",
 				"请开通 binance 赚币/双币申购权限（%s腿下单失败：%v）", l.Name, err)

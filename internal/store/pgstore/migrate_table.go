@@ -204,4 +204,5 @@ var migrationFiles = []struct {
 	{1008, migrations.OppEvalSQL, false},                      // D-258 M4.1：fin_opp_eval 评估卡
 	{1009, migrations.StrategyLifecycleSQL, false},            // D-260 M4.2：fin_strategy 状态机+判据表+提案 SLA
 	{1010, migrations.NavBudgetSQL, false},                    // D-264 M4.4：fin_nav_daily+fin_strategy_budget
+	{1011, migrations.VenueRejectSQL, false},                  // D-255：fin_venue_reject 败因坑表
 }

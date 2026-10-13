@@ -36,6 +36,8 @@ type Store interface {
 	ListFailedProposalOrders(ctx context.Context) ([]pgstore.FailedProposalOrder, error)
 	OutstandingDCIProduct(ctx context.Context, productRef, optType string) (bool, error)
 	DCIOrderLegCount(ctx context.Context, proposalID int64, optType, investCcy string) (int, error)
+	DCIOrderIntentCount(ctx context.Context, reqPrefix string) (int, error)
+	DCIOrderOpenIntent(ctx context.Context, reqPrefix string) (bool, error)
 	FinishDCIOrder(ctx context.Context, id int64, status, response string) error
 	// 交割观察面。
 	ListFilledDCIOrders(ctx context.Context) ([]pgstore.FilledDCIOrder, error)
@@ -50,6 +52,10 @@ type Store interface {
 	OpenConditionGap(ctx context.Context, g *pgstore.ConditionGap) (int64, error)
 	RequestConditionGap(ctx context.Context, id int64) error
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
+	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
+	// D-255：venue 败因坑表读/学面（tryLeg 申购前查坑、败行自动落坑）。
+	ListVenueRejects(ctx context.Context, venue, op string) ([]pgstore.VenueReject, error)
+	LearnVenueReject(ctx context.Context, venue, op, sig string, window time.Duration) error
 	// 提案绑定面。
 	ListProposals(ctx context.Context, status string, limit int) ([]pgstore.Proposal, error)
 	LatestPendingProposal(ctx context.Context, templates []string) (*pgstore.Proposal, error)
