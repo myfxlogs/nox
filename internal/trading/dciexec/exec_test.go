@@ -52,7 +52,8 @@ type fakeStore struct {
 	closeN        *int64
 	cfgID         int64
 	incomeEvs     []pgstore.IncomeEvent
-	pits          []pgstore.VenueReject // D-255：坑表种子/学习捕获
+	pits          []pgstore.VenueReject    // D-255：坑表种子/学习捕获
+	poolRows      []pgstore.CapitalPoolRow // D-286：earn 敞口闸池快照种子
 }
 
 // dciListJSON R14 重取产品面测试具——全候选品 canPurchase+orderId 齐帧。
@@ -228,6 +229,10 @@ func (f *fakeStore) GetStrategyState(_ context.Context, key string) (string, boo
 	}
 	st, ok := f.strategyStates[key]
 	return st, ok, nil
+}
+
+func (f *fakeStore) CapitalPoolSnapshots(context.Context) ([]pgstore.CapitalPoolRow, error) {
+	return f.poolRows, nil
 }
 
 func (f *fakeStore) OpenConditionGap(_ context.Context, g *pgstore.ConditionGap) (int64, error) {

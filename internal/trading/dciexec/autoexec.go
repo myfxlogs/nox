@@ -29,7 +29,7 @@ func (e *Executor) AutoExecLive(ctx context.Context) (int, error) {
 	}
 	fired := 0
 	for _, p := range props {
-		if _, ok := gate.ExecTemplates[p.TemplateID]; !ok {
+		if !gate.IsExecTemplate(p.TemplateID) {
 			continue // 非可执行族模板跳过
 		}
 		state, ok, err := e.Store.GetStrategyState(ctx, p.TemplateID)

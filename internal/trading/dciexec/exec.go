@@ -66,6 +66,8 @@ type Store interface {
 	UpdateOppEvalActual(ctx context.Context, proposalID int64, apr float64) error
 	// D-260 M4.2：生命周期态读面——自动执行闸 state=='live' fail-closed。
 	GetStrategyState(ctx context.Context, strategy string) (string, bool, error)
+	// D-286：earn 敞口闸读面——池快照（CEX 侧权益占比算）。
+	CapitalPoolSnapshots(ctx context.Context) ([]pgstore.CapitalPoolRow, error)
 }
 
 // Executor binance DCI 申购执行器（凭据由装配侧从 exchange_configs 注入）。
@@ -82,6 +84,8 @@ type Executor struct {
 	BalanceFn          func(ctx context.Context, asset string) (float64, error) // 现货 free+locked
 	EarnFn             func(ctx context.Context, asset string) ([]EarnPosition, error)
 	RedeemFn           func(ctx context.Context, productID string, amount float64) error
+	EarnProductsFn     func(ctx context.Context, ccy string) ([]EarnProduct, error)        // earn 活期产品面（D-286；nil=实 GET）
+	EarnSubscribeFn    func(ctx context.Context, productID string, amount float64) error   // earn 申购写径（nil=实 POST）
 	StreamFn           func() bool                                                         // 流存活闸（nil=dephealth 实读）
 	HoldingFn          func(ctx context.Context, productRef, optType string) (bool, error) // venue 持仓读（D-198 返修①；nil=实 GET）
 	PositionsFn        func(ctx context.Context) ([]DCIPosition, error)                    // D-207 venue 持仓全列表（settle 观察；nil=实 GET）
@@ -92,6 +96,9 @@ type Executor struct {
 func (e *Executor) Go(ctx context.Context) (string, error) {
 	var tmpls []string
 	for t := range gate.ExecTemplates {
+		tmpls = append(tmpls, t)
+	}
+	for t := range gate.EarnTemplates {
 		tmpls = append(tmpls, t)
 	}
 	p, err := e.Store.LatestPendingProposal(ctx, tmpls)
@@ -143,13 +150,17 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	}); reason != "" {
 		return "", errors.New(reason)
 	}
-	legs := gate.ExecTemplates[p.TemplateID]
 	// R11② 执行租约：同 proposal_id 120s 内有单即拒（双击/重发防双成交）。
 	if oid, err := e.Store.RecentDCIOrderByProposal(ctx, id, 120*time.Second); err != nil {
 		return "", err
 	} else if oid > 0 {
 		return "", fmt.Errorf("提案#%d 刚执行过（订单#%d）拒单", id, oid)
 	}
+	// D-286：earn 族提案→申购执行径（venue 产品非腿集，闸序已过 CheckDCI+租约）。
+	if gate.EarnTemplates[p.TemplateID] {
+		return e.goEarn(ctx, p)
+	}
+	legs := gate.ExecTemplates[p.TemplateID]
 	if e.BnKey == "" {
 		return "", e.gap(ctx, gate.CallLeg, "credential", "binance:spot",
 			"请配置 binance 凭据（DCI 申购写径）")

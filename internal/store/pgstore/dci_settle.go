@@ -31,7 +31,7 @@ func (s *Store) ListFilledDCIOrders(ctx context.Context) ([]FilledDCIOrder, erro
 		SELECT id, request_id, product_ref, opt_type, invest_ccy,
 		       COALESCE(underlying,''), COALESCE(qty,0), tenor_days, proposal_id,
 		       COALESCE(response,'')
-		FROM fin_dci_order WHERE status='filled' ORDER BY id`)
+		FROM fin_dci_order WHERE status='filled' AND opt_type<>'EARN' ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("list filled dci orders: %w", err)
 	}

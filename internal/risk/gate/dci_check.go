@@ -30,7 +30,7 @@ func CheckDCI(p DCIProposalView) string {
 	if p.Verdict != "viable" {
 		return fmt.Sprintf("提案#%d 评估卡=%s（拒单——非可执行候选）", p.ID, p.Verdict)
 	}
-	if _, ok := ExecTemplates[p.TemplateID]; !ok {
+	if !IsExecTemplate(p.TemplateID) {
 		return fmt.Sprintf("提案#%d 模板 %s 未接执行轨（提案可批执行面未接线）", p.ID, p.TemplateID)
 	}
 	if p.Dormant {

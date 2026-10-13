@@ -86,6 +86,18 @@ func TenorCapOf(cons []pgstore.CapabilityConstraint) (share *float64, cap int) {
 	return share, cap
 }
 
+// CexExposurePctOf CEX 侧权益敞口上限（AGENTS §1 硬线誊录行）——
+// subject=cex_exposure_pct qualifier=max 的 value_num；行缺→nil（调用方
+// fail-closed 落 constraint 缺口，同 custody_share 例）。
+func CexExposurePctOf(cons []pgstore.CapabilityConstraint) *float64 {
+	for _, c := range cons {
+		if c.Subject == "cex_exposure_pct" && c.Qualifier == "max" {
+			return c.ValueNum
+		}
+	}
+	return nil
+}
+
 func (l DCILeg) BoundText(bound float64) string {
 	if l.OptType == "CALL" {
 		return fmt.Sprintf("≥%.0f", bound)
