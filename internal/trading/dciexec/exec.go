@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"nox/internal/kbsearch"
 	"nox/internal/risk/gate"
 	"strings"
 	"time"
@@ -90,6 +91,16 @@ type Executor struct {
 	HoldingFn          func(ctx context.Context, productRef, optType string) (bool, error) // venue 持仓读（D-198 返修①；nil=实 GET）
 	PositionsFn        func(ctx context.Context) ([]DCIPosition, error)                    // D-207 venue 持仓全列表（settle 观察；nil=实 GET）
 	SettledPositionsFn func(ctx context.Context) ([]DCIPosition, error)                    // M3-④ venue SETTLED 终态行全列表（settle 死端切源；nil=实 GET）
+	KBDir              string                                                              // 拒单消费闸：经验库条目目录（空=禁附行；读败 fail-open）
+}
+
+// kbSuffix 拒单消费闸：败因签名对拍经验库条目 → ` kb:<id> <summary>` 附行；
+// 零命中/读败 → ""（fail-open，绝不阻塞告警主径；热径纯关键词对拍零 LLM）。
+func (e *Executor) kbSuffix(sig string) string {
+	if e.KBDir == "" || sig == "" {
+		return ""
+	}
+	return kbsearch.Suffix(e.KBDir, sig)
 }
 
 // Go 裸口令主径：最新 pending 可执行提案→GoProposal 绑 id 执行（D-189③）。

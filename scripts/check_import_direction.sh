@@ -112,6 +112,7 @@ internal/ledger/swapledger -> internal/data/keydomain
 internal/ledger/swapledger -> internal/platform/decimalutil
 internal/ledger/swapledger -> internal/platform/safego
 internal/ledger/swapledger -> internal/store/pgstore
+internal/platform/analyst -> internal/kbsearch
 internal/platform/analyst -> internal/store/pgstore
 internal/platform/errclass -> internal/data/keydomain
 internal/platform/notional -> internal/data/keydomain
@@ -209,6 +210,7 @@ internal/trading/autotrade -> internal/store/pgstore
 internal/trading/autotrade -> internal/trading/exec
 internal/trading/dciexec -> internal/data/bus
 internal/trading/dciexec -> internal/infra/dephealth
+internal/trading/dciexec -> internal/kbsearch
 internal/trading/dciexec -> internal/risk/gate
 internal/trading/dciexec -> internal/platform/errclass
 internal/trading/dciexec -> internal/store/pgstore

@@ -37,12 +37,13 @@ func (e *Executor) tryLeg(ctx context.Context, l gate.DCILeg, share float64, ten
 	if spotFree < qty*(1-1e-6) { // D-203②a：尘埃不阻塞（≥qty×(1-1e-6) 判足量零赎回）
 		redeemed, notes, rerr := e.redeemShortfall(ctx, l.QtyCcy, qty-spotFree)
 		if rerr != nil {
+			kb := e.kbSuffix(errclass.VenueRejectSignature(rerr.Error()))
 			if venueErrKind(rerr) == "permission" {
 				return "", e.gap(ctx, l, "permission", "earn_redeem",
-					"请开通 binance 赚币活期赎回权限（%s 赎回败：%v）", l.QtyCcy, rerr)
+					"请开通 binance 赚币活期赎回权限（%s 赎回败：%v）%s", l.QtyCcy, rerr, kb)
 			}
 			return "", e.gap(ctx, l, "runtime", "earn_redeem",
-				"系统侧病灶：%s 活期赎回败：%v", l.QtyCcy, rerr)
+				"系统侧病灶：%s 活期赎回败：%v%s", l.QtyCcy, rerr, kb)
 		}
 		if redeemed > 0 {
 			if spotFree, err = e.freeBalance(ctx, l.QtyCcy); err != nil {
@@ -169,18 +170,20 @@ func (e *Executor) tryLeg(ctx context.Context, l gate.DCILeg, share float64, ten
 		e.finish(ctx, oid, "failed", err.Error())
 		// D-255①：败因自动落坑——二次触发零 venue 打面（suppress 窗 24h）；
 		// refresh 类瞬态（orderId 过期已重提一次）不落坑——落 suppress 误封 24h。
+		sig := errclass.VenueRejectSignature(err.Error())
 		if !isRefreshErr(err) {
 			if lerr := e.Store.LearnVenueReject(ctx, "binance", "dci_subscribe",
-				errclass.VenueRejectSignature(err.Error()), 24*time.Hour); lerr != nil {
+				sig, 24*time.Hour); lerr != nil {
 				log.Printf("[dciexec] 坑表落行败: %v", lerr)
 			}
 		}
+		kb := e.kbSuffix(sig) // 拒单消费闸：坑签名命中经验库→教训贴告警脸
 		if venueErrKind(err) == "permission" {
 			return "", e.gap(ctx, l, "permission", "dual_order",
-				"请开通 binance 赚币/双币申购权限（%s腿下单失败：%v）", l.Name, err)
+				"请开通 binance 赚币/双币申购权限（%s腿下单失败：%v）%s", l.Name, err, kb)
 		}
 		return "", e.gap(ctx, l, "runtime", "dual_order",
-			"系统侧病灶：venue 拒单（%s腿：%v）", l.Name, err)
+			"系统侧病灶：venue 拒单（%s腿：%v）%s", l.Name, err, kb)
 	}
 	e.finish(ctx, oid, "filled", body)
 	strike := 0.0

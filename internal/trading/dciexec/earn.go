@@ -209,16 +209,18 @@ func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, err
 	body, err := e.earnSubscribe(ctx, pick.ProductID, spotFree)
 	if err != nil {
 		e.finish(ctx, oid, "failed", err.Error())
+		sig := errclass.VenueRejectSignature(err.Error())
 		if lerr := e.Store.LearnVenueReject(ctx, "binance", "earn_subscribe",
-			errclass.VenueRejectSignature(err.Error()), 24*time.Hour); lerr != nil {
+			sig, 24*time.Hour); lerr != nil {
 			log.Printf("[dciexec] earn 坑表落行败: %v", lerr)
 		}
+		kb := e.kbSuffix(sig) // 拒单消费闸：坑签名命中经验库→教训贴告警脸
 		if venueErrKind(err) == "permission" {
 			return "", e.gap(ctx, leg, "permission", "earn_subscribe",
-				"请开通 binance 赚币活期申购权限（申购败：%v）", err)
+				"请开通 binance 赚币活期申购权限（申购败：%v）%s", err, kb)
 		}
 		return "", e.gap(ctx, leg, "runtime", "earn_subscribe",
-			"系统侧病灶：earn 申购 venue 拒单：%v", err)
+			"系统侧病灶：earn 申购 venue 拒单：%v%s", err, kb)
 	}
 	e.finish(ctx, oid, "filled", body)
 	if err := e.Store.SetProposalStatus(ctx, p.ID, "executed"); err != nil {

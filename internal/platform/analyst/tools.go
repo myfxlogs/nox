@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"nox/internal/kbsearch"
 	"nox/internal/store/pgstore"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -46,11 +47,12 @@ const (
 	toolReadDoc   = "read_doc"
 	toolReadCode  = "read_code"
 	toolLLMProbe  = "llm_probe"
+	toolKBSearch  = "kb_search"
 )
 
 // Names 返回工具名集。
 func (t *Tools) Names() []string {
-	return []string{toolQueryRO, toolGetEntity, toolGrepKB, toolReadDoc, toolReadCode, toolLLMProbe}
+	return []string{toolQueryRO, toolGetEntity, toolGrepKB, toolReadDoc, toolReadCode, toolLLMProbe, toolKBSearch}
 }
 
 // Execute 分派工具调用。
@@ -68,6 +70,8 @@ func (t *Tools) Execute(ctx context.Context, call ToolCall) (ToolResult, []Citat
 		return t.execReadFile(ctx, call, "internal", "proto", "cmd")
 	case toolLLMProbe:
 		return t.execLLMProbe(ctx, call)
+	case toolKBSearch:
+		return t.execKBSearch(ctx, call)
 	default:
 		return ToolResult{ToolUseID: call.ID, Content: "未知工具: " + call.Name, IsError: true}, nil, nil
 	}
@@ -82,6 +86,7 @@ func ToolSpecs() []ToolSpec {
 		{Name: toolReadDoc, Description: "读 docs/**/*.md（≤2000 行）", InputSchema: rawJSON(`{"type":"object","properties":{"path":{"type":"string","description":"相对 /kn/docs 的路径"}},"required":["path"]}`)},
 		{Name: toolReadCode, Description: "读仓内源码 internal/proto/cmd（≤2000 行）", InputSchema: rawJSON(`{"type":"object","properties":{"path":{"type":"string","description":"相对 /kn 的路径如 internal/analyst/tools.go"}},"required":["path"]}`)},
 		{Name: toolLLMProbe, Description: "对当前 LLM 配置做受控判别实验（改一个参数观察输出形态）；用于 13/14 契约的矛盾调查与假设判别", InputSchema: rawJSON(`{"type":"object","properties":{"prompt":{"type":"string","description":"探针输入 ≤500 字符"},"max_tokens":{"type":"integer","description":"256-8192"},"thinking_disabled":{"type":"boolean"}},"required":["prompt"]}`)},
+		{Name: toolKBSearch, Description: "经验库条目关键词对拍（条目 keywords vs 文本，高置信命中规则：≥2 词或单 ≥12 字符指纹词）；查败因/症状的既有坑史", InputSchema: rawJSON(`{"type":"object","properties":{"text":{"type":"string","description":"败因签名/症状文本"}},"required":["text"]}`)},
 	}
 }
 
@@ -264,6 +269,43 @@ func (t *Tools) execGrepKB(ctx context.Context, call ToolCall) (ToolResult, []Ci
 	}
 	cite := Citation{Kind: "kb", Ref: truncate(args.Pattern, 100), Excerpt: truncate(files, 500)}
 	return ToolResult{ToolUseID: call.ID, Content: files}, []Citation{cite}, nil
+}
+
+// --- kb_search ---
+
+// execKBSearch 经验库条目对拍（拒单消费闸同源 kbsearch；fail-open——目录读败返
+// IsError 行不 panic 主径）。
+func (t *Tools) execKBSearch(ctx context.Context, call ToolCall) (ToolResult, []Citation, error) {
+	var args struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(call.Input), &args); err != nil {
+		return ToolResult{ToolUseID: call.ID, Content: "参数解析失败: " + err.Error(), IsError: true}, nil, nil
+	}
+	if strings.TrimSpace(args.Text) == "" {
+		return ToolResult{ToolUseID: call.ID, Content: "text 不能为空", IsError: true}, nil, nil
+	}
+	root := t.KnRoot
+	if root == "" {
+		root = KnRoot
+	}
+	entries, err := kbsearch.Load(filepath.Join(root, "docs/经验库/条目"))
+	if err != nil {
+		return ToolResult{ToolUseID: call.ID, Content: "经验库目录读败: " + err.Error(), IsError: true}, nil, nil
+	}
+	hits := kbsearch.Search(entries, args.Text)
+	if len(hits) == 0 {
+		return ToolResult{ToolUseID: call.ID, Content: "零命中（高置信门槛内）"}, nil, nil
+	}
+	if len(hits) > 8 {
+		hits = hits[:8]
+	}
+	var b strings.Builder
+	for _, h := range hits {
+		fmt.Fprintf(&b, "%s [status=%s hits=%d kw=%s] %s\n", h.ID, h.Status, h.Hits, h.LongKW, h.Summary)
+	}
+	cite := Citation{Kind: "kb", Ref: "docs/经验库/条目", Excerpt: truncate(b.String(), 500)}
+	return ToolResult{ToolUseID: call.ID, Content: b.String()}, []Citation{cite}, nil
 }
 
 func truncate(s string, n int) string {

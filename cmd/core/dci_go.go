@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nox/internal/data/bus"
+	"nox/internal/platform/analyst"
 	"nox/internal/platform/httpx"
 	"nox/internal/platform/safego"
 	"nox/internal/portfolio/lifecycle"
@@ -21,6 +22,7 @@ import (
 func buildDCIExecutor(ctx context.Context, st *pgstore.Store) *dciexec.Executor {
 	ex := &dciexec.Executor{Store: st, Client: httpx.Client()}
 	ex.Now = time.Now
+	ex.KBDir = analyst.KnRoot + "/docs/经验库/条目" // 拒单消费闸：坑签名→条目教训附告警尾
 	exchs, err := st.ListExchangeConfigs(ctx)
 	if err == nil {
 		for _, e := range exchs {
