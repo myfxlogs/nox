@@ -410,3 +410,12 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **账本**：`fin_dci_order` opt_type='EARN' 同构行（tenor=0→OutstandingDCIQty/DCIOrderOpenIntent 谓词天然不命中）；`ListFilledDCIOrders` 剔 EARN（无交割终态）；败=failed 行+坑表 24h suppress+gap 分类（credential/permission/runtime）。
 - 锚 7 件绿：happy（best-APR 档中标+态机 executed+账本行）/敞口超限/零可动/零在售 APR 复验/坑抑零打面/venue 败落坑/幂等。
 - 遗留：①提案轨型（autoexec 须 fin_strategy=live，earn 两键现 candidate——终裁面）；②申购额=USDT 现货可动全额（活期可赎承接，DCI 腿径 redeemShortfall 已可回补现货）；③okx earn 写径未接（提案 venue=binance 单源）。
+## 经验库自动归纳管线（业主令 10-13——77KB 积压零消费→归纳去人工化）
+- **段**：`tools/noxkb` 新子命令 `induct`——待归纳.md+待归纳-分析员.md 未消解行 → 关键词分诊 → LLM 聚类草稿 → `gen` 重产索引 → 源行打 `inducted:<h8>` 幂等标。
+- **module 裁定**：noxkb 删 go.mod 并入主 module——`tools/noxkb` 变 `nox/tools/noxkb`，`internal/` 前缀规则放行（LLM 走 analyst 基建+pgstore 账本的前提）。
+- **covered 分诊**（确定性零 LLM）：摘要小写对拍条目 keywords——≥2 关键词命中或单 ≥12 字符指纹级命中 → `covered:<id>`。单短关键词误例实拍（「binance」把 CROSS_VENUE 复审行误归 hmac 条目）→ 收紧规则；该规则是高置信门槛的非唯一正确解，误 covered 代价=真缺口行被打标不入草稿（残留风险）。
+- **LLM 段**：`analyst.RunWithSpecs` 零工具集（noTools 执行器防违发 tool_use panic）→ 严格 JSON `{"drafts":[...]}` → schema 闸（slug/kind/risk 域值/keywords 1-8/summary ≤200/rows 非空/撞库剔除/maxDraft=20）整批违式不落盘只 warn → `条目/<slug>.md` 按模板六节渲染、**status 强写 observed**（verified 只人工授）、evidence_refs 记源行 `file#L`。
+- **源标**：待归纳.md 行末列打 ` ✅ inducted:<h8> covered|draft:<id>`——复用 digest ✅ 消解出口，次跑自动移归档月卷；分析员 inbox 行打 `inducted:`（无 ✅ 归档机制，靠标幂等）；inbox 含「复核域」行跳过（D-172 域外不升 KB）。打标=行级原位改写，digest 未跑前重跑零重复。
+- **fail-open**：PG/AI 未配→LLM 段跳过，covered 标仍落；违式整批不落盘。零新 env（NOX_KB_DIR/NOX_PG_DSN 复用 digest 引导件；NOX_AI_* 属 app_secrets 禁读→DB ai_settings 单源）。
+- **验收**：锚三件（covered 标+幂等/草稿落盘+违式剔除+索引重产/schema 整批闸零写）；本地干跑（KB 拷贝+LLM 缺配）实测幂等。SG cron 挂 `30 22 * * *`（UTC，日报前一拍）由部署侧执行：`cd /opt/nox/tools/noxkb && ./noxkb induct`——**首跑消化 77KB 存量的实拍属部署验收**，本票代码面交付。
+- 残留：①LLM 未配的日报前窗=covered 段仍消化，drafts 留待配置齐备；②inbox 行未被任何 draft 引用者保持未标、次跑重试（设计，非漏）；③索引 budget（98304B）随草稿入增——触顶按既有上浮先例调 maxBytes。

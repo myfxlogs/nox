@@ -1,5 +1,6 @@
 // Package main implements noxkb — Nox 本地经验库索引生成器。
-// P0 只实现 gen / gen --check。不连接 PG，不执行条目命令，不被 core import。
+// gen / gen --check 产索引；induct=自动归纳管线（业主令 10-13：待归纳→分诊→草稿→索引→源标，
+// LLM 经 analyst 基建调用、fin_llm_call 记账——该子命令连 PG）。不被 core import。
 package main
 
 import (
@@ -269,9 +270,10 @@ func genCheck() error {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: noxkb gen | gen --check")
+		fmt.Fprintln(os.Stderr, "usage: noxkb gen | gen --check | induct")
 		os.Exit(2)
 	}
+	applyKBDirEnv() // NOX_KB_DIR 工具引导覆写（同 digest 先例）
 	var err error
 	switch os.Args[1] {
 	case "gen":
@@ -280,6 +282,8 @@ func main() {
 		} else {
 			err = gen()
 		}
+	case "induct":
+		err = inductCmd()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		os.Exit(2)
