@@ -1,4 +1,4 @@
-// service_dept_reports.go —— D-244：ListDeptReports 部门日报→经理摘要读面。
+// service_dept_reports.go —— M4.0：ListDeptReports 公司日报读面（dept='company' 单行）。
 // report_date 空=最新有报日（pgstore.ListDeptReportDates 首行）；dates 侧栏近 30 日。
 package dashboard
 
@@ -11,7 +11,7 @@ import (
 	"connectrpc.com/connect"
 )
 
-// ListDeptReports 某日全部部报+经理摘要（dept 升序——ASCII manager 居首，前端自排展示）。
+// ListDeptReports 某日报告行（M4.0=dept company 单行；历史 manager/部报行原样回读）。
 func (s *Service) ListDeptReports(ctx context.Context, req *connect.Request[v1.ListDeptReportsRequest]) (*connect.Response[v1.ListDeptReportsResponse], error) {
 	dates, err := s.store.ListDeptReportDates(ctx, 30)
 	if err != nil {

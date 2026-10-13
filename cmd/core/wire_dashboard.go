@@ -135,6 +135,7 @@ func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *
 	// R3 返修③：原 gate 在 cfg.AIAPIKey != "" —— env key 空时纯 DB 配置无法激活（deps=nil →「分析员未配置」）。
 	// 双空兜底已由 resolveAiConfig failed_precondition 覆盖（TestResolveAiConfigBothEmpty），勿重复造门。
 	aiClient := analyst.NewClient(cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)
+	aiClient.CallLog = analyst.LLMLogger(st, "dashboard_analyst") // D-246：fin_llm_call 落行
 	aiTools := &analyst.Tools{ReadOnlyDSN: cfg.AIPGDSN, Store: st, KnRoot: analyst.KnRoot}
 	aiTools.EnrichPosition = dashSvc.EnrichPositionForAnalyst() // R2 返修②：get_entity position 含派生字段
 	aiTools.ProbeCaller = dashSvc.ProbeCallerForAnalyst()       // D-100：llm_probe 当问配置探针
@@ -145,11 +146,16 @@ func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *
 	// 飞书扇出走直推（Notify/ChatID 缺=只 alerts 留痕）；fail-open 零业务阻塞。
 	safego.GoLoop("main:deptreport", func() {
 		deptreport.Run(ctx, deptreport.Deps{
-			Store: st,
-			Tools: aiTools,
-			Rate:  aiRate,
+			Store:          st,
+			Tools:          aiTools,
+			Rate:           aiRate,
+			CapitalBaseUSD: cfg.CapitalBaseUSD, // §4.3 指标①硬线分母
 			ResolveClient: func(ctx context.Context) (*analyst.Client, error) {
-				return kbreport.ResolveClient(ctx, st, cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)
+				c, err := kbreport.ResolveClient(ctx, st, cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)
+				if c != nil {
+					c.CallLog = analyst.LLMLogger(st, "company_report") // D-246：fin_llm_call 落行
+				}
+				return c, err
 			},
 			Notify: feishu,
 			ChatID: st.FeishuChatID,
@@ -162,11 +168,15 @@ func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *
 	probeRepDeps := explorer.Deps{
 		Store: st,
 		ResolveClient: func(ctx context.Context) (*analyst.Client, error) {
-			return kbreport.ResolveClient(ctx, st, cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)
+			c, err := kbreport.ResolveClient(ctx, st, cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)
+			if c != nil {
+				c.CallLog = analyst.LLMLogger(st, "probe_report") // D-246：fin_llm_call 落行
+			}
+			return c, err
 		},
 	}
 	dashSvc.SetProbeReporter(func(_ context.Context, posID int64) {
-		safego.GoLoop("probe-report", func() {
+		safego.GoPlain("probe-report", func() {
 			rctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 			if _, _, err := explorer.GenerateProbeReport(rctx, probeRepDeps, posID); err != nil {

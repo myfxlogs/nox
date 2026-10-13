@@ -1,4 +1,5 @@
-// deptreport_test.go —— D-244：Generate 编排/财务专项/经理摘要锚测试（fake store+fake runner，无 DB）。
+// deptreport_test.go —— M4.0/D-246：公司日报单调用编排/money-first 输入序/
+// 脱敏/业主面泄漏拦截锚测试（fake store+fake runner，无 DB）。
 package deptreport
 
 import (
@@ -15,35 +16,42 @@ import (
 
 // fakeStore Store 面内存实现。
 type fakeStore struct {
-	reports   []pgstore.DeptReport
-	emps      []pgstore.Employee
-	rd        *pgstore.RetroDaily
-	retroErr  error
-	alerts    []string
-	pnlErr    error
-	incomeErr error
+	reports  []pgstore.DeptReport
+	rd       *pgstore.RetroDaily
+	retroErr error
+	alerts   []string
+	pools    []pgstore.ExplorerIdlePool
+	props    []pgstore.Proposal
+	gaps     []pgstore.ConditionGap
+	disabled map[string]bool
+	llmUSD   float64
+	llmN     int
 }
 
-func (f *fakeStore) ListEmployees(context.Context) ([]pgstore.Employee, error) { return f.emps, nil }
 func (f *fakeStore) RetroDailyStats(context.Context, time.Time, time.Time) (*pgstore.RetroDaily, error) {
 	return f.rd, f.retroErr
 }
-func (f *fakeStore) FinancePnlByEnv(context.Context) ([]pgstore.FinancePnlEnv, error) {
-	return []pgstore.FinancePnlEnv{{Environment: "real", RealizedPnl: 12.34, Closed: 2}}, f.pnlErr
+func (f *fakeStore) ExplorerIdleFunds(context.Context, time.Time) ([]pgstore.ExplorerIdlePool, error) {
+	return f.pools, nil
 }
-func (f *fakeStore) FinanceIncomeByKind(context.Context) ([]pgstore.FinanceIncomeKind, error) {
-	return []pgstore.FinanceIncomeKind{{Kind: "funding", TotalUSD: 56.78, Rows: 3}}, f.incomeErr
+func (f *fakeStore) NetRealizedSince(context.Context, time.Time, bool) (float64, error) {
+	return -100.0, nil
 }
-func (f *fakeStore) LatestVenueAccountSnapshots(context.Context) ([]pgstore.VenueAccountLatest, error) {
-	eq := 100.0
-	return []pgstore.VenueAccountLatest{{Venue: "binance", VenueType: "perp", EquityRaw: &eq, Currency: "USD"}}, nil
+func (f *fakeStore) ListProposals(context.Context, string, int) ([]pgstore.Proposal, error) {
+	return f.props, nil
+}
+func (f *fakeStore) ListConditionGaps(context.Context, string) ([]pgstore.ConditionGap, error) {
+	return f.gaps, nil
+}
+func (f *fakeStore) ListDisabledStrategies(context.Context) (map[string]bool, error) {
+	return f.disabled, nil
+}
+func (f *fakeStore) LLMCallCostSince(context.Context, time.Time) (float64, int, error) {
+	return f.llmUSD, f.llmN, nil
 }
 func (f *fakeStore) UpsertDeptReport(_ context.Context, r pgstore.DeptReport) error {
 	f.reports = append(f.reports, r)
 	return nil
-}
-func (f *fakeStore) ListDeptReports(context.Context, time.Time) ([]pgstore.DeptReport, error) {
-	return f.reports, nil
 }
 func (f *fakeStore) InsertAlertDedup(_ context.Context, _, msg string, _ time.Duration) error {
 	f.alerts = append(f.alerts, msg)
@@ -63,7 +71,7 @@ type fakeRunner struct {
 	mu      sync.Mutex
 	prompts []string
 	inputs  []string
-	failFor string // 含此子的 dept 输入→返错
+	fail    error
 }
 
 func (f *fakeRunner) run(_ context.Context, _ *analyst.Client, _ analyst.ToolExecutor,
@@ -75,19 +83,20 @@ func (f *fakeRunner) run(_ context.Context, _ *analyst.Client, _ analyst.ToolExe
 	_ = json.Unmarshal(msgs[0].Content, &user)
 	f.inputs = append(f.inputs, user)
 	f.mu.Unlock()
-	if f.failFor != "" && strings.Contains(user, f.failFor) {
-		return analyst.LoopResult{}, context.DeadlineExceeded
+	if f.fail != nil {
+		return analyst.LoopResult{}, f.fail
 	}
-	cb.OnDelta("报告正文-" + system[:8])
+	cb.OnDelta("公司日报正文")
 	return analyst.LoopResult{InputTokens: 11, OutputTokens: 22}, nil
 }
 
 func testDeps(fs *fakeStore, fr *fakeRunner, fn *fakeNotifier) *Deps {
 	d := &Deps{
-		Store:  fs,
-		Client: &analyst.Client{APIKey: "k"},
-		Run:    fr.run,
-		ChatID: func(context.Context) (string, error) { return "chat", nil },
+		Store:          fs,
+		Client:         &analyst.Client{APIKey: "k"},
+		Run:            fr.run,
+		CapitalBaseUSD: 10000,
+		ChatID:         func(context.Context) (string, error) { return "chat", nil },
 	}
 	if fn != nil { // 显式判空——typed-nil Notifier 接口非 nil 会击穿 d.Notify==nil 闸
 		d.Notify = fn
@@ -95,46 +104,27 @@ func testDeps(fs *fakeStore, fr *fakeRunner, fn *fakeNotifier) *Deps {
 	return d
 }
 
-// TestGenerate_AllDeptsAndManager 十一部+经理摘要全落库、token/耗时留痕、飞书扇出。
-func TestGenerate_AllDeptsAndManager(t *testing.T) {
+// TestGenerate_CompanySingleCall M4.0：全日仅 1 次 LLM 调用→dept='company' 单行+推送。
+func TestGenerate_CompanySingleCall(t *testing.T) {
 	fs := &fakeStore{rd: &pgstore.RetroDaily{OpenedToday: 2, FundingActualUSD: 3.5,
-		AlertDist: map[string]int{"warn": 1}, EvalDist: map[string]int{"A": 2}}}
+		AlertDist: map[string]int{"warn": 1}, EvalDist: map[string]int{"A": 2}},
+		pools:  []pgstore.ExplorerIdlePool{{Venue: "binance", Equity: 9000, Balance: 4000, Currency: "USD"}},
+		llmUSD: 1.23, llmN: 7}
 	fr := &fakeRunner{}
 	fn := &fakeNotifier{}
 	date := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
 	if err := Generate(context.Background(), testDeps(fs, fr, fn), date); err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
-	if got := len(fs.reports); got != len(pgstore.EmployeeDepts)+1 {
-		t.Fatalf("reports=%d want %d", got, len(pgstore.EmployeeDepts)+1)
+	if len(fr.inputs) != 1 {
+		t.Fatalf("LLM 调用数=%d want 1", len(fr.inputs))
 	}
-	var mgr *pgstore.DeptReport
-	depts := map[string]bool{}
-	for i := range fs.reports {
-		r := &fs.reports[i]
-		depts[r.Dept] = true
-		if r.PromptTokens != 11 || r.CompletionTokens != 22 {
-			t.Fatalf("dept=%s tokens=%d/%d want 11/22", r.Dept, r.PromptTokens, r.CompletionTokens)
-		}
-		if r.Dept == DeptManager {
-			mgr = r
-		}
+	if len(fs.reports) != 1 || fs.reports[0].Dept != DeptCompany {
+		t.Fatalf("reports=%+v want 1 company 行", fs.reports)
 	}
-	for _, d := range pgstore.EmployeeDepts {
-		if !depts[d] {
-			t.Fatalf("dept %s 缺报", d)
-		}
-	}
-	if mgr == nil {
-		t.Fatal("manager 行缺")
-	}
-	// 经理输入=十一部报正文（manager 摘要 prompt 为第二条 system 型）。
-	if len(fr.inputs) != len(pgstore.EmployeeDepts)+1 {
-		t.Fatalf("llm calls=%d", len(fr.inputs))
-	}
-	mgrInput := fr.inputs[len(fr.inputs)-1]
-	if !strings.Contains(mgrInput, "=== 账本部 ===") {
-		t.Fatalf("manager 输入缺部报段: %.200s", mgrInput)
+	r := fs.reports[0]
+	if r.PromptTokens != 11 || r.CompletionTokens != 22 {
+		t.Fatalf("tokens=%d/%d want 11/22", r.PromptTokens, r.CompletionTokens)
 	}
 	if len(fn.sent) != 1 || !strings.Contains(fn.sent[0], "NOX 公司日报") {
 		t.Fatalf("feishu push=%v", fn.sent)
@@ -144,82 +134,91 @@ func TestGenerate_AllDeptsAndManager(t *testing.T) {
 	}
 }
 
-// TestGather_LedgerFinance 账本部输入含财务专项段；其余部不含。
-func TestGather_LedgerFinance(t *testing.T) {
-	fs := &fakeStore{rd: &pgstore.RetroDaily{}}
-	fr := &fakeRunner{}
-	d := testDeps(fs, fr, nil)
+// TestGather_MoneyFirst 输入段 money-first 固定序：必备指标→①NAV→…→⑦流健康；
+// 名册段不存在（零「员工/在职/离职」措辞）。
+func TestGather_MoneyFirst(t *testing.T) {
+	fs := &fakeStore{rd: &pgstore.RetroDaily{},
+		pools: []pgstore.ExplorerIdlePool{{Venue: "binance", Equity: 9000, Balance: 4000, Currency: "USD"}},
+		props: []pgstore.Proposal{{ID: 7, TemplateID: "carry_x", Venue: "binance",
+			CreatedAt: time.Now().Add(-72 * time.Hour)}},
+		gaps: []pgstore.ConditionGap{
+			{ID: 3, Kind: "capital", Subject: "USD", RequestText: "请划转", Status: "requested",
+				CreatedAt: time.Now().Add(-24 * time.Hour)},
+			{ID: 9, Kind: "runtime", Subject: "x", Status: "waived",
+				CreatedAt: time.Now().Add(-48 * time.Hour)},
+		},
+		disabled: map[string]bool{"swaparb": true}, llmUSD: 1.23, llmN: 7}
+	dayEnd := time.Date(2026, 10, 13, 0, 0, 0, 0, BJTime)
+	fs.props[0].CreatedAt = dayEnd.Add(-72 * time.Hour)
+	fs.gaps[0].CreatedAt = dayEnd.Add(-24 * time.Hour)
+	d := testDeps(fs, &fakeRunner{}, nil)
 	d.fill()
-	date := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
-	if err := Generate(context.Background(), d, date); err != nil {
-		t.Fatalf("Generate: %v", err)
+	input, err := gather(context.Background(), d,
+		time.Date(2026, 10, 12, 0, 0, 0, 0, BJTime), dayEnd)
+	if err != nil {
+		t.Fatalf("gather: %v", err)
 	}
-	var ledger, other string
-	for i, in := range fr.inputs[:len(pgstore.EmployeeDepts)] {
-		if strings.Contains(in, "部门：账本") {
-			ledger = fr.inputs[i]
-		} else {
-			other = fr.inputs[i]
+	order := []string{"【必备指标】", "【① NAV 与闲置资金】", "【② 在仓与 carry 实收】",
+		"【③ 待决提案（含龄）】", "【④ 请求箱】", "【⑤ 策略态变】", "【⑥ 事故与硬线】", "【⑦ 流健康】"}
+	pos := -1
+	for _, seg := range order {
+		i := strings.Index(input, seg)
+		if i < 0 || i < pos {
+			t.Fatalf("段序错 %s: %.400s", seg, input)
+		}
+		pos = i
+	}
+	for _, bad := range []string{"员工", "在职", "离职", "考勤"} {
+		if strings.Contains(input, bad) {
+			t.Fatalf("输入含名册措辞 %q: %.400s", bad, input)
 		}
 	}
-	if !strings.Contains(ledger, "财务专项·venue 资金池快照") || !strings.Contains(ledger, "100.00") {
-		t.Fatalf("账本输入缺财务段: %.300s", ledger)
+	// 必备指标原值：NAV=9000 闲置=4000→44.4%；提案龄 3 天；最老请求龄=24h 行。
+	if !strings.Contains(input, "NAV=9000.00") || !strings.Contains(input, "44.4%") {
+		t.Fatalf("NAV/闲置比指标错: %.300s", input)
 	}
-	if strings.Contains(other, "财务专项") {
-		t.Fatalf("非账本误含财务段: %.300s", other)
+	if !strings.Contains(input, "3.0 天") || !strings.Contains(input, "#7 carry_x") {
+		t.Fatalf("提案龄错: %.400s", input)
+	}
+	if !strings.Contains(input, "投资人侧") || !strings.Contains(input, "系统侧") ||
+		!strings.Contains(input, "请划转") {
+		t.Fatalf("请求箱分列错: %.400s", input)
+	}
+	if !strings.Contains(input, "LLM 成本=1.23") || !strings.Contains(input, "swaparb") {
+		t.Fatalf("LLM 成本/策略态变错: %.400s", input)
 	}
 }
 
-// TestGenerate_FailOpen 单部 LLM 失败不阻塞其余与摘要；AI 未配置整班跳过。
+// TestGenerate_FailOpen LLM 失败返错零落库；AI 未配置当班跳过。
 func TestGenerate_FailOpen(t *testing.T) {
 	fs := &fakeStore{rd: &pgstore.RetroDaily{}}
-	fr := &fakeRunner{failFor: "部门：风控"}
-	d := testDeps(fs, fr, &fakeNotifier{})
+	fr := &fakeRunner{fail: context.DeadlineExceeded}
+	d := testDeps(fs, fr, nil)
 	date := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
-	if err := Generate(context.Background(), d, date); err != nil {
-		t.Fatalf("Generate fail-open 违背: %v", err)
+	if err := Generate(context.Background(), d, date); err == nil {
+		t.Fatal("LLM 失败应返错（fail-open 由 Run 层吞）")
 	}
-	if got := len(fs.reports); got != len(pgstore.EmployeeDepts) { // 10 部 + manager
-		t.Fatalf("reports=%d want %d", got, len(pgstore.EmployeeDepts))
+	if len(fs.reports) != 0 {
+		t.Fatalf("失败零落库: %d", len(fs.reports))
 	}
-
 	d2 := &Deps{Store: fs, Run: fr.run} // Client nil + ResolveClient nil=未配置
 	if err := Generate(context.Background(), d2, date); err == nil {
 		t.Fatal("AI 未配置应返当班跳过错")
 	}
 }
 
-// TestScrub_1301 脱敏闸：触发词「币安行情/冻结」在部报输入、manager 输入、
-// 落库正文三面均洗净（2026-10-13 生产实证 1301——CJK 短语硬触发+冻结金额并置软触发）。
-func TestScrub_1301(t *testing.T) {
-	fs := &fakeStore{rd: &pgstore.RetroDaily{}, emps: []pgstore.Employee{
-		{Name: "main:binance-mkt-ws", Role: "币安行情 WS", Dept: "数据", Running: true, Enabled: true},
-	}}
-	fr := &fakeRunner{}
-	d := testDeps(fs, fr, nil)
-	d.fill()
-	date := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
-	if err := Generate(context.Background(), d, date); err != nil {
-		t.Fatalf("Generate: %v", err)
+// TestScrubBody 脱敏闸：触发词「币安/冻结」洗净 + D-247③ 业主面泄漏行整行剔除。
+func TestScrubBody(t *testing.T) {
+	in := "NAV 正常。\nIR部建议业主面披露下周计划。\nbinance 报价冻结 100 USD。\n明日关注：提案龄。"
+	got := scrubBody(in)
+	if strings.Contains(got, "建议业主") || strings.Contains(got, "业主面") {
+		t.Fatalf("业主面泄漏行未剔: %q", got)
 	}
-	for i, in := range fr.inputs {
-		if strings.Contains(in, "币安") || strings.Contains(in, "冻结") {
-			t.Fatalf("input[%d] 未脱敏: %.200s", i, in)
-		}
+	if strings.Contains(got, "币安") || strings.Contains(got, "冻结") {
+		t.Fatalf("触发词未脱敏: %q", got)
 	}
-	if !strings.Contains(fr.inputs[0], "binance") {
-		t.Fatalf("数据输入应含英文 venue 名: %.200s", fr.inputs[0])
-	}
-	// 存量正文含触发词 → manager 输入侧洗净。
-	fs2 := &fakeStore{reports: []pgstore.DeptReport{{Dept: "研究", Body: "疑似冻结报价"}}}
-	fr2 := &fakeRunner{}
-	d2 := testDeps(fs2, fr2, nil)
-	d2.fill()
-	if err := d2.genManager(context.Background(), &analyst.Client{APIKey: "k"}, date); err != nil {
-		t.Fatalf("genManager: %v", err)
-	}
-	if strings.Contains(fr2.inputs[0], "冻结") || !strings.Contains(fr2.inputs[0], "停滞") {
-		t.Fatalf("manager 输入未脱敏: %.200s", fr2.inputs[0])
+	if !strings.Contains(got, "明日关注") || !strings.Contains(got, "NAV 正常") {
+		t.Fatalf("正常行被误剔: %q", got)
 	}
 }
 

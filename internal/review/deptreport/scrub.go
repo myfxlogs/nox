@@ -1,7 +1,8 @@
 // scrub.go —— LLM 入文/出文脱敏（1301 实证 2026-10-13）：上游网关内容安全闸
 // 对「币安行情」CJK 短语硬触发、「冻结」与具体资金金额并置软触发（资金冻结
 // 诈骗语境误伤），单方各自均放行。只洗喂给 LLM 的文本与落库前正文——DB 原值
-// 不动。新 1301 实证出现新触发词时按同径补映射。
+// 不动。D-247③：出文追加投资人接触面泄漏拦截（「建议业主/业主面」类句整行剔
+// 除——报告只到系统内，向业主的动作建议属越线措辞）。
 package deptreport
 
 import "strings"
@@ -12,56 +13,33 @@ var scrubRepl = strings.NewReplacer(
 	"冻结", "停滞", // 「冻结」+金额并置软触发；「停滞」语义等价零实损
 )
 
-// scrub 脱敏一处文本（部报输入段/manager 拼接段/落库正文同口径）。
+// scrub 脱敏一处文本（LLM 输入段同口径）。
 func scrub(s string) string {
 	return scrubRepl.Replace(s)
 }
 
-// mgrBodyBudget manager 输入单部正文预算（runes）——2026-10-13 实证：十部
-// 全文 ~4.5KB 同源告警簇复述越 1301 判分线（重试 4 连挂/行 dedup 仍挂），
-// 300 行界截断两档+头尾档三验放行。
-const mgrBodyBudget = 300
+// ownerLeakPats D-247③ 投资人接触面泄漏词表（含其一的整行拦截剔除）。
+var ownerLeakPats = []string{
+	"建议业主", "业主面", "请示业主", "请业主", "建议投资人", "投资人应",
+}
 
-// compact 头 2/3+尾 1/3 行界缩量：部报正文超预算时保①员工状态段与③异常/
-// 待办段（经理摘要最有用两端），中段以「…」占位。仅用于 manager 输入拼装，
-// 落库正文保持全文。
-func compact(body string, max int) string {
+// scrubBody 落库前正文脱敏：触发词映射 + 业主面泄漏行整行剔除
+// （剔行不整篇拒绝——单句泄漏不毁整报；剔除后正文留其余段落原值）。
+func scrubBody(body string) string {
+	body = scrub(body)
 	lines := strings.Split(body, "\n")
-	total := 0
-	lens := make([]int, len(lines))
-	for i, ln := range lines {
-		lens[i] = len([]rune(ln))
-		total += lens[i]
-	}
-	if total <= max {
-		return body
-	}
-	kept := make([]bool, len(lines))
-	head, n := max*2/3, 0
-	for i := range lines {
-		if n+lens[i] > head {
-			break
+	out := make([]string, 0, len(lines))
+	for _, ln := range lines {
+		leak := false
+		for _, p := range ownerLeakPats {
+			if strings.Contains(ln, p) {
+				leak = true
+				break
+			}
 		}
-		kept[i] = true
-		n += lens[i]
-	}
-	tail, n := max/3, 0
-	for i := len(lines) - 1; i >= 0; i-- {
-		if kept[i] || n+lens[i] > tail {
-			break
-		}
-		kept[i] = true
-		n += lens[i]
-	}
-	var b strings.Builder
-	cut := false
-	for i, ln := range lines {
-		if kept[i] {
-			b.WriteString(ln + "\n")
-		} else if !cut {
-			b.WriteString("…\n")
-			cut = true
+		if !leak {
+			out = append(out, ln)
 		}
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return strings.Join(out, "\n")
 }
