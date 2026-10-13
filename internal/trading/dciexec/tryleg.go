@@ -167,10 +167,13 @@ func (e *Executor) tryLeg(ctx context.Context, l gate.DCILeg, share float64, ten
 	}
 	if err != nil {
 		e.finish(ctx, oid, "failed", err.Error())
-		// D-255①：败因自动落坑——二次触发零 venue 打面（suppress 窗 24h）。
-		if lerr := e.Store.LearnVenueReject(ctx, "binance", "dci_subscribe",
-			errclass.VenueRejectSignature(err.Error()), 24*time.Hour); lerr != nil {
-			log.Printf("[dciexec] 坑表落行败: %v", lerr)
+		// D-255①：败因自动落坑——二次触发零 venue 打面（suppress 窗 24h）；
+		// refresh 类瞬态（orderId 过期已重提一次）不落坑——落 suppress 误封 24h。
+		if !isRefreshErr(err) {
+			if lerr := e.Store.LearnVenueReject(ctx, "binance", "dci_subscribe",
+				errclass.VenueRejectSignature(err.Error()), 24*time.Hour); lerr != nil {
+				log.Printf("[dciexec] 坑表落行败: %v", lerr)
+			}
 		}
 		if venueErrKind(err) == "permission" {
 			return "", e.gap(ctx, l, "permission", "dual_order",

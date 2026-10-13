@@ -317,12 +317,18 @@ func (f *fakeStore) DCIOrderOpenIntent(_ context.Context, prefix string) (bool, 
 	}
 	return false, nil
 }
-func (f *fakeStore) ListVenueRejects(context.Context, string, string) ([]pgstore.VenueReject, error) {
-	return f.pits, nil
+func (f *fakeStore) ListVenueRejects(_ context.Context, venue, op string) ([]pgstore.VenueReject, error) {
+	var out []pgstore.VenueReject
+	for _, p := range f.pits {
+		if p.Venue == venue && p.Op == op {
+			out = append(out, p)
+		}
+	}
+	return out, nil
 }
 func (f *fakeStore) LearnVenueReject(_ context.Context, venue, op, sig string, _ time.Duration) error {
 	for i := range f.pits {
-		if f.pits[i].ErrorSignature == sig {
+		if f.pits[i].Venue == venue && f.pits[i].Op == op && f.pits[i].ErrorSignature == sig {
 			f.pits[i].Hits++
 			return nil
 		}
