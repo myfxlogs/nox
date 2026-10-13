@@ -31,6 +31,8 @@ type Store interface {
 	ListDisabledStrategies(ctx context.Context) (map[string]bool, error)
 	LLMCallCostSince(ctx context.Context, since time.Time) (float64, int, error)
 	UpsertDeptReport(ctx context.Context, r pgstore.DeptReport) error
+	// ListDeptReports D-249②：昨日 company 行读面（待办闭环跨日对拍；零新表）。
+	ListDeptReports(ctx context.Context, date time.Time) ([]pgstore.DeptReport, error)
 	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
 }
 

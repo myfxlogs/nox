@@ -165,6 +165,7 @@ func gather(ctx context.Context, d *Deps, dayStart, dayEnd time.Time) (string, e
 	// ⑦ 流健康
 	b.WriteString("\n【⑦ 流健康】\n")
 	fmt.Fprintf(&b, "- 流事件（断/重连/zero-frame）=%d｜评估分布=%s\n", rd.StreamEvents, distLine(rd.EvalDist))
+
 	return b.String(), nil
 }
 

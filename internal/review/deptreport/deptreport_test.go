@@ -52,6 +52,15 @@ func (f *fakeStore) ListDisabledStrategies(context.Context) (map[string]bool, er
 func (f *fakeStore) LLMCallCostSince(context.Context, time.Time) (float64, int, error) {
 	return f.llmUSD, f.llmN, nil
 }
+func (f *fakeStore) ListDeptReports(_ context.Context, date time.Time) ([]pgstore.DeptReport, error) {
+	var out []pgstore.DeptReport
+	for _, r := range f.reports {
+		if r.ReportDate.Equal(date) {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
 func (f *fakeStore) UpsertDeptReport(_ context.Context, r pgstore.DeptReport) error {
 	f.reports = append(f.reports, r)
 	return nil
@@ -231,5 +240,36 @@ func TestReportDate_BJ(t *testing.T) {
 	want := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
 	if !got.Equal(want) {
 		t.Fatalf("ReportDate=%v want %v", got, want)
+	}
+}
+
+// TestD249_TodoLoop D-249②：昨日 company 行原文入输入⑧段——跨日待办对拍面；
+// 缺日=空段注明不误引。
+func TestD249_TodoLoop(t *testing.T) {
+	fs := &fakeStore{rd: &pgstore.RetroDaily{},
+		pools: []pgstore.ExplorerIdlePool{{Venue: "binance", Equity: 9000, Currency: "USD"}}}
+	yesterday := time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)
+	fs.reports = append(fs.reports, pgstore.DeptReport{
+		Dept: DeptCompany, ReportDate: yesterday, Body: "昨日正文……明日关注：盯提案#7 与请求箱#3"})
+	fr := &fakeRunner{}
+	date := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
+	if err := Generate(context.Background(), testDeps(fs, fr, nil), date); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if !strings.Contains(fr.inputs[0], "【⑧ 昨日公司日报原文】") ||
+		!strings.Contains(fr.inputs[0], "明日关注：盯提案#7") {
+		t.Fatalf("昨日行应入⑧段: %s", fr.inputs[0][len(fr.inputs[0])-300:])
+	}
+	if !strings.Contains(fr.prompts[0], "昨日待办") {
+		t.Fatal("系统提示应含昨日待办对照段")
+	}
+	// 缺日=空段注明
+	fs2 := &fakeStore{rd: &pgstore.RetroDaily{}}
+	fr2 := &fakeRunner{}
+	if err := Generate(context.Background(), testDeps(fs2, fr2, nil), date); err != nil {
+		t.Fatalf("Generate2: %v", err)
+	}
+	if !strings.Contains(fr2.inputs[0], "昨日无 company 行") {
+		t.Fatal("缺日应空段注明")
 	}
 }

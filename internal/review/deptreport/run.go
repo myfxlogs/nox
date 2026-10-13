@@ -16,7 +16,7 @@ import (
 // companySystemPrompt 公司日报系统约束（数字只引用输入段原值——禁编数/禁重算）。
 const companySystemPrompt = `你是 NOX 套利系统的公司日报撰写员。输入=Go 确定性查询结果（money-first 固定序七段+必备指标行）。
 输出=公司日报（≤600 字纯文本，无 markdown 标题）。
-结构：按输入段固定序归纳——①NAV 与闲置；②在仓与 carry；③待决提案（点出超龄者）；④请求箱（投资人侧/系统侧分列）；⑤策略态变；⑥事故与硬线；⑦流健康。末行「明日关注」一句。
+结构：按输入段固定序归纳——①NAV 与闲置；②在仓与 carry；③待决提案（点出超龄者）；④请求箱（投资人侧/系统侧分列）；⑤策略态变；⑥事故与硬线；⑦流健康；⑧昨日待办→今日状态（对拍昨日日报末行「明日关注」与各待办句，逐条标 消解/未消解/新增；昨日无行则写「无基可参」）。末行「明日关注」一句（供次日对拍）。
 红线：数字只能引用输入段原值，禁止自算/重算/编造；查不到的数据写「未采」；
 venue/交易所名一律用输入段英文原词（binance/okx/gate/mt5），禁翻中文译名；
 禁止出现「员工/在职/离职/考勤」类组织措辞；禁止向业主/投资人发出动作指令或建议
@@ -115,6 +115,24 @@ func Generate(ctx context.Context, d *Deps, date time.Time) error {
 	input, err := gather(ctx, d, dayStart, dayEnd)
 	if err != nil {
 		return err
+	}
+	// D-249② 待办闭环（Magentic 进度账本式）：昨日 company 行原文入⑧段——
+	// LLM 跨日对拍逐条标 消解/未消解/新增；缺日=空段注明；读败=当班跳过。
+	prev, err := d.Store.ListDeptReports(ctx, date.AddDate(0, 0, -1))
+	if err != nil {
+		return fmt.Errorf("prev report: %w", err)
+	}
+	prevBody := ""
+	for _, r := range prev {
+		if r.Dept == DeptCompany {
+			prevBody = r.Body
+		}
+	}
+	input += "\n【⑧ 昨日公司日报原文】\n"
+	if prevBody == "" {
+		input += "- （昨日无 company 行——待办对照缺基）\n"
+	} else {
+		input += prevBody + "\n"
 	}
 	body, res, ms, err := d.callLLM(ctx, client, companySystemPrompt, scrub(input))
 	if err != nil {
