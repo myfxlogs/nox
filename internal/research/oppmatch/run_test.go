@@ -25,7 +25,9 @@ func TestD187_RunOnceRealStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 累计面≥1（测试库跨轮残留使"首扫"非首轮——断言总效果非本轮回传）。
-	var gapRows, propAlerts int
+	// D-247 预检后产出面=3 通道：缺口行+提案告警+休眠约束（冷库全能力缺失时
+	// 前两通道正当为零——休眠即产出）。
+	var gapRows, propAlerts, dormantRows int
 	if err := st.Pool().QueryRow(ctx,
 		`SELECT count(*) FROM fin_condition_gap`).Scan(&gapRows); err != nil {
 		t.Fatal(err)
@@ -34,8 +36,12 @@ func TestD187_RunOnceRealStore(t *testing.T) {
 		`SELECT count(*) FROM alerts WHERE message LIKE '机会提案%'`).Scan(&propAlerts); err != nil {
 		t.Fatal(err)
 	}
-	if gapRows+propAlerts == 0 {
-		t.Fatal("匹配零产出=静默病灶（缺口行+提案告警皆无）")
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM fin_capability_constraint WHERE subject LIKE 'dormant:%'`).Scan(&dormantRows); err != nil {
+		t.Fatal(err)
+	}
+	if gapRows+propAlerts+dormantRows == 0 {
+		t.Fatal("匹配零产出=静默病灶（缺口行+提案告警+休眠约束皆无）")
 	}
 	_, g2, err := RunOnce(ctx, st, 10000, 1000)
 	if err != nil {
