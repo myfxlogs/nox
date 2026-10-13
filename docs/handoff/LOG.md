@@ -404,3 +404,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 ## 资金地图 G3 退回修（DCI 池外在跑）
 - 病灶：idle=equity−deployed 对 DCI 双减——binance spot 快照 equity=venue 扣款后余额，DCI 锁额已离池。
 - 修：deployed 拆「池内在跑（margin/earn/OPEN 腿名义）+池外锁额（DCI）」；idle=equity−池内在跑。锚改 cex:spot 闲 1045/跑 542、明细 ref 标「池外锁额」。
+## earn 提案执行接线（D-286 金钱不眠）@cd0d9b27
+- **执行族登记**：`gate.EarnTemplates{cash_mgmt,earn_apr_lending}`+`IsExecTemplate`（ExecTemplates∪EarnTemplates 单源判）——CheckDCI/autoexec/Go 三消费面同源；ExecTemplateVenues earn→binance（写径现状唯一）。
+- **goEarn 闸序**（GoProposal earn 分派，CheckDCI+120s 租约已过）：venue=binance 限定→凭据→`cex_exposure_pct` 硬线（池快照 CEX 权益占比 fail-closed，申购不动 CEX/CFD 结构但超限不加深）→USDT 现货可动实读全量→活期在售品 best-APR 复验（canPurchase∧APR>0∧minPurchase≤额）→earn_subscribe 坑表抑单→`earn|USDT|p<id>|<attempt>` 幂等键→POST `/v1/simple-earn/flexible/subscribe`。
+- **账本**：`fin_dci_order` opt_type='EARN' 同构行（tenor=0→OutstandingDCIQty/DCIOrderOpenIntent 谓词天然不命中）；`ListFilledDCIOrders` 剔 EARN（无交割终态）；败=failed 行+坑表 24h suppress+gap 分类（credential/permission/runtime）。
+- 锚 7 件绿：happy（best-APR 档中标+态机 executed+账本行）/敞口超限/零可动/零在售 APR 复验/坑抑零打面/venue 败落坑/幂等。
+- 遗留：①提案轨型（autoexec 须 fin_strategy=live，earn 两键现 candidate——终裁面）；②申购额=USDT 现货可动全额（活期可赎承接，DCI 腿径 redeemShortfall 已可回补现货）；③okx earn 写径未接（提案 venue=binance 单源）。
