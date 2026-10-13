@@ -229,3 +229,15 @@ fail-open 不变。**实证**：SG Generate 补班 11/11 全成+manager 行落�
 **验证**：六锚（签名稳化表测/坑落表/二次零 POST+一次性 critical/fix 映射/读败 fail-closed/reqID 稳定+增序）；D191 幂等/D198 续执回归绿（D198 暴露 propID=nil 尝试序缺口→LegCount 兜底修）；-race dciexec/errclass 绿；门禁全过。
 
 **遗留**：委员会可手写 action=fix+critical 行覆盖默认 suppress（expires_at 控窗）；SG 部署验收=败后坑表有行+二次同败零打面。
+
+## DCI 轨 4 件系统病灶裁决（@c6291d52 / STATE@5439595c，已推 nox）
+
+**背景**：原 gap #19 PUT subscribe -9000「0 decimals」/#22 PUT 无达标档 order_ref/#24 CALL 无达标档/#25 BTC 活期赎回 -1102——venue 实拍取证逐件裁决。
+
+**取证**（SG 三通道）：fin_dci_order #1–8 全链——#7/#8 PUT 已 settled；fin_cex_dci_quote NULL order_ref/min_amount 行绝迹于 10-11 10:53（采集面修复时点）；venue CALL 在售 strike 域 [83750,85250] vs 模板界 ≥spot×1.10（92122）=市况无档。
+
+**裁决**：#19 已修（R11/R12 floorTo min_amount 精度，生产成交实证）；#22 已修（采集面全落）；#24 非病灶（市况无档，模板界属委员会域）；#25 主修已落 c2e7ac0e（撤 type=FAST），残留二修。
+
+**改**：①`VenueRejectSignature`→`code:N|归一msg`——binance -9000 同码多因不混坑（refresh 瞬态与 0 decimals 分签名）；②refresh 类瞬态败不落坑（落 suppress 会误封 24h）；③坑表扩 op=`earn_redeem`——redeemShortfall 赎败落坑 24h+窗内抑赎零 venue 打面（读败 fail-open 不堵补缺径，Store 缺席同）；④尘埃赎额 %.8f 格式化归零跳行+note——封堵 -1102「amount empty」重放坑。
+
+**验证**：锚新增 TestD255_RefreshNoPit/RedeemPit/RedeemDust+签名表测改（-9000 双签名锚）；D203 赎回 echo/D191R6 赎回缺口回归绿；-race dciexec/errclass 绿；门禁全过。
