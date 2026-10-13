@@ -201,3 +201,17 @@ fail-open 不变。**实证**：SG Generate 补班 11/11 全成+manager 行落�
 **验证**：✅ `go build/vet ./...`=0；`gofmt` 净；check-lines 零警告；`go test ./internal/review/posreview` 六锚全绿（GoFace 数字钉值/质量痕 NULL/LLM 违式→llm_failed+warn/无 AI 机器面/Sweep fail-open/真实 5434 读写往返）；`-race` posreview 绿；env-reads/迁移契约（零迁移——baseline 表复活零 schema 变更）/import 方向过；pre-commit 十道。
 
 **状态/下一步**：🔄 报审待终审；遗留=①SG 部署验收=12 存量补齐+自然平仓 <10min 落行+`fin_llm_call` reviewer 行；②expected_cost/risk 无机读源恒 NULL（票面语义照办——补源后可填）；③`fin_llm_call` reviewer 行仅 LLM 调用时产（AI 缺配零行属正常）。
+
+## 2026-10-13 M4.6 投资人页请求箱回执（`8a085f85` 报审）
+
+**背景/范围**：D-268——`fin_condition_gap` 态机已全备但 `ResolveConditionGap` 零调用面（业主收 warn 推送无回执口，SG 两条 requested 凭据挂 2 天）；投资人页 v0 纯只读。
+
+**新增**：`proto/dashboardv1/request_box.proto`（`RequestBoxItem`/`ListRequestBox`/`ResolveRequest`+`ResolveRequestState` 枚举）；`service_request_box.go` 两 RPC 实现；`pgstore.RequestBoxRow`/`ListRequestedGaps`（requested 集按请求龄最老在前）；前端 investor.tsx「请求箱」段双按钮；`fmtAge`。
+
+**修改**：`ResolveConditionGap` 签名补 `note` 参+`applied bool` 返回（resolve_note 落「投资人页回执」）；`service.proto` 挂两 rpc+import（rpc 名与消息同名冲突→输入消息 `ResolveRequestRequest`）。
+
+**关键决策**：①age_seconds 后端算（前端零信任——按钮只发 id+态）；②applied=false=行已收口/不存在幂等（双击重发不误报）；③capital 零新码——kind 白名单/EvalCond/reconcile 全在，锚测造 `capital` 行端到端走通即票面「capital:* 走同一态机」条款实证；④reopen 安全网照旧（回执误按下拍 reconcile 自纠）。
+
+**验证**：✅ `go build/vet ./...`=0；`gofmt` 净；`TestM46_RequestBox` 真实 5434 六步锚绿（capital 行入箱+龄→非法态 invalid_argument→fulfilled 翻态+note→幂等复按→出箱）；`TestD186_*` 签名改后绿；`npm run build` 绿；check-lines/import 方向/env-reads/迁移契约全过；pre-commit 十道。
+
+**状态/下一步**：🔄 报审待终审；遗留=①SG 部署验收=投资人页请求箱见 #6/#11+回执一按翻态；②waived 行无 reopen 径（态机不含 waived→open——放弃即终态，票面语义照办）。
