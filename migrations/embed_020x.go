@@ -22,3 +22,6 @@ var NoxRoRoleSQL string // D-241⑧：鲜装 nox_ro 补造（0041+0047 语义合
 
 //go:embed 1005_dept_reports.sql
 var DeptReportsSQL string // D-244：fin_dept_reports（十一部部报+账本专项+经理摘要）
+
+//go:embed 1006_m40_runtime_requestbox.sql
+var M40RuntimeRequestboxSQL string // D-246/D-247 M4.0：台账降噪（未登记/已剔族清行+dept 七值）+请求箱 kind 白名单+runtime 转票

@@ -35,7 +35,7 @@ func (s *Store) OpenConditionGap(ctx context.Context, g *ConditionGap) (int64, e
 
 // ListConditionGaps 缺口清单（status 空串=全态）。
 func (s *Store) ListConditionGaps(ctx context.Context, status string) ([]ConditionGap, error) {
-	q := `SELECT id, template_id, kind, subject, qualifier, request_text, status
+	q := `SELECT id, template_id, kind, subject, qualifier, request_text, status, created_at
 	      FROM fin_condition_gap`
 	args := []any{}
 	if status != "" {
@@ -52,7 +52,7 @@ func (s *Store) ListConditionGaps(ctx context.Context, status string) ([]Conditi
 	for rows.Next() {
 		var g ConditionGap
 		if err := rows.Scan(&g.ID, &g.TemplateID, &g.Kind, &g.Subject, &g.Qualifier,
-			&g.RequestText, &g.Status); err != nil {
+			&g.RequestText, &g.Status, &g.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, g)

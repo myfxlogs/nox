@@ -21,7 +21,7 @@ func TestD187_RunOnceRealStore(t *testing.T) {
 	if err := st.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := RunOnce(ctx, st); err != nil {
+	if _, _, err := RunOnce(ctx, st, 10000, 1000); err != nil {
 		t.Fatal(err)
 	}
 	// 累计面≥1（测试库跨轮残留使"首扫"非首轮——断言总效果非本轮回传）。
@@ -37,7 +37,7 @@ func TestD187_RunOnceRealStore(t *testing.T) {
 	if gapRows+propAlerts == 0 {
 		t.Fatal("匹配零产出=静默病灶（缺口行+提案告警皆无）")
 	}
-	_, g2, err := RunOnce(ctx, st)
+	_, g2, err := RunOnce(ctx, st, 10000, 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestD189_RunOnceProposalRows(t *testing.T) {
 	if _, err := st.Pool().Exec(ctx, `DELETE FROM fin_proposal; DELETE FROM alerts`); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := RunOnce(ctx, st); err != nil {
+	if _, _, err := RunOnce(ctx, st, 10000, 1000); err != nil {
 		t.Fatal(err)
 	}
 	// 提案行数==告警数且告警携稳定 id（提案#N 形）。
@@ -80,7 +80,7 @@ func TestD189_RunOnceProposalRows(t *testing.T) {
 		t.Fatal("提案告警未携稳定数据库 id（提案#N 形）")
 	}
 	// 二扫：同模板 proposed 不重开行（幂等真锚）。
-	if _, _, err := RunOnce(ctx, st); err != nil {
+	if _, _, err := RunOnce(ctx, st, 10000, 1000); err != nil {
 		t.Fatal(err)
 	}
 	var rows2 int
@@ -137,8 +137,8 @@ func TestD193_Sentinel(t *testing.T) {
 	gStale := mkGap("t193_ok", "credential", "gone:x", "requested") // →fulfilled+需求已变更
 	gMiss := mkGap("t193_miss", "holding", "ZZZ", "fulfilled")      // →requested 复开
 	gUnk := mkGap("t193_unk", "permission", "probe_x", "requested") // →unknown 不收
-	gRT := mkGap("t193_ok", "runtime", "dual_order", "requested")   // D-196③→豁免零动
-	if _, _, err := RunOnce(ctx, st); err != nil {
+	gRT := mkGap("t193_ok", "holding", "dual_order", "requested")   // 条件行外 subject→需求已变更收口
+	if _, _, err := RunOnce(ctx, st, 10000, 1000); err != nil {
 		t.Fatal(err)
 	}
 	stOf := func(id int64) (string, *string) {
@@ -163,8 +163,8 @@ func TestD193_Sentinel(t *testing.T) {
 	if stt, _ := stOf(gUnk); stt != "requested" {
 		t.Fatalf("unknown 态不收不复开: %s", stt)
 	}
-	if stt, nn := stOf(gRT); stt != "requested" || nn != nil {
-		t.Fatalf("runtime 行应豁免收口/复开: %s %v", stt, nn)
+	if stt, nn := stOf(gRT); stt != "fulfilled" || nn == nil || *nn != "需求已变更" {
+		t.Fatalf("条件外 subject 应收口: %s %v", stt, nn)
 	}
 	// venue 悬空：dci_buy_low 声明 gate:dual vs executor=binance→warn 行；
 	// 未接执行轨模板（option_spread 等）不报。
@@ -221,7 +221,7 @@ func TestD204_DormantTrack(t *testing.T) {
 		VALUES ('dci_sell_high_covered_call','dci','binance','{}',0.1,'proposed')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := RunOnce(ctx, st); err != nil {
+	if _, _, err := RunOnce(ctx, st, 10000, 1000); err != nil {
 		t.Fatal(err)
 	}
 	var st_ string

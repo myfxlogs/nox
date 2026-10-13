@@ -130,8 +130,17 @@ func (e *Executor) finish(ctx context.Context, id int64, st, resp string) {
 }
 
 // gap 缺口落+请求（D-186 通道复用；err 回执即缺口文案）。
+// D-247：runtime=系统侧运行时故障，发 critical 告警不落请求箱（投资人请求箱
+// 只收 credential/permission/capital/constraint/holding 业主侧条件）。
 func (e *Executor) gap(ctx context.Context, l gate.DCILeg, kind, subject, format string, args ...any) error {
 	text := fmt.Sprintf(format, args...)
+	if kind == "runtime" {
+		if aerr := e.Store.InsertAlert(ctx, nil, "critical",
+			fmt.Sprintf("系统侧病灶 %s runtime:%s —— %s", l.Tmpl, subject, text)); aerr != nil {
+			log.Printf("[dciexec] runtime gap alert: %v", aerr)
+		}
+		return fmt.Errorf("%s", text) // D-196③：runtime 文案自带「系统侧病灶」前缀无双套
+	}
 	id, err := e.Store.OpenConditionGap(ctx, &pgstore.ConditionGap{
 		TemplateID: l.Tmpl, Kind: kind, Subject: subject, RequestText: text})
 	if err != nil {
@@ -139,9 +148,6 @@ func (e *Executor) gap(ctx context.Context, l gate.DCILeg, kind, subject, format
 	}
 	if err := e.Store.RequestConditionGap(ctx, id); err != nil {
 		return err
-	}
-	if kind == "runtime" {
-		return fmt.Errorf("%s", text) // D-196③：runtime 文案自带「系统侧病灶」前缀无双套
 	}
 	return fmt.Errorf("条件缺口：%s", text)
 }

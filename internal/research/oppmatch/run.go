@@ -98,8 +98,10 @@ func quoteFor(ctx context.Context, st *pgstore.Store, tid string) (*float64, err
 
 // RunOnce 单轮匹配（日频调用）：提案=InsertAlert info（episode 闸天然防抖）；
 // 缺口=OpenConditionGap 幂等+RequestConditionGap（仅 open→requested 推一次）。
+// D-247：缺口请求生成前先过可行性预检（capitalBase/perStrategyCap=资金基数×
+// 单策略上限口径；≤0 由 effCap 收口不拦）——不过→模板休眠约束行+原因，零请求。
 // 返回提案数/新请求缺口数。
-func RunOnce(ctx context.Context, st *pgstore.Store) (int, int, error) {
+func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap float64) (int, int, error) {
 	ts, err := st.ListOppTemplates(ctx)
 	if err != nil {
 		return 0, 0, err
@@ -141,6 +143,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store) (int, int, error) {
 	if cons, cerr := st.ListCapabilityConstraints(ctx); cerr == nil {
 		dormant = pgstore.DormantPairs(cons)
 	}
+	feas := NewFeasibility(led, capitalBase, perStrategyCap) // D-247 可行性预检面
 	for _, r := range Match(in, view) {
 		if dormant[r.TemplateID+"@binance"] {
 			if n, derr := st.DeferProposalsByPair(ctx, r.TemplateID, "binance"); derr == nil && n > 0 {
@@ -176,6 +179,22 @@ func RunOnce(ctx context.Context, st *pgstore.Store) (int, int, error) {
 			if err := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
 				"机会%s%d %s（轨=%s，%s）", tag, pid, r.TemplateID, r.ExecTrack, apr)); err != nil {
 				log.Printf("[oppmatch] proposal alert %s: %v", r.TemplateID, err)
+			}
+			continue
+		}
+		// D-247 可行性预检：缺口请求前先判能不能投——不过→模板休眠+原因留痕零请求。
+		if ok, reason := feas.Check(r); !ok {
+			if uerr := st.UpsertCapabilityConstraint(ctx,
+				DormantConstraint(r.TemplateID, "binance", reason)); uerr != nil {
+				log.Printf("[oppmatch] dormant constraint %s: %v", r.TemplateID, uerr)
+				continue
+			}
+			if n, derr := st.DeferProposalsByPair(ctx, r.TemplateID, "binance"); derr == nil && n > 0 {
+				log.Printf("[oppmatch] 预检休眠 %s 翻 deferred %d 行", r.TemplateID, n)
+			}
+			if err := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
+				"可行性预检不过（D-247）%s@binance 休眠：%s", r.TemplateID, reason)); err != nil {
+				log.Printf("[oppmatch] precheck alert %s: %v", r.TemplateID, err)
 			}
 			continue
 		}
