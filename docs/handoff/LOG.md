@@ -253,3 +253,11 @@ fail-open 不变。**实证**：SG Generate 补班 11/11 全成+manager 行落�
 ## D-249② 日报待办闭环（@e791ecd4）
 
 Generate 加⑧段「昨日公司日报原文」（`ListDeptReports(date-1)` 复用读面零新表——进度账本=fin_dept_reports 自身跨日对拍；缺日空段注明，读败当班跳过）；系统提示加「昨日待办→今日状态」必段（消解/未消解/新增逐条标），末行「明日关注」供次日对拍。**修**：⑧段置 Generate 直查——gather 内 BJ 零点 -1d 错 report_date（UTC 零时）口径，锚 `TestD249_TodoLoop` 钉住。
+
+## NAV 幽灵池过滤（@1ce2a810 / STATE@4ef5e5da，已推 nox）
+
+**病灶**：`fin_venue_account_snapshot` 移除户残行（62311223 USD 172.95）入 NAV——`ExplorerIdleFunds` 零 `broker_accounts` 关联，虚 +3%。
+
+**改**：快照读面打 `Ghost` 标（mt4/mt5 行 venue 须在册；CEX venue 天然不入 broker_accounts 不受影响；stopped 户在册照计）；`SumNav` 剔除+`SkippedGhost` 独立计数；幽灵池 Idle/BelowFloor 不打标（防幻影告警）；deptreport ①段幽灵行带标+剔除计数行。写侧不动零迁移。explorer.go 行数硬闸拆 `explorer_idle.go`。
+
+**验证**：锚 `TestGhostPool_NAV`（幽灵标/剔除/计数/CEX 不受影响/在册户照计）；budget/deptreport/pgstore 全包绿含 race；门禁全过。部署验收=NAV 5247.63 实拍。
