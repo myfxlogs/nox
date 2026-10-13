@@ -103,7 +103,9 @@ func (s *Store) ListCapabilityLedger(ctx context.Context) (*CapabilityLedger, er
 			brows.Close()
 			return nil, err
 		}
-		c.VenueType = "cfd"
+		// venue_type 真值注册（mt5/mt4）——原归一 "cfd" 致 type:mt5 凭据键永不命中
+		// （请求箱 #6 cfd_swap_carry credential:mt5 误报根因）；asset_class 语义经 Tags 保留。
+		c.VenueType = vt
 		c.Tags = []string{"cfd", vt, status}
 		l.Credentials = append(l.Credentials, c)
 	}
