@@ -281,3 +281,11 @@ Generate 加⑧段「昨日公司日报原文」（`ListDeptReports(date-1)` 复
 - 锚测：`TestCredTypeTrueValue`（5434 实库 broker 行 venue_type 真值+cfd tag 保留）+ `TestCredMT5_TypeKey`（ledgerView 三级键+credential:mt5 端到端命中）。
 - 机检：build/vet/gofmt 净；pgstore+oppmatch 全包绿、oppmatch race 绿；check-lines 零警告；import 方向 221/222；env-reads/迁移契约（零迁移）过。
 - 部署验收（SG）：下拍 reconcile 后请求箱 #6 自动收口（fulfilled 出集）；#11 保持 requested 如实缺口。
+
+## D-249④ 日报 SOP 输出契约 @9ca6b801
+
+- `deptreport/contract.go`：八段必段表（①NAV…⑧待办对拍+末行明日关注），`contractMiss` 缺段/乱序检出（探针序位严格递增），`contractFixNote` 补正注记。
+- `Generate` 接线：首班违约→user+补正注记重生成一次（重试败保留首班正文）；仍违→`【契约缺段：…】` 标记追加正文 fail-open 落库+log。schema 只管结构不管数字；零新表零迁移。
+- 锚测：校验器三态+补正重生成径+fail-open 标记三件绿；fakeRunner 缺省正文升合规样例（旧锚调用数=1 不破）。
+- 机检：build/vet/gofmt 净、deptreport 全包+race 绿、check-lines 零警告、import 221/222、迁移契约（零迁移）过。
+- 部署验收：今晚 23:05 UTC 班 company 行全序段齐=契约过（违则在正文见「契约缺段」标）。
