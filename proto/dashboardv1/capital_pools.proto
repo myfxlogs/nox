@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package nox.dashboard.v1;
+
+option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
+
+import "google/protobuf/timestamp.proto";
+
+// ==== capital_map.proto —— 资金地图（业主令 10-13 + D-285：按币种如实分组零换算） ====
+
+message GetCapitalPoolsRequest {}
+
+// CapitalDeployedPart 池内「在跑」归因明细（kind：position / dci / earn /
+// margin——ref=人类可读引用，amount 单位=该池 currency）。
+message CapitalDeployedPart {
+  string kind = 1;
+  string ref = 2;
+  double amount = 3;
+}
+
+// CapitalPool 单 venue×venue_type 资金池：equity=快照权益，deployed=在跑归因
+// 合计，idle=equity−deployed（后端算，前端零运算）。
+message CapitalPool {
+  string venue = 1;
+  string venue_type = 2;
+  string currency = 3;
+  double equity = 4;
+  double idle = 5;
+  double deployed = 6;
+  bool online = 7;              // 数据通道活（快照在源节奏窗内）
+  bool stale = 8;               // 快照超源节奏窗（展示置灰标时点）
+  bool ghost = 9;               // 幽灵池（mt 户已移除的残行——NAV 剔计同源语义）
+  google.protobuf.Timestamp updated_at = 10;
+  repeated CapitalDeployedPart deployed_parts = 11;
+}
+
+// CapitalPoolsGroup 币种分组（D-285：USDT/USD/UST 各报各的，零汇率换算）。
+message CapitalPoolsGroup {
+  string currency = 1;
+  double equity = 2;
+  double idle = 3;
+  double deployed = 4;
+  repeated CapitalPool pools = 5;
+}
+
+message GetCapitalPoolsResponse {
+  repeated CapitalPoolsGroup groups = 1;
+  google.protobuf.Timestamp computed_at = 2;
+}

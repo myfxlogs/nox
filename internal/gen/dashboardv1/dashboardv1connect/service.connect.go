@@ -268,6 +268,9 @@ const (
 	// DashboardServiceGetFinanceOverviewProcedure is the fully-qualified name of the DashboardService's
 	// GetFinanceOverview RPC.
 	DashboardServiceGetFinanceOverviewProcedure = "/nox.dashboard.v1.DashboardService/GetFinanceOverview"
+	// DashboardServiceGetCapitalPoolsProcedure is the fully-qualified name of the DashboardService's
+	// GetCapitalPools RPC.
+	DashboardServiceGetCapitalPoolsProcedure = "/nox.dashboard.v1.DashboardService/GetCapitalPools"
 	// DashboardServiceExecuteSpotCarryDemoProcedure is the fully-qualified name of the
 	// DashboardService's ExecuteSpotCarryDemo RPC.
 	DashboardServiceExecuteSpotCarryDemoProcedure = "/nox.dashboard.v1.DashboardService/ExecuteSpotCarryDemo"
@@ -474,6 +477,8 @@ type DashboardServiceClient interface {
 	GetCexScanSnapshot(context.Context, *connect.Request[dashboardv1.GetCexScanSnapshotRequest]) (*connect.Response[dashboardv1.GetCexScanSnapshotResponse], error)
 	// D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
 	GetFinanceOverview(context.Context, *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error)
+	// 资金地图（业主令 10-13 + D-285）：按币种分组的池级 权益/闲置/在跑 归因。
+	GetCapitalPools(context.Context, *connect.Request[dashboardv1.GetCapitalPoolsRequest]) (*connect.Response[dashboardv1.GetCapitalPoolsResponse], error)
 	// D-350 阶段③：spot-carry demo 手动实测（双腿原子：先现货后永续，失败回滚已成交腿）。
 	ExecuteSpotCarryDemo(context.Context, *connect.Request[dashboardv1.ExecuteSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ExecuteSpotCarryDemoResponse], error)
 	ListSpotCarryDemo(context.Context, *connect.Request[dashboardv1.ListSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ListSpotCarryDemoResponse], error)
@@ -1010,6 +1015,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("GetFinanceOverview")),
 			connect.WithClientOptions(opts...),
 		),
+		getCapitalPools: connect.NewClient[dashboardv1.GetCapitalPoolsRequest, dashboardv1.GetCapitalPoolsResponse](
+			httpClient,
+			baseURL+DashboardServiceGetCapitalPoolsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetCapitalPools")),
+			connect.WithClientOptions(opts...),
+		),
 		executeSpotCarryDemo: connect.NewClient[dashboardv1.ExecuteSpotCarryDemoRequest, dashboardv1.ExecuteSpotCarryDemoResponse](
 			httpClient,
 			baseURL+DashboardServiceExecuteSpotCarryDemoProcedure,
@@ -1280,6 +1291,7 @@ type dashboardServiceClient struct {
 	setAiSettings                *connect.Client[dashboardv1.SetAiSettingsRequest, dashboardv1.SetAiSettingsResponse]
 	getCexScanSnapshot           *connect.Client[dashboardv1.GetCexScanSnapshotRequest, dashboardv1.GetCexScanSnapshotResponse]
 	getFinanceOverview           *connect.Client[dashboardv1.GetFinanceOverviewRequest, dashboardv1.GetFinanceOverviewResponse]
+	getCapitalPools              *connect.Client[dashboardv1.GetCapitalPoolsRequest, dashboardv1.GetCapitalPoolsResponse]
 	executeSpotCarryDemo         *connect.Client[dashboardv1.ExecuteSpotCarryDemoRequest, dashboardv1.ExecuteSpotCarryDemoResponse]
 	listSpotCarryDemo            *connect.Client[dashboardv1.ListSpotCarryDemoRequest, dashboardv1.ListSpotCarryDemoResponse]
 	listPaperSpotCarry           *connect.Client[dashboardv1.ListPaperSpotCarryRequest, dashboardv1.ListPaperSpotCarryResponse]
@@ -1708,6 +1720,11 @@ func (c *dashboardServiceClient) GetFinanceOverview(ctx context.Context, req *co
 	return c.getFinanceOverview.CallUnary(ctx, req)
 }
 
+// GetCapitalPools calls nox.dashboard.v1.DashboardService.GetCapitalPools.
+func (c *dashboardServiceClient) GetCapitalPools(ctx context.Context, req *connect.Request[dashboardv1.GetCapitalPoolsRequest]) (*connect.Response[dashboardv1.GetCapitalPoolsResponse], error) {
+	return c.getCapitalPools.CallUnary(ctx, req)
+}
+
 // ExecuteSpotCarryDemo calls nox.dashboard.v1.DashboardService.ExecuteSpotCarryDemo.
 func (c *dashboardServiceClient) ExecuteSpotCarryDemo(ctx context.Context, req *connect.Request[dashboardv1.ExecuteSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ExecuteSpotCarryDemoResponse], error) {
 	return c.executeSpotCarryDemo.CallUnary(ctx, req)
@@ -1975,6 +1992,8 @@ type DashboardServiceHandler interface {
 	GetCexScanSnapshot(context.Context, *connect.Request[dashboardv1.GetCexScanSnapshotRequest]) (*connect.Response[dashboardv1.GetCexScanSnapshotResponse], error)
 	// D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
 	GetFinanceOverview(context.Context, *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error)
+	// 资金地图（业主令 10-13 + D-285）：按币种分组的池级 权益/闲置/在跑 归因。
+	GetCapitalPools(context.Context, *connect.Request[dashboardv1.GetCapitalPoolsRequest]) (*connect.Response[dashboardv1.GetCapitalPoolsResponse], error)
 	// D-350 阶段③：spot-carry demo 手动实测（双腿原子：先现货后永续，失败回滚已成交腿）。
 	ExecuteSpotCarryDemo(context.Context, *connect.Request[dashboardv1.ExecuteSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ExecuteSpotCarryDemoResponse], error)
 	ListSpotCarryDemo(context.Context, *connect.Request[dashboardv1.ListSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ListSpotCarryDemoResponse], error)
@@ -2507,6 +2526,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("GetFinanceOverview")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGetCapitalPoolsHandler := connect.NewUnaryHandler(
+		DashboardServiceGetCapitalPoolsProcedure,
+		svc.GetCapitalPools,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetCapitalPools")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceExecuteSpotCarryDemoHandler := connect.NewUnaryHandler(
 		DashboardServiceExecuteSpotCarryDemoProcedure,
 		svc.ExecuteSpotCarryDemo,
@@ -2853,6 +2878,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetCexScanSnapshotHandler.ServeHTTP(w, r)
 		case DashboardServiceGetFinanceOverviewProcedure:
 			dashboardServiceGetFinanceOverviewHandler.ServeHTTP(w, r)
+		case DashboardServiceGetCapitalPoolsProcedure:
+			dashboardServiceGetCapitalPoolsHandler.ServeHTTP(w, r)
 		case DashboardServiceExecuteSpotCarryDemoProcedure:
 			dashboardServiceExecuteSpotCarryDemoHandler.ServeHTTP(w, r)
 		case DashboardServiceListSpotCarryDemoProcedure:
@@ -3238,6 +3265,10 @@ func (UnimplementedDashboardServiceHandler) GetCexScanSnapshot(context.Context, 
 
 func (UnimplementedDashboardServiceHandler) GetFinanceOverview(context.Context, *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetFinanceOverview is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetCapitalPools(context.Context, *connect.Request[dashboardv1.GetCapitalPoolsRequest]) (*connect.Response[dashboardv1.GetCapitalPoolsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetCapitalPools is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ExecuteSpotCarryDemo(context.Context, *connect.Request[dashboardv1.ExecuteSpotCarryDemoRequest]) (*connect.Response[dashboardv1.ExecuteSpotCarryDemoResponse], error) {
