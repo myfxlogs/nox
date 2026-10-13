@@ -1,5 +1,39 @@
 # LOG.md — 阶段交付归档（NOX 仓首条）
 
+## 2026-10-13 M4.2 终审交付：策略生命周期状态机+机读判据表+提案 SLA+晋级自动执行（c6de485e）
+
+### 背景/范围
+v3 §7 第二阶段：布尔 disabled 升格六态状态机（candidate→paper→graduated→live | demoted→retired）；淘汰判据迁表零字面量；proposed 提案 SLA 限期翻态；live 策略提案自动执行——`go N` 退为投委会晋级批准面（批策略一次非每单）。
+
+### 新增
+- 迁移 `1009_strategy_lifecycle.sql`：`fin_strategy`（六态 CHECK+hit_rules+decided_at/by）+`fin_strategy_criteria`（strategy/kind/pred/params jsonb，UNIQUE 键）+`app_config.proposal_sla_hours`=24。
+- `internal/store/pgstore/strategy_lifecycle.go`（261 行）：SetStrategyState/GetStrategyState/EnsureStrategyRows/ListStrategiesByState/ListStrategyCriteria。
+- `internal/portfolio/lifecycle/criteria.go`（111 行）：FireCriteria 判据求值器（区间门+conds 谓词+mode all/any，metric 无证恒 false fail-closed）。
+- `internal/trading/dciexec/autoexec.go`：AutoExecLive（ExecTemplates 白名单→GetStrategyState=='live'→GoProposal，行缺/读败/非 live 全 fail-closed）。
+- `internal/research/oppmatch/lifecycle.go`：runLifecycle 三件并入扫描拍（覆盖确保/SLA/晋级评估），零新定时器。
+
+### 修改
+- `elimination.go`：三段字面量判据→`NewEliminator` 每判实时读表（读败/空表→不杀+log）；`EvaluateElimination` 签名+ctx 传播至 engine_position_close 消费面。
+- `run.go` RunOnce 尾挂 runLifecycle；`wire_oppmatch.go` 装 dciexec executor 同拍调 AutoExecLive。
+- `IsStrategyDisabled`/`ListDisabledStrategies` 投影=fin_strategy 非 live OR strategy_stats.disabled 并集双保险。
+- 迁移回填：stats.disabled→retired、enabled→live（部署即保产——盲置 candidate 会切断在跑者）。
+
+### 关键决策
+- D-260 放前门：auto-exec 三面边界钉死（白名单+viable 卡+既有约束闸+投委会翻 live 才开火）。
+- D-261 审计修正：`err.Error()=="no rows"`×2→`errors.Is(pgx.ErrNoRows)`（allow_rules.go 惯例对齐）。
+
+### 验证
+- ✅ build/vet/gofmt/触包测试/race/全套件 64 包零 FAIL（D587 flake 本轮未发）。
+- ✅ SG 部署：迁移 1009 applied 04:23:59；`fin_strategy` 16 行=7 stats（1 live+6 retired）∪9 模板 candidate。
+- ✅ SLA 首拍即火：5 条存量 proposed（#1/#3/#4/#5/#121）→expired+critical 告警；proposed→终态<24h 结构性保证。
+- ✅ autoexec 全 candidate→n=0 静默（fail-closed 实证）；backfill 不径 SetStrategyState→零 live 告警（正确）。
+- ✅ 判据种子与原字面量逐项语义对等；demotion 空表=安全侧（存面就绪消费件未建）。
+- ✅ `fin_opp_eval` 5 卡管健。
+
+### 状态/下一步
+- ✅ M4.2 闭环（STATE ✅/D-261/master `c03609f3`）。下一票=M4.3 风控单入口（派单序 M4.0→M4.1→M4.2→M4.3→…）。
+- 开放面：demotion 判据+消费件待委员会定值另票；paper 写径待委员会/probe 域；fin_strategy 键空间碰撞=理论面已记；`go N` 手工批准面保留（投委会权位）。
+
 ## 2026-10-12 切流后热修①：总览持仓闪动+「连接中」卡死（f2064f28）
 
 ### 业主报症
