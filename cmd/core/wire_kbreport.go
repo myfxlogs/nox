@@ -35,6 +35,9 @@ func kbReportLoop(ctx context.Context, st *pgstore.Store, cfg *config.Config, to
 		case <-timer.C:
 		}
 		client, err := kbreport.ResolveClient(ctx, st, cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)
+		if client != nil {
+			client.CallLog = analyst.LLMLogger(st, "kb_report") // D-246：fin_llm_call 落行
+		}
 		if err != nil {
 			log.Printf("[kbreport] resolve client: %v", err)
 		} else if path, err := kbreport.Generate(ctx, kbreport.Deps{Client: client, Tools: tools,

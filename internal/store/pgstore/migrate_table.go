@@ -200,4 +200,5 @@ var migrationFiles = []struct {
 	{1004, migrations.NoxRoRoleSQL, false},                    // D-241⑧：鲜装 nox_ro 补造
 	{1005, migrations.DeptReportsSQL, false},                  // D-244：fin_dept_reports（部门日报→经理摘要）
 	{1006, migrations.M40RuntimeRequestboxSQL, false},         // D-246/D-247：台账降噪+请求箱分流
+	{1007, migrations.LLMCallSQL, false},                      // D-246：fin_llm_call 调用账本
 }

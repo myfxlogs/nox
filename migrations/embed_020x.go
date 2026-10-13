@@ -25,3 +25,6 @@ var DeptReportsSQL string // D-244：fin_dept_reports（十一部部报+账本�
 
 //go:embed 1006_m40_runtime_requestbox.sql
 var M40RuntimeRequestboxSQL string // D-246/D-247 M4.0：台账降噪（未登记/已剔族清行+dept 七值）+请求箱 kind 白名单+runtime 转票
+
+//go:embed 1007_llm_call.sql
+var LLMCallSQL string // D-246 v3 §4.4：fin_llm_call LLM 调用账本（费用入 D-013 口径）

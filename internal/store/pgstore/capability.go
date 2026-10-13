@@ -7,6 +7,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // CapabilityLedger 能力账本聚合视图（D-187 匹配引擎消费面）。
@@ -64,13 +65,14 @@ type CapabilityConstraint struct {
 
 // ConditionGap 条件缺口行（fin_condition_gap）。
 type ConditionGap struct {
-	ID          int64  `json:"id"`
-	TemplateID  string `json:"template_id"`
-	Kind        string `json:"kind"`
-	Subject     string `json:"subject"`
-	Qualifier   string `json:"qualifier"`
-	RequestText string `json:"request_text"`
-	Status      string `json:"status"`
+	ID          int64     `json:"id"`
+	TemplateID  string    `json:"template_id"`
+	Kind        string    `json:"kind"`
+	Subject     string    `json:"subject"`
+	Qualifier   string    `json:"qualifier"`
+	RequestText string    `json:"request_text"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // ListCapabilityLedger 聚合四源+两新表（任一面缺行=该面空非错）。

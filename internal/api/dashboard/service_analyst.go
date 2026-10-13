@@ -111,7 +111,11 @@ func (s *Service) resolveAiConfig(ctx context.Context) (*analyst.Client, error) 
 		// D-591 S7：AI 模型兜底硬编码退役——DB+env 双空报错禁用，禁静默跑型号名兜底。
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("分析员未配置（model 为空）"))
 	}
-	return analyst.NewClient(baseURL, apiKey, model), nil
+	c := analyst.NewClient(baseURL, apiKey, model)
+	if deps.client != nil {
+		c.CallLog = deps.client.CallLog // D-246：临时 client 继承落账钩（fin_llm_call）
+	}
+	return c, nil
 }
 
 // AskAnalyst 流式回答：限流 → 每问读库解析配置 → 构造 messages → analyst.Run → delta/citation/follow_ups/done 流出。

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // MaxToolRounds 工具调用最大轮数（防失控长答）。
@@ -72,6 +73,8 @@ func RunWithSpecsMaxTokensThinking(ctx context.Context, c *Client, tools ToolExe
 		}
 		var toolCalls []ToolCall
 		var assistantBlocks []ContentBlock
+		rIn, rOut := 0, 0 // D-246：逐轮 usage（账本按 HTTP 调用粒度落行）
+		rStart := time.Now()
 		stopReason, err := c.StreamMessages(ctx, req, StreamCallbacks{
 			OnDelta: func(text string) {
 				if cb.OnDelta != nil {
@@ -90,8 +93,18 @@ func RunWithSpecsMaxTokensThinking(ctx context.Context, c *Client, tools ToolExe
 			OnUsage: func(in, out int) {
 				inTok += in
 				outTok += out
+				rIn += in
+				rOut += out
 			},
 		})
+		if c.CallLog != nil { // D-246：fin_llm_call 每次真实调用落行
+			rec := CallRecord{Model: c.Model, InTokens: rIn, OutTokens: rOut,
+				ElapsedMs: int(time.Since(rStart).Milliseconds())}
+			if err != nil {
+				rec.Err = err.Error()
+			}
+			c.CallLog(ctx, rec)
+		}
 		if err != nil {
 			return LoopResult{Grounded: grounded}, fmt.Errorf("stream round %d: %w", round, err)
 		}

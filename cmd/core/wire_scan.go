@@ -9,6 +9,7 @@ import (
 
 	"nox/internal/data/bus"
 	"nox/internal/data/symdig"
+	"nox/internal/platform/analyst"
 	"nox/internal/platform/config"
 	"nox/internal/platform/safego"
 	"nox/internal/research/scan"
@@ -167,6 +168,7 @@ func symdigRound(ctx context.Context, st *pgstore.Store, cfg *config.Config) {
 	}
 	deps := symdig.Deps{Store: st, ReportDir: kbreport.DefaultReportDir, InboxPath: kbreport.DefaultInboxPath, MaxTokens: cfg.SymdigMaxTokens} // R1：/kn 容器约定路径常量，禁第二口径
 	if client, err := kbreport.ResolveClient(ctx, st, cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel); err == nil {
+		client.CallLog = analyst.LLMLogger(st, "symdig") // D-246：fin_llm_call 落行
 		deps.Client = client
 	}
 	if _, err := symdig.Round(ctx, deps); err != nil {
