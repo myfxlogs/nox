@@ -57,6 +57,8 @@ type Store interface {
 	// D-258 M4.1：评估卡消费面——无卡/非 viable=不算候选拒单；settle 回写实绩。
 	GetOppEval(ctx context.Context, proposalID int64) (*pgstore.OppEval, error)
 	UpdateOppEvalActual(ctx context.Context, proposalID int64, apr float64) error
+	// D-260 M4.2：生命周期态读面——自动执行闸 state=='live' fail-closed。
+	GetStrategyState(ctx context.Context, strategy string) (string, bool, error)
 }
 
 // Executor binance DCI 申购执行器（凭据由装配侧从 exchange_configs 注入）。

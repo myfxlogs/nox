@@ -230,6 +230,8 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	} else if n > 0 {
 		log.Printf("[oppmatch] expired %d stale proposals", n)
 	}
+	// D-260 M4.2：生命周期三件并入扫描拍（覆盖/SLA/晋级评估——零新定时器）。
+	runLifecycle(ctx, st, in)
 	log.Printf("[oppmatch] scan done: %d templates, %d proposals, %d new gap requests",
 		len(in), propN, gapN)
 	return propN, gapN, nil

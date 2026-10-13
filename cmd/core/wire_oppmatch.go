@@ -22,6 +22,8 @@ func startOppMatch(ctx context.Context, st *pgstore.Store, cfg *config.Config) {
 }
 
 func oppMatchLoop(ctx context.Context, st *pgstore.Store, cfg *config.Config) {
+	// D-260④：live 策略自动执行器——凭据同 D-191 装配径（缺凭据=GoProposal 内 gap 拒单径）。
+	ex := buildDCIExecutor(ctx, st)
 	// D-193③：首扫等权限探针 boot 轮信号（消首轮假缺口/迟提案；
 	// scanner 未接线场景由 startCexScanner 立即标 done 零死等）。
 	select {
@@ -33,6 +35,11 @@ func oppMatchLoop(ctx context.Context, st *pgstore.Store, cfg *config.Config) {
 		log.Printf("[oppmatch] boot scan: %v", err)
 	} else {
 		log.Printf("[oppmatch] boot scan: %d proposals %d gap-requests", p, g)
+		if n, err := ex.AutoExecLive(ctx); err != nil {
+			log.Printf("[autoexec] boot scan: %v", err)
+		} else if n > 0 {
+			log.Printf("[autoexec] boot scan: %d proposals executed", n)
+		}
 	}
 	for {
 		safego.Beat("main:oppmatch")
@@ -45,6 +52,10 @@ func oppMatchLoop(ctx context.Context, st *pgstore.Store, cfg *config.Config) {
 		}
 		if _, _, err := oppmatch.RunOnce(ctx, st, cfg.CapitalBaseUSD, cfg.AutoTradeMaxNotional); err != nil {
 			log.Printf("[oppmatch] daily scan: %v", err)
+		} else if n, err := ex.AutoExecLive(ctx); err != nil {
+			log.Printf("[autoexec] daily scan: %v", err)
+		} else if n > 0 {
+			log.Printf("[autoexec] daily scan: %d proposals executed", n)
 		}
 	}
 }

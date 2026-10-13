@@ -33,13 +33,14 @@ type fakeStore struct {
 		qty  float64
 		note string
 	}
-	nextID      int64
-	maxTenor    []int // 捕获每次 ListDCIQuotes 的 cap
-	outstanding float64
-	proposals   map[int64]*pgstore.Proposal
-	nextProp    int64
-	evals       map[int64]*pgstore.OppEval // D-258：提案→评估卡种子（默认 viable）
-	actualAPRs  map[int64]float64
+	nextID         int64
+	maxTenor       []int // 捕获每次 ListDCIQuotes 的 cap
+	outstanding    float64
+	proposals      map[int64]*pgstore.Proposal
+	nextProp       int64
+	evals          map[int64]*pgstore.OppEval // D-258：提案→评估卡种子（默认 viable）
+	strategyStates map[string]string          // D-260：键→lifecycle 态（live 闸种子）
+	actualAPRs     map[int64]float64
 	// 交割观察面：
 	filledOrders []pgstore.FilledDCIOrder
 	settled      []struct {
@@ -217,6 +218,15 @@ func (f *fakeStore) GetOppEval(_ context.Context, id int64) (*pgstore.OppEval, e
 func (f *fakeStore) UpdateOppEvalActual(_ context.Context, id int64, apr float64) error {
 	f.actualAPRs[id] = apr
 	return nil
+}
+
+// strategyStates 测试注入态（零值=live 闸默认关——fail-closed 锚）。
+func (f *fakeStore) GetStrategyState(_ context.Context, key string) (string, bool, error) {
+	if f.strategyStates == nil {
+		return "", false, nil
+	}
+	st, ok := f.strategyStates[key]
+	return st, ok, nil
 }
 
 func (f *fakeStore) OpenConditionGap(_ context.Context, g *pgstore.ConditionGap) (int64, error) {
