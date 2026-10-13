@@ -459,3 +459,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **gap#11 收口径**：exchange_configs 行→`ListCapabilityLedger` credentials→`reconcileGaps` EvalCondTri ok→自动 fulfilled（零新径）。
 - **锚**：`TestOkxFuturesSeed`（enc 复制 real 非 sim/幂等/枚举放行+无关值仍拦）+`TestCEXAccount_OkxFutures`（统一账户端点+venue_key 穿透不 panic）+归一锚扩 futures case。
 - **验收残留（SG）**：部署后 `SELECT venue,venue_type FROM exchange_configs WHERE venue='okx' AND venue_type='futures'` 行在册；gap#11 次轮 reconcile 后 fulfilled；`[account] cex querier: okx:futures` 日志行+快照落 unified 无双计。
+
+## 2026-10-14 okx:futures SG 部署验收 ✅ @ba84705b
+
+- 迁移 1014 上库：`okx:futures` 行在册（enc 凭据 k=t，明文恒空）。
+- **gap#11 自动收口**：boot 扫描 reconcileGaps 判凭据到位 → requested→fulfilled，零手工。
+- querier 注册日志 `[account] cex querier: okx:futures` 实证；快照归一 `okx:unified` 零双计（trading 账户单行，earn/funding 独立账本）。
+- `fin_condition_gap` 表**清零**——E0 后系统进入「零业主欠账」。
