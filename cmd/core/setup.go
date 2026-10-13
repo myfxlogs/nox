@@ -250,14 +250,14 @@ func runServices(ctx context.Context, cancel context.CancelFunc, cfg *config.Con
 	if err := atEngine.ReloadFlags(ctx); err != nil {
 		allowRulesFatal("[flags] initial load: %v (startup fail-closed)", err)
 	}
-	safego.Go("setup:atEngine.Run", func() { atEngine.Run(ctx) })
+	safego.GoPlain("setup:atEngine.Run", func() { atEngine.Run(ctx) })
 	allowRulesKick, _ := configKick.Subscribe()
 	startAllowRulesReloader(ctx, atEngine, allowRulesKick, func(allow []exec.ComboAllowSpec) { // D-443 S3+D-469b S5+D-515 S5：kick 主+5min 兜底
 		pipeline.ReloadSwapArbComboAllow(allow)
 		dashSvc.SetSwapArbComboAllow(allow)
 	})
 	// D-180 S3：存量活跃仓 entry 基准回填（boot 一次性，幂等——已有值不覆写）。
-	safego.Go("setup:backfillEntrySpread", func() {
+	safego.GoPlain("setup:backfillEntrySpread", func() {
 		atEngine.BackfillEntrySpreadPublic(ctx)
 	})
 	// D-107 P4：orderTopic 事件 → atEngine.Kick（OnOrderUpdate 持仓变更 → 触发重扫，scanIfDue 30s 节流）。

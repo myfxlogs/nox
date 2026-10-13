@@ -57,6 +57,7 @@ func serveHTTP(cancel context.CancelFunc, cfg *config.Config, st *pgstore.Store,
 			cfg.AIBaseURL, cfg.AIModel, cfg.AIAPIKey,
 			analyst.NewRateLimiter(cfg.AnalystRatePerHour), // 独立限流器，与前端分析员分开计数
 		)
+		queryHandler.CallLog = analyst.LLMLogger(st, "feishu_query") // D-246：fin_llm_call 落行
 		// D-176②：飞书「批准#N/拒绝#N」口令 → 与前端按钮同一 RPC 语义。
 		queryHandler.SetProbeDecider(probeDecider)
 		// D-191②：飞书「go」口令 → DCI covered-call 申购执行（request_id 幂等）。

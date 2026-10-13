@@ -404,8 +404,14 @@ func TestD191R3_StrikeGate(t *testing.T) {
 	if _, err := e2.GoWheel(context.Background()); err != nil { // 双腿无档全 gap 面用 wheel 径
 		t.Fatal(err)
 	}
-	if len(fs2.gaps) != 2 || len(fs2.orders) != 0 {
-		t.Fatalf("双腿无档应各落 gap 不降级凑单: gaps=%d orders=%d", len(fs2.gaps), len(fs2.orders))
+	crit := 0
+	for _, a := range fs2.alerts {
+		if strings.HasPrefix(a, "critical:") && strings.Contains(a, "系统侧病灶") {
+			crit++
+		}
+	}
+	if crit != 2 || len(fs2.orders) != 0 { // D-247：runtime→critical 告警不落请求箱
+		t.Fatalf("双腿无档应各发 critical 告警不降级凑单: alerts=%+v orders=%d", fs2.alerts, len(fs2.orders))
 	}
 }
 
@@ -698,13 +704,13 @@ func TestD191R6_BlindGate(t *testing.T) {
 		t.Fatal("盲源禁缩账——不应有修正写")
 	}
 	found := false
-	for _, g := range fs.gaps {
-		if g.Subject == "earn_position" {
-			found = g.Kind == "runtime" // D-196①：盲源闸=系统侧病灶
+	for _, a := range fs.alerts { // D-247：盲源闸=系统侧病灶→critical 告警不落箱
+		if strings.HasPrefix(a, "critical:") && strings.Contains(a, "earn_position") {
+			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("earn_position runtime gap 未落: %+v", fs.gaps)
+		t.Fatalf("earn_position runtime critical 未落: %+v", fs.alerts)
 	}
 }
 
@@ -888,15 +894,13 @@ func TestD196_VenueErrKind(t *testing.T) {
 	if _, err := e.GoWheel(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	for _, g := range fs.gaps {
-		if g.Subject == "dual_order" {
-			if g.Kind != "runtime" || !strings.Contains(g.RequestText, "系统侧病灶") {
-				t.Fatalf("400 应落 runtime 病灶缺口: %+v", g)
-			}
-			return
+	for _, a := range fs.alerts {
+		if strings.HasPrefix(a, "critical:") && strings.Contains(a, "dual_order") &&
+			strings.Contains(a, "系统侧病灶") {
+			return // D-247：400 拒参→critical 告警不落请求箱
 		}
 	}
-	t.Fatalf("dual_order gap 未落: %+v", fs.gaps)
+	t.Fatalf("dual_order critical 未落: gaps=%+v alerts=%+v", fs.gaps, fs.alerts)
 }
 
 // TestD196R1_SpotErrClass：spotPrice 读败分面——HTTP 400→runtime 不落
@@ -916,6 +920,18 @@ func TestD196R1_SpotErrClass(t *testing.T) {
 		pid := fs.addProposal("dci_buy_low")
 		if _, err := e.GoProposal(context.Background(), pid); err == nil {
 			t.Fatalf("%s: GoProposal 应返错", want.name)
+		}
+		if want.kind == "runtime" { // D-247：runtime→critical 告警不落箱
+			found := false
+			for _, a := range fs.alerts {
+				if strings.HasPrefix(a, "critical:") && strings.Contains(a, "dual_quote") {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("%s: dual_quote critical 未落 alerts=%+v", want.name, fs.alerts)
+			}
+			continue
 		}
 		found := ""
 		for _, g := range fs.gaps {
@@ -1199,13 +1215,13 @@ func TestD198_Resume(t *testing.T) {
 		t.Fatalf("读败不重发, posts=%d", posts5)
 	}
 	found := false
-	for _, g := range fs5.gaps {
-		if g.Kind == "runtime" && strings.Contains(g.RequestText, "读败") {
+	for _, a := range fs5.alerts { // D-247：runtime→critical 告警不落箱
+		if strings.HasPrefix(a, "critical:") && strings.Contains(a, "读败") {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("读败应落 runtime gap: %+v", fs5.gaps)
+		t.Fatalf("读败应发 critical 告警: %+v", fs5.alerts)
 	}
 }
 

@@ -63,7 +63,7 @@ func (r *SwapReconciler) StartLoop(ctx context.Context) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
-	safego.Go("reconcile_swap:initial", func() {
+	safego.GoPlain("reconcile_swap:initial", func() {
 		select {
 		case <-ctx.Done():
 			return

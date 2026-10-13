@@ -172,8 +172,8 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 	done := make(chan struct{})
 	defer close(done)
 	probe := newSubProbe() // D-166：本连接期 per-channel pending→ack 探针记账
-	safego.Go("okx_private_ws:probe", func() { o.probeSubLoop(ctx, conn, done, probe) })
-	safego.GoLoop("okx_private_ws:ping", func() {
+	safego.GoPlain("okx_private_ws:probe", func() { o.probeSubLoop(ctx, conn, done, probe) })
+	safego.GoLoopPlain("okx_private_ws:ping", func() {
 		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()
 		for {

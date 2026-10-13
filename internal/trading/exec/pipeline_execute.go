@@ -188,7 +188,7 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		for i, leg := range legs {
 			wg.Add(1)
 			idx, l := i, leg
-			safego.Go("pipeline:leg-exec", func() {
+			safego.GoPlain("pipeline:leg-exec", func() {
 				defer wg.Done()
 				// client_order_id 确定性编码（attempt_no=1 首次）。
 				coid := generateClientOrderID(requestID, posID, int16(idx), 1)

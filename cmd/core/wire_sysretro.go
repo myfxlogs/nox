@@ -44,6 +44,9 @@ func retroLoop(ctx context.Context, st *pgstore.Store, cfg *config.Config, tools
 		case <-timer.C:
 		}
 		client, err := kbreport.ResolveClient(ctx, st, cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)
+		if client != nil {
+			client.CallLog = analyst.LLMLogger(st, "sysretro") // D-246：fin_llm_call 落行
+		}
 		if err != nil {
 			log.Printf("[sysretro] resolve client: %v", err)
 		} else {

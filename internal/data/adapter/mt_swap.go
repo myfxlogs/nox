@@ -207,7 +207,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		wg.Add(1)
 		sem <- struct{}{}
 		i, ent := i, ent
-		safego.Go("mt_swap:symbol-params", func() {
+		safego.GoPlain("mt_swap:symbol-params", func() {
 			defer wg.Done()
 			defer func() { <-sem }()
 			process(ent, &slots[i], swapPerCallTimeout)
@@ -232,7 +232,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			rwg.Add(1)
 			rsem <- struct{}{}
 			i := i
-			safego.Go("mt_swap:symbol-params-retry", func() {
+			safego.GoPlain("mt_swap:symbol-params-retry", func() {
 				defer rwg.Done()
 				defer func() { <-rsem }()
 				var slot swapSlot

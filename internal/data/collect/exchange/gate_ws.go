@@ -79,16 +79,16 @@ func (g *GateWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 	// 启动同步首拉白名单（失败=不过滤，单次拉取上限 10s），随后后台 1h 刷新。
 	g.spotWL.refresh(ctx)
 	g.futuresWL.refresh(ctx)
-	safego.GoLoop("gate_ws:pair-wl-refresh", func() {
+	safego.GoLoopPlain("gate_ws:pair-wl-refresh", func() {
 		refreshGateWhitelists(ctx, g.spotWL, g.futuresWL)
 	})
 	var wg sync.WaitGroup
 	wg.Add(2)
-	safego.GoLoop("gate_ws:spot-loop", func() {
+	safego.GoLoopPlain("gate_ws:spot-loop", func() {
 		g.runLoop(ctx, g.spotURLs, []string{"spot.tickers"}, gateSpotWSURL, g.spotWL, g.handleSpot, publish, nil)
 		wg.Done() // D-115：尾部非 defer——panic 重启不预支 Done
 	})
-	safego.GoLoop("gate_ws:futures-loop", func() {
+	safego.GoLoopPlain("gate_ws:futures-loop", func() {
 		// 包C：futures 连接订阅面=4 频道同连接（清单/固定帧入常量函数=A14/A16 锚）。
 		g.runLoop(ctx, g.futuresURLs, gateFuturesTickerChannels, gateFuturesWSURL, g.futuresWL, g.handleFuturesDispatch, publish, gateFuturesExtraSubs())
 		wg.Done()

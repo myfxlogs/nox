@@ -33,7 +33,11 @@ func startExplorer(ctx context.Context, st *pgstore.Store, cfg *config.Config, p
 			}
 		},
 		ResolveClient: func(ctx context.Context) (*analyst.Client, error) {
-			return kbreport.ResolveClient(ctx, st, cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)
+			c, err := kbreport.ResolveClient(ctx, st, cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)
+			if c != nil {
+				c.CallLog = analyst.LLMLogger(st, "explorer") // D-246：fin_llm_call 落行
+			}
+			return c, err
 		},
 	}
 	safego.GoLoop("main:explorer", func() { explorer.Run(ctx, deps, nil) })

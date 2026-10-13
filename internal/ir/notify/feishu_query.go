@@ -55,6 +55,8 @@ type FeishuQueryHandler struct {
 	dciGo DCIGoRunner
 	// propLister D-194：「提案」口令→pending 提案清单（nil=未装配）。
 	propLister ProposalLister
+	// CallLog D-246 v3 §4.4：fin_llm_call 落行钩（wire 注入 analyst.LLMLogger；nil=不记账）。
+	CallLog func(ctx context.Context, rec analyst.CallRecord)
 }
 
 // NewFeishuQueryHandler 创建飞书查询处理器。
@@ -187,7 +189,9 @@ func (h *FeishuQueryHandler) resolveClient(ctx context.Context) (*analyst.Client
 	if apiKey == "" {
 		return nil, fmt.Errorf("AI 未配置（api_key 为空）")
 	}
-	return analyst.NewClient(baseURL, apiKey, model), nil
+	c := analyst.NewClient(baseURL, apiKey, model)
+	c.CallLog = h.CallLog
+	return c, nil
 }
 
 // --- 4 专用工具 ---

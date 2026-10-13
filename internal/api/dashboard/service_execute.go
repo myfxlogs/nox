@@ -127,7 +127,7 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 	// D-087 §3.2：手动平仓 → settlement.Settle（fire-and-forget，不阻塞 RPC）
 	// D-159 W2a R3-9：settlement 失败 → 标记 settle_failed 到 position.note（可重试状态）。
 	if s.settler != nil {
-		safego.Go("service_execute:settle", func() {
+		safego.GoPlain("service_execute:settle", func() {
 			posID := req.Msg.GetPositionId()
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // D-508 S5：fire-and-forget 加 deadline 防悬挂
 			defer cancel()
@@ -141,7 +141,7 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 	}
 	// 平仓成功 → 触发统计复盘（§13.6，D-034；fire-and-forget，不阻塞 RPC）
 	if s.reviewer != nil {
-		safego.Go("service_execute:reviewer", s.reviewer)
+		safego.GoPlain("service_execute:reviewer", s.reviewer)
 	}
 	return connect.NewResponse(&v1.ClosePositionResponse{
 		Status: "CLOSED",

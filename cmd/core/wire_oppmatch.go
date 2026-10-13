@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"nox/internal/data/bus"
+	"nox/internal/platform/config"
 	"nox/internal/platform/safego"
 	"nox/internal/research/oppmatch"
 	"nox/internal/review/sysretro"
@@ -16,11 +17,11 @@ import (
 )
 
 // startOppMatch 装配机会匹配 loop（总纲衍生③；非报表环故不随 RetroDisabled 关）。
-func startOppMatch(ctx context.Context, st *pgstore.Store) {
-	safego.GoLoop("main:oppmatch", func() { oppMatchLoop(ctx, st) })
+func startOppMatch(ctx context.Context, st *pgstore.Store, cfg *config.Config) {
+	safego.GoLoop("main:oppmatch", func() { oppMatchLoop(ctx, st, cfg) })
 }
 
-func oppMatchLoop(ctx context.Context, st *pgstore.Store) {
+func oppMatchLoop(ctx context.Context, st *pgstore.Store, cfg *config.Config) {
 	// D-193③：首扫等权限探针 boot 轮信号（消首轮假缺口/迟提案；
 	// scanner 未接线场景由 startCexScanner 立即标 done 零死等）。
 	select {
@@ -28,7 +29,7 @@ func oppMatchLoop(ctx context.Context, st *pgstore.Store) {
 	case <-ctx.Done():
 		return
 	}
-	if p, g, err := oppmatch.RunOnce(ctx, st); err != nil {
+	if p, g, err := oppmatch.RunOnce(ctx, st, cfg.CapitalBaseUSD, cfg.AutoTradeMaxNotional); err != nil {
 		log.Printf("[oppmatch] boot scan: %v", err)
 	} else {
 		log.Printf("[oppmatch] boot scan: %d proposals %d gap-requests", p, g)
@@ -42,7 +43,7 @@ func oppMatchLoop(ctx context.Context, st *pgstore.Store) {
 			return
 		case <-timer.C:
 		}
-		if _, _, err := oppmatch.RunOnce(ctx, st); err != nil {
+		if _, _, err := oppmatch.RunOnce(ctx, st, cfg.CapitalBaseUSD, cfg.AutoTradeMaxNotional); err != nil {
 			log.Printf("[oppmatch] daily scan: %v", err)
 		}
 	}

@@ -24,7 +24,7 @@ func wirePositionMonitor(ctx context.Context, dashSvc *dashboard.Service, a moni
 		bus.NewTopic[*dashv1.SourceHealth]())
 	dashSvc.SetPositionMonitor(pm)
 	// kick ① positions/personal 表写点（posChange 总线——pgstore.OnPositionChange 发布）。
-	safego.GoLoop("main:posMonC.posChange", func() {
+	safego.GoLoopPlain("main:posMonC.posChange", func() {
 		ch, cancel := a.posChange.Subscribe()
 		defer cancel()
 		for {
@@ -40,7 +40,7 @@ func wirePositionMonitor(ctx context.Context, dashSvc *dashboard.Service, a moni
 		}
 	})
 	// kick ② bpMon 逐仓事件（派生列 floating/net 依赖 broker 匹配联动重算——行本体未必变，diff 兜底）。
-	safego.GoLoop("main:posMonC.bp", func() {
+	safego.GoLoopPlain("main:posMonC.bp", func() {
 		ch, cancel := bpTopic.Subscribe()
 		defer cancel()
 		for {
@@ -96,12 +96,12 @@ func wireReconFastRetry(ctx context.Context, recon *reconcile.Reconciler, cfg *c
 		retryConsec = cfg.ResidualRetryConsec
 	}
 	recon.SetFastRetryParams(retryWindow, retryConsec)
-	safego.GoLoop("main:reconFastRetry", func() { recon.StartFastRetryLoop(ctx) })
+	safego.GoLoopPlain("main:reconFastRetry", func() { recon.StartFastRetryLoop(ctx) })
 }
 
 // reconKickSubscribe topic 订阅扇出到 kick（事件载荷不消费——只作叫醒信号）。
 func reconKickSubscribe[T any](ctx context.Context, topic *bus.Topic[T], kick func()) {
-	safego.GoLoop("main:recon.kick", func() {
+	safego.GoLoopPlain("main:recon.kick", func() {
 		ch, cancel := topic.Subscribe()
 		defer cancel()
 		for {

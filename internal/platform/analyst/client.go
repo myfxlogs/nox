@@ -22,6 +22,9 @@ type Client struct {
 	APIKey  string
 	Model   string
 	HTTP    *http.Client
+	// CallLog D-246 v3 §4.4：每次真实 HTTP 调用（loop 每 stream round）回调——
+	// 消费面接 analyst.LLMLogger(st, role) 落 fin_llm_call；nil=不记账。
+	CallLog func(ctx context.Context, rec CallRecord)
 }
 
 // NewClient 创建客户端。baseURL 不含尾 /；model 如 "glm-4.6"。

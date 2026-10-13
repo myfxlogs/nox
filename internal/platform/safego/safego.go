@@ -88,17 +88,43 @@ func Go(name string, fn func()) {
 	}()
 }
 
+// GoPlain/GoLoopPlain D-246 v3 §4.4：子节拍/一次性协程形态——不打 Beat/OnExit
+// （daemon 台账只收装配层 Register 的实名 daemon；WS ping/keepalive/按账户展开的
+// 子循环属父 daemon 内部节拍不入册）。panic 钩与 GoLoop 退避重启语义不变。
+func GoPlain(name string, fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[safego:%s] panic recovered: %v\n%s", name, r, debug.Stack())
+				fireOnPanic(name, r, false)
+			}
+		}()
+		fn()
+	}()
+}
+
+// GoLoopPlain 常驻循环免台账版（panic→告警+退避重启同 GoLoop；零 Beat/Exit）。
+func GoLoopPlain(name string, fn func()) {
+	goLoop(name, fn, false)
+}
+
 // GoLoop 常驻循环协程：panic → log+stack+OnPanic(willRestart=true) → 退避重启
 // （1s 起步×2 封顶 30s；距上次 panic>60s 视为新 episode 重置退避）。
 // fn 正常返回（ctx 取消语义）即终止，不重启。仅用于 Run 型守护循环——
 // 任务级/执行路径/逐事件 spawn 用 Go（重启=重复副作用风险）。
 func GoLoop(name string, fn func()) {
+	goLoop(name, fn, true)
+}
+
+func goLoop(name string, fn func(), beat bool) {
 	go func() {
 		backoff := time.Second
 		lastPanic := time.Time{}
 		for {
 			var stack []byte
-			Beat(name)
+			if beat {
+				Beat(name)
+			}
 			panicked := func() (r any) {
 				defer func() {
 					if p := recover(); p != nil {

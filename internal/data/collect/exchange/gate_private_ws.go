@@ -162,8 +162,8 @@ func (g *GatePrivateWS) runOnce(ctx context.Context) error {
 	defer close(done)
 	sil := newChanSilence() // D-166：本连接期 per-channel 静默记账
 	g.sil.Store(sil)
-	safego.Go("gate_private_ws:probe", func() { g.probeLoop(ctx, conn, done, sil) })
-	safego.GoLoop("gate_private_ws:ping", func() {
+	safego.GoPlain("gate_private_ws:probe", func() { g.probeLoop(ctx, conn, done, sil) })
+	safego.GoLoopPlain("gate_private_ws:ping", func() {
 		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()
 		for {

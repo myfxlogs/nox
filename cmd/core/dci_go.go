@@ -64,7 +64,7 @@ func startDCIPoolReconcile(ctx context.Context, ex *dciexec.Executor) {
 // startDCIResume D-198：首个 cexscan DCI 采集拍完成后（事件式 bus 信号非裸 sleep）
 // 提案断点续执一次——败单提案对 outstanding 复验后续走 GoProposal 同径。
 func startDCIResume(ctx context.Context, ex *dciexec.Executor) {
-	safego.Go("setup:dciResume", func() {
+	safego.GoPlain("setup:dciResume", func() {
 		select {
 		case <-ctx.Done():
 			return
@@ -90,7 +90,7 @@ func startDCISettle(ctx context.Context, ex *dciexec.Executor, refreshTopic *bus
 		return
 	}
 	ch, unsub := refreshTopic.Subscribe()
-	safego.Go("setup:dciSettle", func() {
+	safego.GoPlain("setup:dciSettle", func() {
 		defer unsub()
 		for {
 			select {

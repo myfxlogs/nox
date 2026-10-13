@@ -210,7 +210,7 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 	}
 	done := make(chan struct{})
 	defer close(done)
-	safego.Go(spec.Name+":ws-ping", func() {
+	safego.GoPlain(spec.Name+":ws-ping", func() {
 		ticker := time.NewTicker(pingEvery)
 		defer ticker.Stop()
 		for {
