@@ -201,4 +201,5 @@ var migrationFiles = []struct {
 	{1005, migrations.DeptReportsSQL, false},                  // D-244：fin_dept_reports（部门日报→经理摘要）
 	{1006, migrations.M40RuntimeRequestboxSQL, false},         // D-246/D-247：台账降噪+请求箱分流
 	{1007, migrations.LLMCallSQL, false},                      // D-246：fin_llm_call 调用账本
+	{1008, migrations.OppEvalSQL, false},                      // D-258 M4.1：fin_opp_eval 评估卡
 }

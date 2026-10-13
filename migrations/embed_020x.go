@@ -28,3 +28,6 @@ var M40RuntimeRequestboxSQL string // D-246/D-247 M4.0：台账降噪（未登�
 
 //go:embed 1007_llm_call.sql
 var LLMCallSQL string // D-246 v3 §4.4：fin_llm_call LLM 调用账本（费用入 D-013 口径）
+
+//go:embed 1008_opp_eval.sql
+var OppEvalSQL string // D-258 M4.1：fin_opp_eval 评估卡（一提案一卡）

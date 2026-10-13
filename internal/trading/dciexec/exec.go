@@ -54,6 +54,9 @@ type Store interface {
 	LatestPendingProposal(ctx context.Context, templates []string) (*pgstore.Proposal, error)
 	GetProposal(ctx context.Context, id int64) (*pgstore.Proposal, error)
 	SetProposalStatus(ctx context.Context, id int64, status string) error
+	// D-258 M4.1：评估卡消费面——无卡/非 viable=不算候选拒单；settle 回写实绩。
+	GetOppEval(ctx context.Context, proposalID int64) (*pgstore.OppEval, error)
+	UpdateOppEvalActual(ctx context.Context, proposalID int64, apr float64) error
 }
 
 // Executor binance DCI 申购执行器（凭据由装配侧从 exchange_configs 注入）。
@@ -112,6 +115,17 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	}
 	if p.Status != "proposed" {
 		return "", fmt.Errorf("提案#%d 已 %s（拒单）", id, p.Status)
+	}
+	// D-258 M4.1③：评估卡闸——无卡或非 viable=不算候选（卡读败 fail-closed 拒单）。
+	card, cerr := e.Store.GetOppEval(ctx, id)
+	if cerr != nil {
+		return "", fmt.Errorf("提案#%d 评估卡读败（拒单）: %w", id, cerr)
+	}
+	if card == nil {
+		return "", fmt.Errorf("提案#%d 无评估卡（拒单——无卡不算候选）", id)
+	}
+	if card.Verdict != "viable" {
+		return "", fmt.Errorf("提案#%d 评估卡=%s（拒单——非可执行候选）", id, card.Verdict)
 	}
 	legs, ok := gate.ExecTemplates[p.TemplateID]
 	if !ok {

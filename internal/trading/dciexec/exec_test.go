@@ -38,6 +38,8 @@ type fakeStore struct {
 	outstanding float64
 	proposals   map[int64]*pgstore.Proposal
 	nextProp    int64
+	evals       map[int64]*pgstore.OppEval // D-258：提案→评估卡种子（默认 viable）
+	actualAPRs  map[int64]float64
 	// 交割观察面：
 	filledOrders []pgstore.FilledDCIOrder
 	settled      []struct {
@@ -96,8 +98,10 @@ func newFake() *fakeStore {
 				ProductRef: "PUTP", OrderRef: "OP1", DeliveryTs: &deliv,
 				PurchaseDecimal: idec(0), MinAmount: f64(1), MaxAmount: f64(1e6)},
 		},
-		orders:    map[string]*pgstore.DCIOrder{},
-		proposals: map[int64]*pgstore.Proposal{},
+		orders:     map[string]*pgstore.DCIOrder{},
+		proposals:  map[int64]*pgstore.Proposal{},
+		evals:      map[int64]*pgstore.OppEval{},
+		actualAPRs: map[int64]float64{},
 	}
 }
 
@@ -167,6 +171,7 @@ func (f *fakeStore) addProposal(tmpl string) int64 {
 	f.proposals[f.nextProp] = &pgstore.Proposal{
 		ID: f.nextProp, TemplateID: tmpl, ExecTrack: "auto",
 		Venue: "binance", Status: "proposed"}
+	f.evals[f.nextProp] = &pgstore.OppEval{ProposalID: f.nextProp, TemplateID: tmpl, Verdict: "viable"}
 	return f.nextProp
 }
 
@@ -204,6 +209,13 @@ func (f *fakeStore) SetProposalStatus(_ context.Context, id int64, st string) er
 	if p, ok := f.proposals[id]; ok {
 		p.Status = st
 	}
+	return nil
+}
+func (f *fakeStore) GetOppEval(_ context.Context, id int64) (*pgstore.OppEval, error) {
+	return f.evals[id], nil
+}
+func (f *fakeStore) UpdateOppEvalActual(_ context.Context, id int64, apr float64) error {
+	f.actualAPRs[id] = apr
 	return nil
 }
 
@@ -1250,4 +1262,34 @@ func (f *fakeStore) ExchangeConfigID(context.Context, string, string) (int64, er
 func (f *fakeStore) InsertIncomeEvents(_ context.Context, evs []pgstore.IncomeEvent) (int64, error) {
 	f.incomeEvs = append(f.incomeEvs, evs...)
 	return int64(len(evs)), nil
+}
+
+// TestM41_EvalGate 评估卡闸（D-258 M4.1③）：无卡/非 viable 拒单，viable 过闸。
+func TestM41_EvalGate(t *testing.T) {
+	st := newFake()
+	e := &Executor{Store: st, BnKey: "k", BnSec: "s", Now: time.Now}
+	pid := st.addProposal("dci_buy_low")
+
+	delete(st.evals, pid)
+	if _, err := e.GoProposal(context.Background(), pid); err == nil ||
+		!strings.Contains(err.Error(), "无评估卡") {
+		t.Fatalf("无卡应拒: %v", err)
+	}
+	st.evals[pid] = &pgstore.OppEval{ProposalID: pid, Verdict: "unevaluable"}
+	if _, err := e.GoProposal(context.Background(), pid); err == nil ||
+		!strings.Contains(err.Error(), "评估卡=unevaluable") {
+		t.Fatalf("unevaluable 应拒: %v", err)
+	}
+	st.evals[pid] = &pgstore.OppEval{ProposalID: pid, Verdict: "reject"}
+	if _, err := e.GoProposal(context.Background(), pid); err == nil ||
+		!strings.Contains(err.Error(), "评估卡=reject") {
+		t.Fatalf("reject 应拒: %v", err)
+	}
+	// viable 过卡闸——下一道「无执行轨模板」拦验证非卡因（dci_buy_low 有轨，
+	// 走到 venue 调用面才败——断言错误非卡文案）。
+	st.evals[pid] = &pgstore.OppEval{ProposalID: pid, Verdict: "viable"}
+	_, err := e.GoProposal(context.Background(), pid)
+	if err != nil && strings.Contains(err.Error(), "评估卡") {
+		t.Fatalf("viable 不应卡闸拒: %v", err)
+	}
 }

@@ -20,6 +20,8 @@ type FilledDCIOrder struct {
 	InvestCcy  string
 	Underlying string
 	Qty        float64
+	TenorDays  *int
+	ProposalID *int64 // D-258 M4.1④：结算回写实际 APR 锚
 	Response   string
 }
 
@@ -27,7 +29,8 @@ type FilledDCIOrder struct {
 func (s *Store) ListFilledDCIOrders(ctx context.Context) ([]FilledDCIOrder, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, request_id, product_ref, opt_type, invest_ccy,
-		       COALESCE(underlying,''), COALESCE(qty,0), COALESCE(response,'')
+		       COALESCE(underlying,''), COALESCE(qty,0), tenor_days, proposal_id,
+		       COALESCE(response,'')
 		FROM fin_dci_order WHERE status='filled' ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("list filled dci orders: %w", err)
@@ -37,7 +40,8 @@ func (s *Store) ListFilledDCIOrders(ctx context.Context) ([]FilledDCIOrder, erro
 	for rows.Next() {
 		var o FilledDCIOrder
 		if err := rows.Scan(&o.ID, &o.RequestID, &o.ProductRef, &o.OptType,
-			&o.InvestCcy, &o.Underlying, &o.Qty, &o.Response); err != nil {
+			&o.InvestCcy, &o.Underlying, &o.Qty, &o.TenorDays, &o.ProposalID,
+			&o.Response); err != nil {
 			return nil, err
 		}
 		out = append(out, o)

@@ -194,6 +194,15 @@ func (e *Executor) bookSettlement(ctx context.Context, o pgstore.FilledDCIOrder,
 	if !ok {
 		return nil // 并发已收口——幂等跳
 	}
+	// D-258 M4.1④：评估卡实际 APR 回写——未行权本息同币才换算
+	// （interest/invest×365/tenor）；行权接货 qty 异币不换算跳写。
+	if o.ProposalID != nil && o.TenorDays != nil && *o.TenorDays > 0 &&
+		o.Qty > 0 && strings.EqualFold(ccy, o.InvestCcy) && interest > 0 {
+		apr := interest / o.Qty * 365 / float64(*o.TenorDays) * 100
+		if uerr := e.Store.UpdateOppEvalActual(ctx, *o.ProposalID, apr); uerr != nil {
+			log.Printf("[dci-settle] order %d eval actual apr: %v", o.ID, uerr)
+		}
+	}
 	// income_events：利息与行权接货分 kind 如实记（exchange_configs 缺=id 空，
 	// NULL 下唯一键不生效会重灌——缺配置则跳账并在推送中文备注）。
 	cfgID, cerr := e.Store.ExchangeConfigID(ctx, "binance", "spot")

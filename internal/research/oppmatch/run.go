@@ -172,12 +172,16 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 				log.Printf("[oppmatch] proposal row %s: %v", r.TemplateID, err)
 				continue
 			}
+			card := evalProposal(ctx, st, r, pid) // D-258 M4.1：一提案一卡（每扫一拍复算）
+			if uerr := st.UpsertOppEval(ctx, card); uerr != nil {
+				log.Printf("[oppmatch] eval card proposal#%d: %v", pid, uerr)
+			}
 			tag := "提案#"
 			if !created {
 				tag = "提案#（在册）"
 			}
 			if err := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
-				"机会%s%d %s（轨=%s，%s）", tag, pid, r.TemplateID, r.ExecTrack, apr)); err != nil {
+				"机会%s%d %s（轨=%s，%s，评估卡=%s）", tag, pid, r.TemplateID, r.ExecTrack, apr, card.Verdict)); err != nil {
 				log.Printf("[oppmatch] proposal alert %s: %v", r.TemplateID, err)
 			}
 			continue
