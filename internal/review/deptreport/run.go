@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"nox/internal/platform/analyst"
@@ -134,9 +135,23 @@ func Generate(ctx context.Context, d *Deps, date time.Time) error {
 	} else {
 		input += prevBody + "\n"
 	}
-	body, res, ms, err := d.callLLM(ctx, client, companySystemPrompt, scrub(input))
+	user := scrub(input)
+	body, res, ms, err := d.callLLM(ctx, client, companySystemPrompt, user)
 	if err != nil {
 		return err
+	}
+	// D-249④ 契约校验：固定序段缺/乱→补正重生成一次；仍违→fail-open 落库+标记记 log。
+	if miss := contractMiss(body); len(miss) > 0 {
+		log.Printf("[deptreport] 契约违约 %v——补正重生成一次", miss)
+		if body2, res2, ms2, err2 := d.callLLM(ctx, client, companySystemPrompt, user+contractFixNote(miss)); err2 == nil {
+			body, res, ms = body2, res2, ms+ms2
+		} else {
+			log.Printf("[deptreport] 补正调用败（保留首班正文）: %v", err2)
+		}
+		if miss2 := contractMiss(body); len(miss2) > 0 {
+			body += "\n\n【契约缺段：" + strings.Join(miss2, "·") + "】"
+			log.Printf("[deptreport] 契约缺段仍存 %v——fail-open 落库标记", miss2)
+		}
 	}
 	r := pgstore.DeptReport{
 		Dept: DeptCompany, ReportDate: date, Body: scrubBody(body),

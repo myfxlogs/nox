@@ -78,12 +78,26 @@ func (f *fakeNotifier) SendText(_ context.Context, _, text string) (string, erro
 	return "mid", nil
 }
 
+// contractBody 契约合规正文样例（八段序+末行齐——fakeRunner 缺省返回，防
+// 既有锚被契约重试径污染）。
+const contractBody = `①NAV 与闲置：NAV 10000。
+②在仓与 carry 实收：0 仓。
+③待决提案：0。
+④请求箱：0。
+⑤策略态变：无。
+⑥事故与硬线：无。
+⑦流健康：正常。
+⑧昨日待办→今日状态：无基可参。
+明日关注：无。`
+
 // fakeRunner 回 text 并记录 system prompt 与 user 输入。
+// bodies 队列>0 时逐次弹取（契约重试径锚）；空→contractBody。
 type fakeRunner struct {
 	mu      sync.Mutex
 	prompts []string
 	inputs  []string
 	fail    error
+	bodies  []string
 }
 
 func (f *fakeRunner) run(_ context.Context, _ *analyst.Client, _ analyst.ToolExecutor,
@@ -98,7 +112,12 @@ func (f *fakeRunner) run(_ context.Context, _ *analyst.Client, _ analyst.ToolExe
 	if f.fail != nil {
 		return analyst.LoopResult{}, f.fail
 	}
-	cb.OnDelta("公司日报正文")
+	body := contractBody
+	if len(f.bodies) > 0 {
+		body = f.bodies[0]
+		f.bodies = f.bodies[1:]
+	}
+	cb.OnDelta(body)
 	return analyst.LoopResult{InputTokens: 11, OutputTokens: 22}, nil
 }
 
@@ -271,5 +290,56 @@ func TestD249_TodoLoop(t *testing.T) {
 	}
 	if !strings.Contains(fr2.inputs[0], "昨日无 company 行") {
 		t.Fatal("缺日应空段注明")
+	}
+}
+
+// TestD249_ContractMiss 契约校验器：缺段/乱序/合规三态钉死（schema 只管结构）。
+func TestD249_ContractMiss(t *testing.T) {
+	if miss := contractMiss(contractBody); len(miss) != 0 {
+		t.Fatalf("合规样例误判: %v", miss)
+	}
+	// 缺 ③④ → 两违
+	if miss := contractMiss("NAV 1\n在仓无\n策略变\n事故无\n流健康\n昨日待办\n明日关注"); len(miss) != 2 {
+		t.Fatalf("缺段 miss=%v want 2", miss)
+	}
+	// 乱序（④请求箱先于③提案）→ 违
+	if miss := contractMiss("NAV 1\n在仓无\n请求箱\n提案\n策略\n事故\n流健康\n待办\n明日关注"); len(miss) == 0 {
+		t.Fatal("乱序未检出")
+	}
+	// 缺末行
+	if miss := contractMiss("NAV\n在仓\n提案\n请求箱\n策略\n事故\n流健康\n待办"); len(miss) != 1 || miss[0] != "末行明日关注" {
+		t.Fatalf("末行缺 miss=%v", miss)
+	}
+}
+
+// TestD249_ContractRetry 首班违约→补正重生成一次→合规落库（两调用+补正注记入输入）。
+func TestD249_ContractRetry(t *testing.T) {
+	fs := &fakeStore{rd: &pgstore.RetroDaily{}, pools: []pgstore.ExplorerIdlePool{}}
+	fr := &fakeRunner{bodies: []string{"只有 NAV 一段。", contractBody}}
+	d := testDeps(fs, fr, nil)
+	if err := Generate(context.Background(), d, time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if len(fr.inputs) != 2 {
+		t.Fatalf("调用数=%d want 2（补正一次）", len(fr.inputs))
+	}
+	if !strings.Contains(fr.inputs[1], "契约补正") || !strings.Contains(fr.inputs[1], "在仓") {
+		t.Fatalf("补正注记缺: %q", fr.inputs[1][:min(200, len(fr.inputs[1]))])
+	}
+	if len(fs.reports) != 1 || !strings.Contains(fs.reports[0].Body, "在仓") || strings.Contains(fs.reports[0].Body, "契约缺段") {
+		t.Fatalf("落库正文异常: %+v", fs.reports[0])
+	}
+}
+
+// TestD249_ContractFailOpen 二次仍违→fail-open 落库+「契约缺段」标记（零丢报）。
+func TestD249_ContractFailOpen(t *testing.T) {
+	fs := &fakeStore{rd: &pgstore.RetroDaily{}, pools: []pgstore.ExplorerIdlePool{}}
+	fr := &fakeRunner{bodies: []string{"只有 NAV。", "仍只有 NAV。"}}
+	d := testDeps(fs, fr, nil)
+	if err := Generate(context.Background(), d, time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("Generate 应 fail-open 落库: %v", err)
+	}
+	if len(fs.reports) != 1 || !strings.Contains(fs.reports[0].Body, "契约缺段") {
+		t.Fatalf("缺段标记未落: %+v", fs.reports)
 	}
 }
