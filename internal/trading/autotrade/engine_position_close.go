@@ -92,13 +92,23 @@ func (e *Engine) runStartupElimination(ctx context.Context) {
 		if agg.Total > 0 {
 			winRate = float64(agg.Wins) / float64(agg.Total)
 		}
+		// D-260 M4.2：判据实时读 fin_strategy_criteria（'*' 全局行）——改行即生效零改码。
+		critRows, cerr := e.store.ListStrategyCriteria(ctx, "*", "elimination")
+		if cerr != nil || len(critRows) == 0 {
+			log.Printf("[autotrade] startup elimination criteria %s: %v/空表（本轮不淘汰）", s, cerr)
+			continue
+		}
+		crits := make([]lifecycle.Criterion, 0, len(critRows))
+		for _, r := range critRows {
+			crits = append(crits, lifecycle.Criterion{Strategy: r.Strategy, Kind: r.Kind, Pred: r.Pred, Params: r.Params})
+		}
 		disable, reason := lifecycle.EvaluateElimination(lifecycle.EliminationInput{
 			TotalTrades: agg.Total,
 			WinRate:     winRate,
 			AvgPnl:      agg.AvgPnl,
 			MedianPnl:   agg.MedianPnl,
 			Disabled:    stat.Disabled,
-		})
+		}, crits)
 		if disable {
 			reason += e.elimEvidenceSuffix(ctx, agg.Total, winRate)
 			// 族内全禁——禁用族内全部策略（CARRY/SWAPARB 同族），

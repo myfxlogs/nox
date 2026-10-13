@@ -40,7 +40,7 @@ func TestD268_S3_EliminationAlerts(t *testing.T) {
 	s := testAccumStore(t)
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx,
-		`TRUNCATE positions, position_legs, strategy_stats, position_settlements, autotrade_state CASCADE`); err != nil {
+		`TRUNCATE positions, position_legs, strategy_stats, fin_strategy, position_settlements, autotrade_state CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	// 7 笔负净值：median=-1, avg=-1.57 → 小样本双负触发淘汰
@@ -75,7 +75,7 @@ func TestD268_S3_NoEliminationNoAlert(t *testing.T) {
 	s := testAccumStore(t)
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx,
-		`TRUNCATE positions, position_legs, strategy_stats, position_settlements, autotrade_state CASCADE`); err != nil {
+		`TRUNCATE positions, position_legs, strategy_stats, fin_strategy, position_settlements, autotrade_state CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	// 7 笔正净值：median>0, avg>0 → 不触发淘汰

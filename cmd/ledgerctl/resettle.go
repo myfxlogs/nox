@@ -219,7 +219,7 @@ func (t *resettler) run(ctx context.Context, posID int64, dry bool) {
 		fmt.Printf("pos=%d: stats_status→pending err=%v, keep\n", posID, err)
 		return
 	}
-	if err := settlement.SettleAt(ctx, t.deps, posID, lifecycle.EliminatorAdapter, lifecycle.FamilyResolverAdapter, time.Now()); err != nil {
+	if err := settlement.SettleAt(ctx, t.deps, posID, eliminator(t.store), lifecycle.FamilyResolverAdapter, time.Now()); err != nil {
 		fmt.Printf("pos=%d: SettleAt err=%v\n", posID, err)
 		return
 	}

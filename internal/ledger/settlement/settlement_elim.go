@@ -48,7 +48,7 @@ func runElimination(ctx context.Context, deps Deps, p *pgstore.Position, elim El
 	if agg.Total > 0 {
 		winRate = float64(agg.Wins) / float64(agg.Total)
 	}
-	disable, reason := elim(agg.Total, winRate, agg.AvgPnl, agg.MedianPnl, stat.Disabled)
+	disable, reason := elim(ctx, agg.Total, winRate, agg.AvgPnl, agg.MedianPnl, stat.Disabled)
 	if disable {
 		reason += elimEvidenceSuffix(ctx, deps, agg.Total, winRate)
 		// 族内全禁——family 非 nil 时禁用族内全部策略（CARRY/SWAPARB 同族），

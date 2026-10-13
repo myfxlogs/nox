@@ -12,7 +12,7 @@ import "testing"
 // → 不禁（小样本，median=0 不<0 → D-154 S2 双条件不满足）。旧代码禁=红。
 // winRate 移出小样本判据，median 占位 0 = 不杀（与裁决①语义一致）。
 func TestEvaluateElimination_D136_PerfFundingForm(t *testing.T) {
-	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 7, WinRate: 0.43, AvgPnl: -0.196, MedianPnl: 0})
+	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 7, WinRate: 0.43, AvgPnl: -0.196, MedianPnl: 0}, seedCrits())
 	if disable {
 		t.Fatal("want no disable: 7 trades <30 floor, median=0 不<0 → D-154 S2 双条件不满足")
 	}
@@ -20,7 +20,7 @@ func TestEvaluateElimination_D136_PerfFundingForm(t *testing.T) {
 
 // TestEvaluateElimination_D136_MeanRevertForm 75 笔 winRate=0.0 avg<0（MEANREVERT 形态）→ 禁（回归）。
 func TestEvaluateElimination_D136_MeanRevertForm(t *testing.T) {
-	disable, reason := EvaluateElimination(EliminationInput{TotalTrades: 75, WinRate: 0.0, AvgPnl: -0.5})
+	disable, reason := EvaluateElimination(EliminationInput{TotalTrades: 75, WinRate: 0.0, AvgPnl: -0.5}, seedCrits())
 	if !disable {
 		t.Fatal("want disable: 75 trades >=30, winRate=0.0<0.3")
 	}
@@ -31,7 +31,7 @@ func TestEvaluateElimination_D136_MeanRevertForm(t *testing.T) {
 
 // TestEvaluateElimination_D136_LargeSampleNegAvg 40 笔 winRate=0.6 avg=-0.05（大样本微亏）→ 禁（≥30 均值可信）。
 func TestEvaluateElimination_D136_LargeSampleNegAvg(t *testing.T) {
-	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 40, WinRate: 0.6, AvgPnl: -0.05})
+	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 40, WinRate: 0.6, AvgPnl: -0.05}, seedCrits())
 	if !disable {
 		t.Fatal("want disable: 40 trades >=30, avgPnl<0 → 大样本均值可信")
 	}
@@ -40,7 +40,7 @@ func TestEvaluateElimination_D136_LargeSampleNegAvg(t *testing.T) {
 // TestEvaluateElimination_D136_SmallSampleExtreme 5 笔 winRate=0.0 avg=-1.0 median=-1.0（小样本极端双负）→ 禁。
 // 小样本判据改 median+avg 双负（winRate 移出），加 median=-1.0 保持「极端负杀」原意。
 func TestEvaluateElimination_D136_SmallSampleExtreme(t *testing.T) {
-	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 5, WinRate: 0.0, AvgPnl: -1.0, MedianPnl: -1.0})
+	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 5, WinRate: 0.0, AvgPnl: -1.0, MedianPnl: -1.0}, seedCrits())
 	if !disable {
 		t.Fatal("want disable: 5 trades <30, median=-1.0<0 且 avgPnl=-1.0<0 → D-154 S2 双条件满足")
 	}
@@ -48,7 +48,7 @@ func TestEvaluateElimination_D136_SmallSampleExtreme(t *testing.T) {
 
 // TestEvaluateElimination_D136_SmallSampleHealthy 8 笔 winRate=0.6 avg=+0.1 → 不禁（回归）。
 func TestEvaluateElimination_D136_SmallSampleHealthy(t *testing.T) {
-	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 8, WinRate: 0.6, AvgPnl: 0.1})
+	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 8, WinRate: 0.6, AvgPnl: 0.1}, seedCrits())
 	if disable {
 		t.Fatal("want no disable: healthy small sample")
 	}
@@ -56,7 +56,7 @@ func TestEvaluateElimination_D136_SmallSampleHealthy(t *testing.T) {
 
 // TestEvaluateElimination_D136_BelowMinTrades 3 笔 → 不禁（<5 回归）。
 func TestEvaluateElimination_D136_BelowMinTrades(t *testing.T) {
-	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 3, WinRate: 0.0, AvgPnl: -10})
+	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 3, WinRate: 0.0, AvgPnl: -10}, seedCrits())
 	if disable {
 		t.Fatal("want no disable: <5 trades")
 	}
@@ -68,7 +68,7 @@ func TestEvaluateElimination_D136_BelowMinTrades(t *testing.T) {
 // TestEvaluateElimination_D154_MedianNegAvgNegKill 7 笔 median=-0.5 avg=-0.3（双负）→ 杀。
 // PERP_FUNDING 实证形态：多数仓净负，median 暴露收益结构真相。
 func TestEvaluateElimination_D154_MedianNegAvgNegKill(t *testing.T) {
-	disable, reason := EvaluateElimination(EliminationInput{TotalTrades: 7, WinRate: 0.33, AvgPnl: -0.3, MedianPnl: -0.5})
+	disable, reason := EvaluateElimination(EliminationInput{TotalTrades: 7, WinRate: 0.33, AvgPnl: -0.3, MedianPnl: -0.5}, seedCrits())
 	if !disable {
 		t.Fatal("want disable: 7 trades <30, median=-0.5<0 且 avg=-0.3<0 → D-154 S2 双条件满足")
 	}
@@ -81,7 +81,7 @@ func TestEvaluateElimination_D154_MedianNegAvgNegKill(t *testing.T) {
 // 误杀保护锚：多数仓净正（median>0），少数极端负拉低 avg → 不杀。
 // 旧 winRate 双条件（winRate=0.6>=0.3）也不杀，但 S2 后 winRate 移出——median 正才是新判据的保护点。
 func TestEvaluateElimination_D154_MedianPosAvgNegNoKill(t *testing.T) {
-	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 7, WinRate: 0.6, AvgPnl: -0.05, MedianPnl: 0.1})
+	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 7, WinRate: 0.6, AvgPnl: -0.05, MedianPnl: 0.1}, seedCrits())
 	if disable {
 		t.Fatal("want no disable: 7 trades <30, median=+0.1 不<0 → D-154 S2 双条件不满足（误杀保护）")
 	}
@@ -89,7 +89,7 @@ func TestEvaluateElimination_D154_MedianPosAvgNegNoKill(t *testing.T) {
 
 // TestEvaluateElimination_D154_LargeSampleWinRateKill 40 笔 winRate=0.2 avg=+1（大样本 winRate 单条件）→ 杀。
 func TestEvaluateElimination_D154_LargeSampleWinRateKill(t *testing.T) {
-	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 40, WinRate: 0.2, AvgPnl: 1.0, MedianPnl: 0.5})
+	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 40, WinRate: 0.2, AvgPnl: 1.0, MedianPnl: 0.5}, seedCrits())
 	if !disable {
 		t.Fatal("want disable: 40 trades >=30, winRate=0.2<0.3 → 大样本 winRate 单条件杀")
 	}
@@ -97,7 +97,7 @@ func TestEvaluateElimination_D154_LargeSampleWinRateKill(t *testing.T) {
 
 // TestEvaluateElimination_D154_LargeSampleAvgKill 40 笔 winRate=0.6 avg=-0.5（大样本 avg 单条件）→ 杀。
 func TestEvaluateElimination_D154_LargeSampleAvgKill(t *testing.T) {
-	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 40, WinRate: 0.6, AvgPnl: -0.5, MedianPnl: 0.1})
+	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 40, WinRate: 0.6, AvgPnl: -0.5, MedianPnl: 0.1}, seedCrits())
 	if !disable {
 		t.Fatal("want disable: 40 trades >=30, avg=-0.5<0 → 大样本 avg 单条件杀")
 	}
@@ -105,7 +105,7 @@ func TestEvaluateElimination_D154_LargeSampleAvgKill(t *testing.T) {
 
 // TestEvaluateElimination_D154_ZeroTrades 0 笔 → 不杀（<5 零副作用）。
 func TestEvaluateElimination_D154_ZeroTrades(t *testing.T) {
-	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 0, WinRate: 0, AvgPnl: 0, MedianPnl: 0})
+	disable, _ := EvaluateElimination(EliminationInput{TotalTrades: 0, WinRate: 0, AvgPnl: 0, MedianPnl: 0}, seedCrits())
 	if disable {
 		t.Fatal("want no disable: 0 trades <5 零副作用")
 	}
@@ -115,7 +115,7 @@ func TestEvaluateElimination_D154_ZeroTrades(t *testing.T) {
 // Disabled=true + 极端负样本（100 笔 winRate=0 avg=-100 median=-100）→ 首行短路，
 // disable=false 且 reason=""（禁用态零副作用，不重复禁用/不产 reason 噪音）。
 func TestEvaluateElimination_D154_DisabledNoop(t *testing.T) {
-	disable, reason := EvaluateElimination(EliminationInput{Disabled: true, TotalTrades: 100, WinRate: 0, AvgPnl: -100, MedianPnl: -100})
+	disable, reason := EvaluateElimination(EliminationInput{Disabled: true, TotalTrades: 100, WinRate: 0, AvgPnl: -100, MedianPnl: -100}, seedCrits())
 	if disable {
 		t.Fatal("want no disable: Disabled=true 首行短路，极端负样本也不杀")
 	}

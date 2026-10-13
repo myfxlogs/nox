@@ -18,7 +18,7 @@ func setupStateTestStore(t *testing.T, state string, haltedOn *time.Time) *Engin
 	s := testAccumStore(t)
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx,
-		`TRUNCATE positions, position_legs, autotrade_state, strategy_stats, position_settlements CASCADE`); err != nil {
+		`TRUNCATE positions, position_legs, autotrade_state, strategy_stats, fin_strategy, position_settlements CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx,

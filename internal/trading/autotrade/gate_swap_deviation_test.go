@@ -20,11 +20,11 @@ func setupSwapDeviationStore(t *testing.T, factsSwapBps, actualSwapUSD float64) 
 	t.Helper()
 	s := testAccumStore(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, autotrade_logs, positions, position_legs, position_cashflows, broker_accounts, facts, position_swap_snapshots CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, fin_strategy, autotrade_logs, positions, position_legs, position_cashflows, broker_accounts, facts, position_swap_snapshots CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, autotrade_logs, positions, position_legs, position_cashflows, broker_accounts, facts, position_swap_snapshots CASCADE`)
+		_, _ = s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, fin_strategy, autotrade_logs, positions, position_legs, position_cashflows, broker_accounts, facts, position_swap_snapshots CASCADE`)
 	})
 	if _, err := s.Pool().Exec(ctx,
 		`INSERT INTO autotrade_state (state, reason, halted_on) VALUES ('RUNNING', '', NULL)`); err != nil {
@@ -141,11 +141,11 @@ func TestSwapDeviationGate_LowDeviation_Pass(t *testing.T) {
 func TestSwapDeviationGate_NoHistory_Pass(t *testing.T) {
 	s := testAccumStore(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, autotrade_logs, positions, position_legs, position_cashflows, broker_accounts, facts, position_swap_snapshots CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, fin_strategy, autotrade_logs, positions, position_legs, position_cashflows, broker_accounts, facts, position_swap_snapshots CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, autotrade_logs, positions, position_legs, position_cashflows, broker_accounts, facts, position_swap_snapshots CASCADE`)
+		_, _ = s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, fin_strategy, autotrade_logs, positions, position_legs, position_cashflows, broker_accounts, facts, position_swap_snapshots CASCADE`)
 	})
 	if _, err := s.Pool().Exec(ctx, `INSERT INTO autotrade_state (state, reason, halted_on) VALUES ('RUNNING', '', NULL)`); err != nil {
 		t.Fatalf("insert autotrade_state: %v", err)

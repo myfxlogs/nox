@@ -18,7 +18,7 @@ func setupGateAlertStore(t *testing.T) *pgstore.Store {
 	s := testAccumStore(t)
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx,
-		`TRUNCATE autotrade_state, strategy_stats, autotrade_logs, positions, position_legs,
+		`TRUNCATE autotrade_state, strategy_stats, fin_strategy, autotrade_logs, positions, position_legs,
 		        position_cashflows, broker_accounts, alerts CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}

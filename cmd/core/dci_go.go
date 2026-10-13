@@ -10,6 +10,7 @@ import (
 	"nox/internal/data/bus"
 	"nox/internal/platform/httpx"
 	"nox/internal/platform/safego"
+	"nox/internal/portfolio/lifecycle"
 	"nox/internal/review/sysretro"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/dciexec"
@@ -107,5 +108,23 @@ func startDCISettle(ctx context.Context, ex *dciexec.Executor, refreshTopic *bus
 				}
 			}
 		}
+	})
+}
+
+// lifecycleCriteria 判据行映射：pgstore.StrategyCriteria→lifecycle.Criterion
+// （D-260：store 底层包不回指 lifecycle，adapter 在本层）。
+func lifecycleCriteria(rows []pgstore.StrategyCriteria) []lifecycle.Criterion {
+	out := make([]lifecycle.Criterion, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, lifecycle.Criterion{Strategy: r.Strategy, Kind: r.Kind, Pred: r.Pred, Params: r.Params})
+	}
+	return out
+}
+
+// newDBEliminator D-260：settlement 淘汰判定适配——每轮实时读判据表。
+func newDBEliminator(st *pgstore.Store) func(ctx context.Context, totalTrades int, winRate, avgPnl, medianPnl float64, disabled bool) (bool, string) {
+	return lifecycle.NewEliminator(func(ctx context.Context, kind string) ([]lifecycle.Criterion, error) {
+		rows, err := st.ListStrategyCriteria(ctx, "*", kind)
+		return lifecycleCriteria(rows), err
 	})
 }

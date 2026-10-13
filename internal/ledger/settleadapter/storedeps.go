@@ -124,9 +124,17 @@ func (d *StoreDeps) MarkSettlementStatsRetryable(ctx context.Context, posID int6
 }
 
 // Settle 适配 dashboard.Settler / reconcile.Settler / exec.Settler 接口（D-087 §3.2 三调用点 + D-193-A 扩包 S5 pipeline 路径共用）。
-// elim 用 lifecycle.EliminatorAdapter，family 用 lifecycle.FamilyResolverAdapter（main 装配时注入）。
+// elim 判据实时读 fin_strategy_criteria（D-260 改行即生效），family 用 lifecycle.FamilyResolverAdapter。
 func (d *StoreDeps) Settle(ctx context.Context, posID int64) error {
-	return settlement.Settle(ctx, d, posID, lifecycle.EliminatorAdapter, lifecycle.FamilyResolverAdapter)
+	elim := lifecycle.NewEliminator(func(c context.Context, kind string) ([]lifecycle.Criterion, error) {
+		rows, err := d.store.ListStrategyCriteria(c, "*", kind)
+		out := make([]lifecycle.Criterion, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, lifecycle.Criterion{Strategy: r.Strategy, Kind: r.Kind, Pred: r.Pred, Params: r.Params})
+		}
+		return out, err
+	})
+	return settlement.Settle(ctx, d, posID, elim, lifecycle.FamilyResolverAdapter)
 }
 
 // compile-time: settleStoreDeps 实现 exec.Settler（D-193-A 扩包 S5）。

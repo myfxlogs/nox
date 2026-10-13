@@ -14,7 +14,7 @@ func setupLiveGateStore(t *testing.T, venueLong, venueShort string, longReal, sh
 	t.Helper()
 	s := testAccumStore(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, autotrade_logs, positions, position_legs, position_cashflows, broker_accounts CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, fin_strategy, autotrade_logs, positions, position_legs, position_cashflows, broker_accounts CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx,

@@ -1,6 +1,6 @@
 // cmd/settleonce D-193-A 扩包返修 R3：settlement 补链微工具。
 // 对指定 position 调 settlement.SettleAt（幂等，stats_status 短路），产出真实 settlement 行。
-// 桥接=internal/settleadapter（D-508 S13 共享装配单源），elim=lifecycle.EliminatorAdapter。
+// 桥接=internal/settleadapter（D-508 S13 共享装配单源），elim=eliminator(s)。
 //
 // D-193-A 扩包返修 R3（ZCode 裁定）：479 补走本工具，禁手工 INSERT（方式 B 已否决）。
 //
@@ -52,8 +52,8 @@ func runSettleOnce() {
 	fmt.Printf("=== D-193-A 扩包 R3：settleonce pos=%d ===\n", *posID)
 	fmt.Printf("before: stats_status=%q\n", before)
 
-	// 调 settlement.SettleAt（幂等，elim=lifecycle.EliminatorAdapter，family=lifecycle.FamilyResolverAdapter）
-	err = settlement.SettleAt(ctx, deps, *posID, lifecycle.EliminatorAdapter, lifecycle.FamilyResolverAdapter, time.Now())
+	// 调 settlement.SettleAt（幂等，elim=eliminator(s)，family=lifecycle.FamilyResolverAdapter）
+	err = settlement.SettleAt(ctx, deps, *posID, eliminator(s), lifecycle.FamilyResolverAdapter, time.Now())
 	if err != nil {
 		log.Fatalf("SettleAt pos=%d: %v", *posID, err)
 	}
@@ -63,4 +63,16 @@ func runSettleOnce() {
 	has, _ := s.HasSettlement(ctx, *posID)
 	fmt.Printf("after:  stats_status=%q has_settlement=%v\n", after, has)
 	fmt.Println("DONE（质量如实落库，幂等短路=applied/skipped 直接返回）")
+}
+
+// eliminator D-260 M4.2：淘汰判据实时读表（fin_strategy_criteria 改行即生效）。
+func eliminator(s *pgstore.Store) settlement.Eliminator {
+	return lifecycle.NewEliminator(func(ctx context.Context, kind string) ([]lifecycle.Criterion, error) {
+		rows, err := s.ListStrategyCriteria(ctx, "*", kind)
+		out := make([]lifecycle.Criterion, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, lifecycle.Criterion{Strategy: r.Strategy, Kind: r.Kind, Pred: r.Pred, Params: r.Params})
+		}
+		return out, err
+	})
 }

@@ -82,7 +82,7 @@ func TestD335_EntryGate(t *testing.T) {
 	d311Truncate(t, s)
 	d006LiftCanonicalCap(t, s, "XAUUSD", "XAUUSDT")
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE strategy_stats CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE strategy_stats, fin_strategy CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	d335SeedRegime(t, s)

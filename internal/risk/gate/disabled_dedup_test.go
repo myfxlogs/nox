@@ -16,7 +16,7 @@ func setupGateDisabledStore(t *testing.T, strategy string) *pgstore.Store {
 	t.Helper()
 	s := testAccumStore(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, autotrade_logs, positions, position_legs, position_cashflows CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, fin_strategy, autotrade_logs, positions, position_legs, position_cashflows CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	// autotrade_state=RUNNING
@@ -82,7 +82,7 @@ func TestGateDisabled_Stdout1hDedup(t *testing.T) {
 func TestGateDisabled_DifferentStrategiesNoDedup(t *testing.T) {
 	s := testAccumStore(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, autotrade_logs, positions, position_legs, position_cashflows CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, fin_strategy, autotrade_logs, positions, position_legs, position_cashflows CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx, `INSERT INTO autotrade_state (state, reason, halted_on) VALUES ('RUNNING', '', NULL)`); err != nil {

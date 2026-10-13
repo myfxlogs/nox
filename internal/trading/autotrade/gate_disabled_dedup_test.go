@@ -13,7 +13,7 @@ import (
 func TestRunStartupElimination_AggregateInput(t *testing.T) {
 	s := testAccumStore(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, autotrade_logs, positions, position_legs, position_cashflows CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, fin_strategy, autotrade_logs, positions, position_legs, position_cashflows CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 
@@ -90,7 +90,7 @@ func TestRunStartupElimination_AggregateInput(t *testing.T) {
 func TestRunStartupElimination_EnvironmentIsolation(t *testing.T) {
 	s := testAccumStore(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, autotrade_logs, positions, position_legs, position_cashflows, position_settlements CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, fin_strategy, autotrade_logs, positions, position_legs, position_cashflows, position_settlements CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 
@@ -150,7 +150,7 @@ func TestRunStartupElimination_EnvironmentIsolation(t *testing.T) {
 func TestRunStartupElimination_EnvIsolation_KillCase(t *testing.T) {
 	s := testAccumStore(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, autotrade_logs, positions, position_legs, position_cashflows, position_settlements CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, fin_strategy, autotrade_logs, positions, position_legs, position_cashflows, position_settlements CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 

@@ -61,9 +61,9 @@ type Deps interface {
 }
 
 // Eliminator 淘汰判定函数类型（从 autotrade.evaluateElimination 抽出，避免环依赖）。
-// 加 medianPnl 入参（小样本判据 median<0 AND avg<0）。
+// D-260 M4.2：加 ctx——判据实时读表（fin_strategy_criteria 改行即生效）。
 // 返回 (shouldDisable, reason)。
-type Eliminator func(totalTrades int, winRate, avgPnl, medianPnl float64, disabled bool) (bool, string)
+type Eliminator func(ctx context.Context, totalTrades int, winRate, avgPnl, medianPnl float64, disabled bool) (bool, string)
 
 // FamilyResolver D-256-A S2：策略→风险族映射（避免环依赖，autotrade.riskFamily 注入）。
 // 返回同族策略名列表（如 CARRY→[CARRY,SWAPARB]），用于族级聚合。

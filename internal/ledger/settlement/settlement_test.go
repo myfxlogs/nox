@@ -205,7 +205,7 @@ func (f *fakeDeps) InsertAlert(ctx context.Context, ruleID *int64, level, messag
 }
 
 // noElim 永不禁用的 Eliminator（测试用）。
-func noElim(int, float64, float64, float64, bool) (bool, string) { return false, "" }
+func noElim(context.Context, int, float64, float64, float64, bool) (bool, string) { return false, "" }
 
 // TestSettle_Idempotent 已有 position_settlements 行（stats_status=applied）→ 短路，不重复结算。
 // 短路逻辑改为检查 stats_status（applied/skipped 短路）。
@@ -351,7 +351,9 @@ func TestSettle_EliminatorTriggered(t *testing.T) {
 		insertWon: true, // 返修包②：模拟赢家
 		getStat:   &pgstore.StrategyStat{Strategy: "CROSS_VENUE", TotalTrades: 10, WinRate: 0.1, AvgPnl: -10},
 	}
-	alwaysElim := func(int, float64, float64, float64, bool) (bool, string) { return true, "test elimination" }
+	alwaysElim := func(context.Context, int, float64, float64, float64, bool) (bool, string) {
+		return true, "test elimination"
+	}
 	if err := Settle(context.Background(), d, 4, alwaysElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
@@ -368,7 +370,7 @@ func TestSettle_EliminatorTriggered(t *testing.T) {
 func TestSettle_EliminatorEnvironmentIsolation(t *testing.T) {
 	now := time.Now()
 	rp := -5.0
-	elimByAvg := func(total int, winRate, avg, median float64, disabled bool) (bool, string) {
+	elimByAvg := func(_ context.Context, total int, winRate, avg, median float64, disabled bool) (bool, string) {
 		if avg < 0 {
 			return true, "avg<0"
 		}
@@ -887,7 +889,7 @@ func TestD256A_S2_FamilyAggregationUsed(t *testing.T) {
 		cashflowsNet:     1.0, // CARRY 有 swap 现金流
 		cashflowsQuality: "actual",
 	}
-	elimByAvg := func(total int, winRate, avg, median float64, disabled bool) (bool, string) {
+	elimByAvg := func(_ context.Context, total int, winRate, avg, median float64, disabled bool) (bool, string) {
 		if avg < 0 {
 			return true, "family avg<0"
 		}
@@ -942,7 +944,7 @@ func TestD256A_S2_FamilyNilFallsBackToByEnvironment(t *testing.T) {
 		cashflowsNet:     1.0, // CARRY 有 swap 现金流
 		cashflowsQuality: "actual",
 	}
-	elimByAvg := func(total int, winRate, avg, median float64, disabled bool) (bool, string) {
+	elimByAvg := func(_ context.Context, total int, winRate, avg, median float64, disabled bool) (bool, string) {
 		if avg < 0 {
 			return true, "avg<0"
 		}

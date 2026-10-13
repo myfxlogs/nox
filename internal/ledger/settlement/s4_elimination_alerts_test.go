@@ -11,7 +11,7 @@ import (
 )
 
 // elimYes 总是触发淘汰的 Eliminator（测试用）。
-func elimYes(int, float64, float64, float64, bool) (bool, string) {
+func elimYes(context.Context, int, float64, float64, float64, bool) (bool, string) {
 	return true, "test elimination: avg<0"
 }
 

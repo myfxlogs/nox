@@ -13,7 +13,7 @@ func TestD423_EntryGateFailClosed(t *testing.T) {
 	ctx := context.Background()
 	s := testAccumStore(t)
 	d311Truncate(t, s)
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE strategy_stats, fin_xasset_monitor CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE strategy_stats, fin_strategy, fin_xasset_monitor CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	d335SeedRegime(t, s)
@@ -43,7 +43,7 @@ func TestD423_ReverseComboRejected(t *testing.T) {
 	ctx := context.Background()
 	s := testAccumStore(t)
 	d311Truncate(t, s)
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE strategy_stats, fin_xasset_monitor CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE strategy_stats, fin_strategy, fin_xasset_monitor CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	d335SeedRegime(t, s)

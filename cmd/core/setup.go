@@ -186,7 +186,7 @@ func runServices(ctx context.Context, cancel context.CancelFunc, cfg *config.Con
 		SwapArbRevivalBps:          cfg.SwapArbRevivalBps,          // D-256-A S5：复活扳机告警阈值
 	}, st, dashSvc, oppTopic, qbus)
 	// D-087 §3.2：注入 settlement.Settle 依赖 + 淘汰判定函数 + 风险族解析器（D-256-A S2）
-	atEngine.SetSettleDeps(settleDeps, lifecycle.EliminatorAdapter, lifecycle.FamilyResolverAdapter)
+	atEngine.SetSettleDeps(settleDeps, newDBEliminator(st), lifecycle.FamilyResolverAdapter)
 	// D-004 P1#2：平仓可平性闸的 MT5 trade_mode 即时探针——经 execReg 取实现
 	// TradeModeProber 的 executor（MT5Executor.SymbolParams 直查，非采集缓存）。
 	atEngine.SetTradeModeProberResolver(func(vk string) exec.TradeModeProber {

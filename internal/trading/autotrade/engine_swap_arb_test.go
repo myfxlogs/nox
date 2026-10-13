@@ -17,7 +17,7 @@ func TestScanSwapArb_DisabledStillFeedsRollup(t *testing.T) {
 	s := testAccumStore(t)
 	ctx := context.Background()
 	// 清表：facts/autotrade_logs/combo_daily_rollup/strategy_stats
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE facts, autotrade_logs, combo_daily_rollup, strategy_stats`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE facts, autotrade_logs, combo_daily_rollup, strategy_stats, fin_strategy`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	seedDemoAccounts(t, s, "vA", "vB") // D-144 ① 三态：补 broker_accounts 行（demo）
@@ -79,7 +79,7 @@ func TestScanSwapArb_DisabledStillFeedsRollup(t *testing.T) {
 func TestScanSwapArb_CarryDisabledStillFeedsRollup(t *testing.T) {
 	s := testAccumStore(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE facts, autotrade_logs, combo_daily_rollup, strategy_stats`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE facts, autotrade_logs, combo_daily_rollup, strategy_stats, fin_strategy`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	seedDemoAccounts(t, s, "vA", "vB")

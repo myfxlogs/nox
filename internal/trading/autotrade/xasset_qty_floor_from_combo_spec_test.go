@@ -28,7 +28,7 @@ func d330Setup(t *testing.T) *pgstore.Store {
 	s := testAccumStore(t)
 	d311Truncate(t, s)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, fin_strategy CASCADE`); err != nil {
 		t.Fatalf("truncate state: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx, `INSERT INTO autotrade_state (state, reason, halted_on) VALUES ('RUNNING', '', NULL)`); err != nil {

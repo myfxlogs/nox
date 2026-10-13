@@ -38,7 +38,7 @@ func TestD332_CheckAllStrategiesDisabled_XAssetEnabled(t *testing.T) {
 	s := testAccumStore(t)
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx,
-		`TRUNCATE positions, position_legs, strategy_stats, position_settlements, autotrade_state CASCADE`); err != nil {
+		`TRUNCATE positions, position_legs, strategy_stats, fin_strategy, position_settlements, autotrade_state CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	for _, typ := range []string{"CROSS_VENUE", "MEANREVERT", "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING"} {
@@ -61,7 +61,7 @@ func TestD332_StartupElimination_XAssetCarry(t *testing.T) {
 	s := testAccumStore(t)
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx,
-		`TRUNCATE positions, position_legs, strategy_stats, position_settlements, autotrade_state CASCADE`); err != nil {
+		`TRUNCATE positions, position_legs, strategy_stats, fin_strategy, position_settlements, autotrade_state CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	insertXAssetElimFixture(t, s, []float64{-3, -3, -2, -1, -1, -0.5, -0.5})
