@@ -425,3 +425,13 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **②前端 `/dci` 面板**：ListPersonalPositions(OPEN)+ListDCIOrders 双表纯渲染（qty/entry/status/note/opened_at + venue/template/product/opt_type/strike/qty/ccy/tenor/status/response/proposal/created_at），资金地图「在跑」列加下钻链 `#/dci`。
 - **锚**：TestBinanceEarnPositions（多币聚合/同资产合并/零额跳过/MULTI 指纹/签名头+路径）替 D133 摘除锚（语义反转：拒发径→正常采集）；D132 快照锚绿（分币行+去重口径回归）；TestCapitalPools_* 三键快照不误塌。
 - **遗留**：①SG 验收=`fin_venue_account_snapshot` 现 binance+earn 行+DCI 页对拍 `fin_dci_order` #10 BTC PUT @83250 542 filled；②earn 配置行回种靠迁移 1013（部署后首个 refresh 轮即采集）；③活期赎回/申购写径复用 earn_subscribe 面（不变）。
+## 拒单消费闸（业主令 10-13：坑表教训回流告警面）
+- **共享包 `internal/kbsearch`**：Load 解析 `docs/经验库/条目/*.md` frontmatter（id/keywords/summary/status；retired 剔除）；Match/Search 高置信对拍=induct covered 同规则（<4 字符短词忽略；≥2 命中或单 ≥12 字符指纹词；序=hits desc→最长词 desc→id）。Suffix 便捷件 fail-open（读目/解析败→""）。
+- **告警接线**：dciexec `KBDir` 字段（cmd/core 装配 `/kn/docs/经验库/条目`）；三处落坑点 dci_subscribe/earn_subscribe/earn_redeem 的 permission+runtime gap 文案尾附 ` kb:<id> <summary≤80rune>`——同一拒单的请求箱文本与 critical 告警同得教训行；零命中零拼。
+- **analyst 工具**：`kb_search`（{text}→命中条目行 id/status/hits/kw/summary，顶 8）——项目 LLM 自查坑史同径；import 白名单加 analyst/dciexec→kbsearch 两边。
+- **禁线照办**：热径纯关键词对拍零 LLM 零子进程；附行只引 id+summary；fail-open 读败只省略附行不阻塞落坑/告警。
+- **验收残留**：SG 实拍=触发已知签名拒单（或桩注入）alert 正文现 `kb:` 附行；AskAnalyst kb_search 返条目引用。
+## AI 设置前端页（业主令 10-13：ai_settings 免 SQL）
+- `/settings` 页 AI 板块：base_url/model/api_key（password 框+掩码尾4 placeholder 回显，留空=后端不动）/enabled 开关；GetAiSettings/SetAiSettings 既有 RPC 直走零 proto 动；保存后重读掩码清输入框。
+- 零前端运算、api_key 永不回显明文（掩码只进 placeholder 不进 value）。
+- 验收残留：SG 实拍页面对拍 ai_settings 行。
