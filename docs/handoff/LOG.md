@@ -368,3 +368,28 @@ Generate 加⑧段「昨日公司日报原文」（`ListDeptReports(date-1)` 复
 **验证**：TestListFundingWitnessedSymbols（分所+窗+去重保序+窗外不取）+ D057 测试改分所锚（binance 集不串 okx）全绿；build/vet/gofmt 净；pgstore/exchange/cmd/core 三包测试绿；race 锚绿；check-lines 零警告；import 方向 221/222；env-reads 过。
 
 **部署验收**：SG 拍 `skips` 中 `depth_missing` 趋零（残余=候选腿在所无 funding 证据/venue 未上市——如实缺口）；`[cex-depth] <venue> witnessed bases` 行出三所分计数。
+
+## E0 纪元归档——脚本交付（执行待审）
+
+**交付**：`scripts/archive_epoch0.sql`（仓内可审）。SG 干跑（sed COMMIT→ROLLBACK 全回滚）验证通过：全表集 26 CTAS+TRUNCATE+终态集 4 DELETE+nav 特例链零报错；实测行数——大项 `fin_cex_dci_quote` 1,040,059、`fin_symdig_findings` 375,546、`cex_private_events` 92,973、`fin_cex_radar` 70,040、`position_evals` 12,039；positions 14/legs 46；paper_spot_carry exited 29709；fin_nav_daily 1 行回插。
+
+**票面裁定执行记录（歧义表按禁线处理）**：
+- `fin_proposal`/`explorer_proposals` 票面全表集→**转终态行集**（实拍 proposed×5/new×40 在途，wiping 违业主令在途留活语义）；fin_proposal 另排除 `fin_dci_order` 引用行（FK NO ACTION+留活账本一致）。
+- `fin_position_canonicals` 名义留活但 FK→positions 拦截 TRUNCATE（约束存在拦与行数无关）——6/6 行全指向待归档 positions，归档全表随大集同截（语义=positions 联结映射，新仓续写）。
+- **留活标名待委员会**：fin_trx_cycle_vi/fin_trx_txs/fin_trx_vote_apr/fin_trx_vote_apr_top/fin_trx_witness 五件无 status 列（快照/账本型，在途谓词不可定义）→未归档。
+- `fin_strategy_hearing` 票面名单内已入全表集。
+
+**SG 执行文**（待审后逐条）：
+```
+# ①dump 铁序先（未落两处禁动库）
+ssh SG && docker exec nox-postgres pg_dump -U nox -d nox -Fc -f /tmp/nox_epoch0_20261013.dump
+docker cp nox-postgres:/tmp/nox_epoch0_20261013.dump /opt/nox-backups/
+rclone copy /opt/nox-backups/nox_epoch0_20261013.dump <R2-remote>:nox-backups/   # 副本二
+# ②跑归档（单事务，FK 撞即整体回滚）
+docker cp scripts/archive_epoch0.sql nox-postgres:/tmp/
+docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_epoch0.sql | tee /opt/nox-backups/e0_archive_verify.log
+# ③验收：尾段对拍表 arch=源表前行数（干跑数已上）；live=0（全表集）/在途余留（终态集）；fin_nav_daily live=1
+# ④docker restart nox-core → 拍 scan 环+请求箱#11+fin_strategy live 行
+```
+
+**风险注记**：`fin_proposal` 在途 proposed 行引用的 `fin_opp_eval` 已全归——下拍重评自动补卡；`positions` 清空后 dedup_key 唯一键对新开全放行（历史不复开是业主令语义）；`fin_strategy_hearing` 归零后听证面从 E0 起算。
