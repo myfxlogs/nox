@@ -30,21 +30,28 @@ type OppEval struct {
 }
 
 // UpsertOppEval 一提案一卡幂等覆盖（重扫复算刷新；actual_apr 保已回写值）。
-func (s *Store) UpsertOppEval(ctx context.Context, e *OppEval) error {
+// 返回 unevaluable 连拍数（auto 轨僵尸提案处置②消费：≥阈值翻 deferred）。
+func (s *Store) UpsertOppEval(ctx context.Context, e *OppEval) (int, error) {
 	ev, _ := json.Marshal(e.EvidenceRefs)
-	_, err := s.pool.Exec(ctx, `
+	var streak int
+	err := s.pool.QueryRow(ctx, `
 		INSERT INTO fin_opp_eval (proposal_id, template_id, gross_apr, fee_apr,
-			slippage_apr, failure_apr, window_apr, net_apr, verdict, evidence_refs)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+			slippage_apr, failure_apr, window_apr, net_apr, verdict, evidence_refs,
+			uneval_streak)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+			CASE WHEN $9='unevaluable' THEN 1 ELSE 0 END)
 		ON CONFLICT (proposal_id) DO UPDATE SET
 			template_id=EXCLUDED.template_id, gross_apr=EXCLUDED.gross_apr,
 			fee_apr=EXCLUDED.fee_apr, slippage_apr=EXCLUDED.slippage_apr,
 			failure_apr=EXCLUDED.failure_apr, window_apr=EXCLUDED.window_apr,
 			net_apr=EXCLUDED.net_apr, verdict=EXCLUDED.verdict,
-			evidence_refs=EXCLUDED.evidence_refs, computed_at=now()`,
+			evidence_refs=EXCLUDED.evidence_refs, computed_at=now(),
+			uneval_streak = CASE WHEN EXCLUDED.verdict='unevaluable'
+				THEN fin_opp_eval.uneval_streak+1 ELSE 0 END
+		RETURNING uneval_streak`,
 		e.ProposalID, e.TemplateID, e.GrossAPR, e.FeeAPR, e.SlippageAPR,
-		e.FailureAPR, e.WindowAPR, e.NetAPR, e.Verdict, ev)
-	return err
+		e.FailureAPR, e.WindowAPR, e.NetAPR, e.Verdict, ev).Scan(&streak)
+	return streak, err
 }
 
 // GetOppEval 提案评估卡单查（无行=nil,nil——无卡）。

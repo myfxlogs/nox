@@ -155,6 +155,19 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 			}
 			continue // 零新提案（info 级=台账留痕零推送）
 		}
+		// auto 轨无执行器（IsExecTemplate 外族）→ 永不翻态的僵尸源：
+		// 不产提案+存量 proposed 翻 deferred（D-204 同径复用）+info 留痕。
+		// 处置语义钉死：auto 提案必有处置径（执行器或 deferred），龄不白涨。
+		if r.ExecTrack == "auto" && !gate.IsExecTemplate(r.TemplateID) {
+			if n, derr := st.DeferProposalsByPair(ctx, r.TemplateID, "binance"); derr == nil && n > 0 {
+				log.Printf("[oppmatch] auto 轨无执行器 %s 翻 deferred %d 行", r.TemplateID, n)
+			}
+			if err := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
+				"auto 轨无执行器 %s@binance 达标但不产提案（executor-missing）", r.TemplateID)); err != nil {
+				log.Printf("[oppmatch] executor-missing alert %s: %v", r.TemplateID, err)
+			}
+			continue
+		}
 		if len(r.Missing) == 0 {
 			propN++
 			liveTmpls = append(liveTmpls, r.TemplateID)
@@ -173,8 +186,20 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 				continue
 			}
 			card := evalProposal(ctx, st, r, pid) // D-258 M4.1：一提案一卡（每扫一拍复算）
-			if uerr := st.UpsertOppEval(ctx, card); uerr != nil {
+			streak, uerr := st.UpsertOppEval(ctx, card)
+			if uerr != nil {
 				log.Printf("[oppmatch] eval card proposal#%d: %v", pid, uerr)
+			}
+			// 处置②：unevaluable 连拍≥3 翻 deferred——评估证据持续不足不许无限挂
+			// proposed（阈值=3 扫拍：单拍数据面波动不致误杀，连拍才定性「持续不足」）。
+			if card.Verdict == "unevaluable" && streak >= 3 {
+				if n, derr := st.DeferProposalsByPair(ctx, r.TemplateID, "binance"); derr == nil && n > 0 {
+					log.Printf("[oppmatch] unevaluable 连拍 %d 翻 deferred（proposal#%d）", streak, pid)
+				}
+				if aerr := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
+					"提案#%d %s 评估证据连拍不足（unevaluable×%d）→deferred", pid, r.TemplateID, streak)); aerr != nil {
+					log.Printf("[oppmatch] uneval-defer alert #%d: %v", pid, aerr)
+				}
 			}
 			tag := "提案#"
 			if !created {

@@ -248,3 +248,83 @@ func TestD204_DormantTrack(t *testing.T) {
 		t.Fatalf("休眠轨产新提案：%d 行", n)
 	}
 }
+
+// TestZombieProposalSemantics auto 轨僵尸提案处置两径锚：
+// ①auto 轨+无执行器模板 → 零新提案+存量 proposed 翻 deferred+info 留痕；
+// ②unevaluable 连拍≥3 → deferred（评估证据持续不足不许无限挂 proposed）。
+func TestZombieProposalSemantics(t *testing.T) {
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
+	st, err := pgstore.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx,
+		`DELETE FROM fin_proposal; DELETE FROM alerts;
+		 DELETE FROM fin_opp_eval;
+		 DELETE FROM fin_opp_template_cond WHERE template_id LIKE 'tzombie%';
+		 DELETE FROM fin_opp_template WHERE id LIKE 'tzombie%'`); err != nil {
+		t.Fatal(err)
+	}
+	// A：auto 轨无执行器（tzombie_auto 不在 IsExecTemplate 族）；holding BTC min 0=恒满足。
+	// B：proposal 轨（不触①），tid 无证据源 → 评估卡 unevaluable 连拍。
+	if _, err := st.Pool().Exec(ctx, `
+		INSERT INTO fin_opp_template (id, mechanism, net_apr, exec_track, risk_level, enabled) VALUES
+		('tzombie_auto','x','x','auto','low',true),('tzombie_eval','x','x','proposal','low',true);
+		INSERT INTO fin_opp_template_cond (template_id, seq, kind, subject, qualifier, min_val) VALUES
+		('tzombie_auto',1,'holding','BTC','min_qty',0),
+		('tzombie_eval',1,'holding','BTC','min_qty',0)`); err != nil {
+		t.Fatal(err)
+	}
+	// A 存量僵尸行（#221/#225 同型）。
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_proposal
+		(template_id, exec_track, venue, params, status)
+		VALUES ('tzombie_auto','auto','binance','{}','proposed')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := RunOnce(ctx, st, 10000, 1000); err != nil {
+		t.Fatal(err)
+	}
+	var stt string
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT status FROM fin_proposal WHERE template_id='tzombie_auto'`).Scan(&stt); err != nil {
+		t.Fatal(err)
+	}
+	if stt != "deferred" {
+		t.Fatalf("auto 无执行器存量应翻 deferred, got %s", stt)
+	}
+	var alerts int
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM alerts WHERE message LIKE 'auto 轨无执行器%tzombie_auto%'`).Scan(&alerts); err != nil {
+		t.Fatal(err)
+	}
+	if alerts == 0 {
+		t.Fatal("executor-missing info 留痕缺")
+	}
+	// A 零新提案（行数仍 1 且非 proposed）。
+	var n int
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM fin_proposal WHERE template_id='tzombie_auto' AND status='proposed'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatal("auto 无执行器不应产/留 proposed 行")
+	}
+	// B：连拍 unevaluable×3 → deferred。
+	for i := 0; i < 3; i++ {
+		if _, _, err := RunOnce(ctx, st, 10000, 1000); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT status FROM fin_proposal WHERE template_id='tzombie_eval'`).Scan(&stt); err != nil {
+		t.Fatal(err)
+	}
+	if stt != "deferred" {
+		t.Fatalf("unevaluable 连拍≥3 应翻 deferred, got %s", stt)
+	}
+}

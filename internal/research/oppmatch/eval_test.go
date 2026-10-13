@@ -45,11 +45,11 @@ func TestM41_DCICardViable(t *testing.T) {
 	if card.FeeAPR == nil || card.SlippageAPR == nil || card.WindowAPR == nil || card.FailureAPR == nil {
 		t.Fatalf("机理 n/a 项应落 0 非 NULL: %+v", card)
 	}
-	if err := st.UpsertOppEval(ctx, card); err != nil {
+	if _, err := st.UpsertOppEval(ctx, card); err != nil {
 		t.Fatal(err)
 	}
 	card.Verdict = "reject" // upsert 覆盖语义
-	if err := st.UpsertOppEval(ctx, card); err != nil {
+	if _, err := st.UpsertOppEval(ctx, card); err != nil {
 		t.Fatal(err)
 	}
 	got, err := st.GetOppEval(ctx, pid)
@@ -112,7 +112,7 @@ func TestM41_FundingCarry788Unevaluable(t *testing.T) {
 	if len(miss) == 0 {
 		t.Fatalf("missing 列表缺: %+v", card.EvidenceRefs)
 	}
-	if err := st.UpsertOppEval(ctx, card); err != nil {
+	if _, err := st.UpsertOppEval(ctx, card); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := st.GetOppEval(ctx, pid)

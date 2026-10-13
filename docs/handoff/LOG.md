@@ -1,5 +1,24 @@
 # LOG.md — 阶段交付归档（NOX 仓首条）
 
+## auto 轨僵尸提案处置语义（#221/#225 无执行器永不翻态）
+
+### 病灶
+`IsExecTemplate` 外族的 auto 模板每扫拍过预检入 liveTmpls→`ExpireProposalsExcept` 永免、`pending_uniq` 挡新提案、autoexec 零触碰——proposed 龄只涨不翻（SG 实证 #221 funding_carry/#225 cross_venue_spot unevaluable 挂 ~30h）。
+
+### 处置语义（票面①二选一钉死=「不产提案+存量翻 deferred」）
+- **①auto+无执行器**：`run.go` 达标模板判 `gate.IsExecTemplate` 前置——auto 轨且族外→`DeferProposalsByPair` 翻存量 proposed 为 deferred（D-204 同径复用）+info alert「auto 轨无执行器 …executor-missing」+continue 零新提案。选「不产提案」侧：deferred 提案语义=曾达标待复评，无执行器是结构性缺失非时机问题，产行即 deferred 属虚账。
+- **②unevaluable 连拍阈值**：迁移 1016 `fin_opp_eval.uneval_streak`（unevaluable→+1，其他 verdict→归零，`UpsertOppEval` RETURNING 回传）；扫描拍内 verdict=unevaluable 且连拍≥3→deferred+info alert 携连拍数。阈值=3 拍：单拍数据面波动不致误杀，连拍才定性「持续不足」。
+- **③存量**：#221/#225 两模板均属 auto+族外→部署后首个扫描拍自动由径①翻 deferred（零手改 SQL，处置即语义本身）。
+
+### 禁线照办
+`IsExecTemplate` 注册面零动；proposed→executed 仍唯 autoexec/go 口令径；deferred 复用 D-204；zero LLM；err 不吞（defer 败仅 log，alert 败仅 log——主径不被留痕阻塞，与既有 dormant 分支同式）。
+
+### 锚
+`TestZombieProposalSemantics`：auto 无执行器存量翻 deferred+info 留痕+零新 proposed；proposal 轨无证据源模板连拍 3 次 unevaluable→deferred。
+
+### 验收残留（SG）
+部署后实拍 `fin_proposal` #221/#225 status=deferred+decided_at 落戳；`alerts` 现「auto 轨无执行器 funding_carry/cross_venue_spot」info 行；同模板零新 proposed。
+
 ## 2026-10-13 M4.2 终审交付：策略生命周期状态机+机读判据表+提案 SLA+晋级自动执行（c6de485e）
 
 ### 背景/范围
