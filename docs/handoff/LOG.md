@@ -419,3 +419,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **fail-open**：PG/AI 未配→LLM 段跳过，covered 标仍落；违式整批不落盘。零新 env（NOX_KB_DIR/NOX_PG_DSN 复用 digest 引导件；NOX_AI_* 属 app_secrets 禁读→DB ai_settings 单源）。
 - **验收**：锚三件（covered 标+幂等/草稿落盘+违式剔除+索引重产/schema 整批闸零写）；本地干跑（KB 拷贝+LLM 缺配）实测幂等。SG cron 挂 `30 22 * * *`（UTC，日报前一拍）由部署侧执行：`cd /opt/nox/tools/noxkb && ./noxkb induct`——**首跑消化 77KB 存量的实拍属部署验收**，本票代码面交付。
 - 残留：①LLM 未配的日报前窗=covered 段仍消化，drafts 留待配置齐备；②inbox 行未被任何 draft 引用者保持未标、次跑重试（设计，非漏）；③索引 budget（98304B）随草稿入增——触顶按既有上浮先例调 maxBytes。
+## 财务可见性两件套（binance:earn 回归分币快照 + DCI/持仓面板）
+- **①binance:earn 回归**（D-133 摘除令约束解除）：旧约束「理财面只统计 USDT 不可达」随分币口径解除——`cex_account_binance_earn.go` 走 `GET {sapi}/v1/simple-earn/flexible/position`（USER_DATA 签名复用既有凭据，零新 env；私有流不推 earn 仓位=REST 唯一径，票文已举证）。逐资产聚合→`AccountInfo.Holdings` 分币；单币 Currency=原生币种、多币="MULTI"+Equity=Σqty（仅作变更指纹）。迁移 `1013` 回种配置行（binance spot 行复制，0182 同式幂等）。
+- **快照写径**：`snapshotRows` earn 面改每币种一行（读端 DISTINCT ON 升 (venue,venue_type,currency) 三键）；prev→cur 币种消失补 0 行防陈旧残值滞留。`snapSame` holdings 不参与去重——D-136 accrual 噪声防线不破（聚合额变才触写，消失币种届时零填行兜）。读端三处 + digest + coverage 服务同步三键，`binance:earn` 白名单解除（funding 面摘除保留）。
+- **②前端 `/dci` 面板**：ListPersonalPositions(OPEN)+ListDCIOrders 双表纯渲染（qty/entry/status/note/opened_at + venue/template/product/opt_type/strike/qty/ccy/tenor/status/response/proposal/created_at），资金地图「在跑」列加下钻链 `#/dci`。
+- **锚**：TestBinanceEarnPositions（多币聚合/同资产合并/零额跳过/MULTI 指纹/签名头+路径）替 D133 摘除锚（语义反转：拒发径→正常采集）；D132 快照锚绿（分币行+去重口径回归）；TestCapitalPools_* 三键快照不误塌。
+- **遗留**：①SG 验收=`fin_venue_account_snapshot` 现 binance+earn 行+DCI 页对拍 `fin_dci_order` #10 BTC PUT @83250 542 filled；②earn 配置行回种靠迁移 1013（部署后首个 refresh 轮即采集）；③活期赎回/申购写径复用 earn_subscribe 面（不变）。

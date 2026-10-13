@@ -123,23 +123,40 @@ func TestCEXAccount_OkxEarn(t *testing.T) {
 	}
 }
 
-// TestD133_BinanceEarnRemoved D-133 域1：binance 理财面整体摘除（理财账户实有杂币，
-// 「只统计 USDT」不可达——业主令不纳入系统）——binance:earn 查询径拒发请求
-// （unsupported venue，零 HTTP 出网）；okx:earn 在域不受影响（TestCEXAccount_OkxEarn 锚）。
-func TestD133_BinanceEarnRemoved(t *testing.T) {
-	var called bool
+// TestBinanceEarnPositions 财务可见性两件套①：binance:earn 回归（分币口径解除 D-133
+// 「只统计 USDT」约束）——签名 GET flexible/position，逐资产聚合分币行：
+// 多币 Currency=MULTI；同资产多行合并；零额跳过。
+func TestBinanceEarnPositions(t *testing.T) {
+	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		fmt.Fprint(w, `{"totalAmountInUSDT":"888.88"}`)
+		gotPath = r.URL.Path
+		if r.Header.Get("X-MBX-APIKEY") == "" {
+			t.Error("missing X-MBX-APIKEY")
+		}
+		fmt.Fprint(w, `{"total":4,"rows":[
+			{"asset":"USDT","totalAmount":"500"},
+			{"asset":"USDT","totalAmount":"42"},
+			{"asset":"BTC","totalAmount":"0.01"},
+			{"asset":"XYZ","totalAmount":"0"}]}`)
 	}))
 	defer srv.Close()
 
 	q := NewCEXAccountQuerier("binance", "earn", "key", "secret", "", srv.URL+"/fapi", "", false)
 	acct, err := q.Account(context.Background())
-	if err == nil || acct != nil {
-		t.Fatalf("binance earn want unsupported error, got acct=%+v err=%v", acct, err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if called {
-		t.Error("binance earn 摘除后仍发出 HTTP 请求（应 fail-closed 于 dispatch）")
+	if gotPath != "/sapi/v1/simple-earn/flexible/position" {
+		t.Fatalf("path=%s", gotPath)
+	}
+	if acct.Currency != "MULTI" || acct.Equity != 542.01 {
+		t.Fatalf("acct=%+v", acct)
+	}
+	per := map[string]float64{}
+	for _, h := range acct.Holdings {
+		per[h.Ccy] = h.Qty
+	}
+	if per["USDT"] != 542 || per["BTC"] != 0.01 || len(per) != 2 {
+		t.Fatalf("holdings=%+v", per)
 	}
 }

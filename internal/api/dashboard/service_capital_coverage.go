@@ -134,10 +134,9 @@ func venueAccountRows(ctx context.Context, s *Service) ([]*v1.CapitalCoverageRow
 	out := make([]*v1.CapitalCoverageRow, 0, len(lates))
 	var occ venueOcc
 	for _, l := range lates {
-		// D-130 域2①：binance 资金钱包面官方已废除并入现货——覆盖率行不再枚举；
-		// D-133 域1：binance 理财面整体摘除（业主令：实有杂币「只统计 USDT」不可达）。
-		// 两面配置行停用/删随部署迁移；代码侧双保险，digest 同规。
-		if l.Venue == "binance" && (l.VenueType == "funding" || l.VenueType == "earn") {
+		// D-130 域2①：binance 资金钱包面官方已废除并入现货——覆盖率行不再枚举。
+		// （earn 面已回归：财务可见性两件套①分币快照口径，D-133 摘除令约束解除。）
+		if l.Venue == "binance" && l.VenueType == "funding" {
 			continue
 		}
 		// D-125：池标签去「venue账户」前缀；D-130 域2②面名随 venue 原生词（`okx·交易账户` 式）。

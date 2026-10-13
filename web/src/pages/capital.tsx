@@ -25,7 +25,7 @@ function PoolTable({ pools }: { pools: CapitalPool[] }) {
             <td>{p.venueType}</td>
             <td>{fmtAmt(p.equity)}</td>
             <td>{fmtAmt(p.idle)}</td>
-            <td>{fmtAmt(p.deployed)}</td>
+            <td>{p.deployed > 0 ? <a href="#/dci">{fmtAmt(p.deployed)}</a> : fmtAmt(p.deployed)}</td>
             <td>{p.deployedParts.map((d) => `${d.ref} ${fmtAmt(d.amount)}`).join("；") || "—"}</td>
             <td>
               {p.ghost ? "幽灵" : p.stale ? "陈旧" : p.online ? "在线" : "—"}

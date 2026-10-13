@@ -32,11 +32,11 @@ type ExplorerIdlePool struct {
 // income_events 近30d 合计 + 快照 buffer_multiple，闲置/破地板标记 Go 算。
 func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]ExplorerIdlePool, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT ON (venue, venue_type)
+		SELECT DISTINCT ON (venue, venue_type, currency)
 			venue, venue_type, COALESCE(balance_raw,0), COALESCE(equity_raw,0),
 			COALESCE(free_margin_raw,0), currency, fetched_at, COALESCE(buffer_multiple,0)
 		FROM fin_venue_account_snapshot
-		ORDER BY venue, venue_type, fetched_at DESC`)
+		ORDER BY venue, venue_type, currency, fetched_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("explorer idle snapshots: %w", err)
 	}

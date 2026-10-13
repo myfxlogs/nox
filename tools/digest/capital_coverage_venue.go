@@ -87,9 +87,9 @@ func balanceCcyFoldable(ccy string) bool {
 // （free_margin_raw 已存=D-405；fm≤0/NULL=未采 fail-closed 不计）。表空/查询失败 → 单行「未采」回退。
 func loadVenueAccountRows(ctx context.Context, pool *pgxpool.Pool) ([]CapitalCoverageRow, venueOcc) {
 	vaRows, err := pool.Query(ctx, `
-		SELECT DISTINCT ON (venue, venue_type) venue, venue_type, equity_raw, free_margin_raw, currency, fetched_at
+		SELECT DISTINCT ON (venue, venue_type, currency) venue, venue_type, equity_raw, free_margin_raw, currency, fetched_at
 		FROM fin_venue_account_snapshot
-		ORDER BY venue, venue_type, fetched_at DESC`)
+		ORDER BY venue, venue_type, currency, fetched_at DESC`)
 	if err != nil {
 		return []CapitalCoverageRow{uncollectedRow()}, venueOcc{}
 	}
@@ -103,9 +103,9 @@ func loadVenueAccountRows(ctx context.Context, pool *pgxpool.Pool) ([]CapitalCov
 		if err := vaRows.Scan(&venue, &vt, &equity, &freeMargin, &ccy, &fetched); err != nil {
 			return []CapitalCoverageRow{uncollectedRow()}, venueOcc{}
 		}
-		// D-130 域2①：binance 资金钱包面官方已废除并入现货——行不再枚举；
-		// D-133 域1：binance 理财面整体摘除（服务端同规）。
-		if venue == "binance" && (vt == "funding" || vt == "earn") {
+		// D-130 域2①：binance 资金钱包面官方已废除并入现货——行不再枚举。
+		// （earn 面回归：分币快照口径解除 D-133「只统计 USDT」约束，服务端同规。）
+		if venue == "binance" && vt == "funding" {
 			continue
 		}
 		// D-125：池标签去「venue账户」前缀；D-130 域2②面名随 venue 原生词。

@@ -29,10 +29,13 @@ func (q *CEXAccountQuerier) accountSubaccount(ctx context.Context) (*AccountInfo
 		}
 		return nil, fmt.Errorf("funding account: unsupported venue %q", q.venue)
 	case q.venueType == "earn":
-		// binance 理财面整体摘除（理财账户实有杂币，「只统计 USDT」不可达——业主令
-		// 不纳入系统），earn venue_type 机制保留（okx:earn 在域）。
+		// binance:earn 回归（财务可见性两件套①）：D-133 摘除令的「只统计 USDT」约束
+		// 已被分币快照口径（D-285）解除——逐资产枚举落分币行。
 		if q.venue == "okx" {
 			return q.accountOkxEarn(ctx)
+		}
+		if q.venue == "binance" {
+			return q.accountBinanceEarn(ctx)
 		}
 		return nil, fmt.Errorf("earn account: unsupported venue %q", q.venue)
 	}

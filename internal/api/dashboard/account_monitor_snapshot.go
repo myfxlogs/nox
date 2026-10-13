@@ -5,6 +5,7 @@ package dashboard
 import (
 	"context"
 	"log"
+	"sort"
 	"time"
 
 	"nox/internal/data/venue"
@@ -85,28 +86,80 @@ func (m *AccountMonitor) writeRestSnapshot(ctx context.Context, vk string, prev,
 	if snapSame(prev, acct) {
 		return false
 	}
-	row := pgstore.VenueAccountSnapshot{
-		Venue: acct.Venue, VenueType: venue.NormalizeVenueType(acct.AssetType, acct.Venue, acct.VenueType),
-		BalanceRaw: acct.Balance, EquityRaw: acct.Equity, FreeMarginRaw: acct.FreeMargin,
-		Currency: acct.Currency, FetchedAt: time.Now(), Src: "rest_poll",
-	}
-	if acct.BufferMultiple > 0 {
-		b := acct.BufferMultiple
-		row.BufferMultiple = &b
-	}
-	if err := m.snapWriter(ctx, []pgstore.VenueAccountSnapshot{row}); err != nil {
+	rows := snapshotRows(prev, acct)
+	if err := m.snapWriter(ctx, rows); err != nil {
 		log.Printf("[account-mon] %s rest_poll snapshot write: %v", vk, err)
 		return false
 	}
 	return true
 }
 
-// snapSame D-136：快照去重比较——只比「入库列」（balance/equity/free_margin/currency/
+// snapshotRows 组装写行：默认单行；earn 面多币持仓（binance earn 分币枚举，D-285 零换算）
+// 时每币种一行（读端 DISTINCT ON 含 currency），并入 prev 币种并集——消失的币种
+// 补 0 行防陈旧残值永久滞留。
+func snapshotRows(prev, acct *reconcile.AccountInfo) []pgstore.VenueAccountSnapshot {
+	vt := venue.NormalizeVenueType(acct.AssetType, acct.Venue, acct.VenueType)
+	mk := func(ccy string, eq float64) pgstore.VenueAccountSnapshot {
+		row := pgstore.VenueAccountSnapshot{
+			Venue: acct.Venue, VenueType: vt,
+			BalanceRaw: eq, EquityRaw: eq, FreeMarginRaw: 0, // 分币行零重复保证金概念
+			Currency: ccy, FetchedAt: time.Now(), Src: "rest_poll",
+		}
+		if acct.BufferMultiple > 0 {
+			b := acct.BufferMultiple
+			row.BufferMultiple = &b
+		}
+		return row
+	}
+	if acct.VenueType != "earn" || len(acct.Holdings) == 0 {
+		return []pgstore.VenueAccountSnapshot{{
+			Venue: acct.Venue, VenueType: vt,
+			BalanceRaw: acct.Balance, EquityRaw: acct.Equity, FreeMarginRaw: acct.FreeMargin,
+			Currency: acct.Currency, FetchedAt: time.Now(), Src: "rest_poll",
+			BufferMultiple: bufPtr(acct),
+		}}
+	}
+	per := map[string]float64{}
+	for _, h := range acct.Holdings {
+		per[h.Ccy] += h.Qty
+	}
+	if prev != nil {
+		for _, h := range prev.Holdings {
+			if _, ok := per[h.Ccy]; !ok {
+				per[h.Ccy] = 0 // 消失币种补零行（陈旧残值防滞留）
+			}
+		}
+	}
+	ccys := make([]string, 0, len(per))
+	for c := range per {
+		ccys = append(ccys, c)
+	}
+	sort.Strings(ccys)
+	rows := make([]pgstore.VenueAccountSnapshot, 0, len(ccys))
+	for _, c := range ccys {
+		rows = append(rows, mk(c, per[c]))
+	}
+	return rows
+}
+
+func bufPtr(a *reconcile.AccountInfo) *float64 {
+	if a.BufferMultiple <= 0 {
+		return nil
+	}
+	b := a.BufferMultiple
+	return &b
+}
+
 // buffer_multiple），非入库字段（Holdings 浮动子项等）不参与；prev=nil=首采必写。
 func snapSame(a, b *reconcile.AccountInfo) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
-	return a.Balance == b.Balance && a.Equity == b.Equity && a.FreeMargin == b.FreeMargin &&
-		a.Currency == b.Currency && a.BufferMultiple == b.BufferMultiple
+	if a.Balance != b.Balance || a.Equity != b.Equity || a.FreeMargin != b.FreeMargin ||
+		a.Currency != b.Currency || a.BufferMultiple != b.BufferMultiple {
+		return false
+	}
+	// earn 分币径 holdings 照旧不比（D-136 噪声防线）：币种消失而聚合额不变=该
+	// 币种≈0 不值得写行；真换仓时聚合额变会触写，snapshotRows 零填行兜消失币种。
+	return true
 }

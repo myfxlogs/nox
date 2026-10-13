@@ -206,4 +206,5 @@ var migrationFiles = []struct {
 	{1010, migrations.NavBudgetSQL, false},                    // D-264 M4.4：fin_nav_daily+fin_strategy_budget
 	{1011, migrations.VenueRejectSQL, false},                  // D-255：fin_venue_reject 败因坑表
 	{1012, migrations.ElimHearingSQL, false},                  // D-249①：fin_strategy_hearing 淘汰听证
+	{1013, migrations.BinanceEarnReseedSQL, false},            // 财务可见性两件套①：binance:earn 配置行回种
 }

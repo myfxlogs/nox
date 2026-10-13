@@ -43,3 +43,6 @@ var VenueRejectSQL string // D-255：fin_venue_reject 败因坑表
 
 //go:embed 1012_elim_hearing.sql
 var ElimHearingSQL string // D-249①：fin_strategy_hearing 淘汰多空听证记录
+
+//go:embed 1013_binance_earn_reseed.sql
+var BinanceEarnReseedSQL string // 财务可见性两件套①：binance:earn 配置行回种（D-285 分币口径解除 D-133 约束）

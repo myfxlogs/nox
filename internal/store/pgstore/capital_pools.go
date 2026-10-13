@@ -41,11 +41,11 @@ type CapitalDCIOrder struct {
 // CapitalPoolSnapshots fin_venue_account_snapshot 每池最新行（含 src 供 stale 判）。
 func (s *Store) CapitalPoolSnapshots(ctx context.Context) ([]CapitalPoolRow, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT ON (venue, venue_type)
+		SELECT DISTINCT ON (venue, venue_type, currency)
 			venue, venue_type, COALESCE(equity_raw,0), COALESCE(free_margin_raw,0),
 			currency, COALESCE(src,''), fetched_at
 		FROM fin_venue_account_snapshot
-		ORDER BY venue, venue_type, fetched_at DESC`)
+		ORDER BY venue, venue_type, currency, fetched_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("capital pool snapshots: %w", err)
 	}

@@ -13,6 +13,7 @@ import RiskPage from "./pages/risk";
 import OrgPage from "./pages/org";
 import InvestorPage from "./pages/investor";
 import CapitalPage from "./pages/capital";
+import DciPage from "./pages/dci";
 import "./app.css";
 
 const ROUTES: Record<string, { title: string; el: () => React.JSX.Element }> = {
@@ -23,6 +24,7 @@ const ROUTES: Record<string, { title: string; el: () => React.JSX.Element }> = {
   "/org": { title: "运行面", el: OrgPage },
   "/investor": { title: "投资人", el: InvestorPage },
   "/capital": { title: "资金地图", el: CapitalPage },
+  "/dci": { title: "持仓理财", el: DciPage },
 };
 
 function useHash(): string {
