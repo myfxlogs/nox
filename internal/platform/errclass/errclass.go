@@ -53,32 +53,13 @@ func ClassifyMT5(code string) Action {
 	}
 }
 
-// ClassifyMT4 按 MT4 错误码字符串分类（mt4grpc.ErrorCode.String()）。
-func ClassifyMT4(code string) Action {
-	switch code {
-	case "REQUOTE", "PRICE_CHANGED":
-		return RetryFresh
-	case "OFF_QUOTES", "NO_PRICES", "TOO_MANY_REQUESTS":
-		return Retry
-	case "MARKET_CLOSED", "TRADE_DISABLED":
-		return Halt
-	case "NO_MONEY", "INVALID_TRADE_VOLUME", "INVALID_PRICE",
-		"INVALID_STOPS", "INVALID_TRADE_PARAMETERS":
-		return Abort
-	default:
-		return Abort
-	}
-}
-
-// Classify 按 venueKey 前缀路由 MT5/MT4 分类（CEX 走 Abort 兜底）。
+// Classify 按 venueKey 前缀路由 MT5 分类（mt4 已退役撤码表；CEX 走 Abort 兜底）。
 // code 为错误码字符串（executors 从 ErrorCode.String() 提取）。
 func Classify(venueKey, code string) Action {
 	switch {
 	case keydomain.IsType(venueKey, "mt5"):
 		return ClassifyMT5(code)
-	case keydomain.IsType(venueKey, "mt4"):
-		return ClassifyMT4(code)
-	default:
+	default: // mt4 已退役（无码表）
 		return Abort // CEX 无标准码表，Abort 兜底
 	}
 }

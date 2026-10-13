@@ -173,8 +173,8 @@ func TestD403_ResolveGraduationCanonicals(t *testing.T) {
 		t.Errorf("resolve: %+v", pair)
 	}
 	// 规范化命中：map 侧 XAUUSD 形 vs universe 侧 XAU
-	pair, err = ResolveGraduationCanonicals("XAU", "1314615", "okx", 0, entries, nil)
-	if err != nil || pair.MtCanonical != "XAUUSD" || pair.MtVenueKey != "1314615:mt4" {
+	pair, err = ResolveGraduationCanonicals("XAU", "1314615", "okx", 1, entries, nil)
+	if err != nil || pair.MtCanonical != "XAUUSD" || pair.MtVenueKey != "1314615:mt5" {
 		t.Errorf("normalize resolve: %+v err=%v", pair, err)
 	}
 	// 映射缺失 fail-closed

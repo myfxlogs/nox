@@ -28,7 +28,7 @@ func (s *Service) BackfillSwapHistory(ctx context.Context, req *connect.Request[
 	bareVenue, platform, ok := splitVenueKey(venueKey)
 	if !ok {
 		return connect.NewResponse(&v1.BackfillSwapHistoryReply{
-			Summary: fmt.Sprintf("invalid venueKey %q (expected venue:mt5 or venue:mt4)", venueKey),
+			Summary: fmt.Sprintf("invalid venueKey %q (expected venue:mt5（mt4 已退役）)", venueKey),
 		}), nil
 	}
 	// 从 BrokerManager 获取 orderHistoryScan 闭包
@@ -89,8 +89,8 @@ func (s *Service) BackfillSwapHistory(ctx context.Context, req *connect.Request[
 	}), nil
 }
 
-// splitVenueKey 解析 "venue:mt5"/"venue:mt4" → (bareVenue, platform, ok)。
-// platform: 0=MT4, 1=MT5。ok=false = 格式错误。
+// splitVenueKey 解析 "venue:mt5" → (bareVenue, platform=1, ok)。
+// mt4 已退役（资产面零户）——venue:mt4 按格式错误拒。
 func splitVenueKey(venueKey string) (venue string, platform int, ok bool) {
 	vk := keydomain.Parse(venueKey)
 	if vk.Type == "" {
@@ -99,8 +99,6 @@ func splitVenueKey(venueKey string) (venue string, platform int, ok bool) {
 	switch vk.Type {
 	case "mt5":
 		return vk.Venue, 1, true
-	case "mt4":
-		return vk.Venue, 0, true
 	}
 	return "", 0, false
 }

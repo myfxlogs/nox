@@ -35,43 +35,15 @@ func TestClassifyMT5(t *testing.T) {
 	}
 }
 
-// TestClassifyMT4 MT4 错误码分类（四类 Action）。
-func TestClassifyMT4(t *testing.T) {
-	tests := []struct {
-		code string
-		want Action
-	}{
-		{"REQUOTE", RetryFresh},
-		{"PRICE_CHANGED", RetryFresh},
-		{"OFF_QUOTES", Retry},
-		{"NO_PRICES", Retry},
-		{"TOO_MANY_REQUESTS", Retry},
-		{"MARKET_CLOSED", Halt},
-		{"TRADE_DISABLED", Halt},
-		{"NO_MONEY", Abort},
-		{"INVALID_TRADE_VOLUME", Abort},
-		{"INVALID_PRICE", Abort},
-		{"INVALID_STOPS", Abort},
-		{"INVALID_TRADE_PARAMETERS", Abort},
-		{"UNKNOWN_ERR", Abort}, // 兜底
-	}
-	for _, tt := range tests {
-		got := ClassifyMT4(tt.code)
-		if got != tt.want {
-			t.Errorf("ClassifyMT4(%q) want %v, got %v", tt.code, tt.want, got)
-		}
-	}
-}
-
 // TestClassifyByVenue 按 venueKey 路由 MT5/MT4/CEX。
 func TestClassifyByVenue(t *testing.T) {
 	// MT5 venue
 	if got := Classify("vA:mt5", "MARKET_CLOSED"); got != Halt {
 		t.Errorf("mt5 MARKET_CLOSED want Halt, got %v", got)
 	}
-	// MT4 venue
-	if got := Classify("vB:mt4", "TRADE_DISABLED"); got != Halt {
-		t.Errorf("mt4 TRADE_DISABLED want Halt, got %v", got)
+	// mt4 已退役（码表撤除）——历史 mt4 键统一 Abort 兜底
+	if got := Classify("vB:mt4", "TRADE_DISABLED"); got != Abort {
+		t.Errorf("mt4 TRADE_DISABLED want Abort（已退役）, got %v", got)
 	}
 	// CEX venue → Abort 兜底（无标准码表）
 	if got := Classify("binance:spot", "ANY_CODE"); got != Abort {
@@ -138,9 +110,6 @@ func TestHaltActionStopsStrategy(t *testing.T) {
 		if ClassifyMT5(code) != Halt {
 			t.Errorf("MT5 %s should be Halt (stops strategy)", code)
 		}
-		if ClassifyMT4(code) != Halt {
-			t.Errorf("MT4 %s should be Halt (stops strategy)", code)
-		}
 	}
 }
 
@@ -173,10 +142,10 @@ func TestClassifyErr(t *testing.T) {
 	if got := ClassifyErr("vA:mt5", err); got != Halt {
 		t.Errorf("ClassifyErr mt5 MARKET_CLOSED want Halt, got %v", got)
 	}
-	// MT4 REQUOTE → RetryFresh
+	// mt4 已退役 → Abort 兜底（不再走 MT4 码表）
 	err = errors.New("mt4 ordersend: [code=REQUOTE] requote")
-	if got := ClassifyErr("vB:mt4", err); got != RetryFresh {
-		t.Errorf("ClassifyErr mt4 REQUOTE want RetryFresh, got %v", got)
+	if got := ClassifyErr("vB:mt4", err); got != Abort {
+		t.Errorf("ClassifyErr mt4 REQUOTE want Abort（已退役）, got %v", got)
 	}
 	// 无 code 标记 → Abort 兜底
 	err = errors.New("mt5 ordersend: nil result")

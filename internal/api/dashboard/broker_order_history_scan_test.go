@@ -136,7 +136,7 @@ func TestSplitVenueKey(t *testing.T) {
 		ok       bool
 	}{
 		{"61585565:mt5", "61585565", 1, true},
-		{"vA:mt4", "vA", 0, true},
+		{"vA:mt4", "", 0, false}, // mt4 已退役——解析拒
 		{"vA", "", 0, false},
 		{"vA:spot", "", 0, false},
 	}

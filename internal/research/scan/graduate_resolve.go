@@ -73,10 +73,10 @@ func ResolveGraduationCanonicals(symbol, mtVenue, cexVenue string, platform int,
 	case view.classOfCanon(symbol) != "" || view.mtCanon(symbol, mtVenue) != "":
 		return ResolvedCfdPair{}, fmt.Errorf("graduation canonical: class %s venue %s 无注册 perp 腿（fail-closed）", symbol, cexVenue)
 	}
-	pt := "mt4"
-	if platform == 1 {
-		pt = "mt5"
+	if platform != 1 {
+		return ResolvedCfdPair{}, fmt.Errorf("graduation canonical: venue %s platform=%d——MT4 已退役（fail-closed）", mtVenue, platform)
 	}
+	pt := "mt5"
 	return ResolvedCfdPair{
 		MtCanonical:  mtCanon,
 		MtVenueKey:   keydomain.Join(mtVenue, pt),

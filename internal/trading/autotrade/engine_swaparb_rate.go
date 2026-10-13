@@ -117,7 +117,7 @@ func (e *Engine) notionalPerLotForRate(venue, symbol string) (float64, bool) {
 	// 实测：discoverSwapCombos 用 lf.Venue+":"+lf.Src 拼 venueKey，recalcNetSwap 用 leg.Venue（含后缀）。
 	// 此处 venue 是 bare，需遍历 quotes 找匹配 venue 前缀的报价。
 	// 简化：尝试 mt5 后缀（MT5 是主战场），未命中再尝试 mt4。
-	for _, suffix := range []string{"mt5", "mt4", "spot", "perp"} {
+	for _, suffix := range []string{"mt5", "spot", "perp"} { // mt4 已退役
 		venueKey := keydomain.Join(venue, suffix)
 		if q, ok := e.quotes.Latest(symbol, venueKey); ok {
 			mid := (q.Bid + q.Ask) / 2

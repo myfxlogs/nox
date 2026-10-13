@@ -60,6 +60,7 @@ func TestD348_FinanceOverview_Aggregate(t *testing.T) {
 	s := financeTestStore(t)
 	seedFinanceFixtures(t, s)
 	// M4.4②：NAV 单源=fin_venue_account_snapshot 最新池（写口已过滤 real-only）。
+	mustExec(t, s, `INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('777','mt5','h',0,'p')`) // 幽灵池过滤锚：在册户才计 NAV
 	mustExec(t, s, `INSERT INTO fin_venue_account_snapshot (venue, venue_type, equity_raw, currency, fetched_at)
 		VALUES ('777','mt5',100,'USD',NOW())`)
 	svc := &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005}
@@ -187,6 +188,7 @@ func TestD348_FinanceOverview_FlowsNullTrackAndNoDoubleCount(t *testing.T) {
 func TestD348_FinanceOverview_EquityRealOnly(t *testing.T) {
 	s := financeTestStore(t)
 	ctx := context.Background()
+	mustExec(t, s, `INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('777','mt5','h',0,'p'),('781','mt5','h',0,'p')`)
 	mustExec(t, s, `INSERT INTO fin_venue_account_snapshot (venue, venue_type, equity_raw, currency, fetched_at) VALUES
 		('777','mt5',100,'USD',NOW()),
 		('okx','spot',6400,'USD',NOW()),

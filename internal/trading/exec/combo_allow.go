@@ -6,13 +6,13 @@ import (
 )
 
 // ComboAllowSpec D-159 W1a R1：精确组合门禁——单条允许的 SWAPARB 组合规格。
-// venueKey 格式 "account:mt4" / "account:mt5"（与 broker_accounts.venue + platform 后缀一致）。
+// venueKey 格式 "account:mt5"（mt4 已退役——历史行兼容读出）（与 broker_accounts.venue + platform 后缀一致）。
 // MaxLongQty/MaxShortQty/MaxGrossExposureUSD ≤0 = 该维度不限。
 //
 // 定义在 exec 包（最底层无依赖）：dashboard/autotrade 复用，避免循环依赖。
 type ComboAllowSpec struct {
 	Canonical           string
-	VenueLong           string // 买腿 venueKey（account:mt4 或 account:mt5）
+	VenueLong           string // 买腿 venueKey（account:mt5；mt4 已退役）
 	VenueShort          string // 卖腿 venueKey
 	MaxLongQty          float64
 	MaxShortQty         float64
@@ -94,7 +94,7 @@ func MatchComboAllow(allow []ComboAllowSpec, canonical, venueBuy, venueSell stri
 type XAssetComboAllowSpec struct {
 	CanonicalBuy  string
 	CanonicalSell string
-	VenueBuy      string // 买腿 venueKey（account:mt4/mt5 或 cex:perp）
+	VenueBuy      string // 买腿 venueKey（account:mt5 或 cex:perp）
 	VenueSell     string // 卖腿 venueKey
 	MaxLongQty    float64
 	MaxShortQty   float64

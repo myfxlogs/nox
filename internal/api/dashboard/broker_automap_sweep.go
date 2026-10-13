@@ -97,10 +97,10 @@ func (s *Service) seedAssetEquivVenue(ctx context.Context, venue string, mappedC
 	if err != nil {
 		return 0, fmt.Errorf("broker account: %w", err)
 	}
-	venueType := "mt5"
-	if a.Platform == 0 {
-		venueType = "mt4"
+	if a.Platform != 1 {
+		return 0, fmt.Errorf("venue %s platform=%d——MT4 已退役，automap 跳过", venue, a.Platform)
 	}
+	venueType := "mt5"
 	n := 0
 	for _, e := range equivSeedTargets(mappedCanonicals, equiv, venueType, venue) {
 		ok, err := s.store.InsertAssetEquivIfAbsent(ctx, e)

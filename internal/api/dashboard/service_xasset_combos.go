@@ -21,7 +21,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-var comboVenueTypes = map[string]bool{"mt4": true, "mt5": true, "perp": true, "spot": true}
+var comboVenueTypes = map[string]bool{"mt5": true, "perp": true, "spot": true} // mt4 已退役
 
 // comboVenueOK venue_key 通道型校验（fail-closed 枚举：B-016.4 非法后缀拒写）。
 func comboVenueOK(v string) bool {
@@ -110,7 +110,7 @@ func (s *Service) UpsertXAssetAllowCombo(ctx context.Context, req *connect.Reque
 		return fail("canonical/venue 四元组必填")
 	}
 	if !comboVenueOK(m.VenueBuy) || !comboVenueOK(m.VenueSell) {
-		return fail("venue 后缀非法（只允许 :mt4/:mt5/:perp/:spot）：%s / %s", m.VenueBuy, m.VenueSell)
+		return fail("venue 后缀非法（只允许 :mt5/:perp/:spot）：%s / %s", m.VenueBuy, m.VenueSell)
 	}
 	if m.MaxLongQty <= 0 || m.MaxShortQty <= 0 || m.MaxGrossUsd <= 0 {
 		return fail("三 cap 必填且 >0")
@@ -234,7 +234,7 @@ func (s *Service) PreviewXAssetComboRisk(ctx context.Context, req *connect.Reque
 		return fail("venue/canonical 必填")
 	}
 	if !comboVenueOK(m.VenueBuy) || !comboVenueOK(m.VenueSell) {
-		return fail("venue 后缀非法（只允许 :mt4/:mt5/:perp/:spot）")
+		return fail("venue 后缀非法（只允许 :mt5/:perp/:spot）")
 	}
 	cs := m.CanonicalSell
 	if cs == "" {

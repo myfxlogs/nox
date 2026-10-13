@@ -46,10 +46,13 @@ type BrokerAccount struct {
 // InsertBrokerAccount 插入账号；venue 冲突返回错误（UNIQUE 约束）。
 // IsReal *bool：nil=未知(NULL), &true=实盘, &false=demo（D-144 ① 三态）。
 func (s *Store) InsertBrokerAccount(ctx context.Context, a *BrokerAccount) error {
+	if a.Platform != 1 {
+		return fmt.Errorf("platform=%d 非法——MT4 已退役（资产面零户），仅 mt5=1", a.Platform)
+	}
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, alias, status, commission_bps, is_real, website)
-		VALUES ($1, CASE $2::int WHEN 0 THEN 'mt4' ELSE 'mt5' END, $3, $4, $5, $6, '', $7, $8, $9, $10)
-	`, a.Venue, a.Platform, a.Host, a.Port, a.Password, a.Server, a.Status, a.CommissionBps, a.IsReal, a.Website)
+		VALUES ($1, 'mt5', $2, $3, $4, $5, '', $6, $7, $8, $9)
+	`, a.Venue, a.Host, a.Port, a.Password, a.Server, a.Status, a.CommissionBps, a.IsReal, a.Website)
 	return err
 }
 
