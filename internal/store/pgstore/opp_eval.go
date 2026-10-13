@@ -133,3 +133,58 @@ func (s *Store) DCIRejectCount(ctx context.Context, templateID string, window ti
 		  AND created_at > now() - $2::interval`, templateID, window).Scan(&n)
 	return n, err
 }
+
+// RejectHits fin_venue_reject 窗内累计撞坑数（op 过滤；earn_redeem/dci_subscribe）——
+// 申赎类失败成本证据（口径同 DCI：申购/赎回拒绝发生在资金移动前=零资金损耗）。
+func (s *Store) RejectHits(ctx context.Context, op string, window time.Duration) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(sum(hits),0) FROM fin_venue_reject
+		WHERE op=$1 AND last_seen > now() - $2::interval`, op, window).Scan(&n)
+	return n, err
+}
+
+// MedianTakerFeeBps 在册非模拟 perp 所 taker 费率中位（venue 实测值域，
+// funding_carry 双腿费证据——提案未定腿域，取全集中位不外推单所）。
+func (s *Store) MedianTakerFeeBps(ctx context.Context) (float64, bool, error) {
+	var v *float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY taker_fee_bps)
+		FROM exchange_configs WHERE venue_type='perp' AND NOT simulated
+		  AND taker_fee_bps IS NOT NULL`).Scan(&v)
+	if err != nil {
+		return 0, false, fmt.Errorf("median taker fee: %w", err)
+	}
+	if v == nil {
+		return 0, false, nil
+	}
+	return *v, true, nil
+}
+
+// MedianHoldHours type 集 CLOSED 持仓窗内持有小时中位（realized 时长账本——
+// funding_carry 费年化分母证据；零行=ok=false 缺证据）。
+func (s *Store) MedianHoldHours(ctx context.Context, types []string, window time.Duration) (float64, bool, error) {
+	var v *float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch from closed_at-opened_at)/3600.0)
+		FROM positions WHERE status='CLOSED' AND type=ANY($1)
+		  AND closed_at > now() - $2::interval`, types, window).Scan(&v)
+	if err != nil {
+		return 0, false, fmt.Errorf("median hold hours: %w", err)
+	}
+	if v == nil {
+		return 0, false, nil
+	}
+	return *v, true, nil
+}
+
+// LegFailCount type 集窗内腿败数（position_legs status=FAILED——
+// funding_carry 失败成本证据；>0 时腿败成本未计价由调用方 fail-closed 记 missing）。
+func (s *Store) LegFailCount(ctx context.Context, types []string, window time.Duration) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM position_legs pl JOIN positions p ON p.id=pl.position_id
+		WHERE pl.status='FAILED' AND p.type=ANY($1)
+		  AND pl.ts > now() - $2::interval`, types, window).Scan(&n)
+	return n, err
+}

@@ -45,10 +45,16 @@ func evalProposal(ctx context.Context, st *pgstore.Store, r Result, pid int64) *
 			}
 			in.Window = econ.Term{Value: w, Evidence: "fin_cex_earn_apr 30d中位"}
 		}
-		// 申赎失败通道无机读账本——failure 缺证据。
+		// D-2xx 失败证源=fin_venue_reject earn_redeem 撞坑累计（口径同 DCI：
+		// 申赎拒绝发生在资金移动前=零资金损耗）。
+		if n, err := st.RejectHits(ctx, "earn_redeem", evalWindow); err == nil {
+			in.Failure = econ.Term{Evidence: fmt.Sprintf("fin_venue_reject earn_redeem %d败/30d零资金损耗", n)}
+		}
 	case r.TemplateID == "funding_carry":
-		// funding=永续随市：费=双腿 taker×365/持有窗——持有窗无账本证据源→缺；
-		// 滑点=cex_spread；市窗=facts funding 30d 中位衰减；失败=腿执行账本缺。
+		// funding=永续随市：滑点=cex_spread；市窗=facts funding 30d 中位衰减。
+		// D-2xx 费=perp taker 中位×双腿 按 realized 持有窗年化（PERP_FUNDING
+		// CLOSED 时长账本；零行=缺证据不外推）；失败=position_legs FAILED 账本
+		// ——0 败=零损耗证据，>0=成本未计价 fail-closed 仍缺（不估单价）。
 		if b, ok, err := st.LatestSpreadBps(ctx, "BTCUSDT"); err == nil && ok {
 			in.Slippage = econ.Term{Value: b / 100, Evidence: "fin_cex_spread:BTCUSDT"}
 		}
@@ -58,6 +64,16 @@ func evalProposal(ctx context.Context, st *pgstore.Store, r Result, pid int64) *
 				w = 0
 			}
 			in.Window = econ.Term{Value: w, Evidence: "facts:funding 30d中位"}
+		}
+		if t, ok, err := st.MedianTakerFeeBps(ctx); err == nil && ok {
+			if hh, ok2, err2 := st.MedianHoldHours(ctx, []string{"PERP_FUNDING"}, evalWindow); err2 == nil && ok2 && hh > 0 {
+				// fee_apr = 双腿 taker%×（8760h/中位持有h）年化
+				in.Fee = econ.Term{Value: t * 2 / 100 * (8760 / hh),
+					Evidence: fmt.Sprintf("exchange_configs taker中位%.2fbps×2腿 / PERP_FUNDING 中位持有%.1fh", t, hh)}
+			}
+		}
+		if n, err := st.LegFailCount(ctx, []string{"PERP_FUNDING"}, evalWindow); err == nil && n == 0 {
+			in.Failure = econ.Term{Evidence: "position_legs 0腿败/30d"}
 		}
 	}
 	card := econ.Evaluate(in)
