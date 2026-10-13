@@ -55,8 +55,10 @@ func evalProposal(ctx context.Context, st *pgstore.Store, r Result, pid int64) *
 		// D-2xx 费=perp taker 中位×双腿 按 realized 持有窗年化（PERP_FUNDING
 		// CLOSED 时长账本；零行=缺证据不外推）；失败=position_legs FAILED 账本
 		// ——0 败=零损耗证据，>0=成本未计价 fail-closed 仍缺（不估单价）。
-		if b, ok, err := st.LatestSpreadBps(ctx, "BTCUSDT"); err == nil && ok {
-			in.Slippage = econ.Term{Value: b / 100, Evidence: "fin_cex_spread:BTCUSDT"}
+		// D-277 G4 修复：fin_cex_spread.symbol 写侧存基础币形（BTC/SOL/TRX/ETH），
+		// 键须用基名——"BTCUSDT" 永不命中（8526 行/日鲜写侧键义不动）。
+		if b, ok, err := st.LatestSpreadBps(ctx, "BTC"); err == nil && ok {
+			in.Slippage = econ.Term{Value: b / 100, Evidence: "fin_cex_spread:BTC"}
 		}
 		if m, ok, err := st.MedianFactValue(ctx, "funding", evalWindow); err == nil && ok && r.APR != nil {
 			w := *r.APR - m

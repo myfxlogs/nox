@@ -66,8 +66,9 @@ func TestM41_DCICardViable(t *testing.T) {
 // 两源，余缺=滑点（fin_cex_spread 无行）→ 仍 unevaluable 零外推，missing 如实列。
 func TestM41_FundingCarry788Unevaluable(t *testing.T) {
 	st, ctx := evalTestStore(t)
-	// 自隔离：持仓面清零+perp taker 统一 5bps——fee/failure 证据确定性。
-	if _, err := st.Pool().Exec(ctx, `TRUNCATE positions, position_legs RESTART IDENTITY CASCADE`); err != nil {
+	// 自隔离：持仓面清零+perp taker 统一 5bps——fee/failure 证据确定性；
+	// fin_cex_spread 清零——本锚断言 missing 恰仅 [slippage]，共享库残行会污染源面。
+	if _, err := st.Pool().Exec(ctx, `TRUNCATE positions, position_legs, fin_cex_spread RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.Pool().Exec(ctx, `UPDATE exchange_configs SET taker_fee_bps=5.0 WHERE venue_type='perp'`); err != nil {
@@ -182,5 +183,30 @@ func TestEvalCard_FundingFeeSrc(t *testing.T) {
 	}
 	if card.FeeAPR == nil || *card.FeeAPR <= 0 {
 		t.Fatalf("fee_apr 未落: %+v", card)
+	}
+}
+
+// TestEvalCard_SpreadKeyBase D-277 G4：fin_cex_spread.symbol 存基础币形 BTC——
+// 基名键命中后 slippage 出证（修前 "BTCUSDT" 键永不命中属键型错配病灶）。
+func TestEvalCard_SpreadKeyBase(t *testing.T) {
+	st, ctx := evalTestStore(t)
+	if _, err := st.Pool().Exec(ctx, `TRUNCATE fin_cex_spread`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO fin_cex_spread (symbol, venue_buy, venue_sell, price_buy, price_sell, spread_bps)
+		 VALUES ('BTC','binance','okx',100000,100010,1.5)`); err != nil {
+		t.Fatal(err)
+	}
+	pid, _, err := st.CreateProposal(ctx, &pgstore.Proposal{
+		TemplateID: "funding_carry", ExecTrack: "auto", Venue: "binance",
+		Params: map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gross := 10.0
+	card := evalProposal(ctx, st, Result{TemplateID: "funding_carry", APR: &gross}, pid)
+	if card.SlippageAPR == nil || *card.SlippageAPR != 0.015 {
+		t.Fatalf("基名键应命中 slippage=0.015(1.5bps/100): %+v", card)
 	}
 }
