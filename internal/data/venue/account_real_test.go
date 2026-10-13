@@ -41,6 +41,7 @@ func TestNormalizeVenueType(t *testing.T) {
 	}{
 		{"okx 统一账户归一", "cex", "okx", "spot", "unified"},
 		{"okx perp 同归 unified", "cex", "okx", "perp", "unified"},
+		{"okx futures 同归 unified（gap#11 同钱防双计）", "cex", "okx", "futures", "unified"},
 		{"binance 分钱包不归一", "cex", "binance", "spot", "spot"},
 		{"gate 分钱包不归一", "cex", "gate", "perp", "perp"},
 		{"非 cex 不归一", "cfd", "okx", "mt5", "mt5"},

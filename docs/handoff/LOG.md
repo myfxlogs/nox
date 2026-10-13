@@ -450,3 +450,12 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **病灶修**：迁移 1013 enc 凭据列漏拷（-2014）、induct schema 闸 scope:string 整批拦（宽容反序列化）、earn 成交零推送、敞口闸 '' 币行双计。
 - **AI 基建**：ai_settings 切 SenseNova flash-lite（induct 调用 105s→1.6s）。
 - **遗留**：fin_condition_gap #11 待业主裁；binance:earn USDT 行等 refresh 拍；事件源 stale 语义挂账；listenKey→listenToken 迁移跟踪；github 推送积压在途（代理断）。
+
+## 2026-10-13 okx:futures 交割面开通（gap#11 收口）
+
+- **迁移 1014**：`exchange_configs_venue_type_chk` 枚举 +`'futures'`（drop+add 幂等）；okx:futures 行回种=perp 非 sim 行 enc 凭据复制（NOT EXISTS 幂等，明文列恒空=D-515 语义）；baseline 1000 同步枚举+COMMENT。
+- **写侧归一**：`NormalizeVenueType` okx futures→unified（统一账户同一 /account/balance 覆盖交割持仓资金——不归一则独立 venue_type 同额快照行=同钱双计，'' 币残影同型病灶）；`HasPrivateStream` okx 集加 futures（一条私有流覆盖，防独立轮询）。
+- **分派审计**（futures 盲区核毕）：`Account()` okx 分支穿透任意 type 走 /account/balance ✓；`FullInventory` okx 兜底分支 ✓；CexPositionManager perp-only 过滤 futures 跳过 ✓（采集不接=禁线）；`streamable` okx 仅 perp 起流 ✓（HasPrivateStream true 仅覆盖判定）；executor 构造零 panic、无模板路由 futures=fail-closed by absence ✓；graduation alloc okx 任意交易行通用 ✓；capital_coverage 标签已有 `futures`→「交割」。
+- **gap#11 收口径**：exchange_configs 行→`ListCapabilityLedger` credentials→`reconcileGaps` EvalCondTri ok→自动 fulfilled（零新径）。
+- **锚**：`TestOkxFuturesSeed`（enc 复制 real 非 sim/幂等/枚举放行+无关值仍拦）+`TestCEXAccount_OkxFutures`（统一账户端点+venue_key 穿透不 panic）+归一锚扩 futures case。
+- **验收残留（SG）**：部署后 `SELECT venue,venue_type FROM exchange_configs WHERE venue='okx' AND venue_type='futures'` 行在册；gap#11 次轮 reconcile 后 fulfilled；`[account] cex querier: okx:futures` 日志行+快照落 unified 无双计。

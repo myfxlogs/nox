@@ -46,3 +46,6 @@ var ElimHearingSQL string // D-249①：fin_strategy_hearing 淘汰多空听证�
 
 //go:embed 1013_binance_earn_reseed.sql
 var BinanceEarnReseedSQL string // 财务可见性两件套①：binance:earn 配置行回种（D-285 分币口径解除 D-133 约束）
+
+//go:embed 1014_okx_futures.sql
+var OkxFuturesSQL string // gap#11：venue_type 枚举放 'futures'+okx:futures 配置行回种

@@ -207,4 +207,5 @@ var migrationFiles = []struct {
 	{1011, migrations.VenueRejectSQL, false},                  // D-255：fin_venue_reject 败因坑表
 	{1012, migrations.ElimHearingSQL, false},                  // D-249①：fin_strategy_hearing 淘汰听证
 	{1013, migrations.BinanceEarnReseedSQL, false},            // 财务可见性两件套①：binance:earn 配置行回种
+	{1014, migrations.OkxFuturesSQL, false},                   // gap#11：venue_type 枚举放 'futures'+okx:futures 配置行回种
 }

@@ -593,7 +593,7 @@ CREATE TABLE public.exchange_configs (
     taker_fee_bps double precision,
     maker_fee_bps double precision,
     CONSTRAINT exchange_configs_venue_bare_chk CHECK ((venue !~~ '%:%'::text)),
-    CONSTRAINT exchange_configs_venue_type_chk CHECK ((venue_type = ANY (ARRAY['mt4'::text, 'mt5'::text, 'perp'::text, 'spot'::text, 'funding'::text, 'earn'::text, 'option'::text, 'unified'::text])))
+    CONSTRAINT exchange_configs_venue_type_chk CHECK ((venue_type = ANY (ARRAY['mt4'::text, 'mt5'::text, 'perp'::text, 'spot'::text, 'funding'::text, 'earn'::text, 'option'::text, 'unified'::text, 'futures'::text])))
 );
 
 
@@ -608,7 +608,7 @@ COMMENT ON COLUMN public.exchange_configs.venue IS 'R1 裸端点：CEX 交易所
 -- Name: COLUMN exchange_configs.venue_type; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.exchange_configs.venue_type IS 'R2 通道型：perp|spot|funding|earn|unified';
+COMMENT ON COLUMN public.exchange_configs.venue_type IS 'R2 通道型：perp|spot|funding|earn|unified|futures';
 
 
 --

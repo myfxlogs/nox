@@ -411,3 +411,29 @@ func TestCEXAccount_OKXUSDTOnly(t *testing.T) {
 		t.Errorf("holdings want 仅 USDT 行, got %+v", acct.Holdings)
 	}
 }
+
+// TestCEXAccount_OkxFutures gap#11：okx:futures 配置行走统一账户读径（/api/v5/account/balance
+// 同 spot/perp——统一账户同一余额域覆盖交割持仓资金）——不 panic 零 fail-closed；
+// venue_type 原值穿透（写侧归一 unified 在 dashboard/cexscan 层，querier 不掺）。
+func TestCEXAccount_OkxFutures(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		fmt.Fprint(w, `{"code":"0","msg":"","data":[{"totalEq":"100","details":[
+			{"ccy":"USDT","eq":"100","cashBal":"100","availBal":"80","eqUsd":"100"}
+		]}]}`)
+	}))
+	defer srv.Close()
+
+	q := NewCEXAccountQuerier("okx", "futures", "key", "secret", "pass", srv.URL, "", false)
+	acct, err := q.Account(context.Background())
+	if err != nil {
+		t.Fatalf("okx futures account: %v", err)
+	}
+	if gotPath != "/api/v5/account/balance" {
+		t.Errorf("path = %s, want /api/v5/account/balance", gotPath)
+	}
+	if acct.VenueKey != "okx:futures" || acct.Equity < 99.9 || acct.FreeMargin < 79.9 {
+		t.Errorf("acct = %+v", acct)
+	}
+}

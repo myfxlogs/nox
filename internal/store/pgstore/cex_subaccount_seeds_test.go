@@ -123,3 +123,52 @@ func TestD130_BinanceEarnSeed(t *testing.T) {
 		t.Fatalf("0183 后 okx earn 行=%d err=%v, want 1（不殃及在域面）", n, err)
 	}
 }
+
+// TestOkxFuturesSeed gap#11：1014 重放 → venue_type 枚举放 'futures' +
+// okx:futures 行出（凭据复制 okx perp real 行 enc 列）；幂等重放行数不变；sim perp 不种。
+func TestOkxFuturesSeed(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `TRUNCATE exchange_configs RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, `
+		INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, passphrase, simulated,
+		                              api_key_enc, api_secret_enc, passphrase_enc)
+		VALUES ('okx', 'perp', 'real', '', '', '', false, '\x0101'::bytea, '\x0202'::bytea, '\x0303'::bytea),
+		       ('okx', 'perp', 'sim', '', '', '', true, '\x0404'::bytea, '\x0505'::bytea, '\x0606'::bytea)`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, migrations.OkxFuturesSQL); err != nil {
+		t.Fatalf("apply 1014: %v", err)
+	}
+	// futures 行在册且 enc 凭据=real perp 行（非 sim 行）
+	var enc []byte
+	if err := s.pool.QueryRow(ctx,
+		`SELECT api_key_enc FROM exchange_configs WHERE venue='okx' AND venue_type='futures'`).Scan(&enc); err != nil {
+		t.Fatalf("okx futures 行缺失: %v", err)
+	}
+	if len(enc) != 2 || enc[0] != 0x01 || enc[1] != 0x01 {
+		t.Errorf("api_key_enc = %x, want real perp 行 0101（sim 行 0404 不种）", enc)
+	}
+	// 幂等重放行数不变
+	if _, err := s.pool.Exec(ctx, migrations.OkxFuturesSQL); err != nil {
+		t.Fatalf("re-run 1014: %v", err)
+	}
+	var n int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM exchange_configs WHERE venue='okx' AND venue_type='futures'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("重放后 futures 行=%d err=%v, want 1（幂等）", n, err)
+	}
+	// 枚举放行：直插 futures 行不撞 chk；无关值仍 fail-closed
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated)
+		 VALUES ('binance', 'futures', 'manual', 'k2', 's2', false)`); err != nil {
+		t.Errorf("futures 直插撞约束: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated)
+		 VALUES ('okx', 'nonsense', 'x', 'k3', 's3', false)`); err == nil {
+		t.Error("nonsense venue_type 未撞 chk（枚举放开越界）")
+	}
+}
