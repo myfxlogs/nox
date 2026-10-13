@@ -20,6 +20,7 @@ type NavReport struct {
 	IdleUSD       float64 // Σ 池可动余额（同口径）
 	Pools         []ExplorerIdlePool
 	SkippedNonUSD int // 非 USD 池跳过计数（诚实口径不假换算）
+	SkippedGhost  int // 幽灵池剔除计数（broker_accounts 移除户快照残行——不计 NAV 留痕）
 	ComputedAt    time.Time
 }
 
@@ -28,6 +29,10 @@ type NavReport struct {
 func SumNav(pools []ExplorerIdlePool, now time.Time) *NavReport {
 	r := &NavReport{Pools: pools, ComputedAt: now}
 	for _, p := range pools {
+		if p.Ghost {
+			r.SkippedGhost++
+			continue
+		}
 		if p.Currency != "USD" {
 			r.SkippedNonUSD++
 			continue

@@ -1,0 +1,110 @@
+// explorer_idle.go —— ⑤资金不眠异常读面（自 explorer.go 拆出保行数硬闸）：
+// fin_venue_account_snapshot 每 venue 最新行 + 近30d 收入 + 闲置/破地板标记
+// + 幽灵池打标（broker_accounts 移除户残行——剔 NAV/不告警）。
+package pgstore
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+// ExplorerIdlePool ⑤单 venue 池：最新快照余额 + 近30d收入 + 闲置/破地板标记。
+type ExplorerIdlePool struct {
+	Venue          string
+	VenueType      string
+	Balance        float64
+	Equity         float64
+	FreeMargin     float64
+	Currency       string
+	BufferMultiple float64 // 快照行直取，NULL → 0
+	Income30dUSD   float64 // income_events 近30d amount_usd 合计（venue_key/venue 双键兼容）
+	FetchedAt      time.Time
+	Idle           bool // 余额>0 且 30d 收入=0（睡钱标记，数字口径确定性）
+	BelowFloor     bool // BufferMultiple 有值且 <1（破地板）
+	// Ghost 幽灵池（STATE NAV 幽灵池过滤票）：venue_type=mt4/mt5 快照行但 venue
+	// 已不在 broker_accounts（账户移除后残行——NAV 虚计；stopped 户仍在册不受影响）。
+	// 写侧不动（快照保留=历史真值）；读面打标由 SumNav/展示层剔计。
+	Ghost bool
+}
+
+// ExplorerIdleFunds ⑤资金不眠异常：fin_venue_account_snapshot 每 venue 最新行 +
+// income_events 近30d 合计 + 快照 buffer_multiple，闲置/破地板标记 Go 算。
+func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]ExplorerIdlePool, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (venue, venue_type)
+			venue, venue_type, COALESCE(balance_raw,0), COALESCE(equity_raw,0),
+			COALESCE(free_margin_raw,0), currency, fetched_at, COALESCE(buffer_multiple,0)
+		FROM fin_venue_account_snapshot
+		ORDER BY venue, venue_type, fetched_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("explorer idle snapshots: %w", err)
+	}
+	defer rows.Close()
+	var pools []ExplorerIdlePool
+	for rows.Next() {
+		var p ExplorerIdlePool
+		if err := rows.Scan(&p.Venue, &p.VenueType, &p.Balance, &p.Equity,
+			&p.FreeMargin, &p.Currency, &p.FetchedAt, &p.BufferMultiple); err != nil {
+			return nil, fmt.Errorf("scan idle snapshot: %w", err)
+		}
+		pools = append(pools, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// 近30d收入（venue_key 归一键优先，裸 venue 兼容——D-496 双键惯例）。
+	// 幽灵池过滤：broker 户（mt4/mt5）须在册——移除户残行打标不入 NAV。
+	registered := map[string]bool{}
+	{
+		vrows, verr := s.pool.Query(ctx, `SELECT venue FROM broker_accounts`)
+		if verr != nil {
+			return nil, fmt.Errorf("explorer idle broker venues: %w", verr)
+		}
+		for vrows.Next() {
+			var v string
+			if err := vrows.Scan(&v); err != nil {
+				vrows.Close()
+				return nil, fmt.Errorf("scan broker venue: %w", err)
+			}
+			registered[v] = true
+		}
+		vrows.Close()
+		if err := vrows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	income := map[string]float64{}
+	irows, err := s.pool.Query(ctx, `
+		SELECT venue, COALESCE(SUM(amount_usd),0) FROM income_events
+		WHERE ts >= $1 GROUP BY venue`, now.Add(-30*24*time.Hour))
+	if err != nil {
+		return nil, fmt.Errorf("explorer idle income: %w", err)
+	}
+	for irows.Next() {
+		var v string
+		var sum float64
+		if err := irows.Scan(&v, &sum); err != nil {
+			irows.Close()
+			return nil, fmt.Errorf("scan idle income: %w", err)
+		}
+		income[v] = sum
+	}
+	irows.Close()
+	if err := irows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range pools {
+		p := &pools[i]
+		if p.VenueType == "mt4" || p.VenueType == "mt5" {
+			p.Ghost = !registered[p.Venue]
+		}
+		p.Income30dUSD = income[p.Venue]
+		if p.Ghost {
+			continue // 幽灵池不标 Idle/BelowFloor——移除户残行不告警不虚计
+		}
+		p.BelowFloor = p.BufferMultiple > 0 && p.BufferMultiple < 1
+		p.Idle = p.Balance > 0 && p.Income30dUSD == 0
+	}
+	return pools, nil
+}

@@ -46,6 +46,11 @@ func TestM44_DailyCut(t *testing.T) {
 		('euracct','mt5',999,999,999,'EUR',$1)`, now); err != nil {
 		t.Fatalf("seed snapshots: %v", err)
 	}
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO broker_accounts (venue, venue_type, host, port, password, is_real)
+		VALUES ('euracct','mt5','h',443,'p',true) ON CONFLICT (venue) DO NOTHING`); err != nil {
+		t.Fatalf("seed broker acct: %v", err)
+	}
+	defer func() { _, _ = st.Pool().Exec(ctx, `DELETE FROM broker_accounts WHERE venue='euracct'`) }()
 	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_capability_constraint
 		(scope, subject, qualifier, value_num, source) VALUES ('global','reserve_pct','min',30,'committee')`); err != nil {
 		t.Fatalf("seed reserve: %v", err)

@@ -86,8 +86,15 @@ func gather(ctx context.Context, d *Deps, dayStart, dayEnd time.Time) (string, e
 		b.WriteString("- （无快照行）\n")
 	}
 	for _, p := range pools {
-		fmt.Fprintf(&b, "- %s/%s：equity=%.2f balance=%.2f free_margin=%.2f %s｜income30d=%.2f\n",
-			p.Venue, p.VenueType, p.Equity, p.Balance, p.FreeMargin, p.Currency, p.Income30dUSD)
+		ghost := ""
+		if p.Ghost {
+			ghost = "｜幽灵池（账户移除——不计 NAV）"
+		}
+		fmt.Fprintf(&b, "- %s/%s：equity=%.2f balance=%.2f free_margin=%.2f %s｜income30d=%.2f%s\n",
+			p.Venue, p.VenueType, p.Equity, p.Balance, p.FreeMargin, p.Currency, p.Income30dUSD, ghost)
+	}
+	if navRep.SkippedGhost > 0 {
+		fmt.Fprintf(&b, "- 幽灵池剔除=%d（broker_accounts 已移除户快照残行）\n", navRep.SkippedGhost)
 	}
 	// ② 在仓+carry 实收
 	b.WriteString("\n【② 在仓与 carry 实收】\n")
