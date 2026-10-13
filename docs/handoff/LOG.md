@@ -241,3 +241,15 @@ fail-open 不变。**实证**：SG Generate 补班 11/11 全成+manager 行落�
 **改**：①`VenueRejectSignature`→`code:N|归一msg`——binance -9000 同码多因不混坑（refresh 瞬态与 0 decimals 分签名）；②refresh 类瞬态败不落坑（落 suppress 会误封 24h）；③坑表扩 op=`earn_redeem`——redeemShortfall 赎败落坑 24h+窗内抑赎零 venue 打面（读败 fail-open 不堵补缺径，Store 缺席同）；④尘埃赎额 %.8f 格式化归零跳行+note——封堵 -1102「amount empty」重放坑。
 
 **验证**：锚新增 TestD255_RefreshNoPit/RedeemPit/RedeemDust+签名表测改（-9000 双签名锚）；D203 赎回 echo/D191R6 赎回缺口回归绿；-race dciexec/errclass 绿；门禁全过。
+
+## D-249① 策略淘汰多空听证（@6a8b9354）
+
+**新增**：迁移 1012 `fin_strategy_hearing`；`internal/review/hearing`（多空对辩——裁定击杀前 bull/bear 两路 LLM 各 ≤400 字，输入=确定性统计面快照+判据理由；ctx 200s 封顶+每路重试一次；`clampRunes` Go 侧字数硬闸）。
+
+**接线**：`settlement.ElimHearer` 可选接口（runElimination 击杀前调，钉住 hear→disable 序锚）+ autotrade startup 淘汰扫 `SetSettleDeps` 第四参同钩——两淘汰路径全覆盖。role=`elim_hearing` 入 `fin_llm_call`；§4.3 注册表+§5 对象表补录。
+
+**禁线实证**：听证行 status debated/skipped_no_ai/failed——AI 缺配行照落不阻塞淘汰；裁定权=判据函数零让渡（`TestD249_HearingObserveOnly` 锚）。
+
+## D-249② 日报待办闭环（@e791ecd4）
+
+Generate 加⑧段「昨日公司日报原文」（`ListDeptReports(date-1)` 复用读面零新表——进度账本=fin_dept_reports 自身跨日对拍；缺日空段注明，读败当班跳过）；系统提示加「昨日待办→今日状态」必段（消解/未消解/新增逐条标），末行「明日关注」供次日对拍。**修**：⑧段置 Generate 直查——gather 内 BJ 零点 -1d 错 report_date（UTC 零时）口径，锚 `TestD249_TodoLoop` 钉住。
