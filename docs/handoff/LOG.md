@@ -393,3 +393,11 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 ```
 
 **风险注记**：`fin_proposal` 在途 proposed 行引用的 `fin_opp_eval` 已全归——下拍重评自动补卡；`positions` 清空后 dedup_key 唯一键对新开全放行（历史不复开是业主令语义）；`fin_strategy_hearing` 归零后听证面从 E0 起算。
+
+## 资金地图（业主令 10-13，D-285 零换算）@3e94d09d
+- **RPC `GetCapitalPools`**（命名避开 D-546 钱包树 `GetCapitalMap`）：`fin_venue_account_snapshot` 每池最新行 × 在跑归因，后端算币种分组零汇率换算（USD/USDT/UST 各报各的）。
+- **deployed 口径**：MT 池=equity−free_margin（占用保证金）；`venue_type='earn'` 池全额在跑；CEX 池=OPEN 腿名义（filled_qty×avg_fill_price，按 leg.venue_key 归池）+未到期 DCI 锁额（与 `OutstandingDCIQty` 同谓词——response.settleDate 回执优先、回退 created+tenor 窗），DCI 归属=venue 有 spot 池→spot，无→funding，皆无→不归因不落虚池。idle=equity−deployed。
+- **stale/online**：快照超产源窗=stale——事件/MT 源 5min（同 combo「池快照过期」判窗）、scheduler 36h（日采节奏）；online=!stale 且 src 非空。幽灵池与 `ExplorerIdleFunds` 同语义打标、剔组计、前端折叠独栏。
+- **前端 `/capital`**（nav「资金地图」）：币种卡（权益/闲置/在跑）+池表（在跑明细列策略#仓号/DCI#单号/金额），stale/ghost 置灰标时点，纯渲染零运算。
+- 锚：`TestCapitalPools_Store`（快照/ghost/DCI 窗/腿名义读面）+`TestCapitalPools_Build`（分组/CFD 占用/三源归因/ghost 剔计/stale 判）双绿；机检+npm build 过。
+- 验收留痕（部署后 SG）：USD 组应 5247.63 全闲（3001157+15032313），binance spot 闲 1044.81/跑 542=DCI#10，okx earn 169.45 全额在跑。
