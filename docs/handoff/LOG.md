@@ -298,3 +298,39 @@ Generate 加⑧段「昨日公司日报原文」（`ListDeptReports(date-1)` 复
 - **funding_carry 证据源定位清单**（票面②交付）：fee→exchange_configs.taker_fee_bps（venue 级实测）；持有窗→positions CLOSED PERP_FUNDING (closed_at−opened_at)；failure→position_legs.status='FAILED' join positions.type；slippage→fin_cex_spread；window→facts funding 中位。
 - 锚测：TestEvalCard_EarnFailureSrc / TestEvalCard_FundingFeeSrc / M41_788 三态绿（测试全自隔离种子防共享库串扰）。
 - 部署验收：SG 重跑评估拍后 fin_opp_eval——earn 两模板 failure 出证出 verdict；funding_carry missing 收敛至 [slippage]（perp spread 行在产在→全项出 viable/reject）。
+
+## XASSET_CARRY 开仓阻塞取证（取证票，只查不改）@无新码
+
+**取证时间**：SG 2026-10-13 12:49–13:10 UTC；双通道（docker logs nox-core + psql nox）+ 代码面 trace。
+
+### 结论一：票面假设「depth 事实大面积缺」属实，但断点不是「OKX tickers 不带 depth」
+
+- **OKX 深度走 books 端点已在线**：`cex_depth.go` 三所均取真实盘口端点——binance `/fapi/v1/depth`、gate `/futures/usdt/order_book`、okx `/api/v5/market/books?instId=X-USDT-SWAP&sz=5`。生产实证 `fin_cex_depth` 有 okx `XAU-USDT-SWAP` 行 4401 条、最新 13:10 新鲜。OKX tickers 缺 depth 的假设**推翻**。
+- **真断点=采集宇宙 ⊂ 候选宇宙**：深度基名=静态白名单 5（SPX500/XPT/XPD/XAU/CL）+动态 `ListCfdUniverseDepthBases`（fin_carry_universe CFD 域 canonical→基名，实拍 `[cex-depth] universe bases: 40`）≈45 基名；而 paper cex carry 候选源=FUNDING_HEDGE detector 全 CEX hedge 宇宙（fin_cex_universe TRADING 基名 1093）。候选 canonical 在采面外→`depthOf` n=0→fail-closed `depth_missing`；覆盖内的薄档品种（XPT/XPD/指数类）→`depth_low`。skips≈`depth_missing:48–51 depth_low:18–25 funding_low:2–5` 与该结构吻合。
+- 采集器本身健康：binance 48/gate 38/okx 41 符号持续新鲜写入，5min 节奏正常；残余缺口=venue 侧无该品种（JP225/NAS100/SPX500 等所间不对称，代码注释已注明「所间不对称缺符号静默」惯例）。
+
+### 结论二：live XASSET_CARRY 零开仓的主阻是经济学（net≤0），非采集缺口
+
+- 唯一 live 白名单行：`XAUUSD|XAUUSDT 3001157:mt5×okx:perp`（`[whitelist] xasset row` 实拍，enabled/long=0.01 short=1200）。
+- 监控链全活：`fin_xasset_monitor` `XAUUSDT-XAU×okx:perp×3001157:mt5` 行 5min 新鲜，entry_net_bps≈12.9、equiv_annual_pct≈**0.13%**。
+- detector 净息差≈0：okx `XAUUSDT` funding 事实值=**0**（实拍逐帧 0）；3001157 canonical `XAUUSD` swap 事实=0（`XAUUSDm` 原生键才有真值 −1.28 bps/d≈−4.69pp/年，canonical 键行恒 0——canonical 行记 0 是 swap-free 置 0 口径的副作用，但即便取真值净息差仍为负）。
+- 因此 detector 产候选（net=0 ≥ MinNetAnnualPct 默认 0）→ evaluator `net=0−MarginRateAnnual(4.5)=−4.5`→`classify` net≤0→**RatingTrap→不 publish**→autotrade `recv opp` 24h 零行（XASSET 及其他类型全零——候选层/评估层前置过滤，非引擎死）。
+- 旁证：`[review] XASSET_CARRY 样本=12 平均实收年化低于预期 44.16%`——历史仓实收已证实息差高估；当前 venue 实测 funding=0 即「无肉」，闸按设计拒开是**正确行为**。
+
+### 结论三：position 503/504 FAILED + closed_at=NULL 定性
+
+- 行实况（2026-09-29 05:39/05:40 UTC）：opp 键 `XASSET_CARRY:XAUUSD:3001157:mt5:gate:perp`（彼时白名单放 gate）。双腿并行提交（`executeLeg` safego），5ms 内双双 FAILED、`filled_qty=0`、`order_id` 空——两腿均被**下单前/即拒**级失败（venue 拒绝或本地 fail-closed），非成交后事故。
+- **closed_at=NULL 是设计语义非账本 bug**：`ClosePosition` 才写 `closed_at`（status→CLOSED）；FAILED 由 `UpdatePositionStatus` 直写且 `status NOT IN ('CLOSED','FAILED')` 终态——开即败从未开仓，无 closed_at 合理。positions 排序/复盘读面均按 COALESCE(closed_at,opened_at) 兜底。
+- **失败原因不可复原（证据面当时未建）**：`position_legs.fail_reason` 列=2026-10-12 迁移 0201（leg forensics）才加，503/504 先于列存在→拒因从未落库；docker json.log 3×50MB 轮转已覆盖 9-29；alerts 表最早行 10-11。同期同构型对拍：507/508 MT 腿 FAILED 而 okx 腿 FILLED（收编平干净离场）——MT 腿间歇性拒单是已见形态（mtapi REQUEST_ERROR 间歇实证载于 pipeline 注释）。
+- 假设面（不可证实）：MT `XAUUSDm` 下单遭即时拒（市场会话/保证金/REQUEST_ERROR 族）+ gate `XAU_USDT` 腿同帧拒（合约不可用/qty 界）。两腿独立失败不互因（并行提交无因果链）。
+
+### 修复建议面（裁定后单独派票）
+
+- **R-A depth 覆盖对齐候选宇宙**（修 depth_missing）：`universeDepthBases` 数据源由 fin_carry_universe（CFD 域）扩至 paper 候选实际键集（如 fin_cex_universe TRADING 基名∩有 funding 事实集，或按候选回调注册）——需先议体量上界（1093 基名×3 所 books REST 5min 轮=调用量与限流评估，D-004 轮询例外条款须留痕）；替代向=缩候选宇宙至采面（治理侧）。
+- **R-B FAILED 腿拒因已可持久化**：fail_reason 列 0201 已建，新失败自带 venue 拒因原文——503/504 型「不可复原」不会重演，无需补修；可选「FAILED position 写 closed_at=失败时刻」语义票（账本一致性，收益低）。
+- **R-C XASSET 经济面**：okx XAU perp funding 实测 0 + MT swap −4.7pp/年 → XAU×okx 组合结构性无正息差——属策略/参数域（委员会裁）：要么等 funding 转正自然放行，要么换 venue/标的；系统行为正确无需修。
+- **R-D（可选）gate XAU_USDT 腿 qty=10000 单位核验**：与 okx 腿 1000 不同量级但成功仓（505）同构——疑 gate 合约粒度差异正常；若确证为多 10× 属 sizing 票另案。
+
+### 验收对照
+
+①depth 断点=「采集宇宙⊂候选宇宙」结论落；②FAILED 根因=双腿即拒（原因列后建于行，不可复原）+closed_at NULL=设计语义；③修复面 R-A~R-D 留档。**零生产改动、零代码改动、门槛参数未动**。
