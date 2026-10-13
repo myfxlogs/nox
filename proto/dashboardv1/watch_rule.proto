@@ -14,7 +14,7 @@ message WatchRule {
   string fire_mode = 7;     // once|repeat
   int32 cooldown_sec = 8;
   string note = 9;
-  bool enabled = 10;
+  optional bool enabled = 10; // presence：缺席=默认启用，显式 false 才可关（proto3 裸 bool 缺席=false 会生来死规则）
   int64 last_fired_ts = 11; // unix ts；0=未触发
   bool stale = 12;          // subject 最新报价超窗（服务侧对 qbus 判）
 }

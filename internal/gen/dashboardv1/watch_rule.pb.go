@@ -33,7 +33,7 @@ type WatchRule struct {
 	FireMode      string                 `protobuf:"bytes,7,opt,name=fire_mode,json=fireMode,proto3" json:"fire_mode,omitempty"` // once|repeat
 	CooldownSec   int32                  `protobuf:"varint,8,opt,name=cooldown_sec,json=cooldownSec,proto3" json:"cooldown_sec,omitempty"`
 	Note          string                 `protobuf:"bytes,9,opt,name=note,proto3" json:"note,omitempty"`
-	Enabled       bool                   `protobuf:"varint,10,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Enabled       *bool                  `protobuf:"varint,10,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"`                        // presence：缺席=默认启用，显式 false 才可关（proto3 裸 bool 缺席=false 会生来死规则）
 	LastFiredTs   int64                  `protobuf:"varint,11,opt,name=last_fired_ts,json=lastFiredTs,proto3" json:"last_fired_ts,omitempty"` // unix ts；0=未触发
 	Stale         bool                   `protobuf:"varint,12,opt,name=stale,proto3" json:"stale,omitempty"`                                  // subject 最新报价超窗（服务侧对 qbus 判）
 	unknownFields protoimpl.UnknownFields
@@ -134,8 +134,8 @@ func (x *WatchRule) GetNote() string {
 }
 
 func (x *WatchRule) GetEnabled() bool {
-	if x != nil {
-		return x.Enabled
+	if x != nil && x.Enabled != nil {
+		return *x.Enabled
 	}
 	return false
 }
@@ -406,7 +406,7 @@ var File_dashboardv1_watch_rule_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_watch_rule_proto_rawDesc = "" +
 	"\n" +
-	"\x1cdashboardv1/watch_rule.proto\x12\x10nox.dashboard.v1\"\xbc\x02\n" +
+	"\x1cdashboardv1/watch_rule.proto\x12\x10nox.dashboard.v1\"\xcd\x02\n" +
 	"\tWatchRule\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
@@ -416,11 +416,13 @@ const file_dashboardv1_watch_rule_proto_rawDesc = "" +
 	"\tthreshold\x18\x06 \x01(\x01R\tthreshold\x12\x1b\n" +
 	"\tfire_mode\x18\a \x01(\tR\bfireMode\x12!\n" +
 	"\fcooldown_sec\x18\b \x01(\x05R\vcooldownSec\x12\x12\n" +
-	"\x04note\x18\t \x01(\tR\x04note\x12\x18\n" +
+	"\x04note\x18\t \x01(\tR\x04note\x12\x1d\n" +
 	"\aenabled\x18\n" +
-	" \x01(\bR\aenabled\x12\"\n" +
+	" \x01(\bH\x00R\aenabled\x88\x01\x01\x12\"\n" +
 	"\rlast_fired_ts\x18\v \x01(\x03R\vlastFiredTs\x12\x14\n" +
-	"\x05stale\x18\f \x01(\bR\x05stale\"\x17\n" +
+	"\x05stale\x18\f \x01(\bR\x05staleB\n" +
+	"\n" +
+	"\b_enabled\"\x17\n" +
 	"\x15ListWatchRulesRequest\"K\n" +
 	"\x16ListWatchRulesResponse\x121\n" +
 	"\x05rules\x18\x01 \x03(\v2\x1b.nox.dashboard.v1.WatchRuleR\x05rules\"I\n" +
@@ -469,6 +471,7 @@ func file_dashboardv1_watch_rule_proto_init() {
 	if File_dashboardv1_watch_rule_proto != nil {
 		return
 	}
+	file_dashboardv1_watch_rule_proto_msgTypes[0].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

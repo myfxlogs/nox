@@ -6,6 +6,7 @@ package deptreport
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // contractSection 必段定义：name=违约标记名，probes=正文须含任一关键词（取首个命中位）。
@@ -48,4 +49,34 @@ func contractMiss(body string) []string {
 // contractFixNote 补正提示：并入二次生成的 user 输入尾部。
 func contractFixNote(miss []string) string {
 	return fmt.Sprintf("\n【契约补正】上次输出缺段/乱序：%s。请按固定序八段+末行「明日关注」重出全文，禁缺段禁乱序。\n", strings.Join(miss, "、"))
+}
+
+// contractBackfill 缺段兜底（视窗 C 件）：补正重生成仍缺的序段，把 gather
+// 已产出的该段原料确定拼接回正文——宁带原料段不挂空标记；拼接只限 gather
+// 已产段（【N…】头圈码对名），禁编造；「末行明日关注」无原料段只留 marker。
+func contractBackfill(body, input string, miss []string) string {
+	for _, m := range miss {
+		r, _ := utf8.DecodeRuneInString(m)
+		if r < '①' || r > '⑧' {
+			continue
+		}
+		if raw := rawSection(input, string(r)); raw != "" {
+			body += "\n\n【契约补段·原料 " + m + "】\n" + raw
+		}
+	}
+	return body
+}
+
+// rawSection 取 gather 输入中【N…】头段原文（至下一【头或文末；无=空）。
+func rawSection(input, num string) string {
+	hdr := "【" + num
+	i := strings.Index(input, hdr)
+	if i < 0 {
+		return ""
+	}
+	rest := input[i:]
+	if j := strings.Index(rest[len(hdr):], "\n【"); j >= 0 {
+		rest = rest[:len(hdr)+j]
+	}
+	return strings.TrimSpace(rest)
 }

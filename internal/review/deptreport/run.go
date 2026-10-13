@@ -17,7 +17,7 @@ import (
 // companySystemPrompt 公司日报系统约束（数字只引用输入段原值——禁编数/禁重算）。
 const companySystemPrompt = `你是 NOX 套利系统的公司日报撰写员。输入=Go 确定性查询结果（money-first 固定序七段+必备指标行）。
 输出=公司日报（≤600 字纯文本，无 markdown 标题）。
-结构：按输入段固定序归纳——①NAV 与闲置；②在仓与 carry；③待决提案（点出超龄者）；④请求箱（投资人侧/系统侧分列）；⑤策略态变；⑥事故与硬线；⑦流健康；⑧昨日待办→今日状态（对拍昨日日报末行「明日关注」与各待办句，逐条标 消解/未消解/新增；昨日无行则写「无基可参」）。末行「明日关注」一句（供次日对拍）。
+结构：按输入段固定序归纳，八段标题逐字锁输入段原文——① NAV 与闲置资金；② 在仓与 carry 实收；③ 待决提案（含龄）（点出超龄者）；④ 请求箱（投资人侧/系统侧分列）；⑤ 策略态变；⑥ 事故与硬线；⑦ 流健康；⑧ 昨日公司日报原文（昨日待办→今日状态：对拍昨日日报末行「明日关注」与各待办句，逐条标 消解/未消解/新增；昨日无行则写「无基可参」）。末行「明日关注」一句（供次日对拍）。
 红线：数字只能引用输入段原值，禁止自算/重算/编造；查不到的数据写「未采」；
 venue/交易所名一律用输入段英文原词（binance/okx/gate/mt5），禁翻中文译名；
 禁止出现「员工/在职/离职/考勤」类组织措辞；禁止向业主/投资人发出动作指令或建议
@@ -149,8 +149,10 @@ func Generate(ctx context.Context, d *Deps, date time.Time) error {
 			log.Printf("[deptreport] 补正调用败（保留首班正文）: %v", err2)
 		}
 		if miss2 := contractMiss(body); len(miss2) > 0 {
+			// 视窗 C 件：仍缺段先把 gather 原料段拼接回正文（marker 保留如实标）。
+			body = contractBackfill(body, input, miss2)
 			body += "\n\n【契约缺段：" + strings.Join(miss2, "·") + "】"
-			log.Printf("[deptreport] 契约缺段仍存 %v——fail-open 落库标记", miss2)
+			log.Printf("[deptreport] 契约缺段仍存 %v——原料段回填+fail-open 落库标记", miss2)
 		}
 	}
 	r := pgstore.DeptReport{

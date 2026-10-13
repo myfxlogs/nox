@@ -78,10 +78,15 @@ func (s *Service) UpsertWatchRule(ctx context.Context, req *connect.Request[v1.U
 	if err := validateWatchRule(r); err != nil {
 		return nil, err
 	}
+	// enabled presence 语义：缺席=默认启用（新增/改单未携=开），显式 false 才可关。
+	enabled := true
+	if r.Enabled != nil {
+		enabled = *r.Enabled
+	}
 	id, err := s.store.UpsertWatchRule(ctx, pgstore.WatchRule{
 		ID: r.GetId(), Kind: r.GetKind(), Subject: strings.TrimSpace(r.GetSubject()),
 		VenueKey: strings.TrimSpace(r.GetVenueKey()), Op: r.GetOp(), Threshold: r.GetThreshold(),
-		FireMode: r.GetFireMode(), CooldownSec: int(r.GetCooldownSec()), Note: r.GetNote(), Enabled: r.GetEnabled(),
+		FireMode: r.GetFireMode(), CooldownSec: int(r.GetCooldownSec()), Note: r.GetNote(), Enabled: enabled,
 	})
 	if err != nil {
 		return nil, err
@@ -111,6 +116,6 @@ func watchRuleProto(r pgstore.WatchRule, stale bool) *v1.WatchRule {
 	return &v1.WatchRule{
 		Id: r.ID, Kind: r.Kind, Subject: r.Subject, VenueKey: r.VenueKey, Op: r.Op,
 		Threshold: r.Threshold, FireMode: r.FireMode, CooldownSec: int32(r.CooldownSec),
-		Note: r.Note, Enabled: r.Enabled, LastFiredTs: ts, Stale: stale,
+		Note: r.Note, Enabled: &r.Enabled, LastFiredTs: ts, Stale: stale,
 	}
 }

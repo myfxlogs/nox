@@ -1,5 +1,22 @@
 # LOG.md — 阶段交付归档（NOX 仓首条）
 
+## 视窗 C 件收口：日报缺段兜底 + watch_rule enabled 零值修
+
+### ①deptreport 缺段兜底
+`contractBackfill`（contract.go）：补正重生成仍缺的序段按圈码（①~⑧）对拍 gather 输入的 `【N …】` 头，把该段原料确定拼接回正文（`【契约补段·原料 <名>】` 包裹）——宁带原料段不挂空标记；「末行明日关注」无原料段只留 marker；`【契约缺段】` marker 语义不动。系统提示八段标题逐字锁 gather 输入段原文（① NAV 与闲置资金…⑧ 昨日公司日报原文），消「提示词与原料头不逐字」的诱导缺段面。
+
+### ②watch_rule enabled presence
+proto `enabled`→`optional bool`（缺席≠false）：UpsertWatchRule `r.Enabled==nil→true`——新增/改单未携=启用，显式 false 才可关。`watchRuleProto` 回写 `&r.Enabled` 保 presence。前端零改（表单/toggle 恒显式携值）。
+
+### 禁线
+拼接只限 gather 已产段零编造；proto optional 接线面全量核（Go/TS 生成件+service+前端同核）；marker 不删。
+
+### 锚
+`TestContractBackfill`（圈码段逐字拼回+末行无补段+⑦ 边界不越界）；`TestD249_ContractFailOpen` 加⑥原料回填断言；`TestWatchRuleEnabledPresence`（缺席→true/显式 false→false 两行进表对拍）。
+
+### 验收残留（SG）
+造缺段输入→正文含「契约补段·原料 ⑥…」+marker 标；不带 enabled 建规则→enabled=true 且触发链通。
+
 ## auto 轨僵尸提案处置语义（#221/#225 无执行器永不翻态）
 
 ### 病灶

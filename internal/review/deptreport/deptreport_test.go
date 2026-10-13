@@ -342,4 +342,30 @@ func TestD249_ContractFailOpen(t *testing.T) {
 	if len(fs.reports) != 1 || !strings.Contains(fs.reports[0].Body, "契约缺段") {
 		t.Fatalf("缺段标记未落: %+v", fs.reports)
 	}
+	// 视窗 C 件：仍缺段须带 gather 原料段回填（②在仓段原文在正文中），marker 仍标。
+	body := fs.reports[0].Body
+	if !strings.Contains(body, "【契约补段·原料 ⑥事故与硬线】") ||
+		!strings.Contains(body, "告警分布") {
+		t.Fatalf("⑥ 原料段未回填: %q", body)
+	}
+}
+
+// TestContractBackfill 原料段回填纯锚：圈码段拼回+末行无原料段只留 marker+禁编造。
+func TestContractBackfill(t *testing.T) {
+	input := "【必备指标】\n- NAV=1\n\n【① NAV 与闲置资金】\n- 池1\n\n【② 在仓与 carry 实收】\n- 仓2\n\n【⑥ 事故与硬线】\n- 告警分布：（无）\n- 硬线：未触碰\n\n【⑦ 流健康】\n- 流=0\n"
+	out := contractBackfill("正文NAV 提案 请求箱 策略 流健康 待办 明日关注", input,
+		[]string{"②在仓与 carry", "⑥事故与硬线", "末行明日关注"})
+	if !strings.Contains(out, "【契约补段·原料 ②在仓与 carry】\n【② 在仓与 carry 实收】\n- 仓2") {
+		t.Fatalf("② 段未逐字拼回: %q", out)
+	}
+	if !strings.Contains(out, "- 硬线：未触碰") {
+		t.Fatalf("⑥ 原料缺: %q", out)
+	}
+	if strings.Contains(out, "末行明日关注】\n") {
+		t.Fatal("末行无原料段却生成了补段")
+	}
+	// 段边界：⑦ 头不得混入 ⑥ 回填。
+	if strings.Contains(out[strings.Index(out, "硬线：未触碰"):], "流健康】\n- 流=0") {
+		t.Fatal("段边界越界混入 ⑦")
+	}
 }
