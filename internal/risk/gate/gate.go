@@ -40,6 +40,8 @@ type Gate struct {
 	breaker   map[string]*rejectEntry
 	breakerMu sync.Mutex
 	swapArb   *atomic.Pointer[SwapArbComboSnapshot] // D-515 S5：表热读快照共享指针（nil=回退 cfg）
+	// 预算一致性闸（D-262 M4.3④ 预留）：nil=未装配不消费——M4.4 挂实现后同点生效。
+	budgetCheck BudgetChecker
 }
 
 // NewGate 创建门禁。
@@ -262,6 +264,15 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		g.breakerLogOnce(ctx, intent, be)
 		log.Printf("[autotrade] breaker skip %s class=%s resume=%s", intent.DedupKey, be.Class, be.ResumeAt.Format("15:04"))
 		return GateResult{Status: "REJECTED", Reason: "breaker " + be.Class}
+	}
+
+	// 预算一致性闸（D-262 M4.3④）：接口预留检点。nil=未装配跳过（M4.4 挂实现），
+	// 装配后实现侧对预算行缺席/读败 fail-closed。
+	if g.budgetCheck != nil {
+		if allow, reason := g.budgetCheck.CheckBudget(ctx, intent.Strategy, intent.NotionalUSD); !allow {
+			g.rejectLog(ctx, *intent, "budget: "+reason, false)
+			return GateResult{Status: "REJECTED", Reason: "budget: " + reason}
+		}
 	}
 
 	// 执行 + 结果收尾（分类落库/熔断记账/审计，D-053 拆 gate_helpers.go 纯搬移）。

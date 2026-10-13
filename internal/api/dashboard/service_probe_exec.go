@@ -1,4 +1,5 @@
 // service_probe_exec.go —— D-047：OpenProbe 执行段（守卫过后才进此文件面）。
+// [exec-entry:committee-exempt] D-262 M4.3③：OpenProbe 委员会例外执行段。
 // 序：CreatePosition(OPENING) → bm.PlaceOrder → CreatePositionLeg(OPEN/FILLED) → OPEN。
 // position 行先落=venue 侧实单与 DB 态之间永有审计锚（败/UNKNOWN 都留行）。
 package dashboard

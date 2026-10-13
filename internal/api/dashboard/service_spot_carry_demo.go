@@ -98,6 +98,7 @@ func registerSpotCarryDemoRow(ctx context.Context, st demoPaperStore, venue, sym
 }
 
 // ExecuteSpotCarryDemo 手动双腿闭环：现货腿（demo /api 段）+永续腿（既有 demo-fapi 路径）。
+// [exec-entry:demo] D-262 M4.3③：纯 demo 件——venue=demo 端点零真金，不进真金闸。
 func (s *Service) ExecuteSpotCarryDemo(ctx context.Context, req *connect.Request[v1.ExecuteSpotCarryDemoRequest]) (*connect.Response[v1.ExecuteSpotCarryDemoResponse], error) {
 	in := req.Msg
 	if err := validateSpotCarryDemoParams(in.Venue, in.Symbol, in.Side, in.QtyUsd); err != nil {

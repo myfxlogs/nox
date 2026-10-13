@@ -15,6 +15,8 @@ import (
 )
 
 // ExecuteMeanRevert D-070 均值回归直接执行（绕过 detector，autotrade engine 专用）。
+// [exec-entry:gated-body] D-262 M4.3①：调用方=engine_meanrevert/engine_swaparb_armed
+// 的 intent.Execute 回调（已过 Gate.Submit）——禁新增非闸调用方。
 // 直接接收 canonical + venueBuy + venueSell + qty，构造 LegSpec 并执行。
 // maxNotional: CFD 名义额上限（0=用默认$10K）。
 // 返回 status、message、positionID。

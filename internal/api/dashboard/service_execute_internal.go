@@ -11,7 +11,9 @@ import (
 	"nox/internal/trading/exec"
 )
 
-// ExecuteOpportunityInternal 执行机会的核心逻辑（D-070 抽取，供 RPC 和 autotrade engine 复用）。
+// ExecuteOpportunityInternal —— [exec-entry:gated-body] D-262 M4.3①：过闸后执行体
+// （D-070 抽取，供 autotrade engine 复用）。只经 gate.TradeIntent.Execute 回调触达
+// （engine_opp / ExecuteOpportunity RPC 同径）——直接调用=绕闸，禁新增非闸调用方。
 // 返回 status（EXECUTED/FAILED）、message、positionID（失败时为0）。
 func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, requestID string, qty float64) (status, message string, positionID int64) {
 	if s.pipeline == nil {

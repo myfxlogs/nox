@@ -251,6 +251,7 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 			log.Printf("[autotrade] xasset qty floor from combo spec: %s qty %.6f notional $%.0f", opp.ID, qty, intentNotional)
 		}
 	}
+	// [exec-entry:gate] D-262 M4.3①：正规径——intent.Execute→ExecuteOpportunityInternal。
 	intent := gate.TradeIntent{
 		Strategy:    opp.Type,
 		Canonical:   opp.Canonical,

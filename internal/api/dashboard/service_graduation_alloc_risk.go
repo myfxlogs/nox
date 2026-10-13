@@ -1,6 +1,7 @@
 // service_graduation_alloc_risk.go D-540：毕业授权可用基准/风险位/建议额评估
 // （自 sizing.go 析出——池快照行/可用基准求值/腿保证金率/风险位与安全垫反推。
 // 零信任：一切阈值与安全线由服务端裁定，前端只渲染三字段）。
+// [exec-entry:compute-only] D-262 M4.3③：纯 sizing 计算件——无下单径，非入口。
 package dashboard
 
 import (

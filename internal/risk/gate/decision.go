@@ -27,6 +27,12 @@ type GateResult struct {
 	PosID  int64
 }
 
+// Submitter 开仓闸消费面（D-262 M4.3①）——dashboard 手动执行面注入签名同源，
+// autotrade.New 内经接口断言把 Gate 同实例挂进 service 侧，跨包零循环依赖。
+type Submitter interface {
+	Submit(ctx context.Context, intent *TradeIntent) GateResult
+}
+
 // GateInput gateDecision 纯函数入参（可测性，无 IO）。
 type GateInput struct {
 	State        string  // 当前系统状态

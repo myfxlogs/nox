@@ -41,6 +41,11 @@ func New(cfg gate.Config, store *pgstore.Store, service engineService, oppTopic 
 	if service != nil {
 		e.gate.SetMarginFloorChecker(service)
 		e.gate.SetCapitalView(service.CapitalView())
+		// D-262 M4.3①：手动开仓面收口——service 侧挂同闸实例（接口断言零依赖向；
+		// 手动/自动同一 Gate=闸态/熔断/审计同账无双口径）。
+		if s, ok := service.(interface{ SetOrderGate(gate.Submitter) }); ok {
+			s.SetOrderGate(e.gate)
+		}
 	}
 	e.gate.SetVenueAlias(nil) // D-556：缺省无别名（main SetGateVenueAlias 装配闭包）
 	// 热重载指针初值=启动加载结果（cfg.XAssetAllowCombos，setup 期 xassetAllowFromTable 产出）。
@@ -59,3 +64,6 @@ func New(cfg gate.Config, store *pgstore.Store, service engineService, oppTopic 
 func (e *Engine) SetGateVenueAlias(aliasOf func(vk string) string) {
 	e.gate.SetVenueAlias(aliasOf)
 }
+
+// RiskGate D-262 M4.3①：透出统一开仓闸（装配校验/测试观测点）。
+func (e *Engine) RiskGate() *gate.Gate { return e.gate }

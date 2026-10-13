@@ -218,6 +218,7 @@ func (e *Engine) trySwapArb(ctx context.Context, strategy, canonical, venueLong,
 	dedupKey := combo.Key(strategy, canonical, venueLong, venueShort)
 	// 组合保证金预算观察版告警（只告警不拦截）+ 杠杆不对称提示。best-effort 不影响开仓。
 	e.observeMarginBudget(canonical, venueLong, venueShort, notional)
+	// [exec-entry:gate] D-262 M4.3①：正规径——intent.Execute→ExecuteMeanRevertWithCap。
 	intent := gate.TradeIntent{
 		Strategy:    strategy,
 		Canonical:   canonical,

@@ -85,6 +85,9 @@ func (s *Service) probeReject(ctx context.Context, req *v1.OpenProbeRequest, rea
 }
 
 // OpenProbe D-047①②：开系统探针仓单腿仓。
+// [exec-entry:committee-exempt] D-262 M4.3③：探针=委员会调查件，自有守卫链
+// （RPC 开关/venue 白名单/控制面/事故闸/在途上限/权益纪律），拒单全量落 alerts warn。
+// 不进 Gate.Submit——探针腿异构（单腿调查仓，非套利对），明示例外。
 func (s *Service) OpenProbe(ctx context.Context, req *connect.Request[v1.OpenProbeRequest]) (*connect.Response[v1.OpenProbeResponse], error) {
 	r := req.Msg
 	if s.store == nil || s.bm == nil {

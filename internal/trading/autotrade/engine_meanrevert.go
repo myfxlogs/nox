@@ -139,6 +139,7 @@ func (e *Engine) executeMeanRevert(ctx context.Context, canonical, venueBuy, ven
 		return
 	}
 	dedupKey := combo.Key("MEANREVERT", canonical, venueBuy, venueSell)
+	// [exec-entry:gate] D-262 M4.3①：正规径——intent.Execute→ExecuteMeanRevert。
 	intent := gate.TradeIntent{
 		Strategy:    "MEANREVERT",
 		Canonical:   canonical,

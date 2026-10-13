@@ -21,6 +21,8 @@ type leverageSetter interface {
 }
 
 // Execute 执行机会（§13.1）。
+// [exec-entry:gated-body] D-262 M4.3①：本件=正规径末段——只经
+// Gate.Submit→intent.Execute→本件（开仓面）触达；Committee 例外/DCI 命名闸不径本件。
 // opportunityID + requestID 幂等：重复提交返回已有 position。
 func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posType string, legs []LegSpec) (*ExecuteResult, error) {
 	// 风控⓪：fail-fast 入口守卫（修复⑭ S4）。空 type 撞 positions_type_check 约束、nil legs 无

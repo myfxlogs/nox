@@ -36,6 +36,7 @@ internal/api/dashboard -> internal/research/scan
 internal/api/dashboard -> internal/review/kbreport
 internal/api/dashboard -> internal/review/sysretro
 internal/api/dashboard -> internal/review/verification
+internal/api/dashboard -> internal/risk/gate
 internal/api/dashboard -> internal/store/pgstore
 internal/api/dashboard -> internal/trading/exec
 internal/data/adapter -> internal/data/adapter/gen/mtapi/mt5

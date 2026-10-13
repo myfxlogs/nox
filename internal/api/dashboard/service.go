@@ -12,6 +12,7 @@ import (
 	"nox/internal/platform/config"
 	"nox/internal/portfolio/capitalview"
 	"nox/internal/research/econ"
+	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/exec"
 
@@ -26,7 +27,10 @@ type Service struct {
 	// D-195-A：执行控制面检查器（避免 dashboard→autotrade 循环依赖，用接口注入）。
 	// dashboard.New 内部自建 storeGateChecker（直接查 execution_controls）。
 	gateChecker GateChecker
-	bm          *BrokerManager
+	// D-262 M4.3①：开仓风控闸（autotrade.Engine 同实例注入；nil=手动开仓面
+	// fail-closed 拒单不执行——闸门未接线比绕闸安全）。
+	orderGate gate.Submitter
+	bm        *BrokerManager
 	// configKick D-469b S2/S5：config 类 mutation 成功路径回调（装配=bus.Topic.Publish；
 	// nil=未接线不 kick）。消费方=三 cex manager+白名单/自选/告警热载器。
 	configKick func()

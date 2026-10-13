@@ -223,6 +223,8 @@ func (m *BrokerManager) venueOrders(ctx context.Context, venueKey string) VenueO
 
 // PlaceOrder 经注册执行器下单（D-047 探针仓开仓专用薄封装——venue_key→Executor
 // 注册表解引用单点；CEX/MT 各 executor 内部形态差异由其自身吸收）。
+// [exec-entry:shared-executor] D-262 M4.3③：本件=传输层非入口——开仓分类责在
+// 各调用方（probe=committee-exempt、spot_carry_demo=demo、pipeline=gated-body）。
 func (m *BrokerManager) PlaceOrder(ctx context.Context, o exec.Order) (exec.Fill, error) {
 	e, ok := m.reg.Get(o.Venue)
 	if !ok {

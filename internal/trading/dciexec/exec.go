@@ -10,6 +10,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"nox/internal/risk/gate"
@@ -107,7 +108,8 @@ func (e *Executor) Go(ctx context.Context) (string, error) {
 	return fmt.Sprintf("提案#%d %s：%s", p.ID, p.TemplateID, msg), nil
 }
 
-// GoProposal 指定提案执行（「go N」口令/RPC 同径）：态机闸（proposed 才执行，
+// GoProposal —— [exec-entry:named-gate:CheckDCI] D-262 M4.3②：DCI 提案执行
+// （「go N」口令/RPC 同径）：态机闸（proposed 才执行，
 // expired/declined 拒单带因）+模板→腿子集+订单回链 proposal_id；
 // strike/qty 实时闸复验保留——提案 params 快照是审计锚非钉价。
 func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
@@ -115,28 +117,27 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("提案#%d 查询败: %w", id, err)
 	}
-	if p.Status != "proposed" {
-		return "", fmt.Errorf("提案#%d 已 %s（拒单）", id, p.Status)
-	}
-	// D-258 M4.1③：评估卡闸——无卡或非 viable=不算候选（卡读败 fail-closed 拒单）。
+	// D-262 M4.3②：检面归 risk/gate 单包（命名闸 CheckDCI；读库 fail-closed 留本层）。
 	card, cerr := e.Store.GetOppEval(ctx, id)
 	if cerr != nil {
 		return "", fmt.Errorf("提案#%d 评估卡读败（拒单）: %w", id, cerr)
 	}
-	if card == nil {
-		return "", fmt.Errorf("提案#%d 无评估卡（拒单——无卡不算候选）", id)
+	// 休眠轨读败放行（不扩闸）——约束读败放行同例。
+	dormantHit := false
+	if dormant, derr := e.dormantPairs(ctx); derr == nil {
+		dormantHit = dormant[p.TemplateID+"@"+p.Venue]
 	}
-	if card.Verdict != "viable" {
-		return "", fmt.Errorf("提案#%d 评估卡=%s（拒单——非可执行候选）", id, card.Verdict)
+	var verdict string
+	if card != nil {
+		verdict = card.Verdict
 	}
-	legs, ok := gate.ExecTemplates[p.TemplateID]
-	if !ok {
-		return "", fmt.Errorf("提案#%d 模板 %s 未接执行轨（提案可批执行面未接线）", id, p.TemplateID)
+	if reason := gate.CheckDCI(gate.DCIProposalView{
+		ID: id, TemplateID: p.TemplateID, Venue: p.Venue, Status: p.Status,
+		HasCard: card != nil, Verdict: verdict, Dormant: dormantHit,
+	}); reason != "" {
+		return "", errors.New(reason)
 	}
-	// 休眠轨拒单带因（非市况文案）——约束读败放行（不扩闸）。
-	if dormant, derr := e.dormantPairs(ctx); derr == nil && dormant[p.TemplateID+"@"+p.Venue] {
-		return "", fmt.Errorf("休眠轨（D-191R7）%s@%s（拒单）", p.TemplateID, p.Venue)
-	}
+	legs := gate.ExecTemplates[p.TemplateID]
 	// R11② 执行租约：同 proposal_id 120s 内有单即拒（双击/重发防双成交）。
 	if oid, err := e.Store.RecentDCIOrderByProposal(ctx, id, 120*time.Second); err != nil {
 		return "", err

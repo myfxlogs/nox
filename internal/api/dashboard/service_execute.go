@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nox/internal/platform/safego"
+	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/exec"
 
@@ -81,17 +82,44 @@ func metaForType(posType string, openBps float64) pgstore.PositionMeta {
 	}
 }
 
+// SetOrderGate 装配开仓闸（autotrade.New 注其 Gate 同实例；gate.Submitter 接口签名同源）。
+func (s *Service) SetOrderGate(g gate.Submitter) { s.orderGate = g }
+
+// ExecuteOpportunity —— [exec-entry:gate] D-262 M4.3①：手动开仓面收口。
+// 正规径=Gate.Submit→intent.Execute→pipeline；闸未接线=fail-closed 拒单。
 func (s *Service) ExecuteOpportunity(ctx context.Context, req *connect.Request[v1.ExecuteOpportunityRequest]) (*connect.Response[v1.ExecuteOpportunityResponse], error) {
-	if s.pipeline == nil {
+	if s.pipeline == nil || s.orderGate == nil {
 		return connect.NewResponse(&v1.ExecuteOpportunityResponse{
 			Status:  "FAILED",
-			Message: "执行器未接线（请联系维护方）",
+			Message: "执行面未接线（风控闸/执行器缺——请联系维护方）",
 		}), nil
 	}
-	status, msg, posID := s.ExecuteOpportunityInternal(ctx, req.Msg.GetOpportunityId(), req.Msg.GetRequestId(), req.Msg.GetQty())
+	oppID := req.Msg.GetOpportunityId()
+	opp, err := s.store.GetOpportunity(ctx, oppID)
+	if err != nil || opp == nil {
+		return connect.NewResponse(&v1.ExecuteOpportunityResponse{
+			Status:  "FAILED",
+			Message: fmt.Sprintf("机会 %s 查询失败（拒单）: %v", oppID, err),
+		}), nil
+	}
+	qty := req.Msg.GetQty()
+	res := s.orderGate.Submit(ctx, &gate.TradeIntent{
+		Strategy:    opp.Type,
+		Canonical:   opp.Canonical,
+		VenueBuy:    opp.VenueBuy,
+		VenueSell:   opp.VenueSell,
+		Qty:         qty,
+		NotionalUSD: qty * opp.PriceBuy,
+		DedupKey:    opp.ID,
+		NetBps:      opp.NetBps,
+		Execute: func(ctx context.Context) (string, string, int64) {
+			return s.ExecuteOpportunityInternal(ctx, opp.ID, req.Msg.GetRequestId(), qty)
+		},
+	})
+	msg := res.Reason
 	return connect.NewResponse(&v1.ExecuteOpportunityResponse{
-		PositionId: posID,
-		Status:     status,
+		PositionId: res.PosID,
+		Status:     res.Status,
 		Message:    msg,
 	}), nil
 }
