@@ -205,6 +205,8 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 	safego.GoLoop("main:idleCapital", func() { dashboard.NewIdleCapitalMonitor(dashSvc, 30*time.Minute).Run(ctx) }) // D-554
 	// D-087 §3.2：settlement.Settle 统一结算入口——构造 storeDeps（实现 settlement.Deps）注入三调用点
 	settleDeps := settleadapter.New(st)
+	// D-249①：淘汰多空听证钩（裁定击杀前对辩落 fin_strategy_hearing；观察面 fail-open）。
+	settleDeps.HearElim = newElimHearing(st, cfg)
 	recon.SetCloser(dashSvc)
 	recon.SetSettler(settleDeps) // D-087：替换 SetStatUpdater + SetVerificationUpdater
 	dashSvc.SetSettler(settleDeps)

@@ -40,3 +40,6 @@ var NavBudgetSQL string // D-264 M4.4：fin_nav_daily 日切 NAV + fin_strategy_
 
 //go:embed 1011_venue_reject.sql
 var VenueRejectSQL string // D-255：fin_venue_reject 败因坑表
+
+//go:embed 1012_elim_hearing.sql
+var ElimHearingSQL string // D-249①：fin_strategy_hearing 淘汰多空听证记录

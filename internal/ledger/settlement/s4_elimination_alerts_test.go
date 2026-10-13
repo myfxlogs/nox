@@ -76,3 +76,65 @@ func TestD268_S4_SpyCount(t *testing.T) {
 			len(d.disabledStrats), d.disabledStrats)
 	}
 }
+
+// hearDeps 听证观察面 spy（D-249①：裁定击杀前调 HearElimination，不翻裁定）。
+type hearDeps struct {
+	*fakeDeps
+	heard []string // 捕获 (trigger, reason)
+}
+
+func (h *hearDeps) HearElimination(_ context.Context, trigger string, fam []string,
+	total int, winRate, avgPnl, medianPnl float64, reason string) {
+	h.heard = append(h.heard, trigger+"|"+reason)
+}
+
+// TestD249_HearingObserveOnly 钦定锚：听证钩被调但裁定结果与听证无关——
+// disable 仍按判据函数结果落（LLM 零翻权）；听证钩返回什么不影响 DisableStrategy。
+func TestD249_HearingObserveOnly(t *testing.T) {
+	d := &hearDeps{fakeDeps: &fakeDeps{
+		getStat: &pgstore.StrategyStat{Strategy: "CARRY"},
+		aggStat: pgstore.AggregateStat{Total: 10, Wins: 2, AvgPnl: -1.0, MedianPnl: -1.0},
+	}}
+	p := &pgstore.Position{Type: "CARRY", Environment: "demo"}
+
+	runElimination(context.Background(), d, p, elimYes, nil)
+
+	if len(d.heard) != 1 || !strings.HasPrefix(d.heard[0], "CARRY|test elimination") {
+		t.Fatalf("听证应在击杀前触发并带理由: %v", d.heard)
+	}
+	if d.disableStrategy == "" && len(d.disabledStrats) == 0 {
+		t.Fatal("听证后淘汰仍应执行（裁定权在判据函数）")
+	}
+}
+
+// TestD249_HearingFailOpen 听证钩 panic/耗时异常不外溢——runElimination 不因
+// 观察面故障漏淘汰（钩内实现自封顶，此锚验证调用序：钩先于 DisableStrategy）。
+func TestD249_HearingBeforeDisable(t *testing.T) {
+	var order []string
+	d := &hearDeps{fakeDeps: &fakeDeps{
+		getStat: &pgstore.StrategyStat{Strategy: "CARRY"},
+		aggStat: pgstore.AggregateStat{Total: 10},
+	}}
+	d2 := &hearOrderDeps{hearDeps: d, order: &order}
+	p := &pgstore.Position{Type: "CARRY", Environment: "demo"}
+	runElimination(context.Background(), d2, p, elimYes, nil)
+	if len(order) != 2 || order[0] != "hear" || order[1] != "disable" {
+		t.Fatalf("听证应先于禁用: %v", order)
+	}
+}
+
+// hearOrderDeps 记录 hear/disable 调用序。
+type hearOrderDeps struct {
+	*hearDeps
+	order *[]string
+}
+
+func (h *hearOrderDeps) HearElimination(ctx context.Context, trigger string, fam []string,
+	total int, winRate, avgPnl, medianPnl float64, reason string) {
+	*h.order = append(*h.order, "hear")
+	h.hearDeps.HearElimination(ctx, trigger, fam, total, winRate, avgPnl, medianPnl, reason)
+}
+func (h *hearOrderDeps) DisableStrategy(ctx context.Context, s, r string) error {
+	*h.order = append(*h.order, "disable")
+	return h.hearDeps.DisableStrategy(ctx, s, r)
+}

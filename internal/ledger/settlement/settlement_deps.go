@@ -65,6 +65,13 @@ type Deps interface {
 // 返回 (shouldDisable, reason)。
 type Eliminator func(ctx context.Context, totalTrades int, winRate, avgPnl, medianPnl float64, disabled bool) (bool, string)
 
+// ElimHearer D-249①：淘汰多空听证观察钩（可选接口——Deps 未实现=不听证）。
+// 裁定击杀前同步调用；听证仅观察面不翻裁定（LLM 对辩文本落 fin_strategy_hearing）。
+type ElimHearer interface {
+	HearElimination(ctx context.Context, trigger string, fam []string,
+		total int, winRate, avgPnl, medianPnl float64, reason string)
+}
+
 // FamilyResolver D-256-A S2：策略→风险族映射（避免环依赖，autotrade.riskFamily 注入）。
 // 返回同族策略名列表（如 CARRY→[CARRY,SWAPARB]），用于族级聚合。
 // nil = 无族合并（每策略独立聚合，向后兼容）。

@@ -86,6 +86,8 @@ type Engine struct {
 	legSuspend   map[int64]bool
 	legSuspendMu sync.Mutex
 
+	// HearElim D-249①：淘汰听证观察钩（SetSettleDeps 装配；nil=不听证）。
+	HearElim func(ctx context.Context, trigger string, fam []string, total int, winRate, avgPnl, medianPnl float64, reason string)
 	// settlement.Settle 依赖 + 淘汰判定函数（main 装配后调 SetSettleDeps）。
 	settleDeps settlement.Deps
 	eliminator settlement.Eliminator
@@ -162,10 +164,12 @@ func (e *Engine) ValidateStartup() {
 
 // SetSettleDeps 注入结算依赖 + 淘汰判定函数（D-087 §3.2，main 装配后调）。
 // family 非 nil 时淘汰聚合改用族级（CARRY/SWAPARB 合并样本）。
-func (e *Engine) SetSettleDeps(deps settlement.Deps, elim settlement.Eliminator, family settlement.FamilyResolver) {
+func (e *Engine) SetSettleDeps(deps settlement.Deps, elim settlement.Eliminator, family settlement.FamilyResolver,
+	hear func(ctx context.Context, trigger string, fam []string, total int, winRate, avgPnl, medianPnl float64, reason string)) {
 	e.settleDeps = deps
 	e.eliminator = elim
 	e.familyResolver = family
+	e.HearElim = hear // D-249①：淘汰听证观察钩（startup 扫同径；nil=不听证）
 	// 结算后 dd30 账本回撤线——Deps 提供 PostSettle 挂点时接线
 	//（共享 StoreDeps 实例覆盖 autotrade/reconcile/dashboard/pipeline 全结算路径）。
 	if h, ok := deps.(interface {

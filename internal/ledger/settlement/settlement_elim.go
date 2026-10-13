@@ -57,6 +57,10 @@ func runElimination(ctx context.Context, deps Deps, p *pgstore.Position, elim El
 		if family != nil {
 			famStrategies = family(p.Type)
 		}
+		// D-249①：多空听证（裁定击杀前）——观察面，fail-open 不阻塞淘汰。
+		if h, ok := deps.(ElimHearer); ok {
+			h.HearElimination(ctx, p.Type, famStrategies, agg.Total, winRate, agg.AvgPnl, agg.MedianPnl, reason)
+		}
 		for _, fam := range famStrategies {
 			if err := deps.DisableStrategy(ctx, fam, reason); err != nil {
 				log.Printf("[settlement] disable strategy %s: %v", fam, err)

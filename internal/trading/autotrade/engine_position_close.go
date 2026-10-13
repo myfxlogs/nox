@@ -111,6 +111,10 @@ func (e *Engine) runStartupElimination(ctx context.Context) {
 		}, crits)
 		if disable {
 			reason += e.elimEvidenceSuffix(ctx, agg.Total, winRate)
+			// D-249①：多空听证（裁定击杀前）——观察面 fail-open。
+			if e.HearElim != nil {
+				e.HearElim(ctx, s, famStrategies, agg.Total, winRate, agg.AvgPnl, agg.MedianPnl, reason)
+			}
 			// 族内全禁——禁用族内全部策略（CARRY/SWAPARB 同族），
 			// 避免复活场景下 CARRY 触发淘汰后 SWAPARB 存活至重启/自身结算。
 			for _, fam := range famStrategies {

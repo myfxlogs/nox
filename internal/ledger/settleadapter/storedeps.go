@@ -22,6 +22,8 @@ func New(store *pgstore.Store) *StoreDeps { return &StoreDeps{store: store} }
 type StoreDeps struct {
 	store      *pgstore.Store
 	postSettle func(context.Context, int64) // D-032 ①：结算后钩子（autotrade 风控线注入）
+	// HearElim D-249①：淘汰听证钩（cmd/core 装配=hearing.Deps.Debate 闭包；nil=不听证）。
+	HearElim func(ctx context.Context, trigger string, fam []string, total int, winRate, avgPnl, medianPnl float64, reason string)
 }
 
 // 编译期断言：settleStoreDeps 实现 settlement.Deps。
@@ -29,6 +31,14 @@ var _ settlement.Deps = (*StoreDeps)(nil)
 
 // SetPostSettleHook D-032 ①：注入结算后回调（autotrade.SetSettleDeps 装配点调）。
 func (d *StoreDeps) SetPostSettleHook(fn func(context.Context, int64)) { d.postSettle = fn }
+
+// HearElimination 实现 settlement.ElimHearer——未注入钩子时空操作。
+func (d *StoreDeps) HearElimination(ctx context.Context, trigger string, fam []string,
+	total int, winRate, avgPnl, medianPnl float64, reason string) {
+	if d.HearElim != nil {
+		d.HearElim(ctx, trigger, fam, total, winRate, avgPnl, medianPnl, reason)
+	}
+}
 
 // PostSettled 实现 settlement.PostSettler——未注入钩子时空操作。
 func (d *StoreDeps) PostSettled(ctx context.Context, posID int64) {
