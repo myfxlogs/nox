@@ -18,19 +18,36 @@ import (
 // llmRunner 可注入测试桩——生产面=analyst.RunWithSpecs 包装。
 type llmRunner func(ctx context.Context, system, prompt string) (string, error)
 
+// stringList 宽容反序列化：模型时把清单字段产成单字符串——收 string→单元素数组。
+type stringList []string
+
+func (s *stringList) UnmarshalJSON(b []byte) error {
+	var arr []string
+	if err := json.Unmarshal(b, &arr); err == nil {
+		*s = arr
+		return nil
+	}
+	var one string
+	if err := json.Unmarshal(b, &one); err != nil {
+		return err
+	}
+	*s = []string{one}
+	return nil
+}
+
 // draftSpec LLM 产出的条目草稿字段（status 不收——程序强写 observed）。
 type draftSpec struct {
-	ID        string   `json:"id"`
-	Kind      string   `json:"kind"`
-	Risk      string   `json:"risk"`
-	Keywords  []string `json:"keywords"`
-	Scope     []string `json:"scope"`
-	Summary   string   `json:"summary"`
-	Facts     string   `json:"facts"`      // 事实/症状节
-	RootCause string   `json:"root_cause"` // 根因或策略解释节
-	Handling  string   `json:"handling"`   // 处置节
-	Boundary  string   `json:"boundary"`   // 适用边界节
-	Rows      []int    `json:"rows"`       // 引用源行号（输入序号）
+	ID        string     `json:"id"`
+	Kind      string     `json:"kind"`
+	Risk      string     `json:"risk"`
+	Keywords  stringList `json:"keywords"`
+	Scope     stringList `json:"scope"`
+	Summary   string     `json:"summary"`
+	Facts     string     `json:"facts"`      // 事实/症状节
+	RootCause string     `json:"root_cause"` // 根因或策略解释节
+	Handling  string     `json:"handling"`   // 处置节
+	Boundary  string     `json:"boundary"`   // 适用边界节
+	Rows      []int      `json:"rows"`       // 引用源行号（输入序号）
 }
 
 var (
@@ -43,7 +60,7 @@ var (
 const inductSystem = `你是 NOX 经验库归纳员。输入是未消解的告警/拒绝事件清单（编号+摘要）。
 任务：把语义同类的事件聚成一簇，每簇产一条经验条目草稿。
 只输出一个 JSON 对象，无其他文字：{"drafts":[{...}]}。
-每个 draft 字段：id(ASCII 小写 kebab-case)/kind(pitfall|strategy|invariant|ops)/risk(critical|high|medium|low)/keywords(1-8 个)/scope/summary(≤120字)/facts/root_cause/handling/boundary/rows(引用的输入编号数组)。
+每个 draft 字段：id(ASCII 小写 kebab-case)/kind(pitfall|strategy|invariant|ops)/risk(critical|high|medium|low)/keywords(1-8 个的字符串数组)/scope(字符串数组)/summary(≤120字)/facts/root_cause/handling/boundary/rows(引用的输入编号整数数组)。
 不确定的簇不产草稿。禁编造数字/根因；无证据支撑的写「待核」。`
 
 // parseDrafts JSON schema 闸：整体违式 → error（不落盘）；单条违式 → 剔除该条记因。
