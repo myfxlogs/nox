@@ -577,7 +577,7 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - 锚 5 件：normBase 三所交割形/basisAnn 全域 fail-closed+perp annualize 回归/binance QUARTER 收/okx FUTURES+index+funding 不打交割/gate expire_time 枚举/首扫静默+次扫 NEW/DELIST。
 - SG 验收残留：radar 轮后 `fin_cex_universe` 现 okx BTC-USDT-YYMMDD FUTURES 行+last_basis_ann 非空；首轮零告警洪泛。
 
-## 2026-10-14 雷达交割轴补全 @pending
+## 2026-10-14 雷达交割轴补全 @cd6940aa
 - okx FUTURES filter：中段白名单 {USDT,USDC,USD_UM}（USD_UM=USDⓈ篮线性交割=SG 实证稳定币交割实面）；BTC-USD-* 币本位剔（逆向另一族）；BTC-USDT-*/BTC-USDC-* 命名空间保留。
 - okx index 接线：okxIndexUly（USD_UM→BASE-USD、其余→BASE-mid）逐 uly index-tickers；mark=FUTURES tickers last（已拉零新调用）。
 - binance 交割 mark/index：premiumIndex 响应本就全符号含 markPrice/indexPrice——premiumIndexFunding 返三 map 顺手填 FUTURES 行（perp mark/index 仍走 ticks/facts 原位不动），零新增调用。
