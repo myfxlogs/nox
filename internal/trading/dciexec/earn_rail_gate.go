@@ -23,11 +23,7 @@ type gateEarnRail struct {
 func (r *gateEarnRail) req(ctx context.Context, method, endpoint, query, body string) ([]byte, error) {
 	urlPath := "/api/v4" + endpoint
 	ts := r.e.Now().Unix()
-	base := strings.TrimRight(r.c.BaseURL, "/")
-	if base == "" {
-		base = "https://api.gateio.ws"
-	}
-	url := base + urlPath
+	url := gateAPIBase(r.c.BaseURL) + urlPath
 	if query != "" {
 		url += "?" + query
 	}
@@ -114,4 +110,14 @@ func (r *gateEarnRail) FreeBalance(ctx context.Context, _ string) (float64, erro
 func parseF(s string) float64 {
 	f, _ := strconv.ParseFloat(strings.TrimSpace(s), 64)
 	return f
+}
+
+// gateAPIBase base_url→API host 基址：库内约定已含 /api/v4 前缀（reconcile 实证）——
+// 剥后缀防双拼（旧径 …/api/v4/api/v4/… → venue HTML 404，SG #377 实证）；空→原生域。
+func gateAPIBase(raw string) string {
+	base := strings.TrimSuffix(strings.TrimRight(raw, "/"), "/api/v4")
+	if base == "" {
+		return "https://api.gateio.ws"
+	}
+	return base
 }

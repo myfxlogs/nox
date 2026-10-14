@@ -4,6 +4,8 @@ package dciexec
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -106,5 +108,35 @@ func TestEarnRail_BinanceLegacyFn(t *testing.T) {
 	}
 	if *calls != 1 {
 		t.Fatalf("申购调用=%d", *calls)
+	}
+}
+
+// TestGateAPIBase 双前缀修锚：三形态 base_url→正确基址；mock 实发路径对拍。
+func TestGateAPIBase(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"", "https://api.gateio.ws"},
+		{"https://api.gateio.ws", "https://api.gateio.ws"},
+		{"https://api.gateio.ws/api/v4", "https://api.gateio.ws"},
+		{"https://api.gateio.ws/api/v4/", "https://api.gateio.ws"},
+		{"http://127.0.0.1:8080/api/v4", "http://127.0.0.1:8080"},
+	} {
+		if got := gateAPIBase(tc.in); got != tc.want {
+			t.Fatalf("gateAPIBase(%q)=%q want %q", tc.in, got, tc.want)
+		}
+	}
+	// 实发路径对拍：含 /api/v4 的 mock base→服务端只见单前缀。
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Write([]byte(`{"available":"10"}`))
+	}))
+	defer srv.Close()
+	ex := &Executor{Client: srv.Client(), Now: time.Now}
+	rail := &gateEarnRail{e: ex, c: EarnCred{Key: "k", Secret: "s", BaseURL: srv.URL + "/api/v4"}}
+	if _, err := rail.FreeBalance(context.Background(), "USDT"); err != nil {
+		t.Fatalf("free balance: %v", err)
+	}
+	if gotPath != "/api/v4/futures/usdt/accounts" {
+		t.Fatalf("实发路径: %s", gotPath)
 	}
 }
