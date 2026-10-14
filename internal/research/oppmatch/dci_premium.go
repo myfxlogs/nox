@@ -39,18 +39,21 @@ func dciStrikeBound(ctx context.Context, st *pgstore.Store, opt string) float64 
 }
 
 // dciPremiumGate 溢价闸判定：返回过闸与否+拒因注记（「溢价低于闸」语义）。
-func dciPremiumGate(ctx context.Context, st *pgstore.Store) (bool, string) {
-	qs, err := st.ListDCIQuotes(ctx, "binance", "BTC", "PUT", "USDT", 90,
+func dciPremiumGate(ctx context.Context, st *pgstore.Store, venue string) (bool, string) {
+	qs, err := st.ListDCIQuotes(ctx, venue, "BTC", "PUT", "USDT", 90,
 		dciStrikeBound(ctx, st, "PUT"))
 	if err != nil {
-		return false, fmt.Sprintf("PUT 报价读败：%v", err)
+		return false, fmt.Sprintf("%s PUT 报价读败：%v", venue, err)
 	}
 	if len(qs) == 0 || qs[0].APY <= 0 {
-		return false, "PUT 达标档报价缺（溢价未知不臆放）"
+		return false, fmt.Sprintf("%s PUT 达标档报价缺（溢价未知不臆放）", venue)
 	}
-	// 单位口径：fin_cex_dci_quote 本查询面只取 binance 行——apr 列=venue 实拍
-	// %口径原样（cexscan/dci.go 注），归一小数后与 earn_apr（小数）同制比较。
-	premium := qs[0].APY / 100
+	// 单位口径按 venue 采集面归一小数：binance apy 列=%口径实拍（cexscan/dci.go
+	// 注）→/100；okx annualizedYield 本身就是小数形（0.0541=5.41%）→原值。
+	premium := qs[0].APY
+	if venue == "binance" {
+		premium /= 100
+	}
 	earnApr, ok, err := st.MaxEarnAPR(ctx)
 	if err != nil {
 		return false, fmt.Sprintf("earn_apr 现值读败：%v", err)

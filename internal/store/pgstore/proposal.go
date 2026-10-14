@@ -128,13 +128,14 @@ func (s *Store) SetProposalStatus(ctx context.Context, id int64, status string) 
 }
 
 // ExpireProposalsExcept 过期并入扫描拍：当轮不再达标的 pending 提案→expired
-// （事件驱动零新定时器；just-executed/declined 行不动）。
-func (s *Store) ExpireProposalsExcept(ctx context.Context, liveTemplates []string) (int, error) {
+// （事件驱动零新定时器；just-executed/declined 行不动）。保活键="tid@venue" 对
+// ——同模板异 venue 提案独立保活（okx DCI 拓展：模板在册≠各 venue 面都在册）。
+func (s *Store) ExpireProposalsExcept(ctx context.Context, livePairs []string) (int, error) {
 	q := `UPDATE fin_proposal SET status='expired', decided_at=now() WHERE status='proposed'`
 	args := []any{}
-	if len(liveTemplates) > 0 { // 空集=全过期；ANY(NULL) 谓词恒 NULL 会零行更新
-		q += ` AND NOT (template_id = ANY($1))`
-		args = append(args, liveTemplates)
+	if len(livePairs) > 0 { // 空集=全过期；ANY(NULL) 谓词恒 NULL 会零行更新
+		q += ` AND NOT (template_id||'@'||venue = ANY($1))`
+		args = append(args, livePairs)
 	}
 	res, err := s.pool.Exec(ctx, q, args...)
 	if err != nil {

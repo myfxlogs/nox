@@ -15,6 +15,7 @@ import (
 type FilledDCIOrder struct {
 	ID         int64
 	RequestID  string
+	Venue      string
 	ProductRef string
 	OptType    string
 	InvestCcy  string
@@ -28,7 +29,7 @@ type FilledDCIOrder struct {
 // ListFilledDCIOrders 交割观察候选集（filled 非终态——settled 才是；行少量可全取）。
 func (s *Store) ListFilledDCIOrders(ctx context.Context) ([]FilledDCIOrder, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, request_id, product_ref, opt_type, invest_ccy,
+		SELECT id, request_id, venue, product_ref, opt_type, invest_ccy,
 		       COALESCE(underlying,''), COALESCE(qty,0), tenor_days, proposal_id,
 		       COALESCE(response,'')
 		FROM fin_dci_order WHERE status='filled' AND opt_type<>'EARN' ORDER BY id`)
@@ -39,7 +40,7 @@ func (s *Store) ListFilledDCIOrders(ctx context.Context) ([]FilledDCIOrder, erro
 	var out []FilledDCIOrder
 	for rows.Next() {
 		var o FilledDCIOrder
-		if err := rows.Scan(&o.ID, &o.RequestID, &o.ProductRef, &o.OptType,
+		if err := rows.Scan(&o.ID, &o.RequestID, &o.Venue, &o.ProductRef, &o.OptType,
 			&o.InvestCcy, &o.Underlying, &o.Qty, &o.TenorDays, &o.ProposalID,
 			&o.Response); err != nil {
 			return nil, err

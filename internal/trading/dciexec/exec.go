@@ -175,7 +175,12 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 		return e.goEarn(ctx, p)
 	}
 	legs := gate.ExecTemplates[p.TemplateID]
-	if e.BnKey == "" {
+	// 腿执行面按 venue 分派（okx DCI：quote→trade 两段式+funding 扣款户）；
+	// binance 径凭据闸照旧，okx 凭据闸在 tryLegOKX 内（credential 缺口同形）。
+	try := e.tryLeg
+	if p.Venue == "okx" {
+		try = e.tryLegOKX
+	} else if e.BnKey == "" {
 		return "", e.gap(ctx, gate.CallLeg, "credential", "binance:spot",
 			"请配置 binance 凭据（DCI 申购写径）")
 	}
@@ -208,7 +213,7 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 					"请喂约束 %s（%s腿 OTM 闸界比率）", l.BoundSubject(), l.Name)))
 			continue
 		}
-		msg, err := e.tryLeg(ctx, l, *share, tenorCap, spot*(*ratio), spot, &p.ID)
+		msg, err := try(ctx, l, *share, tenorCap, spot*(*ratio), spot, &p.ID)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.Name, err))
 			continue

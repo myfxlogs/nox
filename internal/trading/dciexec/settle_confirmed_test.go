@@ -14,7 +14,7 @@ import (
 
 func d207Order() pgstore.FilledDCIOrder {
 	return pgstore.FilledDCIOrder{
-		ID: 7, RequestID: "prop-7-put", ProductRef: "PUTP", OptType: "PUT",
+		ID: 7, RequestID: "prop-7-put", Venue: "binance", ProductRef: "PUTP", OptType: "PUT",
 		InvestCcy: "USDT", Underlying: "BTC", Qty: 541,
 		Response: `{"orderId":1,"settleDate":` + fmt.Sprint(time.Now().Add(-time.Hour).UnixMilli()) + `}`,
 	}

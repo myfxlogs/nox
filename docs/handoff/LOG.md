@@ -867,3 +867,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **扣款户定案**：`asset/balances` funding 1948.0017→1938.0017（-10.00 整）；unified=0 未动；savings 179.73（早前探针 $10 已落账）。→ **sfp/dcd 走资金账户扣款**，复用收口票短差划转件（funding 不足补 18→6）。
 - **首笔 okx DCI 持仓**：ETH-USDT-261021-2280-P $10，10-21 到期、行权价 2280（idxPx 2466.93）——小幅试单，到期按 venue 结算走。
 - **提案面断点不变**：oppmatch `ListDCIQuotes(ctx,"binance",…)` 写死——okx 报价 32.9 万行在库不进提案，DCI 拓展票即此修。
+
+## 2026-10-14 okx DCI 拓展（实施席）
+- **提案层 venue 参化**（run.go）：ExecTemplates 模板按 `dciProposalVenues{binance,okx}` 各出独立提案（pending 键 tid+venue 已就绪）；`proposalParams`/`dciPremiumGate` 加 venue 参——闸判据不放宽（okx annualizedYield 小数形原值 vs binance %口径/100 归一）；`ExpireProposalsExcept` 保活键升 `tid@venue` 对（earn 族按 earnExecVenues 各键保活同旧语义）。
+- **执行面**（okx_dci.go）：`tryLegOKX`——合并余额（unified+funding）×share→qty、达标档 StrikePass 选取、幂等键 `dci|okx|腿|product|delivDay|n`、funding 短差 `min(needed,unified)` 补划 18→6→`POST /sfp/dcd/quote {productId,notionalSz,notionalCcy}`→`validUntil` 过期如实败不重提→`POST /sfp/dcd/trade {quoteId}`→`GET order-status?ordId=` 回执拼接→`fin_dci_order venue='okx'` 同形落账+warn 推送+坑表 `okx:dci_trade` 落坑。
+- **exec.go 分派**：`p.Venue=="okx"`→tryLegOKX，binance 凭据闸照旧 venue 内自闭。
+- **settle.go**：ListFilledDCIOrders 行补 venue 列；观察拍 `venue≠binance` 跳过——**okx 行权/到期对账面续票**（本票不混径，如实记）。
+- **锚**：mock 三段式序列（transfer→quote→trade→order-status）+订单 venue=okx+过期报价零 trade+凭据缺 credential 缺口；settle 桩补 Venue 列。

@@ -13,6 +13,10 @@ import (
 	"nox/internal/store/pgstore"
 )
 
+// dciProposalVenues dci 族提案 venue 枚举——报价面采集在跑的 venue 各出
+// 独立提案（fin_cex_dci_quote venue 维度；新 venue 采集接入加列即可）。
+var dciProposalVenues = []string{"binance", "okx"}
+
 // RunOnce 单轮匹配（日频调用）：提案=InsertAlert info（episode 闸天然防抖）；
 // 缺口=OpenConditionGap 幂等+RequestConditionGap（仅 open→requested 推一次）。
 // D-247：缺口请求生成前先过可行性预检（capitalBase/perStrategyCap=资金基数×
@@ -53,7 +57,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 		gapByKey[g.TemplateID+"|"+g.Kind+"|"+g.Subject] = g.Status
 	}
 	propN, gapN := 0, 0
-	var liveTmpls []string // 当轮达标模板集（过期判定并入扫描拍——零新定时器）
+	var liveTmpls []string // 当轮达标 tid@venue 对集（过期判定并入扫描拍——零新定时器）
 	// 休眠轨集（约束表 subject 'dormant:<tmpl>@<venue>' value_num=1）——
 	// 命中跳过 CreateProposal+存量 proposed 翻 deferred；读败不阻扫描（集空降级）。
 	dormant := map[string]bool{}
@@ -85,57 +89,79 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 			}
 			continue
 		}
-		// D-514 DCI 溢价闸：dci_buy_low 权利金年化<max(3×earn_apr,8%)→
-		// 「无达标档」不产提案（权利金坍缩期不卖 tail 险；闸只挡 DCI 不碰 earn）。
-		if r.TemplateID == "dci_buy_low" && len(r.Missing) == 0 {
-			if ok, why := dciPremiumGate(ctx, st); !ok {
-				if aerr := st.InsertAlertDedup(ctx, "info", fmt.Sprintf(
-					"D-514 溢价闸：dci_buy_low %s——本拍「无达标档」不产提案", why), 6*time.Hour); aerr != nil {
-					log.Printf("[oppmatch] 溢价闸 alert: %v", aerr)
-				}
-				continue
-			}
-		}
 		if len(r.Missing) == 0 {
-			propN++
-			liveTmpls = append(liveTmpls, r.TemplateID)
-			apr := "报价缺"
-			if r.APR != nil {
-				apr = fmt.Sprintf("apy=%.4g（venue原生口径）", *r.APR)
+			// dci 族 venue 参化：同模板按 venue 各出独立提案（pending 幂等键
+			// template_id+venue）；其余族照旧 binance 单 venue。
+			venues := []string{"binance"}
+			if _, ok := gate.ExecTemplates[r.TemplateID]; ok {
+				venues = dciProposalVenues
 			}
-			// 提案实体化——行即稳定 id（同模板 pending 复用），
-			// params=快照审计锚（执行时实时闸复验，非钉价）。
-			pid, created, err := st.CreateProposal(ctx, &pgstore.Proposal{
-				TemplateID: r.TemplateID, ExecTrack: r.ExecTrack, Venue: "binance",
-				Params:      proposalParams(ctx, st, r),
-				ExpectedAPR: r.APR})
-			if err != nil {
-				log.Printf("[oppmatch] proposal row %s: %v", r.TemplateID, err)
-				continue
-			}
-			card := evalProposal(ctx, st, r, pid) // D-258 M4.1：一提案一卡（每扫一拍复算）
-			streak, uerr := st.UpsertOppEval(ctx, card)
-			if uerr != nil {
-				log.Printf("[oppmatch] eval card proposal#%d: %v", pid, uerr)
-			}
-			// 处置②：unevaluable 连拍≥3 翻 deferred——评估证据持续不足不许无限挂
-			// proposed（阈值=3 扫拍：单拍数据面波动不致误杀，连拍才定性「持续不足」）。
-			if card.Verdict == "unevaluable" && streak >= 3 {
-				if n, derr := st.DeferProposalsByPair(ctx, r.TemplateID, "binance"); derr == nil && n > 0 {
-					log.Printf("[oppmatch] unevaluable 连拍 %d 翻 deferred（proposal#%d）", streak, pid)
+			for _, venue := range venues {
+				if dormant[r.TemplateID+"@"+venue] {
+					continue
 				}
-				if aerr := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
-					"提案#%d %s 评估证据连拍不足（unevaluable×%d）→deferred", pid, r.TemplateID, streak)); aerr != nil {
-					log.Printf("[oppmatch] uneval-defer alert #%d: %v", pid, aerr)
+				// D-514 DCI 溢价闸：venue 维度判——本 venue 无达标档只压本 venue
+				// 提案（权利金坍缩期不卖 tail 险；闸只挡 DCI 不碰 earn）。
+				if r.TemplateID == "dci_buy_low" {
+					if ok, why := dciPremiumGate(ctx, st, venue); !ok {
+						if aerr := st.InsertAlertDedup(ctx, "info", fmt.Sprintf(
+							"D-514 溢价闸：dci_buy_low@%s %s——本拍「无达标档」不产提案", venue, why), 6*time.Hour); aerr != nil {
+							log.Printf("[oppmatch] 溢价闸 alert: %v", aerr)
+						}
+						continue
+					}
 				}
-			}
-			tag := "提案#"
-			if !created {
-				tag = "提案#（在册）"
-			}
-			if err := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
-				"机会%s%d %s（轨=%s，%s，评估卡=%s）", tag, pid, r.TemplateID, r.ExecTrack, apr, card.Verdict)); err != nil {
-				log.Printf("[oppmatch] proposal alert %s: %v", r.TemplateID, err)
+				propN++
+				// 保活键=tid@venue 对；earn 族提案由 idleGapScan 分 venue 产
+				// （主环只产 binance）——earnExecVenues 各键都保活同旧语义。
+				liveVenues := venues
+				if gate.EarnTemplates[r.TemplateID] {
+					liveVenues = liveVenues[:0]
+					for v := range earnExecVenues {
+						liveVenues = append(liveVenues, v)
+					}
+				}
+				for _, lv := range liveVenues {
+					liveTmpls = append(liveTmpls, r.TemplateID+"@"+lv)
+				}
+				apr := "报价缺"
+				if r.APR != nil {
+					apr = fmt.Sprintf("apy=%.4g（venue原生口径）", *r.APR)
+				}
+				// 提案实体化——行即稳定 id（同模板 pending 复用），
+				// params=快照审计锚（执行时实时闸复验，非钉价）。
+				pid, created, err := st.CreateProposal(ctx, &pgstore.Proposal{
+					TemplateID: r.TemplateID, ExecTrack: r.ExecTrack, Venue: venue,
+					Params:      proposalParams(ctx, st, r, venue),
+					ExpectedAPR: r.APR})
+				if err != nil {
+					log.Printf("[oppmatch] proposal row %s@%s: %v", r.TemplateID, venue, err)
+					continue
+				}
+				card := evalProposal(ctx, st, r, pid) // D-258 M4.1：一提案一卡（每扫一拍复算）
+				streak, uerr := st.UpsertOppEval(ctx, card)
+				if uerr != nil {
+					log.Printf("[oppmatch] eval card proposal#%d: %v", pid, uerr)
+				}
+				// 处置②：unevaluable 连拍≥3 翻 deferred——评估证据持续不足不许无限挂
+				// proposed（阈值=3 扫拍：单拍数据面波动不致误杀，连拍才定性「持续不足」）。
+				if card.Verdict == "unevaluable" && streak >= 3 {
+					if n, derr := st.DeferProposalsByPair(ctx, r.TemplateID, venue); derr == nil && n > 0 {
+						log.Printf("[oppmatch] unevaluable 连拍 %d 翻 deferred（proposal#%d）", streak, pid)
+					}
+					if aerr := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
+						"提案#%d %s@%s 评估证据连拍不足（unevaluable×%d）→deferred", pid, r.TemplateID, venue, streak)); aerr != nil {
+						log.Printf("[oppmatch] uneval-defer alert #%d: %v", pid, aerr)
+					}
+				}
+				tag := "提案#"
+				if !created {
+					tag = "提案#（在册）"
+				}
+				if err := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
+					"机会%s%d %s@%s（轨=%s，%s，评估卡=%s）", tag, pid, r.TemplateID, venue, r.ExecTrack, apr, card.Verdict)); err != nil {
+					log.Printf("[oppmatch] proposal alert %s: %v", r.TemplateID, err)
+				}
 			}
 			continue
 		}
@@ -202,7 +228,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 
 // proposalParams 提案快照参数（审计锚非钉价）：dci 模板补最优档 product/strike/tenor
 // 快照；其余仅 apr——执行时实时闸复验为准（禁区：禁按提案时 strike 硬执行）。
-func proposalParams(ctx context.Context, st *pgstore.Store, r Result) map[string]any {
+func proposalParams(ctx context.Context, st *pgstore.Store, r Result, venue string) map[string]any {
 	p := map[string]any{}
 	if r.APR != nil {
 		p["apr"] = *r.APR
@@ -218,7 +244,7 @@ func proposalParams(ctx context.Context, st *pgstore.Store, r Result) map[string
 		// 快照同界——bound=现货参照×约束表 OTM 界（无参照/界行缺
 		// →无界快照降级；快照=审计锚非钉价，执行时实时闸复验不变）。
 		bound := dciStrikeBound(ctx, st, opt)
-		if qs, err := st.ListDCIQuotes(ctx, "binance", "BTC", opt, inv, 90, bound); err == nil && len(qs) > 0 {
+		if qs, err := st.ListDCIQuotes(ctx, venue, "BTC", opt, inv, 90, bound); err == nil && len(qs) > 0 {
 			p["product_ref"] = qs[0].ProductRef
 			if qs[0].Strike != nil {
 				p["strike"] = *qs[0].Strike

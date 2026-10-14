@@ -120,6 +120,9 @@ func (e *Executor) SettleExpiredOrders(ctx context.Context) (int, error) {
 	now := e.Now()
 	var due []pgstore.FilledDCIOrder
 	for _, o := range orders {
+		if o.Venue != "binance" {
+			continue // okx 行权/到期对账面续票——本拍只办 binance 径不混读
+		}
 		if st, ok := settleDateOf(o.Response); ok && !st.After(now) {
 			due = append(due, o)
 		}

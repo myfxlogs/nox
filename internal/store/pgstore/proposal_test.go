@@ -63,7 +63,7 @@ func TestD189_ProposalLifecycle(t *testing.T) {
 		t.Fatalf("decline 后再开应新行: %v c=%v id=%d", err, c3, id3)
 	}
 	// ⑤过期并入扫描拍——不在 live 集者→expired，已定者不动。
-	n, err := st.ExpireProposalsExcept(ctx, []string{"dci_buy_low"})
+	n, err := st.ExpireProposalsExcept(ctx, []string{"dci_buy_low@binance"})
 	if err != nil || n != 1 {
 		t.Fatalf("expire n=%d want 1: %v", n, err)
 	}
@@ -72,7 +72,7 @@ func TestD189_ProposalLifecycle(t *testing.T) {
 		t.Fatalf("expired 态缺: %+v", got)
 	}
 	// ⑥二扫幂等零重扫（live 集不变→已定行不复写、buy_low 仍在集不动）。
-	if n, err := st.ExpireProposalsExcept(ctx, []string{"dci_buy_low"}); err != nil || n != 0 {
+	if n, err := st.ExpireProposalsExcept(ctx, []string{"dci_buy_low@binance"}); err != nil || n != 0 {
 		t.Fatalf("二轮 expire 应 0: %d %v", n, err)
 	}
 	// ⑦订单回链 proposal_id。
