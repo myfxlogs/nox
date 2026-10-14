@@ -131,3 +131,15 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 
 - **裁**：rejected=`binance|PERPETUAL|BTC`（币报价族）、`binance|PERPETUAL|USD1`、`binance|PERPETUAL|U`（边缘稳定币报价，流动性薄）、`okx|FUTURES|USD`（币本位交割=设计稿明定另一族）。留 proposed=`binance|PERPETUAL|USDC`（真货架可顺手扩）、`binance|TRADIFI_PERPETUAL|USD1`（股指永续=新资产族最值得研究）、`okx|FUTURES|USD_UM_XPERP`（XPERP 语义待查）。
 - **语义**：rejected 走弃件记忆抑重推——同键不重返；留件等 S2 通用族落地再评，不自动批准。
+
+## D-511 XAUUSDT 系统外单收编口径 2026-10-14（业主授权决策席拍）
+- **裁**：中间态——外单计入敞口面板（行标 external）但生命周期永不接管（不开不平不追踪）。推翻「维持现状」：$8 名义虽小，但敞口盲是原则错——外单是真实账户 delta。
+- **边界**：仅展示面并表，进敞口/浓度透视；交易径零接管。
+
+## D-512 CMC 手工仓位只读纳管 2026-10-14（业主授权）
+- **裁**：收编为只读展示行——手工录入径→快照域落行标 `manual`，进业主可见资金全景；不进敞口计算不风控不追踪（外来仓位同 XAUUSDT 判例）。
+- **禁线**：不编值不估算，缺数据=缺行如实；仓位动不了。
+
+## D-513 毕业委任规则（确定性自动放行）2026-10-14（业主授权）
+- **裁**：批。pending≥3天∧paper龄≥14天∧accrued>0∧flag_warn空∧单策略额度≤$500∧品种限既有 live 模板域∧日批≤1∧逐笔 warn 告警∧app_config 一键可撤。
+- **理由**：缺席期策略永不毕业=进化链断；确定性规则可审计 vs LLM 副席非确定性——前者优（同 D-184 精神）。额度 $500 保守起。
