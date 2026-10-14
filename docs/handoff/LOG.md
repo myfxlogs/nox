@@ -18,6 +18,12 @@ build/vet/gofmt 净；dciexec/oppmatch/pgstore 全包绿；`-race` dciexec+oppma
 ### 验收残留（SG）
 ①CEX 占比>35% 时 earn 提案真放行+浓度 info 行在库；②造跨所收益差→请求箱现 transfer 行，重跑零重推；③尘额不再发赎（坑表零新 -6006），正常额赎不被挡。
 
+### 部署验收（决策席 10-14 SG 实拍 @790aafb1）
+- **①中**：`fin_dci_order` #16 filled（236.9467 USDT→USDT001，purchaseId 12955699607）——旧闸下必拒的提案真放行；浓度 info#143 落库「CEX总=96.1% binance=93.2%」只标不拦。**注**：96.1% 为重启期 MT5 快照陈旧致分母塌缩的失真值（真值~45%）——告警行为正确但输入脏，佐证冻结区「敞口分母鲜度守卫」票的必要性。
+- **②中（机制活+正确静默）**：xferScan 每拍在跑（`0 new gap requests`）；实拍 earn APR 差=binance 2.41% vs okx 3.50%≈**1.09pp<5pp 阈**——不产行是对的行为（无伪阳）。
+- **③中**：-6006 坑行 hits 仍 1 零新增；部署后零新 -6006；遗留 op 级坑窗至 10-15 00:03（旧签名行到期自消）。
+- **附带**：warn#140「模板venue悬空：earn_apr_lending 声明 okx:spot 凭据但执行轨=binance」——自盯抓到模板元数据漂移，遗留记。
+
 ## binance:earn USDT 仓位缺采
 
 ### 病灶（SG 实证 10-14）
