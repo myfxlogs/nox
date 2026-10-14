@@ -31,6 +31,7 @@ func runLifecycle(ctx context.Context, st *pgstore.Store, templates []Template) 
 	}
 	proposalSLA(ctx, st)
 	evaluateGraduation(ctx, st)
+	delegateGraduations(ctx, st) // D-513：毕业委任规则并入扫描拍（零新定时器）
 }
 
 // proposalSLA 提案超龄→expired+critical（期限机读；键缺/非法→默认 24h 钦定回退+log）。

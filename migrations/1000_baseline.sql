@@ -414,6 +414,7 @@ CREATE TABLE public.carry_graduations (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     decided_at timestamp with time zone,
     decided_note text DEFAULT ''::text NOT NULL,
+    decided_by text DEFAULT ''::text NOT NULL,
     combo_id bigint,
     net_all_in_usd numeric,
     flag_warn text,
@@ -5053,6 +5054,40 @@ ALTER TABLE ONLY public.position_settlements
 
 ALTER TABLE ONLY public.position_swap_snapshots
     ADD CONSTRAINT position_swap_snapshots_position_id_fkey FOREIGN KEY (position_id) REFERENCES public.positions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fin_manual_position; Type: TABLE; Schema: public; Owner: -
+-- D-512：业主手工仓位只读台账（src=manual）——只读展示域，不进敞口不风控不追踪。
+--
+
+CREATE TABLE public.fin_manual_position (
+    id bigint NOT NULL,
+    venue_label text DEFAULT 'manual'::text NOT NULL,
+    symbol text NOT NULL,
+    qty numeric NOT NULL,
+    price_usd numeric,
+    note text DEFAULT ''::text NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fin_manual_position_qty_pos CHECK ((qty > (0)::numeric)),
+    CONSTRAINT fin_manual_position_price_pos CHECK (((price_usd IS NULL) OR (price_usd > (0)::numeric)))
+);
+
+CREATE SEQUENCE public.fin_manual_position_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER SEQUENCE public.fin_manual_position_id_seq OWNED BY public.fin_manual_position.id;
+
+ALTER TABLE ONLY public.fin_manual_position ALTER COLUMN id SET DEFAULT nextval('public.fin_manual_position_id_seq'::regclass);
+
+ALTER TABLE ONLY public.fin_manual_position
+    ADD CONSTRAINT fin_manual_position_pkey PRIMARY KEY (id);
 
 
 --

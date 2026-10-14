@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { client, errText } from "../api";
 import type { CapitalPoolsGroup, CapitalPool } from "../gen/dashboardv1/capital_pools_pb";
+import type { ManualPosition } from "../gen/dashboardv1/manual_position_pb";
 import { ts } from "../components/fmt";
 
 function fmtAmt(v: number): string {
@@ -42,21 +43,48 @@ export default function CapitalPage() {
   const [groups, setGroups] = useState<CapitalPoolsGroup[]>([]);
   const [computedAt, setComputedAt] = useState("");
   const [stalePools, setStalePools] = useState<string[]>([]);
+  const [manual, setManual] = useState<ManualPosition[]>([]);
   const [err, setErr] = useState("");
+  // D-512 录入面（qty/价/注；id 空=新行）
+  const [form, setForm] = useState({ symbol: "", qty: "", price: "", venueLabel: "", note: "" });
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await client.getCapitalPools({});
-        setGroups(r.groups);
-        setComputedAt(ts(r.computedAt));
-        setStalePools(r.stalePools);
-        setErr("");
-      } catch (e) {
-        setErr(errText(e));
-      }
-    })();
-  }, []);
+  async function load() {
+    try {
+      const r = await client.getCapitalPools({});
+      setGroups(r.groups);
+      setComputedAt(ts(r.computedAt));
+      setStalePools(r.stalePools);
+      setManual(r.manualPositions);
+      setErr("");
+    } catch (e) {
+      setErr(errText(e));
+    }
+  }
+  useEffect(() => { void load(); }, []);
+
+  async function addManual() {
+    setBusy(true);
+    try {
+      const r = await client.upsertManualPosition({
+        venueLabel: form.venueLabel || "manual",
+        symbol: form.symbol.trim(),
+        qty: Number(form.qty) || 0,
+        priceUsd: form.price ? Number(form.price) : undefined,
+        note: form.note, enabled: true,
+      });
+      if (!r.ok) { setErr(r.error); return; }
+      setForm({ symbol: "", qty: "", price: "", venueLabel: "", note: "" });
+      await load();
+    } catch (e) { setErr(errText(e)); } finally { setBusy(false); }
+  }
+  async function delManual(id: number) {
+    setBusy(true);
+    try {
+      await client.deleteManualPosition({ id: BigInt(id) });
+      await load();
+    } catch (e) { setErr(errText(e)); } finally { setBusy(false); }
+  }
 
   return (
     <main>
@@ -117,6 +145,37 @@ export default function CapitalPage() {
         );
       })()}
       {groups.length === 0 && !err && <div>无资金池快照</div>}
+
+      {/* D-512 手工仓位只读段：src=manual——只进全景展示，不进敞口/分母/风控。 */}
+      <section>
+        <h2>手工仓位 <small style={{ fontSize: 12, color: "#777" }}>只读台账（manual）· 不计敞口不分母</small></h2>
+        {manual.length > 0 && (
+          <table>
+            <thead><tr><th>来源</th><th>品种</th><th>量</th><th>录入价</th><th>注</th><th>更新</th><th></th></tr></thead>
+            <tbody>
+              {manual.map((m) => (
+                <tr key={m.id.toString()}>
+                  <td>{m.venueLabel}</td>
+                  <td>{m.symbol}</td>
+                  <td>{m.qty}</td>
+                  <td>{m.priceUsd !== undefined ? fmtAmt(m.priceUsd) : "—"}</td>
+                  <td>{m.note}</td>
+                  <td>{ts(m.updatedAt)}</td>
+                  <td><button disabled={busy} onClick={() => delManual(Number(m.id))}>删</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+          <input placeholder="品种" value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} />
+          <input placeholder="量" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} style={{ width: 100 }} />
+          <input placeholder="录入价USD(可空)" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} style={{ width: 120 }} />
+          <input placeholder="来源标(默认manual)" value={form.venueLabel} onChange={(e) => setForm({ ...form, venueLabel: e.target.value })} style={{ width: 140 }} />
+          <input placeholder="注" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          <button disabled={busy || !form.symbol.trim() || !(Number(form.qty) > 0)} onClick={addManual}>录入</button>
+        </div>
+      </section>
     </main>
   );
 }

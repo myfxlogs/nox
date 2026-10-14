@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	v1 "nox/internal/gen/dashboardv1"
 	"nox/internal/store/pgstore"
@@ -53,6 +54,8 @@ func (s *Service) ListVenueExposureCaps(ctx context.Context, _ *connect.Request[
 			UpdatedAt:    timestamppb.New(c.UpdatedAt),
 			AllocatedUsd: allocated[c.VenueKey],
 			OverCap:      c.Enabled && c.CapUSD > 0 && allocated[c.VenueKey] > c.CapUSD,
+			// D-511：外单名义并入透视面（真 delta 如实呈；执法闸口径不变仍只算系统仓）。
+			ExternalNotionalUsd: s.externalNotionalUSD(ctx, strings.SplitN(c.VenueKey, ":", 2)[0], time.Now()),
 		}
 		if p, ok := s.legPool(ctx, snaps, c.VenueKey); ok {
 			avail := p.equity

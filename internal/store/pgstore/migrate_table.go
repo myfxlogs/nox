@@ -214,4 +214,6 @@ var migrationFiles = []struct {
 	{1018, migrations.RadarFuturesAxisSQL, false},             // 宇宙雷达仪器轴：contract_type/expiry_ts/basis_ann
 	{1019, migrations.OppHypothesisSQL, false},                // 新品类自发现 S1：fin_opp_hypothesis 假设行表
 	{1020, migrations.PaperDeliverySQL, false},                // 日历基差 P0：paper venue_type 枚举加 futures
+	{1021, migrations.ManualPositionSQL, false},               // CMC 手工仓位只读纳管：fin_manual_position
+	{1022, migrations.GraduationDecidedBySQL, false},          // 毕业委任审计列：carry_graduations.decided_by
 }

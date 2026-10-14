@@ -105,6 +105,7 @@ type CarryGraduationRow struct {
 	// D-471：18/19 已被 475a 观测列占用→顺延 22/23。
 	Risk          *GraduationRiskReport `protobuf:"bytes,22,opt,name=risk,proto3,oneof" json:"risk,omitempty"`                            // S1 风险档案（pending 即时算；decided NULL）
 	EntryWindow   string                `protobuf:"bytes,23,opt,name=entry_window,json=entryWindow,proto3" json:"entry_window,omitempty"` // S2 open / closed:<reason>（pending 即时算）
+	DecidedBy     string                `protobuf:"bytes,24,opt,name=decided_by,json=decidedBy,proto3" json:"decided_by,omitempty"`       // D-513：裁决主体——''=人工委员会；delegate:D-513=委任规则自动放行
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -296,6 +297,13 @@ func (x *CarryGraduationRow) GetRisk() *GraduationRiskReport {
 func (x *CarryGraduationRow) GetEntryWindow() string {
 	if x != nil {
 		return x.EntryWindow
+	}
+	return ""
+}
+
+func (x *CarryGraduationRow) GetDecidedBy() string {
+	if x != nil {
+		return x.DecidedBy
 	}
 	return ""
 }
@@ -1702,10 +1710,13 @@ type VenueExposureCapRow struct {
 	OverCap          bool                   `protobuf:"varint,12,opt,name=over_cap,json=overCap,proto3" json:"over_cap,omitempty"` // allocated>cap（静态闸已过载，红标警示）
 	// D-557 S1：通道白名单 join（合并单表用）——kind=venue 规则按 venue_key 命中；
 	// sim/real 双行并存取 real 优先。0=无规则行（前端显「未开通」）。
-	AllowRuleId   int64 `protobuf:"varint,13,opt,name=allow_rule_id,json=allowRuleId,proto3" json:"allow_rule_id,omitempty"`
-	AllowEnabled  bool  `protobuf:"varint,14,opt,name=allow_enabled,json=allowEnabled,proto3" json:"allow_enabled,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	AllowRuleId  int64 `protobuf:"varint,13,opt,name=allow_rule_id,json=allowRuleId,proto3" json:"allow_rule_id,omitempty"`
+	AllowEnabled bool  `protobuf:"varint,14,opt,name=allow_enabled,json=allowEnabled,proto3" json:"allow_enabled,omitempty"`
+	// D-511：外单名义 USD（台账查无记录的 broker 仓，|qty×cs×价×fx|）——透视面并入
+	// 分子呈真 delta；执法闸（exposureCapGate）语义不变仍只算系统仓。
+	ExternalNotionalUsd float64 `protobuf:"fixed64,15,opt,name=external_notional_usd,json=externalNotionalUsd,proto3" json:"external_notional_usd,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *VenueExposureCapRow) Reset() {
@@ -1834,6 +1845,13 @@ func (x *VenueExposureCapRow) GetAllowEnabled() bool {
 		return x.AllowEnabled
 	}
 	return false
+}
+
+func (x *VenueExposureCapRow) GetExternalNotionalUsd() float64 {
+	if x != nil {
+		return x.ExternalNotionalUsd
+	}
+	return 0
 }
 
 type ListVenueExposureCapsRequest struct {
@@ -2654,7 +2672,7 @@ var File_dashboardv1_graduation_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\n" +
-	"\x1cdashboardv1/graduation.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd5\a\n" +
+	"\x1cdashboardv1/graduation.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf4\a\n" +
 	"\x12CarryGraduationRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x19\n" +
 	"\bpaper_id\x18\x02 \x01(\x03R\apaperId\x12\x14\n" +
@@ -2683,7 +2701,9 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x0ecoverage_ratio\x18\x14 \x01(\x01H\aR\rcoverageRatio\x88\x01\x01\x12+\n" +
 	"\x0fmin_accrued_usd\x18\x15 \x01(\x01H\bR\rminAccruedUsd\x88\x01\x01\x12?\n" +
 	"\x04risk\x18\x16 \x01(\v2&.nox.dashboard.v1.GraduationRiskReportH\tR\x04risk\x88\x01\x01\x12!\n" +
-	"\fentry_window\x18\x17 \x01(\tR\ventryWindowB\v\n" +
+	"\fentry_window\x18\x17 \x01(\tR\ventryWindow\x12\x1d\n" +
+	"\n" +
+	"decided_by\x18\x18 \x01(\tR\tdecidedByB\v\n" +
 	"\t_mt_venueB\x13\n" +
 	"\x11_last_funding_annB\v\n" +
 	"\t_combo_idB\x11\n" +
@@ -2862,7 +2882,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12?\n" +
 	"\x04risk\x18\x03 \x01(\v2&.nox.dashboard.v1.GraduationRiskReportH\x00R\x04risk\x88\x01\x01B\a\n" +
-	"\x05_risk\"\x8e\x04\n" +
+	"\x05_risk\"\xc2\x04\n" +
 	"\x13VenueExposureCapRow\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x17\n" +
 	"\acap_usd\x18\x02 \x01(\x01R\x06capUsd\x12\x18\n" +
@@ -2880,7 +2900,8 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x0flive_updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\rliveUpdatedAt\x12\x19\n" +
 	"\bover_cap\x18\f \x01(\bR\aoverCap\x12\"\n" +
 	"\rallow_rule_id\x18\r \x01(\x03R\vallowRuleId\x12#\n" +
-	"\rallow_enabled\x18\x0e \x01(\bR\fallowEnabled\"\x1e\n" +
+	"\rallow_enabled\x18\x0e \x01(\bR\fallowEnabled\x122\n" +
+	"\x15external_notional_usd\x18\x0f \x01(\x01R\x13externalNotionalUsd\"\x1e\n" +
 	"\x1cListVenueExposureCapsRequest\"Z\n" +
 	"\x1dListVenueExposureCapsResponse\x129\n" +
 	"\x04rows\x18\x01 \x03(\v2%.nox.dashboard.v1.VenueExposureCapRowR\x04rows\"\x80\x01\n" +

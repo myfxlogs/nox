@@ -71,6 +71,7 @@ func (s *Service) ListCarryGraduations(ctx context.Context, req *connect.Request
 			Status:      g.Status,
 			CreatedAt:   g.CreatedAt.Format(time.RFC3339),
 			ComboId:     g.ComboID,
+			DecidedBy:   g.DecidedBy, // D-513：delegate:D-513 自动批透出（''=人工委员会）
 		}
 		if g.DecidedAt != nil {
 			row.DecidedAt = g.DecidedAt.Format(time.RFC3339)

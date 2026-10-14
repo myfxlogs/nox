@@ -138,6 +138,7 @@ internal/research/explorer -> internal/gen/explorer/v1
 internal/research/explorer -> internal/ir/inboxfmt
 internal/research/explorer -> internal/platform/analyst
 internal/research/explorer -> internal/store/pgstore
+internal/research/oppmatch -> internal/data/keydomain
 internal/research/oppmatch -> internal/portfolio/lifecycle
 internal/research/oppmatch -> internal/research/econ
 internal/research/oppmatch -> internal/risk/gate

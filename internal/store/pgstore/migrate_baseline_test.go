@@ -39,7 +39,7 @@ func TestBaseline_Replayable(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, migrations.BaselineSQL); err != nil {
 		t.Fatalf("baseline replay: %v", err)
 	}
-	// 84 CREATE TABLE（91−7 不搬表）；information_schema 另含 v_cycle_realrate 视图
+	// 85 CREATE TABLE（92−7 不搬表；D-512 +fin_manual_position）；information_schema 另含 v_cycle_realrate 视图
 	// 与 pg_stat_statements 扩展两对象——口径=BASE TABLE 且剔扩展件。
 	var n int
 	if err := s.Pool().QueryRow(ctx, `
@@ -48,8 +48,8 @@ func TestBaseline_Replayable(t *testing.T) {
 		  AND table_name NOT IN ('pg_stat_statements','pg_stat_statements_info')`).Scan(&n); err != nil {
 		t.Fatalf("count tables: %v", err)
 	}
-	if n != 84 {
-		t.Fatalf("baseline 表数=%d want 84（91−7 不搬表）", n)
+	if n != 85 {
+		t.Fatalf("baseline 表数=%d want 85（92−7 不搬表）", n)
 	}
 	for _, tbl := range []string{"fin_cmc_account_summary", "fin_cmc_history", "fin_cmc_positions",
 		"fin_cmc_prices", "intra_events", "paper_intra_trades", "price_alerts"} {

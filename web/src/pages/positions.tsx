@@ -113,7 +113,8 @@ export default function PositionsPage() {
               <td>
                 <input
                   type="checkbox"
-                  checked={sel.has(key(p))}
+                  disabled={p.external}
+                  checked={!p.external && sel.has(key(p))}
                   onChange={(e) =>
                     setSel((s) => {
                       const n = new Set(s);
@@ -124,14 +125,14 @@ export default function PositionsPage() {
                 />
               </td>
               <td>{p.accountAlias || p.venueKey}</td>
-              <td>{p.symbol}</td>
+              <td>{p.symbol}{p.external && <span className="warn" title="系统外单：台账查无记录——敞口并表但系统不开不平"> 外单</span>}</td>
               <td>{p.side}</td>
               <td>{p.volume}</td>
               <td>{p.currentPrice || "—"}</td>
               <td className={p.pnl >= 0 ? "good" : "crit"}>{fmtUsd(p.pnl)}</td>
               <td>{fmtUsd(p.swap)}</td>
               <td>{ts(p.openedAt)}</td>
-              <td><button disabled={busy} onClick={() => closeOne(p)}>平仓</button></td>
+              <td>{p.external ? <span style={{ opacity: 0.5 }}>不接管</span> : <button disabled={busy} onClick={() => closeOne(p)}>平仓</button>}</td>
             </tr>
           ))}
         </tbody>

@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package nox.dashboard.v1;
+
+option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
+
+import "google/protobuf/timestamp.proto";
+
+// ==== manual_position.proto —— D-512：CMC 手工仓位只读纳管 ====
+// 只读展示域：录入径只写台账行，零执行权限；不进敞口/风控/追踪读径。
+
+message ManualPosition {
+  int64 id = 1;
+  string venue_label = 2;        // 来源域标（默认 'manual'，如 'cmc'）
+  string symbol = 3;
+  double qty = 4;
+  optional double price_usd = 5; // 录入价；nil=未知价如实空态（不编值）
+  string note = 6;
+  bool enabled = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message ListManualPositionsRequest {}
+message ListManualPositionsResponse { repeated ManualPosition rows = 1; }
+
+message UpsertManualPositionRequest {
+  int64 id = 1;                  // 0=插入
+  string venue_label = 2;
+  string symbol = 3;
+  double qty = 4;
+  optional double price_usd = 5;
+  string note = 6;
+  bool enabled = 7;
+}
+message UpsertManualPositionResponse { bool ok = 1; string error = 2; int64 id = 3; }
+
+message DeleteManualPositionRequest { int64 id = 1; }
+message DeleteManualPositionResponse { bool ok = 1; string error = 2; }

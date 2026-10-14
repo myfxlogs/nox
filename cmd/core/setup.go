@@ -19,6 +19,7 @@ import (
 	"nox/internal/platform/safego"
 	"nox/internal/portfolio/budget"
 	"nox/internal/portfolio/lifecycle"
+	"nox/internal/research/oppmatch"
 	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/autotrade"
@@ -233,14 +234,13 @@ func runServices(ctx context.Context, cancel context.CancelFunc, cfg *config.Con
 		}
 		return out
 	})
-	dashSvc.SetXAssetCarryLive(atEngine.XAssetNetCarryPublic)                              // D-340R1 S1：装配补线（复审定案零调用方=live 全量缺省 R1-class 第 4 现）
-	dashSvc.SetEconSources(atEngine.PositionEconPublic, atEngine.EntryBreakevenDaysPublic) // D-014 ④：回本列/pending_entries 与闸同源
-	// D-403 S3：毕业链 approve 依赖接线（engine 先构造后接 setter，SSOT 装配序；热重载 nil=fail-closed）。
-	dashSvc.SetXAssetReloader(atEngine)
-	dashSvc.SetRejectBreaker(atEngine) // D-560 S3：熔断快照透出+ResumeXAssetCombo 行为
-	// D-264 M4.4④：预算一致性闸挂真实现（fin_strategy_budget 只读；配置器日切独写；行缺/读败 fail-closed）。
-	atEngine.RiskGate().SetBudgetChecker(budget.NewChecker(st))
-	dashSvc.SetRefreshTopic(refreshTopic) // D-508 S9：域刷新通知注入（→case 14）
+	dashSvc.SetXAssetCarryLive(atEngine.XAssetNetCarryPublic)                                                      // D-340R1 S1：装配补线（复审定案零调用方=live 全量缺省 R1-class 第 4 现）
+	dashSvc.SetEconSources(atEngine.PositionEconPublic, atEngine.EntryBreakevenDaysPublic)                         // D-014 ④：回本列/pending_entries 与闸同源
+	dashSvc.SetXAssetReloader(atEngine)                                                                            // D-403 S3：毕业链 approve 依赖接线（热重载 nil=fail-closed）
+	dashSvc.SetRejectBreaker(atEngine)                                                                             // D-560 S3：熔断快照透出+ResumeXAssetCombo 行为
+	oppmatch.GradDelegateReload = func(ctx context.Context) error { return atEngine.ReloadXAssetAllowCombos(ctx) } // D-513 委任批热载钩（nil=静默跳过）
+	atEngine.RiskGate().SetBudgetChecker(budget.NewChecker(st))                                                    // D-264 M4.4④ 预算闸真实现（行缺/读败 fail-closed）
+	dashSvc.SetRefreshTopic(refreshTopic)                                                                          // D-508 S9：域刷新通知注入（→case 14）
 	// D-443 S3/S4：venue gap 报告改表活读（60s 热重载后 ≤60s 反映实时态，非启动快照）。
 	dashSvc.SetAllowVenuesSource(func(ctx context.Context) (map[string]bool, error) {
 		v, _, err := st.LoadAutotradeAllowRules(ctx, cfg.Environment == "demo")

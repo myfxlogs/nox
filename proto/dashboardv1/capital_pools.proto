@@ -5,6 +5,7 @@ package nox.dashboard.v1;
 option go_package = "nox/internal/gen/dashboardv1;dashboardv1";
 
 import "google/protobuf/timestamp.proto";
+import "dashboardv1/manual_position.proto";
 
 // ==== capital_map.proto —— 资金地图（业主令 10-13 + D-285：按币种如实分组零换算） ====
 
@@ -51,4 +52,7 @@ message GetCapitalPoolsResponse {
   // 敞口/占比判据此标「分母缺池」而非拿陈旧值当现值。
   repeated string stale_pools = 3;
   bool denominator_incomplete = 4;
+  // D-512：手工仓位台账行（src=manual）——只读展示并入全景面；
+  // 不进分母不进敞口（物理隔离：groups/pools 恒不含 manual 行）。
+  repeated ManualPosition manual_positions = 5;
 }

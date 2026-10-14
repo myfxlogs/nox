@@ -35,6 +35,16 @@ func (s *Service) GetCapitalPools(ctx context.Context, req *connect.Request[v1.G
 	}
 	now := time.Now()
 	resp := s.buildCapitalPools(pools, legs, dcis, now)
+	// D-512：手工仓位台账并入响应（src=manual 只读展示域——不进分母不进敞口）。
+	if manual, merr := s.store.ListManualPositions(ctx); merr == nil {
+		for i := range manual {
+			if manual[i].Enabled {
+				resp.ManualPositions = append(resp.ManualPositions, manualPositionProto(&manual[i]))
+			}
+		}
+	} else {
+		log.Printf("[capital] manual positions read: %v（空列表降级不拖垮全景）", merr)
+	}
 	if resp.DenominatorIncomplete {
 		if aerr := s.store.InsertAlertDedup(ctx, "info", fmt.Sprintf(
 			"分母池鲜度失：资金地图分母缺 %s（陈旧快照剔计，恢复自动销）",

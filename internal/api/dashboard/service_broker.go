@@ -142,6 +142,7 @@ func annotateWithIndex(bps []*v1.BrokerPosition, posIdx map[string]int64, orderI
 			bp.IsArb = true
 		}
 		bp.IsSample = bp.PositionId == 0 // D-094：孤儿/收息样本行标注（Σ 排除，行仍显示）
+		bp.External = bp.PositionId == 0 // D-511：台账查无记录=系统外单（敞口并入生命周期不接管）
 	}
 }
 
@@ -212,28 +213,8 @@ func AnnotateBrokerPositions(ctx context.Context, svc *Service, bps []*v1.Broker
 	}
 }
 
-// CloseBrokerPosition 经注册执行器平仓一条 venue 持仓（人工确认后，§1）。
-func (s *Service) CloseBrokerPosition(ctx context.Context, req *connect.Request[v1.CloseBrokerPositionRequest]) (*connect.Response[v1.CloseBrokerPositionResponse], error) {
-	if _, err := s.bm.CloseOrder(ctx, req.Msg.GetVenueKey(), req.Msg.GetTicket()); err != nil {
-		return connect.NewResponse(&v1.CloseBrokerPositionResponse{Status: "FAILED", Message: err.Error()}), nil
-	}
-	return connect.NewResponse(&v1.CloseBrokerPositionResponse{Status: "CLOSED"}), nil
-}
-
-// CloseBrokerPositions 批量平仓（D-052 全平选中）：逐条执行，单条失败不阻断后续。
-// 前端二次点击确认后调用；每项独立返回 CLOSED/FAILED。
-func (s *Service) CloseBrokerPositions(ctx context.Context, req *connect.Request[v1.CloseBrokerPositionsRequest]) (*connect.Response[v1.CloseBrokerPositionsResponse], error) {
-	items := req.Msg.GetItems()
-	results := make([]*v1.CloseBrokerPositionResponse, 0, len(items))
-	for _, it := range items {
-		if _, err := s.bm.CloseOrder(ctx, it.GetVenueKey(), it.GetTicket()); err != nil {
-			results = append(results, &v1.CloseBrokerPositionResponse{Status: "FAILED", Message: err.Error()})
-			continue
-		}
-		results = append(results, &v1.CloseBrokerPositionResponse{Status: "CLOSED"})
-	}
-	return connect.NewResponse(&v1.CloseBrokerPositionsResponse{Results: results}), nil
-}
+// D-511：单/批平仓径移 service_external_exposure.go（externalCloseGuard 同域——外单
+// 生命周期零接管的守卫点与消费点同文件）。
 
 // --- 账户资产（D-053） ---
 

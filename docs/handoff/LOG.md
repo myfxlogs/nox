@@ -1,5 +1,16 @@
 # LOG.md — 阶段交付归档（NOX 仓首条）
 
+## 三票：外单敞口并表 D-511 + CMC 手工仓位纳管 D-512 + 毕业委任 D-513
+
+### ①D-511 外单敞口并表
+`annotateWithIndex` 增 `bp.External = PositionId==0`（台账查无记录=外单，position_id 标注是 CEX 腿唯一归属信号——IsSample 同集复用判据）；`externalNotionalUSD`（service_external_exposure.go）镜像 venueLegUSD 口径 |qty×cs×价×fx| 汇 venue 外单名义 → `VenueExposureCapRow.external_notional_usd` 透视透出（执法闸口径不变仍只算系统仓）；CloseBrokerPosition(s) 前置 `externalCloseGuard`（快照可识别 external→FAILED「外单不接管」，快照无行→fail-open 放行）；前端持仓页 external 行「外单」标+勾选/平仓钮摘除。
+
+### ②D-512 CMC 手工仓位只读纳管
+迁移 1021 `fin_manual_position`（qty>0/price>0 chk，价可空=未知不编）；pgstore CRUD；三 RPC（List/Upsert/Delete——录入面零执行权限，mutation info 审计留痕）；`GetCapitalPoolsResponse.manual_positions` 并入全景响应（物理隔离：groups/pools 恒不含 manual 行，敞口/浓度/风控零消费点）；资金地图「手工仓位」段+录入/删表单。
+
+### ③D-513 毕业委任规则·确定性自动放行
+`oppmatch/delegate.go` 挂 runLifecycle 尾（并入每日扫描拍零新定时器）：app_config `grad_delegate_enabled`∈{0,false,off,disabled}→全停（缺省启用=决策本意）；热载钩 `GradDelegateReload` nil→静默跳过（假授权不留）。全条件 AND：pending≥3d ∧ paper龄≥14d ∧ accrued>0 ∧ flag_warn 空 ∧ qty_usd∈(0,500] ∧ canonical∈live 白名单域 ∧ 日批<1 ∧ 现价 tick 可得（qty=QtyUSD/px）∧ structure='spot_carry'（结构域收窄 fail-closed，cfd/其他留人工）→ InsertXAssetAllowCombo + DelegateApproveCarryGraduation（decided_by='delegate:D-513'，迁移 1022 列）+ 逐笔 warn 告警 + 引擎热载。锚 TestD513：达标批+六反例全留 pending+日批闸+热载计数对拍。
+
 ## 三票：CEX 敞口闸撤除 + 跨 venue 调拨提案 + earn_redeem 抑赎粒度修
 
 ### ①D-288 CEX 占比闸撤除

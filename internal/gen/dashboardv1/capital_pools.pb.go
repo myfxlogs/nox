@@ -332,8 +332,11 @@ type GetCapitalPoolsResponse struct {
 	// 敞口/占比判据此标「分母缺池」而非拿陈旧值当现值。
 	StalePools            []string `protobuf:"bytes,3,rep,name=stale_pools,json=stalePools,proto3" json:"stale_pools,omitempty"`
 	DenominatorIncomplete bool     `protobuf:"varint,4,opt,name=denominator_incomplete,json=denominatorIncomplete,proto3" json:"denominator_incomplete,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// D-512：手工仓位台账行（src=manual）——只读展示并入全景面；
+	// 不进分母不进敞口（物理隔离：groups/pools 恒不含 manual 行）。
+	ManualPositions []*ManualPosition `protobuf:"bytes,5,rep,name=manual_positions,json=manualPositions,proto3" json:"manual_positions,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *GetCapitalPoolsResponse) Reset() {
@@ -394,11 +397,18 @@ func (x *GetCapitalPoolsResponse) GetDenominatorIncomplete() bool {
 	return false
 }
 
+func (x *GetCapitalPoolsResponse) GetManualPositions() []*ManualPosition {
+	if x != nil {
+		return x.ManualPositions
+	}
+	return nil
+}
+
 var File_dashboardv1_capital_pools_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_capital_pools_proto_rawDesc = "" +
 	"\n" +
-	"\x1fdashboardv1/capital_pools.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x18\n" +
+	"\x1fdashboardv1/capital_pools.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a!dashboardv1/manual_position.proto\"\x18\n" +
 	"\x16GetCapitalPoolsRequest\"S\n" +
 	"\x13CapitalDeployedPart\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x10\n" +
@@ -424,14 +434,15 @@ const file_dashboardv1_capital_pools_proto_rawDesc = "" +
 	"\x06equity\x18\x02 \x01(\x01R\x06equity\x12\x12\n" +
 	"\x04idle\x18\x03 \x01(\x01R\x04idle\x12\x1a\n" +
 	"\bdeployed\x18\x04 \x01(\x01R\bdeployed\x123\n" +
-	"\x05pools\x18\x05 \x03(\v2\x1d.nox.dashboard.v1.CapitalPoolR\x05pools\"\xeb\x01\n" +
+	"\x05pools\x18\x05 \x03(\v2\x1d.nox.dashboard.v1.CapitalPoolR\x05pools\"\xb8\x02\n" +
 	"\x17GetCapitalPoolsResponse\x12;\n" +
 	"\x06groups\x18\x01 \x03(\v2#.nox.dashboard.v1.CapitalPoolsGroupR\x06groups\x12;\n" +
 	"\vcomputed_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"computedAt\x12\x1f\n" +
 	"\vstale_pools\x18\x03 \x03(\tR\n" +
 	"stalePools\x125\n" +
-	"\x16denominator_incomplete\x18\x04 \x01(\bR\x15denominatorIncompleteB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x16denominator_incomplete\x18\x04 \x01(\bR\x15denominatorIncomplete\x12K\n" +
+	"\x10manual_positions\x18\x05 \x03(\v2 .nox.dashboard.v1.ManualPositionR\x0fmanualPositionsB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_capital_pools_proto_rawDescOnce sync.Once
@@ -453,6 +464,7 @@ var file_dashboardv1_capital_pools_proto_goTypes = []any{
 	(*CapitalPoolsGroup)(nil),       // 3: nox.dashboard.v1.CapitalPoolsGroup
 	(*GetCapitalPoolsResponse)(nil), // 4: nox.dashboard.v1.GetCapitalPoolsResponse
 	(*timestamppb.Timestamp)(nil),   // 5: google.protobuf.Timestamp
+	(*ManualPosition)(nil),          // 6: nox.dashboard.v1.ManualPosition
 }
 var file_dashboardv1_capital_pools_proto_depIdxs = []int32{
 	5, // 0: nox.dashboard.v1.CapitalPool.updated_at:type_name -> google.protobuf.Timestamp
@@ -460,11 +472,12 @@ var file_dashboardv1_capital_pools_proto_depIdxs = []int32{
 	2, // 2: nox.dashboard.v1.CapitalPoolsGroup.pools:type_name -> nox.dashboard.v1.CapitalPool
 	3, // 3: nox.dashboard.v1.GetCapitalPoolsResponse.groups:type_name -> nox.dashboard.v1.CapitalPoolsGroup
 	5, // 4: nox.dashboard.v1.GetCapitalPoolsResponse.computed_at:type_name -> google.protobuf.Timestamp
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	6, // 5: nox.dashboard.v1.GetCapitalPoolsResponse.manual_positions:type_name -> nox.dashboard.v1.ManualPosition
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_capital_pools_proto_init() }
@@ -472,6 +485,7 @@ func file_dashboardv1_capital_pools_proto_init() {
 	if File_dashboardv1_capital_pools_proto != nil {
 		return
 	}
+	file_dashboardv1_manual_position_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

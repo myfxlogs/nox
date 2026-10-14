@@ -41,6 +41,7 @@ type CarryGraduation struct {
 	DecidedNote    string
 	ComboID        *int64  // approve 写入的白名单行 id；NULL=无写入
 	FlagWarn       *string // D-463 S2：warn 旗标命中透出（拼接 reason 短串；NULL=无旗）
+	DecidedBy      string  // D-513：裁决主体——''=人工委员会 RPC；'delegate:D-513'=委任规则自动批
 }
 
 // ListPaperForGraduation D-403 S2：毕业判定候选全集——active 行 + 近 14 天 exited 行
@@ -82,7 +83,7 @@ func (g CarryGraduation) VenuePair() string {
 func (s *Store) GetCarryGraduation(ctx context.Context, id int64) (*CarryGraduation, error) {
 	row := s.pool.QueryRow(ctx, `
 		SELECT id, paper_id, venue, venue_a, venue_b, venue_type_a, venue_type_b, symbol, structure, mt_venue, age_days, accrued_usd,
-		       last_funding_ann, net_all_in_usd, status, created_at, decided_at, decided_note, combo_id, flag_warn
+		       last_funding_ann, net_all_in_usd, status, created_at, decided_at, decided_note, combo_id, flag_warn, decided_by
 		FROM carry_graduations WHERE id = $1`, id)
 	return scanCarryGraduation(row)
 }
@@ -91,7 +92,7 @@ func (s *Store) GetCarryGraduation(ctx context.Context, id int64) (*CarryGraduat
 func (s *Store) ListCarryGraduations(ctx context.Context) ([]CarryGraduation, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, paper_id, venue, venue_a, venue_b, venue_type_a, venue_type_b, symbol, structure, mt_venue, age_days, accrued_usd,
-		       last_funding_ann, net_all_in_usd, status, created_at, decided_at, decided_note, combo_id, flag_warn
+		       last_funding_ann, net_all_in_usd, status, created_at, decided_at, decided_note, combo_id, flag_warn, decided_by
 		FROM carry_graduations ORDER BY created_at DESC, id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list carry graduations: %w", err)
@@ -102,7 +103,7 @@ func (s *Store) ListCarryGraduations(ctx context.Context) ([]CarryGraduation, er
 		var g CarryGraduation
 		if err := rows.Scan(&g.ID, &g.PaperID, &g.Venue, &g.VenueA, &g.VenueB, &g.VenueTypeA, &g.VenueTypeB, &g.Symbol, &g.Structure, &g.MtVenue,
 			&g.AgeDays, &g.AccruedUSD, &g.LastFundingAnn, &g.NetAllInUSD, &g.Status, &g.CreatedAt,
-			&g.DecidedAt, &g.DecidedNote, &g.ComboID, &g.FlagWarn); err != nil {
+			&g.DecidedAt, &g.DecidedNote, &g.ComboID, &g.FlagWarn, &g.DecidedBy); err != nil {
 			return nil, err
 		}
 		out = append(out, g)
@@ -136,6 +137,30 @@ func (s *Store) UpdateCarryGraduationDecision(ctx context.Context, id int64, sta
 		return fmt.Errorf("update carry graduation %d: not pending", id)
 	}
 	return nil
+}
+
+// DelegateApproveCarryGraduation D-513 委任批落账：status=approved + decided_by='delegate:D-513'
+// +combo_id/decided_note，pending 守卫同人工径（并发/已裁决零行更新→err 由调用方转跳过）。
+func (s *Store) DelegateApproveCarryGraduation(ctx context.Context, id int64, comboID *int64, note string) error {
+	ct, err := s.pool.Exec(ctx, `
+		UPDATE carry_graduations SET status = 'approved', decided_at = now(), decided_by = 'delegate:D-513', combo_id = $2, decided_note = $3
+		WHERE id = $1 AND status = 'pending'`, id, comboID, note)
+	if err != nil {
+		return fmt.Errorf("delegate approve graduation %d: %w", id, err)
+	}
+	if ct.RowsAffected() == 0 {
+		return fmt.Errorf("delegate approve graduation %d: not pending", id)
+	}
+	return nil
+}
+
+// CountDelegateGraduationsToday 当日（DB 历日）委任批计数——D-513 日批≤1 闸数据源。
+func (s *Store) CountDelegateGraduationsToday(ctx context.Context) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM carry_graduations
+		WHERE decided_by = 'delegate:D-513' AND decided_at >= date_trunc('day', now())`).Scan(&n)
+	return n, err
 }
 
 // XAssetComboInsert approve 写白名单行的入参（列=xasset_allow_combos 全可写列）。
@@ -202,7 +227,7 @@ func scanCarryGraduation(row pgx.Row) (*CarryGraduation, error) {
 	var g CarryGraduation
 	err := row.Scan(&g.ID, &g.PaperID, &g.Venue, &g.VenueA, &g.VenueB, &g.VenueTypeA, &g.VenueTypeB, &g.Symbol, &g.Structure, &g.MtVenue,
 		&g.AgeDays, &g.AccruedUSD, &g.LastFundingAnn, &g.NetAllInUSD, &g.Status, &g.CreatedAt,
-		&g.DecidedAt, &g.DecidedNote, &g.ComboID, &g.FlagWarn)
+		&g.DecidedAt, &g.DecidedNote, &g.ComboID, &g.FlagWarn, &g.DecidedBy)
 	if err != nil {
 		return nil, err
 	}

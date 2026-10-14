@@ -67,3 +67,9 @@ var OppHypothesisSQL string // 新品类假设行表
 
 //go:embed 1020_paper_delivery.sql
 var PaperDeliverySQL string // 日历基差 P0 纸面轨：venue_type 枚举加 futures
+
+//go:embed 1021_manual_position.sql
+var ManualPositionSQL string // CMC 手工仓位只读纳管：fin_manual_position
+
+//go:embed 1022_graduation_decided_by.sql
+var GraduationDecidedBySQL string // 毕业委任审计列：carry_graduations.decided_by

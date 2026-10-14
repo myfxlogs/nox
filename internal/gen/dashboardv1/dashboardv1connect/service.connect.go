@@ -274,6 +274,15 @@ const (
 	// DashboardServiceDeleteWatchRuleProcedure is the fully-qualified name of the DashboardService's
 	// DeleteWatchRule RPC.
 	DashboardServiceDeleteWatchRuleProcedure = "/nox.dashboard.v1.DashboardService/DeleteWatchRule"
+	// DashboardServiceListManualPositionsProcedure is the fully-qualified name of the
+	// DashboardService's ListManualPositions RPC.
+	DashboardServiceListManualPositionsProcedure = "/nox.dashboard.v1.DashboardService/ListManualPositions"
+	// DashboardServiceUpsertManualPositionProcedure is the fully-qualified name of the
+	// DashboardService's UpsertManualPosition RPC.
+	DashboardServiceUpsertManualPositionProcedure = "/nox.dashboard.v1.DashboardService/UpsertManualPosition"
+	// DashboardServiceDeleteManualPositionProcedure is the fully-qualified name of the
+	// DashboardService's DeleteManualPosition RPC.
+	DashboardServiceDeleteManualPositionProcedure = "/nox.dashboard.v1.DashboardService/DeleteManualPosition"
 	// DashboardServiceGetFinanceOverviewProcedure is the fully-qualified name of the DashboardService's
 	// GetFinanceOverview RPC.
 	DashboardServiceGetFinanceOverviewProcedure = "/nox.dashboard.v1.DashboardService/GetFinanceOverview"
@@ -488,6 +497,10 @@ type DashboardServiceClient interface {
 	ListWatchRules(context.Context, *connect.Request[dashboardv1.ListWatchRulesRequest]) (*connect.Response[dashboardv1.ListWatchRulesResponse], error)
 	UpsertWatchRule(context.Context, *connect.Request[dashboardv1.UpsertWatchRuleRequest]) (*connect.Response[dashboardv1.UpsertWatchRuleResponse], error)
 	DeleteWatchRule(context.Context, *connect.Request[dashboardv1.DeleteWatchRuleRequest]) (*connect.Response[dashboardv1.DeleteWatchRuleResponse], error)
+	// D-512：手工仓位只读台账（录入面零执行权限；行只进资金全景展示）。
+	ListManualPositions(context.Context, *connect.Request[dashboardv1.ListManualPositionsRequest]) (*connect.Response[dashboardv1.ListManualPositionsResponse], error)
+	UpsertManualPosition(context.Context, *connect.Request[dashboardv1.UpsertManualPositionRequest]) (*connect.Response[dashboardv1.UpsertManualPositionResponse], error)
+	DeleteManualPosition(context.Context, *connect.Request[dashboardv1.DeleteManualPositionRequest]) (*connect.Response[dashboardv1.DeleteManualPositionResponse], error)
 	// D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
 	GetFinanceOverview(context.Context, *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error)
 	// 资金地图（业主令 10-13 + D-285）：按币种分组的池级 权益/闲置/在跑 归因。
@@ -1040,6 +1053,24 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("DeleteWatchRule")),
 			connect.WithClientOptions(opts...),
 		),
+		listManualPositions: connect.NewClient[dashboardv1.ListManualPositionsRequest, dashboardv1.ListManualPositionsResponse](
+			httpClient,
+			baseURL+DashboardServiceListManualPositionsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListManualPositions")),
+			connect.WithClientOptions(opts...),
+		),
+		upsertManualPosition: connect.NewClient[dashboardv1.UpsertManualPositionRequest, dashboardv1.UpsertManualPositionResponse](
+			httpClient,
+			baseURL+DashboardServiceUpsertManualPositionProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("UpsertManualPosition")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteManualPosition: connect.NewClient[dashboardv1.DeleteManualPositionRequest, dashboardv1.DeleteManualPositionResponse](
+			httpClient,
+			baseURL+DashboardServiceDeleteManualPositionProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("DeleteManualPosition")),
+			connect.WithClientOptions(opts...),
+		),
 		getFinanceOverview: connect.NewClient[dashboardv1.GetFinanceOverviewRequest, dashboardv1.GetFinanceOverviewResponse](
 			httpClient,
 			baseURL+DashboardServiceGetFinanceOverviewProcedure,
@@ -1324,6 +1355,9 @@ type dashboardServiceClient struct {
 	listWatchRules               *connect.Client[dashboardv1.ListWatchRulesRequest, dashboardv1.ListWatchRulesResponse]
 	upsertWatchRule              *connect.Client[dashboardv1.UpsertWatchRuleRequest, dashboardv1.UpsertWatchRuleResponse]
 	deleteWatchRule              *connect.Client[dashboardv1.DeleteWatchRuleRequest, dashboardv1.DeleteWatchRuleResponse]
+	listManualPositions          *connect.Client[dashboardv1.ListManualPositionsRequest, dashboardv1.ListManualPositionsResponse]
+	upsertManualPosition         *connect.Client[dashboardv1.UpsertManualPositionRequest, dashboardv1.UpsertManualPositionResponse]
+	deleteManualPosition         *connect.Client[dashboardv1.DeleteManualPositionRequest, dashboardv1.DeleteManualPositionResponse]
 	getFinanceOverview           *connect.Client[dashboardv1.GetFinanceOverviewRequest, dashboardv1.GetFinanceOverviewResponse]
 	getCapitalPools              *connect.Client[dashboardv1.GetCapitalPoolsRequest, dashboardv1.GetCapitalPoolsResponse]
 	executeSpotCarryDemo         *connect.Client[dashboardv1.ExecuteSpotCarryDemoRequest, dashboardv1.ExecuteSpotCarryDemoResponse]
@@ -1764,6 +1798,21 @@ func (c *dashboardServiceClient) DeleteWatchRule(ctx context.Context, req *conne
 	return c.deleteWatchRule.CallUnary(ctx, req)
 }
 
+// ListManualPositions calls nox.dashboard.v1.DashboardService.ListManualPositions.
+func (c *dashboardServiceClient) ListManualPositions(ctx context.Context, req *connect.Request[dashboardv1.ListManualPositionsRequest]) (*connect.Response[dashboardv1.ListManualPositionsResponse], error) {
+	return c.listManualPositions.CallUnary(ctx, req)
+}
+
+// UpsertManualPosition calls nox.dashboard.v1.DashboardService.UpsertManualPosition.
+func (c *dashboardServiceClient) UpsertManualPosition(ctx context.Context, req *connect.Request[dashboardv1.UpsertManualPositionRequest]) (*connect.Response[dashboardv1.UpsertManualPositionResponse], error) {
+	return c.upsertManualPosition.CallUnary(ctx, req)
+}
+
+// DeleteManualPosition calls nox.dashboard.v1.DashboardService.DeleteManualPosition.
+func (c *dashboardServiceClient) DeleteManualPosition(ctx context.Context, req *connect.Request[dashboardv1.DeleteManualPositionRequest]) (*connect.Response[dashboardv1.DeleteManualPositionResponse], error) {
+	return c.deleteManualPosition.CallUnary(ctx, req)
+}
+
 // GetFinanceOverview calls nox.dashboard.v1.DashboardService.GetFinanceOverview.
 func (c *dashboardServiceClient) GetFinanceOverview(ctx context.Context, req *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error) {
 	return c.getFinanceOverview.CallUnary(ctx, req)
@@ -2043,6 +2092,10 @@ type DashboardServiceHandler interface {
 	ListWatchRules(context.Context, *connect.Request[dashboardv1.ListWatchRulesRequest]) (*connect.Response[dashboardv1.ListWatchRulesResponse], error)
 	UpsertWatchRule(context.Context, *connect.Request[dashboardv1.UpsertWatchRuleRequest]) (*connect.Response[dashboardv1.UpsertWatchRuleResponse], error)
 	DeleteWatchRule(context.Context, *connect.Request[dashboardv1.DeleteWatchRuleRequest]) (*connect.Response[dashboardv1.DeleteWatchRuleResponse], error)
+	// D-512：手工仓位只读台账（录入面零执行权限；行只进资金全景展示）。
+	ListManualPositions(context.Context, *connect.Request[dashboardv1.ListManualPositionsRequest]) (*connect.Response[dashboardv1.ListManualPositionsResponse], error)
+	UpsertManualPosition(context.Context, *connect.Request[dashboardv1.UpsertManualPositionRequest]) (*connect.Response[dashboardv1.UpsertManualPositionResponse], error)
+	DeleteManualPosition(context.Context, *connect.Request[dashboardv1.DeleteManualPositionRequest]) (*connect.Response[dashboardv1.DeleteManualPositionResponse], error)
 	// D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
 	GetFinanceOverview(context.Context, *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error)
 	// 资金地图（业主令 10-13 + D-285）：按币种分组的池级 权益/闲置/在跑 归因。
@@ -2591,6 +2644,24 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("DeleteWatchRule")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListManualPositionsHandler := connect.NewUnaryHandler(
+		DashboardServiceListManualPositionsProcedure,
+		svc.ListManualPositions,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListManualPositions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceUpsertManualPositionHandler := connect.NewUnaryHandler(
+		DashboardServiceUpsertManualPositionProcedure,
+		svc.UpsertManualPosition,
+		connect.WithSchema(dashboardServiceMethods.ByName("UpsertManualPosition")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceDeleteManualPositionHandler := connect.NewUnaryHandler(
+		DashboardServiceDeleteManualPositionProcedure,
+		svc.DeleteManualPosition,
+		connect.WithSchema(dashboardServiceMethods.ByName("DeleteManualPosition")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceGetFinanceOverviewHandler := connect.NewUnaryHandler(
 		DashboardServiceGetFinanceOverviewProcedure,
 		svc.GetFinanceOverview,
@@ -2953,6 +3024,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceUpsertWatchRuleHandler.ServeHTTP(w, r)
 		case DashboardServiceDeleteWatchRuleProcedure:
 			dashboardServiceDeleteWatchRuleHandler.ServeHTTP(w, r)
+		case DashboardServiceListManualPositionsProcedure:
+			dashboardServiceListManualPositionsHandler.ServeHTTP(w, r)
+		case DashboardServiceUpsertManualPositionProcedure:
+			dashboardServiceUpsertManualPositionHandler.ServeHTTP(w, r)
+		case DashboardServiceDeleteManualPositionProcedure:
+			dashboardServiceDeleteManualPositionHandler.ServeHTTP(w, r)
 		case DashboardServiceGetFinanceOverviewProcedure:
 			dashboardServiceGetFinanceOverviewHandler.ServeHTTP(w, r)
 		case DashboardServiceGetCapitalPoolsProcedure:
@@ -3350,6 +3427,18 @@ func (UnimplementedDashboardServiceHandler) UpsertWatchRule(context.Context, *co
 
 func (UnimplementedDashboardServiceHandler) DeleteWatchRule(context.Context, *connect.Request[dashboardv1.DeleteWatchRuleRequest]) (*connect.Response[dashboardv1.DeleteWatchRuleResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.DeleteWatchRule is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListManualPositions(context.Context, *connect.Request[dashboardv1.ListManualPositionsRequest]) (*connect.Response[dashboardv1.ListManualPositionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListManualPositions is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) UpsertManualPosition(context.Context, *connect.Request[dashboardv1.UpsertManualPositionRequest]) (*connect.Response[dashboardv1.UpsertManualPositionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.UpsertManualPosition is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) DeleteManualPosition(context.Context, *connect.Request[dashboardv1.DeleteManualPositionRequest]) (*connect.Response[dashboardv1.DeleteManualPositionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.DeleteManualPosition is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetFinanceOverview(context.Context, *connect.Request[dashboardv1.GetFinanceOverviewRequest]) (*connect.Response[dashboardv1.GetFinanceOverviewResponse], error) {

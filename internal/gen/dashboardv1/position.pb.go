@@ -980,6 +980,7 @@ type BrokerPosition struct {
 	AsOf                        *timestamppb.Timestamp `protobuf:"bytes,33,opt,name=as_of,json=asOf,proto3" json:"as_of,omitempty"`                                                                           // D-094：本行数据的事件时戳（MT=OnOrderProfit 帧到达时刻；CEX=权威回读时刻）透传——前端展示数据新鲜度，断流陈旧可观测；nil=未知
 	IsSample                    bool                   `protobuf:"varint,34,opt,name=is_sample,json=isSample,proto3" json:"is_sample,omitempty"`                                                              // D-094：孤儿/收息样本行（position_id=0 未关联系统仓，如手动收息 0.002 XAUUSDT）——Σ 统计条排除，行本身仍显示
 	PriceAt                     *timestamppb.Timestamp `protobuf:"bytes,35,opt,name=price_at,json=priceAt,proto3" json:"price_at,omitempty"`                                                                  // D-162：现价时刻（报价 tick 真钟；fresh=false 时=stale 价时点——前端标「休市/陈旧」）；nil=无报价
+	External                    bool                   `protobuf:"varint,36,opt,name=external,proto3" json:"external,omitempty"`                                                                              // D-511：系统外单（broker 返回值对台账 position_legs 查无记录=position_id 0）——敞口透视并入但生命周期永不接管（不开不平不追踪），前端禁执行钮
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -1257,6 +1258,13 @@ func (x *BrokerPosition) GetPriceAt() *timestamppb.Timestamp {
 		return x.PriceAt
 	}
 	return nil
+}
+
+func (x *BrokerPosition) GetExternal() bool {
+	if x != nil {
+		return x.External
+	}
+	return false
 }
 
 type ListBrokerPositionsRequest struct {
@@ -2498,7 +2506,7 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\"g\n" +
 	"\x15ListPositionsResponse\x128\n" +
 	"\tpositions\x18\x01 \x03(\v2\x1a.nox.dashboard.v1.PositionR\tpositions\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\"\x86\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"\xa2\n" +
 	"\n" +
 	"\x0eBrokerPosition\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1b\n" +
@@ -2540,7 +2548,8 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x13probe_auto_close_at\x18  \x01(\v2\x1a.google.protobuf.TimestampR\x10probeAutoCloseAt\x12/\n" +
 	"\x05as_of\x18! \x01(\v2\x1a.google.protobuf.TimestampR\x04asOf\x12\x1b\n" +
 	"\tis_sample\x18\" \x01(\bR\bisSample\x125\n" +
-	"\bprice_at\x18# \x01(\v2\x1a.google.protobuf.TimestampR\apriceAtB\x19\n" +
+	"\bprice_at\x18# \x01(\v2\x1a.google.protobuf.TimestampR\apriceAt\x12\x1a\n" +
+	"\bexternal\x18$ \x01(\bR\bexternalB\x19\n" +
 	"\x17_close_now_estimate_usd\"6\n" +
 	"\x1aListBrokerPositionsRequest\x12\x18\n" +
 	"\arefresh\x18\x01 \x01(\bR\arefresh\"\xc7\x01\n" +
