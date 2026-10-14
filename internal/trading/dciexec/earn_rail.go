@@ -173,15 +173,13 @@ func (r *okxEarnRail) Subscribe(ctx context.Context, _ string, amount float64) (
 		if err != nil {
 			return "", err
 		}
-		mv := needed
-		if unified < mv {
-			mv = unified
-		}
-		if mv <= 0 {
-			return "", fmt.Errorf("okx 申购短差 %.8f 且 unified 无款可划——fail-closed 不申购", needed)
+		// 短差须足额盖——unified<needed 划过去申购照样败（尘额划转 SG #22 实证
+		// venue 400 Parameter amt error）：unified 盖不住短差=fail-closed 不申购。
+		if unified < needed {
+			return "", fmt.Errorf("okx 申购短差 %.8f、unified 可动 %.8f 盖不住——fail-closed 不申购", needed, unified)
 		}
 		tb := fmt.Sprintf(`{"ccy":"USDT","amt":"%s","from":"18","to":"6","type":"0"}`,
-			strconv.FormatFloat(mv, 'f', 8, 64))
+			strconv.FormatFloat(needed, 'f', 8, 64))
 		if _, err := r.req(ctx, http.MethodPost, "/api/v5/asset/transfer", tb); err != nil {
 			return "", fmt.Errorf("okx 18→6 划转败（不试申购）: %w", err)
 		}
