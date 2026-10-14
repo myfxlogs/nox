@@ -183,3 +183,17 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 ## D-521 假设裁决第二拍+裁决队列浮面 2026-10-14
 - **裁决**：17 行 proposed 全留零批准——cfd_swap 裸向 9=D-518 留观件等对冲化设计；cfd_swap_hedged 7=对冲腿假设净息 0.7~3.5%/yr 不显著跑赢 earn 基线且两腿执行是 novel 机制非 generic_yield 参数；venue novel 3=无族可入无机制桥。S2 冻结面正确续命。
 - **结构缺口**：裁决队列不自浮面——proposed 积压是环境态非任务面，S2 激活依赖裁决席想起开拍=不稳依赖。浮面件另立票。
+
+## D-522 NAV 按结算币种单源（2026-10-15 晨检裁定）
+- **实证**：`SumNav`（pgstore/nav.go:36）currency='USD' 恒等过滤——CEX USDT 池 ≈7794 全跳过，`fin_nav_daily`=4247.63 仅为实盘 ~12k 的 1/3；配置器 `nav×(1−reserve)/live` 与 D-030 分母同失真（D-519 移资 CEX 后矛盾显形）。
+- **裁**：NAV 不改「单数」语义，改**按结算币种分账**——`fin_nav_daily` 变 (day,currency) 行（USD/USDT 各一，零换算不跨币加总）；配置器预算派生键=策略结算币种（earn/dci_buy_low=USDT 读 nav_usdt，cfd/xasset 类=USD 读 nav_usd，结算币种=提案 invest_ccy 同口径）；投资人页/日报双行展示。
+- **边界**：零换算红线不动（跨币永不加总求 NAV 总额——D-030 目标分母同受 D-285 约束，按币种分别记账评估）；USD-only 行存量不迁（历史如实）；预算缺席行仍 fail-closed。
+
+## D-523 快照读面=账本真值，两写口对齐（2026-10-15 晨检裁定）
+- **实证**：gate:perp 快照 998（9-30 化石，venue 实有 perp=0 现货已出借）/binance:perp 1000（实有 1344）/binance:funding 9-30 化石；binance spot 曾落 0 而 venue 实有 1088（WS 事件漏发窗，REST 校准只回写活账本禁写快照——D-132 行 82「WS 覆盖键不写」）；gate:earn 键无写口（venue 实有 1999.64 uni-lend 出借）。而 `ExplorerIdleFunds`/`SumNav`/`CapitalPoolSnapshots`/资金地图 idle 列全部读此表当实时面——「审计留痕」与「消费端当现值」矛盾。
+- **裁**：`fin_venue_account_snapshot` 定位恢复=**账本真值面**（读端无需改），写口二补——①REST 校准/活账本回写发生值变时同步落快照行（src=rest_calib），WS 覆盖键不豁免「值变即写」；②WS 重连成功（onReconnect 既有钩）触发一次 venue 余额实读→与末行比对值变落行（断窗漏事件自愈）。③gate:earn 键接入 rest_poll 写口同 binance:earn 先例。零新定时器——两径皆事件驱动（校准事件发生/重连事件发生）。
+
+## D-524 earn 收益增量归属入账（2026-10-15 晨检裁定）
+- **实证**：okx savings `earnings` 累计 70.89、`loanAmt` 复投增（#26 下单 1938.00→现 2117.77 含业主另入）；gate `lend_records` type=reinvest ~0.0054 USDT/h 落 `lent_amount`（venue 实拍 1999.5978→1999.6412）；binance earn 同构。`income_events` 全期 earn 收益=0 行——D-030 ≥8% 缺账本证据面。
+- **裁**：earn 池（venue_type=earn / dci_order 理财形 filled 行 venue_key 面）收益归属=**增量法**——池行 equity 新写时 Δ(equity)−已归属流（本系统申购/赎回单、已知划转）=收益增量 → income_events 行（income_type=earn_yield，amount_usd=Δ 面值——零换算面各币种同视）；venue 侧逐笔可查的（gate lend_records reinvest、binance earn history 如可取）优先按 venue 回执归，取不到走池增量。负 Δ 无对应赎单=如实负收益行。
+- **边界**：增量归属挂快照写径（D-523 写口同源同拍），零新定时器零轮询；BTC 归属份（D-516 share=0.3334）收益同乘系数；收益归属不做税/费拆（venue 净值即实收）。
