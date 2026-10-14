@@ -154,3 +154,39 @@ func renderDeadCornerSection(cs []deadCorner) string {
 	}
 	return buf.String()
 }
+
+// loadAdjudicationQueue 裁决队列浮面（D-521 续——proposed 积压是环境态非任务
+// 面）：fin_opp_hypothesis status='proposed' 计数+分类键 top3。只读聚合件。
+func loadAdjudicationQueue(ctx context.Context, pool *pgxpool.Pool) (int, []string, error) {
+	var n int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM fin_opp_hypothesis WHERE status='proposed'`).Scan(&n); err != nil {
+		return 0, nil, fmt.Errorf("adjudication queue count: %w", err)
+	}
+	rows, err := pool.Query(ctx, `
+		SELECT split_part(category_key,'|',1) AS k, count(*) c
+		FROM fin_opp_hypothesis WHERE status='proposed'
+		GROUP BY k ORDER BY c DESC, k LIMIT 3`)
+	if err != nil {
+		return 0, nil, fmt.Errorf("adjudication queue top: %w", err)
+	}
+	defer rows.Close()
+	var tops []string
+	for rows.Next() {
+		var k string
+		var c int
+		if err := rows.Scan(&k, &c); err != nil {
+			return 0, nil, err
+		}
+		tops = append(tops, fmt.Sprintf("%s×%d", k, c))
+	}
+	return n, tops, rows.Err()
+}
+
+// renderAdjudicationQueue 「待裁假设」行——N=0 照常印（同死角段防静默惯例）。
+func renderAdjudicationQueue(n int, tops []string) string {
+	if len(tops) == 0 {
+		return fmt.Sprintf("待裁假设：%d 条（proposed）\n", n)
+	}
+	return fmt.Sprintf("待裁假设：%d 条（proposed，分类键 top3：%s）\n", n, strings.Join(tops, "、"))
+}

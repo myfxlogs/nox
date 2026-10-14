@@ -926,3 +926,7 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **接货处置 D-517 okx 形**：跨币到账→`6→18` 回划（sfp 到账在 funding）→`POST /trade/order` market sell ccy-USDT→`GET /trade/order` accFillSz×avgPx 得额→`dci_exercise_disposal` 净损益入账；败=留仓标 pending_disposal 不臆造。
 - **redeem-quote/redeem 提前赎回**：无触发消费面——接线即成死代码，如实留续（文档已在票史，触发面立后再接）。
 - **锚**：`TestOkxSettle_SettledBooks` mock settled 行→翻态 USDT 1010.5/利息 10.5 对拍+LIVE 零翻；全包 -race 绿。
+
+## 2026-10-15 裁决队列浮面（实施席）
+- **浮面**：digest 报告序列尾段加「待裁假设：N 条（proposed，分类键 top3：k×n、…）」——`fin_opp_hypothesis status='proposed'` count+`split_part(category_key,'|',1)` top3 聚合；N=0 照常印行防静默；读败段跳过 warn 留痕同惯例。只加推送行——批准键归裁决席零动。
+- **锚**：自足库 proposed 3/approved 1→n≥3+top1 对拍+N=0 渲染行。

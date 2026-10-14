@@ -142,3 +142,40 @@ func TestDeadCorner_RenderZero(t *testing.T) {
 		t.Fatalf("N=0 段缺行: %s", md)
 	}
 }
+
+// 裁决队列浮面锚：proposed 计数+分类键 top3；N=0 照常印行。
+func TestAdjudicationQueue(t *testing.T) {
+	dsn := os.Getenv("NOX_TEST_DSN")
+	if dsn == "" {
+		dsn = "postgres://nox:nox@127.0.0.1:5434/digest_dead_test"
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Skipf("pg: %v", err)
+	}
+	defer pool.Close()
+	if _, err := pool.Exec(ctx,
+		`CREATE TABLE IF NOT EXISTS fin_opp_hypothesis (category_key text, status text)`); err != nil {
+		t.Fatalf("schema: %v", err)
+	}
+	pool.Exec(ctx, `DELETE FROM fin_opp_hypothesis WHERE category_key LIKE 'xadq%'`)
+	defer pool.Exec(ctx, `DELETE FROM fin_opp_hypothesis WHERE category_key LIKE 'xadq%'`)
+	if _, err := pool.Exec(ctx, `INSERT INTO fin_opp_hypothesis (category_key, status) VALUES
+		('xadq_a|v|s','proposed'),('xadq_a|v|s2','proposed'),('xadq_b|v|s','proposed'),('xadq_a|v|s3','approved')`); err != nil {
+		t.Fatal(err)
+	}
+	n, tops, err := loadAdjudicationQueue(ctx, pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n < 3 || len(tops) == 0 || tops[0] != "xadq_a×2" {
+		t.Fatalf("n=%d tops=%v", n, tops)
+	}
+	if out := renderAdjudicationQueue(n, tops); !strings.Contains(out, "待裁假设") || !strings.Contains(out, "xadq_a×2") {
+		t.Fatalf("render: %s", out)
+	}
+	if out := renderAdjudicationQueue(0, nil); !strings.Contains(out, "待裁假设：0") {
+		t.Fatalf("N=0 照常印行: %s", out)
+	}
+}
