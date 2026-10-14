@@ -33,6 +33,7 @@ type okxSwapCache struct {
 	FetchedAt   time.Time       `json:"fetched_at"`
 	Instruments []okxInstrument `json:"instruments"`
 	Tickers     []okxTicker     `json:"tickers"`
+	Options     []okxInstrument `json:"options"` // instType=OPTION 载荷（品类信号原料，不收行）
 }
 
 type okxInstrument struct {
@@ -95,7 +96,15 @@ func (o okx) swapFetch(ctx context.Context) (okxSwapCache, error) {
 		}
 		tk = append(tk, tkResp.Data...)
 	}
-	return okxSwapCache{FetchedAt: time.Now(), Instruments: ins, Tickers: tk}, nil
+	// 品类侦测面：instType 全集 {SPOT,MARGIN,SWAP,FUTURES,OPTION} 中 OPTION 为
+	// 已知未收品类——拉 instruments 计数产信号（tickers 不拉，非评估轴）。
+	var opt struct {
+		Data []okxInstrument `json:"data"`
+	}
+	if err := getJSON(ctx, o.hc, o.base+"/api/v5/public/instruments?instType=OPTION", &opt); err != nil {
+		log.Printf("[universe-radar] okx OPTION instruments 读败（品类信号该源缺）: %v", err)
+	}
+	return okxSwapCache{FetchedAt: time.Now(), Instruments: ins, Tickers: tk, Options: opt.Data}, nil
 }
 
 func (o okx) Scan(ctx context.Context) ([]Row, error) {

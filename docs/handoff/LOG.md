@@ -586,3 +586,13 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - 部署坑记录在案：instruments 缓存存序列化 struct 非原始 JSON——扩字段后须删 /root/.cache/nox-universe-radar/*.json 逼新拉（SG 已实证此坑）。
 - 锚升：USD_UM 收+BTC-USD-* 剔+index uly 映射对拍+binance 交割 mark/index 接线断言。
 - SG 验收残留：fin_cex_universe 现 *-USD_UM-* FUTURES 行+basis_ann 量级合理；binance 4 交割行 basis_ann 出数；轮零告警洪泛。
+
+## 2026-10-14 新品类自发现管线 S1 @pending
+- 迁移 1019：fin_opp_hypothesis（category_key UNIQUE 幂等锚；status chk proposed/approved/rejected/trialing；rejected 在册=弃件记忆抑重推——UpsertHypothesis ON CONFLICT 只刷 last_seen/sample/detail，xmax=0 判新插）。
+- a 级侦测：catSource 可选接口——binance 收轴集外 (contractType,quoteAsset) 对（月度交割/币本位等）；okx FUTURES 白名单外中段（币本位）+OPTION instType 存在性（instruments?instType=OPTION 入 24h 缓存载荷）；gate contracts 形态键（gateShape 数字归一 D，收轴 USDT/USDT_D 外）。instType 无全集枚举端点=全新 instType 不可侦，b 级公告源缺位如实记（设计稿 §2 D# 待裁）。
+- LLM memo：kbreport.ResolveClient（ai_settings 单源）+LLMLogger(role=category_memo)；JSON schema 闸（family_fit∈{generic_yield,novel,none} 越域降 novel、memo≤2000、无 JSON 占位）；只写 family_fit/params_proto/memo 三列不碰 status（批准键永不进 LLM 手）。
+- 告警：新假设聚合一条 info（含 memo≤300 字）；bootstrap 轮行照落零告警（同 universe NEW 静默）；LLM 未配 fail-open 占位。
+- 禁线照办：S1 不建批准/试单/毕业径；零新 env；venue 读径败 fail-closed。
+- 锚 3 件：管线全链（落行+memo+告警+同键零重推+rejected 抑）/schema 闸违式降级/bootstrap 告警抑制。
+- SG 验收残留：雷达轮后 fin_opp_hypothesis 现 proposed 行（预期 okx|OPTION、binance|CURRENT_MONTH|USDT 等已知未收品类首拍各一）+memo 非空+info 告警到；同键重跑零重推。
+- 机检备注：全量套件 dashboard D543 单发 FAIL=gate:perp cap 脏值残留（同前票 panic 杀进程型复案），UPDATE 归位后单跑绿；与本改动无关。

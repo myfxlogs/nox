@@ -19,7 +19,9 @@ import (
 	"strings"
 	"time"
 
+	"nox/internal/platform/analyst"
 	"nox/internal/platform/httpx" // SSOT：自动注入 CA + X-Proxy-Token
+	"nox/internal/review/kbreport"
 	"nox/internal/store/pgstore"
 )
 
@@ -188,6 +190,18 @@ func run(ctx context.Context) error {
 	if err := st.InsertCexRadar(ctx, rrows, now); err != nil {
 		return fmt.Errorf("insert radar: %w", err)
 	}
+
+	// 新品类自发现 S1：目录内新品型信号→fin_opp_hypothesis（幂等）→LLM memo→info 告警。
+	// LLM 未配/ResolveClient 败→nil runner（假设行+novel 占位照落，memo 空如实）。
+	// b 级公告 feed 缺位如实记（instType 无全集枚举端点，新 instType 不可侦）。
+	var cll catLLM
+	if c, cerr := kbreport.ResolveClient(ctx, st, "", "", ""); cerr == nil {
+		c.CallLog = analyst.LLMLogger(st, "category_memo")
+		cll = catLLMRunner(c)
+	} else {
+		log.Printf("[universe-radar] 品类 memo LLM 未配（memo 空占位）: %v", cerr)
+	}
+	processCategories(ctx, st, allSources(hc, proxy, st.Pool(), filepath.Join(cacheDir, "nox-universe-radar")), cll, bootstrap)
 	log.Printf("universe-radar: 扫描 %d 行，事件 %d 条%s", len(rows), len(events),
 		map[bool]string{true: "（bootstrap 静默）", false: ""}[bootstrap])
 

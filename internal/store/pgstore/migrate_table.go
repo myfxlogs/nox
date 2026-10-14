@@ -212,4 +212,5 @@ var migrationFiles = []struct {
 	{1016, migrations.OppEvalUnevalStreakSQL, false},          // auto 轨僵尸提案②：unevaluable 连拍计数列
 	{1017, migrations.GapKindTransferSQL, false},              // 跨 venue 调拨提案：gap kind 放 transfer
 	{1018, migrations.RadarFuturesAxisSQL, false},             // 宇宙雷达仪器轴：contract_type/expiry_ts/basis_ann
+	{1019, migrations.OppHypothesisSQL, false},                // 新品类自发现 S1：fin_opp_hypothesis 假设行表
 }

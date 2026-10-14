@@ -61,3 +61,6 @@ var GapKindTransferSQL string // 跨 venue 调拨提案：gap kind 放 'transfer
 
 //go:embed 1018_radar_futures_axis.sql
 var RadarFuturesAxisSQL string // 宇宙雷达仪器轴：contract_type/expiry_ts/basis_ann
+
+//go:embed 1019_opp_hypothesis.sql
+var OppHypothesisSQL string // 新品类假设行表
