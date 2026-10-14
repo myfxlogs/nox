@@ -110,15 +110,18 @@ func (r *okxEarnRail) req(ctx context.Context, method, pathWithQuery, body strin
 		return nil, fmt.Errorf("okx %s HTTP %d: %s", pathWithQuery, resp.StatusCode, string(b))
 	}
 	var env struct {
-		Code string          `json:"code"`
+		Code json.RawMessage `json:"code"`
 		Msg  string          `json:"msg"`
 		Data json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(b, &env); err != nil {
 		return nil, fmt.Errorf("okx %s 解析: %w", pathWithQuery, err)
 	}
-	if env.Code != "" && env.Code != "0" {
-		return nil, fmt.Errorf("okx %s code=%s: %s", pathWithQuery, env.Code, env.Msg)
+	// code 两形容错：多数端点回字符串 "0"，sfp/dcd 族实拍回数字 0
+	//（cexscan 同型实证）——RawMessage 收后去引号归一。
+	code := strings.Trim(string(env.Code), `"`)
+	if code != "" && code != "0" {
+		return nil, fmt.Errorf("okx %s code=%s: %s", pathWithQuery, code, env.Msg)
 	}
 	return env.Data, nil
 }

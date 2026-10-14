@@ -271,7 +271,8 @@ func TestOkxSettle_EarnRowSkipped(t *testing.T) {
 	var calls []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls = append(calls, r.Method+" "+r.URL.Path)
-		w.Write([]byte(`{"code":"0","data":[{"ordId":"1","state":"live"}]}`))
+		// sfp/dcd 族 code 实拍是数字非字符串（SG order-status 实证）。
+		w.Write([]byte(`{"code":0,"data":[{"ordId":"1","state":"live"}]}`))
 	}))
 	defer srv.Close()
 	st := newFake()
