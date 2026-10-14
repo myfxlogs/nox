@@ -930,3 +930,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 ## 2026-10-15 裁决队列浮面（实施席）
 - **浮面**：digest 报告序列尾段加「待裁假设：N 条（proposed，分类键 top3：k×n、…）」——`fin_opp_hypothesis status='proposed'` count+`split_part(category_key,'|',1)` top3 聚合；N=0 照常印行防静默；读败段跳过 warn 留痕同惯例。只加推送行——批准键归裁决席零动。
 - **锚**：自足库 proposed 3/approved 1→n≥3+top1 对拍+N=0 渲染行。
+
+## 2026-10-15 okx DCI 两票合并复审验收（决策席，终版镜像 1592eb5b=6a8709c8）
+- **约束闸票（@89f448db 起）**：SG 三通道实拍——报价面 1188/3574 行带约束（NULL 档=venue 同 productId 低 apy 变体不带申购字段，fail-closed 保守正确）；#445 实拍本地拦「notionalSz 0 约束不达标」零 venue 打面零新订单行。复审补刀 `05983a96`：划转步尘差守卫（needed≤1e-6 跳划转+unified<needed fail-closed——earn 轨语义照搬，票内③原漏）。
+- **行权对账票（@3f998ebe 起）**：复审补三刀——`368a4293` earn 行滤出 okx 轮询；`6fc0fecf` envelope code 数字/字符串两形容错（sfp/dcd 族实证数字）；`6a8709c8` 到期闸（未到期不轮防 50011）。**补登记**：探针真单 11401353 手工落 `fin_dci_order` #30（manual_probe 如实标）→10-21 起自动对账。
+- **坑库补碑**：venue 应答字段类型按端点分族（sfp/dcd 数字 code）——同型病灶第 N 发；Go `060102` 两位年 69-99→19xx。
+- **裁决队列浮面（@24afa392）**：digest 待裁假设行随源码同步进 SG，明早 06:10 cron 自首拍生效。
