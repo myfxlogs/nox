@@ -765,3 +765,8 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **排除径复核**：deploy_sync 无 --delete、files-from=git ls-files——非跟踪件 SG 侧原样保留；docs/报告/（symdig/sysretro）本就未跟踪；运行时写盘面=digest 经验库五件+noxkb 索引件（知识产物有意入 git）+docs/报告，白名单完整。
 - **说明页**：`docs/经验库/运行时件.md` 入 git 记 schema/写者/口径。
 - **锚**：`TestClampWatermark` 自建 digest_wm_test 库两态对拍（化石钳回/真水位不动）；digest 模块 build/vet/gofmt/test 全绿。
+
+## 2026-10-14 earn 多 venue 化复审=返修（验收席）@957e6337+b6321eda 合并面
+- **过面**：rail 四动词面干净（binance 包壳零变/okx savings/gate uni-lend）；凭据 exchange_configs 按 venue_type 优先序 DB 驱动（D-162 合规）；迁移 1024 pending 锚扩 (template_id,venue) 落 SG；尘阈 $100 落闸；83 测试 race 绿；部署成。
+- **退件（1 项结构性死提案）**：idleGapScan 产 #377 gate/#378 okx `cash_mgmt proposed` 但 `fin_opp_eval` 零卡——CheckDCI 无卡拒单（dci_check.go:27）+UpsertOppEval 唯一产卡点 run.go:117 在主模板环不盖 idle 产案→**提案永续 inert 不可执行**，票面「并可执行」不成立。修法归实施：产案同拍产卡或等效径，禁绕卡闸。
+- **残留观察**：gate earn/uni 申购扣款账户与 perp 余额源一致性待首执实证（票面允许 venue 实响应发现）；#32/#35 缺口行待提案真执行后收口。
