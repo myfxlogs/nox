@@ -1,5 +1,22 @@
 # LOG.md — 阶段交付归档（NOX 仓首条）
 
+## binance:earn USDT 仓位缺采
+
+### 病灶（SG 实证 10-14）
+`fin_dci_order` #13/#14/#15 三笔 USDT001 申购全 filled（≈1160.69）但 earn 池快照只有尘币零 USDT——采集器只查 `flexible/position` 且**缺省分页（size 默认 10）**，尘币占满首页把 USDT 挤出窗；另申购品可为 locked 定期归 `locked/position` 未采。
+
+### 修
+`accountBinanceEarn` 重构：`earnPositions` 件双端点翻页全采——`flexible`+`locked` 并列、每页 `current/size=100`（页内行<size 或累计≥total 止）；locked 行额字段 `amount` 与 flexible `totalAmount` 双键兼容解析，同资产跨端点并入 per 币聚合。端点败/解析败 fail-closed 返错（「查不到=零仓位」禁静默吞）。
+
+### 锚
+`TestBinanceEarnPositions` 升双端点锚：路径序 flexible→locked、翻页参数 current=1&size=100、locked amount 字段解析、USDT 542(flex)+1160.69(locked)=1702.69 跨源合并、MULTI 指纹。
+
+### 禁线照办
+零新凭据/env（同签名 USER_DATA）；分币行不落删不合并零换算；REST 只读。
+
+### 验收残留（SG）
+`fin_venue_account_snapshot` 现 `binance+earn+USDT` 行值≈1160.69 对拍 #13+#14+#15；资金地图 earn 池组计含 USDT；spot 减额对拍平账。
+
 ## 视窗 C 件收口：日报缺段兜底 + watch_rule enabled 零值修
 
 ### ①deptreport 缺段兜底

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -126,18 +127,30 @@ func TestCEXAccount_OkxEarn(t *testing.T) {
 // TestBinanceEarnPositions 财务可见性两件套①：binance:earn 回归（分币口径解除 D-133
 // 「只统计 USDT」约束）——签名 GET flexible/position，逐资产聚合分币行：
 // 多币 Currency=MULTI；同资产多行合并；零额跳过。
+// SG 缺采修：flexible+locked 双端点翻页（size=100）——locked 行额字段 amount。
 func TestBinanceEarnPositions(t *testing.T) {
-	var gotPath string
+	var paths []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
+		paths = append(paths, r.URL.Path)
 		if r.Header.Get("X-MBX-APIKEY") == "" {
 			t.Error("missing X-MBX-APIKEY")
 		}
-		fmt.Fprint(w, `{"total":4,"rows":[
-			{"asset":"USDT","totalAmount":"500"},
-			{"asset":"USDT","totalAmount":"42"},
-			{"asset":"BTC","totalAmount":"0.01"},
-			{"asset":"XYZ","totalAmount":"0"}]}`)
+		if r.URL.Query().Get("size") != "100" || r.URL.Query().Get("current") != "1" {
+			t.Errorf("翻页参数缺: %s", r.URL.RawQuery)
+		}
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/flexible/position"):
+			fmt.Fprint(w, `{"total":4,"rows":[
+				{"asset":"USDT","totalAmount":"500"},
+				{"asset":"USDT","totalAmount":"42"},
+				{"asset":"BTC","totalAmount":"0.01"},
+				{"asset":"XYZ","totalAmount":"0"}]}`)
+		case strings.HasSuffix(r.URL.Path, "/locked/position"):
+			// locked 端点额字段=amount（USDT 定期仓位在此——SG 实证主嫌犯径）。
+			fmt.Fprint(w, `{"total":1,"rows":[{"asset":"USDT","amount":"1160.69"}]}`)
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
 	}))
 	defer srv.Close()
 
@@ -146,17 +159,18 @@ func TestBinanceEarnPositions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gotPath != "/sapi/v1/simple-earn/flexible/position" {
-		t.Fatalf("path=%s", gotPath)
+	if len(paths) != 2 || !strings.HasSuffix(paths[0], "/flexible/position") ||
+		!strings.HasSuffix(paths[1], "/locked/position") {
+		t.Fatalf("paths=%v", paths)
 	}
-	if acct.Currency != "MULTI" || acct.Equity != 542.01 {
+	if acct.Currency != "MULTI" || acct.Equity != 1702.7 {
 		t.Fatalf("acct=%+v", acct)
 	}
 	per := map[string]float64{}
 	for _, h := range acct.Holdings {
 		per[h.Ccy] = h.Qty
 	}
-	if per["USDT"] != 542 || per["BTC"] != 0.01 || len(per) != 2 {
+	if per["USDT"] != 1702.69 || per["BTC"] != 0.01 || len(per) != 2 {
 		t.Fatalf("holdings=%+v", per)
 	}
 }
