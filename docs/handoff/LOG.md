@@ -633,7 +633,7 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 ## 2026-10-14 S1 首批假设裁决 D-510+分母鲜度守卫立票
 - 4 rejected（币报价/边缘报价/币本位交割）抑重推；3 留 proposed（USDC 永续/TRADIFI 股指/USD_UM_XPERP 待查）。
 
-## 2026-10-14 敞口分母鲜度守卫 @pending
+## 2026-10-14 敞口分母鲜度守卫 @6687ee7d
 - pgstore 单源鲜度：CapitalPoolRow+Stale 列、PoolStale(5min 事件源/36h scheduler)、StalePoolKeys 缺池清单。分母剔 stale 非幽灵行——不拿陈旧值当现值。
 - proto+RPC：GetCapitalPoolsResponse 加 stale_pools/denominator_incomplete；GetCapitalPools 缺池时 dedup 24h info「分母池鲜度失」一次性推。
 - dciexec concentrationAlert：stale 池剔分母+浓度行附「分母缺池」注+同款 dedup 告警。资金地图页 banner 示缺池。
