@@ -787,3 +787,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **病灶**：idleGapScan 只产提案不产卡——CheckDCI「无卡拒单」拦死，SG #377 gate/#378 okx 死提案实证。
 - **修**：产案后同拍 `evalProposal`+`UpsertOppEval`（cash_mgmt earn 分支五项机制口径复用——费/滑点机制不适用、window=venue APR−30d 中位、failure=earn_redeem 账本）；`Result.GrossEvidence` 新字段证源覆盖（`fin_cex_earn_apr <venue> <ccy> 最新行+闲置池实证 equity=…`）；`LatestEarnAPR` venue+ccy 最新行读件；APR 缺→gross missing 如实 unevaluable 不编值；eval earn 分支补 `r.APR!=nil` 闸（nil APR×有 median=panic 潜伏坑顺手封）。
 - **锚升**：earn_venue_test 产案后卡数=2+gross_apr=venue 实读行对拍；race/全包绿。
+
+## 2026-10-14 三票并件验收（对冲腿+退役径✅、earn 返修✅真金实证）@58c5a40a+4c138ab0
+- **对冲腿**：SG 实产 6 条 `cfd_swap_hedged` 假设——XAUUSD short↔okx XAU-USD_UM 交割腿×2+gate XAU_USDT 现货腿、XAGUSD↔gate XAG_USDT/XAGUSDT+okx XAG-USDT-SWAP；5 条裸腿附「对冲腿：无」注记幂等。残留：交割腿 funding=0 致净 carry 略虚（detail 已标 FUTURES，尾巴票修注）。
+- **退役径**：`XASSET_CARRY` 委任退役实证——「累计 PnL -63.48 越硬线 -50 且零持仓」+warn 告警+delegate-retire 留痕。口径差注记：实现给亏损硬线加了「N 日零活动」前置（保守向，不误伤活跃亏损策略——留档若需调口径改判据）。
+- **earn 返修真金实证**：#378 okx 提案 viable 卡→AutoExecLive 真打 `okx-saving-USDT $1958`→venue HTTP 403 Forbidden（业主开的划账权限≠理财 scope）→fail-closed 坑表+缺口告警如实落。**rail 本身真通**——权限面是业主域待办。#377 gate=unevaluable（gate 无 earn_apr 采集行）。
+- **业主请求箱新增**：`permission|earn_subscribe:okx` #38 requested——okx API 需补 savings/理财权限。旧泛化行 #4 收 fulfilled（binance 实证在跑）。
+- **尾巴票立**：gate earn_apr 采集+缺口 subject venue 键+交割腿成本注记。
