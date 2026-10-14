@@ -720,3 +720,8 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
   - okx:perp 有归因收入仍非 idle——「有收入的不误标」反向锚成立
 - 机检：pgstore 286 测试 -race 绿；build/vet/gofmt 净。
 - 观察新件：`模板venue悬空 earn_apr_lending 凭据 okx:spot vs 执行轨 binance` info 冒头（需求行漂移如实报——列入待议）。
+
+## 2026-10-14 D-518 cfd_swap 首批裁决（决策席）
+- 38 条 proposed → 留 7（BRENT/WTI/XAGUSD/XAUUSD/AUDCHF/USDCHF/AUDJPY ≥2.5%）拒 31（别名重复×3+低于 earn 基线×28）。
+- approved 留零：裸 delta 需对冲结构设计才配可跑，S2 触发器不激活——留件=观察级。
+- 3001157 $3.2k 结构性零息户证（scanner 零产出实证）——业主域挪资裁。
