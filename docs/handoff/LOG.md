@@ -711,3 +711,12 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - SG 实拍：09:30 cron 拍零 `XAU-USD_UM` fetch 错、近 6min critical 该类计数=0；`fin_cex_universe` FUTURES 行 20/2480 在册不动。告警洪泛止血——critical 通道恢复可用。
 - ws-dead 核查结论采信：radar_watchlist 写侧只走 divergence/band 事件，交割行 FundingAnn=nil 不产事件=非同根，独立病灶记备查（binance perp 候选零帧×3 轮——列入观察）。
 - 机检：xasset-monitor 53 测试 -race 绿；build/vet/gofmt 净。
+
+## 2026-10-14 okx idle 粒度修验收 ✅（验收席）@350397f2
+- 修法复核：`GROUP BY venue` → `GROUP BY venue_key` 池级归因；裸 venue 键行=不可归因收入保守并入各池判闲（宁标不闲不漏睡钱——旧语义保）。单源读径 NAV/digest/idle monitor/idle_gap 同口径随迁。
+- SG 实拍（容器 09:39 起、boot 扫 09:40 实产）：
+  - `fin_condition_gap`：`executor|okx:unified|requested` $1956 缺口行+请求箱推 ✅
+  - 顺带实证：`executor|okx:earn` $169.5 粉尘池同扫出——粒度修后按池判闲生效 ✅
+  - okx:perp 有归因收入仍非 idle——「有收入的不误标」反向锚成立
+- 机检：pgstore 286 测试 -race 绿；build/vet/gofmt 净。
+- 观察新件：`模板venue悬空 earn_apr_lending 凭据 okx:spot vs 执行轨 binance` info 冒头（需求行漂移如实报——列入待议）。
