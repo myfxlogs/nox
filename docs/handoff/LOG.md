@@ -807,3 +807,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **交割腿注记**：FUTURES 腿 detail 附「交割腿基差成本未计」。
 - **请求箱现态**：`earn_subscribe:okx`#38 requested（业主唯一待办）；gate #377 待真执行实证（理财权限业主已开——下拍成败即凭据实证）。
 - **机检**：130 测试 race 绿；机检面净。
+
+## 2026-10-14 okx earn 权限 venue 重验证=仍 403（业主回执后实证）
+- 业主 12:02 前端回执 #38 fulfilled；验收席清坑表放行→12:31 boot 扫 #378 重试真单 #19 发出→**okx purchase-redemption 仍 HTTP 403 Forbidden**——签名通过权限不足类拒：业主所开权限 scope 非理财(savings/Earn)项（此前所开=划账/transfer）。
+- 处置：#38 回退 requested 附实证注记；坑表重新学习抑 24h（code:403|forbidden）。
+- **教训**：条件请求回执≠条件满足——venue 实响应才是验收锚。请求箱「回执后 venue 复测」应成固定环（本次人工做，机制化可入票）。
+- 另：gate rail 账户族病灶立票（futures/usdt/accounts 404——$998 真所在户族待 venue 实响应枚举）。
