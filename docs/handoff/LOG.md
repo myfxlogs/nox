@@ -740,3 +740,7 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **渲染**：「死角：N」行 N=0 照常印防静默（票面钦定）。
 - **机检**：digest 模块 build/vet/gofmt/race 绿；锚=自足库 digest_dead_test 注入「running 零产出 daemon/离线 daemon/孤儿 kind/live 零动策略/live 有动策略」五态对拍+N=0 渲染。
 - **验收残留（SG）**：次日 06:10 digest 现「死角」段——预期首批列名：swap facts 若仍无消费件（本票前已接 hypothesis 扫描，应消）、95 幽灵名册行（D-246 病灶残留 daemon 若在册）。
+
+## 2026-10-14 死角日报验收 ✅（验收席）@cf5a9e23 + 业主回执落账
+- **死角日报**：deadcorner.go 156 行——A daemon 在职∧beat 新鲜但产出域 24h 零行 / B facts kind 采集有行但无消费件白名单 / C live 策略 48h 零提案零动作；N=0 照常印防静默；daemon→产出域=手写 8 件 map（票面钦定不通用化）。机检 39 测试 -race 绿、build/vet/gofmt 净。digest=`go run` 源驱动 cron 06:10——deploy_sync 源码已到 SG，**明早日报实拍为 SG 验收锚**（手动干跑会推水位线故不抢跑）。
+- **业主回执落账**（D-519 四件）：#36 capital|3001157→waived「划转暂定」（资金暂留 Exness，重启走新条件件）；okx 划账权限已开、gate 理财/钱包/统一账户全开——earn 多 venue 票凭据面就绪，#32/#35 保持 requested 待径接。
