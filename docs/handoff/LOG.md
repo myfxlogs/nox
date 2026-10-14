@@ -835,3 +835,8 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **快照断更真因**（票面②如实记非修）：`hydrateAccountSnapshots` 自 3d-P1#1c 降为 boot 一次性水合——周期快照写整体退役，fin_venue_account_snapshot=审计留痕、实时源=AccountMonitor；gate:perp 化石非 gate 专病=全表陈旧-by-design。提案池标签无碍（提案 venue 键只 'gate' 不挂 venue_type，FreeBalance 现货读面与钱同户）。
 - **okx 划转步**：`okxEarnRail.Subscribe` 前置 `POST /asset/transfer {from:18,to:6,type:0}` 交易户→资金户（savings 只认资金户，venue 文档实证），划转败如实不试申购；FreeBalance 仍 unified、Redeem 款落资金户。
 - **锚**：gate mock 现货数组路径+okx mock 双端点序列（transfer→purchase；transfer 58000 败→purchase 零发）；dciexec 全包 -race 绿。
+
+## 2026-10-14 earn 三拍连击：gate 真拒因+okx 业主手动划转实证
+- `63ec5179` 部署后 boot 扫：①#378 `okx USDT 可动=0`——业主手动把 $1958 unified→funding（`okx:funding=1958.27` 12:57:10 快照实证，金额与提案分毫不差）；②#377 过现货余额读真打 `POST /earn/uni/lends`→venue `HTTP 400 INVALID_PARAM_VALUE: min_rate null`——出借单须带 min_rate 底价。
+- 收口票立案：okx FreeBalance=unified+funding 合并+Subscribe 只划短差；gate Subscribe 补 min_rate（Products 已读该值）。
+- #38 权限面不变——业主若已在 API key 勾交易写权限，rail 收口后下拍即真验证。
