@@ -770,3 +770,15 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **过面**：rail 四动词面干净（binance 包壳零变/okx savings/gate uni-lend）；凭据 exchange_configs 按 venue_type 优先序 DB 驱动（D-162 合规）；迁移 1024 pending 锚扩 (template_id,venue) 落 SG；尘阈 $100 落闸；83 测试 race 绿；部署成。
 - **退件（1 项结构性死提案）**：idleGapScan 产 #377 gate/#378 okx `cash_mgmt proposed` 但 `fin_opp_eval` 零卡——CheckDCI 无卡拒单（dci_check.go:27）+UpsertOppEval 唯一产卡点 run.go:117 在主模板环不盖 idle 产案→**提案永续 inert 不可执行**，票面「并可执行」不成立。修法归实施：产案同拍产卡或等效径，禁绕卡闸。
 - **残留观察**：gate earn/uni 申购扣款账户与 perp 余额源一致性待首执实证（票面允许 venue 实响应发现）；#32/#35 缺口行待提案真执行后收口。
+
+## 2026-10-14 对冲腿可行面扫描+策略退役径（实施席）
+- **对冲腿扫描**（`oppmatch/hedgescan.go`+`pgstore/hedge_scan.go`，swapScan 尾挂）：cfd_swap 裸腿假设逐条过桥——broker_symbol_map（'m' 后缀变体双查）→asset_equiv asset_class→universe.base 剥 quote 后缀对拍（binance/okx/gate TRADING 实读）。有腿→`cfd_swap_hedged|mt|sym|side|cex|csym` 幂等假设行（detail 记腿对/1:1 名义假设/净 carry=swap−funding 实读成本）；方向对向正确：CFD short→CEX long（现货腿零成本优先+funding 低者优），CFD long→只留 perp 空腿。无腿/桥缺→detail 幂等附「对冲腿：无」不删假设。
+- **退役径**（`oppmatch/retire.go`+`pgstore/strategy_retire.go`，同扫描拍）：live 策略 Nd 零提案∧零 autotrade∧零持仓∧零收益→retired（decided_by='delegate-retire'+warn 告警）；或 total_pnl≤retire_pnl_floor_usd（缺省 -50）且零持仓→退。config 键 retire_delegate_enabled/retire_idle_days/retire_pnl_floor_usd 全可撤可调；在持仓/在飞提案永不退；retired 不删行台账留复活。
+- **锚**：hedge 两腿产出+净 carry 数值对拍+无腿注记幂等；retire 零产退/活跃与在仓不误伤/撤键全停/亏损硬线。
+- **机检**：build/vet/gofmt 净；oppmatch+pgstore 全包 -race 绿。
+
+## 2026-10-14 运行时件回刷修验收 ✅ @b2d6b2b5（验收席 SG 实拍）
+- **去跟踪**：待归纳/分析员/.digest_state/归档月报四件 `git ls-files` 零命中+`.gitignore` 钉死；归档既有物只出跟踪未删盘（SG/本机实查）；条目/索引知识产物仍入 git。
+- **水位自愈 SG 实证**：手动 digest 跑出 `化石水位 autotrade_logs 89704→0、alerts 64904→300`——钳位件真实生效，告警面增量语义复活。
+- **回刷验证 SG 实拍**：digest 写盘后再跑 deploy_sync——`待归纳.md`/`.digest_state` mtime 保持 11:31 写盘时刻未被回刷（病灶修复实证）。
+- **机检**：digest 模块 40 测试绿；clampWatermark 逻辑=水位>库内 max→钳回+warn log，≤max 不动不破增量。
