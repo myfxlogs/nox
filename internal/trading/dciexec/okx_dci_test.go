@@ -281,6 +281,9 @@ func TestOkxSettle_EarnRowSkipped(t *testing.T) {
 			Response: `[{"amt":"1","ccy":"USDT","side":"purchase"}]`},
 		{ID: 30, RequestID: "dci|okx|probe|P|x|1", Venue: "okx", OptType: "PUT",
 			Response: `{"ordId":"11401353"}`},
+		{ID: 31, RequestID: "dci|okx|PUT|BTC-USDT-301231-80000-P|301231|1", Venue: "okx",
+			OptType: "PUT", ProductRef: "BTC-USDT-301231-80000-P",
+			Response: `{"ordId":"2"}`}, // 远月未到期——不轮（50011 实证）
 	}
 	ex := &Executor{Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}

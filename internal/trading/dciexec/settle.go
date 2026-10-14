@@ -124,7 +124,9 @@ func (e *Executor) SettleExpiredOrders(ctx context.Context) (int, error) {
 		if o.Venue == "okx" {
 			// earn 轨申购行也落本表 venue=okx（request_id=earn|…、回执无 ordId）
 			// ——非 DCI 产品单，不喂 order-status 轮询否则每拍报错。
-			if strings.HasPrefix(o.RequestID, "dci|okx|") {
+			// 未到期单同样不轮（product_ref 内嵌交割日 YYMMDD——scan 事件密集
+			// 时轮远月单会顶 venue 限流 50011，SG 实证）。
+			if strings.HasPrefix(o.RequestID, "dci|okx|") && okxDeliveryReached(o.ProductRef, now) {
 				okxOrders = append(okxOrders, o)
 			}
 			continue

@@ -22,6 +22,21 @@ import (
 
 var okxOrdIDRe = regexp.MustCompile(`"ordId"\s*:\s*"([^"]+)"`)
 
+// okxDeliveryReached product_ref 内嵌交割日（ETH-USDT-261021-2280-P 第三段
+// YYMMDD）→ 交割日 UTC 零点起算到期可轮。形外 ref 如实轮（venue order-status
+// 才是终态真相，ref 畸形不该饿死真单）。
+func okxDeliveryReached(productRef string, now time.Time) bool {
+	parts := strings.Split(productRef, "-")
+	if len(parts) < 3 || len(parts[2]) != 6 {
+		return true
+	}
+	d, err := time.Parse("060102", parts[2])
+	if err != nil {
+		return true
+	}
+	return !now.Before(d)
+}
+
 // settleOKXOrder okx 单到期对账：order-status 轮询 state——非 settled 如实
 // 跳过（未到期零误翻）；settled→落账+入账+处置。返 true=本拍翻态。
 func (e *Executor) settleOKXOrder(ctx context.Context, o pgstore.FilledDCIOrder) (bool, error) {
