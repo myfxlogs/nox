@@ -611,6 +611,6 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - 死行重试：UpsertHypothesis RETURNING 加 `family_fit IS NULL AND status='proposed'`→memoPending；上轮 memo 写败的行下轮重试预审、回填不告警（原 `!inserted→continue` 会令空 memo 行永久死库——票面附带问询属实）。
 - 锚升：params_proto 落 {} 对拍 + 死行回填零告警锚；共享库 alerts 残留清基线。
 
-## 2026-10-14 源文件超限拆分 @pending
+## 2026-10-14 源文件超限拆分 @696b7c5c
 - check-lines 三警告清零：diff.go 360→132（拆 diff_norm/diff_funding/diff_divergence/diff_basis）；tools.go 316→94（拆 tools_query/tools_readfile/tools_kb）；run.go 308→224（拆 run_view）。纯搬移零行为变——签名/导出符号/测试语义全不动。
 - 机检：三包 build/vet/gofmt/test/-race 全绿；全量 go test 中 dashboard D587 单发 flake（共享库压力型复案，隔离单跑 1.56s 绿）。
