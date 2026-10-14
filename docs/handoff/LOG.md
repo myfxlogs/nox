@@ -566,7 +566,7 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **契约补段**：`contractBackfill` 在 SG 代码面（contract.go:64 `契约补段·原料` 拼接径在）；行为验证点=明早 07:05 日报——若 kimi-k3 漏段则见原料段回填+marker。
 - 测试规则#3 DeleteWatchRule 已清。
 
-## 2026-10-14 宇宙雷达仪器轴扩列 @pending
+## 2026-10-14 宇宙雷达仪器轴扩列 @dedaf4f1
 - 迁移 1018：fin_cex_universe+fin_cex_radar 加 contract_type(PERP/FUTURES)/expiry_ts/basis_ann；pgstore 读写面同步。
 - 枚举：binance 收 CURRENT_QUARTER/NEXT_QUARTER（deliveryDate→expiry）；okx instruments+tickers 拉 SWAP+FUTURES 双 instType（expTime→expiry，OPTION 不扩）；gate 同 contracts 端点 expire_time>0 行。
 - 评估轴：FUTURES 走 basisAnn=(mark/index−1)×365/days×100；expiry 零值/已过/mark/index≤0→nil fail-closed；funding 轴 perp 语义零动（交割 FundingAnn nil 自动不入 funding 事件/divergence）。
