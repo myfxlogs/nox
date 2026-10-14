@@ -216,6 +216,7 @@ internal/trading/dciexec -> internal/infra/dephealth
 internal/trading/dciexec -> internal/kbsearch
 internal/trading/dciexec -> internal/risk/gate
 internal/trading/dciexec -> internal/platform/errclass
+internal/trading/dciexec -> internal/platform/signutil
 internal/trading/dciexec -> internal/store/pgstore
 internal/trading/engine -> internal/data/bus
 internal/trading/engine -> internal/data/fact
