@@ -238,9 +238,10 @@ func (r *okxEarnRail) unifiedAvail(ctx context.Context, ccy string) (float64, er
 	return 0, nil // 币种行缺席=该币零可动（venue 实响应零值如实）
 }
 
-// fundingAvail `GET /asset/balance?ccy=` → data[].availBal（资金户）。
+// fundingAvail `GET /asset/balances?ccy=` → data[].availBal（资金户）。
+// SG 10-14 探针实证：单数形 /asset/balance=404 未命中——复数 balances 才是真路径。
 func (r *okxEarnRail) fundingAvail(ctx context.Context, ccy string) (float64, error) {
-	data, err := r.req(ctx, http.MethodGet, "/api/v5/asset/balance?ccy="+ccy, "")
+	data, err := r.req(ctx, http.MethodGet, "/api/v5/asset/balances?ccy="+ccy, "")
 	if err != nil {
 		return 0, err
 	}

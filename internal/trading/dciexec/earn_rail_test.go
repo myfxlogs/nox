@@ -150,7 +150,7 @@ func TestOkxRail_FundingAwareSubscribe(t *testing.T) {
 		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			*calls = append(*calls, r.Method+" "+r.URL.Path)
 			switch {
-			case r.URL.Path == "/api/v5/asset/balance":
+			case r.URL.Path == "/api/v5/asset/balances":
 				w.Write([]byte(fmt.Sprintf(`{"code":"0","data":[{"ccy":"USDT","availBal":"%v"}]}`, funding)))
 			case r.URL.Path == "/api/v5/account/balance":
 				w.Write([]byte(fmt.Sprintf(`{"code":"0","data":[{"details":[{"ccy":"USDT","availBal":"%v"}]}]}`, unified)))
