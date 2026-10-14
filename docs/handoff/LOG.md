@@ -686,3 +686,12 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
   - 拆分续票：service_broker 277/setup 300 达标零改动属实
 - **机检**：oppmatch/pgstore/dciexec 364 测试绿；build/vet/gofmt 净。
 - **残留（退回跟进件）**：**okx unified $1956 仍漏**——非实现错：Idle 语义按 venue 级 30d 收入判，okx 有已平仓 XAU-SWAP funding $4.31 → 整池非 idle → 余额扫描跳过。「venue 有收入≠该笔现金在赚」粒度盲在 ExplorerIdleFunds 判定层，gate:perp 能被扫到纯因 gate 零收入。立后续票：Idle 判据下沉到池/币种粒度。
+
+## xasset-monitor 交割符号回归（2026-10-14）
+
+- **病灶**：`derive.go loadDerivationInputs` `WHERE status='TRADING'` 全收 universe 行——雷达仪器轴扩列后 `XAU-USD_UM-270326` 类 FUTURES 行进监控簿，WS 不订交割符号→ticks 零行→每 5min cron 打 critical「no rows」，38条/12h 淹没告警通道。
+- **修**：派生入参加 `AND COALESCE(contract_type,'PERP') <> 'FUTURES'`——交割行剔监控簿面，universe/radar 采集与研究面零动；NULL/'' 存量行=perp 语义照旧收；告警语义一行没动（真无 ticks 该报还报，只剔本不该在簿的符号）。
+- **ws-dead 核查结论=非同根**：radar_watchlist 写侧只走 divergence/band 事件（`tools/universe-radar/digest.go`），交割行 `FundingAnn=nil` 不产 divergence 事件→不进 watchlist→不进 WS 候选。`[ws-dead]`（binance perp 候选零帧×3 轮）=独立病灶，本票不动，记备查。
+- **锚**：`TestFuturesExcludedFromMonitorUniverse`——FUTURES 行不入派生、PERP/NULL 行照旧收（对拍 `loadDerivationInputs` 真实库径）。
+- **机检**：xasset-monitor 全包+`-race` 绿；build/vet/gofmt 净；derive.go 恰 300 行。
+- **验收残留（SG）**：下一拍 cron 日志零 `XAU-USD_UM` critical；`fin_cex_universe` 交割行在册不动。

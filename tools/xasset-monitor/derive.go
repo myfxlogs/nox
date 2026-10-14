@@ -49,8 +49,11 @@ func loadDerivationInputs(ctx context.Context, st *pgstore.Store) ([]allowComboR
 	}
 
 	var uni []universeRow
+	// 交割行剔监控簿（xasset 对=funding 腿永续面；FUTURES 行 WS 不订→ticks 零行
+	// →每拍 critical 洪泛实证。NULL=存量 perp 语义收）。universe 采集面不动。
 	uniRows, err := st.Pool().Query(ctx, `SELECT venue, symbol, hedge_canonical
-		FROM fin_cex_universe WHERE status = 'TRADING'`)
+		FROM fin_cex_universe WHERE status = 'TRADING'
+		  AND COALESCE(contract_type,'PERP') <> 'FUTURES'`)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("list universe: %w", err)
 	}

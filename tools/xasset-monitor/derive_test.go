@@ -140,3 +140,49 @@ func TestD552_LoadDerivationInputsDeliversKeyedColumns(t *testing.T) {
 			combos[0].venueBuy, combos[0].venueSell)
 	}
 }
+
+// TestFuturesExcludedFromMonitorUniverse 交割行剔监控簿锚（xasset-monitor 交割符号
+// 回归票）：FUTURES 行不进派生入参（ticks 零行→critical 洪泛病灶）；PERP 行照旧收。
+func TestFuturesExcludedFromMonitorUniverse(t *testing.T) {
+	s, err := pgstore.New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
+	if err != nil {
+		t.Fatalf("pgstore.New: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+	ctx := context.Background()
+	if err := s.Migrate(ctx); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if _, err := s.Pool().Exec(ctx,
+		`DELETE FROM fin_cex_universe WHERE symbol LIKE 'XMON%'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Pool().Exec(ctx, `
+		INSERT INTO fin_cex_universe (venue, symbol, base, status, contract_type) VALUES
+		('okx','XMON-USD_UM-270326','XMON','TRADING','FUTURES'),
+		('okx','XMON-USDT-SWAP','XMON','TRADING','PERP'),
+		('binance','XMONPERPQ','XMON','TRADING',NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	_, uni, _, _, _, err := loadDerivationInputs(ctx, s)
+	if err != nil {
+		t.Fatalf("loadDerivationInputs: %v", err)
+	}
+	var fut, perp, nullCt bool
+	for _, r := range uni {
+		switch r.symbol {
+		case "XMON-USD_UM-270326":
+			fut = true
+		case "XMON-USDT-SWAP":
+			perp = true
+		case "XMONPERPQ":
+			nullCt = true
+		}
+	}
+	if fut {
+		t.Fatal("FUTURES 行混入监控簿派生——ticks 零行 critical 洪泛源复现")
+	}
+	if !perp || !nullCt {
+		t.Fatalf("perp/存量 NULL 行应照旧收: perp=%v nullCt=%v", perp, nullCt)
+	}
+}
