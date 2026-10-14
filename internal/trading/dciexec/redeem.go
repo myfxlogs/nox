@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"nox/internal/platform/errclass"
@@ -33,23 +34,52 @@ func (e *Executor) listRedeemPits(ctx context.Context) ([]pgstore.VenueReject, e
 	return e.Store.ListVenueRejects(ctx, "binance", "earn_redeem")
 }
 
-// learnRedeemPit 赎败落坑（Store 缺席→nil——测试注口径）。
-func (e *Executor) learnRedeemPit(ctx context.Context, err error) error {
+// learnRedeemPit 赎败落坑（Store 缺席→nil——测试注口径）。低于最小赎回额
+// 类签名带产品粒度后缀 |p=<pid>——抑同产品同败因重放，不抑全 op 径。
+func (e *Executor) learnRedeemPit(ctx context.Context, err error, productID string) error {
 	if e.Store == nil {
 		return nil
 	}
-	return e.Store.LearnVenueReject(ctx, "binance", "earn_redeem",
-		errclass.VenueRejectSignature(err.Error()), 24*time.Hour)
+	sig := errclass.VenueRejectSignature(err.Error())
+	if isBelowMinRedeem(err.Error()) {
+		sig += "|p=" + productID
+	}
+	return e.Store.LearnVenueReject(ctx, "binance", "earn_redeem", sig, 24*time.Hour)
+}
+
+// isBelowMinRedeem 「低于最小赎回额」败因识别（-6006 实拍码 + 文案兜底）。
+func isBelowMinRedeem(msg string) bool {
+	return strings.Contains(msg, "-6006") ||
+		strings.Contains(strings.ToLower(msg), "below min")
+}
+
+// redeemPitBlocks 坑表读面→（全径抑签名, 产品抑集）：带 |p=<pid> 后缀的坑只抑
+// 该产品重放；无后缀坑=真败因 op 级抑（suppress/critical 语义不动）。
+func redeemPitBlocks(pits []pgstore.VenueReject, now time.Time) (string, map[string]bool) {
+	blocked := map[string]bool{}
+	for i := range pits {
+		pp := &pits[i]
+		if !pp.Active(now) || pp.Action == "fix" {
+			continue
+		}
+		if j := strings.Index(pp.ErrorSignature, "|p="); j >= 0 {
+			blocked[pp.ErrorSignature[j+3:]] = true
+			continue
+		}
+		return pp.ErrorSignature, nil
+	}
+	return "", blocked
 }
 
 func (e *Executor) redeemShortfall(ctx context.Context, asset string, need float64) (float64, []string, error) {
-	// D-255 扩 op=earn_redeem：坑表 suppress/critical 窗内零 venue 打面
-	// （同败因反复撞 redemption 与申购同规）；读败 fail-open——不堵补缺径。
+	// D-255 op=earn_redeem 坑表；粒度修——|p=<pid> 签名只抑该产品同败因重放，
+	// 尘额坑不再挡全径；无后缀坑仍 op 级抑。读败 fail-open——不堵补缺径。
+	var prodBlocked map[string]bool
 	if pits, perr := e.listRedeemPits(ctx); perr == nil {
-		for i := range pits {
-			if pits[i].Active(e.Now()) && pits[i].Action != "fix" {
-				return 0, nil, fmt.Errorf("坑表抑赎窗内（%s expires=%s）", pits[i].ErrorSignature, pitExpiry(&pits[i]))
-			}
+		if sig, pb := redeemPitBlocks(pits, e.Now()); sig != "" {
+			return 0, nil, fmt.Errorf("坑表抑赎窗内（%s）", sig)
+		} else {
+			prodBlocked = pb
 		}
 	}
 	eps, err := e.earnPositionsOf(ctx, asset)
@@ -79,8 +109,18 @@ func (e *Executor) redeemShortfall(ctx context.Context, asset string, need float
 			notes = append(notes, fmt.Sprintf("跳过 %s 尘埃额 %.10f（格式化归零——发参即 -1102）", p.ProductID, amt))
 			continue
 		}
+		if prodBlocked[p.ProductID] {
+			notes = append(notes, fmt.Sprintf("跳过 %s（同败因坑抑该产品重放窗内）", p.ProductID))
+			continue
+		}
+		// venue 最小赎回额闸（MinRedeem 有证据才判；缺证据按需求额过——缺据不禁）。
+		if p.MinRedeem > 0 && amt < p.MinRedeem {
+			notes = append(notes, fmt.Sprintf(
+				"跳过 %s 额 %.8f<最小赎回 %.8f（防发径——发即 -6006 尘额拒）", p.ProductID, amt, p.MinRedeem))
+			continue
+		}
 		if err := e.redeem(ctx, p.ProductID, amt); err != nil {
-			if lerr := e.learnRedeemPit(ctx, err); lerr != nil {
+			if lerr := e.learnRedeemPit(ctx, err, p.ProductID); lerr != nil {
 				log.Printf("[dciexec] 赎回坑落行败: %v", lerr)
 			}
 			return done, notes, fmt.Errorf("redeem(productId=%q amount=%.8f need=%.8f): %w",

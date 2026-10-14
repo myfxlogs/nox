@@ -210,4 +210,5 @@ var migrationFiles = []struct {
 	{1014, migrations.OkxFuturesSQL, false},                   // gap#11：venue_type 枚举放 'futures'+okx:futures 配置行回种
 	{1015, migrations.WatchRuleSQL, false},                    // 业主视窗两件套 B：通用盯盘规则表
 	{1016, migrations.OppEvalUnevalStreakSQL, false},          // auto 轨僵尸提案②：unevaluable 连拍计数列
+	{1017, migrations.GapKindTransferSQL, false},              // 跨 venue 调拨提案：gap kind 放 transfer
 }

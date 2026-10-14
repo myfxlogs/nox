@@ -257,6 +257,8 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	}
 	// D-260 M4.2：生命周期三件并入扫描拍（覆盖/SLA/晋级评估——零新定时器）。
 	runLifecycle(ctx, st, in)
+	// 跨 venue 机会差调拨提案（业主令 10-14——同资产 earn APR 差超阈→请求箱）。
+	xferScan(ctx, st)
 	log.Printf("[oppmatch] scan done: %d templates, %d proposals, %d new gap requests",
 		len(in), propN, gapN)
 	return propN, gapN, nil

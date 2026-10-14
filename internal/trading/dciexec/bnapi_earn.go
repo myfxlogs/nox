@@ -15,6 +15,9 @@ type EarnPosition struct {
 	ProductID string
 	Amount    float64
 	Locked    bool // locked=定期（不可 FAST 赎回）
+	// MinRedeem venue 最小赎回额（flexible/position 行 minAmount 键，
+	// 实拍待证——键缺/零=venue 未给证据按需求额过，禁硬编底数）。
+	MinRedeem float64
 }
 
 // earnPositions 赚币子账持仓读：GET /v1/simple-earn/{flexible,locked}/position
@@ -40,6 +43,7 @@ func (e *Executor) earnPositions(ctx context.Context, asset string) ([]EarnPosit
 				ProductID   string `json:"productId"`
 				TotalAmount string `json:"totalAmount"`
 				Amount      string `json:"amount"`
+				MinAmount   string `json:"minAmount"`
 			} `json:"rows"`
 		}
 		if err := json.Unmarshal(b, &r); err != nil {
@@ -57,8 +61,15 @@ func (e *Executor) earnPositions(ctx context.Context, asset string) ([]EarnPosit
 			if perr != nil {
 				return nil, fmt.Errorf("%s %s 持仓金额解析败 %q: %w", seg.path, asset, amt, perr)
 			}
+			var minR float64
+			if row.MinAmount != "" {
+				if m, merr := strconv.ParseFloat(row.MinAmount, 64); merr == nil {
+					minR = m
+				}
+			}
 			if f > 0 {
-				out = append(out, EarnPosition{ProductID: row.ProductID, Amount: f, Locked: seg.locked})
+				out = append(out, EarnPosition{
+					ProductID: row.ProductID, Amount: f, Locked: seg.locked, MinRedeem: minR})
 			}
 		}
 	}

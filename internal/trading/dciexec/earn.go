@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -93,8 +94,10 @@ func (e *Executor) earnSubscribe(ctx context.Context, productID string, amount f
 }
 
 // goEarn earn 提案执行：USDT 现货可动全量→活期申购（眠钱承接位）。
-// 闸序：写径 venue/凭据 → 敞口硬线（CEX 权益占比≤cex_exposure_pct）→
-// 现货可动读（venue 实读）→ 产品在售+APR 复验 → 坑表抑单 → 幂等键申购。
+// 闸序：写径 venue/凭据 → 现货可动读（venue 实读）→ 产品在售+APR 复验 →
+// 坑表抑单 → 幂等键申购。
+// D-288：CEX 总占比敞口闸已撤（业主令「钱跟利走」）——改浓度透视 info 告警
+// （单 venue≥50% 或 CEX 总≥70% 只标不拦）；其余硬线（CFD≥25%/−3%/事故仓/oz）不动。
 func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, error) {
 	leg := gate.DCILeg{Name: "EARN", Tmpl: p.TemplateID}
 	if p.Venue != "binance" {
@@ -104,37 +107,11 @@ func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, err
 		return "", e.gap(ctx, leg, "credential", "binance:spot",
 			"请配置 binance 凭据（earn 申购写径）")
 	}
-	cons, err := e.Store.ListCapabilityConstraints(ctx)
-	if err != nil {
-		return "", err
-	}
-	cexCap := gate.CexExposurePctOf(cons)
-	if cexCap == nil {
-		return "", e.gap(ctx, leg, "constraint", "cex_exposure_pct",
-			"请喂约束 cex_exposure_pct（CEX 权益敞口上限 %%）")
-	}
-	// 敞口闸：CEX 侧权益占比须已在硬线内——申购不动 CEX/CFD 结构（场内挪位），
-	// 但超限态势下不再加深 CEX 集中度（fail-closed 如实拒）。
-	pools, err := e.Store.CapitalPoolSnapshots(ctx)
-	if err != nil {
-		return "", fmt.Errorf("池快照读败（敞口闸 fail-closed）: %w", err)
-	}
-	var cexEq, totEq float64
-	for _, r := range pools {
-		if r.Ghost {
-			continue
-		}
-		totEq += r.Equity
-		if r.VenueType != "mt4" && r.VenueType != "mt5" {
-			cexEq += r.Equity
-		}
-	}
-	if totEq <= 0 {
-		return "", e.gap(ctx, leg, "runtime", "pool_snapshot",
-			"系统侧病灶：池权益合计=0（敞口闸不可判，fail-closed 不申购）")
-	}
-	if pct := cexEq / totEq * 100; pct > *cexCap {
-		return "", fmt.Errorf("CEX 权益占比 %.1f%%>硬线 %.0f%%（earn 申购拒——不加深 CEX 集中度）", pct, *cexCap)
+	// D-288 浓度透视（非闸）：单 venue≥50% 或 CEX 总≥70%→info 标。读败不阻塞申购。
+	if pools, perr := e.Store.CapitalPoolSnapshots(ctx); perr != nil {
+		log.Printf("[dciexec] 浓度透视读败（不阻塞）: %v", perr)
+	} else {
+		e.concentrationAlert(ctx, pools)
 	}
 	// 现货可动=申购额（D-192 venue 实读源；活期可赎=眠钱承接非锁仓）。
 	spotFree, err := e.freeBalance(ctx, "USDT")
@@ -234,4 +211,42 @@ func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, err
 	}
 	return fmt.Sprintf("%s %s 申购 %.4f USDT→%s（APR %.2f%%）",
 		p.TemplateID, pick.Asset, spotFree, pick.ProductID, pick.APR*100), nil
+}
+
+// concentrationAlert D-288 浓度透视（非闸）：单 venue 权益≥50% 或 CEX 总≥70%→
+// info alert 如实标，零拦截。阈值=D-288 字面量（业主令裁撤硬闸的保留透视面）。
+func (e *Executor) concentrationAlert(ctx context.Context, pools []pgstore.CapitalPoolRow) {
+	var totEq float64
+	venueEq := map[string]float64{}
+	cexEq := 0.0
+	for _, r := range pools {
+		if r.Ghost || r.Equity <= 0 {
+			continue
+		}
+		totEq += r.Equity
+		venueEq[r.Venue] += r.Equity
+		if r.VenueType != "mt4" && r.VenueType != "mt5" {
+			cexEq += r.Equity
+		}
+	}
+	if totEq <= 0 {
+		return
+	}
+	var hot []string
+	for v, eq := range venueEq {
+		if pct := eq / totEq * 100; pct >= 50 {
+			hot = append(hot, fmt.Sprintf("%s=%.1f%%", v, pct))
+		}
+	}
+	if pct := cexEq / totEq * 100; pct >= 70 {
+		hot = append(hot, fmt.Sprintf("CEX总=%.1f%%", pct))
+	}
+	if len(hot) == 0 {
+		return
+	}
+	sort.Strings(hot)
+	if err := e.Store.InsertAlertDedup(ctx, "info", fmt.Sprintf(
+		"浓度透视：%s（D-288 透视面——只标不拦）", strings.Join(hot, " ")), 24*time.Hour); err != nil {
+		log.Printf("[dciexec] 浓度透视 alert: %v", err)
+	}
 }

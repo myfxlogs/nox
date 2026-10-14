@@ -2,6 +2,7 @@ package oppmatch
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"nox/internal/platform/testutil"
@@ -326,5 +327,73 @@ func TestZombieProposalSemantics(t *testing.T) {
 	}
 	if stt != "deferred" {
 		t.Fatalf("unevaluable 连拍≥3 应翻 deferred, got %s", stt)
+	}
+}
+
+// TestXferScan 跨 venue 机会差调拨提案锚：同资产 earn APR 差超阈+源池闲量
+// →fin_condition_gap 投资人侧请求行；重扫幂等零重推。
+func TestXferScan(t *testing.T) {
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
+	st, err := pgstore.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// 种子：binance 闲 USDT 池（零收入=Idle 标）+两所 earn APR（差 7pt>阈 5）。
+	if _, err := st.Pool().Exec(ctx, `
+		DELETE FROM fin_venue_account_snapshot WHERE venue='xferbin';
+		DELETE FROM fin_cex_earn_apr WHERE venue IN ('xferbin','xferokx');
+		DELETE FROM fin_condition_gap WHERE template_id='cross_venue_xfer'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx, `
+		INSERT INTO fin_venue_account_snapshot
+			(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at)
+			VALUES ('xferbin','spot',1000,1000,1000,'USDT',now());
+		INSERT INTO fin_cex_earn_apr (venue, ccy, product_type, apr) VALUES
+			('xferbin','USDT','flexible',0.02),('xferokx','USDT','flexible',0.09)`); err != nil {
+		t.Fatal(err)
+	}
+	xferScan(ctx, st)
+	var n int
+	var txt string
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*), max(request_text) FROM fin_condition_gap
+		 WHERE template_id='cross_venue_xfer' AND subject='USDT:xferbin>xferokx'`).Scan(&n, &txt); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 || !strings.Contains(txt, "xferbin→xferokx") {
+		t.Fatalf("调拨请求行缺/文案错: n=%d txt=%q", n, txt)
+	}
+	var status string
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT status FROM fin_condition_gap WHERE template_id='cross_venue_xfer' AND subject='USDT:xferbin>xferokx'`).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "requested" {
+		t.Fatalf("应 requested（已推业主）: %s", status)
+	}
+	// 重扫幂等——行数不变。
+	xferScan(ctx, st)
+	var n2 int
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM fin_condition_gap WHERE template_id='cross_venue_xfer' AND subject='USDT:xferbin>xferokx'`).Scan(&n2); err != nil {
+		t.Fatal(err)
+	}
+	if n2 != 1 {
+		t.Fatalf("重扫应幂等零重推: %d", n2)
+	}
+	// 反向差（xferokx→xferbin）不应产行。
+	var rev int
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM fin_condition_gap WHERE subject LIKE 'USDT:xferokx%'`).Scan(&rev); err != nil {
+		t.Fatal(err)
+	}
+	if rev != 0 {
+		t.Fatal("反向差不应产提案")
 	}
 }

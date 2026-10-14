@@ -65,20 +65,29 @@ func TestEarn_HappyPath(t *testing.T) {
 	}
 }
 
-// TestEarn_ExposureCap CEX 权益占比超硬线→拒（不加深集中度）。
-func TestEarn_ExposureCap(t *testing.T) {
+// TestEarn_ConcentrationAlert D-288：CEX 占比敞口闸已撤——超阈仍申购放行，
+// 浓度透视 info 行落账（binance 90%≥单 venue 50% 阈+CEX 总≥70% 阈同中）。
+func TestEarn_ConcentrationAlert(t *testing.T) {
 	ex, f, calls := earnFixture()
 	f.poolRows = []pgstore.CapitalPoolRow{
 		{Venue: "binance", VenueType: "spot", Equity: 9000, Currency: "USDT"},
 		{Venue: "m", VenueType: "mt5", Equity: 1000, Currency: "USD"},
 	}
 	pid := f.addProposal("earn_apr_lending")
-	if _, err := ex.GoProposal(context.Background(), pid); err == nil ||
-		!strings.Contains(err.Error(), "敞口") && !strings.Contains(err.Error(), "占比") {
-		t.Fatalf("敞口拒: %v", err)
+	if _, err := ex.GoProposal(context.Background(), pid); err != nil {
+		t.Fatalf("占比超限不应再拒（D-288 撤闸）: %v", err)
 	}
-	if *calls != 0 {
-		t.Error("超限仍申购")
+	if *calls != 1 {
+		t.Fatal("撤闸后应放行申购")
+	}
+	var saw bool
+	for _, a := range f.alerts {
+		if strings.Contains(a, "浓度透视") && strings.Contains(a, "binance") {
+			saw = true
+		}
+	}
+	if !saw {
+		t.Errorf("浓度透视 info 行缺: %v", f.alerts)
 	}
 }
 

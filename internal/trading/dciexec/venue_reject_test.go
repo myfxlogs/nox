@@ -215,3 +215,66 @@ func TestD255_RedeemDust(t *testing.T) {
 		t.Fatalf("尘埃 note 缺: %v", notes)
 	}
 }
+
+// TestRedeemPit_ProductScoped：-6006 低于最小赎回额→坑签名带 |p=<pid> 只抑
+// 该产品重放；同 op 其他产品不受影响（尘额坑不抑全径）。
+func TestRedeemPit_ProductScoped(t *testing.T) {
+	fs := newFake()
+	var calls []string
+	e := &Executor{Store: fs, Now: time.Now,
+		EarnFn: func(context.Context, string) ([]EarnPosition, error) {
+			return []EarnPosition{{ProductID: "EP1", Amount: 0.5}, {ProductID: "EP2", Amount: 0.5}}, nil
+		},
+		RedeemFn: func(_ context.Context, pid string, _ float64) error {
+			calls = append(calls, pid)
+			if pid == "EP1" {
+				return fmt.Errorf(`redeem HTTP 400: {"code":-6006,"msg":"amount below minimum"}`)
+			}
+			return nil
+		}}
+	// 首拍：EP1 -6006 败 → 坑落行带产品后缀。
+	if _, _, err := e.redeemShortfall(context.Background(), "USDT", 0.5); err == nil {
+		t.Fatal("首赎应败")
+	}
+	var sig string
+	for _, p := range fs.pits {
+		if p.Op == "earn_redeem" {
+			sig = p.ErrorSignature
+		}
+	}
+	if !strings.Contains(sig, "|p=EP1") {
+		t.Fatalf("-6006 坑签名应带产品粒度: %q", sig)
+	}
+	// 二拍：EP1 被坑跳行零打面，EP2 正常发赎——全径不被尘额坑抑。
+	calls = calls[:0]
+	if _, notes, err := e.redeemShortfall(context.Background(), "USDT", 0.5); err != nil {
+		t.Fatalf("二拍不应被全径抑: %v", err)
+	} else {
+		_ = notes
+	}
+	if len(calls) != 1 || calls[0] != "EP2" {
+		t.Fatalf("应只发 EP2: %v", calls)
+	}
+	// MinRedeem 闸：额<min 不发赎。
+	e2 := &Executor{Store: newFake(), Now: time.Now,
+		EarnFn: func(context.Context, string) ([]EarnPosition, error) {
+			return []EarnPosition{{ProductID: "EP9", Amount: 0.001, MinRedeem: 0.1}}, nil
+		},
+		RedeemFn: func(context.Context, string, float64) error {
+			t.Error("尘额<最小赎回额不应发赎")
+			return nil
+		}}
+	done, notes, err := e2.redeemShortfall(context.Background(), "USDT", 0.0005)
+	if err != nil || done != 0 {
+		t.Fatalf("done=%v err=%v", done, err)
+	}
+	var minNote bool
+	for _, n := range notes {
+		if strings.Contains(n, "最小赎回") {
+			minNote = true
+		}
+	}
+	if !minNote {
+		t.Fatalf("最小额跳行 note 缺: %v", notes)
+	}
+}

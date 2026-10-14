@@ -1,5 +1,23 @@
 # LOG.md — 阶段交付归档（NOX 仓首条）
 
+## 三票：CEX 敞口闸撤除 + 跨 venue 调拨提案 + earn_redeem 抑赎粒度修
+
+### ①D-288 CEX 占比闸撤除
+`goEarn` 删 cex_exposure_pct 硬闸整段（constraint 缺口+占比拒单）；改 `concentrationAlert`：单 venue≥50% 或 CEX 总≥70%→`InsertAlertDedup` info「浓度透视」24h 窗去重，只标不拦。读败不阻塞申购。DCI 腿径/其他同源占比判零动（票面禁线照办——`CexExposurePctOf` 保留）。锚 `TestEarn_ConcentrationAlert`：90% 池仍申购+浓度 info 行含 venue 名。
+
+### ②跨 venue 机会差调拨提案（xferScan）
+`oppmatch/xfer.go` 并入扫描拍：同资产（USDT 先行域 `xferCCYs`）`LatestCexEarnAPRs` 跨所比——**APR 列=小数，阈 xfer_apr_diff_pct=pp 点**（缺省 5，app_config 可改）；APR 行 >24h 剔、缺一方不比（fail-closed）、源池须 `Idle` 睡钱标+equity>0（deployed 不动）。达标→`fin_condition_gap`（template_id=`cross_venue_xfer`哨兵/kind=`transfer` 新枚举=迁移 1017/subject=`USDT:src>dst`）+RequestConditionGap 推请求箱；UNIQUE 幂等+业主收口后差仍存复推（D-196②）。系统永不执行划转。锚 `TestXferScan`：7pt 差产行+requested+重扫幂等+反向不产。
+
+### ③earn_redeem 抑赎窗粒度修
+- **防发径**：`EarnPosition.MinRedeem`（flexible/position 行 `minAmount` 键，实拍待证——键缺/零=缺证据按需求额过，禁硬编）；`amt<MinRedeem` 跳行+note，尘额不再发赎撞 -6006。
+- **粒度坑**：`isBelowMinRedeem`（-6006 码或 below min 文案）败因签名带 `|p=<pid>` 后缀——`redeemPitBlocks` 读面拆：带后缀坑只抑该产品重放，无后缀坑仍 op 级抑（suppress/critical 真坑语义不动）。锚 `TestRedeemPit_ProductScoped`：EP1 -6006 落坑签名 `|p=EP1`→二拍 EP1 跳行零打面、EP2 正常发赎；EP9 额<MinRedeem 零发赎+note。
+
+### 机检
+build/vet/gofmt 净；dciexec/oppmatch/pgstore 全包绿；`-race` dciexec+oppmatch 绿；迁移 1017 契约过（NOT VALID 同 1006 式）；pre-commit 十道。
+
+### 验收残留（SG）
+①CEX 占比>35% 时 earn 提案真放行+浓度 info 行在库；②造跨所收益差→请求箱现 transfer 行，重跑零重推；③尘额不再发赎（坑表零新 -6006），正常额赎不被挡。
+
 ## binance:earn USDT 仓位缺采
 
 ### 病灶（SG 实证 10-14）

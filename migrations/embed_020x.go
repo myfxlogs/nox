@@ -55,3 +55,6 @@ var WatchRuleSQL string // 业主视窗两件套 B：通用盯盘规则表
 
 //go:embed 1016_opp_eval_uneval_streak.sql
 var OppEvalUnevalStreakSQL string // auto 轨僵尸提案②：unevaluable 连拍计数列
+
+//go:embed 1017_gap_kind_transfer.sql
+var GapKindTransferSQL string // 跨 venue 调拨提案：gap kind 放 'transfer'
