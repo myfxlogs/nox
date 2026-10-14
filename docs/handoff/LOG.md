@@ -845,3 +845,11 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - 订单 #20 实证链：`asset/transfer 18→6` **成功**（同签名同时间戳同 key）→ `purchase-redemption` 403。okx:funding=1958.27 快照 12:57:10——**划转是我们 rail 干的不是业主手动**（前次误判纠正）。
 - 结论：key+签名+IP+交易写权限全实证无罪；403=finance/savings 端点族专属未授权。OKX 新版 key 权限为勾选树——赚币/金融产品族子项需业主核对（#38 已改窄请求文）。
 - Plan B 记档：`POST /account/set-auto-earn` 自动赚币属**交易权限族**（调整配置写）——若 savings 端点族对该 key 不可授权，auto-earn 同效路径（unified 闲置自动出借，连 funding 前置都不用）。
+
+## 2026-10-14 earn rail 收口票更新 —— okx 403 翻案：URL 错拼非权限（探针实锤成交 $10）
+- **根因（签名探针定案）**：`purchase-redemption` 是错拼——文档原路径=`/api/v5/finance/savings/purchase-redempt`。OKX 网关对签名但路径未命中的请求统一回 `HTTP 403 Forbidden`，与权限拒不可分——我们一路误诊成「赚币 scope 未勾」，业主勾了赚币仍 403 谜底在此。
+- **实验链**：`GET savings/balance`=200（读到 $169.73 真余币宝持仓）→ `POST purchase-redempt` 空参=`400 50014 side 为空`（过权限层到业务校验）→ 带参 `{amt:10,side:purchase}`=**`200 code:0` 真实成交 $10**。对照 `set-auto-earn` 空参=400（/account 族权限亦通）、`purchase-redemption`=403（路径未命中）。
+- **翻案定性**：与 gate `/api/v4/api/v4` 同型——URL 拼接错→网关级 4xx（gate 回 HTML 404、okx 回 JSON 403），都不经业务校验层。**判据立碑：venue 4xx 先查路径拼写再议权限**。
+- **订单#20 实证**：划转 `asset/transfer 18→6` 成功是 rail 自划转非业主手动——业主权限勾选（读/赚币/划转/交易）全程无错。
+- **收口票更新**：三断齐修=①okx FreeBalance 合并 unified+funding、Subscribe 短差划转；②gate min_rate 必填；③okx `purchase-redemption`→`purchase-redempt`。落地后 #377 真出借、#378 funding $1958 真申购。
+- **探针工具**：SG `/opt/nox/tools/probe_okxearn/`（非 git 跟踪面）——签名读凭据不落会话，可复用于 finance 族权限探针。
