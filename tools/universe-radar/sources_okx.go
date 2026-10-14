@@ -169,28 +169,27 @@ func (o okx) Scan(ctx context.Context) ([]Row, error) {
 			rows[i].Mark = float64(d.Last)
 		}
 	}
-	// FUTURES basis 轴 index：标的现货指数 /index-tickers?uly=BASE-USDT 逐 uly 取
-	//（交割 uly 数屈指低频；读败→Index 留 0→basis_ann nil 诚实缺，禁猜）。
-	ulys := make(map[string]bool)
-	rowUly := make(map[string]string)
+	// FUTURES basis 轴 index：标的现货指数 /index-tickers?instId=BASE-USD 逐品种取
+	//（交割指数屈指低频；读败→Index 留 0→basis_ann nil 诚实缺，禁猜）。
+	idxIDs := make(map[string]bool)
+	rowIdx := make(map[string]string)
 	for i := range rows {
 		if rows[i].ContractType == ctFutures && rows[i].Base != "" {
-			uly := okxIndexUly(rows[i].Symbol)
-			if uly != "" {
-				ulys[uly] = true
-				rowUly[rows[i].Symbol] = uly
+			if id := okxIndexInstID(rows[i].Symbol); id != "" {
+				idxIDs[id] = true
+				rowIdx[rows[i].Symbol] = id
 			}
 		}
 	}
-	for uly := range ulys {
-		if px, err := o.indexPx(ctx, uly); err == nil {
+	for id := range idxIDs {
+		if px, err := o.indexPx(ctx, id); err == nil {
 			for i := range rows {
-				if rowUly[rows[i].Symbol] == uly {
+				if rowIdx[rows[i].Symbol] == id {
 					rows[i].Index = px
 				}
 			}
 		} else {
-			log.Printf("[universe-radar] okx index-tickers %s 读败（basis_ann 该行 NULL）: %v", uly, err)
+			log.Printf("[universe-radar] okx index-tickers %s 读败（basis_ann 该行 NULL）: %v", id, err)
 		}
 	}
 	return rows, nil
@@ -200,9 +199,10 @@ func (o okx) Scan(ctx context.Context) ([]Row, error) {
 // SG 实证 OKX 稳定币交割腿实面=USD_UM）。USD 中段=币本位逆向合约（settleCcy=币）不收。
 var okxLinearMid = map[string]bool{"USDT": true, "USDC": true, "USD_UM": true}
 
-// okxIndexUly FUTURES instId→index-tickers 的 uly：USD_UM→BASE-USD（USDⓈ 篮基差对
-// USD 指数），其余→BASE-mid。非三段/中段非白名单→""（不调 index 端点）。
-func okxIndexUly(instID string) string {
+// okxIndexInstID FUTURES instId→index-tickers 的 instId：USD_UM→BASE-USD（USDⓈ 篮
+// 基差对 USD 指数），其余→BASE-mid。非三段/中段非白名单→""（不调 index 端点）。
+// venue 实证：index-tickers 吃 instId 参（?instId=BTC-USD 有行、?uly= 无行）。
+func okxIndexInstID(instID string) string {
 	p := strings.Split(instID, "-")
 	if len(p) != 3 || !okxLinearMid[p[1]] {
 		return ""
@@ -214,18 +214,19 @@ func okxIndexUly(instID string) string {
 	return p[0] + "-" + mid
 }
 
-// indexPx /api/v5/market/index-tickers?uly=<BASE-USDT>→idxPx（venue 官方公共端点无凭据）。
-func (o okx) indexPx(ctx context.Context, uly string) (float64, error) {
+// indexPx /api/v5/market/index-tickers?instId=<BASE-USD>→idxPx（venue 官方公共端点无凭据）。
+func (o okx) indexPx(ctx context.Context, instID string) (float64, error) {
 	var r struct {
 		Data []struct {
-			IdxPx flexFloat `json:"idxPx"`
+			InstID string    `json:"instId"`
+			IdxPx  flexFloat `json:"idxPx"`
 		} `json:"data"`
 	}
-	if err := getJSON(ctx, o.hc, o.base+"/api/v5/market/index-tickers?uly="+uly, &r); err != nil {
+	if err := getJSON(ctx, o.hc, o.base+"/api/v5/market/index-tickers?instId="+instID, &r); err != nil {
 		return 0, err
 	}
 	if len(r.Data) == 0 {
-		return 0, fmt.Errorf("index-tickers %s 无行", uly)
+		return 0, fmt.Errorf("index-tickers %s 无行", instID)
 	}
 	return float64(r.Data[0].IdxPx), nil
 }

@@ -122,7 +122,7 @@ func TestFutures_Okx(t *testing.T) {
 				fmt.Fprint(w, `{"data":[{"instId":"BTC-USDT-SWAP","instType":"SWAP","state":"live","listTime":"1","ctVal":"0.01"}]}`)
 			}
 		case strings.Contains(r.URL.Path, "index-tickers"):
-			idxUlys = append(idxUlys, r.URL.Query().Get("uly"))
+			idxUlys = append(idxUlys, r.URL.Query().Get("instId"))
 			fmt.Fprint(w, `{"data":[{"idxPx":"100000"}]}`)
 		case strings.Contains(r.URL.Path, "tickers") && r.URL.Query().Get("instType") == "FUTURES":
 			fmt.Fprint(w, `{"data":[{"instId":"BTC-USDT-241227","volCcy24h":"1000","last":"101000"},
