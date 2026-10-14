@@ -37,9 +37,11 @@ type okxSwapCache struct {
 
 type okxInstrument struct {
 	InstID   string    `json:"instId"`
+	InstType string    `json:"instType"` // SWAP/FUTURES（载荷合并后按此分拣）
 	State    string    `json:"state"`
 	ListTime flexInt   `json:"listTime"` // ms
 	CtVal    flexFloat `json:"ctVal"`    // 合约面值（base 单位，BTC-USDT-SWAP=0.01）
+	ExpTime  flexInt   `json:"expTime"`  // ms；FUTURES 交割日
 }
 
 type okxTicker struct {
@@ -75,19 +77,25 @@ func (o okx) swapCached(ctx context.Context) (okxSwapCache, error) {
 }
 
 func (o okx) swapFetch(ctx context.Context) (okxSwapCache, error) {
-	var ins struct {
-		Data []okxInstrument `json:"data"`
+	var ins []okxInstrument
+	var tk []okxTicker
+	for _, it := range []string{"SWAP", "FUTURES"} { // 交割轴扩列（OPTION 不收——Greeks/premium 非基差轴）
+		var insResp struct {
+			Data []okxInstrument `json:"data"`
+		}
+		if err := getJSON(ctx, o.hc, o.base+"/api/v5/public/instruments?instType="+it, &insResp); err != nil {
+			return okxSwapCache{}, fmt.Errorf("instruments %s: %w", it, err)
+		}
+		ins = append(ins, insResp.Data...)
+		var tkResp struct {
+			Data []okxTicker `json:"data"`
+		}
+		if err := getJSON(ctx, o.hc, o.base+"/api/v5/market/tickers?instType="+it, &tkResp); err != nil {
+			return okxSwapCache{}, fmt.Errorf("market/tickers %s: %w", it, err)
+		}
+		tk = append(tk, tkResp.Data...)
 	}
-	if err := getJSON(ctx, o.hc, o.base+"/api/v5/public/instruments?instType=SWAP", &ins); err != nil {
-		return okxSwapCache{}, fmt.Errorf("instruments: %w", err)
-	}
-	var tk struct {
-		Data []okxTicker `json:"data"`
-	}
-	if err := getJSON(ctx, o.hc, o.base+"/api/v5/market/tickers?instType=SWAP", &tk); err != nil {
-		return okxSwapCache{}, fmt.Errorf("market/tickers: %w", err)
-	}
-	return okxSwapCache{FetchedAt: time.Now(), Instruments: ins.Data, Tickers: tk.Data}, nil
+	return okxSwapCache{FetchedAt: time.Now(), Instruments: ins, Tickers: tk}, nil
 }
 
 func (o okx) Scan(ctx context.Context) ([]Row, error) {
@@ -98,19 +106,26 @@ func (o okx) Scan(ctx context.Context) ([]Row, error) {
 	rows := make([]Row, 0, len(snap.Instruments))
 	idx := make(map[string]int)
 	for _, d := range snap.Instruments {
-		if !strings.HasSuffix(d.InstID, "-USDT-SWAP") {
+		r := Row{Symbol: d.InstID, LaunchTS: msTime(int64(d.ListTime)), CtVal: f64ptr(float64(d.CtVal))}
+		switch {
+		case strings.HasSuffix(d.InstID, "-USDT-SWAP"):
+			r.ContractType = ctPerp
+			r.Base = strings.TrimSuffix(d.InstID, "-USDT-SWAP")
+		case d.InstType == "FUTURES" && len(strings.Split(d.InstID, "-")) == 3 &&
+			strings.Split(d.InstID, "-")[1] == "USDT": // BTC-USDT-241227 形 USDT 交割
+			r.ContractType = ctFutures
+			r.Base = strings.Split(d.InstID, "-")[0]
+			r.ExpiryTS = msTime(int64(d.ExpTime)) // 0/缺→零值→basis_ann nil fail-closed
+		default:
 			continue
 		}
 		st := d.State
 		if st == "live" {
 			st = "TRADING"
 		}
+		r.Status = st
 		idx[d.InstID] = len(rows)
-		rows = append(rows, Row{
-			Symbol: d.InstID, Base: strings.TrimSuffix(d.InstID, "-USDT-SWAP"),
-			Status: st, LaunchTS: msTime(int64(d.ListTime)),
-			CtVal: f64ptr(float64(d.CtVal)),
-		})
+		rows = append(rows, r)
 	}
 	// D-205②：funding 换 venue 公共 REST——/api/v5/public/funding-rate 逐 instId
 	// 循环限频（不依赖订阅集，全量 SWAP 可评）；interval=(nextFundingTime-fundingTime)
@@ -120,6 +135,9 @@ func (o okx) Scan(ctx context.Context) ([]Row, error) {
 	ivl := latestFacts(ctx, o.pool, "okx", "funding_interval", []string{"okx_ws_v5"}, "15 minutes")
 	for instID := range idx {
 		i := idx[instID]
+		if rows[i].ContractType == ctFutures {
+			continue // 交割无 funding 轴——不打 funding-rate 端点（venue 侧本就无该数据）
+		}
 		if fr, err := o.fundingRate(ctx, instID); err == nil {
 			rows[i].FundingRate = fr.rate
 			rows[i].IntervalH = fr.ivlH
@@ -142,7 +160,42 @@ func (o okx) Scan(ctx context.Context) ([]Row, error) {
 			rows[i].Mark = float64(d.Last)
 		}
 	}
+	// FUTURES basis 轴 index：标的现货指数 /index-tickers?uly=BASE-USDT 逐 uly 取
+	//（交割 uly 数屈指低频；读败→Index 留 0→basis_ann nil 诚实缺，禁猜）。
+	ulys := make(map[string]bool)
+	for i := range rows {
+		if rows[i].ContractType == ctFutures && rows[i].Base != "" {
+			ulys[rows[i].Base+"-USDT"] = true
+		}
+	}
+	for uly := range ulys {
+		if px, err := o.indexPx(ctx, uly); err == nil {
+			for i := range rows {
+				if rows[i].ContractType == ctFutures && rows[i].Base+"-USDT" == uly {
+					rows[i].Index = px
+				}
+			}
+		} else {
+			log.Printf("[universe-radar] okx index-tickers %s 读败（basis_ann 该行 NULL）: %v", uly, err)
+		}
+	}
 	return rows, nil
+}
+
+// indexPx /api/v5/market/index-tickers?uly=<BASE-USDT>→idxPx（venue 官方公共端点无凭据）。
+func (o okx) indexPx(ctx context.Context, uly string) (float64, error) {
+	var r struct {
+		Data []struct {
+			IdxPx flexFloat `json:"idxPx"`
+		} `json:"data"`
+	}
+	if err := getJSON(ctx, o.hc, o.base+"/api/v5/market/index-tickers?uly="+uly, &r); err != nil {
+		return 0, err
+	}
+	if len(r.Data) == 0 {
+		return 0, fmt.Errorf("index-tickers %s 无行", uly)
+	}
+	return float64(r.Data[0].IdxPx), nil
 }
 
 // okxFunding D-205②：/api/v5/public/funding-rate 单 instId 读——

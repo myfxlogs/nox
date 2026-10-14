@@ -62,6 +62,13 @@ func (g gate) Scan(ctx context.Context) ([]Row, error) {
 		rows = append(rows, r)
 	}
 	fundNote("gate", len(rows), funded)
+	// 交割轴：contracts 载荷 expire_time>0=交割合约（venue 原生字段，非名字猜）。
+	// 交割符号不进 ticks 采集面 → Mark/Index 零值诚实缺（basis_ann NULL）。
+	if frows, ferr := g.futuresContracts(ctx); ferr == nil {
+		rows = append(rows, frows...)
+	} else {
+		log.Printf("[universe-radar] gate 交割枚举读败（本轮无交割行）: %v", ferr)
+	}
 	return rows, nil
 }
 
@@ -69,6 +76,33 @@ func (g gate) Scan(ctx context.Context) ([]Row, error) {
 type gateFunding struct {
 	rate float64
 	ivlH int
+}
+
+// futuresContracts 同 /api/v4/futures/usdt/contracts 载荷中 expire_time>0 行→FUTURES。
+// 独立调用不复用 fundingContracts 结果（读败不污染 perp funding 主径）。
+func (g gate) futuresContracts(ctx context.Context) ([]Row, error) {
+	if g.hc == nil || g.base == "" {
+		return nil, fmt.Errorf("REST 面未接线")
+	}
+	var arr []struct {
+		Name       string  `json:"name"`        // BTC_USDT_20241227 形
+		ExpireTime flexInt `json:"expire_time"` // 秒；0=perp
+	}
+	if err := getJSON(ctx, g.hc, g.base+"/api/v4/futures/usdt/contracts", &arr); err != nil {
+		return nil, err
+	}
+	var out []Row
+	for _, c := range arr {
+		if c.ExpireTime <= 0 || !strings.HasSuffix(c.Name, "_USDT") && !strings.Contains(c.Name, "_USDT_") {
+			continue
+		}
+		out = append(out, Row{
+			Symbol: c.Name, Base: strings.Split(c.Name, "_")[0],
+			ContractType: ctFutures, Status: "TRADING",
+			ExpiryTS: secTime(int64(c.ExpireTime)), CtVal: f64ptr(0),
+		})
+	}
+	return out, nil
 }
 
 // fundingContracts GET /api/v4/futures/usdt/contracts——全市场合约面 funding

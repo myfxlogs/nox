@@ -28,7 +28,8 @@ func d591CacheFile(t *testing.T, dir string, age time.Duration, syms map[string]
 			UnderlyingType string  `json:"underlyingType"`
 			Status         string  `json:"status"`
 			OnboardDate    flexInt `json:"onboardDate"`
-		}{sym, sym[:3], "USDT", "PERPETUAL", underlying, "TRADING", flexInt(1720000000000)})
+			DeliveryDate   flexInt `json:"deliveryDate"`
+		}{sym, sym[:3], "USDT", "PERPETUAL", underlying, "TRADING", flexInt(1720000000000), 0})
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {

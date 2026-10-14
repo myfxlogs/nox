@@ -23,7 +23,9 @@ import (
 // Row 归一化的单合约快照行。
 type Row struct {
 	Symbol, Base, Class, Status string
+	ContractType                string    // PERP/FUTURES（源适配显式赋；空=perp 存量语义）
 	LaunchTS                    time.Time // 零值=无上市时间
+	ExpiryTS                    time.Time // FUTURES 交割日（venue 仪器字段原值；零值=无→basis_ann nil）
 	FundingRate                 float64   // 单次结算费率（原始小数）
 	IntervalH                   int       // funding 结算间隔小时（0=无数据）
 	Vol24h, Mark, Index         float64

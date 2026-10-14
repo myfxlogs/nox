@@ -21,20 +21,46 @@ import (
 
 const statusTrading = "TRADING" // 归一后「在交易中」统一值（sources.go 各所适配）
 
+// 仪器轴（fin_cex_universe.contract_type 域值，迁移 1018）。
+const (
+	ctPerp    = "PERP"    // 永续——funding 年化轴
+	ctFutures = "FUTURES" // 交割——到期收敛基差年化轴（无 funding 概念）
+)
+
+// normBase 剥报价/交割后缀得 base：
+//
+//	perp：XAUUSDT→XAU、XAU_USDT→XAU、XAU-USDT-SWAP→XAU；
+//	交割：BTC-USDT-241227→BTC（okx 六位数日期）、BTCUSDT_240927→BTC（binance 下划线日期）、
+//	BTC_USDT_20241227→BTC（gate 八位数日期）——日期尾段先剥再走 perp 链。
+func normBase(symbol string) string {
+	s := symbol
+	if i := strings.LastIndexAny(s, "-_"); i > 0 && allDigits(s[i+1:]) && len(s[i+1:]) >= 6 {
+		s = s[:i] // 交割日期尾段（-YYMMDD/_YYMMDD/_YYYYMMDD）
+	}
+	for _, suf := range []string{"-USDT-SWAP", "-USDT", "_USDT", "USDT"} {
+		if strings.HasSuffix(s, suf) {
+			return strings.TrimSuffix(s, suf)
+		}
+	}
+	return s
+}
+
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // alias base→canonical 别名表（设计附录 A，初版静态 map；追加属配置活）。
 var alias = map[string]string{
 	"XAU": "XAUUSD", "XAG": "XAGUSD", "XPT": "XPTUSD", "XPD": "XPDUSD",
 	"COPPER": "XCUUSD", "CL": "WTI", "BZ": "BRENT", "NATGAS": "NATGAS",
-}
-
-// normBase 剥报价后缀得 base：XAUUSDT→XAU、XAU_USDT→XAU、XAU-USDT-SWAP→XAU。
-func normBase(symbol string) string {
-	for _, suf := range []string{"-USDT-SWAP", "_USDT", "USDT"} {
-		if strings.HasSuffix(symbol, suf) {
-			return strings.TrimSuffix(symbol, suf)
-		}
-	}
-	return symbol
 }
 
 // canonicalOf base→canonical：别名表命中→映射值；未命中→base 本身（加密货币照常）。
@@ -96,6 +122,9 @@ func tierOf(r Row, hedge bool) string {
 func normalize(venue string, rows []Row, hedgeSet map[string]bool, classOf map[string]string) []normRow {
 	out := make([]normRow, 0, len(rows))
 	for _, r := range rows {
+		if r.ContractType == "" {
+			r.ContractType = ctPerp // 存量语义兜底（源适配显式赋值后此分支不该触发）
+		}
 		canon := canonicalOf(normBase(r.Symbol))
 		hit, hedge := hedgeHit(r, canon, hedgeSet)
 		nr := normRow{Row: r, Venue: venue, Canonical: canon,
@@ -114,9 +143,13 @@ func diffUniverse(old map[string]pgstore.CexUniverseRow, rows []normRow) []pgsto
 		return nil // 首轮 bootstrap 静默
 	}
 	oldClasses := make(map[string]bool)
+	oldHasFutures := false
 	for _, o := range old {
 		if o.Class != "" {
 			oldClasses[o.Class] = true
+		}
+		if o.ContractType == ctFutures {
+			oldHasFutures = true
 		}
 	}
 	var evs []pgstore.CexEvent
@@ -124,6 +157,11 @@ func diffUniverse(old map[string]pgstore.CexUniverseRow, rows []normRow) []pgsto
 	for _, n := range rows {
 		o, ok := old[n.Venue+"|"+n.Symbol]
 		if !ok {
+			// 交割轴首扫静默：旧 universe 全 perp（轴尚未存在）时 FUTURES 新行视同
+			// bootstrap——批量 NEW 不落事件不告警（同首轮静默语义），行照常 upsert。
+			if n.ContractType == ctFutures && !oldHasFutures {
+				continue
+			}
 			evs = append(evs, pgstore.CexEvent{Venue: n.Venue, Symbol: n.Symbol, EventType: "NEW",
 				Detail: fmt.Sprintf("tier=%s class=%s hedge=%s", n.Tier, n.Class, n.HedgeCanonical)})
 		} else {
@@ -294,5 +332,19 @@ func basisBps(mark, index float64) *float64 {
 		return nil
 	}
 	v := math.Round((mark/index-1)*1e4*10) / 10
+	return &v
+}
+
+// basisAnn 交割基差年化 %=(mark/index−1)×365/days_to_expiry×100（到期收敛速率口径）。
+// fail-closed：mark/index≤0、expiry 零值或已过/当日（days<0.5）→nil，禁猜到期日。
+func basisAnn(mark, index float64, expiry time.Time, now time.Time) *float64 {
+	if mark <= 0 || index <= 0 || expiry.IsZero() {
+		return nil
+	}
+	days := expiry.Sub(now).Hours() / 24
+	if days < 0.5 {
+		return nil
+	}
+	v := math.Round((mark/index-1)*365/days*100*10) / 10
 	return &v
 }

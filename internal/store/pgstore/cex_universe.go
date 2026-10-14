@@ -13,11 +13,14 @@ import (
 // LaunchTS/FundingAnn/Vol24h/LastAlertTS/CtVal 为 NULL 可空列，用指针表达。
 type CexUniverseRow struct {
 	Venue, Symbol, Base, Class, Status string
+	ContractType                       string // PERP/FUTURES（1018 仪器轴；存量行 NULL 读为 ''）
 	LaunchTS                           *time.Time
+	ExpiryTS                           *time.Time // FUTURES 交割日
 	FirstSeen                          time.Time
 	LastAlertTS                        *time.Time
 	HedgeCanonical, Tier               string
 	FundingAnn, Vol24h, LastBasisBps   *float64
+	BasisAnn                           *float64 // FUTURES 基差年化 %（到期收敛速率）
 	CtVal                              *float64 // D-311：合约面值（1 张=基础资产数），nil=未知
 }
 
@@ -28,8 +31,10 @@ type CexEvent struct {
 
 // CexRadarRow 是 fin_cex_radar 一行（L0 全宇宙快照）。
 type CexRadarRow struct {
-	Venue, Symbol                   string
+	Venue, Symbol, ContractType     string
 	FundingAnn, Vol24h, Mark, Index *float64
+	BasisAnn                        *float64
+	ExpiryTS                        *time.Time
 	HedgeCanonical, Tier            string
 }
 
@@ -38,7 +43,7 @@ func (s *Store) ListCexUniverse(ctx context.Context) (map[string]CexUniverseRow,
 	rows, err := s.pool.Query(ctx, `
 		SELECT venue, symbol, base, underlying_class, status, launch_ts,
 		       first_seen, last_alert_ts, hedge_canonical, tier, last_funding_ann, last_vol24h, ct_val,
-		       last_basis_bps
+		       last_basis_bps, COALESCE(contract_type,''), expiry_ts, last_basis_ann
 		FROM fin_cex_universe`)
 	if err != nil {
 		return nil, fmt.Errorf("list cex_universe: %w", err)
@@ -49,7 +54,7 @@ func (s *Store) ListCexUniverse(ctx context.Context) (map[string]CexUniverseRow,
 		var r CexUniverseRow
 		if err := rows.Scan(&r.Venue, &r.Symbol, &r.Base, &r.Class, &r.Status, &r.LaunchTS,
 			&r.FirstSeen, &r.LastAlertTS, &r.HedgeCanonical, &r.Tier, &r.FundingAnn, &r.Vol24h, &r.CtVal,
-			&r.LastBasisBps); err != nil {
+			&r.LastBasisBps, &r.ContractType, &r.ExpiryTS, &r.BasisAnn); err != nil {
 			return nil, err
 		}
 		out[r.Venue+"|"+r.Symbol] = r
@@ -71,8 +76,9 @@ func (s *Store) UpsertCexUniverse(ctx context.Context, rows []CexUniverseRow, no
 	for _, r := range rows {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO fin_cex_universe (venue, symbol, base, underlying_class, status,
-				launch_ts, last_seen, hedge_canonical, tier, last_funding_ann, last_vol24h, ct_val, last_basis_bps)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+				launch_ts, last_seen, hedge_canonical, tier, last_funding_ann, last_vol24h, ct_val, last_basis_bps,
+				contract_type, expiry_ts, last_basis_ann)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
 			ON CONFLICT (venue, symbol) DO UPDATE SET
 				base = EXCLUDED.base,
 				underlying_class = EXCLUDED.underlying_class,
@@ -84,10 +90,13 @@ func (s *Store) UpsertCexUniverse(ctx context.Context, rows []CexUniverseRow, no
 				last_funding_ann = EXCLUDED.last_funding_ann,
 				last_vol24h = EXCLUDED.last_vol24h,
 				ct_val = EXCLUDED.ct_val,
-				last_basis_bps = EXCLUDED.last_basis_bps`,
+				last_basis_bps = EXCLUDED.last_basis_bps,
+				contract_type = EXCLUDED.contract_type,
+				expiry_ts = EXCLUDED.expiry_ts,
+				last_basis_ann = EXCLUDED.last_basis_ann`,
 			r.Venue, r.Symbol, r.Base, r.Class, r.Status,
 			r.LaunchTS, now, r.HedgeCanonical, r.Tier, r.FundingAnn, r.Vol24h, r.CtVal,
-			r.LastBasisBps); err != nil {
+			r.LastBasisBps, r.ContractType, r.ExpiryTS, r.BasisAnn); err != nil {
 			return fmt.Errorf("upsert cex_universe %s|%s: %w", r.Venue, r.Symbol, err)
 		}
 	}
@@ -148,9 +157,9 @@ func (s *Store) InsertCexRadar(ctx context.Context, rows []CexRadarRow, now time
 	for _, r := range rows {
 		if _, err := s.pool.Exec(ctx, `
 			INSERT INTO fin_cex_radar (ts, venue, symbol, funding_ann, vol24h, mark, idx,
-				hedge_canonical, tier) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+				hedge_canonical, tier, contract_type, expiry_ts, basis_ann) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
 			now, r.Venue, r.Symbol, r.FundingAnn, r.Vol24h, r.Mark, r.Index,
-			r.HedgeCanonical, r.Tier); err != nil {
+			r.HedgeCanonical, r.Tier, r.ContractType, r.ExpiryTS, r.BasisAnn); err != nil {
 			return fmt.Errorf("insert cex_radar %s|%s: %w", r.Venue, r.Symbol, err)
 		}
 	}

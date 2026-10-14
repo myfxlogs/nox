@@ -84,7 +84,11 @@ func TestD205_OKXFundingREST(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.Contains(r.URL.Path, "instruments"):
-			fmt.Fprint(w, `{"data":[{"instId":"AAA-USDT-SWAP","state":"live","listTime":"1","ctVal":"1"},{"instId":"BBB-USDT-SWAP","state":"live","listTime":"1","ctVal":"1"}]}`)
+			if r.URL.Query().Get("instType") == "FUTURES" {
+				fmt.Fprint(w, `{"data":[]}`)
+			} else {
+				fmt.Fprint(w, `{"data":[{"instId":"AAA-USDT-SWAP","instType":"SWAP","state":"live","listTime":"1","ctVal":"1"},{"instId":"BBB-USDT-SWAP","instType":"SWAP","state":"live","listTime":"1","ctVal":"1"}]}`)
+			}
 		case strings.Contains(r.URL.Path, "tickers"):
 			fmt.Fprint(w, `{"data":[{"instId":"AAA-USDT-SWAP","volCcy24h":"1000","last":"2"}]}`)
 		case strings.Contains(r.URL.Path, "funding-rate"):

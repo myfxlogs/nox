@@ -58,3 +58,6 @@ var OppEvalUnevalStreakSQL string // auto 轨僵尸提案②：unevaluable 连�
 
 //go:embed 1017_gap_kind_transfer.sql
 var GapKindTransferSQL string // 跨 venue 调拨提案：gap kind 放 'transfer'
+
+//go:embed 1018_radar_futures_axis.sql
+var RadarFuturesAxisSQL string // 宇宙雷达仪器轴：contract_type/expiry_ts/basis_ann

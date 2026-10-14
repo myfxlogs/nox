@@ -565,3 +565,14 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **enabled presence**：规则#3 不带 enabled 建→真触发（`盯盘触发#3: BTCUSDT 83194.8 < 999999` warn 00:03:49 落库）→once 自翻——proto3 零值陷阱实证闭合。
 - **契约补段**：`contractBackfill` 在 SG 代码面（contract.go:64 `契约补段·原料` 拼接径在）；行为验证点=明早 07:05 日报——若 kimi-k3 漏段则见原料段回填+marker。
 - 测试规则#3 DeleteWatchRule 已清。
+
+## 2026-10-14 宇宙雷达仪器轴扩列 @pending
+- 迁移 1018：fin_cex_universe+fin_cex_radar 加 contract_type(PERP/FUTURES)/expiry_ts/basis_ann；pgstore 读写面同步。
+- 枚举：binance 收 CURRENT_QUARTER/NEXT_QUARTER（deliveryDate→expiry）；okx instruments+tickers 拉 SWAP+FUTURES 双 instType（expTime→expiry，OPTION 不扩）；gate 同 contracts 端点 expire_time>0 行。
+- 评估轴：FUTURES 走 basisAnn=(mark/index−1)×365/days×100；expiry 零值/已过/mark/index≤0→nil fail-closed；funding 轴 perp 语义零动（交割 FundingAnn nil 自动不入 funding 事件/divergence）。
+- okx index 轴：/index-tickers?uly=BASE-USDT 逐 uly 取 idxPx（交割 uly 屈指低频）；读败 Index=0→basis_ann NULL 诚实缺。交割符号不打 funding-rate 端点。
+- normBase 扩：尾段数字日期（-YYMMDD/_YYMMDD/_YYYYMMDD≥6位）先剥再走 perp 链（BTC-USDT-241227→BTC 等三所形全测）。
+- bootstrap 静默沿用：旧 universe 零 FUTURES 行时交割新行视同首轮静默（零 NEW 事件零告警），轴立后 NEW/DELISTED 径照常。
+- 对冲腿 join：universe 键 venue|symbol 原生名即区分到期腿；contract_type+expiry_ts 列就位供日历价差下游表达（产提案属后续票）。
+- 锚 5 件：normBase 三所交割形/basisAnn 全域 fail-closed+perp annualize 回归/binance QUARTER 收/okx FUTURES+index+funding 不打交割/gate expire_time 枚举/首扫静默+次扫 NEW/DELIST。
+- SG 验收残留：radar 轮后 `fin_cex_universe` 现 okx BTC-USDT-YYMMDD FUTURES 行+last_basis_ann 非空；首轮零告警洪泛。

@@ -160,16 +160,22 @@ func run(ctx context.Context) error {
 	byKey := make(map[string]normRow, len(rows))
 	for _, n := range rows {
 		byKey[n.Venue+"|"+n.Symbol] = n
+		var basis *float64
+		if n.ContractType == ctFutures {
+			basis = basisAnn(n.Mark, n.Index, n.ExpiryTS, now) // 交割轴=funding 缺≠剔除，走基差年化
+		}
 		urows = append(urows, pgstore.CexUniverseRow{
 			Venue: n.Venue, Symbol: n.Symbol, Base: normBase(n.Symbol), Class: n.Class,
+			ContractType: n.ContractType, ExpiryTS: launchPtr(n.ExpiryTS),
 			Status: n.Status, LaunchTS: launchPtr(n.LaunchTS),
 			HedgeCanonical: n.HedgeCanonical, Tier: n.Tier,
 			FundingAnn: n.FundingAnn, Vol24h: &n.Vol24h, CtVal: n.CtVal,
-			LastBasisBps: basisBps(n.Mark, n.Index), // D-354 S1：基差落库（okx 无面→NULL）
+			LastBasisBps: basisBps(n.Mark, n.Index), BasisAnn: basis,
 		})
 		rrows = append(rrows, pgstore.CexRadarRow{
-			Venue: n.Venue, Symbol: n.Symbol, FundingAnn: n.FundingAnn,
-			Vol24h: &n.Vol24h, Mark: &n.Mark, Index: &n.Index,
+			Venue: n.Venue, Symbol: n.Symbol, ContractType: n.ContractType,
+			FundingAnn: n.FundingAnn, Vol24h: &n.Vol24h, Mark: &n.Mark, Index: &n.Index,
+			BasisAnn: basis, ExpiryTS: launchPtr(n.ExpiryTS),
 			HedgeCanonical: n.HedgeCanonical, Tier: n.Tier,
 		})
 	}

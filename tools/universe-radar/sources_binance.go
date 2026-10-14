@@ -39,7 +39,8 @@ type binanceExchangeInfo struct {
 		ContractType   string  `json:"contractType"`
 		UnderlyingType string  `json:"underlyingType"`
 		Status         string  `json:"status"`
-		OnboardDate    flexInt `json:"onboardDate"` // ms
+		OnboardDate    flexInt `json:"onboardDate"`  // ms
+		DeliveryDate   flexInt `json:"deliveryDate"` // ms；交割合约到期日
 	} `json:"symbols"`
 }
 
@@ -87,16 +88,28 @@ func (b binance) Scan(ctx context.Context) ([]Row, error) {
 	rows := make([]Row, 0, len(ei.Symbols))
 	idx := make(map[string]int)
 	for _, s := range ei.Symbols {
-		// 仅收 USDT 本位 perp（contractType 含 PERPETUAL、quoteAsset=USDT）
-		if !strings.Contains(s.ContractType, "PERPETUAL") || s.QuoteAsset != "USDT" {
+		// USDT 本位 perp+季度交割（CURRENT_QUARTER/NEXT_QUARTER）；其余类型不收。
+		ct := ""
+		switch {
+		case strings.Contains(s.ContractType, "PERPETUAL"):
+			ct = ctPerp
+		case strings.Contains(s.ContractType, "QUARTER"):
+			ct = ctFutures // CURRENT_QUARTER/NEXT_QUARTER 同属季度交割轴
+		}
+		if ct == "" || s.QuoteAsset != "USDT" {
 			continue
 		}
-		idx[s.Symbol] = len(rows)
-		rows = append(rows, Row{
+		r := Row{
 			Symbol: s.Symbol, Base: s.BaseAsset, Class: s.UnderlyingType,
-			Status: s.Status, LaunchTS: msTime(int64(s.OnboardDate)),
+			ContractType: ct,
+			Status:       s.Status, LaunchTS: msTime(int64(s.OnboardDate)),
 			CtVal: f64ptr(1.0), // D-311 S2：USDT-M qty=基础币数，无合约面值概念
-		})
+		}
+		if ct == ctFutures {
+			r.ExpiryTS = msTime(int64(s.DeliveryDate)) // 0/缺→零值→basis_ann nil fail-closed
+		}
+		idx[s.Symbol] = len(rows)
+		rows = append(rows, r)
 	}
 	vol := latestFacts(ctx, b.pool, "binance", "vol24h", []string{"binance_ws_ticker", "binance_rest_ticker"}, "30 minutes")
 	idxP := latestFacts(ctx, b.pool, "binance", "index_price", []string{"binance_ws_markprice", "binance_rest_markprice"}, "15 minutes") // D-591 R2
