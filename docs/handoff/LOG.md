@@ -606,7 +606,7 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **S1 幂等中**：次轮零假设行零事件零告警（category_key 抑重推实证）；侦测产真货（TRADIFI_PERPETUAL|USD1=股指类永续、USD1/U/USDC 报价永续、USD_UM_XPERP）。
 - **S1 缺陷钉死**：4/7 假设行 memo 永久空——LLM 无 JSON 走占位路径时 `params_proto` 写空串进 jsonb 炸 22P02，且**行已落在册后续轮不重试 memo**（空 memo 行死态）。返修件已立：占位写径修+空 memo 行重试语义。
 
-## 2026-10-14 S1 占位写径修 @pending
+## 2026-10-14 S1 占位写径修 @f0ff5aff
 - UpdateHypothesisMemo proto 参 []byte→string + `NULLIF($4::text,'')::jsonb`：jsonb 不吃零长字节序（22P02 实证）。
 - 死行重试：UpsertHypothesis RETURNING 加 `family_fit IS NULL AND status='proposed'`→memoPending；上轮 memo 写败的行下轮重试预审、回填不告警（原 `!inserted→continue` 会令空 memo 行永久死库——票面附带问询属实）。
 - 锚升：params_proto 落 {} 对拍 + 死行回填零告警锚；共享库 alerts 残留清基线。
