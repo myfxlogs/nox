@@ -629,3 +629,6 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 ## 2026-10-14 DCI 接货处置径立票（决策席）
 - 实证：DCI 行权落 BTC 后 settle 径只记 income_events 不处置——BTC 变裸现货库存躺仓，阴跌敞口无人管。
 - 票面方向（待立票行细化）：行权事件→自动现货卖回 or 转 dci_sell_high 模板接住——两择属风险胃口裁，先记缺口。
+
+## 2026-10-14 S1 首批假设裁决 D-510+分母鲜度守卫立票
+- 4 rejected（币报价/边缘报价/币本位交割）抑重推；3 留 proposed（USDC 永续/TRADIFI 股指/USD_UM_XPERP 待查）。

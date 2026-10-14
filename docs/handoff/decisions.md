@@ -126,3 +126,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 **不动**：`dci_call_otm_bound=1.10` 对称界不变；qty 小额/tenor 上限/settle 记账径照旧。接货后 BTC 库存处置径（自动卖回 vs 转 sell_high 接住）另行立票——机制设计非参数。
 
 **域**：策略执行参数属决策席域（D-184 全权），业主域只涉方向锚本身。
+
+## D-510 S1 首批假设裁决（4 拒 3 留）2026-10-14
+
+- **裁**：rejected=`binance|PERPETUAL|BTC`（币报价族）、`binance|PERPETUAL|USD1`、`binance|PERPETUAL|U`（边缘稳定币报价，流动性薄）、`okx|FUTURES|USD`（币本位交割=设计稿明定另一族）。留 proposed=`binance|PERPETUAL|USDC`（真货架可顺手扩）、`binance|TRADIFI_PERPETUAL|USD1`（股指永续=新资产族最值得研究）、`okx|FUTURES|USD_UM_XPERP`（XPERP 语义待查）。
+- **语义**：rejected 走弃件记忆抑重推——同键不重返；留件等 S2 通用族落地再评，不自动批准。
