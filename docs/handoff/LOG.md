@@ -823,3 +823,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **病灶**：`earn_rail_gate.req` base_url（库约定含 `/api/v4`）再拼 `"/api/v4"+endpoint` → 实发 `…/api/v4/api/v4/…`，venue 回 HTML 404（SG #377 实证）；reconcile/accountGate 同约定读通=本就对，不动。
 - **修**：抽 `gateAPIBase`——`TrimSuffix(TrimRight(base,"/"),"/api/v4")` 空回退原生域；签名仍签 `/api/v4`+endpoint（urlPath 不变）。
 - **锚**：`TestGateAPIBase` 五形态基址对拍+mock 服实发路径=/api/v4/futures/usdt/accounts 单前缀；dciexec 全包绿。
+
+## 2026-10-14 gate rail 双前缀修部署+第二层真相：钱在现货户
+- `a24df0e2` 部署 SG 实证：#377 不再 404——FreeBalance 真实读通 `/futures/usdt/accounts` 但 venue 报 `available=0`。RPC GetCapitalMap 实拉：`gate·现货可用=1999.5978`、`gate·合约=0`——**钱在现货户，期货户空**。
+- 连带病灶：`fin_venue_account_snapshot gate:perp=998` 是 2026-09-30 化石行——gate 快照采集断更两周，idleGapScan 一直在读假标签把现货钱当 perp 闲钱。
+- uni-lend 从现货户扣款→rail FreeBalance 应读 `/spot/accounts`——追修票已立。
+- okx 文档取证（业主供链接）：purchase-redemption「仅资金账户资产可申购」——rail 缺 18→6 asset/transfer 步，立票「okx rail 划转步」。OKX 权限仅三档（读/交易/提现），403=写权限面；`sfp/dcd/*`=OKX 双币赢=DCI 同构面（connected mechanism 新目标，同源资金账户门禁）。
