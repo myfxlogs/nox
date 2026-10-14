@@ -168,6 +168,55 @@ func TestOkxDCILeg_ConstraintGate(t *testing.T) {
 	}
 }
 
+// TestOkxDCILeg_DustShortfall 尘级短差跳划转：funding 差 ≤1e-6、unified 仅尘
+// →不发 asset/transfer，申购照常走 dcd 序列（earn 轨同语义照搬——旧 min() 语义
+// 会发尘划转被 venue 51000 拒，SG #22/#24/#445 同型实证）。
+func TestOkxDCILeg_DustShortfall(t *testing.T) {
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		switch r.URL.Path {
+		case "/api/v5/account/balance":
+			w.Write([]byte(`{"code":"0","data":[{"details":[{"ccy":"USDT","availBal":"0.0000005"}]}]}`))
+		case "/api/v5/asset/balances":
+			w.Write([]byte(`{"code":"0","data":[{"ccy":"USDT","availBal":"99.9999995"}]}`))
+		case "/api/v5/finance/sfp/dcd/quote":
+			fmt.Fprintf(w, `{"code":"0","data":[{"quoteId":"qt1","validUntil":"%d"}]}`,
+				time.Now().Add(time.Hour).UnixMilli())
+		case "/api/v5/finance/sfp/dcd/trade":
+			w.Write([]byte(`{"code":"0","data":[{"ordId":"1"}]}`))
+		case "/api/v5/finance/sfp/dcd/order-status":
+			w.Write([]byte(`{"code":"0","data":[{"ordId":"1","state":"LIVE"}]}`))
+		default:
+			w.Write([]byte(`{"code":"50100","msg":"unknown","data":[]}`))
+		}
+	}))
+	defer srv.Close()
+	st := newFake()
+	tenor := 7
+	deliv := time.Now().AddDate(0, 0, 7)
+	st.quotes = append(st.quotes, pgstore.CexDCIQuote{
+		Venue: "okx", Underlying: "BTC", InvestCcy: "USDT", OptType: "PUT",
+		Strike: f64(80000), TenorDays: &tenor, APY: 0.11,
+		ProductRef: "P1", DeliveryTs: &deliv,
+		MinAmount: f64(10), PurchaseDecimal: idec(0)})
+	ex := &Executor{Store: st, Client: srv.Client(), Now: time.Now,
+		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
+	propID := int64(9)
+	// qty=(99.9999995+5e-7)→floor=100 ≥min10；needed=5e-7 尘差→跳划转照常申购。
+	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, &propID); err != nil {
+		t.Fatalf("尘差应跳划转照常申购: %v", err)
+	}
+	for _, c := range calls {
+		if strings.Contains(c, "asset/transfer") {
+			t.Fatalf("尘级短差不应发划转: %v", calls)
+		}
+	}
+	if !strings.Contains(strings.Join(calls, ";"), "dcd/trade") {
+		t.Fatalf("应走完 dcd 序列: %v", calls)
+	}
+}
+
 // TestOkxSettle_SettledBooks 行权/到期对账锚：order-status=settled→CAS 翻态+
 // 利息入账+warn；LIVE 未终态零翻。接货态（settleCcy≠invest）走处置钩。
 func TestOkxSettle_SettledBooks(t *testing.T) {

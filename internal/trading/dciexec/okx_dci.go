@@ -101,20 +101,18 @@ func (e *Executor) tryLegOKX(ctx context.Context, l gate.DCILeg, share float64, 
 	if !created {
 		return fmt.Sprintf("%s腿已受理（request_id 防重）", l.Name), nil
 	}
-	// funding 短差补划 18→6（sfp/dcd 扣款户=funding 探针实锤）；unified 无款
-	// fail-closed 不试 venue（划转败/短差缺款均如实拒）。
-	if needed := deposit - f; needed > 0 {
-		mv := needed
-		if u < mv {
-			mv = u
-		}
-		if mv <= 0 {
+	// funding 短差补划 18→6（sfp/dcd 扣款户=funding 探针实锤）。尘差
+	// ≤1e-6 跳划转（venue 划转下限下——earn 轨同语义，按 deposit 申购交
+	// venue 裁决）；真短差须 unified 足额盖——部分划转后申购照样败
+	//（earn 轨 SG #22/#24 同型实证），盖不住 fail-closed 不试 venue。
+	if needed := deposit - f; needed > 1e-6 {
+		if u < needed {
 			e.finish(ctx, oid, "failed", "funding 短差且 unified 无款可划")
 			return "", e.gap(ctx, l, "holding", l.QtyCcy,
 				"okx 可动不足：notional %.6f、funding %.6f、unified %.6f", deposit, f, u)
 		}
 		tb := fmt.Sprintf(`{"ccy":"%s","amt":"%s","from":"18","to":"6","type":"0"}`,
-			l.QtyCcy, strconv.FormatFloat(mv, 'f', 8, 64))
+			l.QtyCcy, strconv.FormatFloat(needed, 'f', 8, 64))
 		if _, terr := rail.req(ctx, http.MethodPost, "/api/v5/asset/transfer", tb); terr != nil {
 			e.finish(ctx, oid, "failed", terr.Error())
 			return "", e.gap(ctx, l, "runtime", "okx_transfer",
