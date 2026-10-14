@@ -704,3 +704,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **锚**：`TestIdleGranularity_VenueKeyIncome`——三态对拍：unified 现金闲/perp 有收入不闲/裸键收入保守压闲。
 - **机检**：pgstore 全包+`-race` 绿；build/vet/gofmt 净。
 - **验收残留（SG）**：下拍扫描 `fin_condition_gap` 现 `okx|unified` executor 缺口行+请求箱推。
+
+## 2026-10-14 xasset-monitor 交割符号回归验收 ✅（验收席）@398c5564
+- 修法复核：derive.go 派生谓词 `+AND COALESCE(contract_type,'PERP')<>'FUTURES'`——单行剔交割行，universe/radar/告警语义零动；锚测试 TestFuturesExcludedFromMonitorUniverse 实库对拍（FUTURES 不入/PERP/NULL 收）。
+- **部署径注意**：xasset-monitor=SG 宿主 cron 二进制不走镜像——deploy_sync.sh 推源码+`build_host_tools.sh` 就地重建（首跑静默无输出但实为成功，二进制 09:25:32 更新实证）。
+- SG 实拍：09:30 cron 拍零 `XAU-USD_UM` fetch 错、近 6min critical 该类计数=0；`fin_cex_universe` FUTURES 行 20/2480 在册不动。告警洪泛止血——critical 通道恢复可用。
+- ws-dead 核查结论采信：radar_watchlist 写侧只走 divergence/band 事件，交割行 FundingAnn=nil 不产事件=非同根，独立病灶记备查（binance perp 候选零帧×3 轮——列入观察）。
+- 机检：xasset-monitor 53 测试 -race 绿；build/vet/gofmt 净。
