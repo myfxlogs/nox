@@ -725,3 +725,8 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - 38 条 proposed → 留 7（BRENT/WTI/XAGUSD/XAUUSD/AUDCHF/USDCHF/AUDJPY ≥2.5%）拒 31（别名重复×3+低于 earn 基线×28）。
 - approved 留零：裸 delta 需对冲结构设计才配可跑，S2 触发器不激活——留件=观察级。
 - 3001157 $3.2k 结构性零息户证（scanner 零产出实证）——业主域挪资裁。
+
+## 2026-10-14 业主域归位纠偏（D-184 口径修正）
+- **3001157 零息户**：不走对话裁决——已按「条件缺口→业主请求」机制入库 `fin_condition_gap #36 capital|3001157|requested`（请求箱/飞书 warn 双到）。请求文：划转至有息面户（15032313 目录有 BRENT/WTI/FX 套息面）或补开 carry 品种户或 waived 认沉淀。**这是系统义务项不是临时问话**。
+- **earn_apr_lending 模板漂移**：查属实——0188 种子声明 okx:spot+binance:spot 双凭据，执行轨仅 binance。**裁：保留声明不删**（删了=okx 评估面瞎掉，缺口的 executor 行恰好是它产出的）；venue-float warn=「声明面>执行面」诚实常设信号，与 executor 缺口行同义冗余但 warn 级 dedup 可容。收口路径=okx earn 写径接上（业主权限件）或 waived。
+- 业主域口径重申：D-184 下「挪资/权限/凭据」一律走条件请求箱，不走会话裁决——此前「要你拍」表述越界，以本行为准。
