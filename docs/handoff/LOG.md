@@ -625,3 +625,7 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 ## 2026-10-14 日历基差 P0 SG 验收通过（验收席）
 - 三通道实拍：迁移1020 随 core boot 落；radar 轮「paper delivery: opened=4 exited=0」；paper_spot_carry 4 行 perp_delivery 在册——BTC/ETH×261225/270326，venue_type_a=futures×b=spot（现货对冲审后稿钉），entry_basis_bps 快照 99~228bps、entry_funding_ann=basis_ann 4.2~5.1%；facts delivery_depth_spread_bps 4 行真 bookTicker 滑点（0.51~6.17bps）。
 - 零告警洪泛照旧（1462 行 0 事件，2 条开仓 info 为正当）。Δbasis 累计 accrued 次轮起走；T−1 语义待 12 月到期面实证（单测锚已钉）。
+
+## 2026-10-14 DCI 接货处置径立票（决策席）
+- 实证：DCI 行权落 BTC 后 settle 径只记 income_events 不处置——BTC 变裸现货库存躺仓，阴跌敞口无人管。
+- 票面方向（待立票行细化）：行权事件→自动现货卖回 or 转 dci_sell_high 模板接住——两择属风险胃口裁，先记缺口。
