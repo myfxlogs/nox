@@ -169,3 +169,9 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **留 proposed 7 条**（15032313 户）：BRENT 5.4%/WTI 5.0%/XAGUSD short 3.7%/XAUUSD short 3.7%/AUDCHF 3.4%/USDCHF 2.8%/AUDJPY 2.6%。
 - **approved=零（有意）**：裸 delta 族≠可跑策略——从「收息面」到「可开仓策略」差一层对冲/篮化结构设计（同 DCI 批评面：息是小头是方向赌注）；S2 触发器不因本批激活。留件义=保留观察+未来对冲化设计时再议。
 - **结构新证**：38 条全产自 15032313（$1k）；3001157（$3.2k 大头）零正 swap 面=结构性零息账户——业主域裁决（挪资/认沉淀），挂待议。
+
+## D-519 请求箱四件调配裁定 2026-10-14（业主授权：由我调配其配合）
+- **capital|3001157**：全额划转 Exness→binance。理由：Exness 该户目录零正 swap 面=swap-free 结构性无 carry 位，CFD 策略形态在此户无承载；CEX 侧有活引擎（earn/DCI/日历基差）。请求文已改写为执行指令，业主 wire 后 fulfilled。
+- **executor|okx:unified**：API 实查可行——OKX `POST /api/v5/finance/savings/purchase-redemption`（side=purchase/redempt，可选 min rate 0.01-3.65）。立实施票接 okx earn 写径，接上即闭环金钱不眠。
+- **executor|okx:earn**：粉尘 $169.5——业主令「不计」，行已 waived；顺带 idleGapScan 加 <$100 小池阈值防粉尘件再入请求箱。
+- **executor|gate:perp**：API 实查可行——gate `POST /api/v4/earn/uni/lends`（type=lend/redeem，min_rate 小时结算）。同票接径；gate 池纯保证金无持仓无策略，$998 进 uni-lend 灵活放息。
