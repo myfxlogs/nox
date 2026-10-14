@@ -621,3 +621,7 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - 滑点前置：binance bookTicker REST 逐交割符号读→facts(delivery_depth_spread_bps 新 kind)；读败→note='滑点未知'诚实降级不判死。
 - 迁移 1020：psc_venue_type_ab_chk 枚举加 'futures'（baseline 同步）。执行器不建（P2）。
 - 锚：配对域（USD_UM/负基差剔）+全链（开仓行结构/滑点未知标/Δbasis 重估 5.0 对拍/T−1 退因）。
+
+## 2026-10-14 日历基差 P0 SG 验收通过（验收席）
+- 三通道实拍：迁移1020 随 core boot 落；radar 轮「paper delivery: opened=4 exited=0」；paper_spot_carry 4 行 perp_delivery 在册——BTC/ETH×261225/270326，venue_type_a=futures×b=spot（现货对冲审后稿钉），entry_basis_bps 快照 99~228bps、entry_funding_ann=basis_ann 4.2~5.1%；facts delivery_depth_spread_bps 4 行真 bookTicker 滑点（0.51~6.17bps）。
+- 零告警洪泛照旧（1462 行 0 事件，2 条开仓 info 为正当）。Δbasis 累计 accrued 次轮起走；T−1 语义待 12 月到期面实证（单测锚已钉）。
