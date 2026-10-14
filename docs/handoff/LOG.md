@@ -744,3 +744,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 ## 2026-10-14 死角日报验收 ✅（验收席）@cf5a9e23 + 业主回执落账
 - **死角日报**：deadcorner.go 156 行——A daemon 在职∧beat 新鲜但产出域 24h 零行 / B facts kind 采集有行但无消费件白名单 / C live 策略 48h 零提案零动作；N=0 照常印防静默；daemon→产出域=手写 8 件 map（票面钦定不通用化）。机检 39 测试 -race 绿、build/vet/gofmt 净。digest=`go run` 源驱动 cron 06:10——deploy_sync 源码已到 SG，**明早日报实拍为 SG 验收锚**（手动干跑会推水位线故不抢跑）。
 - **业主回执落账**（D-519 四件）：#36 capital|3001157→waived「划转暂定」（资金暂留 Exness，重启走新条件件）；okx 划账权限已开、gate 理财/钱包/统一账户全开——earn 多 venue 票凭据面就绪，#32/#35 保持 requested 待径接。
+
+## 2026-10-14 死角日报 SG 复核 ✅+两连带病灶（验收席）
+- **死角段实证**：SG 手动同 cron 命令跑 digest——待归纳.md 尾现「死角对拍」段，`死角：11`，全真死角：facts 孤儿 `opt_parity_dev` 13.5万行/日、`trade_session` 18.1万行/日、`mt_symbol_meta/product`、`egress_canary`、`init_margin_rate`、`trade_mode`、`triple_swap_day` 均无消费件；daemon `main:okx_income`/`setup:swapLedger` 在职零产；策略 `XASSET_CARRY` live 48h 零动。机制合格——实现验收通过。
+- **实施席声明纠偏**：报审称「次日 06:10 digest 已现」——当时该拍未跑（cron 06:10 CST=22:10 UTC），SG 文件无此段；实证系我手动跑产。实施侧 SG 声明第二次与实际不符（首次=D-511~513 报在测试环境）。
+- **连带病灶①（deploy_sync 回刷运行时件）**：`docs/经验库/待归纳.md` 与 `.digest_state` 是 git 跟踪件，deploy_sync `--files-from=git ls-files` 每次同步把 SG 运行时写盘回刷成仓内 Oct-12 旧版——SG digest 天天 written 但产物留不住。
+- **连带病灶②（alerts 水印化石）**：`.digest_state` 水位 alerts=64904 但生产 alerts.max(id)=289（arb 时代迁移遗留）→ digest 告警面永久零增量。
