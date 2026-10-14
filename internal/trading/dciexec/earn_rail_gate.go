@@ -92,19 +92,26 @@ func (r *gateEarnRail) Redeem(ctx context.Context, _ string, amount float64) err
 	return err
 }
 
-// FreeBalance perp 户可动 `GET /futures/usdt/accounts`→available（USDT 本位单币）。
-func (r *gateEarnRail) FreeBalance(ctx context.Context, _ string) (float64, error) {
-	b, err := r.req(ctx, http.MethodGet, "/futures/usdt/accounts", "", "")
+// FreeBalance 现货户可动 `GET /spot/accounts?currency=`→available（uni-lend 从现货
+// 扣款——SG 实证期货户=0/现货户 $1999.6，perp 快照 998 是 9-30 化石行）。
+func (r *gateEarnRail) FreeBalance(ctx context.Context, ccy string) (float64, error) {
+	b, err := r.req(ctx, http.MethodGet, "/spot/accounts", "currency="+ccy, "")
 	if err != nil {
 		return 0, err
 	}
-	var row struct {
+	var rows []struct {
+		Currency  string `json:"currency"`
 		Available string `json:"available"`
 	}
-	if err := json.Unmarshal(b, &row); err != nil {
-		return 0, fmt.Errorf("gate futures accounts 解析: %w", err)
+	if err := json.Unmarshal(b, &rows); err != nil {
+		return 0, fmt.Errorf("gate spot accounts 解析: %w", err)
 	}
-	return parseF(row.Available), nil
+	for _, row := range rows {
+		if row.Currency == ccy {
+			return parseF(row.Available), nil
+		}
+	}
+	return 0, nil
 }
 
 func parseF(s string) float64 {

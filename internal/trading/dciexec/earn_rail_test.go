@@ -128,7 +128,7 @@ func TestGateAPIBase(t *testing.T) {
 	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
-		w.Write([]byte(`{"available":"10"}`))
+		w.Write([]byte(`[{"currency":"USDT","available":"10"}]`))
 	}))
 	defer srv.Close()
 	ex := &Executor{Client: srv.Client(), Now: time.Now}
@@ -136,7 +136,42 @@ func TestGateAPIBase(t *testing.T) {
 	if _, err := rail.FreeBalance(context.Background(), "USDT"); err != nil {
 		t.Fatalf("free balance: %v", err)
 	}
-	if gotPath != "/api/v4/futures/usdt/accounts" {
+	if gotPath != "/api/v4/spot/accounts" {
 		t.Fatalf("实发路径: %s", gotPath)
+	}
+}
+
+// TestOkxRail_TransferBeforeSubscribe okx 划转步锚：Subscribe 先发 18→6 transfer，
+// 成功才发 purchase-redemption；transfer 败→purchase 不发。
+func TestOkxRail_TransferBeforeSubscribe(t *testing.T) {
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		w.Write([]byte(`{"code":"0","msg":"","data":[]}`))
+	}))
+	defer srv.Close()
+	ex := &Executor{Client: srv.Client(), Now: time.Now}
+	rail := &okxEarnRail{e: ex, c: EarnCred{Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}
+	if _, err := rail.Subscribe(context.Background(), "", 100); err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	if len(calls) != 2 ||
+		calls[0] != "POST /api/v5/asset/transfer" ||
+		calls[1] != "POST /api/v5/finance/savings/purchase-redemption" {
+		t.Fatalf("端点序列: %v", calls)
+	}
+	// transfer 败→purchase 不发。
+	calls = nil
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.URL.Path)
+		w.Write([]byte(`{"code":"58000","msg":"transfer denied","data":[]}`))
+	}))
+	defer srv2.Close()
+	rail2 := &okxEarnRail{e: ex, c: EarnCred{Key: "k", Secret: "s", Pass: "p", BaseURL: srv2.URL}}
+	if _, err := rail2.Subscribe(context.Background(), "", 100); err == nil {
+		t.Fatal("划转败应如实报")
+	}
+	if len(calls) != 1 || calls[0] != "/api/v5/asset/transfer" {
+		t.Fatalf("划转败不应发申购: %v", calls)
 	}
 }

@@ -1,7 +1,7 @@
 // earn_rail.go —— earn 执行径多 venue 化：产品读/申购/赎回/余额四动词 per venue
 // 适配面。binance=原实现包壳零行为变；okx=savings purchase-redemption；gate=earn/uni
 // lend-redeem。凭据源=exchange_configs（装配注入 EarnCreds，缺行=nil rail→credential
-// 缺口不臆造）。余额口径：okx=unified availBal、gate=perp available、binance=spot free。
+// 缺口不臆造）。余额口径：okx=unified availBal、gate=现货 available、binance=spot free。
 package dciexec
 
 import (
@@ -158,11 +158,16 @@ func (r *okxEarnRail) Products(ctx context.Context, ccy string) ([]EarnProduct, 
 	return out, nil
 }
 
-// Subscribe 余币宝申购：`POST /finance/savings/purchase-redemption`
-// {ccy,amt,side:purchase}——rate 不带（venue 按市价撮合，带 rate 会拒超额；产品读已验 APR>0）。
+// Subscribe 申购前置划转+申购：savings 只认资金账户资产（venue 文档实证）——
+// 先 `POST /asset/transfer {from:"18",to:"6"}` 交易户→资金户，成则
+// `POST /finance/savings/purchase-redemption`；划转败如实报不试申购。
 func (r *okxEarnRail) Subscribe(ctx context.Context, _ string, amount float64) (string, error) {
-	body := fmt.Sprintf(`{"ccy":"USDT","amt":"%s","side":"purchase"}`,
-		strconv.FormatFloat(amount, 'f', 8, 64))
+	amt := strconv.FormatFloat(amount, 'f', 8, 64)
+	tb := fmt.Sprintf(`{"ccy":"USDT","amt":"%s","from":"18","to":"6","type":"0"}`, amt)
+	if _, err := r.req(ctx, http.MethodPost, "/api/v5/asset/transfer", tb); err != nil {
+		return "", fmt.Errorf("okx 18→6 划转败（不试申购）: %w", err)
+	}
+	body := fmt.Sprintf(`{"ccy":"USDT","amt":"%s","side":"purchase"}`, amt)
 	b, err := r.req(ctx, http.MethodPost, "/api/v5/finance/savings/purchase-redemption", body)
 	return string(b), err
 }

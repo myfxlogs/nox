@@ -829,3 +829,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - 连带病灶：`fin_venue_account_snapshot gate:perp=998` 是 2026-09-30 化石行——gate 快照采集断更两周，idleGapScan 一直在读假标签把现货钱当 perp 闲钱。
 - uni-lend 从现货户扣款→rail FreeBalance 应读 `/spot/accounts`——追修票已立。
 - okx 文档取证（业主供链接）：purchase-redemption「仅资金账户资产可申购」——rail 缺 18→6 asset/transfer 步，立票「okx rail 划转步」。OKX 权限仅三档（读/交易/提现），403=写权限面；`sfp/dcd/*`=OKX 双币赢=DCI 同构面（connected mechanism 新目标，同源资金账户门禁）。
+
+## 2026-10-14 gate rail 现货户+okx rail 划转步（实施席）
+- **gate 余额源**：`gateEarnRail.FreeBalance` `/futures/usdt/accounts`→`GET /spot/accounts?currency=`（uni-lend 从现货扣款；SG 实证期货户=0/现货 $1999.6，perp 998 化石行）。gate 凭据装配优先序不动（同 key 现货面可读）。
+- **快照断更真因**（票面②如实记非修）：`hydrateAccountSnapshots` 自 3d-P1#1c 降为 boot 一次性水合——周期快照写整体退役，fin_venue_account_snapshot=审计留痕、实时源=AccountMonitor；gate:perp 化石非 gate 专病=全表陈旧-by-design。提案池标签无碍（提案 venue 键只 'gate' 不挂 venue_type，FreeBalance 现货读面与钱同户）。
+- **okx 划转步**：`okxEarnRail.Subscribe` 前置 `POST /asset/transfer {from:18,to:6,type:0}` 交易户→资金户（savings 只认资金户，venue 文档实证），划转败如实不试申购；FreeBalance 仍 unified、Redeem 款落资金户。
+- **锚**：gate mock 现货数组路径+okx mock 双端点序列（transfer→purchase；transfer 58000 败→purchase 零发）；dciexec 全包 -race 绿。
