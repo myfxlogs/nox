@@ -26,7 +26,7 @@ func d514Store(t *testing.T) (*pgstore.Store, context.Context) {
 	}
 	for _, q := range []string{
 		`DELETE FROM fin_cex_dci_quote WHERE product_ref LIKE 'D514%'`,
-		`DELETE FROM fin_cex_earn_apr WHERE ccy LIKE 'D514%'`,
+		`DELETE FROM fin_cex_earn_apr WHERE ccy LIKE 'D514%' OR (ccy='USDT' AND apr=1.08)`,
 		`DELETE FROM fin_venue_account_snapshot WHERE venue LIKE 'd514%'`,
 		`DELETE FROM fin_condition_gap WHERE subject LIKE 'd514%'`,
 		`DELETE FROM fin_opp_hypothesis WHERE category_key LIKE 'cfd_swap|d514%'`,
@@ -61,7 +61,7 @@ func TestD514_PremiumGate(t *testing.T) {
 		 VALUES ('okx','D514MOON','earn',365.0, now())`); err != nil {
 		t.Fatal(err)
 	}
-	_, earn, _, err := st.MaxEarnAPRByCcy(ctx, "USDT")
+	_, earn, _, _, err := st.MaxEarnAPRByCcy(ctx, "USDT")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,6 +71,15 @@ func TestD514_PremiumGate(t *testing.T) {
 	}
 	if thr > 0.5 { // 锚前照：异币种行销档若混入基准则 thr 虚高——钉死口径。
 		t.Fatalf("USDT 基准被异币种污染: thr=%v", thr)
+	}
+	// 鲜度闸锚：陈旧 USDT 高 APR 行（>24h）不入基准——现值才是真替代。
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO fin_cex_earn_apr (venue, ccy, product_type, apr, ts)
+		 VALUES ('okx','USDT','earn',1.08, now()-interval '2 days')`); err != nil {
+		t.Fatal(err)
+	}
+	if bv, ba, _, _, err := st.MaxEarnAPRByCcy(ctx, "USDT"); err != nil || ba >= 1.0 {
+		t.Fatalf("陈旧行销档混入基准: %s %.4f %v", bv, ba, err)
 	}
 	// 高溢价（闸×1.5；apy 列=binance %口径——闸小数×100 入库）→放行。
 	d514Put(t, st, ctx, thr*150)

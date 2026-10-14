@@ -892,3 +892,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **修**：`MaxEarnAPRByCcy(ctx,ccy)` 新读件（ccy 过滤+venue 顶行返回供审计）；闸基准=同币种 USDT 跨 venue max（「权利金 vs 同币种无风险替代」语义对）；拒因/过闸注记附基准 venue+apr。
 - **禁线**：earn APR 复验面（在售+APR>0）不动；BETH 行如实留库；binance 闸口径修正属如实。
 - **锚**：D514MOON apr=365 异币种行在场→USDT 基准 thr 不受污染断言+放行/拒/报价缺三态照旧绿。
+
+## 2026-10-14 D-514 溢价闸基准窗口修（实施席）
+- **病灶二层**：同币种修对后 SG 实拍仍拒——`fin_cex_earn_apr` 9-22 okx USDT flexible 1.08 促销化石行在 30d max 窗内当基准（3×108%=324% 地板）；现值真面=每 5min 在刷的 0.035。
+- **修**：`MaxEarnAPRByCcy` SQL 改 `DISTINCT ON (venue) ORDER BY ts DESC` 各 venue 最新行+行龄 24h 鲜度闸→跨 venue max——断更采集的化石行不冒充现值；返 venue+apr+ts，闸注记附 `@时间` 可审计。
+- **禁线**：`MaxEarnAPR`（其他消费面）不动；化石行不删；行龄阈值=代码常量 24h。
+- **锚**：陈旧 USDT 1.08 行在场→基准仍取新值断言（ba<1.0）；D514 三态照旧绿。

@@ -4,6 +4,7 @@ package pgstore
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -33,23 +34,28 @@ func (s *Store) MaxEarnAPR(ctx context.Context) (float64, bool, error) {
 	return v, v > 0, nil
 }
 
-// MaxEarnAPRByCcy 近 30d 同币种跨 venue 理财报价顶行（溢价闸基准——
-// 「权利金跑不赢同币种无风险替代」口径，异币种营销档不入基准）。
-// 返 venue+apr 顶行供审计注记；零行→ok=false。
-func (s *Store) MaxEarnAPRByCcy(ctx context.Context, ccy string) (string, float64, bool, error) {
+// MaxEarnAPRByCcy 同币种跨 venue 理财现值顶行（溢价闸基准——「权利金跑不赢
+// 当前同币种无风险替代」口径）：各 venue 该币最新行取 max+行龄 24h 鲜度闸
+// （采集断更/过期促销化石行不冒充现值——SG 实证 9-22 USDT 1.08 行销档在 30d
+// 窗内当基准抬高地板 3×108%）。返 venue+apr+ts 顶行供审计注记；零行→ok=false。
+func (s *Store) MaxEarnAPRByCcy(ctx context.Context, ccy string) (string, float64, time.Time, bool, error) {
 	var venue string
 	var v float64
+	var ts time.Time
 	err := s.pool.QueryRow(ctx, `
-		SELECT venue, apr FROM fin_cex_earn_apr
-		WHERE ccy=$1 AND ts > now() - interval '30 days'
-		ORDER BY apr DESC LIMIT 1`, ccy).Scan(&venue, &v)
+		SELECT venue, apr, ts FROM (
+			SELECT DISTINCT ON (venue) venue, apr, ts
+			FROM fin_cex_earn_apr WHERE ccy=$1
+			ORDER BY venue, ts DESC
+		) latest WHERE ts > now() - interval '24 hours'
+		ORDER BY apr DESC LIMIT 1`, ccy).Scan(&venue, &v, &ts)
 	if err == pgx.ErrNoRows {
-		return "", 0, false, nil
+		return "", 0, time.Time{}, false, nil
 	}
 	if err != nil {
-		return "", 0, false, err
+		return "", 0, time.Time{}, false, err
 	}
-	return venue, v, true, nil
+	return venue, v, ts, true, nil
 }
 
 // MaxFactValue 近 7d 某 facts kind 最大值（报价面兜底；kind 白名单口径由调用方定）。

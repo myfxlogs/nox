@@ -56,7 +56,7 @@ func dciPremiumGate(ctx context.Context, st *pgstore.Store, venue string) (bool,
 	}
 	// 基准=同币种（投入币 USDT）跨 venue 理财顶档——异币种营销档不入基准
 	// （BETH 365% 类 3× 地板虚高实证）；earn 面缺=退纯地板不臆放。
-	benchVenue, earnApr, ok, err := st.MaxEarnAPRByCcy(ctx, "USDT")
+	benchVenue, earnApr, benchTS, ok, err := st.MaxEarnAPRByCcy(ctx, "USDT")
 	if err != nil {
 		return false, fmt.Sprintf("earn_apr USDT 基准读败：%v", err)
 	}
@@ -68,8 +68,8 @@ func dciPremiumGate(ctx context.Context, st *pgstore.Store, venue string) (bool,
 		thr = t
 	}
 	if premium < thr {
-		return false, fmt.Sprintf("溢价低于闸：premium_ann %.2f%% < max(3×USDT_earn %s %.2f%%, 8%%)=%.2f%%",
-			premium*100, benchVenue, earnApr*100, thr*100)
+		return false, fmt.Sprintf("溢价低于闸：premium_ann %.2f%% < max(3×USDT_earn %s %.2f%%@%s, 8%%)=%.2f%%",
+			premium*100, benchVenue, earnApr*100, benchTS.Format("01-02 15:04"), thr*100)
 	}
-	return true, fmt.Sprintf("基准=USDT earn_apr 顶档 %s %.2f%%", benchVenue, earnApr*100)
+	return true, fmt.Sprintf("基准=USDT earn_apr %s %.2f%% @%s", benchVenue, earnApr*100, benchTS.Format("01-02 15:04"))
 }
