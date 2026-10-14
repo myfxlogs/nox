@@ -886,3 +886,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **机检独立重跑绿**：build/vet/gofmt/test 90 项+race 62 项 @6463aa24。
 - **缺口**：okx 报价行 `min_amount/max_amount/purchase_decimal` 仍 NULL——采集件已读到 `minSize/maxSize/stepSz`（cexscan 日志 row keys 实证）但未持久化，rail 下单无约束闸，低档产品将靠 venue 拒单兜底（坑表如实收）。续件：cexscan/dci_okx.go 补三字段落库+tryLegOKX 达标档校验加 minSize 闸。
 - **部署口径**：镜像 0f9e2fb8 含本票——okx PUT 提案若出库按评估额执行（当前 funding=0 将如实拒），CALL 需持仓面。
+
+## 2026-10-14 D-514 溢价闸基准口径修（实施席）
+- **病灶**：闸基准 `MaxEarnAPR`=全 venue 全币种 max——okx BETH apr=3.65（365% 营销档）把地板抬到 3×=1095%，okx PUT premium 18.79% 永续被挡（SG alerts 实证）。
+- **修**：`MaxEarnAPRByCcy(ctx,ccy)` 新读件（ccy 过滤+venue 顶行返回供审计）；闸基准=同币种 USDT 跨 venue max（「权利金 vs 同币种无风险替代」语义对）；拒因/过闸注记附基准 venue+apr。
+- **禁线**：earn APR 复验面（在售+APR>0）不动；BETH 行如实留库；binance 闸口径修正属如实。
+- **锚**：D514MOON apr=365 异币种行在场→USDT 基准 thr 不受污染断言+放行/拒/报价缺三态照旧绿。

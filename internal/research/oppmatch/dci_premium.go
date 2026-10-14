@@ -54,9 +54,11 @@ func dciPremiumGate(ctx context.Context, st *pgstore.Store, venue string) (bool,
 	if venue == "binance" {
 		premium /= 100
 	}
-	earnApr, ok, err := st.MaxEarnAPR(ctx)
+	// 基准=同币种（投入币 USDT）跨 venue 理财顶档——异币种营销档不入基准
+	// （BETH 365% 类 3× 地板虚高实证）；earn 面缺=退纯地板不臆放。
+	benchVenue, earnApr, ok, err := st.MaxEarnAPRByCcy(ctx, "USDT")
 	if err != nil {
-		return false, fmt.Sprintf("earn_apr 现值读败：%v", err)
+		return false, fmt.Sprintf("earn_apr USDT 基准读败：%v", err)
 	}
 	if !ok {
 		earnApr = 0 // earn 面缺≠无限额——闸退纯地板 8%
@@ -66,8 +68,8 @@ func dciPremiumGate(ctx context.Context, st *pgstore.Store, venue string) (bool,
 		thr = t
 	}
 	if premium < thr {
-		return false, fmt.Sprintf("溢价低于闸：premium_ann %.2f%% < max(3×earn_apr %.2f%%, 8%%)=%.2f%%",
-			premium*100, earnApr*100, thr*100)
+		return false, fmt.Sprintf("溢价低于闸：premium_ann %.2f%% < max(3×USDT_earn %s %.2f%%, 8%%)=%.2f%%",
+			premium*100, benchVenue, earnApr*100, thr*100)
 	}
-	return true, ""
+	return true, fmt.Sprintf("基准=USDT earn_apr 顶档 %s %.2f%%", benchVenue, earnApr*100)
 }

@@ -54,14 +54,23 @@ func d514Put(t *testing.T, st *pgstore.Store, ctx context.Context, apy float64) 
 
 func TestD514_PremiumGate(t *testing.T) {
 	st, ctx := d514Store(t)
-	// 闸值由共享库 earn 现值实算（MaxEarnAPR 全表口径——不测固定值，测关系式）。
-	earn, _, err := st.MaxEarnAPR(ctx)
+	// 闸值由共享库 earn 现值实算（同币种 USDT 基准口径——不测固定值，测关系式）。
+	// 异币种营销档在场不入基准（BETH 365% 型病灶锚）。
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO fin_cex_earn_apr (venue, ccy, product_type, apr, ts)
+		 VALUES ('okx','D514MOON','earn',365.0, now())`); err != nil {
+		t.Fatal(err)
+	}
+	_, earn, _, err := st.MaxEarnAPRByCcy(ctx, "USDT")
 	if err != nil {
 		t.Fatal(err)
 	}
 	thr := 0.08
 	if 3*earn > thr {
 		thr = 3 * earn
+	}
+	if thr > 0.5 { // 锚前照：异币种行销档若混入基准则 thr 虚高——钉死口径。
+		t.Fatalf("USDT 基准被异币种污染: thr=%v", thr)
 	}
 	// 高溢价（闸×1.5；apy 列=binance %口径——闸小数×100 入库）→放行。
 	d514Put(t, st, ctx, thr*150)

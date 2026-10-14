@@ -33,6 +33,25 @@ func (s *Store) MaxEarnAPR(ctx context.Context) (float64, bool, error) {
 	return v, v > 0, nil
 }
 
+// MaxEarnAPRByCcy 近 30d 同币种跨 venue 理财报价顶行（溢价闸基准——
+// 「权利金跑不赢同币种无风险替代」口径，异币种营销档不入基准）。
+// 返 venue+apr 顶行供审计注记；零行→ok=false。
+func (s *Store) MaxEarnAPRByCcy(ctx context.Context, ccy string) (string, float64, bool, error) {
+	var venue string
+	var v float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT venue, apr FROM fin_cex_earn_apr
+		WHERE ccy=$1 AND ts > now() - interval '30 days'
+		ORDER BY apr DESC LIMIT 1`, ccy).Scan(&venue, &v)
+	if err == pgx.ErrNoRows {
+		return "", 0, false, nil
+	}
+	if err != nil {
+		return "", 0, false, err
+	}
+	return venue, v, true, nil
+}
+
 // MaxFactValue 近 7d 某 facts kind 最大值（报价面兜底；kind 白名单口径由调用方定）。
 func (s *Store) MaxFactValue(ctx context.Context, kind string) (float64, bool, error) {
 	var v float64
