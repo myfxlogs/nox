@@ -860,3 +860,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **gate min_rate**：`Subscribe` body 加 `min_rate`=`uniCurrency()` 实读原值透传（SG #377 实证缺之 venue 400 INVALID_PARAM_VALUE）；Products 抽 `uniCurrency` 助手共享；min_rate 读不出 fail-closed 不申购。
 - **快照断更**：上票已查=boot 水合 only 全局陈旧-by-design，如实记不阻塞。
 - **锚**：okx mock 四态（funding 够零划直购/短差补划/unified 无款拒/划转败拒+合并余额 1958.27）+gate 现货数组；dciexec 全包 -race 绿；禁线：申购额不放大、binance 零回归。
+
+## 2026-10-14 okx DCI（双币赢）执行面真单实证 —— 扣款户=funding 定案
+- **业主答疑三件**：①app 端 funding/trading/简单赚币三户均可作扣款源；②app 产品列表+申购可见、历史未买过；③授权 $10 真单探针。
+- **真单实证链**：`POST /sfp/dcd/quote {ETH-USDT-261021-2280-P,10,USDT}`→200（absYield 0.26%/年化 14.07%、quoteId+validUntil）→`POST /sfp/dcd/trade {quoteId}`→200（ordId=11401353, INITIAL）→`GET order-status`→**LIVE**。
+- **扣款户定案**：`asset/balances` funding 1948.0017→1938.0017（-10.00 整）；unified=0 未动；savings 179.73（早前探针 $10 已落账）。→ **sfp/dcd 走资金账户扣款**，复用收口票短差划转件（funding 不足补 18→6）。
+- **首笔 okx DCI 持仓**：ETH-USDT-261021-2280-P $10，10-21 到期、行权价 2280（idxPx 2466.93）——小幅试单，到期按 venue 结算走。
+- **提案面断点不变**：oppmatch `ListDCIQuotes(ctx,"binance",…)` 写死——okx 报价 32.9 万行在库不进提案，DCI 拓展票即此修。
