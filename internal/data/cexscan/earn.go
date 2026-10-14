@@ -208,5 +208,48 @@ func (c *EarnCollector) Collect(ctx context.Context) ([]pgstore.CexEarnAPR, map[
 	} else {
 		out = append(out, aprs...)
 	}
+	if aprs, err := c.CollectGate(ctx); err != nil {
+		errs["gate"] = err
+		log.Printf("[cexscan] gate earn collect: %v", err)
+	} else {
+		out = append(out, aprs...)
+	}
 	return out, errs
+}
+
+// gateEarnUniURL gate earn/uni 币种详情公开端点（var=测试可覆；public 无凭据可采，
+// 同 gateDualURL 例——min_rate 为时息口径）。
+var gateEarnUniURL = "https://api.gateio.ws/api/v4/earn/uni/currencies/USDT"
+
+// CollectGate 采集 gate uni-lend USDT 币种详情（min_rate 时息×24×365 年化口径——
+// 票面钦定；max_rate 顶帽不入库不做广告值）。
+func (c *EarnCollector) CollectGate(ctx context.Context) ([]pgstore.CexEarnAPR, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", gateEarnUniURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("gate earn request: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("gate earn HTTP %d: %s", resp.StatusCode, string(body))
+	}
+	var row struct {
+		Currency string      `json:"currency"`
+		MinRate  json.Number `json:"min_rate"`
+	}
+	if err := json.Unmarshal(body, &row); err != nil {
+		return nil, fmt.Errorf("gate earn decode: %w", err)
+	}
+	minRate, err := row.MinRate.Float64()
+	if err != nil {
+		return nil, fmt.Errorf("gate earn min_rate parse %q: %w", row.MinRate.String(), err)
+	}
+	return []pgstore.CexEarnAPR{{
+		Venue: "gate", Ccy: "USDT", ProductType: "uni_lend",
+		APR: minRate * 24 * 365,
+	}}, nil
 }

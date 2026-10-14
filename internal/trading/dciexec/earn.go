@@ -196,7 +196,7 @@ func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, err
 		}
 		kb := e.kbSuffix(sig) // 拒单消费闸：坑签名命中经验库→教训贴告警脸
 		if venueErrKind(err) == "permission" {
-			return "", e.gap(ctx, leg, "permission", "earn_subscribe",
+			return "", e.gap(ctx, leg, "permission", "earn_subscribe:"+p.Venue,
 				"请开通 %s 赚币活期申购权限（申购败：%v）%s", p.Venue, err, kb)
 		}
 		return "", e.gap(ctx, leg, "runtime", "earn_subscribe",

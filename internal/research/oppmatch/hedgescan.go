@@ -93,6 +93,11 @@ func hedgeScan(ctx context.Context, st *pgstore.Store) {
 					cost = -cost // 空腿收息=负成本
 				}
 			}
+			note := ""
+			if l.ContractType == "FUTURES" {
+				// 交割腿 funding=0 不虚增——基差收敛成本未计价，如实注明。
+				note = "；交割腿基差成本未计"
+			}
 			_, inserted, _, uerr := st.UpsertHypothesis(ctx, pgstore.OppHypothesis{
 				Venue: mtVenue, CategoryKey: key,
 				InstType: "cfd_hedged", Shape: "swap_hedge",
@@ -100,9 +105,9 @@ func hedgeScan(ctx context.Context, st *pgstore.Store) {
 					side, sym, mtVenue, hedgeSide(side), l.Symbol, l.Venue),
 				Detail: fmt.Sprintf(
 					"腿对：%s %s@%s × %s %s@%s（%s）；名义 1:1 同标的 qty 换算假设；"+
-						"swap≈%.1f%%/yr − 对冲腿成本≈%.1f%%/yr（universe funding 实读）→净 carry≈%.1f%%/yr",
+						"swap≈%.1f%%/yr − 对冲腿成本≈%.1f%%/yr（universe funding 实读）→净 carry≈%.1f%%/yr%s",
 					side, sym, mtVenue, hedgeSide(side), l.Symbol, l.Venue, l.ContractType,
-					swapAnn, cost, swapAnn-cost),
+					swapAnn, cost, swapAnn-cost, note),
 			})
 			if uerr != nil {
 				log.Printf("[oppmatch] hedge hypothesis %s: %v", key, uerr)

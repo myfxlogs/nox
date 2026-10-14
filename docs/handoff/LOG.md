@@ -794,3 +794,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **earn 返修真金实证**：#378 okx 提案 viable 卡→AutoExecLive 真打 `okx-saving-USDT $1958`→venue HTTP 403 Forbidden（业主开的划账权限≠理财 scope）→fail-closed 坑表+缺口告警如实落。**rail 本身真通**——权限面是业主域待办。#377 gate=unevaluable（gate 无 earn_apr 采集行）。
 - **业主请求箱新增**：`permission|earn_subscribe:okx` #38 requested——okx API 需补 savings/理财权限。旧泛化行 #4 收 fulfilled（binance 实证在跑）。
 - **尾巴票立**：gate earn_apr 采集+缺口 subject venue 键+交割腿成本注记。
+
+## 2026-10-14 earn 尾巴三件（实施席）
+- **gate APR 采集**：`EarnCollector.CollectGate`→公开端点 `GET /earn/uni/currencies/USDT`（public 同 gateDualURL 例零凭据），`min_rate` 时息×24×365 口径入库 `fin_cex_earn_apr`（product_type='uni_lend'）；并入 `Collect` 聚合（单所败 log warn 不拖拍）。
+- **缺口 subject venue 键**：earn 申购 permission 缺口 `earn_subscribe`→`earn_subscribe:<venue>`（okx 403 不再撞 binance 旧行，幂等键变更=新行不迁旧）。
+- **交割腿注记**：hedgescan `contract_type='FUTURES'` 腿 detail 附「交割腿基差成本未计」（funding=0 不虚增）。
+- **锚**：CollectGate mock 对拍 0.0001×24×365=0.876；cexscan/dciexec/oppmatch 全包 -race 绿。

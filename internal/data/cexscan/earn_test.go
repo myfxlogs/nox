@@ -162,3 +162,29 @@ func TestEarn_NewEarnCollector(t *testing.T) {
 		t.Errorf("bnSapiURL = %q, want https://192.229.85.35:8443/sapi", c.bnSapiURL)
 	}
 }
+
+// TestEarn_CollectGate mock gate earn/uni 币种详情→min_rate×24×365 口径对拍。
+func TestEarn_CollectGate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"currency":"USDT","min_lend_amount":"0.1","max_rate":"0.0004","min_rate":"0.0001"}`))
+	}))
+	defer srv.Close()
+	old := gateEarnUniURL
+	gateEarnUniURL = srv.URL
+	defer func() { gateEarnUniURL = old }()
+	c := &EarnCollector{client: srv.Client()}
+	aprs, err := c.CollectGate(context.Background())
+	if err != nil {
+		t.Fatalf("CollectGate: %v", err)
+	}
+	if len(aprs) != 1 {
+		t.Fatalf("got %d aprs, want 1", len(aprs))
+	}
+	want := 0.0001 * 24 * 365 // min_rate 时息→年化（票面钦定口径）
+	if aprs[0].APR < want-1e-9 || aprs[0].APR > want+1e-9 {
+		t.Fatalf("apr=%v want %v", aprs[0].APR, want)
+	}
+	if aprs[0].Venue != "gate" || aprs[0].ProductType != "uni_lend" {
+		t.Fatalf("row=%+v", aprs[0])
+	}
+}
