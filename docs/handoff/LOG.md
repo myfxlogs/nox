@@ -674,3 +674,15 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **拆分续票**：现状已达标（service_broker 277 / setup 300，上轮拆分已清）——check-lines 零警告实证，零改动。
 - **CFD swap 面**：`pgstore/facts_swap.go`（LatestSwapFacts 每 venue×symbol 最新行 24h 鲜度窗）+`oppmatch/swapscan.go`——正息面→fin_opp_hypothesis（category_key=`cfd_swap|v|sym|side` 幂等，detail 注 bps_daily×365/100 口径假设+裸 delta 标）；账户 equity=0「面在钱不在」剔榜+dedup info 标；新假设聚合 info 告警。只产假设不碰钱。
 - 机检：build/vet/gofmt 净；oppmatch/pgstore/dciexec 全包+`-race` 绿；锚 7 件（闸高/低/报价缺三态、idle gap 幂等、swap 榜+面在钱不在+幂等、归属系数+撤键复归、卖回成/败/不处置三态）；npm build 绿；pre-commit 十道。
+
+## 2026-10-14 六票验收+SG 部署（验收席）@60d21269
+- **部署**：本机 build → save|load → `compose up -d --no-deps` → 迁移落 1023，容器 healthy；boot 扫描 09:12-13 实跑。
+- **SG 实证**：
+  - CFD swap：`fin_opp_hypothesis` 落 38 行 `cfd_swap|15032313|*|long/short` proposed（BRENT/AUDCHF/AUDJPY 在列，与人工侦察对拍一致）；`110660304` 剔榜「面在钱不在」info 留痕 ✅
+  - D-514：`D-514 溢价闸：dci_buy_low PUT 达标档报价缺——本拍无达标档不产提案` info 实证，缺报价 fail-closed ✅
+  - idle 缺口：`fin_condition_gap executor|gate:perp|requested` 实开+请求箱推（gate $998 闲）✅
+  - D-516：配 `ownership_share:binance:earn:BTC=0.3334` → GetCapitalPools 实证 `equity=0.01895`（1/3）+`custodialEquity=0.03790`（2/3 代管标）✅
+  - D-517：disposeExercise 钩子+SpotSellFn 代码面证；真实行权未发生=「待首次行权实证」留观
+  - 拆分续票：service_broker 277/setup 300 达标零改动属实
+- **机检**：oppmatch/pgstore/dciexec 364 测试绿；build/vet/gofmt 净。
+- **残留（退回跟进件）**：**okx unified $1956 仍漏**——非实现错：Idle 语义按 venue 级 30d 收入判，okx 有已平仓 XAU-SWAP funding $4.31 → 整池非 idle → 余额扫描跳过。「venue 有收入≠该笔现金在赚」粒度盲在 ExplorerIdleFunds 判定层，gate:perp 能被扫到纯因 gate 零收入。立后续票：Idle 判据下沉到池/币种粒度。
