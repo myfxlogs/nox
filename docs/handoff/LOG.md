@@ -874,3 +874,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **exec.go 分派**：`p.Venue=="okx"`→tryLegOKX，binance 凭据闸照旧 venue 内自闭。
 - **settle.go**：ListFilledDCIOrders 行补 venue 列；观察拍 `venue≠binance` 跳过——**okx 行权/到期对账面续票**（本票不混径，如实记）。
 - **锚**：mock 三段式序列（transfer→quote→trade→order-status）+订单 venue=okx+过期报价零 trade+凭据缺 credential 缺口；settle 桩补 Venue 列。
+
+## 2026-10-14 earn rail 收口三件 —— SG 验收全绿（复审席）
+- **gate #377**：提案 executed → 订单 #23 `filled`；venue `GET /earn/uni/lends` 实拍 `lent_amount=1999.597814`、`lend_records type=lend`——$1999.60 现货真出借在账。`min_rate` 修复一击命中。
+- **okx #378**：提案 executed → 订单 #26 `filled` qty=1938.0017；venue `savings/balance` 实拍 amt=2117.73（179.73 旧存+1938 新购），funding=0、unified=0——尘级短差判定生效零划转直购。
+- **验收途两现场修**：①`fundingAvail` `/asset/balance`(单数404)→`/asset/balances`(200)@7e49e344——mock 曾把错路径钉断言（同型病灶第二发，条目已立碑）；②尘级短差：`needed=3.4e-9` 尘划转被 venue `amt error` 拒（#22/#24 实证）→fail-closed @0efa077+尘差直购 @0f9e2fb8。
+- **部署教训**：detached worktree 上 `git pull` 空转致镜像构在旧提交——部署前必 `git rev-parse HEAD` 核源。坑表签名行已清（旧的 403 签名+新的 fail-closed 签名各一条）。
+- **顺带部署增量**：镜像 0f9e2fb8 含实施席已报的 okx DCI 拓展（6463aa24 venue 参化+quote→trade rail）——复审独立验票单开，首拍 okx DCI 提案出库情况待观。
