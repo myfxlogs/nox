@@ -597,6 +597,6 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - SG 验收残留：雷达轮后 fin_opp_hypothesis 现 proposed 行（预期 okx|OPTION、binance|CURRENT_MONTH|USDT 等已知未收品类首拍各一）+memo 非空+info 告警到；同键重跑零重推。
 - 机检备注：全量套件 dashboard D543 单发 FAIL=gate:perp cap 脏值残留（同前票 panic 杀进程型复案），UPDATE 归位后单跑绿；与本改动无关。
 
-## 2026-10-14 雷达交割轴返修 @pending
+## 2026-10-14 雷达交割轴返修 @1978cbe6
 - okx indexPx 端点参 uly→instId：venue 实证 index-tickers 只吃 instId（?instId=BTC-USD 有行、?uly= 无行——返修单咬此）。okxIndexUly→okxIndexInstID 语义不变（USD_UM→BASE-USD 映射照旧）。锚对拍 instId 查询参。
 - SG 残留：部署后重跑 radar 验 okx USD_UM 行 basis_ann 出数。
