@@ -100,12 +100,13 @@ func (e *Executor) earnSubscribe(ctx context.Context, productID string, amount f
 // （单 venue≥50% 或 CEX 总≥70% 只标不拦）；其余硬线（CFD≥25%/−3%/事故仓/oz）不动。
 func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, error) {
 	leg := gate.DCILeg{Name: "EARN", Tmpl: p.TemplateID}
-	if p.Venue != "binance" {
-		return "", fmt.Errorf("earn 写径仅 binance（提案 venue=%s——okx earn 未接）", p.Venue)
-	}
-	if e.BnKey == "" {
-		return "", e.gap(ctx, leg, "credential", "binance:spot",
-			"请配置 binance 凭据（earn 申购写径）")
+	rail, ok := e.earnRail(p.Venue)
+	if !ok {
+		if _, has := e.EarnCreds[p.Venue]; !has && e.EarnRails == nil {
+			return "", e.gap(ctx, leg, "credential", p.Venue+":earn",
+				"请配置 %s 凭据（earn 申购写径）", p.Venue)
+		}
+		return "", fmt.Errorf("earn 写径未接 venue=%s（rail 缺席——如实不执行）", p.Venue)
 	}
 	// D-288 浓度透视（非闸）：单 venue≥50% 或 CEX 总≥70%→info 标。读败不阻塞申购。
 	if pools, perr := e.Store.CapitalPoolSnapshots(ctx); perr != nil {
@@ -114,19 +115,20 @@ func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, err
 		e.concentrationAlert(ctx, pools)
 	}
 	// 现货可动=申购额（D-192 venue 实读源；活期可赎=眠钱承接非锁仓）。
-	spotFree, err := e.freeBalance(ctx, "USDT")
+	// 余额源=rail 所在池（okx=unified 交易户 / gate=perp 户 / binance=spot）。
+	spotFree, err := rail.FreeBalance(ctx, "USDT")
 	if err != nil {
-		return "", e.gap(ctx, leg, "runtime", "spot_balance",
-			"系统侧病灶：USDT 现货余额读败：%v", err)
+		return "", e.gap(ctx, leg, "runtime", "balance_read",
+			"系统侧病灶：%s USDT 余额读败：%v", p.Venue, err)
 	}
 	if spotFree <= 0.00000001 {
-		return "", fmt.Errorf("USDT 现货可动=0（无眠钱可申——如实不执行）")
+		return "", fmt.Errorf("%s USDT 可动=0（无眠钱可申——如实不执行）", p.Venue)
 	}
 	// 产品在售+APR 复验：best flexible canPurchase && APR>0 && 量达 min。
-	prods, err := e.earnProducts(ctx, "USDT")
+	prods, err := rail.Products(ctx, "USDT")
 	if err != nil {
 		return "", e.gap(ctx, leg, "runtime", "earn_list",
-			"系统侧病灶：binance 活期产品面读败：%v", err)
+			"系统侧病灶：%s 活期产品面读败：%v", p.Venue, err)
 	}
 	var pick *EarnProduct
 	for i := range prods {
@@ -139,10 +141,10 @@ func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, err
 		}
 	}
 	if pick == nil {
-		return "", fmt.Errorf("binance USDT 活期无可购档（在售面零达标——APR 复验如实拒）")
+		return "", fmt.Errorf("%s USDT 活期无可购档（在售面零达标——APR 复验如实拒）", p.Venue)
 	}
-	// 坑表抑单（op=earn_subscribe；读败 fail-closed 同申购例）。
-	pits, perr := e.Store.ListVenueRejects(ctx, "binance", "earn_subscribe")
+	// 坑表抑单（op=earn_subscribe；读败 fail-closed 同申购例；venue 键按提案 venue）。
+	pits, perr := e.Store.ListVenueRejects(ctx, p.Venue, "earn_subscribe")
 	if perr != nil {
 		return "", e.gap(ctx, leg, "runtime", "earn_subscribe",
 			"系统侧病灶：earn 申购前坑表读败（fail-closed 不打 venue）：%v", perr)
@@ -153,7 +155,8 @@ func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, err
 			continue
 		}
 		if aerr := e.Store.InsertAlertDedup(ctx, "critical", fmt.Sprintf(
-			"venue 坑表抑单 binance:earn_subscribe:%s（earn 申购 hits=%d expires=%s）",
+			"venue 坑表抑单 %s:earn_subscribe:%s（earn 申购 hits=%d expires=%s）",
+			p.Venue,
 			pp.ErrorSignature, pp.Hits, pitExpiry(pp)), 24*time.Hour); aerr != nil {
 			log.Printf("[dciexec] earn 坑表抑单 alert: %v", aerr)
 		}
@@ -173,7 +176,7 @@ func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, err
 	tenor := 0 // 活期无交割期——tenor=0 使 outstanding 谓词天然不命中
 	oid, created, err := e.Store.CreateDCIOrder(ctx, &pgstore.DCIOrder{
 		RequestID: fmt.Sprintf("%s|%d", reqPrefix, attempt+1),
-		Venue:     "binance", TemplateID: p.TemplateID, ProductRef: pick.ProductID,
+		Venue:     p.Venue, TemplateID: p.TemplateID, ProductRef: pick.ProductID,
 		Underlying: "USDT", OptType: "EARN", InvestCcy: "USDT",
 		Qty: spotFree, TenorDays: &tenor, ProposalID: &p.ID,
 	})
@@ -183,18 +186,18 @@ func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, err
 	if !created {
 		return "", fmt.Errorf("提案#%d earn 申购已受理（request_id 幂等命中）", p.ID)
 	}
-	body, err := e.earnSubscribe(ctx, pick.ProductID, spotFree)
+	body, err := rail.Subscribe(ctx, pick.ProductID, spotFree)
 	if err != nil {
 		e.finish(ctx, oid, "failed", err.Error())
 		sig := errclass.VenueRejectSignature(err.Error())
-		if lerr := e.Store.LearnVenueReject(ctx, "binance", "earn_subscribe",
+		if lerr := e.Store.LearnVenueReject(ctx, p.Venue, "earn_subscribe",
 			sig, 24*time.Hour); lerr != nil {
 			log.Printf("[dciexec] earn 坑表落行败: %v", lerr)
 		}
 		kb := e.kbSuffix(sig) // 拒单消费闸：坑签名命中经验库→教训贴告警脸
 		if venueErrKind(err) == "permission" {
 			return "", e.gap(ctx, leg, "permission", "earn_subscribe",
-				"请开通 binance 赚币活期申购权限（申购败：%v）%s", err, kb)
+				"请开通 %s 赚币活期申购权限（申购败：%v）%s", p.Venue, err, kb)
 		}
 		return "", e.gap(ctx, leg, "runtime", "earn_subscribe",
 			"系统侧病灶：earn 申购 venue 拒单：%v%s", err, kb)

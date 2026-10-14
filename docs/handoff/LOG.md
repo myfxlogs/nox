@@ -750,3 +750,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **实施席声明纠偏**：报审称「次日 06:10 digest 已现」——当时该拍未跑（cron 06:10 CST=22:10 UTC），SG 文件无此段；实证系我手动跑产。实施侧 SG 声明第二次与实际不符（首次=D-511~513 报在测试环境）。
 - **连带病灶①（deploy_sync 回刷运行时件）**：`docs/经验库/待归纳.md` 与 `.digest_state` 是 git 跟踪件，deploy_sync `--files-from=git ls-files` 每次同步把 SG 运行时写盘回刷成仓内 Oct-12 旧版——SG digest 天天 written 但产物留不住。
 - **连带病灶②（alerts 水印化石）**：`.digest_state` 水位 alerts=64904 但生产 alerts.max(id)=289（arb 时代迁移遗留）→ digest 告警面永久零增量。
+
+## 2026-10-14 earn 执行径多 venue 化（实施席）
+- **rail 化**：`dciexec/earn_rail.go` EarnRail 四动词面（Products/Subscribe/Redeem/FreeBalance）；binance=原实现包壳零行为变（BnKey/旧 Fn 注入面兼容在位即建 rail）；okx=savings `purchase-redemption` 双端点+`lending-rate-summary` 产品读（estRate→preRate 回落）；gate=earn/uni `lends`+`currencies/{ccy}`（min_rate×24×365 保守 APR）。余额口径：okx=unified availBal / gate=perp available / binance=spot free——所内划转步不臆造，venue 拒单如实落坑。OkxSign 新入 `signutil`（gate 签名复用既有）。
+- **凭据**：`cmd/core/dci_go.go` exchange_configs 按 venue_type 优先序取行（okx: unified>perp>spot>''；gate: perp>unified>''），simulated/缺 key 行剔——无凭据=nil rail→credential 缺口 fail-closed。
+- **提案径**：`earnExecVenues` {binance,okx,gate}；rail 面内 USDT 闲池→`cash_mgmt` 提案 venue 键分行（迁移 **1024**：`fin_proposal_pending_uniq`→(template_id,venue)，基线同步，fallback 查询补 venue 键）；面外 venue 照旧 executor 缺口；<$100 尘额两径都不入。非 USDT 闲池暂不进提案（定值域限）亦不出缺口——如实记录待扩。
+- **机检**：build/vet/gofmt 净；dciexec/oppmatch/pgstore/cmd-core 全包+race 绿；锚 2 件新（earn_venue_test rail 三态+尘阈+幂等、earn_rail_test mock rail 申购径+credential 缺口）；全量 `go test ./...` 仅 dashboard D587 拨号超时 flake（隔离单跑 1.6s 绿，共享测试库压力型六度同族）。
+- **残留**：earn_rail.go 299 行贴闸；SG 验收=下拍扫描 cash_mgmt 提案现 venue=okx/gate 行并可执行（或凭据缺→credential 行）。

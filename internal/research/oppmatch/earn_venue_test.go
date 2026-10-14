@@ -1,0 +1,70 @@
+package oppmatch
+
+import (
+	"testing"
+)
+
+// TestEarnRailVenues_IdleProposal earn 多 venue 化锚：earnExecVenues 面内闲池
+// （okx/gate）→cash_mgmt 提案 venue 键分行零缺口行；<$100 尘池静默；
+// 白名单外 venue 照旧 executor 缺口。
+func TestEarnRailVenues_IdleProposal(t *testing.T) {
+	st, ctx := d514Store(t)
+	for _, q := range []string{
+		`DELETE FROM fin_proposal WHERE venue IN ('d514okx','okx','gate','xgnovenue')`,
+		`DELETE FROM fin_condition_gap WHERE subject LIKE 'okx%' OR subject LIKE 'gate%' OR subject LIKE 'xgnovenue%'`,
+	} {
+		if _, err := st.Pool().Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_venue_account_snapshot
+		(venue, venue_type, currency, balance_raw, equity_raw, fetched_at, src) VALUES
+		('okx','unified','USDT',1956,1956,now(),'ws'),
+		('gate','perp','USDT',998,998,now(),'ws'),
+		('okx','earn','USDT',90,90,now(),'ws'),
+		('xgnovenue','spot','USDT',500,500,now(),'ws')`); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_, _ = st.Pool().Exec(ctx,
+			`DELETE FROM fin_venue_account_snapshot WHERE venue IN ('okx','gate','xgnovenue')`)
+		_, _ = st.Pool().Exec(ctx,
+			`DELETE FROM fin_proposal WHERE template_id='cash_mgmt' AND venue IN ('okx','gate')`)
+		_, _ = st.Pool().Exec(ctx,
+			`DELETE FROM fin_condition_gap WHERE subject LIKE 'xgnovenue%'`)
+	}()
+	idleGapScan(ctx, st)
+	var okxP, gateP, dustP, gapN, xgap int
+	for _, q := range []struct {
+		dst *int
+		sql string
+	}{
+		{&okxP, `SELECT count(*) FROM fin_proposal WHERE template_id='cash_mgmt' AND venue='okx' AND status='proposed'`},
+		{&gateP, `SELECT count(*) FROM fin_proposal WHERE template_id='cash_mgmt' AND venue='gate' AND status='proposed'`},
+		{&dustP, `SELECT count(*) FROM fin_proposal WHERE template_id='cash_mgmt' AND venue='okx' AND params::text LIKE '%earn%'`},
+		{&gapN, `SELECT count(*) FROM fin_condition_gap WHERE kind='executor' AND subject IN ('okx:unified','gate:perp')`},
+		{&xgap, `SELECT count(*) FROM fin_condition_gap WHERE kind='executor' AND subject='xgnovenue:spot'`},
+	} {
+		if err := st.Pool().QueryRow(ctx, q.sql).Scan(q.dst); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if okxP != 1 || gateP != 1 {
+		t.Fatalf("rail 面内闲池应产提案: okx=%d gate=%d", okxP, gateP)
+	}
+	if gapN != 0 {
+		t.Fatalf("rail 面内 venue 不应再出 executor 缺口: %d", gapN)
+	}
+	if xgap != 1 {
+		t.Fatalf("白名单外 venue 缺口照旧: %d", xgap)
+	}
+	// 幂等重跑零重产。
+	idleGapScan(ctx, st)
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM fin_proposal WHERE template_id='cash_mgmt' AND venue='okx' AND status='proposed'`).Scan(&okxP); err != nil {
+		t.Fatal(err)
+	}
+	if okxP != 1 {
+		t.Fatalf("重跑重产: %d", okxP)
+	}
+}

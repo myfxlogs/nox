@@ -76,3 +76,6 @@ var GraduationDecidedBySQL string // 毕业委任审计列：carry_graduations.d
 
 //go:embed 1023_gap_kind_executor.sql
 var GapKindExecutorSQL string // okx idle 缺口：fin_condition_gap kind 放 executor
+
+//go:embed 1024_proposal_pending_venue.sql
+var ProposalPendingVenueSQL string // earn 多 venue 化：pending 唯一锚加 venue

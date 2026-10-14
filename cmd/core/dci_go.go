@@ -33,6 +33,35 @@ func buildDCIExecutor(ctx context.Context, st *pgstore.Store) *dciexec.Executor 
 				ex.APIBase = httpx.BinanceApiSegBase(e.BaseURL, "api")
 			}
 		}
+		// earn 执行径多 venue 化：okx（余币宝）/gate（uni-lend）凭据行按 venue_type
+		// 优先序兜取——同所多行不猜哪条，OKX unified>perp>spot、gate perp>unified；
+		// 均无则 venue 无 EarnCreds 行→rail 缺席=credential 缺口如实出。
+		for _, vtpref := range []struct {
+			venue string
+			types []string
+		}{{"okx", []string{"unified", "perp", "spot", ""}},
+			{"gate", []string{"perp", "unified", ""}}} {
+			var best *pgstore.ExchangeConfig
+			bestPri := len(vtpref.types)
+			for i := range exchs {
+				e := &exchs[i]
+				if e.Venue != vtpref.venue || e.Simulated || e.APIKey == "" || e.APISecret == "" {
+					continue
+				}
+				for pri, vt := range vtpref.types {
+					if e.VenueType == vt && pri < bestPri {
+						best, bestPri = e, pri
+					}
+				}
+			}
+			if best != nil {
+				if ex.EarnCreds == nil {
+					ex.EarnCreds = map[string]dciexec.EarnCred{}
+				}
+				ex.EarnCreds[vtpref.venue] = dciexec.EarnCred{
+					Key: best.APIKey, Secret: best.APISecret, Pass: best.Passphrase, BaseURL: best.BaseURL}
+			}
+		}
 	}
 	return ex
 }

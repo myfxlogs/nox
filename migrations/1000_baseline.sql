@@ -4525,7 +4525,7 @@ CREATE INDEX fin_carry_universe_ts_idx ON public.fin_carry_universe USING btree 
 -- Name: fin_proposal_pending_uniq; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX fin_proposal_pending_uniq ON public.fin_proposal USING btree (template_id) WHERE (status = 'proposed'::text);
+CREATE UNIQUE INDEX fin_proposal_pending_uniq ON public.fin_proposal USING btree (template_id, venue) WHERE (status = 'proposed'::text);
 
 
 --

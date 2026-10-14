@@ -85,8 +85,10 @@ type Executor struct {
 	BalanceFn          func(ctx context.Context, asset string) (float64, error) // 现货 free+locked
 	EarnFn             func(ctx context.Context, asset string) ([]EarnPosition, error)
 	RedeemFn           func(ctx context.Context, productID string, amount float64) error
-	EarnProductsFn     func(ctx context.Context, ccy string) ([]EarnProduct, error)           // earn 活期产品面（D-286；nil=实 GET）
-	EarnSubscribeFn    func(ctx context.Context, productID string, amount float64) error      // earn 申购写径（nil=实 POST）
+	EarnProductsFn     func(ctx context.Context, ccy string) ([]EarnProduct, error)           // earn 活期产品面（D-286；nil=实 GET——binance 径）
+	EarnSubscribeFn    func(ctx context.Context, productID string, amount float64) error      // earn 申购写径（nil=实 POST——binance 径）
+	EarnCreds          map[string]EarnCred                                                    // earn 多 venue 凭据（exchange_configs 装配注入）
+	EarnRails          map[string]EarnRail                                                    // 测试注面：venue→rail 替真发（nil=按 EarnCreds 建）
 	StreamFn           func() bool                                                            // 流存活闸（nil=dephealth 实读）
 	HoldingFn          func(ctx context.Context, productRef, optType string) (bool, error)    // venue 持仓读（D-198 返修①；nil=实 GET）
 	PositionsFn        func(ctx context.Context) ([]DCIPosition, error)                       // D-207 venue 持仓全列表（settle 观察；nil=实 GET）

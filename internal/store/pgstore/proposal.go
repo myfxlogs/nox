@@ -36,11 +36,11 @@ func (s *Store) CreateProposal(ctx context.Context, p *Proposal) (int64, bool, e
 		ON CONFLICT DO NOTHING RETURNING id`,
 		p.TemplateID, p.ExecTrack, p.Venue, pj, p.ExpectedAPR).Scan(&id)
 	if err != nil {
-		// 已落同模板 proposed 行→返其稳定 id。
+		// 已落同模板同 venue proposed 行→返其稳定 id（1024 唯一锚含 venue）。
 		err2 := s.pool.QueryRow(ctx, `
 			SELECT id FROM fin_proposal
-			WHERE template_id=$1 AND status='proposed'
-			ORDER BY id DESC LIMIT 1`, p.TemplateID).Scan(&id)
+			WHERE template_id=$1 AND venue=$2 AND status='proposed'
+			ORDER BY id DESC LIMIT 1`, p.TemplateID, p.Venue).Scan(&id)
 		if err2 != nil {
 			return 0, false, err
 		}

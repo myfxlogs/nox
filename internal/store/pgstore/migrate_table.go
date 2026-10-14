@@ -217,4 +217,5 @@ var migrationFiles = []struct {
 	{1021, migrations.ManualPositionSQL, false},               // CMC 手工仓位只读纳管：fin_manual_position
 	{1022, migrations.GraduationDecidedBySQL, false},          // 毕业委任审计列：carry_graduations.decided_by
 	{1023, migrations.GapKindExecutorSQL, false},              // idle 缺口扫描：gap kind 放 executor
+	{1024, migrations.ProposalPendingVenueSQL, false},         // earn 多 venue 化：pending 唯一锚加 venue
 }
