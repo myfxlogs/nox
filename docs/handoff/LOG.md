@@ -909,3 +909,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **部署**：镜像 `1a035b81`（含 a77cc158）→ SG nox-core 重启。
 - **实拍链**：15:17 boot 扫 → 提案 #445 `dci_buy_low@okx` proposed（BTC-USDT-261030-77500-P，apr 14.73% vs 新基准 10.5% 过闸）→ autoexec 执行 → `fin_dci_order` #27 failed，venue 回执 `51000 Parameter amt error`（尘额划转 18→6）。
 - **如实定性**：账户面 funding/unified 双空（$2117 在 savings），提案资本口径 CapitalUSD 含 savings 合规出库，但 DCI 只能花 funding/unified→qty=尘额；尘划转病灶第三发（DCI rail 未复用 earn rail 跳划转件），约束落库票（minSize 闸）就位后此类单本地拦。
+
+## 2026-10-14 symdig 盲区修复审验收（决策席 SG 实拍）
+- **部署**：镜像 `e280ca5b`（含 cf0869d6）→ SG nox-core 重启。
+- **实拍**：15:29 boot 轮 symdig 实跑——pending 过滤后 LLM 调用落行（completion=0），输出干净零 malformed warn 复发；收件箱无新增（tail 品种为 NZD 系/指数 CFD，LLM 如实判零别名=合法空提案）。
+- **定性**：盲区结构修成立（head pending 品种不再占 picks 额度）；warn 降噪面就位（同文案 24h 抑）；提案落地与否归 LLM 语义判断域，非缺陷。
+- **顺带观察**：#445 `dci_buy_low@okx` 在 boot 拍重试再败同签名（尘划转 51000）——提案 proposed 态每拍重试+每拍出 critical，约束闸票（minSize 落库）是收口件，当前噪音可忍。
