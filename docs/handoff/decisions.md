@@ -175,3 +175,7 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **executor|okx:unified**：API 实查可行——OKX `POST /api/v5/finance/savings/purchase-redemption`（side=purchase/redempt，可选 min rate 0.01-3.65）。立实施票接 okx earn 写径，接上即闭环金钱不眠。
 - **executor|okx:earn**：粉尘 $169.5——业主令「不计」，行已 waived；顺带 idleGapScan 加 <$100 小池阈值防粉尘件再入请求箱。
 - **executor|gate:perp**：API 实查可行——gate `POST /api/v4/earn/uni/lends`（type=lend/redeem，min_rate 小时结算）。同票接径；gate 池纯保证金无持仓无策略，$998 进 uni-lend 灵活放息。
+
+## D-520 决策席纪律闸 2026-10-14（业主令——决策席上移问句病灶纠）
+- **病灶**：决策席反复把自裁域上行成对话问句（「要你拍」「要不要立票」「业主域裁决挪资」），违反 D-184 分工——业主只响应请求箱与真金授权，不坐决策席管道。
+- **裁**：AGENTS.md §3 增决策席纪律四条——裁定行文=决定+理由+配合项禁问句上行；配合项一律落 fin_condition_gap 请求箱；能进机制不进会话；业主待判断仅三件（真金授权/请求箱回执/方向锚）。
