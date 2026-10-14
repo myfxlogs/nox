@@ -119,16 +119,32 @@ func (e *Executor) SettleExpiredOrders(ctx context.Context) (int, error) {
 	}
 	now := e.Now()
 	var due []pgstore.FilledDCIOrder
+	var okxOrders []pgstore.FilledDCIOrder
 	for _, o := range orders {
+		if o.Venue == "okx" {
+			okxOrders = append(okxOrders, o) // okx 径=per-order order-status 轮询
+			continue
+		}
 		if o.Venue != "binance" {
-			continue // okx 行权/到期对账面续票——本拍只办 binance 径不混读
+			continue // 未知 venue 如实跳（不混径）
 		}
 		if st, ok := settleDateOf(o.Response); ok && !st.After(now) {
 			due = append(due, o)
 		}
 	}
+	okxSettled := 0
+	for i := range okxOrders {
+		done, err := e.settleOKXOrder(ctx, okxOrders[i])
+		if err != nil {
+			log.Printf("[dci-settle] okx order %d: %v——单错跳单不影响余行", okxOrders[i].ID, err)
+			continue
+		}
+		if done {
+			okxSettled++
+		}
+	}
 	if len(due) == 0 {
-		return 0, nil
+		return okxSettled, nil
 	}
 	pos, err := e.dciPositions(ctx)
 	if err != nil {
@@ -184,7 +200,7 @@ func (e *Executor) SettleExpiredOrders(ctx context.Context) (int, error) {
 		}
 		settled++
 	}
-	return settled, nil
+	return settled + okxSettled, nil
 }
 
 // bookSettlement 确认行入账单步：CAS 翻态→income_events 分 kind→表象行收口→warn。

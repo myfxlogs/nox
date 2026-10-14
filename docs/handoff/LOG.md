@@ -920,3 +920,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **采集**：parseOKXDCI 落 `minSize/maxSize/stepSz`→`min_amount/max_amount/purchase_decimal`（stepSz 字面小数位→步进位，"1"→0/"0.0001"→4；列在册零迁移）。
 - **下单闸**：tryLegOKX 选档跳过 MinAmount/PurchaseDecimal 缺行（fail-closed 不臆默认）→`deposit=floorTo(qty,stepDec)` 界内闸——低于 minSize/超 maxSize 如实「约束不达标」拒单零 venue 打面（不补不截同 binance 径）；划转/trade 用 deposit。
 - **锚**：三态（qty<min 零 dcd/transfer 调用、约束缺行 fail-closed、达标过闸走序列）；既有序列/过期/凭据锚同绿。
+
+## 2026-10-15 okx DCI 行权/到期对账（实施席）
+- **观察拍**：settle.go 分派改 venue 支路——okx filled 单 per-order 轮 `GET /sfp/dcd/order-status?ordId=`（ordId 从 response 正则取），非 settled 如实跳下拍；unknown venue 也如实跳。`settleOKXOrder`→`bookSettlementOKX`（okx_settle.go）：CAS 翻态+eval APR 回写+income_events venue=okx（settleSz/settleCcy 交割面、yieldSz/yieldCcy 利息）+表象收口+warn——同 binance 形，回执键=官方实拍（order-history 样例）。
+- **接货处置 D-517 okx 形**：跨币到账→`6→18` 回划（sfp 到账在 funding）→`POST /trade/order` market sell ccy-USDT→`GET /trade/order` accFillSz×avgPx 得额→`dci_exercise_disposal` 净损益入账；败=留仓标 pending_disposal 不臆造。
+- **redeem-quote/redeem 提前赎回**：无触发消费面——接线即成死代码，如实留续（文档已在票史，触发面立后再接）。
+- **锚**：`TestOkxSettle_SettledBooks` mock settled 行→翻态 USDT 1010.5/利息 10.5 对拍+LIVE 零翻；全包 -race 绿。

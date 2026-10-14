@@ -167,3 +167,50 @@ func TestOkxDCILeg_ConstraintGate(t *testing.T) {
 		}
 	}
 }
+
+// TestOkxSettle_SettledBooks 行权/到期对账锚：order-status=settled→CAS 翻态+
+// 利息入账+warn；LIVE 未终态零翻。接货态（settleCcy≠invest）走处置钩。
+func TestOkxSettle_SettledBooks(t *testing.T) {
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/api/v5/finance/sfp/dcd/order-status"):
+			w.Write([]byte(`{"code":"0","data":[{"ordId":"11401353","state":"settled","settleSz":"1010.5","settleCcy":"USDT","yieldSz":"10.5","yieldCcy":"USDT","settlePx":"78000"}]}`))
+		default:
+			w.Write([]byte(`{"code":"50100","data":[]}`))
+		}
+	}))
+	defer srv.Close()
+	st := newFake()
+	st.cfgID = 42
+	ex := &Executor{Store: st, Client: srv.Client(), Now: time.Now,
+		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
+	td := 7
+	pid := int64(9)
+	o := pgstore.FilledDCIOrder{ID: 7, RequestID: "dci|okx|PUT|P|x|1", Venue: "okx",
+		ProductRef: "BTC-USDT-260327-80000-P", OptType: "PUT", InvestCcy: "USDT",
+		Underlying: "BTC", Qty: 1000, TenorDays: &td, ProposalID: &pid,
+		Response: `{"ordId":"11401353"}`}
+	done, err := ex.settleOKXOrder(context.Background(), o)
+	if err != nil || !done {
+		t.Fatalf("settle: done=%v err=%v", done, err)
+	}
+	if len(st.settled) != 1 || st.settled[0].ccy != "USDT" || st.settled[0].qty != 1010.5 {
+		t.Fatalf("翻态行: %+v", st.settled)
+	}
+	if st.settled[0].income != 10.5 {
+		t.Fatalf("利息额: %+v", st.settled[0])
+	}
+	// LIVE 态→零翻。
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"code":"0","data":[{"ordId":"1","state":"live"}]}`))
+	}))
+	defer srv2.Close()
+	ex.Client = srv2.Client()
+	ex.EarnCreds["okx"] = EarnCred{Key: "k", Secret: "s", Pass: "p", BaseURL: srv2.URL}
+	done2, err := ex.settleOKXOrder(context.Background(), o)
+	if err != nil || done2 {
+		t.Fatalf("LIVE 零翻: done=%v err=%v", done2, err)
+	}
+}
