@@ -9,9 +9,9 @@ import (
 	"nox/internal/store/pgstore"
 )
 
-func poolRow(venue, vt, ccy string, eq, fm float64, src string, at time.Time, ghost bool) pgstore.CapitalPoolRow {
+func poolRowAt(venue, vt, ccy string, eq, fm float64, src string, at time.Time, ghost bool, now time.Time) pgstore.CapitalPoolRow {
 	return pgstore.CapitalPoolRow{Venue: venue, VenueType: vt, Equity: eq, FreeMargin: fm,
-		Currency: ccy, Src: src, FetchedAt: at, Ghost: ghost}
+		Currency: ccy, Src: src, FetchedAt: at, Ghost: ghost, Stale: pgstore.PoolStale(src, at, now)}
 }
 
 // TestCapitalPools_Build 全口径锚。
@@ -22,13 +22,13 @@ func TestCapitalPools_Build(t *testing.T) {
 	old := now.Add(-time.Hour)
 
 	pools := []pgstore.CapitalPoolRow{
-		poolRow("m1", "mt5", "USD", 5000, 4500, "mt_frame", fresh, false),   // 占用 500
-		poolRow("m2", "mt5", "USD", 1000, 1000, "mt_frame", old, false),     // 全闲置+陈旧
-		poolRow("gone", "mt5", "USD", 172, 172, "mt_frame", old, true),      // 幽灵剔合计
-		poolRow("cex", "spot", "USDT", 1045, 0, "cex_event", fresh, false),  // +542 DCI +1000 腿
-		poolRow("cex", "earn", "USDT", 169, 0, "rest_poll", fresh, false),   // 全额在跑
-		poolRow("cex", "perp", "USDT", 2000, 0, "cex_event", fresh, false),  // +1000 腿
-		poolRow("sched", "funding", "USDT", 50, 0, "scheduler", old, false), // scheduler 1h 不陈旧
+		poolRowAt("m1", "mt5", "USD", 5000, 4500, "mt_frame", fresh, false, now),   // 占用 500
+		poolRowAt("m2", "mt5", "USD", 1000, 1000, "mt_frame", old, false, now),     // 全闲置+陈旧
+		poolRowAt("gone", "mt5", "USD", 172, 172, "mt_frame", old, true, now),      // 幽灵剔合计
+		poolRowAt("cex", "spot", "USDT", 1045, 0, "cex_event", fresh, false, now),  // +542 DCI +1000 腿
+		poolRowAt("cex", "earn", "USDT", 169, 0, "rest_poll", fresh, false, now),   // 全额在跑
+		poolRowAt("cex", "perp", "USDT", 2000, 0, "cex_event", fresh, false, now),  // +1000 腿
+		poolRowAt("sched", "funding", "USDT", 50, 0, "scheduler", old, false, now), // scheduler 1h 不陈旧
 	}
 	legs := []pgstore.CapitalDeployedLeg{
 		{VenueKey: "cex:perp", PositionID: 7, PosType: "PERP_FUNDING", Amount: 1000},
@@ -44,9 +44,13 @@ func TestCapitalPools_Build(t *testing.T) {
 	}
 	usd, usdt := r.Groups[0], r.Groups[1]
 
-	// USD 组：5000+1000（幽灵 172 剔）=6000；deployed=500；idle=5500。
-	if usd.Equity != 6000 || usd.Deployed != 500 || usd.Idle != 5500 {
+	// USD 组：5000（幽灵 172 剔 + m2 陈旧剔分母——陈旧值不当现值）；deployed=500；idle=4500。
+	if usd.Equity != 5000 || usd.Deployed != 500 || usd.Idle != 4500 {
 		t.Errorf("USD 组: %+v", usd)
+	}
+	// 分母鲜度守卫：m2:mt5 进缺池清单+denominator_incomplete 标。
+	if !r.DenominatorIncomplete || len(r.StalePools) != 1 || r.StalePools[0] != "m2:mt5" {
+		t.Errorf("分母鲜度标: %+v pools=%v", r.DenominatorIncomplete, r.StalePools)
 	}
 	// USDT 组：1045+169+2000+50=3264；deployed=542+169+1000=1711；
 	// idle=equity−池内在跑（DCI 池外锁额不双减，终审 G3）=2095。

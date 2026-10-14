@@ -47,4 +47,8 @@ message CapitalPoolsGroup {
 message GetCapitalPoolsResponse {
   repeated CapitalPoolsGroup groups = 1;
   google.protobuf.Timestamp computed_at = 2;
+  // 分母鲜度守卫：被剔的陈旧非幽灵池键（venue:venue_type）；非空=分母不完整，
+  // 敞口/占比判据此标「分母缺池」而非拿陈旧值当现值。
+  repeated string stale_pools = 3;
+  bool denominator_incomplete = 4;
 }

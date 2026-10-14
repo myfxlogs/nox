@@ -219,7 +219,12 @@ func (e *Executor) concentrationAlert(ctx context.Context, pools []pgstore.Capit
 	var totEq float64
 	venueEq := map[string]float64{}
 	cexEq := 0.0
+	var stalePools []string
 	for _, r := range pools {
+		if r.Stale && !r.Ghost {
+			stalePools = append(stalePools, r.PoolKey()) // 分母剔陈旧池——不拿陈旧值当现值
+			continue
+		}
 		if r.Ghost || r.Equity <= 0 {
 			continue
 		}
@@ -227,6 +232,14 @@ func (e *Executor) concentrationAlert(ctx context.Context, pools []pgstore.Capit
 		venueEq[r.Venue] += r.Equity
 		if r.VenueType != "mt4" && r.VenueType != "mt5" {
 			cexEq += r.Equity
+		}
+	}
+	if len(stalePools) > 0 {
+		sort.Strings(stalePools)
+		if aerr := e.Store.InsertAlertDedup(ctx, "info", fmt.Sprintf(
+			"分母池鲜度失：浓度透视分母缺 %s（陈旧快照剔计，恢复自动销）",
+			strings.Join(stalePools, ",")), 24*time.Hour); aerr != nil {
+			log.Printf("[dciexec] 分母鲜度 alert: %v", aerr)
 		}
 	}
 	if totEq <= 0 {
@@ -245,8 +258,12 @@ func (e *Executor) concentrationAlert(ctx context.Context, pools []pgstore.Capit
 		return
 	}
 	sort.Strings(hot)
+	missNote := ""
+	if len(stalePools) > 0 {
+		missNote = "｜分母缺池 " + strings.Join(stalePools, ",")
+	}
 	if err := e.Store.InsertAlertDedup(ctx, "info", fmt.Sprintf(
-		"浓度透视：%s（D-288 透视面——只标不拦）", strings.Join(hot, " ")), 24*time.Hour); err != nil {
+		"浓度透视：%s%s（D-288 透视面——只标不拦）", strings.Join(hot, " "), missNote), 24*time.Hour); err != nil {
 		log.Printf("[dciexec] 浓度透视 alert: %v", err)
 	}
 }

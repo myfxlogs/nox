@@ -41,6 +41,7 @@ function PoolTable({ pools }: { pools: CapitalPool[] }) {
 export default function CapitalPage() {
   const [groups, setGroups] = useState<CapitalPoolsGroup[]>([]);
   const [computedAt, setComputedAt] = useState("");
+  const [stalePools, setStalePools] = useState<string[]>([]);
   const [err, setErr] = useState("");
 
   useEffect(() => {
@@ -49,6 +50,7 @@ export default function CapitalPage() {
         const r = await client.getCapitalPools({});
         setGroups(r.groups);
         setComputedAt(ts(r.computedAt));
+        setStalePools(r.stalePools);
         setErr("");
       } catch (e) {
         setErr(errText(e));
@@ -60,6 +62,9 @@ export default function CapitalPage() {
     <main>
       <h2>资金地图 <small style={{ fontSize: 12, color: "#777" }}>算于 {computedAt} · 各币种原值零换算</small></h2>
       {err && <div className="err">{err}</div>}
+      {stalePools.length > 0 && (
+        <div className="warn">分母缺池（陈旧快照剔计）：{stalePools.join("、")}——合计为实有鲜池口径</div>
+      )}
       {/* 主币组照常渲染；非主币折叠——业主令 10-13 小币种口径（计件不计值）。 */}
       {groups.filter((g) => g.currency === "USD" || g.currency === "USDT").map((g) => {
         const live = g.pools.filter((p) => !p.ghost && (p.equity !== 0 || p.idle !== 0 || p.deployed !== 0));

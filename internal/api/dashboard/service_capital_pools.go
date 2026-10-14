@@ -6,7 +6,9 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -15,19 +17,9 @@ import (
 	"nox/internal/store/pgstore"
 )
 
-// capitalPoolStaleAfter 池快照陈旧阈值：与 combo 判定「池快照过期 >5min」同窗；
-// scheduler 源（日采钱包面）放宽至 36h（产源节奏+宽限，不硬套事件源节奏）。
-const capitalPoolStaleAfter = 5 * time.Minute
-const capitalSchedulerStaleAfter = 36 * time.Hour
-
-func capitalPoolStale(src string, fetchedAt, now time.Time) bool {
-	if src == "scheduler" {
-		return now.Sub(fetchedAt) > capitalSchedulerStaleAfter
-	}
-	return now.Sub(fetchedAt) > capitalPoolStaleAfter
-}
-
 // GetCapitalPools 资金地图：每池 权益/闲置/在跑 归因，币种分组后端算。
+// 分母鲜度守卫：stale 池行剔出组计（陈旧值不当现值），响应带 stale_pools+
+// denominator_incomplete 标；有缺池→dedup info 告警一次性推（D-033 系统自盯）。
 func (s *Service) GetCapitalPools(ctx context.Context, req *connect.Request[v1.GetCapitalPoolsRequest]) (*connect.Response[v1.GetCapitalPoolsResponse], error) {
 	pools, err := s.store.CapitalPoolSnapshots(ctx)
 	if err != nil {
@@ -43,6 +35,13 @@ func (s *Service) GetCapitalPools(ctx context.Context, req *connect.Request[v1.G
 	}
 	now := time.Now()
 	resp := s.buildCapitalPools(pools, legs, dcis, now)
+	if resp.DenominatorIncomplete {
+		if aerr := s.store.InsertAlertDedup(ctx, "info", fmt.Sprintf(
+			"分母池鲜度失：资金地图分母缺 %s（陈旧快照剔计，恢复自动销）",
+			strings.Join(resp.StalePools, ",")), 24*time.Hour); aerr != nil {
+			log.Printf("[capital] 分母鲜度告警落行败: %v", aerr)
+		}
+	}
 	return connect.NewResponse(resp), nil
 }
 
@@ -77,7 +76,7 @@ func (s *Service) buildCapitalPools(pools []pgstore.CapitalPoolRow, legs []pgsto
 			Equity: row.Equity, Ghost: row.Ghost,
 			UpdatedAt: timestamppb.New(row.FetchedAt),
 		}
-		p.Stale = capitalPoolStale(row.Src, row.FetchedAt, now)
+		p.Stale = row.Stale // 鲜度单源=pgstore PoolStale（阈值双写禁）
 		p.Online = !p.Stale && row.Src != ""
 		poolKey := row.Venue + ":" + row.VenueType
 		inPool := 0.0 // 池内在跑（占着 equity）；池外锁额（DCI）只入 Deployed 不动 Idle
@@ -133,7 +132,7 @@ func (s *Service) buildCapitalPools(pools []pgstore.CapitalPoolRow, legs []pgsto
 			groups[p.Currency] = g
 		}
 		g.Pools = append(g.Pools, p)
-		if !p.Ghost {
+		if !p.Ghost && !p.Stale { // stale 池剔分母——陈旧值不当现值
 			g.Equity += p.Equity
 			g.Deployed += p.Deployed
 			g.Idle += p.Idle
@@ -146,6 +145,8 @@ func (s *Service) buildCapitalPools(pools []pgstore.CapitalPoolRow, legs []pgsto
 	}
 	sort.Strings(ccys)
 	resp := &v1.GetCapitalPoolsResponse{ComputedAt: timestamppb.New(now)}
+	resp.StalePools = pgstore.StalePoolKeys(pools)
+	resp.DenominatorIncomplete = len(resp.StalePools) > 0
 	for _, c := range ccys {
 		g := groups[c]
 		sort.Slice(g.Pools, func(i, j int) bool {

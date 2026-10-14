@@ -325,11 +325,15 @@ func (x *CapitalPoolsGroup) GetPools() []*CapitalPool {
 }
 
 type GetCapitalPoolsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Groups        []*CapitalPoolsGroup   `protobuf:"bytes,1,rep,name=groups,proto3" json:"groups,omitempty"`
-	ComputedAt    *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=computed_at,json=computedAt,proto3" json:"computed_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Groups     []*CapitalPoolsGroup   `protobuf:"bytes,1,rep,name=groups,proto3" json:"groups,omitempty"`
+	ComputedAt *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=computed_at,json=computedAt,proto3" json:"computed_at,omitempty"`
+	// 分母鲜度守卫：被剔的陈旧非幽灵池键（venue:venue_type）；非空=分母不完整，
+	// 敞口/占比判据此标「分母缺池」而非拿陈旧值当现值。
+	StalePools            []string `protobuf:"bytes,3,rep,name=stale_pools,json=stalePools,proto3" json:"stale_pools,omitempty"`
+	DenominatorIncomplete bool     `protobuf:"varint,4,opt,name=denominator_incomplete,json=denominatorIncomplete,proto3" json:"denominator_incomplete,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *GetCapitalPoolsResponse) Reset() {
@@ -376,6 +380,20 @@ func (x *GetCapitalPoolsResponse) GetComputedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *GetCapitalPoolsResponse) GetStalePools() []string {
+	if x != nil {
+		return x.StalePools
+	}
+	return nil
+}
+
+func (x *GetCapitalPoolsResponse) GetDenominatorIncomplete() bool {
+	if x != nil {
+		return x.DenominatorIncomplete
+	}
+	return false
+}
+
 var File_dashboardv1_capital_pools_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_capital_pools_proto_rawDesc = "" +
@@ -406,11 +424,14 @@ const file_dashboardv1_capital_pools_proto_rawDesc = "" +
 	"\x06equity\x18\x02 \x01(\x01R\x06equity\x12\x12\n" +
 	"\x04idle\x18\x03 \x01(\x01R\x04idle\x12\x1a\n" +
 	"\bdeployed\x18\x04 \x01(\x01R\bdeployed\x123\n" +
-	"\x05pools\x18\x05 \x03(\v2\x1d.nox.dashboard.v1.CapitalPoolR\x05pools\"\x93\x01\n" +
+	"\x05pools\x18\x05 \x03(\v2\x1d.nox.dashboard.v1.CapitalPoolR\x05pools\"\xeb\x01\n" +
 	"\x17GetCapitalPoolsResponse\x12;\n" +
 	"\x06groups\x18\x01 \x03(\v2#.nox.dashboard.v1.CapitalPoolsGroupR\x06groups\x12;\n" +
 	"\vcomputed_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"computedAtB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"computedAt\x12\x1f\n" +
+	"\vstale_pools\x18\x03 \x03(\tR\n" +
+	"stalePools\x125\n" +
+	"\x16denominator_incomplete\x18\x04 \x01(\bR\x15denominatorIncompleteB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_capital_pools_proto_rawDescOnce sync.Once

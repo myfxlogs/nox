@@ -6,6 +6,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -19,7 +20,26 @@ type CapitalPoolRow struct {
 	Src        string
 	FetchedAt  time.Time
 	Ghost      bool // mt4/mt5 行且 venue 不在 broker_accounts（同 ExplorerIdlePool 语义）
+	Stale      bool // 快照龄超源节奏窗（分母构成剔该行——不拿陈旧值当现值）
 }
+
+// 池快照陈旧阈值（单源——dashboard/闸径共用，禁双处各写）：
+// 事件源池 5min（combo 判定同窗）；scheduler 源（日采钱包面）36h 宽限。
+const (
+	CapitalPoolStaleAfter      = 5 * time.Minute
+	CapitalSchedulerStaleAfter = 36 * time.Hour
+)
+
+// PoolStale 池行鲜度判：scheduler 源放宽产源节奏，其余按事件源窗。
+func PoolStale(src string, fetchedAt, now time.Time) bool {
+	if src == "scheduler" {
+		return now.Sub(fetchedAt) > CapitalSchedulerStaleAfter
+	}
+	return now.Sub(fetchedAt) > CapitalPoolStaleAfter
+}
+
+// PoolKey 池键（分母构成/陈旧清单共用串）。
+func (p CapitalPoolRow) PoolKey() string { return p.Venue + ":" + p.VenueType }
 
 // CapitalDeployedLeg OPEN 持仓腿在池名义归因（amount=成交量×成交均价，腿计价币）。
 type CapitalDeployedLeg struct {
@@ -86,13 +106,29 @@ func (s *Store) CapitalPoolSnapshots(ctx context.Context) ([]CapitalPoolRow, err
 	if err := vrows.Err(); err != nil {
 		return nil, err
 	}
+	now := time.Now()
 	for i := range pools {
 		p := &pools[i]
 		if p.VenueType == "mt4" || p.VenueType == "mt5" {
 			p.Ghost = !registered[p.Venue]
 		}
+		p.Stale = PoolStale(p.Src, p.FetchedAt, now)
 	}
 	return pools, nil
+}
+
+// StalePoolKeys 分母缺池清单：stale 且非幽灵的池键去重（鲜度守卫读径附标用）。
+func StalePoolKeys(pools []CapitalPoolRow) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range pools {
+		if p.Stale && !p.Ghost && !seen[p.PoolKey()] {
+			seen[p.PoolKey()] = true
+			out = append(out, p.PoolKey())
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // CapitalOpenLegs OPEN 持仓各 OPEN 腿在池名义：成交量×成交均价（无成交价回退
