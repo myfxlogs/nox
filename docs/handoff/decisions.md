@@ -116,3 +116,13 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 **保留（系统自盯，非闸）**：单 venue 或 CEX 总集中度超阈（单 venue≥50% 或 CEX 总≥70%）→ info 级 alert 如实标浓度——只透风险不拦流向。
 
 **决策席异议留痕**：推荐过「单 venue ≤40%」硬顶，业主裁撤；30 天 −3% 全停、事故仓停新开、CFD≥25%、90天≤3oz 其余硬线不动。
+
+## D-509（2026-10-14 决策席）：DCI PUT 行权界 ATM→5% OTM
+
+**实证**：`dci_put_otm_bound=1.00` 允许贴价卖 PUT（SG 在册 strike 83000-83500 vs 现货 83427≈ATM）；贴价卖看跌=约 50% 概率接货的裸方向赌注，盈亏结构非 carry 定位。
+
+**改**：`fin_capability_constraint.dci_put_otm_bound` max 1.00→**0.95**（SG 已改）。接货从「抛硬币」压回尾部事件；权利金 APR 少收换「接货时先跌 5%」的缓冲。
+
+**不动**：`dci_call_otm_bound=1.10` 对称界不变；qty 小额/tenor 上限/settle 记账径照旧。接货后 BTC 库存处置径（自动卖回 vs 转 sell_high 接住）另行立票——机制设计非参数。
+
+**域**：策略执行参数属决策席域（D-184 全权），业主域只涉方向锚本身。
