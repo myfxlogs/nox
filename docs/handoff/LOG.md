@@ -840,3 +840,8 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - `63ec5179` 部署后 boot 扫：①#378 `okx USDT 可动=0`——业主手动把 $1958 unified→funding（`okx:funding=1958.27` 12:57:10 快照实证，金额与提案分毫不差）；②#377 过现货余额读真打 `POST /earn/uni/lends`→venue `HTTP 400 INVALID_PARAM_VALUE: min_rate null`——出借单须带 min_rate 底价。
 - 收口票立案：okx FreeBalance=unified+funding 合并+Subscribe 只划短差；gate Subscribe 补 min_rate（Products 已读该值）。
 - #38 权限面不变——业主若已在 API key 勾交易写权限，rail 收口后下拍即真验证。
+
+## 2026-10-14 okx 403 收窄为 finance 端点族拒：划转实证交易写权限在
+- 订单 #20 实证链：`asset/transfer 18→6` **成功**（同签名同时间戳同 key）→ `purchase-redemption` 403。okx:funding=1958.27 快照 12:57:10——**划转是我们 rail 干的不是业主手动**（前次误判纠正）。
+- 结论：key+签名+IP+交易写权限全实证无罪；403=finance/savings 端点族专属未授权。OKX 新版 key 权限为勾选树——赚币/金融产品族子项需业主核对（#38 已改窄请求文）。
+- Plan B 记档：`POST /account/set-auto-earn` 自动赚币属**交易权限族**（调整配置写）——若 savings 端点族对该 key 不可授权，auto-earn 同效路径（unified 闲置自动出借，连 funding 前置都不用）。
