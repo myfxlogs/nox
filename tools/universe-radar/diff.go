@@ -34,13 +34,23 @@ const (
 //	BTC_USDT_20241227→BTC（gate 八位数日期）——日期尾段先剥再走 perp 链。
 func normBase(symbol string) string {
 	s := symbol
-	if i := strings.LastIndexAny(s, "-_"); i > 0 && allDigits(s[i+1:]) && len(s[i+1:]) >= 6 {
-		s = s[:i] // 交割日期尾段（-YYMMDD/_YYMMDD/_YYYYMMDD）
-	}
-	for _, suf := range []string{"-USDT-SWAP", "-USDT", "_USDT", "USDT"} {
+	// 交割日期尾段先剥（-YYMMDD/_YYMMDD/_YYYYMMDD，≥6 位纯数字——
+	// _USDT/_USD_UM 等定价币尾含非数字不误伤）；okx USD_UM 形剥完日期剩
+	// -USD_UM 定价币尾，交下方后缀链（-USD_UM 先于 -USD 判，防截成 -UM）。
+	s = stripDigitsTail(s)
+	for _, suf := range []string{"-USDT-SWAP", "-USD_UM", "_USD_UM", "-USDT", "-USDC", "-USD",
+		"_USDT", "_USDC", "_USD", "USDT", "USDC"} {
 		if strings.HasSuffix(s, suf) {
 			return strings.TrimSuffix(s, suf)
 		}
+	}
+	return s
+}
+
+// stripDigitsTail 剥「-_ 分隔的 ≥6 位纯数字尾段」（交割日期）。剥一次返回新串。
+func stripDigitsTail(s string) string {
+	if i := strings.LastIndexAny(s, "-_"); i > 0 && allDigits(s[i+1:]) && len(s[i+1:]) >= 6 {
+		return s[:i]
 	}
 	return s
 }

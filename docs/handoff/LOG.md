@@ -576,3 +576,13 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - 对冲腿 join：universe 键 venue|symbol 原生名即区分到期腿；contract_type+expiry_ts 列就位供日历价差下游表达（产提案属后续票）。
 - 锚 5 件：normBase 三所交割形/basisAnn 全域 fail-closed+perp annualize 回归/binance QUARTER 收/okx FUTURES+index+funding 不打交割/gate expire_time 枚举/首扫静默+次扫 NEW/DELIST。
 - SG 验收残留：radar 轮后 `fin_cex_universe` 现 okx BTC-USDT-YYMMDD FUTURES 行+last_basis_ann 非空；首轮零告警洪泛。
+
+## 2026-10-14 雷达交割轴补全 @pending
+- okx FUTURES filter：中段白名单 {USDT,USDC,USD_UM}（USD_UM=USDⓈ篮线性交割=SG 实证稳定币交割实面）；BTC-USD-* 币本位剔（逆向另一族）；BTC-USDT-*/BTC-USDC-* 命名空间保留。
+- okx index 接线：okxIndexUly（USD_UM→BASE-USD、其余→BASE-mid）逐 uly index-tickers；mark=FUTURES tickers last（已拉零新调用）。
+- binance 交割 mark/index：premiumIndex 响应本就全符号含 markPrice/indexPrice——premiumIndexFunding 返三 map 顺手填 FUTURES 行（perp mark/index 仍走 ticks/facts 原位不动），零新增调用。
+- normBase 扩：stripDigitsTail 剥 ≥6 位纯数字日期尾（-_ 分隔）+后缀链加 USD_UM/USDC/USD（-USD_UM 先于 -USD 判防截 -UM）。
+- ct_val 照旧读 venue ctVal 真值（USDⓈ 面值不编 1.0）。
+- 部署坑记录在案：instruments 缓存存序列化 struct 非原始 JSON——扩字段后须删 /root/.cache/nox-universe-radar/*.json 逼新拉（SG 已实证此坑）。
+- 锚升：USD_UM 收+BTC-USD-* 剔+index uly 映射对拍+binance 交割 mark/index 接线断言。
+- SG 验收残留：fin_cex_universe 现 *-USD_UM-* FUTURES 行+basis_ann 量级合理；binance 4 交割行 basis_ann 出数；轮零告警洪泛。

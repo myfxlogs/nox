@@ -112,7 +112,7 @@ func (o okx) Scan(ctx context.Context) ([]Row, error) {
 			r.ContractType = ctPerp
 			r.Base = strings.TrimSuffix(d.InstID, "-USDT-SWAP")
 		case d.InstType == "FUTURES" && len(strings.Split(d.InstID, "-")) == 3 &&
-			strings.Split(d.InstID, "-")[1] == "USDT": // BTC-USDT-241227 形 USDT 交割
+			okxLinearMid[strings.Split(d.InstID, "-")[1]]: // BTC-USDT-241227 / BTC-USD_UM-250321 形
 			r.ContractType = ctFutures
 			r.Base = strings.Split(d.InstID, "-")[0]
 			r.ExpiryTS = msTime(int64(d.ExpTime)) // 0/缺→零值→basis_ann nil fail-closed
@@ -163,15 +163,20 @@ func (o okx) Scan(ctx context.Context) ([]Row, error) {
 	// FUTURES basis 轴 index：标的现货指数 /index-tickers?uly=BASE-USDT 逐 uly 取
 	//（交割 uly 数屈指低频；读败→Index 留 0→basis_ann nil 诚实缺，禁猜）。
 	ulys := make(map[string]bool)
+	rowUly := make(map[string]string)
 	for i := range rows {
 		if rows[i].ContractType == ctFutures && rows[i].Base != "" {
-			ulys[rows[i].Base+"-USDT"] = true
+			uly := okxIndexUly(rows[i].Symbol)
+			if uly != "" {
+				ulys[uly] = true
+				rowUly[rows[i].Symbol] = uly
+			}
 		}
 	}
 	for uly := range ulys {
 		if px, err := o.indexPx(ctx, uly); err == nil {
 			for i := range rows {
-				if rows[i].ContractType == ctFutures && rows[i].Base+"-USDT" == uly {
+				if rowUly[rows[i].Symbol] == uly {
 					rows[i].Index = px
 				}
 			}
@@ -180,6 +185,24 @@ func (o okx) Scan(ctx context.Context) ([]Row, error) {
 		}
 	}
 	return rows, nil
+}
+
+// okxLinearMid FUTURES 中段白名单：USDT/USDC 稳定币本位 + USD_UM（USDⓈ篮结算线性交割，
+// SG 实证 OKX 稳定币交割腿实面=USD_UM）。USD 中段=币本位逆向合约（settleCcy=币）不收。
+var okxLinearMid = map[string]bool{"USDT": true, "USDC": true, "USD_UM": true}
+
+// okxIndexUly FUTURES instId→index-tickers 的 uly：USD_UM→BASE-USD（USDⓈ 篮基差对
+// USD 指数），其余→BASE-mid。非三段/中段非白名单→""（不调 index 端点）。
+func okxIndexUly(instID string) string {
+	p := strings.Split(instID, "-")
+	if len(p) != 3 || !okxLinearMid[p[1]] {
+		return ""
+	}
+	mid := p[1]
+	if mid == "USD_UM" {
+		mid = "USD"
+	}
+	return p[0] + "-" + mid
 }
 
 // indexPx /api/v5/market/index-tickers?uly=<BASE-USDT>→idxPx（venue 官方公共端点无凭据）。

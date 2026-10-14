@@ -123,7 +123,7 @@ func (b binance) Scan(ctx context.Context) ([]Row, error) {
 	// D-205②：funding 换 venue 公共 REST 全量面（premiumIndex 单调用=lastFundingRate+
 	// nextFundingTime，斩断「要数据必先订阅」死锁）；fundingInfo 补 interval 小时真值，
 	// 读败→facts ivl 兜底参考（仅兜底不做 venue 扩集依据）。
-	rates, err := b.premiumIndexFunding(ctx)
+	rates, marks, indexes, err := b.premiumIndexFunding(ctx)
 	ivls, ierr := b.fundingIntervals(ctx)
 	if ierr != nil {
 		log.Printf("[universe-radar] binance fundingInfo 读败（facts ivl 兜底）: %v", ierr)
@@ -134,6 +134,16 @@ func (b binance) Scan(ctx context.Context) ([]Row, error) {
 	if err != nil {
 		log.Printf("[universe-radar] binance premiumIndex 读败（facts funding 兜底）: %v", err)
 		rates = nil
+		marks = nil
+		indexes = nil
+	}
+	// 交割腿 mark/index 接线：premiumIndex 响应本就全符号含 markPrice+indexPrice
+	//（QUARTER 在内）——ticks/facts 不订交割符号，此面顺手填 FUTURES 行，零新增调用。
+	for i := range rows {
+		if rows[i].ContractType == ctFutures {
+			rows[i].Mark = marks[rows[i].Symbol]
+			rows[i].Index = indexes[rows[i].Symbol]
+		}
 	}
 	funded := 0
 	for i := range rows {
@@ -163,20 +173,27 @@ func (b binance) Scan(ctx context.Context) ([]Row, error) {
 }
 
 // premiumIndexFunding D-205②：GET /fapi/v1/premiumIndex——单调用全市场
-// [symbol→lastFundingRate（单期小数）]（venue 官方公共端点无凭据）。
-func (b binance) premiumIndexFunding(ctx context.Context) (map[string]float64, error) {
+// symbol→{lastFundingRate（单期小数）, markPrice, indexPrice}（venue 官方公共端点无凭据；
+// mark/index 供 FUTURES 行 basis 轴——perp mark/index 仍走 ticks/facts 原位不动）。
+func (b binance) premiumIndexFunding(ctx context.Context) (funding, mark, index map[string]float64, err error) {
 	var arr []struct {
 		Symbol          string    `json:"symbol"`
 		LastFundingRate flexFloat `json:"lastFundingRate"`
+		MarkPrice       flexFloat `json:"markPrice"`
+		IndexPrice      flexFloat `json:"indexPrice"`
 	}
-	if err := getJSON(ctx, b.hc, b.base+"/fapi/v1/premiumIndex", &arr); err != nil {
-		return nil, err
+	if err = getJSON(ctx, b.hc, b.base+"/fapi/v1/premiumIndex", &arr); err != nil {
+		return nil, nil, nil, err
 	}
-	out := make(map[string]float64, len(arr))
+	funding = make(map[string]float64, len(arr))
+	mark = make(map[string]float64, len(arr))
+	index = make(map[string]float64, len(arr))
 	for _, r := range arr {
-		out[r.Symbol] = float64(r.LastFundingRate)
+		funding[r.Symbol] = float64(r.LastFundingRate)
+		mark[r.Symbol] = float64(r.MarkPrice)
+		index[r.Symbol] = float64(r.IndexPrice)
 	}
-	return out, nil
+	return funding, mark, index, nil
 }
 
 // fundingIntervals D-205②：GET /fapi/v1/fundingInfo——symbol→fundingIntervalHours

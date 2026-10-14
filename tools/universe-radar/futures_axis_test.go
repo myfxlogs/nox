@@ -20,6 +20,7 @@ func TestFutures_NormBase(t *testing.T) {
 		{"BTC-USDT-241227", "BTC"},   // okx 六位数交割
 		{"BTCUSDT_240927", "BTC"},    // binance 下划线季度
 		{"BTC_USDT_20241227", "BTC"}, // gate 八位数交割
+		{"ETH-USD_UM-250321", "ETH"}, // okx USDⓈ篮交割
 		{"BTC-USDT-SWAP", "BTC"},     // perp 回归
 	} {
 		if got := normBase(tc.sym); got != tc.want {
@@ -66,7 +67,8 @@ func TestFutures_BinanceQuarter(t *testing.T) {
 				{"symbol":"ETHUSDT_NQ","baseAsset":"ETH","quoteAsset":"USDT","contractType":"NEXT_QUARTER","underlyingType":"COIN","status":"TRADING","deliveryDate":1772000000000},
 				{"symbol":"BTCBUSD","baseAsset":"BTC","quoteAsset":"BUSD","contractType":"PERPETUAL","status":"TRADING"}]}`)
 		case strings.HasSuffix(r.URL.Path, "premiumIndex"):
-			fmt.Fprint(w, `[{"symbol":"BTCUSDT","lastFundingRate":"0.0001"}]`)
+			fmt.Fprint(w, `[{"symbol":"BTCUSDT","lastFundingRate":"0.0001","markPrice":"100000","indexPrice":"99900"},
+				{"symbol":"BTCUSDT_241227","markPrice":"101500","indexPrice":"99900","lastFundingRate":""}]`)
 		case strings.HasSuffix(r.URL.Path, "fundingInfo"):
 			fmt.Fprint(w, `[{"symbol":"BTCUSDT","fundingIntervalHours":8}]`)
 		default:
@@ -100,24 +102,31 @@ func TestFutures_BinanceQuarter(t *testing.T) {
 	if q.FundingRate != 0 || q.IntervalH != 0 {
 		t.Fatalf("交割 funding 应零值不剔：%+v", q)
 	}
+	if q.Mark != 101500 || q.Index != 99900 {
+		t.Fatalf("交割 mark/index 应从 premiumIndex 接上：%+v", q)
+	}
 }
 
 // okx FUTURES 枚举+expiry+index 轴+funding 端点不打交割。
 func TestFutures_Okx(t *testing.T) {
 	var fundingHits []string
+	var idxUlys []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.Contains(r.URL.Path, "instruments"):
 			if r.URL.Query().Get("instType") == "FUTURES" {
 				fmt.Fprint(w, `{"data":[{"instId":"BTC-USDT-241227","instType":"FUTURES","state":"live","listTime":"1","ctVal":"0.01","expTime":"1735000000000"},
-					{"instId":"BTC-USD-241227","instType":"FUTURES","state":"live","listTime":"1","ctVal":"0.01","expTime":"1735000000000"}]}`)
+					{"instId":"BTC-USD-241227","instType":"FUTURES","state":"live","listTime":"1","ctVal":"0.01","expTime":"1735000000000"},
+					{"instId":"ETH-USD_UM-250321","instType":"FUTURES","state":"live","listTime":"1","ctVal":"0.01","expTime":"1742800000000"}]}`)
 			} else {
 				fmt.Fprint(w, `{"data":[{"instId":"BTC-USDT-SWAP","instType":"SWAP","state":"live","listTime":"1","ctVal":"0.01"}]}`)
 			}
 		case strings.Contains(r.URL.Path, "index-tickers"):
+			idxUlys = append(idxUlys, r.URL.Query().Get("uly"))
 			fmt.Fprint(w, `{"data":[{"idxPx":"100000"}]}`)
 		case strings.Contains(r.URL.Path, "tickers") && r.URL.Query().Get("instType") == "FUTURES":
-			fmt.Fprint(w, `{"data":[{"instId":"BTC-USDT-241227","volCcy24h":"1000","last":"101000"}]}`)
+			fmt.Fprint(w, `{"data":[{"instId":"BTC-USDT-241227","volCcy24h":"1000","last":"101000"},
+				{"instId":"ETH-USD_UM-250321","volCcy24h":"100","last":"3600"}]}`)
 		case strings.Contains(r.URL.Path, "tickers"):
 			fmt.Fprint(w, `{"data":[{"instId":"BTC-USDT-SWAP","volCcy24h":"1000","last":"100000"}]}`)
 		case strings.Contains(r.URL.Path, "funding-rate"):
@@ -133,13 +142,16 @@ func TestFutures_Okx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 2 {
-		t.Fatalf("rows=%d want 2（USD 本位交割剔）", len(rows))
+	if len(rows) != 3 {
+		t.Fatalf("rows=%d want 3（USD 币本位交割剔，USD_UM 收）", len(rows))
 	}
-	var fut *Row
+	var fut, um *Row
 	for i := range rows {
 		if rows[i].Symbol == "BTC-USDT-241227" {
 			fut = &rows[i]
+		}
+		if rows[i].Symbol == "ETH-USD_UM-250321" {
+			um = &rows[i]
 		}
 	}
 	if fut == nil || fut.ContractType != ctFutures || fut.Base != "BTC" {
@@ -151,8 +163,22 @@ func TestFutures_Okx(t *testing.T) {
 	if fut.Mark != 101000 || fut.Index != 100000 {
 		t.Fatalf("mark/index 破：%+v", fut)
 	}
+	if um == nil || um.Mark != 3600 || um.Index != 100000 {
+		t.Fatalf("USD_UM 行破：%+v", um)
+	}
+	// index uly 映射：USDT→BTC-USDT，USD_UM→ETH-USD（USDⓈ篮对 USD 指数）
+	wantUlys := map[string]bool{"BTC-USDT": true, "ETH-USD": true}
+	for _, u := range idxUlys {
+		if !wantUlys[u] {
+			t.Fatalf("意外 index uly：%s", u)
+		}
+		delete(wantUlys, u)
+	}
+	if len(wantUlys) != 0 {
+		t.Fatalf("index uly 缺拉：%v", wantUlys)
+	}
 	for _, h := range fundingHits {
-		if strings.HasSuffix(h, "-241227") {
+		if strings.Contains(h, "241227") || strings.Contains(h, "250321") {
 			t.Fatalf("交割符号不得打 funding-rate：%s", h)
 		}
 	}
