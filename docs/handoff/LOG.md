@@ -639,3 +639,7 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - dciexec concentrationAlert：stale 池剔分母+浓度行附「分母缺池」注+同款 dedup 告警。资金地图页 banner 示缺池。
 - 锚：buildCapitalPools 全口径锚升 stale 剔计（USD 组 5000/4500）+缺池清单对拍；PoolStale 单源双消费端零双写。
 - 机检：dashboard/dciexec/pgstore 全包绿、dashboard -race 23.5s 绿、npm build 绿；全量套件 dashboard D580 Migrate 阻塞 600s flake（三度记录的压力型共享库病灶，非本票）。
+
+## 2026-10-14 敞口分母鲜度守卫验收 ✅（验收席）
+- 复核：334 测试绿（pgstore/dciexec）；SG alerts 库现「分母池鲜度失」行实证（窗口期 dedup 推送在痕）；当前池鲜 RPC 标已自动收起——恢复销标语义实证。
+- 验收锚全中：stale_pools 剔分母、denominator_incomplete 标、一次性 info 告警、恢复自动销。
