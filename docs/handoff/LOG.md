@@ -904,3 +904,8 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **修**：①`pendingInboxSymbols` 收件箱全历史 symdig_alias 行→symbol 集，picks 过滤在 30 行截断前（tail 拿到额度）；②malformed warn 改 `InsertAlertDedup` 24h（Store 接口加面，pgstore 现成件）；③prompt evidence ≤80 字符（截断容忍轻量版）。
 - **禁线**：AI 只读纪律不动（提案仍只进箱）；两轮重试/max_tokens→error 分级不动；findings 分类面不动。
 - **锚**：`TestSymdigPendingSkipPicks`——昨日 pending GOLD 行在场→payload 零 GOLD+TAILSYM 进 payload 并入箱。
+
+## 2026-10-14 D-514 窗口修复审验收（决策席 SG 实拍）
+- **部署**：镜像 `1a035b81`（含 a77cc158）→ SG nox-core 重启。
+- **实拍链**：15:17 boot 扫 → 提案 #445 `dci_buy_low@okx` proposed（BTC-USDT-261030-77500-P，apr 14.73% vs 新基准 10.5% 过闸）→ autoexec 执行 → `fin_dci_order` #27 failed，venue 回执 `51000 Parameter amt error`（尘额划转 18→6）。
+- **如实定性**：账户面 funding/unified 双空（$2117 在 savings），提案资本口径 CapitalUSD 含 savings 合规出库，但 DCI 只能花 funding/unified→qty=尘额；尘划转病灶第三发（DCI rail 未复用 earn rail 跳划转件），约束落库票（minSize 闸）就位后此类单本地拦。
