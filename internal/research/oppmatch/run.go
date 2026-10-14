@@ -191,6 +191,10 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	idleGapScan(ctx, st)
 	// CFD swap 正息面→假设行（采集在跑消费断档接上；只产假设不碰钱）。
 	swapScan(ctx, st)
+	// 裸腿假设→对冲腿可行面（asset_equiv 类桥实读 universe；无腿如实注记）。
+	hedgeScan(ctx, st)
+	// live 策略退役闸（委任式——死角实证触发；零产/亏损硬线+零持仓前置）。
+	delegateRetire(ctx, st)
 	log.Printf("[oppmatch] scan done: %d templates, %d proposals, %d new gap requests",
 		len(in), propN, gapN)
 	return propN, gapN, nil
