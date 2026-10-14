@@ -18,7 +18,7 @@ type ExplorerIdlePool struct {
 	FreeMargin     float64
 	Currency       string
 	BufferMultiple float64 // 快照行直取，NULL → 0
-	Income30dUSD   float64 // income_events 近30d amount_usd 合计（venue_key/venue 双键兼容）
+	Income30dUSD   float64 // income_events 近30d 合计，venue_key 粒度归因
 	FetchedAt      time.Time
 	Idle           bool // 余额>0 且 30d 收入=0（睡钱标记，数字口径确定性）
 	BelowFloor     bool // BufferMultiple 有值且 <1（破地板）
@@ -86,10 +86,13 @@ func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]Explore
 			return nil, err
 		}
 	}
+	// 收入判据 venue_key 粒度（okx idle 粒度修票）：仓位 income（如 okx:perp
+	// funding）不得掩盖同所 unified 躺账现金；venue_type='' 裸键行=不可归因
+	// 收入，并入该 venue 各池保守判闲（宁可不闲不漏睡钱侧——裸键旧语义保）。
 	income := map[string]float64{}
 	irows, err := s.pool.Query(ctx, `
-		SELECT venue, COALESCE(SUM(amount_usd),0) FROM income_events
-		WHERE ts >= $1 GROUP BY venue`, now.Add(-30*24*time.Hour))
+		SELECT venue_key, COALESCE(SUM(amount_usd),0) FROM income_events
+		WHERE ts >= $1 GROUP BY venue_key`, now.Add(-30*24*time.Hour))
 	if err != nil {
 		return nil, fmt.Errorf("explorer idle income: %w", err)
 	}
@@ -123,7 +126,7 @@ func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]Explore
 			p.Equity *= f
 			p.FreeMargin *= f
 		}
-		p.Income30dUSD = income[p.Venue]
+		p.Income30dUSD = income[p.Venue+":"+p.VenueType] + income[p.Venue]
 		if p.Ghost {
 			continue // 幽灵池不标 Idle/BelowFloor——移除户残行不告警不虚计
 		}

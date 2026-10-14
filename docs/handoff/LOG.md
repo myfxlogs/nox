@@ -695,3 +695,12 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **锚**：`TestFuturesExcludedFromMonitorUniverse`——FUTURES 行不入派生、PERP/NULL 行照旧收（对拍 `loadDerivationInputs` 真实库径）。
 - **机检**：xasset-monitor 全包+`-race` 绿；build/vet/gofmt 净；derive.go 恰 300 行。
 - **验收残留（SG）**：下一拍 cron 日志零 `XAU-USD_UM` critical；`fin_cex_universe` 交割行在册不动。
+
+## okx idle 粒度修（2026-10-14）
+
+- **病灶**：`ExplorerIdleFunds` 收入判据 `GROUP BY venue` 裸键聚合——okx:perp 仓位 funding $4.31 掩盖同所 unified 池 $1956 躺账现金（「venue 有收入≠该笔现金在赚」，SG 实证）。
+- **修**：聚合下沉 `GROUP BY venue_key`——池级归因；`Income30dUSD = income[venue:venue_type] + income[venue]`（venue_type='' 裸键行=不可归因收入并入各池保守判闲，宁可不闲不漏睡钱）。单源读径→NAV/digest/idle monitor/idle_gap 同口径随迁零改。
+- **效果**：okx:perp 有归因收入仍非 idle；okx:unified $1956 现 Idle=true→idleGapScan 出 `executor` 缺口行（okx 无 earn 写径实证已录，如实缺口不臆造）。
+- **锚**：`TestIdleGranularity_VenueKeyIncome`——三态对拍：unified 现金闲/perp 有收入不闲/裸键收入保守压闲。
+- **机检**：pgstore 全包+`-race` 绿；build/vet/gofmt 净。
+- **验收残留（SG）**：下拍扫描 `fin_condition_gap` 现 `okx|unified` executor 缺口行+请求箱推。
