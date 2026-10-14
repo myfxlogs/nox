@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"nox/internal/store/pgstore"
@@ -114,6 +115,20 @@ func parseOKXDCI(body []byte, baseCcy, optType string, now time.Time) ([]pgstore
 		row := pgstore.CexDCIQuote{Venue: "okx", Underlying: baseCcy, OptType: optFull,
 			InvestCcy: firstNonEmpty(pick(d, "investCcy", "quoteCcy", "notionalCcy"), "USDT"), APY: apy,
 			ProductRef: pick(d, "productId", "id", "instId")}
+		// 申购量界落库（row keys 实证 minSize/maxSize/stepSz 在响应；
+		// stepSz→purchase_decimal 小数位——下单 floor 步进口径同 binance 径）。
+		if v, err := strconv.ParseFloat(pick(d, "minSize", "minSz"), 64); err == nil {
+			row.MinAmount = &v
+		}
+		if v, err := strconv.ParseFloat(pick(d, "maxSize", "maxSz"), 64); err == nil {
+			row.MaxAmount = &v
+		}
+		if step := pick(d, "stepSz", "stepSize"); step != "" {
+			if _, err := strconv.ParseFloat(step, 64); err == nil {
+				dec := stepDecimals(step)
+				row.PurchaseDecimal = &dec
+			}
+		}
 		if v, err := strconv.ParseFloat(pick(d, "strike", "strikePx"), 64); err == nil {
 			row.Strike = &v
 		}
@@ -133,3 +148,12 @@ func parseOKXDCI(body []byte, baseCcy, optType string, now time.Time) ([]pgstore
 // ---------- Gate：GET https://api.gateio.ws/api/v4/earn/dual/investment_plan（public） ----------
 
 var gateDualURL = "https://api.gateio.ws/api/v4/earn/dual/investment_plan" // var=测试可覆
+
+// stepDecimals stepSz 字符串→步进小数位（"1"→0、"0.5"→1、"0.0001"→4；
+// 字面小数位如实算——venue 步进面原值语义）。
+func stepDecimals(step string) int {
+	if i := strings.IndexByte(step, '.'); i >= 0 {
+		return len(step) - i - 1
+	}
+	return 0
+}

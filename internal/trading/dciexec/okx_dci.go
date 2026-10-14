@@ -47,16 +47,33 @@ func (e *Executor) tryLegOKX(ctx context.Context, l gate.DCILeg, share float64, 
 		return "", err
 	}
 	var q *pgstore.CexDCIQuote
+	var sawStrikeOK bool
 	for i := range qs {
 		if !l.StrikePass(&qs[i], bound) || qs[i].ProductRef == "" {
 			continue
+		}
+		sawStrikeOK = true
+		if qs[i].MinAmount == nil || qs[i].PurchaseDecimal == nil {
+			continue // 约束行缺=不可申购参数（fail-closed 不臆默认——binance 径同语义）
 		}
 		q = &qs[i]
 		break
 	}
 	if q == nil {
+		if sawStrikeOK {
+			return "", e.gap(ctx, l, "runtime", "dual_quote",
+				"系统侧病灶：%s腿 okx 无可申购参数档（达标档缺 minSize/stepSz——采集面未落）", l.Name)
+		}
 		return "", e.gap(ctx, l, "runtime", "dual_quote",
 			"%s腿 okx 无达标档在售（spot %.0f，strike 界 %s）", l.Name, spot, l.BoundText(bound))
+	}
+	// 申购量界闸：notional floor 至 stepSz 小数位；界外 fail-closed 如实败不打
+	// venue（不补不截——binance 径同语义，低于 minSize 靠 venue 拒兜底不体面）。
+	deposit := floorTo(qty, *q.PurchaseDecimal)
+	if deposit < *q.MinAmount || (q.MaxAmount != nil && deposit > *q.MaxAmount) {
+		return "", e.gap(ctx, l, "runtime", "dual_quote",
+			"系统侧病灶：%s腿 okx notionalSz %v 约束不达标（qty %.8f floor 至 dec%d；min %v max %v——不补不截如实败）",
+			l.Name, deposit, qty, *q.PurchaseDecimal, amtTxt(q.MinAmount), amtTxt(q.MaxAmount))
 	}
 	now := e.Now()
 	// 幂等键同 binance 径：腿+产品+交割日+尝试序（金额浮点尾不入键）。
@@ -77,7 +94,7 @@ func (e *Executor) tryLegOKX(ctx context.Context, l gate.DCILeg, share float64, 
 	oid, created, err := e.Store.CreateDCIOrder(ctx, &pgstore.DCIOrder{
 		RequestID: reqID, Venue: "okx", TemplateID: l.Tmpl,
 		ProductRef: q.ProductRef, Underlying: "BTC", OptType: l.OptType, Strike: q.Strike,
-		InvestCcy: q.InvestCcy, Qty: qty, TenorDays: q.TenorDays, ProposalID: propID})
+		InvestCcy: q.InvestCcy, Qty: deposit, TenorDays: q.TenorDays, ProposalID: propID})
 	if err != nil {
 		return "", err
 	}
@@ -86,7 +103,7 @@ func (e *Executor) tryLegOKX(ctx context.Context, l gate.DCILeg, share float64, 
 	}
 	// funding 短差补划 18→6（sfp/dcd 扣款户=funding 探针实锤）；unified 无款
 	// fail-closed 不试 venue（划转败/短差缺款均如实拒）。
-	if needed := qty - f; needed > 0 {
+	if needed := deposit - f; needed > 0 {
 		mv := needed
 		if u < mv {
 			mv = u
@@ -94,7 +111,7 @@ func (e *Executor) tryLegOKX(ctx context.Context, l gate.DCILeg, share float64, 
 		if mv <= 0 {
 			e.finish(ctx, oid, "failed", "funding 短差且 unified 无款可划")
 			return "", e.gap(ctx, l, "holding", l.QtyCcy,
-				"okx 可动不足：qty %.6f、funding %.6f、unified %.6f", qty, f, u)
+				"okx 可动不足：notional %.6f、funding %.6f、unified %.6f", deposit, f, u)
 		}
 		tb := fmt.Sprintf(`{"ccy":"%s","amt":"%s","from":"18","to":"6","type":"0"}`,
 			l.QtyCcy, strconv.FormatFloat(mv, 'f', 8, 64))
@@ -104,7 +121,7 @@ func (e *Executor) tryLegOKX(ctx context.Context, l gate.DCILeg, share float64, 
 				"系统侧病灶：okx 18→6 划转败（%s腿不试申购）：%v", l.Name, terr)
 		}
 	}
-	body, err := okxDCITrade(ctx, rail, q.ProductRef, qty, l.InvestCcy, e.Now())
+	body, err := okxDCITrade(ctx, rail, q.ProductRef, deposit, l.InvestCcy, e.Now())
 	if err != nil {
 		e.finish(ctx, oid, "failed", err.Error())
 		sig := errclass.VenueRejectSignature(err.Error())

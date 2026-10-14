@@ -915,3 +915,8 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **实拍**：15:29 boot 轮 symdig 实跑——pending 过滤后 LLM 调用落行（completion=0），输出干净零 malformed warn 复发；收件箱无新增（tail 品种为 NZD 系/指数 CFD，LLM 如实判零别名=合法空提案）。
 - **定性**：盲区结构修成立（head pending 品种不再占 picks 额度）；warn 降噪面就位（同文案 24h 抑）；提案落地与否归 LLM 语义判断域，非缺陷。
 - **顺带观察**：#445 `dci_buy_low@okx` 在 boot 拍重试再败同签名（尘划转 51000）——提案 proposed 态每拍重试+每拍出 critical，约束闸票（minSize 落库）是收口件，当前噪音可忍。
+
+## 2026-10-15 okx DCI 产品约束落库+下单闸（实施席）
+- **采集**：parseOKXDCI 落 `minSize/maxSize/stepSz`→`min_amount/max_amount/purchase_decimal`（stepSz 字面小数位→步进位，"1"→0/"0.0001"→4；列在册零迁移）。
+- **下单闸**：tryLegOKX 选档跳过 MinAmount/PurchaseDecimal 缺行（fail-closed 不臆默认）→`deposit=floorTo(qty,stepDec)` 界内闸——低于 minSize/超 maxSize 如实「约束不达标」拒单零 venue 打面（不补不截同 binance 径）；划转/trade 用 deposit。
+- **锚**：三态（qty<min 零 dcd/transfer 调用、约束缺行 fail-closed、达标过闸走序列）；既有序列/过期/凭据锚同绿。

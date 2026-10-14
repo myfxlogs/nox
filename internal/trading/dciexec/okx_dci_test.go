@@ -53,7 +53,8 @@ func TestOkxDCILeg_QuoteTradeSequence(t *testing.T) {
 	st.quotes = append(st.quotes, pgstore.CexDCIQuote{
 		Venue: "okx", Underlying: "BTC", InvestCcy: "USDT", OptType: "PUT",
 		Strike: f64(80000), TenorDays: &tenor, APY: 0.11,
-		ProductRef: "BTC-USDT-260327-80000-P", DeliveryTs: &deliv})
+		ProductRef: "BTC-USDT-260327-80000-P", DeliveryTs: &deliv,
+		MinAmount: f64(10), PurchaseDecimal: idec(0)})
 	ex := &Executor{Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	propID := int64(9)
@@ -95,7 +96,8 @@ func TestOkxDCILeg_ExpiredQuoteFails(t *testing.T) {
 	st.quotes = append(st.quotes, pgstore.CexDCIQuote{
 		Venue: "okx", Underlying: "BTC", InvestCcy: "USDT", OptType: "PUT",
 		Strike: f64(80000), TenorDays: &tenor, APY: 0.11,
-		ProductRef: "BTC-USDT-260327-80000-P", DeliveryTs: &deliv})
+		ProductRef: "BTC-USDT-260327-80000-P", DeliveryTs: &deliv,
+		MinAmount: f64(10), PurchaseDecimal: idec(0)})
 	ex := &Executor{Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	propID := int64(9)
@@ -115,5 +117,53 @@ func TestOkxDCILeg_NoCredGap(t *testing.T) {
 	propID := int64(9)
 	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, &propID); err == nil {
 		t.Fatal("凭据缺应 credential 缺口")
+	}
+}
+
+// TestOkxDCILeg_ConstraintGate 约束闸三态：qty<minSize 如实败零 venue 打面；
+// 约束行缺 fail-closed 不臆默认；达标档照常过闸（序列锚已覆）。
+func TestOkxDCILeg_ConstraintGate(t *testing.T) {
+	mk := func(q pgstore.CexDCIQuote, calls *[]string) (*httptest.Server, *Executor) {
+		srv := okxDCISrv(t, calls, false)
+		st := newFake()
+		st.quotes = append(st.quotes, q)
+		return srv, &Executor{Store: st, Client: srv.Client(), Now: time.Now,
+			EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
+	}
+	tenor := 7
+	deliv := time.Now().AddDate(0, 0, 7)
+	base := func() pgstore.CexDCIQuote {
+		return pgstore.CexDCIQuote{Venue: "okx", Underlying: "BTC", InvestCcy: "USDT",
+			OptType: "PUT", Strike: f64(80000), TenorDays: &tenor, APY: 0.11,
+			ProductRef: "P1", DeliveryTs: &deliv,
+			MinAmount: f64(10), PurchaseDecimal: idec(0)}
+	}
+	// qty<min：余额 funding100+unified1000×share 0.005=5.5 < min10 → 拒零打面。
+	var calls []string
+	q := base()
+	srv, ex := mk(q, &calls)
+	defer srv.Close()
+	propID := int64(9)
+	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 0.005, 90, 100000, 90000, &propID); err == nil {
+		t.Fatal("约束不达标应拒")
+	}
+	for _, c := range calls {
+		if strings.Contains(c, "dcd/") || strings.Contains(c, "transfer") {
+			t.Fatalf("约束不达标不应打 venue: %v", calls)
+		}
+	}
+	// 约束行缺（MinAmount nil）→ fail-closed 拒。
+	calls = nil
+	q2 := base()
+	q2.MinAmount, q2.PurchaseDecimal = nil, nil
+	srv2, ex2 := mk(q2, &calls)
+	defer srv2.Close()
+	if _, err := ex2.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, &propID); err == nil {
+		t.Fatal("约束行缺应 fail-closed")
+	}
+	for _, c := range calls {
+		if strings.Contains(c, "dcd/") {
+			t.Fatalf("约束缺不应打 venue: %v", calls)
+		}
 	}
 }
