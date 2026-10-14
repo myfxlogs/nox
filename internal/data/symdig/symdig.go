@@ -25,6 +25,9 @@ type Store interface {
 	LatestSymdigKeys(ctx context.Context) (map[string]bool, error)
 	InsertSymdigFindings(ctx context.Context, runTS time.Time, rows []pgstore.SymdigFinding) error
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
+	// D-330 降噪面：同文案窗口内抑重（复发不刷屏；实现侧无 dedup 件的 fake
+	// 可回落 InsertAlert 同语义）。
+	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
 }
 
 // Deps 一轮深挖依赖（Now/路径可注入；Client 可空=跳过 LLM 段）。

@@ -26,6 +26,7 @@ type fakeStore struct {
 	mu       sync.Mutex
 	inserted []pgstore.SymdigFinding
 	alerts   []string
+	dedupN   int
 }
 
 func (f *fakeStore) LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) {
@@ -62,6 +63,15 @@ func (f *fakeStore) InsertSymdigFindings(_ context.Context, _ time.Time, rows []
 func (f *fakeStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.alerts = append(f.alerts, level+":"+msg)
+	return nil
+}
+
+// InsertAlertDedup 同键窗内抑重——fake 记 dedup 调用次数对拍降噪语义。
+func (f *fakeStore) InsertAlertDedup(_ context.Context, level, msg string, _ time.Duration) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.dedupN++
 	f.alerts = append(f.alerts, level+":"+msg)
 	return nil
 }
@@ -232,5 +242,49 @@ func TestSymdigInboxDedup(t *testing.T) {
 	}
 	if strings.Contains(string(data), "ZERO→") {
 		t.Fatalf("conf=0 提案不应入箱: %s", data)
+	}
+}
+
+// 盲区修锚：收件箱历史 pending 提案的 symbol 跨日不进 LLM payload
+// （head 烧 token/tail 零覆盖病灶）；tail 品种照常进 picks。
+func TestSymdigPendingSkipPicks(t *testing.T) {
+	dir := t.TempDir()
+	inbox := filepath.Join(dir, "inbox.md")
+	os.WriteFile(inbox, []byte(`| date | source | title | reason | action |
+|---|---|---|---|---|
+| 2026-10-13 | symdig_alias | GOLD→XAU@v1 | e conf=0.90 | 人工核对 |
+`), 0o644)
+	st := &fakeStore{
+		facts: []fact.Fact{
+			{Kind: fact.KindTradeMode, Venue: "v1", Symbol: "GOLD", Value: fact.TradeModeFull, Ts: time.Now()},
+			{Kind: fact.KindTradeMode, Venue: "v1", Symbol: "TAILSYM", Value: fact.TradeModeFull, Ts: time.Now()},
+		},
+		uni: map[string]bool{},
+	}
+	var payload string
+	run := func(_ context.Context, _ *analyst.Client, _ analyst.ToolExecutor,
+		_ []analyst.ToolSpec, _ string, msgs []analyst.Message,
+		cb analyst.LoopCallbacks) (analyst.LoopResult, error) {
+		payload = string(msgs[0].Content)
+		cb.OnDelta("```symdig-proposals\n[{\"symbol\":\"TAILSYM\",\"venue\":\"v1\",\"proposed_canonical\":\"TC\",\"evidence\":\"e\",\"confidence\":0.9}]\n```")
+		return analyst.LoopResult{}, nil
+	}
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	_, err := Round(context.Background(), Deps{
+		Store: st, Client: &analyst.Client{}, Run: run, Now: func() time.Time { return now },
+		InboxPath: inbox, ReportDir: filepath.Join(dir, "报告"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(payload, `"GOLD"`) || strings.Contains(payload, `"symbol":"GOLD"`) {
+		t.Fatalf("pending symbol 不应进 payload: %s", payload)
+	}
+	if !strings.Contains(payload, "TAILSYM") {
+		t.Fatalf("tail 品种应进 payload: %s", payload)
+	}
+	data, _ := os.ReadFile(inbox)
+	if !strings.Contains(string(data), "TAILSYM→TC") {
+		t.Fatalf("tail 提案应入箱: %s", data)
 	}
 }

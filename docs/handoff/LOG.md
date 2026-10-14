@@ -898,3 +898,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **修**：`MaxEarnAPRByCcy` SQL 改 `DISTINCT ON (venue) ORDER BY ts DESC` 各 venue 最新行+行龄 24h 鲜度闸→跨 venue max——断更采集的化石行不冒充现值；返 venue+apr+ts，闸注记附 `@时间` 可审计。
 - **禁线**：`MaxEarnAPR`（其他消费面）不动；化石行不删；行龄阈值=代码常量 24h。
 - **锚**：陈旧 USDT 1.08 行在场→基准仍取新值断言（ba<1.0）；D514 三态照旧绿。
+
+## 2026-10-15 symdig 提案盲区修（实施席）
+- **盲区**：picks=确定性前 30 行+收件箱仅当日去重——head 品种每轮重复提案烧 token、tail 品种慢性零覆盖；warn 四轮复发刷屏。
+- **修**：①`pendingInboxSymbols` 收件箱全历史 symdig_alias 行→symbol 集，picks 过滤在 30 行截断前（tail 拿到额度）；②malformed warn 改 `InsertAlertDedup` 24h（Store 接口加面，pgstore 现成件）；③prompt evidence ≤80 字符（截断容忍轻量版）。
+- **禁线**：AI 只读纪律不动（提案仍只进箱）；两轮重试/max_tokens→error 分级不动；findings 分类面不动。
+- **锚**：`TestSymdigPendingSkipPicks`——昨日 pending GOLD 行在场→payload 零 GOLD+TAILSYM 进 payload 并入箱。

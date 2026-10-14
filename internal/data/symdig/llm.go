@@ -24,7 +24,7 @@ const maxLLMRows = 30
 const symdigSystemPrompt = `你是 NOX 系统的 symbol 配对深挖员。用户消息给出 MT 经纪商未配对/疑似错配品种清单（JSON）。
 任务：对每个品种判断是否存在语义别名可配对（例：GOLD→XAU、GER40→DE30、PLATINUM→XPT、WS30→US30、NIKKEI↔JP225）或明显的映射漂移。
 只输出一个 ` + "```symdig-proposals" + ` fenced JSON 数组，每项 {"symbol","venue","proposed_canonical","evidence","confidence"}；
-evidence 必须基于给定字段（品种名/canonical/venue），禁止纯猜测编造。无提案输出空数组。块外文字不解析。`
+evidence 必须基于给定字段（品种名/canonical/venue），≤80 字符，禁止纯猜测编造。无提案输出空数组。块外文字不解析。`
 
 // proposalsRe/开放块容忍（EOF 截断容忍，同 sysretro openFenceRe 先例）。
 var (
@@ -43,9 +43,15 @@ type proposal struct {
 
 // llmDig 深挖一轮：findings 精选 → AI 提案 → 收件箱（只读，不改库）。
 func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error {
+	// 盲区修：收件箱是持久面——已有 pending 提案的 symbol 跨日去重不进 picks
+	//（head 品种不再每轮烧 token 重复提案，tail 品种有额度被覆盖）。
+	pending := pendingInboxSymbols(deps.InboxPath)
 	var picks []pgstore.SymdigFinding
 	for _, r := range sum.Rows {
 		if r.Klass == KlassUnpaired || r.Klass == KlassUnmappedUnknown || r.Klass == KlassMispaired {
+			if pending[r.Symbol] {
+				continue
+			}
 			picks = append(picks, r)
 			if len(picks) >= maxLLMRows {
 				break
@@ -101,7 +107,7 @@ func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error
 		} else {
 			log.Printf("[symdig] proposals fenced 未闭合（EOF 容忍解析）")
 			if deps.Store != nil {
-				_ = deps.Store.InsertAlert(ctx, nil, "warn", "[symdig] 提案 AI 输出格式异常（已按截断内容容忍解析，提案集可能不完整）")
+				_ = deps.Store.InsertAlertDedup(ctx, "warn", "[symdig] 提案 AI 输出格式异常（已按截断内容容忍解析，提案集可能不完整）", 24*time.Hour)
 			}
 		}
 	}
@@ -137,6 +143,27 @@ func parseProposals(aiText string) ([]proposal, bool) {
 		return props, true
 	}
 	return props, unclosed
+}
+
+// pendingInboxSymbols 收件箱 pending symdig_alias 提案 symbol 集——跨日
+// 全历史行读（行未被归档即 pending；归档文件不查，同 symbol 复活重提合法）。
+func pendingInboxSymbols(path string) map[string]bool {
+	out := map[string]bool{}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return out
+	}
+	for _, ln := range strings.Split(string(data), "\n") {
+		cells := strings.Split(ln, "|")
+		if len(cells) < 4 || strings.TrimSpace(cells[2]) != "symdig_alias" {
+			continue
+		}
+		title := strings.TrimSpace(cells[3])
+		if i := strings.Index(title, "→"); i > 0 {
+			out[title[:i]] = true
+		}
+	}
+	return out
 }
 
 // appendInbox 提案进收件箱（v2 行走 inboxfmt；本函数保留 conf 过滤+当日同 symbol 去重）。
