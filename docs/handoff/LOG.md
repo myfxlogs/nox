@@ -518,3 +518,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **僵尸提案修复 @8122698b**：boot 扫描实证 #221 funding_carry/#225 cross_venue_spot `proposed→deferred`（auto 轨无执行器新语义生效），机制缺口闭合。
 - **返修**：proto3 `enabled` 零值陷阱（不带 enabled 建规则=死规则）并入 C 件收口票。
 - **顺带实证**：XAUUSDT SELL 系统外单系统已自动 warn 告警「不追踪，若为收编漏检残余请人工核查」。
+
+## 2026-10-14 视窗 C 件 SG 部署验收 ✅ @f219029f
+
+- **enabled presence**：规则#3 不带 enabled 建→真触发（`盯盘触发#3: BTCUSDT 83194.8 < 999999` warn 00:03:49 落库）→once 自翻——proto3 零值陷阱实证闭合。
+- **契约补段**：`contractBackfill` 在 SG 代码面（contract.go:64 `契约补段·原料` 拼接径在）；行为验证点=明早 07:05 日报——若 kimi-k3 漏段则见原料段回填+marker。
+- 测试规则#3 DeleteWatchRule 已清。
