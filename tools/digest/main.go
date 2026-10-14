@@ -48,6 +48,11 @@ func run(commitFlag bool) error {
 	}
 	defer pool.Close()
 
+	// 2.5 化石水位自愈（库迁移/重建后旧水位>max(id)=增量面永久空读——钳回实存上限重锚）
+	if err := clampWatermark(ctx, pool, state); err != nil {
+		return fmt.Errorf("clamp watermark: %w", err)
+	}
+
 	// 3. 读增量
 	logs, err := readAutotradeLogs(ctx, pool, state.AutotradeLogsMaxID)
 	if err != nil {

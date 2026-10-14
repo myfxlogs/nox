@@ -7,3 +7,8 @@ web/src/gen/
 ledgerctl
 /core
 /noxkb
+# digest/分析员运行时产物（SG 写盘——deploy_sync 只推 git 跟踪件，入 git=回刷病灶）
+docs/经验库/待归纳.md
+docs/经验库/待归纳-分析员.md
+docs/经验库/.digest_state
+docs/经验库/归档/待归纳-*.md

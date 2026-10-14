@@ -758,3 +758,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **机检**：build/vet/gofmt 净；dciexec/oppmatch/pgstore/cmd-core 全包+race 绿；锚 2 件新（earn_venue_test rail 三态+尘阈+幂等、earn_rail_test mock rail 申购径+credential 缺口）；全量 `go test ./...` 仅 dashboard D587 拨号超时 flake（隔离单跑 1.6s 绿，共享测试库压力型六度同族）。
 - **残留**：earn_rail.go 299 行贴闸；SG 验收=下拍扫描 cash_mgmt 提案现 venue=okx/gate 行并可执行（或凭据缺→credential 行）。
 - **提交边界碰撞实录**：决策席「两票立册」提交 @957e6337 与实施席 earn 票在途 stage 面撞车——该提交内含实施侧 earn_rail.go/idle_gap/迁移1024/okx signutil 等 606 行实现代码（实施席已 stage 未 commit，我 commit 时一并卷入），实施席随后以 @b6321eda 补完文件拆分。**earn 票复审须按 957e6337+b6321eda 合并 diff 审，不能只审尾提交**。教训：多会话同树作业时，commit 前先 `git diff --cached --stat` 核对暂存面。
+
+## 2026-10-14 运行时件回刷修（实施席）
+- **去跟踪**：`待归纳.md`/`待归纳-分析员.md`/`.digest_state`/`归档/待归纳-*.md` `git rm --cached`+`.gitignore` 钉死——SG 写盘不再被 files-from 回刷（归档既有物只出跟踪不删盘，条目/索引/技能清单知识产物仍入 git）。
+- **水位自愈**：`clampWatermark` 挂 digest 连接后——存量水位>库内实存 max(id)→钳回上限+warn log（化石 64904>289 无需人工删件，首跑自重锚，水位≤max 不动不破增量语义）。
+- **排除径复核**：deploy_sync 无 --delete、files-from=git ls-files——非跟踪件 SG 侧原样保留；docs/报告/（symdig/sysretro）本就未跟踪；运行时写盘面=digest 经验库五件+noxkb 索引件（知识产物有意入 git）+docs/报告，白名单完整。
+- **说明页**：`docs/经验库/运行时件.md` 入 git 记 schema/写者/口径。
+- **锚**：`TestClampWatermark` 自建 digest_wm_test 库两态对拍（化石钳回/真水位不动）；digest 模块 build/vet/gofmt/test 全绿。

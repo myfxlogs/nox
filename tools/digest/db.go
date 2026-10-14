@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -61,4 +62,26 @@ func readAlerts(ctx context.Context, pool *pgxpool.Pool, waterID int64) ([]alert
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// clampWatermark 化石水位自愈：存量水位 > 库内实存 max(id) → 钳回实存上限。
+// 库迁移/重建后旧水位令增量面永久空读（SG 实证 alerts 水位 64904 > max 289=迁移遗留）；
+// 钳位仅向前回退水位，不丢未读增量（水位>max 时 id≤max 的行本就不可能未读）。
+func clampWatermark(ctx context.Context, pool *pgxpool.Pool, s *digestState) error {
+	var logMax, alertMax int64
+	if err := pool.QueryRow(ctx, `SELECT COALESCE(max(id),0) FROM autotrade_logs`).Scan(&logMax); err != nil {
+		return fmt.Errorf("max autotrade_logs: %w", err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT COALESCE(max(id),0) FROM alerts`).Scan(&alertMax); err != nil {
+		return fmt.Errorf("max alerts: %w", err)
+	}
+	if s.AutotradeLogsMaxID > logMax {
+		log.Printf("digest: 化石水位 autotrade_logs %d→%d（库内实存上限）", s.AutotradeLogsMaxID, logMax)
+		s.AutotradeLogsMaxID = logMax
+	}
+	if s.AlertsMaxID > alertMax {
+		log.Printf("digest: 化石水位 alerts %d→%d（库内实存上限）", s.AlertsMaxID, alertMax)
+		s.AlertsMaxID = alertMax
+	}
+	return nil
 }

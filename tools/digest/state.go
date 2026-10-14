@@ -1,5 +1,5 @@
 // state.go 水位文件 .digest_state（S3.4，幂等重跑零重复）。
-// 记两表最大 id；JSON 格式；git 跟踪。
+// 记两表最大 id；JSON 格式；SG 运行时产物不入 git（deploy_sync 回刷病灶修）。
 package main
 
 import (
