@@ -81,22 +81,24 @@ func processCategories(ctx context.Context, st *pgstore.Store, srcs []Source, ll
 				InstType: sig.InstType, Shape: sig.Shape,
 				Sample: sig.Sample, Detail: sig.Detail,
 			}
-			id, inserted, err := st.UpsertHypothesis(ctx, h)
+			id, inserted, memoPending, err := st.UpsertHypothesis(ctx, h)
 			if err != nil {
 				log.Printf("[universe-radar] hypothesis %s: %v", sig.CategoryKey, err)
 				continue
 			}
-			if !inserted {
+			// memoPending=上轮 memo 写败的死行（family_fit NULL）——重试预审不告警。
+			if !inserted && !memoPending {
 				continue // 键在册（proposed/rejected/trialing 不扰——弃件记忆+幂等锚）
 			}
 			ff, memo, proto := "novel", "", ""
 			if llm != nil {
 				ff, memo, proto = catMemo(ctx, llm, sig)
-				if err := st.UpdateHypothesisMemo(ctx, id, ff, memo, []byte(proto)); err != nil {
-					log.Printf("[universe-radar] hypothesis memo %s: %v", sig.CategoryKey, err)
-				}
-			} else {
-				_ = st.UpdateHypothesisMemo(ctx, id, ff, memo, nil) // 未配 LLM=novel 占位，memo 空如实
+			}
+			if err := st.UpdateHypothesisMemo(ctx, id, ff, memo, proto); err != nil {
+				log.Printf("[universe-radar] hypothesis memo %s: %v", sig.CategoryKey, err)
+			}
+			if !inserted {
+				continue // 死行回填不产告警（告警只认新键）
 			}
 			line := fmt.Sprintf("%s %s inst=%s shape=%s ×%d（样例 %s）family_fit=%s",
 				s.Venue(), sig.CategoryKey, sig.InstType, sig.Shape, sig.Count, sig.Sample, ff)

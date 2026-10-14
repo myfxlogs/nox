@@ -600,3 +600,13 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 ## 2026-10-14 雷达交割轴返修 @1978cbe6
 - okx indexPx 端点参 uly→instId：venue 实证 index-tickers 只吃 instId（?instId=BTC-USD 有行、?uly= 无行——返修单咬此）。okxIndexUly→okxIndexInstID 语义不变（USD_UM→BASE-USD 映射照旧）。锚对拍 instId 查询参。
 - SG 残留：部署后重跑 radar 验 okx USD_UM 行 basis_ann 出数。
+
+## 2026-10-14 交割轴+S1 SG 验收（决策席实拍）
+- **交割轴全中**：okx USD_UM FUTURES 20 行在册+basis_ann 出数（SOL-USD_UM-261030=+19.00% 首个真日历基差信号；XAU-USD_UM-261127=-10.30% 负基差如实）；binance 4 行 4.1~5.1%；返修 1978cbe6（uly→instId）生效——index-tickers 零读败。
+- **S1 幂等中**：次轮零假设行零事件零告警（category_key 抑重推实证）；侦测产真货（TRADIFI_PERPETUAL|USD1=股指类永续、USD1/U/USDC 报价永续、USD_UM_XPERP）。
+- **S1 缺陷钉死**：4/7 假设行 memo 永久空——LLM 无 JSON 走占位路径时 `params_proto` 写空串进 jsonb 炸 22P02，且**行已落在册后续轮不重试 memo**（空 memo 行死态）。返修件已立：占位写径修+空 memo 行重试语义。
+
+## 2026-10-14 S1 占位写径修 @pending
+- UpdateHypothesisMemo proto 参 []byte→string + `NULLIF($4::text,'')::jsonb`：jsonb 不吃零长字节序（22P02 实证）。
+- 死行重试：UpsertHypothesis RETURNING 加 `family_fit IS NULL AND status='proposed'`→memoPending；上轮 memo 写败的行下轮重试预审、回填不告警（原 `!inserted→continue` 会令空 memo 行永久死库——票面附带问询属实）。
+- 锚升：params_proto 落 {} 对拍 + 死行回填零告警锚；共享库 alerts 残留清基线。

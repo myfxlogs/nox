@@ -28,6 +28,15 @@ func TestCategoryPipeline(t *testing.T) {
 		CategoryKey: "okx|FUTURES|USD", Venue: "okx", InstType: "FUTURES",
 		Shape: "USD", Count: 8, Sample: "BTC-USD-250321", Detail: "币本位逆向",
 	}
+	// 共享库残留清基线（上轮跑次的告警/假设行不归本拍计数）
+	for _, q := range []string{
+		`DELETE FROM alerts WHERE message LIKE '%okx|FUTURES|USD%'`,
+		`DELETE FROM fin_opp_hypothesis WHERE category_key='okx|FUTURES|USD'`,
+	} {
+		if _, err := st.Pool().Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
 	src := fakeSrc{sigs: []CategorySignal{sig}}
 	llm := func(context.Context, string, string) (string, error) {
 		return `{"family_fit":"novel","params_proto":{},"memo":"币本位逆向交割，装不进 generic_yield，建议立票评估"}`, nil
@@ -44,6 +53,9 @@ func TestCategoryPipeline(t *testing.T) {
 	}
 	if status != "proposed" || family != "novel" || memo == "" {
 		t.Fatalf("假设行破：status=%s family=%s memo=%q", status, family, memo)
+	}
+	if string(proto) != "{}" {
+		t.Fatalf("params_proto 应落 {}：%q", proto)
 	}
 	var alertCnt int
 	if err := st.Pool().QueryRow(ctx,
@@ -64,6 +76,31 @@ func TestCategoryPipeline(t *testing.T) {
 	}
 	if alertCnt != 1 {
 		t.Fatalf("同键重推破（弃件记忆）：%d", alertCnt)
+	}
+
+	// memo 写败死行重试：置 family_fit/memo/params_proto NULL 模拟上轮写败，
+	// 重跑应回填 memo（memoPending 锚）且不产新告警
+	if _, err := st.Pool().Exec(ctx,
+		`UPDATE fin_opp_hypothesis SET family_fit=NULL, memo=NULL, params_proto=NULL
+		 WHERE category_key='okx|FUTURES|USD'`); err != nil {
+		t.Fatal(err)
+	}
+	processCategories(ctx, st, []Source{src}, llm, false)
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT COALESCE(memo,''), COALESCE(params_proto::text,'') FROM fin_opp_hypothesis
+		 WHERE category_key='okx|FUTURES|USD'`).Scan(&memo, &proto); err != nil {
+		t.Fatal(err)
+	}
+	if memo == "" || string(proto) != "{}" {
+		t.Fatalf("死行 memo 应回填：memo=%q proto=%q", memo, proto)
+	}
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM alerts WHERE level='info' AND message LIKE '%okx|FUTURES|USD%'`).
+		Scan(&alertCnt); err != nil {
+		t.Fatal(err)
+	}
+	if alertCnt != 1 {
+		t.Fatalf("死行回填不产告警：%d", alertCnt)
 	}
 
 	// rejected 行抑重推：手翻 rejected 后新信号源同键→零告警
