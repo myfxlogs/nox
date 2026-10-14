@@ -52,19 +52,29 @@ func (r *gateEarnRail) req(ctx context.Context, method, endpoint, query, body st
 // Products gate uni 借出币种详情 `GET /earn/uni/currencies/{ccy}`——
 // {min_lend_amount, max_rate(hourly), min_rate}；max_rate>0 且 min 可解析=可购；
 // APR=min_rate(hourly)×24×365 保守口径（max_rate 顶帽不拿来做广告值）。
-func (r *gateEarnRail) Products(ctx context.Context, ccy string) ([]EarnProduct, error) {
+func (r *gateEarnRail) uniCurrency(ctx context.Context, ccy string) (gateUniCcy, error) {
+	var row gateUniCcy
 	b, err := r.req(ctx, http.MethodGet, "/earn/uni/currencies/"+ccy, "", "")
 	if err != nil {
-		return nil, err
-	}
-	var row struct {
-		Currency string `json:"currency"`
-		MinLend  string `json:"min_lend_amount"`
-		MaxRate  string `json:"max_rate"`
-		MinRate  string `json:"min_rate"`
+		return row, err
 	}
 	if err := json.Unmarshal(b, &row); err != nil {
-		return nil, fmt.Errorf("gate uni currency 解析: %w", err)
+		return row, fmt.Errorf("gate uni currency 解析: %w", err)
+	}
+	return row, nil
+}
+
+type gateUniCcy struct {
+	Currency string `json:"currency"`
+	MinLend  string `json:"min_lend_amount"`
+	MaxRate  string `json:"max_rate"`
+	MinRate  string `json:"min_rate"`
+}
+
+func (r *gateEarnRail) Products(ctx context.Context, ccy string) ([]EarnProduct, error) {
+	row, err := r.uniCurrency(ctx, ccy)
+	if err != nil {
+		return nil, err
 	}
 	minLend, maxRate, minRate := parseF(row.MinLend), parseF(row.MaxRate), parseF(row.MinRate)
 	return []EarnProduct{{
@@ -76,11 +86,19 @@ func (r *gateEarnRail) Products(ctx context.Context, ccy string) ([]EarnProduct,
 	}}, nil
 }
 
-// Subscribe uni 借出 `POST /earn/uni/lends` {currency,amount,type:"lend"}——
-// min_rate 不带（ venue 按当前率撮合；currency 面已读 min/max）。
+// Subscribe uni 借出 `POST /earn/uni/lends` {currency,amount,type:"lend",min_rate}——
+// min_rate 必带（SG #377 实证 venue 400 INVALID_PARAM_VALUE 缺之即拒）：
+// currencies 面读到的 min_rate hourly 原值透传不换算；读不出 fail-closed 不申购。
 func (r *gateEarnRail) Subscribe(ctx context.Context, _ string, amount float64) (string, error) {
-	body := fmt.Sprintf(`{"currency":"USDT","amount":"%s","type":"lend"}`,
-		strconv.FormatFloat(amount, 'f', 8, 64))
+	row, err := r.uniCurrency(ctx, "USDT")
+	if err != nil {
+		return "", err
+	}
+	if row.MinRate == "" {
+		return "", fmt.Errorf("gate uni currencies min_rate 缺——fail-closed 不申购")
+	}
+	body := fmt.Sprintf(`{"currency":"USDT","amount":"%s","type":"lend","min_rate":"%s"}`,
+		strconv.FormatFloat(amount, 'f', 8, 64), row.MinRate)
 	b, err := r.req(ctx, http.MethodPost, "/earn/uni/lends", "", body)
 	return string(b), err
 }

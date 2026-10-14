@@ -159,28 +159,62 @@ func (r *okxEarnRail) Products(ctx context.Context, ccy string) ([]EarnProduct, 
 }
 
 // Subscribe 申购前置划转+申购：savings 只认资金账户资产（venue 文档实证）——
-// 先 `POST /asset/transfer {from:"18",to:"6"}` 交易户→资金户，成则
-// `POST /finance/savings/purchase-redemption`；划转败如实报不试申购。
+// 先读 funding 现额算短差 needed=amt−funding；needed≤0 零划转直购，
+// needed>0 划 `min(needed, unified_avail)`（unified 无可划=如实拒不试申购）。
+// 端点翻案（SG 10-14 探针实证）：文档截断形 `purchase-redempt` 才是真路径——
+// OKX 网关对签名未命中路径统一回 403 伪装权限拒，非权限病灶。
 func (r *okxEarnRail) Subscribe(ctx context.Context, _ string, amount float64) (string, error) {
-	amt := strconv.FormatFloat(amount, 'f', 8, 64)
-	tb := fmt.Sprintf(`{"ccy":"USDT","amt":"%s","from":"18","to":"6","type":"0"}`, amt)
-	if _, err := r.req(ctx, http.MethodPost, "/api/v5/asset/transfer", tb); err != nil {
-		return "", fmt.Errorf("okx 18→6 划转败（不试申购）: %w", err)
+	funding, err := r.fundingAvail(ctx, "USDT")
+	if err != nil {
+		return "", err
 	}
-	body := fmt.Sprintf(`{"ccy":"USDT","amt":"%s","side":"purchase"}`, amt)
-	b, err := r.req(ctx, http.MethodPost, "/api/v5/finance/savings/purchase-redemption", body)
+	if needed := amount - funding; needed > 0 {
+		unified, err := r.unifiedAvail(ctx, "USDT")
+		if err != nil {
+			return "", err
+		}
+		mv := needed
+		if unified < mv {
+			mv = unified
+		}
+		if mv <= 0 {
+			return "", fmt.Errorf("okx 申购短差 %.8f 且 unified 无款可划——fail-closed 不申购", needed)
+		}
+		tb := fmt.Sprintf(`{"ccy":"USDT","amt":"%s","from":"18","to":"6","type":"0"}`,
+			strconv.FormatFloat(mv, 'f', 8, 64))
+		if _, err := r.req(ctx, http.MethodPost, "/api/v5/asset/transfer", tb); err != nil {
+			return "", fmt.Errorf("okx 18→6 划转败（不试申购）: %w", err)
+		}
+	}
+	body := fmt.Sprintf(`{"ccy":"USDT","amt":"%s","side":"purchase"}`,
+		strconv.FormatFloat(amount, 'f', 8, 64))
+	b, err := r.req(ctx, http.MethodPost, "/api/v5/finance/savings/purchase-redempt", body)
 	return string(b), err
 }
 
 func (r *okxEarnRail) Redeem(ctx context.Context, _ string, amount float64) error {
 	body := fmt.Sprintf(`{"ccy":"USDT","amt":"%s","side":"redempt"}`,
 		strconv.FormatFloat(amount, 'f', 8, 64))
-	_, err := r.req(ctx, http.MethodPost, "/api/v5/finance/savings/purchase-redemption", body)
+	_, err := r.req(ctx, http.MethodPost, "/api/v5/finance/savings/purchase-redempt", body)
 	return err
 }
 
-// FreeBalance unified 交易户可动：`GET /account/balance?ccy=` → data[].details[].availBal。
+// FreeBalance 可动=unified 交易户 availBal + funding 资金户 availBal 合并口径
+// （两池都可经划转达申购；SG 实证自划转后 funding=1958 单读 unified 报 0 假贫）。
 func (r *okxEarnRail) FreeBalance(ctx context.Context, ccy string) (float64, error) {
+	u, err := r.unifiedAvail(ctx, ccy)
+	if err != nil {
+		return 0, err
+	}
+	f, err := r.fundingAvail(ctx, ccy)
+	if err != nil {
+		return 0, err
+	}
+	return u + f, nil
+}
+
+// unifiedAvail `GET /account/balance?ccy=` → data[].details[].availBal（交易户）。
+func (r *okxEarnRail) unifiedAvail(ctx context.Context, ccy string) (float64, error) {
 	data, err := r.req(ctx, http.MethodGet, "/api/v5/account/balance?ccy="+ccy, "")
 	if err != nil {
 		return 0, err
@@ -202,4 +236,25 @@ func (r *okxEarnRail) FreeBalance(ctx context.Context, ccy string) (float64, err
 		}
 	}
 	return 0, nil // 币种行缺席=该币零可动（venue 实响应零值如实）
+}
+
+// fundingAvail `GET /asset/balance?ccy=` → data[].availBal（资金户）。
+func (r *okxEarnRail) fundingAvail(ctx context.Context, ccy string) (float64, error) {
+	data, err := r.req(ctx, http.MethodGet, "/api/v5/asset/balance?ccy="+ccy, "")
+	if err != nil {
+		return 0, err
+	}
+	var rows []struct {
+		Ccy      string `json:"ccy"`
+		AvailBal string `json:"availBal"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return 0, fmt.Errorf("okx asset balance 解析: %w", err)
+	}
+	for _, row := range rows {
+		if row.Ccy == ccy {
+			return parseF(row.AvailBal), nil
+		}
+	}
+	return 0, nil
 }

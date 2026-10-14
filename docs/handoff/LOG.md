@@ -853,3 +853,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **订单#20 实证**：划转 `asset/transfer 18→6` 成功是 rail 自划转非业主手动——业主权限勾选（读/赚币/划转/交易）全程无错。
 - **收口票更新**：三断齐修=①okx FreeBalance 合并 unified+funding、Subscribe 短差划转；②gate min_rate 必填；③okx `purchase-redemption`→`purchase-redempt`。落地后 #377 真出借、#378 funding $1958 真申购。
 - **探针工具**：SG `/opt/nox/tools/probe_okxearn/`（非 git 跟踪面）——签名读凭据不落会话，可复用于 finance 族权限探针。
+
+## 2026-10-14 earn rail 收口三件（实施席）
+- **okx 端点翻案**：`purchase-redemption`→`purchase-redempt`（Subscribe+Redeem 两处）——文档截断形是真路径，OKX 网关对签名未命中路径回 403 伪装权限拒（探针实证真路径 200 成交）。
+- **okx 资金户感知**：`FreeBalance`=unified `account/balance` + funding `asset/balance` 合并口径（rail 自划转后 funding=1958 单读 unified 假贫实证）；`Subscribe` 先读 funding 现额——needed≤0 零划转直购，needed>0 划 `min(needed, unified_avail)`，unified 无款 fail-closed 不购不划；划转只在申购前置步不攒 funding。
+- **gate min_rate**：`Subscribe` body 加 `min_rate`=`uniCurrency()` 实读原值透传（SG #377 实证缺之 venue 400 INVALID_PARAM_VALUE）；Products 抽 `uniCurrency` 助手共享；min_rate 读不出 fail-closed 不申购。
+- **快照断更**：上票已查=boot 水合 only 全局陈旧-by-design，如实记不阻塞。
+- **锚**：okx mock 四态（funding 够零划直购/短差补划/unified 无款拒/划转败拒+合并余额 1958.27）+gate 现货数组；dciexec 全包 -race 绿；禁线：申购额不放大、binance 零回归。

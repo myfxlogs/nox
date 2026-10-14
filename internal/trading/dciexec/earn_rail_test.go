@@ -4,6 +4,7 @@ package dciexec
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -141,37 +142,84 @@ func TestGateAPIBase(t *testing.T) {
 	}
 }
 
-// TestOkxRail_TransferBeforeSubscribe okx 划转步锚：Subscribe 先发 18→6 transfer，
-// 成功才发 purchase-redemption；transfer 败→purchase 不发。
-func TestOkxRail_TransferBeforeSubscribe(t *testing.T) {
+// TestOkxRail_FundingAwareSubscribe 资金户感知锚：
+// funding 够→零划转直购；funding 短差→补划 min(needed,unified) 再购；
+// unified 无款→fail-closed 不购；划转败→不购。端点=截断真形 purchase-redempt。
+func TestOkxRail_FundingAwareSubscribe(t *testing.T) {
+	mkSrv := func(funding, unified float64, transferOK bool, calls *[]string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			*calls = append(*calls, r.Method+" "+r.URL.Path)
+			switch {
+			case r.URL.Path == "/api/v5/asset/balance":
+				w.Write([]byte(fmt.Sprintf(`{"code":"0","data":[{"ccy":"USDT","availBal":"%v"}]}`, funding)))
+			case r.URL.Path == "/api/v5/account/balance":
+				w.Write([]byte(fmt.Sprintf(`{"code":"0","data":[{"details":[{"ccy":"USDT","availBal":"%v"}]}]}`, unified)))
+			case r.URL.Path == "/api/v5/asset/transfer" && transferOK:
+				w.Write([]byte(`{"code":"0","data":[{"transId":"1"}]}`))
+			case r.URL.Path == "/api/v5/asset/transfer":
+				w.Write([]byte(`{"code":"58000","msg":"denied","data":[]}`))
+			case r.URL.Path == "/api/v5/finance/savings/purchase-redempt":
+				w.Write([]byte(`{"code":"0","data":[{"sbsptId":"1"}]}`))
+			default:
+				w.Write([]byte(`{"code":"50100","msg":"unknown path","data":[]}`))
+			}
+		}))
+	}
+	ex := &Executor{Client: http.DefaultClient, Now: time.Now}
+	mkRail := func(srv *httptest.Server) *okxEarnRail {
+		ex.Client = srv.Client()
+		return &okxEarnRail{e: ex, c: EarnCred{Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}
+	}
+	// funding 够→零划转直购。
 	var calls []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls = append(calls, r.Method+" "+r.URL.Path)
-		w.Write([]byte(`{"code":"0","msg":"","data":[]}`))
-	}))
-	defer srv.Close()
-	ex := &Executor{Client: srv.Client(), Now: time.Now}
-	rail := &okxEarnRail{e: ex, c: EarnCred{Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}
-	if _, err := rail.Subscribe(context.Background(), "", 100); err != nil {
-		t.Fatalf("subscribe: %v", err)
+	srv := mkSrv(2000, 0, true, &calls)
+	if _, err := mkRail(srv).Subscribe(context.Background(), "", 100); err != nil {
+		t.Fatalf("funding 够应直购: %v", err)
 	}
-	if len(calls) != 2 ||
-		calls[0] != "POST /api/v5/asset/transfer" ||
-		calls[1] != "POST /api/v5/finance/savings/purchase-redemption" {
-		t.Fatalf("端点序列: %v", calls)
+	srv.Close()
+	if len(calls) != 2 || calls[1] != "POST /api/v5/finance/savings/purchase-redempt" {
+		t.Fatalf("零划转直购序列: %v", calls)
 	}
-	// transfer 败→purchase 不发。
+	// funding 短差→补划转再购。
 	calls = nil
-	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls = append(calls, r.URL.Path)
-		w.Write([]byte(`{"code":"58000","msg":"transfer denied","data":[]}`))
-	}))
-	defer srv2.Close()
-	rail2 := &okxEarnRail{e: ex, c: EarnCred{Key: "k", Secret: "s", Pass: "p", BaseURL: srv2.URL}}
-	if _, err := rail2.Subscribe(context.Background(), "", 100); err == nil {
-		t.Fatal("划转败应如实报")
+	srv = mkSrv(100, 1958, true, &calls)
+	if _, err := mkRail(srv).Subscribe(context.Background(), "", 1000); err != nil {
+		t.Fatalf("补划应成: %v", err)
 	}
-	if len(calls) != 1 || calls[0] != "/api/v5/asset/transfer" {
-		t.Fatalf("划转败不应发申购: %v", calls)
+	srv.Close()
+	if len(calls) != 4 || calls[2] != "POST /api/v5/asset/transfer" ||
+		calls[3] != "POST /api/v5/finance/savings/purchase-redempt" {
+		t.Fatalf("补划序列: %v", calls)
 	}
+	// unified 无款→fail-closed 不购不划。
+	calls = nil
+	srv = mkSrv(100, 0, true, &calls)
+	if _, err := mkRail(srv).Subscribe(context.Background(), "", 1000); err == nil {
+		t.Fatal("无款可划应拒")
+	}
+	srv.Close()
+	for _, c := range calls {
+		if strings.Contains(c, "purchase-redempt") {
+			t.Fatalf("无款可划不应发申购: %v", calls)
+		}
+	}
+	// 划转败→不购。
+	calls = nil
+	srv = mkSrv(0, 1958, false, &calls)
+	if _, err := mkRail(srv).Subscribe(context.Background(), "", 100); err == nil {
+		t.Fatal("划转败应拒")
+	}
+	srv.Close()
+	for _, c := range calls {
+		if strings.Contains(c, "purchase-redempt") {
+			t.Fatalf("划转败不应发申购: %v", calls)
+		}
+	}
+	// FreeBalance 合并口径。
+	calls = nil
+	srv = mkSrv(1958.27, 0, true, &calls)
+	if v, err := mkRail(srv).FreeBalance(context.Background(), "USDT"); err != nil || v != 1958.27 {
+		t.Fatalf("合并余额: %v %v", v, err)
+	}
+	srv.Close()
 }
