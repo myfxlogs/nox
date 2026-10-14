@@ -800,3 +800,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **缺口 subject venue 键**：earn 申购 permission 缺口 `earn_subscribe`→`earn_subscribe:<venue>`（okx 403 不再撞 binance 旧行，幂等键变更=新行不迁旧）。
 - **交割腿注记**：hedgescan `contract_type='FUTURES'` 腿 detail 附「交割腿基差成本未计」（funding=0 不虚增）。
 - **锚**：CollectGate mock 对拍 0.0001×24×365=0.876；cexscan/dciexec/oppmatch 全包 -race 绿。
+
+## 2026-10-14 earn 尾巴三件验收 ✅ @43173462（验收席 SG 实拍）
+- **gate APR 采集**：`fin_cex_earn_apr` 现 `gate|USDT|uni_lend|0.000964` 实读行（`GET /earn/uni/currencies/USDT` min_rate×24×365 公开端点零凭据）→#377 提案卡 unevaluable→**viable**（gross=0.000964），下拍真执行试金石。
+- **subject venue 键**：`earn_subscribe:<venue>` 落码——okx 403 不再撞 binance 旧行；坑表实证 `okx|earn_subscribe|code:403|forbidden` 已学 1 命中→重试抑 24h 不刷屏。
+- **交割腿注记**：FUTURES 腿 detail 附「交割腿基差成本未计」。
+- **请求箱现态**：`earn_subscribe:okx`#38 requested（业主唯一待办）；gate #377 待真执行实证（理财权限业主已开——下拍成败即凭据实证）。
+- **机检**：130 测试 race 绿；机检面净。
