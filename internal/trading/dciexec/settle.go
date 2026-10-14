@@ -251,6 +251,9 @@ func (e *Executor) bookSettlement(ctx context.Context, o pgstore.FilledDCIOrder,
 		o.ID, o.ProductRef, qty, dir, interest, o.InvestCcy, o.RequestID)); err != nil {
 		return err
 	}
+	// D-517 接货处置钩子：行权落标的币→市价卖回（CAS 幂等闸在 bookSettlement
+	// 头——dispose 只跑一次；USD 族/同币到账内部直返零副作用）。
+	e.disposeExercise(ctx, o, ccy, qty)
 	return nil
 }
 

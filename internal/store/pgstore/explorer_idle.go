@@ -26,6 +26,10 @@ type ExplorerIdlePool struct {
 	// 已不在 broker_accounts（账户移除后残行——NAV 虚计；stopped 户仍在册不受影响）。
 	// 写侧不动（快照保留=历史真值）；读面打标由 SumNav/展示层剔计。
 	Ghost bool
+	// D-516 共享持有归属：Balance/Equity/FreeMargin 已乘 Share=归属份；
+	// Custodial=代管余量（equity_raw×(1−share)——展示标用，不进判据）。
+	Share     float64
+	Custodial float64
 }
 
 // ExplorerIdleFunds ⑤资金不眠异常：fin_venue_account_snapshot 每 venue 最新行 +
@@ -102,10 +106,22 @@ func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]Explore
 	if err := irows.Err(); err != nil {
 		return nil, err
 	}
+	shares, serr := s.OwnershipShares(ctx)
+	if serr != nil {
+		return nil, serr // D-516：系数读败 fail-closed——不静默按全归属放大 NAV
+	}
 	for i := range pools {
 		p := &pools[i]
 		if p.VenueType == "mt4" || p.VenueType == "mt5" {
 			p.Ghost = !registered[p.Venue]
+		}
+		p.Share = 1.0
+		if f, ok := OwnershipShare(shares, p.Venue, p.VenueType, p.Currency); ok {
+			p.Share = f
+			p.Custodial = p.Equity * (1 - f)
+			p.Balance *= f
+			p.Equity *= f
+			p.FreeMargin *= f
 		}
 		p.Income30dUSD = income[p.Venue]
 		if p.Ghost {

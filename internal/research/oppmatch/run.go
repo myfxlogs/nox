@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
@@ -83,6 +84,17 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 				log.Printf("[oppmatch] executor-missing alert %s: %v", r.TemplateID, err)
 			}
 			continue
+		}
+		// D-514 DCI 溢价闸：dci_buy_low 权利金年化<max(3×earn_apr,8%)→
+		// 「无达标档」不产提案（权利金坍缩期不卖 tail 险；闸只挡 DCI 不碰 earn）。
+		if r.TemplateID == "dci_buy_low" && len(r.Missing) == 0 {
+			if ok, why := dciPremiumGate(ctx, st); !ok {
+				if aerr := st.InsertAlertDedup(ctx, "info", fmt.Sprintf(
+					"D-514 溢价闸：dci_buy_low %s——本拍「无达标档」不产提案", why), 6*time.Hour); aerr != nil {
+					log.Printf("[oppmatch] 溢价闸 alert: %v", aerr)
+				}
+				continue
+			}
 		}
 		if len(r.Missing) == 0 {
 			propN++
@@ -175,6 +187,10 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	runLifecycle(ctx, st, in)
 	// 跨 venue 机会差调拨提案（业主令 10-14——同资产 earn APR 差超阈→请求箱）。
 	xferScan(ctx, st)
+	// 闲置 CEX 池缺口扫描（okx unified 类——无 earn 执行径如实记缺口行）。
+	idleGapScan(ctx, st)
+	// CFD swap 正息面→假设行（采集在跑消费断档接上；只产假设不碰钱）。
+	swapScan(ctx, st)
 	log.Printf("[oppmatch] scan done: %d templates, %d proposals, %d new gap requests",
 		len(in), propN, gapN)
 	return propN, gapN, nil
@@ -197,19 +213,7 @@ func proposalParams(ctx context.Context, st *pgstore.Store, r Result) map[string
 	if opt != "" {
 		// 快照同界——bound=现货参照×约束表 OTM 界（无参照/界行缺
 		// →无界快照降级；快照=审计锚非钉价，执行时实时闸复验不变）。
-		var bound float64
-		if spot, err := st.LatestSpreadSpotRef(ctx, "BTC"); err == nil && spot > 0 {
-			if cons, err := st.ListCapabilityConstraints(ctx); err == nil {
-				cb, pb := gate.OTMBoundRatios(cons)
-				ratio := cb
-				if opt == "PUT" {
-					ratio = pb
-				}
-				if ratio != nil {
-					bound = gate.StrikeBound(spot, *ratio)
-				}
-			}
-		}
+		bound := dciStrikeBound(ctx, st, opt)
 		if qs, err := st.ListDCIQuotes(ctx, "binance", "BTC", opt, inv, 90, bound); err == nil && len(qs) > 0 {
 			p["product_ref"] = qs[0].ProductRef
 			if qs[0].Strike != nil {

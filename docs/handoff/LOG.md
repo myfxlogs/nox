@@ -658,3 +658,19 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 ## 2026-10-14 income 回流定案 D-515
 - 取证：E0 归档后 income_events 全表最早 created_at=10-13 14:59:42（归档后 1min）——okx 采集器拉 venue 收入窗把 10-06~09 funding 按真实 ts 重灌；binance XAUUSDT 3 笔为外单实时 funding。
 - 裁：不设纪元门（venue 权威全收）；展示层按 position_id 归因分栏即可（记此备后续面板票用）。
+
+## 2026-10-14 D-511/512/513 三票验收+SG 部署（验收席）@cfe64625
+- **部署纠偏**：实施席报「SG 验收」实为测试环境——SG 生产迁移停在 1020、容器旧镜像。验收席按钦定径实测部署：本机 build → docker save|ssh load → `compose up -d --no-deps nox-core`（全量 up 触发 postgres CPU 限额重建拒绝，--no-deps 正确绕法）→ 迁移落 1022，容器 healthy。
+- **SG 实证**：`fin_manual_position` 表就位；`carry_graduations.decided_by` 列就位；UpsertManualPosition→List→Delete 生产端到端回环通（探针行 TESTUSD 已删）；`grad_delegate_enabled` 未设=默认启用（D-513 口径）。
+- **机检**：1095 测试绿；diff 36 文件 ~1900 行（proto/gen/service/迁移/前端）。
+- **残留**：D-511 external 标在 SG 无法用真仓复验（当前零 broker 持仓，ListBrokerPositions 空）——代码+测试面证，待真实外单出现时对拍复核；xasset-monitor 交割符号 critical 洪泛持续（38+/12h），等优先票；earn_redeem 现 -6006「坑表抑赎窗内」critical——疑抑赎窗误伤正常赎回，列入值守观察。
+
+## D-514/okx idle 缺口/D-516/D-517/拆分续票/CFD swap 面 六票 2026-10-14
+
+- **D-514 溢价闸**：`oppmatch/dci_premium.go`——dci_buy_low 提案落点前闸：最优 PUT 档 apy（binance %口径→/100 归一）< max(3×MaxEarnAPR, 8%) → 「溢价低于闸」info 留痕（6h dedup）+不产提案；报价缺/earn 读败 fail-closed 拒。dciStrikeBound 从 proposalParams 抽出共用（D-509 界同径）。只挡 dci_buy_low。
+- **okx idle**：`oppmatch/idle_gap.go`——ExplorerIdleFunds 池（快照现成行）非 mt/非 ghost/Idle 且 venue ∉ earnExecVenues{binance} → fin_condition_gap（kind='executor'，迁移 1023 放枚举）+RequestConditionGap 幂等推。okx earn 写径实查=无（dciexec goEarn 硬拒非 binance）→如实记缺口不臆造 API。gate 同规则自动覆盖。
+- **D-516**：`pgstore/ownership.go`——app_config `ownership_share:<v>:<vt>:<ccy>` 系数（0<s≤1，越界不计），在 CapitalPoolSnapshots+ExplorerIdleFunds 边界单源乘入 Equity/Balance/FreeMargin；Custodial=代管余量透出（proto ownership_share/custodial_equity + 资金地图 badge），不进任何判据。系数读败 fail-closed。业主须配 `ownership_share:binance:earn:BTC=0.3334`。
+- **D-517**：`dciexec/disposal.go`——bookSettlement 尾挂 disposeExercise：行权跨币到账（非 USD 族非投币）→binance 现货 MARKET SELL 3 次有界重试→得额−申购付额落 income_events `dci_exercise_disposal`（亏如实负值）+warn；败/凭据缺→personal_positions pending_disposal 留仓标+warn。CAS 幂等闸天然只跑一次。
+- **拆分续票**：现状已达标（service_broker 277 / setup 300，上轮拆分已清）——check-lines 零警告实证，零改动。
+- **CFD swap 面**：`pgstore/facts_swap.go`（LatestSwapFacts 每 venue×symbol 最新行 24h 鲜度窗）+`oppmatch/swapscan.go`——正息面→fin_opp_hypothesis（category_key=`cfd_swap|v|sym|side` 幂等，detail 注 bps_daily×365/100 口径假设+裸 delta 标）；账户 equity=0「面在钱不在」剔榜+dedup info 标；新假设聚合 info 告警。只产假设不碰钱。
+- 机检：build/vet/gofmt 净；oppmatch/pgstore/dciexec 全包+`-race` 绿；锚 7 件（闸高/低/报价缺三态、idle gap 幂等、swap 榜+面在钱不在+幂等、归属系数+撤键复归、卖回成/败/不处置三态）；npm build 绿；pre-commit 十道。

@@ -24,7 +24,12 @@ function PoolTable({ pools }: { pools: CapitalPool[] }) {
           <tr key={p.venue + ":" + p.venueType} style={p.stale || p.ghost ? { opacity: 0.45 } : undefined}>
             <td>{p.venue}</td>
             <td>{p.venueType}</td>
-            <td>{fmtAmt(p.equity)}</td>
+            <td>{fmtAmt(p.equity)}
+              {p.ownershipShare > 0 && p.ownershipShare < 1 &&
+                <span className="warn" title={`代管 ${fmtAmt(p.custodialEquity)} 不进判据`}>
+                  {` 归属${(p.ownershipShare * 100).toFixed(1)}%·代管${fmtAmt(p.custodialEquity)}`}
+                </span>}
+            </td>
             <td>{fmtAmt(p.idle)}</td>
             <td>{p.deployed > 0 ? <a href="#/dci">{fmtAmt(p.deployed)}</a> : fmtAmt(p.deployed)}</td>
             <td>{p.deployedParts.map((d) => `${d.ref} ${fmtAmt(d.amount)}`).join("；") || "—"}</td>

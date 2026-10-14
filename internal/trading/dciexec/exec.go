@@ -85,13 +85,14 @@ type Executor struct {
 	BalanceFn          func(ctx context.Context, asset string) (float64, error) // 现货 free+locked
 	EarnFn             func(ctx context.Context, asset string) ([]EarnPosition, error)
 	RedeemFn           func(ctx context.Context, productID string, amount float64) error
-	EarnProductsFn     func(ctx context.Context, ccy string) ([]EarnProduct, error)        // earn 活期产品面（D-286；nil=实 GET）
-	EarnSubscribeFn    func(ctx context.Context, productID string, amount float64) error   // earn 申购写径（nil=实 POST）
-	StreamFn           func() bool                                                         // 流存活闸（nil=dephealth 实读）
-	HoldingFn          func(ctx context.Context, productRef, optType string) (bool, error) // venue 持仓读（D-198 返修①；nil=实 GET）
-	PositionsFn        func(ctx context.Context) ([]DCIPosition, error)                    // D-207 venue 持仓全列表（settle 观察；nil=实 GET）
-	SettledPositionsFn func(ctx context.Context) ([]DCIPosition, error)                    // M3-④ venue SETTLED 终态行全列表（settle 死端切源；nil=实 GET）
-	KBDir              string                                                              // 拒单消费闸：经验库条目目录（空=禁附行；读败 fail-open）
+	EarnProductsFn     func(ctx context.Context, ccy string) ([]EarnProduct, error)           // earn 活期产品面（D-286；nil=实 GET）
+	EarnSubscribeFn    func(ctx context.Context, productID string, amount float64) error      // earn 申购写径（nil=实 POST）
+	StreamFn           func() bool                                                            // 流存活闸（nil=dephealth 实读）
+	HoldingFn          func(ctx context.Context, productRef, optType string) (bool, error)    // venue 持仓读（D-198 返修①；nil=实 GET）
+	PositionsFn        func(ctx context.Context) ([]DCIPosition, error)                       // D-207 venue 持仓全列表（settle 观察；nil=实 GET）
+	SettledPositionsFn func(ctx context.Context) ([]DCIPosition, error)                       // M3-④ venue SETTLED 终态行全列表（settle 死端切源；nil=实 GET）
+	SpotSellFn         func(ctx context.Context, symbol string, qty float64) (float64, error) // D-517 接货市价卖回（nil=实 POST /v3/order）
+	KBDir              string                                                                 // 拒单消费闸：经验库条目目录（空=禁附行；读败 fail-open）
 }
 
 // kbSuffix 拒单消费闸：败因签名对拍经验库条目 → ` kb:<id> <summary>` 附行；

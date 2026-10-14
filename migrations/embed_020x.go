@@ -73,3 +73,6 @@ var ManualPositionSQL string // CMC 手工仓位只读纳管：fin_manual_positi
 
 //go:embed 1022_graduation_decided_by.sql
 var GraduationDecidedBySQL string // 毕业委任审计列：carry_graduations.decided_by
+
+//go:embed 1023_gap_kind_executor.sql
+var GapKindExecutorSQL string // okx idle 缺口：fin_condition_gap kind 放 executor

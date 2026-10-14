@@ -21,6 +21,10 @@ type CapitalPoolRow struct {
 	FetchedAt  time.Time
 	Ghost      bool // mt4/mt5 行且 venue 不在 broker_accounts（同 ExplorerIdlePool 语义）
 	Stale      bool // 快照龄超源节奏窗（分母构成剔该行——不拿陈旧值当现值）
+	// D-516 共享持有归属：Equity/FreeMargin 已乘 Share=归属份；Custodial=代管
+	// 余量（原始 equity×(1−share)——面板标「代管」用，不进任何判据）。
+	Share     float64
+	Custodial float64
 }
 
 // 池快照陈旧阈值（单源——dashboard/闸径共用，禁双处各写）：
@@ -106,6 +110,10 @@ func (s *Store) CapitalPoolSnapshots(ctx context.Context) ([]CapitalPoolRow, err
 	if err := vrows.Err(); err != nil {
 		return nil, err
 	}
+	shares, err := s.OwnershipShares(ctx)
+	if err != nil {
+		return nil, err // D-516：系数表读败 fail-closed——不静默按全归属放大资产
+	}
 	now := time.Now()
 	for i := range pools {
 		p := &pools[i]
@@ -113,6 +121,13 @@ func (s *Store) CapitalPoolSnapshots(ctx context.Context) ([]CapitalPoolRow, err
 			p.Ghost = !registered[p.Venue]
 		}
 		p.Stale = PoolStale(p.Src, p.FetchedAt, now)
+		p.Share = 1.0
+		if f, ok := OwnershipShare(shares, p.Venue, p.VenueType, p.Currency); ok {
+			p.Share = f
+			p.Custodial = p.Equity * (1 - f)
+			p.Equity *= f
+			p.FreeMargin *= f
+		}
 	}
 	return pools, nil
 }

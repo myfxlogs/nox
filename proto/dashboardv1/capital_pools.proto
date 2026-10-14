@@ -34,6 +34,10 @@ message CapitalPool {
   bool ghost = 9;               // 幽灵池（mt 户已移除的残行——NAV 剔计同源语义）
   google.protobuf.Timestamp updated_at = 10;
   repeated CapitalDeployedPart deployed_parts = 11;
+  // D-516 共享持有归属：ownership_share<1 时 equity/idle/deployed 已是归属份；
+  // custodial_equity=代管余量（面板如实标代管，不进分母不进判据）。
+  double ownership_share = 12;
+  double custodial_equity = 13;
 }
 
 // CapitalPoolsGroup 币种分组（D-285：USDT/USD/UST 各报各的，零汇率换算）。

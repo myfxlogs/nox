@@ -1,0 +1,70 @@
+// dci_premium.go —— D-514 DCI 溢价闸：dci_buy_low 权利金年化 < max(3×earn_apr, 8%)
+// →「无达标档」不产提案。premium_ann=fin_cex_dci_quote 最优 PUT 档 apy（venue
+// 原生年化口径——权利金/本金×365/tenor venue 已算）；earn_apr=fin_cex_earn_apr
+// 现值（MaxEarnAPR）。两源读败/报价缺=fail-closed 拒产（溢价未知不臆放）。
+// 只挡 DCI：earn/其他模板零动；D-509 bound 照旧复用同一选档界。
+package oppmatch
+
+import (
+	"context"
+	"fmt"
+
+	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
+)
+
+// dciPremiumFloor D-514 闸地板（业主令钉值：8%）。
+const dciPremiumFloor = 0.08
+
+// dciStrikeBound D-509 快照同界：现货参照×约束表 OTM 界（opt=PUT→put ratio，
+// CALL→call ratio；无参照/界行缺→0=无界快照降级）。
+func dciStrikeBound(ctx context.Context, st *pgstore.Store, opt string) float64 {
+	spot, err := st.LatestSpreadSpotRef(ctx, "BTC")
+	if err != nil || spot <= 0 {
+		return 0
+	}
+	cons, err := st.ListCapabilityConstraints(ctx)
+	if err != nil {
+		return 0
+	}
+	cb, pb := gate.OTMBoundRatios(cons)
+	ratio := cb
+	if opt == "PUT" {
+		ratio = pb
+	}
+	if ratio == nil {
+		return 0
+	}
+	return gate.StrikeBound(spot, *ratio)
+}
+
+// dciPremiumGate 溢价闸判定：返回过闸与否+拒因注记（「溢价低于闸」语义）。
+func dciPremiumGate(ctx context.Context, st *pgstore.Store) (bool, string) {
+	qs, err := st.ListDCIQuotes(ctx, "binance", "BTC", "PUT", "USDT", 90,
+		dciStrikeBound(ctx, st, "PUT"))
+	if err != nil {
+		return false, fmt.Sprintf("PUT 报价读败：%v", err)
+	}
+	if len(qs) == 0 || qs[0].APY <= 0 {
+		return false, "PUT 达标档报价缺（溢价未知不臆放）"
+	}
+	// 单位口径：fin_cex_dci_quote 本查询面只取 binance 行——apr 列=venue 实拍
+	// %口径原样（cexscan/dci.go 注），归一小数后与 earn_apr（小数）同制比较。
+	premium := qs[0].APY / 100
+	earnApr, ok, err := st.MaxEarnAPR(ctx)
+	if err != nil {
+		return false, fmt.Sprintf("earn_apr 现值读败：%v", err)
+	}
+	if !ok {
+		earnApr = 0 // earn 面缺≠无限额——闸退纯地板 8%
+	}
+	thr := dciPremiumFloor
+	if t := 3 * earnApr; t > thr {
+		thr = t
+	}
+	if premium < thr {
+		return false, fmt.Sprintf("溢价低于闸：premium_ann %.2f%% < max(3×earn_apr %.2f%%, 8%%)=%.2f%%",
+			premium*100, earnApr*100, thr*100)
+	}
+	return true, ""
+}

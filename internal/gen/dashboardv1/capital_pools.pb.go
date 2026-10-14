@@ -136,8 +136,12 @@ type CapitalPool struct {
 	Ghost         bool                   `protobuf:"varint,9,opt,name=ghost,proto3" json:"ghost,omitempty"`   // 幽灵池（mt 户已移除的残行——NAV 剔计同源语义）
 	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	DeployedParts []*CapitalDeployedPart `protobuf:"bytes,11,rep,name=deployed_parts,json=deployedParts,proto3" json:"deployed_parts,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// D-516 共享持有归属：ownership_share<1 时 equity/idle/deployed 已是归属份；
+	// custodial_equity=代管余量（面板如实标代管，不进分母不进判据）。
+	OwnershipShare  float64 `protobuf:"fixed64,12,opt,name=ownership_share,json=ownershipShare,proto3" json:"ownership_share,omitempty"`
+	CustodialEquity float64 `protobuf:"fixed64,13,opt,name=custodial_equity,json=custodialEquity,proto3" json:"custodial_equity,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CapitalPool) Reset() {
@@ -245,6 +249,20 @@ func (x *CapitalPool) GetDeployedParts() []*CapitalDeployedPart {
 		return x.DeployedParts
 	}
 	return nil
+}
+
+func (x *CapitalPool) GetOwnershipShare() float64 {
+	if x != nil {
+		return x.OwnershipShare
+	}
+	return 0
+}
+
+func (x *CapitalPool) GetCustodialEquity() float64 {
+	if x != nil {
+		return x.CustodialEquity
+	}
+	return 0
 }
 
 // CapitalPoolsGroup 币种分组（D-285：USDT/USD/UST 各报各的，零汇率换算）。
@@ -413,7 +431,7 @@ const file_dashboardv1_capital_pools_proto_rawDesc = "" +
 	"\x13CapitalDeployedPart\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x10\n" +
 	"\x03ref\x18\x02 \x01(\tR\x03ref\x12\x16\n" +
-	"\x06amount\x18\x03 \x01(\x01R\x06amount\"\xf3\x02\n" +
+	"\x06amount\x18\x03 \x01(\x01R\x06amount\"\xc7\x03\n" +
 	"\vCapitalPool\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1d\n" +
 	"\n" +
@@ -428,7 +446,9 @@ const file_dashboardv1_capital_pools_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12L\n" +
-	"\x0edeployed_parts\x18\v \x03(\v2%.nox.dashboard.v1.CapitalDeployedPartR\rdeployedParts\"\xac\x01\n" +
+	"\x0edeployed_parts\x18\v \x03(\v2%.nox.dashboard.v1.CapitalDeployedPartR\rdeployedParts\x12'\n" +
+	"\x0fownership_share\x18\f \x01(\x01R\x0eownershipShare\x12)\n" +
+	"\x10custodial_equity\x18\r \x01(\x01R\x0fcustodialEquity\"\xac\x01\n" +
 	"\x11CapitalPoolsGroup\x12\x1a\n" +
 	"\bcurrency\x18\x01 \x01(\tR\bcurrency\x12\x16\n" +
 	"\x06equity\x18\x02 \x01(\x01R\x06equity\x12\x12\n" +

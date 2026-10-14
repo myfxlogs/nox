@@ -86,6 +86,9 @@ func (s *Service) buildCapitalPools(pools []pgstore.CapitalPoolRow, legs []pgsto
 			Equity: row.Equity, Ghost: row.Ghost,
 			UpdatedAt: timestamppb.New(row.FetchedAt),
 		}
+		// D-516：归属份已乘入 equity；代管余量透出供面板标（不进组计不进判据）。
+		p.OwnershipShare = row.Share
+		p.CustodialEquity = row.Custodial
 		p.Stale = row.Stale // 鲜度单源=pgstore PoolStale（阈值双写禁）
 		p.Online = !p.Stale && row.Src != ""
 		poolKey := row.Venue + ":" + row.VenueType

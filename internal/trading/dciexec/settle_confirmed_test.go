@@ -70,7 +70,7 @@ func TestD207_SettleConfirmed(t *testing.T) {
 	}
 	var warn string
 	for _, a := range st.alerts {
-		if strings.HasPrefix(a, "warn:") {
+		if strings.HasPrefix(a, "warn:") && strings.Contains(a, "已交割") {
 			warn = a
 		}
 	}
