@@ -263,3 +263,36 @@ func TestOkxSettle_SettledBooks(t *testing.T) {
 		t.Fatalf("LIVE 零翻: done=%v err=%v", done2, err)
 	}
 }
+
+// TestOkxSettle_EarnRowSkipped earn 轨申购行（request_id=earn|…、回执无 ordId）
+// 不进 okx order-status 轮询——否则每拍「缺 ordId」报错刷屏；dci|okx| 前缀
+// 行照常轮询。
+func TestOkxSettle_EarnRowSkipped(t *testing.T) {
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		w.Write([]byte(`{"code":"0","data":[{"ordId":"1","state":"live"}]}`))
+	}))
+	defer srv.Close()
+	st := newFake()
+	st.filledOrders = []pgstore.FilledDCIOrder{
+		{ID: 26, RequestID: "earn|USDT|p378|7", Venue: "okx", OptType: "EARN",
+			Response: `[{"amt":"1","ccy":"USDT","side":"purchase"}]`},
+		{ID: 30, RequestID: "dci|okx|probe|P|x|1", Venue: "okx", OptType: "PUT",
+			Response: `{"ordId":"11401353"}`},
+	}
+	ex := &Executor{Store: st, Client: srv.Client(), Now: time.Now,
+		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
+	if _, err := ex.SettleExpiredOrders(context.Background()); err != nil {
+		t.Fatalf("settle: %v", err)
+	}
+	n := 0
+	for _, c := range calls {
+		if strings.Contains(c, "order-status") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("order-status 应只轮 dci 前缀行（earn 行滤掉）: %v", calls)
+	}
+}

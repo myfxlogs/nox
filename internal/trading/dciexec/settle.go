@@ -122,7 +122,11 @@ func (e *Executor) SettleExpiredOrders(ctx context.Context) (int, error) {
 	var okxOrders []pgstore.FilledDCIOrder
 	for _, o := range orders {
 		if o.Venue == "okx" {
-			okxOrders = append(okxOrders, o) // okx 径=per-order order-status 轮询
+			// earn 轨申购行也落本表 venue=okx（request_id=earn|…、回执无 ordId）
+			// ——非 DCI 产品单，不喂 order-status 轮询否则每拍报错。
+			if strings.HasPrefix(o.RequestID, "dci|okx|") {
+				okxOrders = append(okxOrders, o)
+			}
 			continue
 		}
 		if o.Venue != "binance" {
