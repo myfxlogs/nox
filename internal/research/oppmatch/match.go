@@ -44,7 +44,9 @@ type Result struct {
 	TemplateID string
 	ExecTrack  string
 	APR        *float64
-	Missing    []Cond
+	// GrossEvidence gross 项证源覆盖（idle 产案等非报价径；空=默认 quoteFor 口径）。
+	GrossEvidence string
+	Missing       []Cond
 }
 
 var stableCcy = map[string]bool{"USD": true, "USDT": true, "USDC": true}

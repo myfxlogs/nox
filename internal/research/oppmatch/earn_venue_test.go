@@ -17,6 +17,11 @@ func TestEarnRailVenues_IdleProposal(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_cex_earn_apr
+		(venue, ccy, product_type, apr, ts) VALUES
+		('okx','USDT','flex',0.031,now()),('gate','USDT','flex',0.025,now())`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_venue_account_snapshot
 		(venue, venue_type, currency, balance_raw, equity_raw, fetched_at, src) VALUES
 		('okx','unified','USDT',1956,1956,now(),'ws'),
@@ -32,6 +37,11 @@ func TestEarnRailVenues_IdleProposal(t *testing.T) {
 			`DELETE FROM fin_proposal WHERE template_id='cash_mgmt' AND venue IN ('okx','gate')`)
 		_, _ = st.Pool().Exec(ctx,
 			`DELETE FROM fin_condition_gap WHERE subject LIKE 'xgnovenue%'`)
+		_, _ = st.Pool().Exec(ctx,
+			`DELETE FROM fin_cex_earn_apr WHERE venue IN ('okx','gate') AND product_type='flex'`)
+		_, _ = st.Pool().Exec(ctx,
+			`DELETE FROM fin_opp_eval WHERE proposal_id IN
+			 (SELECT id FROM fin_proposal WHERE template_id='cash_mgmt' AND venue IN ('okx','gate'))`)
 	}()
 	idleGapScan(ctx, st)
 	var okxP, gateP, dustP, gapN, xgap int
@@ -57,6 +67,25 @@ func TestEarnRailVenues_IdleProposal(t *testing.T) {
 	}
 	if xgap != 1 {
 		t.Fatalf("白名单外 venue 缺口照旧: %d", xgap)
+	}
+	// 评估卡同步产（M4.1 无卡拒单返修锚）：okx/gate 提案各一卡 verdict 非空。
+	var cards int
+	if err := st.Pool().QueryRow(ctx, `
+		SELECT count(*) FROM fin_opp_eval e JOIN fin_proposal p ON e.proposal_id=p.id
+		 WHERE p.template_id='cash_mgmt' AND p.venue IN ('okx','gate') AND e.verdict<>''`).Scan(&cards); err != nil {
+		t.Fatal(err)
+	}
+	if cards != 2 {
+		t.Fatalf("提案无卡: %d", cards)
+	}
+	var gross float64
+	if err := st.Pool().QueryRow(ctx, `
+		SELECT e.gross_apr FROM fin_opp_eval e JOIN fin_proposal p ON e.proposal_id=p.id
+		 WHERE p.venue='okx'`).Scan(&gross); err != nil {
+		t.Fatal(err)
+	}
+	if gross <= 0 || gross > 1 {
+		t.Fatalf("venue APR 证源错: %v", gross)
 	}
 	// 幂等重跑零重产。
 	idleGapScan(ctx, st)

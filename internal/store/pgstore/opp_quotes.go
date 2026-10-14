@@ -2,7 +2,11 @@
 // fin_cex_earn_apr 现有采集面直查；窗口对齐各自 retention）。
 package pgstore
 
-import "context"
+import (
+	"context"
+
+	"github.com/jackc/pgx/v5"
+)
 
 // MaxDCIAPY 近 30d DCI 报价最佳 apy（指定 underlying 过滤，空串=全资产）。
 func (s *Store) MaxDCIAPY(ctx context.Context, underlying string) (float64, bool, error) {
@@ -53,4 +57,19 @@ func (s *Store) LatestSpreadSpotRef(ctx context.Context, symbol string) (float64
 		return 0, nil // 无行=快照无界参照，降级非错
 	}
 	return v, nil
+}
+
+// LatestEarnAPR venue+ccy 最新理财报价行（idle 产案评估卡证源；缺行→ok=false）。
+func (s *Store) LatestEarnAPR(ctx context.Context, venue, ccy string) (float64, bool, error) {
+	var v float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT apr FROM fin_cex_earn_apr WHERE venue=$1 AND ccy=$2
+		ORDER BY ts DESC LIMIT 1`, venue, ccy).Scan(&v)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	return v, true, nil
 }

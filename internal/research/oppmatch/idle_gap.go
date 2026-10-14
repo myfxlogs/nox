@@ -42,9 +42,25 @@ func idleGapScan(ctx context.Context, st *pgstore.Store) {
 			if p.Currency != "USDT" {
 				continue
 			}
-			if _, _, err := st.CreateProposal(ctx, &pgstore.Proposal{
-				TemplateID: "cash_mgmt", ExecTrack: "auto", Venue: p.Venue}); err != nil {
+			pid, _, err := st.CreateProposal(ctx, &pgstore.Proposal{
+				TemplateID: "cash_mgmt", ExecTrack: "auto", Venue: p.Venue})
+			if err != nil {
 				log.Printf("[oppmatch] idle proposal %s: %v", p.Venue, err)
+				continue
+			}
+			// 提案须带评估卡（M4.1 无卡拒单——SG 实证 #377/#378 零卡死提案）。
+			// 证源=池闲置实证+venue earn APR 最新行；APR 缺→卡面 gross missing
+			// 如实 unevaluable 不编值。
+			r := Result{TemplateID: "cash_mgmt", ExecTrack: "auto"}
+			if apr, ok, aerr := st.LatestEarnAPR(ctx, p.Venue, p.Currency); aerr == nil && ok {
+				r.APR = &apr
+				r.GrossEvidence = fmt.Sprintf(
+					"fin_cex_earn_apr %s %s 最新行；闲置池实证 equity=%.4g 30d收益=0",
+					p.Venue, p.Currency, p.Equity)
+			}
+			card := evalProposal(ctx, st, r, pid)
+			if _, uerr := st.UpsertOppEval(ctx, card); uerr != nil {
+				log.Printf("[oppmatch] idle eval card #%d: %v", pid, uerr)
 			}
 			continue
 		}

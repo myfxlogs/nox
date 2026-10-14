@@ -782,3 +782,8 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **水位自愈 SG 实证**：手动 digest 跑出 `化石水位 autotrade_logs 89704→0、alerts 64904→300`——钳位件真实生效，告警面增量语义复活。
 - **回刷验证 SG 实拍**：digest 写盘后再跑 deploy_sync——`待归纳.md`/`.digest_state` mtime 保持 11:31 写盘时刻未被回刷（病灶修复实证）。
 - **机检**：digest 模块 40 测试绿；clampWatermark 逻辑=水位>库内 max→钳回+warn log，≤max 不动不破增量。
+
+## 2026-10-14 earn 返修：idle 产案同步评估卡（实施席）
+- **病灶**：idleGapScan 只产提案不产卡——CheckDCI「无卡拒单」拦死，SG #377 gate/#378 okx 死提案实证。
+- **修**：产案后同拍 `evalProposal`+`UpsertOppEval`（cash_mgmt earn 分支五项机制口径复用——费/滑点机制不适用、window=venue APR−30d 中位、failure=earn_redeem 账本）；`Result.GrossEvidence` 新字段证源覆盖（`fin_cex_earn_apr <venue> <ccy> 最新行+闲置池实证 equity=…`）；`LatestEarnAPR` venue+ccy 最新行读件；APR 缺→gross missing 如实 unevaluable 不编值；eval earn 分支补 `r.APR!=nil` 闸（nil APR×有 median=panic 潜伏坑顺手封）。
+- **锚升**：earn_venue_test 产案后卡数=2+gross_apr=venue 实读行对拍；race/全包绿。

@@ -21,7 +21,11 @@ const evalWindow = 30 * 24 * time.Hour
 func evalProposal(ctx context.Context, st *pgstore.Store, r Result, pid int64) *pgstore.OppEval {
 	in := econ.EvalInput{TemplateID: r.TemplateID}
 	if r.APR != nil {
-		in.Gross = econ.Term{Value: *r.APR, Evidence: "quoteFor:" + r.TemplateID}
+		ev := "quoteFor:" + r.TemplateID
+		if r.GrossEvidence != "" {
+			ev = r.GrossEvidence
+		}
+		in.Gross = econ.Term{Value: *r.APR, Evidence: ev}
 	}
 	dci := strings.HasPrefix(r.TemplateID, "dci_") || r.TemplateID == "option_spread"
 	earn := r.TemplateID == "earn_apr_lending" || r.TemplateID == "cash_mgmt"
@@ -38,7 +42,7 @@ func evalProposal(ctx context.Context, st *pgstore.Store, r Result, pid int64) *
 	case earn:
 		in.Fee = econ.Term{Evidence: "mechanism:理财申赎费不适用"}
 		in.Slippage = econ.Term{Evidence: "mechanism:理财报价滑点不适用"}
-		if m, ok, err := st.MedianEarnAPR(ctx, evalWindow); err == nil && ok {
+		if m, ok, err := st.MedianEarnAPR(ctx, evalWindow); err == nil && ok && r.APR != nil {
 			w := *r.APR - m
 			if w < 0 {
 				w = 0
