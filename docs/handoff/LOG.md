@@ -813,3 +813,8 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - 处置：#38 回退 requested 附实证注记；坑表重新学习抑 24h（code:403|forbidden）。
 - **教训**：条件请求回执≠条件满足——venue 实响应才是验收锚。请求箱「回执后 venue 复测」应成固定环（本次人工做，机制化可入票）。
 - 另：gate rail 账户族病灶立票（futures/usdt/accounts 404——$998 真所在户族待 venue 实响应枚举）。
+
+## 2026-10-14 gate 404 根因翻案：双 /api/v4 前缀 bug（业主期货权限无关）
+- 决策席取证：#377 报错体为 **HTML** 非 Gate JSON label——请求未达 API 路由层。库内 `exchange_configs gate:perp base_url` 约定含 `/api/v4`（reconcile 靠它读通 $998 实证），而 `earn_rail_gate.go req()` 又拼 `"/api/v4"+endpoint` → 实发 `…/api/v4/api/v4/futures/usdt/accounts`。
+- 教训：「venue 404」先验响应体形态——HTML=路由层未达（URL bug），JSON label=真 venue 拒（权限/账户）。原「账户族修」票收窄为 `req()` 一行级 base 归一（TrimSuffix /api/v4）+三形态 mock 测试。
+- okx 侧对比：403 响应为 OKX JSON `{"code":403…}`——真到达 venue 的权限拒，URL 无 bug，两案性质不同勿混。
