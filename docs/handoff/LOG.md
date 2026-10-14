@@ -881,3 +881,8 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **验收途两现场修**：①`fundingAvail` `/asset/balance`(单数404)→`/asset/balances`(200)@7e49e344——mock 曾把错路径钉断言（同型病灶第二发，条目已立碑）；②尘级短差：`needed=3.4e-9` 尘划转被 venue `amt error` 拒（#22/#24 实证）→fail-closed @0efa077+尘差直购 @0f9e2fb8。
 - **部署教训**：detached worktree 上 `git pull` 空转致镜像构在旧提交——部署前必 `git rev-parse HEAD` 核源。坑表签名行已清（旧的 403 签名+新的 fail-closed 签名各一条）。
 - **顺带部署增量**：镜像 0f9e2fb8 含实施席已报的 okx DCI 拓展（6463aa24 venue 参化+quote→trade rail）——复审独立验票单开，首拍 okx DCI 提案出库情况待观。
+
+## 2026-10-14 okx DCI 拓展复审补注（决策席）
+- **机检独立重跑绿**：build/vet/gofmt/test 90 项+race 62 项 @6463aa24。
+- **缺口**：okx 报价行 `min_amount/max_amount/purchase_decimal` 仍 NULL——采集件已读到 `minSize/maxSize/stepSz`（cexscan 日志 row keys 实证）但未持久化，rail 下单无约束闸，低档产品将靠 venue 拒单兜底（坑表如实收）。续件：cexscan/dci_okx.go 补三字段落库+tryLegOKX 达标档校验加 minSize 闸。
+- **部署口径**：镜像 0f9e2fb8 含本票——okx PUT 提案若出库按评估额执行（当前 funding=0 将如实拒），CALL 需持仓面。
