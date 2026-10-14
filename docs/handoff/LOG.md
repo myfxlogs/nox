@@ -730,3 +730,13 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **3001157 零息户**：不走对话裁决——已按「条件缺口→业主请求」机制入库 `fin_condition_gap #36 capital|3001157|requested`（请求箱/飞书 warn 双到）。请求文：划转至有息面户（15032313 目录有 BRENT/WTI/FX 套息面）或补开 carry 品种户或 waived 认沉淀。**这是系统义务项不是临时问话**。
 - **earn_apr_lending 模板漂移**：查属实——0188 种子声明 okx:spot+binance:spot 双凭据，执行轨仅 binance。**裁：保留声明不删**（删了=okx 评估面瞎掉，缺口的 executor 行恰好是它产出的）；venue-float warn=「声明面>执行面」诚实常设信号，与 executor 缺口行同义冗余但 warn 级 dedup 可容。收口路径=okx earn 写径接上（业主权限件）或 waived。
 - 业主域口径重申：D-184 下「挪资/权限/凭据」一律走条件请求箱，不走会话裁决——此前「要你拍」表述越界，以本行为准。
+
+## 死角日报（2026-10-14）
+
+- **件**：tools/digest 尾段新「死角对拍」段——daemon/facts/策略三面在跑零产出显形，纯报告件不拦不拒。
+- **A 面**：fin_employee_registry 在职口径（enabled∧running∧beat 新鲜同 EmployeeStatus 判定）×产出域表 24h 零新行→列名；手写 map 8 件（cexscan→earn_apr / acctFrameSnapshots→venue_account_snapshot / ticker→ticks / income→income_events(venue 收窄) / carry-universe→cex_universe.last_seen / oppmatch→fin_proposal / swapLedger→position_cashflows）；纯事件驱动件（cex-io）不入图防误报。
+- **B 面**：facts kind 24h 有采集但不在消费件清单→孤儿列名（清单读径实查：funding*/swap_*/delivery_depth_spread_bps/funding_history/term_dispersion/idle_funds/price/cex_exposure_pct/index_price/vol24h/order_history）。
+- **C 面**：fin_strategy live 但 48h 零提案（fin_proposal.template_id）零动作（autotrade_logs.strategy）→列名。
+- **渲染**：「死角：N」行 N=0 照常印防静默（票面钦定）。
+- **机检**：digest 模块 build/vet/gofmt/race 绿；锚=自足库 digest_dead_test 注入「running 零产出 daemon/离线 daemon/孤儿 kind/live 零动策略/live 有动策略」五态对拍+N=0 渲染。
+- **验收残留（SG）**：次日 06:10 digest 现「死角」段——预期首批列名：swap facts 若仍无消费件（本票前已接 hypothesis 扫描，应消）、95 幽灵名册行（D-246 病灶残留 daemon 若在册）。

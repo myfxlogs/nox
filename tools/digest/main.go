@@ -179,6 +179,13 @@ func run(commitFlag bool) error {
 	} else {
 		pendingMd += RenderCapitalCoverageSection(covRows)
 	}
+	// 死角日报（票面：daemon/facts/策略三面在跑零产出对拍——纯报告件）。
+	corners, err := loadDeadCorners(ctx, pool)
+	if err != nil {
+		log.Printf("digest: deadcorner load: %v (段跳过)", err)
+	} else {
+		pendingMd += renderDeadCornerSection(corners)
+	}
 	if err := os.WriteFile(pendingPath, []byte(pendingMd), 0644); err != nil {
 		return fmt.Errorf("write pending: %w", err)
 	}
