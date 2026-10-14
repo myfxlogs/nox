@@ -94,7 +94,8 @@ func run(ctx context.Context) error {
 	if cerr != nil {
 		cacheDir = os.TempDir()
 	}
-	for _, src := range allSources(hc, proxy, st.Pool(), filepath.Join(cacheDir, "nox-universe-radar")) {
+	srcs := allSources(hc, proxy, st.Pool(), filepath.Join(cacheDir, "nox-universe-radar"))
+	for _, src := range srcs {
 		rs, err := src.Scan(ctx)
 		if err != nil {
 			log.Printf("universe-radar: venue=%s 扫描失败: %v", src.Venue(), err)
@@ -155,6 +156,9 @@ func run(ctx context.Context) error {
 			log.Printf("[universe-radar] paper perp carry: opened=%d exited=%d", len(pOpened), pExited)
 		}
 	}
+
+	// 日历基差 P0 纸面轨：binance 交割轴信号→perp_delivery 虚仓（见 paper_delivery.go）。
+	paperDeliveryRound(ctx, st, srcs, rows, now)
 
 	// 落库：universe upsert + events + radar 全量行（L0）。
 	urows := make([]pgstore.CexUniverseRow, 0, len(rows))

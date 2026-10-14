@@ -100,7 +100,9 @@ var validKinds = map[string]bool{
 	"spot_depth_spread_bps": true,
 	"spot_depth_bid_usd":    true,
 	"spot_depth_ask_usd":    true,
-	KindEgressCanary:        true, // D-104 本机出口 canary
+	// 交割腿 bookTicker 价差（src=universe-radar，日历基差 P0 滑点前置）。
+	"delivery_depth_spread_bps": true,
+	KindEgressCanary:            true, // D-104 本机出口 canary
 }
 
 // ValidKind 报告 k 是否为已知 Kind。

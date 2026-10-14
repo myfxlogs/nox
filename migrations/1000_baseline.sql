@@ -439,7 +439,7 @@ END) STORED,
     CONSTRAINT carry_graduations_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text]))),
     CONSTRAINT cg_venue_a_bare_chk CHECK (((venue_a <> ''::text) AND (venue_a !~~ '%:%'::text) AND (venue_a !~~ '%×%'::text))),
     CONSTRAINT cg_venue_b_bare_chk CHECK (((venue_b !~~ '%:%'::text) AND (venue_b !~~ '%×%'::text))),
-    CONSTRAINT cg_venue_type_ab_chk CHECK (((venue_type_a = ANY (ARRAY[''::text, 'spot'::text, 'perp'::text])) AND (venue_type_b = ANY (ARRAY[''::text, 'spot'::text, 'perp'::text]))))
+    CONSTRAINT cg_venue_type_ab_chk CHECK (((venue_type_a = ANY (ARRAY[''::text, 'spot'::text, 'perp'::text, 'futures'::text])) AND (venue_type_b = ANY (ARRAY[''::text, 'spot'::text, 'perp'::text, 'futures'::text]))))
 );
 
 
@@ -2452,7 +2452,7 @@ CASE
     ELSE ((venue_b || ':'::text) || venue_type_b)
 END) STORED,
     CONSTRAINT psc_venue_bare_chk CHECK (((venue_a !~~ '%:%'::text) AND (venue_b !~~ '%:%'::text) AND ((mt_venue IS NULL) OR (mt_venue !~~ '%:%'::text)))),
-    CONSTRAINT psc_venue_type_ab_chk CHECK (((venue_type_a = ANY (ARRAY[''::text, 'spot'::text, 'perp'::text])) AND (venue_type_b = ANY (ARRAY[''::text, 'spot'::text, 'perp'::text]))))
+    CONSTRAINT psc_venue_type_ab_chk CHECK (((venue_type_a = ANY (ARRAY[''::text, 'spot'::text, 'perp'::text, 'futures'::text])) AND (venue_type_b = ANY (ARRAY[''::text, 'spot'::text, 'perp'::text, 'futures'::text]))))
 );
 
 

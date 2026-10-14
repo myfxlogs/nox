@@ -267,3 +267,21 @@ func latestTicksMid(ctx context.Context, pool *pgxpool.Pool, venue string) map[s
 	}
 	return out
 }
+
+// DeliverySpreadBps P0 滑点前置：GET /fapi/v1/ticker/bookTicker?symbol=——
+// 逐交割符号读盘口价差（4 符号低频 1h 轮，venue 公共端点无凭据）。
+// bid/ask 破价（≤0/倒挂）→ err fail-closed，调用方标「滑点未知」不编。
+func (b binance) DeliverySpreadBps(ctx context.Context, sym string) (float64, error) {
+	var r struct {
+		Bid flexFloat `json:"bidPrice"`
+		Ask flexFloat `json:"askPrice"`
+	}
+	if err := getJSON(ctx, b.hc, b.base+"/fapi/v1/ticker/bookTicker?symbol="+sym, &r); err != nil {
+		return 0, err
+	}
+	if r.Bid <= 0 || r.Ask < r.Bid {
+		return 0, fmt.Errorf("bookTicker %s 价破 bid=%v ask=%v", sym, r.Bid, r.Ask)
+	}
+	mid := (float64(r.Bid) + float64(r.Ask)) / 2
+	return (float64(r.Ask) - float64(r.Bid)) / mid * 1e4, nil
+}

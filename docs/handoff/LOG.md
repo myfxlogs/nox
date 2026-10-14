@@ -614,3 +614,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 ## 2026-10-14 源文件超限拆分 @696b7c5c
 - check-lines 三警告清零：diff.go 360→132（拆 diff_norm/diff_funding/diff_divergence/diff_basis）；tools.go 316→94（拆 tools_query/tools_readfile/tools_kb）；run.go 308→224（拆 run_view）。纯搬移零行为变——签名/导出符号/测试语义全不动。
 - 机检：三包 build/vet/gofmt/test/-race 全绿；全量 go test 中 dashboard D587 单发 flake（共享库压力型复案，隔离单跑 1.56s 绿）。
+
+## 2026-10-14 日历基差 P0 纸面轨 @pending
+- paper_delivery.go：binance 同所同 canonical 跨 contract_type 组对（perp 腿在场+交割行 basis_ann>0 contango 才入对；okx USD_UM/负基差 P0 禁线实证锚）。开仓行 structure/side='perp_delivery'、venue_type_a=futures×b=spot（对冲腿现货=正 funding 期多 perp 是成本项）、entry_basis_bps+entry_funding_ann(=basis_ann) 快照。
+- PnL=Δbasis 市值重估：(entry−cur)×qty/1e4 accruedReplace 绝对写（非 funding 差×天数）；min_accrued 自动低水位=收敛路径观测件。退出：expiry−24h→'expiry_t_minus_1'、连缺 3 轮→data_lost。basis_ann 缺=不开仓。
+- 滑点前置：binance bookTicker REST 逐交割符号读→facts(delivery_depth_spread_bps 新 kind)；读败→note='滑点未知'诚实降级不判死。
+- 迁移 1020：psc_venue_type_ab_chk 枚举加 'futures'（baseline 同步）。执行器不建（P2）。
+- 锚：配对域（USD_UM/负基差剔）+全链（开仓行结构/滑点未知标/Δbasis 重估 5.0 对拍/T−1 退因）。

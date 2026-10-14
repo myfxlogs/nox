@@ -64,3 +64,6 @@ var RadarFuturesAxisSQL string // 宇宙雷达仪器轴：contract_type/expiry_t
 
 //go:embed 1019_opp_hypothesis.sql
 var OppHypothesisSQL string // 新品类假设行表
+
+//go:embed 1020_paper_delivery.sql
+var PaperDeliverySQL string // 日历基差 P0 纸面轨：venue_type 枚举加 futures
