@@ -757,3 +757,4 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **提案径**：`earnExecVenues` {binance,okx,gate}；rail 面内 USDT 闲池→`cash_mgmt` 提案 venue 键分行（迁移 **1024**：`fin_proposal_pending_uniq`→(template_id,venue)，基线同步，fallback 查询补 venue 键）；面外 venue 照旧 executor 缺口；<$100 尘额两径都不入。非 USDT 闲池暂不进提案（定值域限）亦不出缺口——如实记录待扩。
 - **机检**：build/vet/gofmt 净；dciexec/oppmatch/pgstore/cmd-core 全包+race 绿；锚 2 件新（earn_venue_test rail 三态+尘阈+幂等、earn_rail_test mock rail 申购径+credential 缺口）；全量 `go test ./...` 仅 dashboard D587 拨号超时 flake（隔离单跑 1.6s 绿，共享测试库压力型六度同族）。
 - **残留**：earn_rail.go 299 行贴闸；SG 验收=下拍扫描 cash_mgmt 提案现 venue=okx/gate 行并可执行（或凭据缺→credential 行）。
+- **提交边界碰撞实录**：决策席「两票立册」提交 @957e6337 与实施席 earn 票在途 stage 面撞车——该提交内含实施侧 earn_rail.go/idle_gap/迁移1024/okx signutil 等 606 行实现代码（实施席已 stage 未 commit，我 commit 时一并卷入），实施席随后以 @b6321eda 补完文件拆分。**earn 票复审须按 957e6337+b6321eda 合并 diff 审，不能只审尾提交**。教训：多会话同树作业时，commit 前先 `git diff --cached --stat` 核对暂存面。
