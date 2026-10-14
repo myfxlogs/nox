@@ -643,3 +643,7 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 ## 2026-10-14 敞口分母鲜度守卫验收 ✅（验收席）
 - 复核：334 测试绿（pgstore/dciexec）；SG alerts 库现「分母池鲜度失」行实证（窗口期 dedup 推送在痕）；当前池鲜 RPC 标已自动收起——恢复销标语义实证。
 - 验收锚全中：stale_pools 剔分母、denominator_incomplete 标、一次性 info 告警、恢复自动销。
+
+## 2026-10-14 income 回流定案 D-515
+- 取证：E0 归档后 income_events 全表最早 created_at=10-13 14:59:42（归档后 1min）——okx 采集器拉 venue 收入窗把 10-06~09 funding 按真实 ts 重灌；binance XAUUSDT 3 笔为外单实时 funding。
+- 裁：不设纪元门（venue 权威全收）；展示层按 position_id 归因分栏即可（记此备后续面板票用）。
