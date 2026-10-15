@@ -43,43 +43,50 @@ func (e *Executor) SweepPendingDisposals(ctx context.Context) (int, error) {
 			}
 			continue
 		}
-		// 损益锚：note 内 DCI#id → 原单 qty=申购付额；查无则只记得额（不编差值）。
+		// 损益锚：note 内 DCI#id → 原单单点读（DCIOrderByID——ListDCIOrders
+		// 有 >200→clamp20 静默截断，10-15 实证 id=11 被截致 invest=0、得额
+		// 351.94 被当净利 +351.94 虚增入账）。锚缺→不记 income（不编差值——
+		// 得额≠损益），行仍照关（卖回是真账）+ 告警明示人工补记。
 		ordID := int64(0)
 		if m := pendingDisposalOrderRE.FindStringSubmatch(p.Note); m != nil {
 			ordID, _ = strconv.ParseInt(m[1], 10, 64)
 		}
 		invest, uly := 0.0, ccy+"USDT"
+		anchored := false
 		if ordID > 0 {
-			if orders, lerr := e.Store.ListDCIOrders(ctx, 500); lerr == nil {
-				for _, o := range orders {
-					if o.ID == ordID {
-						invest, uly = o.Qty, o.Underlying
-						break
-					}
-				}
+			if o, lerr := e.Store.DCIOrderByID(ctx, ordID); lerr != nil {
+				log.Printf("[dci-sweep] order %d anchor: %v", ordID, lerr)
+			} else if o != nil {
+				invest, uly, anchored = o.Qty, o.Underlying, true
 			}
 		}
 		pnl := proceeds - invest
-		if cfgID, cerr := e.Store.ExchangeConfigID(ctx, "binance", "spot"); cerr == nil && cfgID > 0 {
-			if _, ierr := e.Store.InsertIncomeEvents(ctx, []pgstore.IncomeEvent{{
-				Venue: "binance", VenueType: "spot", ConfigID: cfgID,
-				Symbol:     uly,
-				IncomeType: "dci_exercise_disposal",
-				AmountUSD:  pnl, TranID: ordID*10 + 7, Ts: e.Now()}}); ierr != nil {
-				log.Printf("[dci-sweep] income: %v", ierr)
+		if anchored {
+			if cfgID, cerr := e.Store.ExchangeConfigID(ctx, "binance", "spot"); cerr == nil && cfgID > 0 {
+				if _, ierr := e.Store.InsertIncomeEvents(ctx, []pgstore.IncomeEvent{{
+					Venue: "binance", VenueType: "spot", ConfigID: cfgID,
+					Symbol:     uly,
+					IncomeType: "dci_exercise_disposal",
+					AmountUSD:  pnl, TranID: ordID*10 + 7, Ts: e.Now()}}); ierr != nil {
+					log.Printf("[dci-sweep] income: %v", ierr)
+				}
 			}
 		}
 		marker := "pending_disposal"
 		if ordID > 0 {
 			marker = fmt.Sprintf("DCI#%d", ordID)
 		}
+		pnlNote := fmt.Sprintf("净损益 %+.2f", pnl)
+		if !anchored {
+			pnlNote = "原单锚缺——损益未入账待人工补记"
+		}
 		if _, cerr := e.Store.ClosePersonalPositionsByMarker(ctx, marker,
-			fmt.Sprintf("已清扫卖回得 %.2f USDT（净损益 %+.2f）", proceeds, pnl)); cerr != nil {
+			fmt.Sprintf("已清扫卖回得 %.2f USDT（%s）", proceeds, pnlNote)); cerr != nil {
 			log.Printf("[dci-sweep] close row %d: %v", p.ID, cerr)
 		}
 		if aerr := e.Store.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
-			"pending_disposal 清扫：%.8f %s 已市价卖回得 %.2f USDT（净损益 %+.2f，DCI#%d）",
-			qty, ccy, proceeds, pnl, ordID)); aerr != nil {
+			"pending_disposal 清扫：%.8f %s 已市价卖回得 %.2f USDT（%s，DCI#%d）",
+			qty, ccy, proceeds, pnlNote, ordID)); aerr != nil {
 			log.Printf("[dci-sweep] alert: %v", aerr)
 		}
 		done++

@@ -166,12 +166,13 @@ func (f *fakeStore) OutstandingDCIQty(context.Context, string, string) (float64,
 func (f *fakeStore) ListOpenPersonalPositions(context.Context) ([]pgstore.PersonalPosition, error) {
 	return f.positions, nil
 }
-func (f *fakeStore) ListDCIOrders(_ context.Context, limit int) ([]pgstore.DCIOrder, error) {
-	out := make([]pgstore.DCIOrder, 0, len(f.orders))
+func (f *fakeStore) DCIOrderByID(_ context.Context, id int64) (*pgstore.DCIOrder, error) {
 	for _, o := range f.orders {
-		out = append(out, *o)
+		if o.ID == id {
+			return o, nil
+		}
 	}
-	return out, nil
+	return nil, nil
 }
 func (f *fakeStore) UpdatePersonalPositionQtyNote(_ context.Context, id int64, qty float64, note string) error {
 	f.updates = append(f.updates, struct {

@@ -216,3 +216,41 @@ func TestD542_SweepPendingDisposal(t *testing.T) {
 		t.Fatalf("清扫 warn 未发: %+v", st.alerts)
 	}
 }
+
+// TestD542_SweepUnanchored 锚缺面：note 有 DCI#id 但台账查无/读败——卖回照做
+// （真账）但 income 行不入账（得额≠损益，10-15 实证 invest=0 虚增 +352 净利）。
+// 关行+warn 仍落，文案明示待人工补记。
+func TestD542_SweepUnanchored(t *testing.T) {
+	st := newFake()
+	st.cfgID = 42
+	qty := 0.00433
+	st.positions = []pgstore.PersonalPosition{{
+		ID: 9, Asset: "BTC", Kind: "other", Status: "OPEN", Qty: &qty,
+		Note: "pending_disposal D-517：DCI#99 行权接货待卖回",
+	}}
+	// orders 表空——id=99 查无
+	ex := &Executor{Store: st, BnKey: "k", Now: time.Now,
+		SpotFiltersFn: func(context.Context, string) (float64, float64, int, error) {
+			return 0.00001, 0.00001, 5, nil
+		},
+		SpotSellFn: func(context.Context, string, float64) (float64, error) { return 346.4, nil },
+	}
+	n, err := ex.SweepPendingDisposals(context.Background())
+	if err != nil || n != 1 {
+		t.Fatalf("sweep n=%d err=%v", n, err)
+	}
+	for _, ev := range st.incomeEvs {
+		if ev.IncomeType == "dci_exercise_disposal" {
+			t.Fatalf("锚缺仍记损益行（得额冒充净利）: %+v", ev)
+		}
+	}
+	var warned bool
+	for _, a := range st.alerts {
+		if strings.Contains(a, "锚缺") {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Fatalf("锚缺告警未明示: %+v", st.alerts)
+	}
+}

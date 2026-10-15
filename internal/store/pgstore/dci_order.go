@@ -232,6 +232,27 @@ func (s *Store) ListDCIOrders(ctx context.Context, limit int) ([]DCIOrder, error
 	return out, rows.Err()
 }
 
+// DCIOrderByID 单点读（D-542：ListDCIOrders limit>200 静默 clamp 20——清扫锚
+// 旧单被抓不到实证）；缺行→nil,nil 如实空。
+func (s *Store) DCIOrderByID(ctx context.Context, id int64) (*DCIOrder, error) {
+	var o DCIOrder
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, request_id, venue, template_id, product_ref, underlying, opt_type,
+		       strike, invest_ccy, qty, tenor_days, status,
+		       left(response, 300), proposal_id, created_at, resolved_at
+		FROM fin_dci_order WHERE id=$1`, id).Scan(
+		&o.ID, &o.RequestID, &o.Venue, &o.TemplateID, &o.ProductRef, &o.Underlying,
+		&o.OptType, &o.Strike, &o.InvestCcy, &o.Qty, &o.TenorDays,
+		&o.Status, &o.Response, &o.ProposalID, &o.CreatedAt, &o.ResolvedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &o, nil
+}
+
 // DCIOrderIntentCount D-255③：意图稳定键尝试序——同「腿+产品+交割日」前缀的
 // fin_dci_order 行数+1=新尝试号（proposal_id 无关——wheel 径无绑定也推进，
 // 败单行不再 ON CONFLICT 假「已受理」）。

@@ -49,8 +49,9 @@ type Store interface {
 	InsertPersonalPosition(ctx context.Context, asset, kind, priceSymbol, note string, qty *float64, openedAt *time.Time) (int64, error)
 	OutstandingDCIQty(ctx context.Context, venue, investCcy string) (float64, error)
 	ListOpenPersonalPositions(ctx context.Context) ([]pgstore.PersonalPosition, error)
-	// ListDCIOrders pending_disposal 清扫损益锚（DCI#id→原单 qty/underlying）。
-	ListDCIOrders(ctx context.Context, limit int) ([]pgstore.DCIOrder, error)
+	// DCIOrderByID pending_disposal 清扫损益锚（DCI#id→原单 qty/underlying；
+	// 单点读——ListDCIOrders 有 >200→clamp20 静默截断，锚旧单必用此径）。
+	DCIOrderByID(ctx context.Context, id int64) (*pgstore.DCIOrder, error)
 	UpdatePersonalPositionQtyNote(ctx context.Context, id int64, qty float64, note string) error
 	OpenConditionGap(ctx context.Context, g *pgstore.ConditionGap) (int64, error)
 	RequestConditionGap(ctx context.Context, id int64) error
