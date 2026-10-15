@@ -42,6 +42,10 @@ func (s *Store) InsertVenueAccountSnapshots(ctx context.Context, snaps []VenueAc
 	if len(snaps) == 0 {
 		return nil
 	}
+	snaps = s.throttleRestSnaps(ctx, snaps) // D-545 写放大闸：rest 系 ε+心跳去重
+	if len(snaps) == 0 {
+		return nil
+	}
 	sql := `INSERT INTO fin_venue_account_snapshot
 		(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at, src, buffer_multiple) VALUES `
 	args := make([]any, 0, len(snaps)*9)
@@ -66,6 +70,108 @@ func (s *Store) InsertVenueAccountSnapshots(ctx context.Context, snaps []VenueAc
 		s.snapHook(ctx, snaps)
 	}
 	return nil
+}
+
+// snapRestThrottledSrcs D-545：写放大节流只作用于 rest 系补写径（事件径
+// okx_event/binance_event/mt_frame/mt_event=权威源零节流，D-544 不动）。
+var snapRestThrottledSrcs = map[string]bool{"rest_calib": true, "rest_poll": true}
+
+// throttleRestSnaps ε+心跳闸：rest 系写行——同键值未变超 ε（equity/balance/
+// free_margin 各列 abs<0.01 或 rel<0.1%）且距上次写 <10min → 跳过；≥10min
+// 心跳照常写（fetched_at 是鲜度闸/读序证据面不可省）。读败→原样放行
+// （fail-open：漏几行补写优于吞真值）。
+func (s *Store) throttleRestSnaps(ctx context.Context, snaps []VenueAccountSnapshot) []VenueAccountSnapshot {
+	var keys []string
+	keyOf := func(sn VenueAccountSnapshot) string {
+		return sn.Venue + "|" + sn.VenueType + "|" + sn.Currency
+	}
+	restIdx := map[int]bool{}
+	for i, sn := range snaps {
+		src := sn.Src
+		if src == "" {
+			src = "scheduler"
+		}
+		if snapRestThrottledSrcs[src] {
+			restIdx[i] = true
+			keys = append(keys, keyOf(sn))
+		}
+	}
+	if len(keys) == 0 {
+		return snaps
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (venue, venue_type, currency)
+			venue||'|'||venue_type||'|'||COALESCE(currency,''),
+			COALESCE(balance_raw,0), COALESCE(equity_raw,0), COALESCE(free_margin_raw,0),
+			fetched_at
+		FROM fin_venue_account_snapshot
+		WHERE (venue||'|'||venue_type||'|'||COALESCE(currency,'')) = ANY($1)
+		ORDER BY venue, venue_type, currency, fetched_at DESC`, keys)
+	if err != nil {
+		return snaps // 读败放行——吞真值风险大于冗余写
+	}
+	defer rows.Close()
+	type lastSnap struct {
+		bal, eq, fm float64
+		at          time.Time
+	}
+	last := map[string]lastSnap{}
+	for rows.Next() {
+		var k string
+		var ls lastSnap
+		if err := rows.Scan(&k, &ls.bal, &ls.eq, &ls.fm, &ls.at); err != nil {
+			return snaps
+		}
+		last[k] = ls
+	}
+	eps := func(a, b float64) bool {
+		d := a - b
+		if d < 0 {
+			d = -d
+		}
+		lim := 0.01
+		if r := 0.001 * dAbs(b); r > lim {
+			lim = r
+		}
+		return d < lim
+	}
+	out := snaps[:0]
+	for i, sn := range snaps {
+		if !restIdx[i] {
+			out = append(out, sn)
+			continue
+		}
+		l, ok := last[keyOf(sn)]
+		if ok && sn.FetchedAt.Sub(l.at) < 10*time.Minute &&
+			eps(sn.EquityRaw, l.eq) && eps(sn.BalanceRaw, l.bal) && eps(sn.FreeMarginRaw, l.fm) {
+			continue // ε 内浮值+10min 窗内=跳写
+		}
+		out = append(out, sn)
+	}
+	return out
+}
+
+func dAbs(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+// PruneVenueAccountSnapshots D-545② 保留窗：删 fetched_at<cutoff 且该键有更新
+// 行的老行——每键最新行永远保留（化石键=断采唯一证据，含化石行本身）。
+func (s *Store) PruneVenueAccountSnapshots(ctx context.Context, cutoff time.Time) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `
+		DELETE FROM fin_venue_account_snapshot a
+		WHERE a.fetched_at < $1
+		  AND EXISTS (SELECT 1 FROM fin_venue_account_snapshot b
+		              WHERE b.venue=a.venue AND b.venue_type=a.venue_type
+		                AND b.currency IS NOT DISTINCT FROM a.currency
+		                AND b.fetched_at > a.fetched_at)`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("prune venue account snapshots: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 // VenueAccountLatest 每 venue 最新快照（D-359 覆盖率面板行）。
