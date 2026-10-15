@@ -10,6 +10,7 @@ import { fmtUsd, fmtAge } from "../components/fmt";
 
 export default function InvestorPage() {
   const [nav, setNav] = useState<number | null>(null);
+  const [navCcy, setNavCcy] = useState<Record<string, number>>({}); // D-522④：NAV 分币种
   const [realized, setRealized] = useState<number | null>(null);
   const [today, setToday] = useState<number | null>(null);
   const [floatNet, setFloatNet] = useState<number | null>(null);
@@ -31,6 +32,7 @@ export default function InvestorPage() {
           client.listRequestBox({}),
         ]);
         setNav(fin.totalEquityUsd);
+        setNavCcy(fin.equityByCcy ?? {});
         setRealized(pnl.realizedSinceAnchor);
         setToday(pnl.realizedToday);
         setFloatNet(pnl.floatingNetUsd);
@@ -68,7 +70,12 @@ export default function InvestorPage() {
       </div>
       {err && <div className="err">{err}</div>}
       <div className="cards">
-        <div className="card"><div className="k">NAV 总权益</div><div className="v">{fmtUsd(nav)}</div></div>
+        <div className="card"><div className="k">NAV 总权益</div><div className="v">{fmtUsd(nav)}</div>
+          {/* D-522④：结算币种分账行（USD/USDT 各一行，永不加总） */}
+          {Object.entries(navCcy).sort().map(([c, v]) => (
+            <div key={c} className="muted" style={{fontSize: "12px"}}>NAV {c} = {fmtUsd(v)} {c}</div>
+          ))}
+        </div>
         <div className="card"><div className="k">锚点以来已实现</div><div className="v">{fmtUsd(realized)}</div></div>
         <div className="card"><div className="k">今日已实现</div><div className="v">{fmtUsd(today)}</div></div>
         <div className="card"><div className="k">浮动净值</div><div className="v">{fmtUsd(floatNet)}</div></div>

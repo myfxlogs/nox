@@ -82,3 +82,6 @@ var ProposalPendingVenueSQL string // earn 多 venue 化：pending 唯一锚加 
 
 //go:embed 1025_gate_earn_config.sql
 var GateEarnConfigSQL string // D-523③：gate:earn 子账户配置回种
+
+//go:embed 1026_nav_daily_ccy.sql
+var NavDailyCcySQL string // D-522：fin_nav_daily PK 升 (day_start,currency)

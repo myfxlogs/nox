@@ -56,7 +56,7 @@ func gather(ctx context.Context, d *Deps, dayStart, dayEnd time.Time) (string, e
 	if err != nil {
 		return "", fmt.Errorf("nav: %w", err)
 	}
-	nav, idle := navRep.NavUSD, navRep.IdleUSD
+	nav, idle := navRep.NavUSD, navRep.IdleUSD // USD 桶（-3% 硬线分母口径不动）
 	var b strings.Builder
 	fmt.Fprintf(&b, "报告日期：%s（北京时间历日）\n\n", dayStart.In(BJTime).Format("2006-01-02"))
 
@@ -71,7 +71,23 @@ func gather(ctx context.Context, d *Deps, dayStart, dayEnd time.Time) (string, e
 	if nav > 0 {
 		idlePct = idle / nav * 100
 	}
-	fmt.Fprintf(&b, "- NAV=%.2f USD｜闲置=%.2f USD（%.1f%%）\n", nav, idle, idlePct)
+	// D-522④：日报 NAV 按结算币种分行展示（跨币永不加总）。
+	ccys := make([]string, 0, len(navRep.ByCcy))
+	for c := range navRep.ByCcy {
+		ccys = append(ccys, c)
+	}
+	sort.Strings(ccys)
+	for _, c := range ccys {
+		bk := navRep.ByCcy[c]
+		pct := 0.0
+		if bk.Nav > 0 {
+			pct = bk.Idle / bk.Nav * 100
+		}
+		fmt.Fprintf(&b, "- NAV=%.2f %s｜闲置=%.2f %s（%.1f%%）\n", bk.Nav, c, bk.Idle, c, pct)
+	}
+	if len(ccys) == 0 {
+		fmt.Fprintf(&b, "- NAV=%.2f USD｜闲置=%.2f USD（%.1f%%）\n", nav, idle, idlePct)
+	}
 	fmt.Fprintf(&b, "- 30d 净额=%.2f USD%s\n", net30, hardLine)
 	fmt.Fprintf(&b, "- 提案中位龄=%s\n", ageFmt(medianAge(props, dayEnd)))
 	fmt.Fprintf(&b, "- 最老投资人侧请求龄=%s\n", ageFmt(oldestGapAge(gaps, dayEnd)))

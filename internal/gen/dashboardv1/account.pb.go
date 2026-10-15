@@ -1897,8 +1897,10 @@ type GetFinanceOverviewResponse struct {
 	IncomeByKind     []*FinanceIncomeRow `protobuf:"bytes,5,rep,name=income_by_kind,json=incomeByKind,proto3" json:"income_by_kind,omitempty"`
 	Flows            []*FinanceFlowRow   `protobuf:"bytes,6,rep,name=flows,proto3" json:"flows,omitempty"`                                                   // ts 倒序 LIMIT 200
 	TotalRealizedUsd float64             `protobuf:"fixed64,7,opt,name=total_realized_usd,json=totalRealizedUsd,proto3" json:"total_realized_usd,omitempty"` // D-508 S8：Σ pnl_by_env.realized_pnl（前端直读不再聚合）
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// D-522④：NAV 按结算币种分账（USD/USDT 各键，跨币永不加总——total_equity_usd 保留=USD 桶）。
+	EquityByCcy   map[string]float64 `protobuf:"bytes,8,rep,name=equity_by_ccy,json=equityByCcy,proto3" json:"equity_by_ccy,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetFinanceOverviewResponse) Reset() {
@@ -1964,6 +1966,13 @@ func (x *GetFinanceOverviewResponse) GetTotalRealizedUsd() float64 {
 		return x.TotalRealizedUsd
 	}
 	return 0
+}
+
+func (x *GetFinanceOverviewResponse) GetEquityByCcy() map[string]float64 {
+	if x != nil {
+		return x.EquityByCcy
+	}
+	return nil
 }
 
 var File_dashboardv1_account_proto protoreflect.FileDescriptor
@@ -2121,14 +2130,18 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"amount_usd\x18\x05 \x01(\x01R\tamountUsd\x12\x1f\n" +
 	"\vposition_id\x18\x06 \x01(\x03R\n" +
 	"positionId\x12\x12\n" +
-	"\x04note\x18\a \x01(\tR\x04note\"\xdf\x02\n" +
+	"\x04note\x18\a \x01(\tR\x04note\"\x82\x04\n" +
 	"\x1aGetFinanceOverviewResponse\x12(\n" +
 	"\x10total_equity_usd\x18\x02 \x01(\x01R\x0etotalEquityUsd\x12?\n" +
 	"\n" +
 	"pnl_by_env\x18\x04 \x03(\v2!.nox.dashboard.v1.FinancePnlByEnvR\bpnlByEnv\x12H\n" +
 	"\x0eincome_by_kind\x18\x05 \x03(\v2\".nox.dashboard.v1.FinanceIncomeRowR\fincomeByKind\x126\n" +
 	"\x05flows\x18\x06 \x03(\v2 .nox.dashboard.v1.FinanceFlowRowR\x05flows\x12,\n" +
-	"\x12total_realized_usd\x18\a \x01(\x01R\x10totalRealizedUsdJ\x04\b\x01\x10\x02J\x04\b\x03\x10\x04R\rdeposited_usdR\vnet_pnl_usdB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x12total_realized_usd\x18\a \x01(\x01R\x10totalRealizedUsd\x12a\n" +
+	"\requity_by_ccy\x18\b \x03(\v2=.nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntryR\vequityByCcy\x1a>\n" +
+	"\x10EquityByCcyEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01J\x04\b\x01\x10\x02J\x04\b\x03\x10\x04R\rdeposited_usdR\vnet_pnl_usdB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_account_proto_rawDescOnce sync.Once
@@ -2142,7 +2155,7 @@ func file_dashboardv1_account_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_account_proto_rawDescData
 }
 
-var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_dashboardv1_account_proto_goTypes = []any{
 	(*KnowledgeEntry)(nil),                  // 0: nox.dashboard.v1.KnowledgeEntry
 	(*ListKnowledgeEntriesRequest)(nil),     // 1: nox.dashboard.v1.ListKnowledgeEntriesRequest
@@ -2174,31 +2187,33 @@ var file_dashboardv1_account_proto_goTypes = []any{
 	(*FinanceIncomeRow)(nil),                // 27: nox.dashboard.v1.FinanceIncomeRow
 	(*FinanceFlowRow)(nil),                  // 28: nox.dashboard.v1.FinanceFlowRow
 	(*GetFinanceOverviewResponse)(nil),      // 29: nox.dashboard.v1.GetFinanceOverviewResponse
-	(*timestamppb.Timestamp)(nil),           // 30: google.protobuf.Timestamp
+	nil,                                     // 30: nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
+	(*timestamppb.Timestamp)(nil),           // 31: google.protobuf.Timestamp
 }
 var file_dashboardv1_account_proto_depIdxs = []int32{
-	30, // 0: nox.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
-	30, // 1: nox.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
+	31, // 0: nox.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
+	31, // 1: nox.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: nox.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> nox.dashboard.v1.KnowledgeEntry
-	30, // 3: nox.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	30, // 4: nox.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	31, // 3: nox.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	31, // 4: nox.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
 	10, // 5: nox.dashboard.v1.ListKBEntriesResponse.entries:type_name -> nox.dashboard.v1.KBEntry
 	3,  // 6: nox.dashboard.v1.ListDailyIncomeResponse.items:type_name -> nox.dashboard.v1.PositionDailyIncome
-	30, // 7: nox.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
+	31, // 7: nox.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
 	21, // 8: nox.dashboard.v1.AccountInfo.holdings:type_name -> nox.dashboard.v1.Holding
-	30, // 9: nox.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
+	31, // 9: nox.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
 	19, // 10: nox.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> nox.dashboard.v1.AccountMarginStatus
 	17, // 11: nox.dashboard.v1.ListAccountsResponse.accounts:type_name -> nox.dashboard.v1.AccountInfo
-	30, // 12: nox.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
-	30, // 13: nox.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
+	31, // 12: nox.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
+	31, // 13: nox.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
 	26, // 14: nox.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> nox.dashboard.v1.FinancePnlByEnv
 	27, // 15: nox.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> nox.dashboard.v1.FinanceIncomeRow
 	28, // 16: nox.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> nox.dashboard.v1.FinanceFlowRow
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	30, // 17: nox.dashboard.v1.GetFinanceOverviewResponse.equity_by_ccy:type_name -> nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_account_proto_init() }
@@ -2212,7 +2227,7 @@ func file_dashboardv1_account_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_account_proto_rawDesc), len(file_dashboardv1_account_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   30,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

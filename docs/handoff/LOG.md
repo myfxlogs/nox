@@ -945,3 +945,9 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **⑤binance spot user-ws**：根因=续租 ping 复用 start 的 ws-api ctrl 长连，30min idle 被断管→broken-pipe→无谓全量重连；修=续租每拍拨短连一用一弃。
 - **⑥目标款消失提案**：`ExpireProposalsOutsideVenues`（tid+venue 集外 CAS 过期）挂 idleGapScan 拍尾——cash_mgmt 提案 pool 不再闲/尘阈以下同拍 expired 不挂 SLA。
 - **binance:funding=0 落行偏差如实记**：binance funding 钱包官方废面已摘除（0182 删行+分支死码清退），无配置行=无读径→不落行（写即臆造）；fossil 行保留。若 SG 要 0 行封口须另立径。
+
+## 2026-10-15 NAV 按结算币种分账 D-522（实施席）
+- **SumNav/ComputeNav**：池按 currency 分桶→`ByCcy map[ccy]{Nav,Idle}`（USD/USDT 各桶，跨币永不加总 D-285；其余币种池 SkippedNonUSD 计数不计）；NavUSD/IdleUSD=USD 桶别名兼容旧面。
+- **fin_nav_daily**：迁移 1026 PK 升 (day_start,currency)（存量 USD-only 行 currency='USD' 不迁）；DailyCut 按桶分行落、venues jsonb 按币种分组；LatestNavDaily 返最新日全币种行。
+- **配置器 derive 键=结算币种**：`gate.StrategySettleCcy` 注册面（ExecTemplates→腿 InvestCcy、EarnTemplates→USDT、XASSET_CARRY/SWAPARB/CARRY→USD；未注册名回退 USD 桶+log——历史单桶语义保留不致存量策略断供）；每组 share=min(maxNotional, nav_ccy×(1−reserve)/组数)，桶缺席=0 预算行 fail-closed；derived_from 带 ccy/nav_ccy/live_count_ccy。
+- **消费面同迁**：deptreport 日报 NAV 行按币种分行；finance_overview proto 加 `equity_by_ccy` map（buf regen）；投资人页 NAV 卡下按币种分行展示。

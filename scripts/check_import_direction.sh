@@ -125,6 +125,7 @@ internal/portfolio/capitalview -> internal/data/venue
 internal/portfolio/capitalview -> internal/data/keydomain
 internal/portfolio/capitalview -> internal/ledger/reconcile
 internal/portfolio/capitalview -> internal/store/pgstore
+internal/portfolio/budget -> internal/risk/gate
 internal/portfolio/idle -> internal/ir/inboxfmt
 internal/portfolio/idle -> internal/store/pgstore
 internal/portfolio/trxvote -> internal/platform/safego

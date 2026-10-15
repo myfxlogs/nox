@@ -219,4 +219,5 @@ var migrationFiles = []struct {
 	{1023, migrations.GapKindExecutorSQL, false},              // idle 缺口扫描：gap kind 放 executor
 	{1024, migrations.ProposalPendingVenueSQL, false},         // earn 多 venue 化：pending 唯一锚加 venue
 	{1025, migrations.GateEarnConfigSQL, false},               // D-523③：gate:earn 配置行回种
+	{1026, migrations.NavDailyCcySQL, false},                  // D-522：fin_nav_daily PK 升 (day_start,currency)
 }

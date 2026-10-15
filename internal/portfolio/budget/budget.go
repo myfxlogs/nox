@@ -15,8 +15,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"time"
 
+	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 )
 
@@ -40,21 +42,34 @@ func ReservePctOf(cons []pgstore.CapabilityConstraint) float64 {
 }
 
 // derive 纯函数：每 live 策略预算额（零 live → 空 map）。
-func derive(nav, reservePct, maxNotional float64, live []string) map[string]float64 {
+// D-522③：按结算币种分组 derive——策略预算只吃同币种 NAV 桶（USD 策略吃 USD 桶、
+// USDT 策略吃 USDT 桶，跨币永不加总 D-285）；结算币种未知=fail-closed 跳过不产预算。
+func derive(navByCcy map[string]pgstore.NavBucket, reservePct, maxNotional float64, live []string, ccyOf func(string) (string, bool)) map[string]float64 {
 	out := make(map[string]float64, len(live))
-	if len(live) == 0 || nav <= 0 {
-		return out
-	}
-	deployable := nav * (1 - reservePct/100)
-	if deployable < 0 {
-		deployable = 0
-	}
-	share := deployable / float64(len(live))
-	if share > maxNotional {
-		share = maxNotional
-	}
+	byCcy := map[string][]string{}
 	for _, s := range live {
-		out[s] = share
+		ccy, ok := ccyOf(s)
+		if !ok {
+			// 注册面未载 → USD 桶（历史单桶语义保留——CFD/MT 轨结算户皆 USD；
+			// 显式 fail-closed 只留给「桶缺席」而非「名未注册」，不致存量策略断供）。
+			log.Printf("[budget] %s 结算币种未注册——回退 USD 桶", s)
+			ccy = "USD"
+		}
+		byCcy[ccy] = append(byCcy[ccy], s)
+	}
+	for ccy, group := range byCcy {
+		bucket := navByCcy[ccy] // 缺席桶=零值→deployable=0 预算 0（fail-closed 不放无本预算）
+		deployable := bucket.Nav * (1 - reservePct/100)
+		if deployable < 0 {
+			deployable = 0
+		}
+		share := deployable / float64(len(group))
+		if share > maxNotional {
+			share = maxNotional
+		}
+		for _, s := range group {
+			out[s] = share
+		}
 	}
 	return out
 }
@@ -68,12 +83,27 @@ func DailyCut(ctx context.Context, s Store, now, dayStart time.Time, maxNotional
 	if err != nil {
 		return fmt.Errorf("nav 计算败（日切拒落）: %w", err)
 	}
-	venues, _ := json.Marshal(nav.Pools)
-	if err := s.UpsertNavDaily(ctx, pgstore.NavDailyRow{
-		DayStart: dayStart, NavUSD: nav.NavUSD, IdleUSD: nav.IdleUSD,
-		Venues: venues, ComputedAt: nav.ComputedAt,
-	}); err != nil {
-		return err
+	// D-522①：fin_nav_daily 按结算币种分行（PK=day_start×ccy；venues 按币种分组）。
+	ccys := make([]string, 0, len(nav.ByCcy))
+	for c := range nav.ByCcy {
+		ccys = append(ccys, c)
+	}
+	sort.Strings(ccys)
+	for _, ccy := range ccys {
+		bucket := nav.ByCcy[ccy]
+		var ccyPools []pgstore.ExplorerIdlePool
+		for _, p := range nav.Pools {
+			if p.Currency == ccy && !p.Ghost {
+				ccyPools = append(ccyPools, p)
+			}
+		}
+		venues, _ := json.Marshal(ccyPools)
+		if err := s.UpsertNavDaily(ctx, pgstore.NavDailyRow{
+			DayStart: dayStart, Currency: ccy, NavUSD: bucket.Nav, IdleUSD: bucket.Idle,
+			Venues: venues, ComputedAt: nav.ComputedAt,
+		}); err != nil {
+			return err
+		}
 	}
 	live, err := s.ListStrategiesByState(ctx, "live")
 	if err != nil {
@@ -84,12 +114,27 @@ func DailyCut(ctx context.Context, s Store, now, dayStart time.Time, maxNotional
 		return fmt.Errorf("约束读败: %w", err)
 	}
 	reservePct := ReservePctOf(cons)
-	allocs := derive(nav.NavUSD, reservePct, maxNotional, live)
+	// D-522③：derive 键=策略结算币种（gate.StrategySettleCcy 注册面；未知币种 fail-closed）。
+	settleOf := map[string]string{}
+	allocs := derive(nav.ByCcy, reservePct, maxNotional, live, gate.StrategySettleCcy)
+	for _, st := range live {
+		if c, ok := gate.StrategySettleCcy(st); ok {
+			settleOf[st] = c
+		}
+	}
 	now2 := time.Now()
 	for strategy, usd := range allocs {
+		ccy := settleOf[strategy]
+		var groupN int
+		for _, s2 := range live {
+			if settleOf[s2] == ccy {
+				groupN++
+			}
+		}
 		from, _ := json.Marshal(map[string]any{
-			"nav_usd": nav.NavUSD, "reserve_pct": reservePct, "live_count": len(live),
-			"max_notional": maxNotional, "rule": "min(maxNotional, nav*(1-reserve)/liveCount)",
+			"ccy": ccy, "nav_ccy": nav.ByCcy[ccy].Nav, "reserve_pct": reservePct,
+			"live_count_ccy": groupN,
+			"max_notional":   maxNotional, "rule": "min(maxNotional, nav_ccy*(1-reserve)/liveCountCcy)",
 		})
 		if err := s.UpsertStrategyBudget(ctx, pgstore.StrategyBudget{
 			Strategy: strategy, BudgetUSD: usd, DerivedFrom: from, UpdatedAt: now2,
@@ -97,7 +142,7 @@ func DailyCut(ctx context.Context, s Store, now, dayStart time.Time, maxNotional
 			return err
 		}
 	}
-	log.Printf("[budget] 日切 nav=%.0f idle=%.0f live=%d 预算落 %d 行", nav.NavUSD, nav.IdleUSD, len(live), len(allocs))
+	log.Printf("[budget] 日切 ccy=%d 桶 live=%d 预算落 %d 行", len(ccys), len(live), len(allocs))
 	return nil
 }
 

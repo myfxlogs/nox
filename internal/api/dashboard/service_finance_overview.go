@@ -53,13 +53,14 @@ func (s *Service) buildFinanceOverview(ctx context.Context) (*v1.GetFinanceOverv
 	if err != nil {
 		return nil, err
 	}
-	equity, skippedNonUSD := s.equityTotalUSD(ctx)
+	equity, skippedNonUSD, byCcy := s.equityTotalUSD(ctx)
 	if skippedNonUSD > 0 {
-		log.Printf("[finance] overview: %d 个非 USD 计价账户跳过未计权益（诚实口径，不做假换算）", skippedNonUSD)
+		log.Printf("[finance] overview: %d 个非 USD/USDT 计价账户跳过未计权益（诚实口径，不做假换算）", skippedNonUSD)
 	}
 
 	resp := &v1.GetFinanceOverviewResponse{
 		TotalEquityUsd: equity,
+		EquityByCcy:    byCcy, // D-522④：投资人页 NAV 分币种双行
 	}
 	var totalRealized float64
 	for _, r := range pnls {
@@ -90,14 +91,18 @@ func (s *Service) buildFinanceOverview(ctx context.Context) (*v1.GetFinanceOverv
 // equityTotalUSD —— D-264 M4.4②：改读 pgstore.ComputeNav 单函数（NAV 口径单源，
 // deptreport/fin_nav_daily/配置器同径）。快照表写口已过滤 real-only（D-006 径——
 // cex=!Simulated / cfd=venue∈is_real 键集），本层不重复筛；非 USD 池跳过+计数透传。
-func (s *Service) equityTotalUSD(ctx context.Context) (total float64, skippedNonUSD int) {
+func (s *Service) equityTotalUSD(ctx context.Context) (total float64, skippedNonUSD int, byCcy map[string]float64) {
 	if s.store == nil {
-		return 0, 0 // 未接线（测试）→ 诚实零值
+		return 0, 0, nil // 未接线（测试）→ 诚实零值
 	}
 	nav, err := s.store.ComputeNav(ctx, time.Now())
 	if err != nil {
 		log.Printf("[finance] overview: nav 读取失败，权益按零值报（诚实口径不假数）: %v", err)
-		return 0, 0
+		return 0, 0, nil
 	}
-	return nav.NavUSD, nav.SkippedNonUSD
+	byCcy = map[string]float64{}
+	for c, b := range nav.ByCcy {
+		byCcy[c] = b.Nav
+	}
+	return nav.NavUSD, nav.SkippedNonUSD, byCcy
 }

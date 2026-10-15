@@ -1,5 +1,7 @@
 package gate
 
+import "strings"
+
 // ExecTemplates 可执行提案模板→腿映射（D-189：提案模板=腿子集；
 // 新模板增 legs 在此登记，venue 悬空自检与执行入口同源消费——M2.4 自 dciexec 移入，
 // oppmatch 读径 require research↛trading 红线，模板组成属闸域件）。
@@ -36,4 +38,22 @@ func ExecTemplateVenues() map[string]string {
 		out[t] = "binance" // earn 写径当前仅 binance（okx earn 未接）
 	}
 	return out
+}
+
+// StrategySettleCcy D-522③：策略结算币种读口——derive 键取模板注册面不硬编。
+// ExecTemplates→腿 InvestCcy（dci_buy_low→USDT、sell_high→BTC）；EarnTemplates→USDT
+// （earn 申购定值域）；MT/CFD 轨=USD 保证金结算户。未知策略→false（预算面 fail-closed）。
+func StrategySettleCcy(strategy string) (string, bool) {
+	low := strings.ToLower(strategy)
+	if legs, ok := ExecTemplates[low]; ok && len(legs) > 0 {
+		return legs[0].InvestCcy, true
+	}
+	if EarnTemplates[low] {
+		return "USDT", true
+	}
+	switch strings.ToUpper(strategy) {
+	case "XASSET_CARRY", "SWAPARB", "CARRY":
+		return "USD", true
+	}
+	return "", false
 }

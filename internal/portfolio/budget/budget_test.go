@@ -13,16 +13,30 @@ import (
 
 // TestM44_Derive 纯函数推导锚：deployable=nav×(1−reserve)；per=min(maxNotional,均分)。
 func TestM44_Derive(t *testing.T) {
-	got := derive(10000, 30, 1000, []string{"SWAPARB", "MEANREVERT"})
+	usd := map[string]pgstore.NavBucket{"USD": {Nav: 10000}}
+	got := derive(usd, 30, 1000, []string{"SWAPARB", "MEANREVERT"}, gate.StrategySettleCcy)
 	if got["SWAPARB"] != 1000 || got["MEANREVERT"] != 1000 { // 7000/2=3500>cap→1000
 		t.Fatalf("cap 生效错: %v", got)
 	}
-	got = derive(4000, 30, 1000, []string{"A", "B", "C", "D"})
-	if got["A"] != 700 { // 2800/4=700<cap→700
+	got = derive(map[string]pgstore.NavBucket{"USD": {Nav: 4000}}, 30, 1000,
+		[]string{"A", "B", "C", "D"}, gate.StrategySettleCcy)
+	if got["A"] != 700 { // 2800/4=700<cap→700（未注册名回退 USD 桶）
 		t.Fatalf("均分生效错: %v", got)
 	}
-	if len(derive(10000, 30, 1000, nil)) != 0 {
+	if len(derive(usd, 30, 1000, nil, gate.StrategySettleCcy)) != 0 {
 		t.Fatal("零 live 应空")
+	}
+	// D-522③：分币种 derive——USDT 策略吃 USDT 桶不吃 USD 桶。
+	both := map[string]pgstore.NavBucket{"USD": {Nav: 10000}, "USDT": {Nav: 5000}}
+	got = derive(both, 0, 1e9, []string{"SWAPARB", "cash_mgmt"}, gate.StrategySettleCcy)
+	if got["SWAPARB"] != 10000 || got["cash_mgmt"] != 5000 {
+		t.Fatalf("分币 derive 错: %v", got)
+	}
+	// USDT 桶缺席 → cash_mgmt 预算=0 行（无本不放预算）。
+	got = derive(map[string]pgstore.NavBucket{"USD": {Nav: 10000}}, 0, 1e9,
+		[]string{"cash_mgmt"}, gate.StrategySettleCcy)
+	if got["cash_mgmt"] != 0 {
+		t.Fatalf("缺席桶应零预算: %v", got)
 	}
 }
 
@@ -64,10 +78,11 @@ func TestM44_DailyCut(t *testing.T) {
 		t.Fatalf("DailyCut: %v", err)
 	}
 	// nav=6000+4000=10000（EUR 池跳过）；idle=8000；deployable=7000/2=3500→cap 1000
-	row, ok, err := st.LatestNavDaily(ctx)
-	if err != nil || !ok {
-		t.Fatalf("nav 行缺席: ok=%v err=%v", ok, err)
+	rows, err := st.LatestNavDaily(ctx)
+	if err != nil || len(rows) != 1 || rows[0].Currency != "USD" {
+		t.Fatalf("nav 行错: %v %v", rows, err)
 	}
+	row := rows[0]
 	if row.NavUSD != 10000 || row.IdleUSD != 8000 {
 		t.Fatalf("nav/idle 错: %.0f/%.0f", row.NavUSD, row.IdleUSD)
 	}
@@ -93,9 +108,9 @@ func TestM44_DailyCut(t *testing.T) {
 	if err := DailyCut(ctx, st, now, dayStart, 1000); err != nil {
 		t.Fatalf("DailyCut 复跑: %v", err)
 	}
-	row2, _, _ := st.LatestNavDaily(ctx)
-	if row2.NavUSD != 6000 {
-		t.Fatalf("幂等覆盖错: %.0f", row2.NavUSD)
+	rows2, _ := st.LatestNavDaily(ctx)
+	if len(rows2) != 1 || rows2[0].NavUSD != 6000 {
+		t.Fatalf("幂等覆盖错: %v", rows2)
 	}
 }
 
@@ -159,5 +174,55 @@ func TestM44_BudgetGate_Submit(t *testing.T) {
 	res = g.Submit(ctx, mk(9000))
 	if res.Status != "REJECTED" || !strings.Contains(res.Reason, "预算") {
 		t.Fatalf("超额应拒: %s %s", res.Status, res.Reason)
+	}
+}
+
+// TestD522_NavCcySplit 分账锚：USDT 池归 USDT 桶——nav_daily 双行、earn 提案预算
+// 吃 USDT 桶、USD 策略不被稀释（跨币永不加总）。
+func TestD522_NavCcySplit(t *testing.T) {
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
+	ctx := context.Background()
+	if _, err := st.Pool().Exec(ctx, `TRUNCATE fin_nav_daily, fin_strategy_budget, fin_strategy,
+		fin_venue_account_snapshot, fin_capability_constraint, autotrade_state, strategy_stats CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	defer func() {
+		_, _ = st.Pool().Exec(ctx, `TRUNCATE fin_nav_daily, fin_strategy_budget, fin_strategy,
+			fin_venue_account_snapshot, fin_capability_constraint, autotrade_state, strategy_stats CASCADE`)
+	}()
+	now := time.Now()
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_venue_account_snapshot
+		(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at) VALUES
+		('mtacct','mt5',4247,4247,4247,'USD',$1),('okx','unified',7794,7794,7794,'USDT',$1)`, now); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO broker_accounts (venue, venue_type, host, port, password, is_real)
+		VALUES ('mtacct','mt5','h',443,'p',true) ON CONFLICT (venue) DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _, _ = st.Pool().Exec(ctx, `DELETE FROM broker_accounts WHERE venue='mtacct'`) }()
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_strategy (strategy, state) VALUES
+		('XASSET_CARRY','live'),('cash_mgmt','live')`); err != nil {
+		t.Fatal(err)
+	}
+	dayStart := time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)
+	if err := DailyCut(ctx, st, now, dayStart, 1e9); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := st.LatestNavDaily(ctx)
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("应双行: %v %v", rows, err)
+	}
+	if rows[0].Currency != "USD" || rows[1].Currency != "USDT" ||
+		rows[0].NavUSD != 4247 || rows[1].NavUSD != 7794 {
+		t.Fatalf("分账行错: %+v", rows)
+	}
+	xb, _, _ := st.GetStrategyBudget(ctx, "XASSET_CARRY")
+	cb, _, _ := st.GetStrategyBudget(ctx, "cash_mgmt")
+	if xb == nil || cb == nil || xb.BudgetUSD != 4247 || cb.BudgetUSD != 7794 {
+		t.Fatalf("预算错: xb=%v cb=%v", xb, cb)
+	}
+	if !strings.Contains(string(cb.DerivedFrom), `"ccy": "USDT"`) {
+		t.Fatalf("derived_from 缺币种键: %s", cb.DerivedFrom)
 	}
 }

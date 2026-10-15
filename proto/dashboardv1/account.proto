@@ -216,4 +216,6 @@ message GetFinanceOverviewResponse {
   repeated FinanceIncomeRow income_by_kind = 5;
   repeated FinanceFlowRow flows = 6;  // ts 倒序 LIMIT 200
   double total_realized_usd = 7;      // D-508 S8：Σ pnl_by_env.realized_pnl（前端直读不再聚合）
+  // D-522④：NAV 按结算币种分账（USD/USDT 各键，跨币永不加总——total_equity_usd 保留=USD 桶）。
+  map<string, double> equity_by_ccy = 8;
 }
