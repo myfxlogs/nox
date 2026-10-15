@@ -92,11 +92,35 @@ func meanOf(v []float64) float64 {
 	return s / float64(len(v))
 }
 
+// depthStaleNote 化石标：产者=cex_depth_sampler 已于 10-07 撤除（D-103 观察窗满收口，
+// 非故障）——D-531 裁定接流产者不复建（观察窗已毕，复建属新需求另票），facts 残值
+// 保留作历史只读。最新样本龄超阈即在章首如实标注数据截止日——不冒充现值。
+const depthStaleAfter = 48 * time.Hour
+
+func depthStaleNote(rows []pgstore.DepthFact, now time.Time) string {
+	var latest time.Time
+	for _, r := range rows {
+		if r.Ts.After(latest) {
+			latest = r.Ts
+		}
+	}
+	if latest.IsZero() || now.Sub(latest) <= depthStaleAfter {
+		return ""
+	}
+	return fmt.Sprintf("〔数据化石：深度采样器已撤（D-103 收口），最新样本 %s——下表为历史残值非现值〕\n",
+		latest.Format("01-02"))
+}
+
 // depthWeeklyTable 周报「三所深度（近 7 日）」表：每 venue×symbol 均值/中位/p10/p90/最差时点；
 // 零行对标无此对；拍数<4 注采样中（不猜分布）。
 func depthWeeklyTable(rows []pgstore.DepthFact) string {
-	cells := groupDepth(rows)
+	return depthWeeklyTableAt(rows, time.Now())
+}
+
+func depthWeeklyTableAt(rows []pgstore.DepthFact, now time.Time) string {
 	var b strings.Builder
+	b.WriteString(depthStaleNote(rows, now))
+	cells := groupDepth(rows)
 	keys := make([]string, 0, len(cells))
 	for k := range cells {
 		keys = append(keys, k)
@@ -136,10 +160,15 @@ func depthWeeklyTable(rows []pgstore.DepthFact) string {
 
 // depthDailyLine 日报一行快照：当窗各 venue×symbol 中位深度/点差；零行=无此对；全空=采样中。
 func depthDailyLine(rows []pgstore.DepthFact) string {
+	return depthDailyLineAt(rows, time.Now())
+}
+
+func depthDailyLineAt(rows []pgstore.DepthFact, now time.Time) string {
 	cells := groupDepth(rows)
 	if len(cells) == 0 {
 		return "三所深度当日: 采样中（0 拍）"
 	}
+	note := depthStaleNote(rows, now)
 	var parts []string
 	for _, sym := range []string{"XAUT", "PAXG"} {
 		for _, v := range []string{"binance", "gate", "okx"} {
@@ -152,5 +181,5 @@ func depthDailyLine(rows []pgstore.DepthFact) string {
 				v, sym, medianOf(c.bid), medianOf(c.ask), medianOf(c.spread)))
 		}
 	}
-	return "三所深度当日: " + strings.Join(parts, " | ")
+	return "三所深度当日: " + note + strings.Join(parts, " | ")
 }

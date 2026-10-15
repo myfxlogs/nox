@@ -231,3 +231,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **取证**：①提案轨产物=fin_dci_order 行+fin_personal_position 表象行，从不写 `positions`（dciexec bookSettlement/earn 径核实）；actual_apr 提案族回写已由 dci settle 与 earn 池增量两径覆盖，不依赖仓位桥。②positions 全量=autotrade 引擎直产（dedup_key=combo.Key），request_id 属引擎幂等键域，与 fin_dci_order.request_id（dci|/earn| 域）结构性不相交；fin_proposal.params->>'position_id' 全库零写径。③carry/xasset 的实测-预实对照已在 settle 同点位（UpsertVerificationSample/UpdateStrategyStat/checkXassetPredictVsActual）——提案回链非其真值环载体。④(a) 路成立前置=提案驱动仓位执行轨（归属语义一提案一仓/多仓合并+schema+引擎改造），属 M 阶段方案级另票，现无轨可接。
 - **裁定**：carry/xasset 及一切 autotrade 直产仓永不经提案轨（引擎直产=终态语义）——如实封口径，删 `ProposalForClosedPosition` 回链读径+`ActualAPRWriter` 接口+adapter 双委托+编译断言+fake 锚测（死码全清，史实在 git）。settlement.go 挂点留注记指回链语义。
 - **重开条件**：提案驱动仓位轨立项（a 路）时此桥随件重建——届时须先裁「提案→仓位」归属语义并落 schema 裁决行。
+
+## D-531 spot_depth 产者死活裁决（D-103 收口撤除非故障）
+- **死因实锤**：git blame 定点 ab59fecde（10-07）——D-103「撤 cexscan 深度采样器」随 D-578 观察窗满收口删 depth_sampler.go，产者是按计划退役非断链故障；facts 行保留=终值快照（该 commit 明示保留读面）。
+- **裁定**：①接流产者**不复建**——WS book 流接产属新需求另票（D-004 禁回退 REST 轮询）；②sysretro 深度段改化石标——最新样本龄>48h 章首标「数据化石+截止日」（depth_section.go 周报表+日报行同挂）；③facts 旧行**保留**——历史只读不删（D-103 同口径）。
+- **次缺陷留痕**：消费面读化石 8 天零告警=D-033 自盯未捕（残值非错值，告警判据无「数据龄」维——数据源撤除须同帧评估消费面为新增规则）。
