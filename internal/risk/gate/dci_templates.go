@@ -27,15 +27,26 @@ func IsExecTemplate(tid string) bool {
 	return EarnTemplates[tid]
 }
 
-// ExecTemplateVenues 可执行提案模板→执行 venue（D-193① venue 悬空自检数据源；
-// 本 executor=binance 单所写径——venue 集从腿面衍生非手抄）。
-func ExecTemplateVenues() map[string]string {
-	out := make(map[string]string, len(ExecTemplates)+len(EarnTemplates))
+// DCIExecVenues DCI 腿族执行轨覆盖 venue 集（GoProposal 分派面：
+// binance=tryLeg、okx=tryLegOKX；新 venue 接径在此补名——oppmatch 提案
+// 枚举与 venue 悬空自检同源消费）。
+var DCIExecVenues = map[string]bool{"binance": true, "okx": true}
+
+// EarnExecVenues earn 族执行轨覆盖 venue 集（dciexec.earnRail 分派面：
+// binance/okx/gate 三径；新 venue 接径在此补名——同上双消费面同源）。
+var EarnExecVenues = map[string]bool{"binance": true, "okx": true, "gate": true}
+
+// ExecTemplateVenueSets 可执行提案模板→执行轨 venue 覆盖集（D-193① venue
+// 悬空自检数据源）。语义=「模板声明凭据 venue ∈ rail 覆盖集」——earn/DCI
+// rail 已多 venue 化，提案 venue 在覆盖集内由执行器按 venue 路由（旧单
+// venue 映射把 okx:spot 凭据判悬空=漂移误报源）。
+func ExecTemplateVenueSets() map[string]map[string]bool {
+	out := make(map[string]map[string]bool, len(ExecTemplates)+len(EarnTemplates))
 	for t := range ExecTemplates {
-		out[t] = "binance"
+		out[t] = DCIExecVenues
 	}
 	for t := range EarnTemplates {
-		out[t] = "binance" // earn 写径当前仅 binance（okx earn 未接）
+		out[t] = EarnExecVenues
 	}
 	return out
 }

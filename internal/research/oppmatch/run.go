@@ -7,15 +7,26 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"time"
 
 	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 )
 
-// dciProposalVenues dci 族提案 venue 枚举——报价面采集在跑的 venue 各出
-// 独立提案（fin_cex_dci_quote venue 维度；新 venue 采集接入加列即可）。
-var dciProposalVenues = []string{"binance", "okx"}
+// dciProposalVenues dci 族提案 venue 枚举——执行轨覆盖集各出独立提案
+// （fin_cex_dci_quote venue 维度；gate.DCIExecVenues 单源衍生排序定序）。
+var dciProposalVenues = sortedVenues(gate.DCIExecVenues)
+
+// sortedVenues venue 集→排序切片（提案枚举/保活键确定性——map 序不定）。
+func sortedVenues(set map[string]bool) []string {
+	out := make([]string, 0, len(set))
+	for v := range set {
+		out = append(out, v)
+	}
+	sort.Strings(out)
+	return out
+}
 
 // RunOnce 单轮匹配（日频调用）：提案=InsertAlert info（episode 闸天然防抖）；
 // 缺口=OpenConditionGap 幂等+RequestConditionGap（仅 open→requested 推一次）。
@@ -91,10 +102,15 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 		}
 		if len(r.Missing) == 0 {
 			// dci 族 venue 参化：同模板按 venue 各出独立提案（pending 幂等键
-			// template_id+venue）；其余族照旧 binance 单 venue。
+			// template_id+venue）；earn_apr_lending 按有 USDT 报价行的 rail
+			// venue 各出（报价所取 venue 如实写提案——跨 venue 顶档价配错
+			// venue 轨=错价出单面）；其余族照旧 binance 单 venue。
 			venues := []string{"binance"}
+			var venueAPR map[string]float64
 			if _, ok := gate.ExecTemplates[r.TemplateID]; ok {
 				venues = dciProposalVenues
+			} else if r.TemplateID == "earn_apr_lending" {
+				venues, venueAPR = earnQuoteVenues(ctx, st)
 			}
 			for _, venue := range venues {
 				if dormant[r.TemplateID+"@"+venue] {
@@ -115,25 +131,29 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 					gateNote = why
 				}
 				propN++
-				// 保活键=tid@venue 对；earn 族提案由 idleGapScan 分 venue 产
-				// （主环只产 binance）——earnExecVenues 各键都保活同旧语义。
+				// 保活键=tid@venue 对；earn 族提案 rail 覆盖集各键都保活同
+				// 旧语义（cash_mgmt 分 venue 由 idleGapScan 产/过期自管）。
 				liveVenues := venues
 				if gate.EarnTemplates[r.TemplateID] {
-					liveVenues = liveVenues[:0]
-					for v := range earnExecVenues {
-						liveVenues = append(liveVenues, v)
-					}
+					liveVenues = sortedVenues(gate.EarnExecVenues)
 				}
 				for _, lv := range liveVenues {
 					liveTmpls = append(liveTmpls, r.TemplateID+"@"+lv)
 				}
+				// earn_apr_lending 提案 venue=报价所取 venue——apr/证源随 venue
+				// 换（跨 venue 顶档价不贴别所提案，执行轨按 venue 路由不悬空）。
+				rv := r
+				if va, ok := venueAPR[venue]; ok {
+					rv.APR = &va
+					rv.GrossEvidence = fmt.Sprintf("fin_cex_earn_apr %s USDT 最新行", venue)
+				}
 				apr := "报价缺"
-				if r.APR != nil {
-					apr = fmt.Sprintf("apy=%.4g（venue原生口径）", *r.APR)
+				if rv.APR != nil {
+					apr = fmt.Sprintf("apy=%.4g（venue原生口径）", *rv.APR)
 				}
 				// 提案实体化——行即稳定 id（同模板 pending 复用），
 				// params=快照审计锚（执行时实时闸复验，非钉价）。
-				params := proposalParams(ctx, st, r, venue)
+				params := proposalParams(ctx, st, rv, venue)
 				if gateNote != "" {
 					params["gate_note"] = gateNote
 				}
@@ -145,7 +165,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 					log.Printf("[oppmatch] proposal row %s@%s: %v", r.TemplateID, venue, err)
 					continue
 				}
-				card := evalProposal(ctx, st, r, pid) // D-258 M4.1：一提案一卡（每扫一拍复算）
+				card := evalProposal(ctx, st, rv, pid) // D-258 M4.1：一提案一卡（每扫一拍复算）
 				streak, uerr := st.UpsertOppEval(ctx, card)
 				if uerr != nil {
 					log.Printf("[oppmatch] eval card proposal#%d: %v", pid, uerr)
@@ -235,10 +255,31 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	return propN, gapN, nil
 }
 
+// earnQuoteVenues earn_apr_lending 提案 venue 枚举：rail 覆盖集内有 USDT
+// 报价行的 venue 各出独立提案（报价所取 venue 如实写提案 venue——旧单 binance
+// venue+跨所顶档价=「okx 利率被 binance 轨执行」错 venue 错价面）。报价读败
+// venue 本拍不产（读败不臆造不静默——log 留痕）。
+func earnQuoteVenues(ctx context.Context, st *pgstore.Store) ([]string, map[string]float64) {
+	var venues []string
+	aprs := map[string]float64{}
+	for _, v := range sortedVenues(gate.EarnExecVenues) {
+		apr, ok, err := st.LatestEarnAPR(ctx, v, "USDT")
+		if err != nil {
+			log.Printf("[oppmatch] earn_apr %s 报价读败（本 venue 不产）: %v", v, err)
+			continue
+		}
+		if ok {
+			venues = append(venues, v)
+			aprs[v] = apr
+		}
+	}
+	return venues, aprs
+}
+
 // proposalParams 提案快照参数（审计锚非钉价）：dci 模板补最优档 product/strike/tenor
 // 快照；其余仅 apr——执行时实时闸复验为准（禁区：禁按提案时 strike 硬执行）。
 func proposalParams(ctx context.Context, st *pgstore.Store, r Result, venue string) map[string]any {
-	p := map[string]any{}
+	p := map[string]any{"venue": venue}
 	if r.APR != nil {
 		p["apr"] = *r.APR
 	}
