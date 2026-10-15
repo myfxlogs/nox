@@ -1065,3 +1065,11 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **ambient 依赖扫尾（票面③）**：oppmatch 全测试面 `fin_cex_spread` 读取者仅 `dciPremiumGate` 一径，eval 两锚皆自 TRUNCATE+自 seed 无依赖——零同类残留。
 - **拆分票**：`cex_account_subaccounts.go`（312→40 行只留分派）+`cex_account_okx_subaccounts.go`（218 行）+`cex_account_gate_subaccounts.go`（50 行）；测试随迁同名件，纯搬家零语义。`check-lines.sh` 全仓软警清零。
 - **机检**：reconcile/oppmatch/pgstore 包绿、reconcile -race 绿、全量 `go test ./...` EXIT=0、build/vet/gofmt 净、pre-commit 十道过；**CI run 38694601088 success**（业主令闭环：push 后自查绿）。
+
+## 2026-10-15 graduation 零合格断链取证（查证+裁决定件，零执行代码）→D-532
+
+- **拒因逐行分解**（SG scanned=127 全拒）：active 33=缺账 23+净额非正 6+天数不足 4；exited 94（14d窗）=缺账 68+净额非正 25+时长不足 1。**缺账 91/127=71.7% 是第一断链**——非判据过严，是簿/basis 列从未覆盖（票载「accrued<fee 结构性负」权重实低——22/33 active 已净正）。
+- **data_lost 58 归因**：非流死（universe 全 TRADING 新鲜、radar 每小时在跑）。①24 行 binance 交割腿——perp_delivery 轨上线即遇 mark/index 缺帧→miss≥3 退→重开→再退 churn（每合约 6 次重开实证）；②34 行 okx×binance 山寨 perp_perp——对侧行/funding 间歇缺席致 miss（funding 覆盖 745/882 缺口+「率源缺跳过 accrue」日志实证）。
+- **自盯次缺陷（票②预断命中）**：data_lost 58 行退出零告警（paperExitNote 只注 note）；warnMonitorBookAbsent 哨兵 6d 零推送——两自盯面未捕断链。
+- **裁定 D-532**（decisions.md）：修喂流自愈为主（立票①簿/账源覆盖查证②断链告警补口），qty_usd 名义额另票评估；all-in 判据/合格矩阵零动。
+- 交付=STATE 翻✅+D-532 裁定行+新立两票行；零代码改动故无机检项。

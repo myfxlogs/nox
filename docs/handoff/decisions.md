@@ -236,3 +236,14 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **死因实锤**：git blame 定点 ab59fecde（10-07）——D-103「撤 cexscan 深度采样器」随 D-578 观察窗满收口删 depth_sampler.go，产者是按计划退役非断链故障；facts 行保留=终值快照（该 commit 明示保留读面）。
 - **裁定**：①接流产者**不复建**——WS book 流接产属新需求另票（D-004 禁回退 REST 轮询）；②sysretro 深度段改化石标——最新样本龄>48h 章首标「数据化石+截止日」（depth_section.go 周报表+日报行同挂）；③facts 旧行**保留**——历史只读不删（D-103 同口径）。
 - **次缺陷留痕**：消费面读化石 8 天零告警=D-033 自盯未捕（残值非错值，告警判据无「数据龄」维——数据源撤除须同帧评估消费面为新增规则）。
+
+## D-532 graduation 零合格断链裁定（取证票收口——scanned=127 qualified=0 三因分解）
+
+- **拒因逐行分解**（SG 10-15，scanned=127=active 33+exited 窗内 94；首败归因按判据链序）：
+  active——缺账 23（basis NULL 23/est_fee NULL 19，cfd 轨 25 行全缺 monitor 簿）+全账净额非正 6+天数不足 4；
+  exited——缺账 68（exit 冻结收敛列 NULL：normalized 25/27、age_7d 6/6、adverse 3/3、data_lost 34/58）+净额非正 25+时长不足 1。
+  **缺账合计 91/127=71.7% 为第一断链**（venue 簿/basis 列从未覆盖，非判据过严）。
+- **data_lost 58 归因**（票②）：非采集死——universe last_seen 全 TRADING 新鲜、radar 每小时在跑。两簇：①24 行 binance 交割腿（BTCUSDT/ETHUSDT×4 合约各 6 次重开）——perp_delivery 轨 10-14 上线即遇 mark/index 缺帧（`futBySym` curOK 谓词不过）→miss≥3 退→重开→再退 churn；②34 行 okx×binance 山寨 perp_perp（ZAMA/ATOM/USELESS 等）——「任一侧缺席/nil」miss：funding 覆盖率缺口（binance 745/882）+对侧行间歇缺席，率源缺 accrue 跳过日志实证。
+- **D-033 自盯次缺陷命中**：data_lost 58 行退出零告警（`paperExitNote` 只注 note 无 alert 挂点）；`warnMonitorBookAbsent` 哨兵 6d 窗内零推送记录——两自盯面皆未捕断链。
+- **裁定**：修喂流自愈为主+仓位规模另票。①立票：cfd monitor 簿覆盖缺口→warn 推送实证接线核查（哨兵为何沉默）；delivery mark/index facts 缺帧自愈/缺即如实告警；②立票：data_lost 批量退聚合 warn（同毕业链聚合惯例，退出即推）；③qty_usd $1000→$2000+ 名义额档另票评估（accrued 22/33 已净正——费率衰减后 $1000 名义额边际，但缺账是闸门先修账）。
+- **不动项**：all-in 净额判据零动（D-468 账真）；graduation 合格矩阵零动；data_lost 仍不合格集外（失联截断非证据）。
