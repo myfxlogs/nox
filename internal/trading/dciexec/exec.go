@@ -49,6 +49,8 @@ type Store interface {
 	InsertPersonalPosition(ctx context.Context, asset, kind, priceSymbol, note string, qty *float64, openedAt *time.Time) (int64, error)
 	OutstandingDCIQty(ctx context.Context, venue, investCcy string) (float64, error)
 	ListOpenPersonalPositions(ctx context.Context) ([]pgstore.PersonalPosition, error)
+	// ListDCIOrders pending_disposal 清扫损益锚（DCI#id→原单 qty/underlying）。
+	ListDCIOrders(ctx context.Context, limit int) ([]pgstore.DCIOrder, error)
 	UpdatePersonalPositionQtyNote(ctx context.Context, id int64, qty float64, note string) error
 	OpenConditionGap(ctx context.Context, g *pgstore.ConditionGap) (int64, error)
 	RequestConditionGap(ctx context.Context, id int64) error
@@ -99,7 +101,9 @@ type Executor struct {
 	PositionsFn        func(ctx context.Context) ([]DCIPosition, error)                       // D-207 venue 持仓全列表（settle 观察；nil=实 GET）
 	SettledPositionsFn func(ctx context.Context) ([]DCIPosition, error)                       // M3-④ venue SETTLED 终态行全列表（settle 死端切源；nil=实 GET）
 	SpotSellFn         func(ctx context.Context, symbol string, qty float64) (float64, error) // D-517 接货市价卖回（nil=实 POST /v3/order）
-	KBDir              string                                                                 // 拒单消费闸：经验库条目目录（空=禁附行；读败 fail-open）
+	// SpotFiltersFn 测试注口（nil=实 GET /v3/exchangeInfo）：LOT_SIZE stepSize/minQty/prec。
+	SpotFiltersFn func(ctx context.Context, symbol string) (step, minQty float64, prec int, err error)
+	KBDir         string // 拒单消费闸：经验库条目目录（空=禁附行；读败 fail-open）
 }
 
 // kbSuffix 拒单消费闸：败因签名对拍经验库条目 → ` kb:<id> <summary>` 附行；

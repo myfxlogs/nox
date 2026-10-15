@@ -40,6 +40,9 @@ type residReconStore interface {
 	SumVenueIOExternal(ctx context.Context, venue, ccy string, from, to time.Time) (float64, error)
 	SumVenueIOTransfers(ctx context.Context, venue, ccy, wallet string, from, to time.Time) (float64, error)
 	SumIncomeForPool(ctx context.Context, venue, venueType, ccy string, from, to time.Time) (float64, error)
+	// SumDCISettleWindow DCI 交割腿（本拍窗内 settled：outflow=本金离 earn 池、
+	// inflow=本息到默认钱包——不可归因残差的自解释项）。
+	SumDCISettleWindow(ctx context.Context, venue, ccy string, from, to time.Time) (outflow, inflow float64, err error)
 	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
 }
 
@@ -103,8 +106,21 @@ func (r *ResidualRecon) evaluate(ctx context.Context, sn *pgstore.VenueAccountSn
 	if err != nil {
 		return fmt.Errorf("income: %w", err)
 	}
+	// DCI 交割补腿：本拍窗内 settled 行——earn 池本金离场计入 outflow
+	// （还本去向钱包端经 inflow 项对称解释，双侧同窗只对 settled_at 生效）。
+	dciOut, dciIn, err := r.store.SumDCISettleWindow(ctx, sn.Venue, ccy, prevTS, sn.FetchedAt)
+	if err != nil {
+		return fmt.Errorf("dci settle window: %w", err)
+	}
+	dciNet := 0.0
+	if sn.VenueType == "earn" {
+		dciNet -= dciOut // 本金离 earn 桶=权益正当下降（归进项）
+	}
+	if residReconVenueDepositWallet[sn.Venue] == sn.VenueType {
+		dciNet += dciIn // 本息落到充提钱包
+	}
 	delta := sn.EquityRaw - prev
-	residual := delta - external - transfers - income
+	residual := delta - external - transfers - income - dciNet
 	thr := 1.0
 	if t := 0.005 * absF(sn.EquityRaw); t > thr {
 		thr = t

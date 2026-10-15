@@ -137,6 +137,13 @@ func startDCISettle(ctx context.Context, ex *dciexec.Executor, refreshTopic *bus
 				} else if n > 0 {
 					log.Printf("[dci-settle] scan: %d 单交割翻态", n)
 				}
+				// pending_disposal 清扫（10-15 事故次生缺口：卖败留仓行无件再碰
+				// =永等人工）——同拍搭车，零新定时器。
+				if n, err := ex.SweepPendingDisposals(ctx); err != nil {
+					log.Printf("[dci-sweep] scan: %v", err)
+				} else if n > 0 {
+					log.Printf("[dci-sweep] scan: %d 留仓行已卖回", n)
+				}
 			}
 		}
 	})

@@ -12,9 +12,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"nox/internal/store/pgstore"
@@ -91,12 +93,20 @@ func (e *Executor) markPendingDisposal(ctx context.Context, o pgstore.FilledDCIO
 
 // spotMarketSell binance 现货市价卖（POST /v3/order MARKET SELL quantity）。
 // 返回 cummulativeQuoteQty=USDT 得额；测试注 SpotSellFn。
+// 10-15 生产事故修（DCI#11 接货 0.00433438 BTC 三次 -1013 LOT_SIZE 尽败滞留）：
+// 报量先对齐 venue LOT_SIZE 过滤器（stepSize floor；<minQty→fail-closed 留仓径）。
+// D-004 举证：LOT_SIZE 过滤器属 exchangeInfo 参考数据，binance spot WS 无任何
+// 频道承载（官方文档 WS 面仅 market/user-data 流），REST 低频拉取+进程内缓存合规。
 func (e *Executor) spotMarketSell(ctx context.Context, symbol string, qty float64) (float64, error) {
+	qty, err := e.spotLotFloor(ctx, symbol, qty)
+	if err != nil {
+		return 0, err
+	}
 	if e.SpotSellFn != nil {
 		return e.SpotSellFn(ctx, symbol, qty)
 	}
-	q := fmt.Sprintf("symbol=%s&side=SELL&type=MARKET&quantity=%.8f&timestamp=%d&recvWindow=5000",
-		symbol, qty, e.Now().UnixMilli())
+	q := fmt.Sprintf("symbol=%s&side=SELL&type=MARKET&quantity=%s&timestamp=%d&recvWindow=5000",
+		symbol, strconv.FormatFloat(qty, 'f', -1, 64), e.Now().UnixMilli())
 	url := fmt.Sprintf("%s/v3/order?%s&signature=%s",
 		strings.TrimRight(e.APIBase, "/"), q, sign(e.BnSec, q))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
@@ -124,4 +134,100 @@ func (e *Executor) spotMarketSell(ctx context.Context, symbol string, qty float6
 		return 0, fmt.Errorf("spot sell status=%s（非 FILLED——%s）", r.Status, string(b))
 	}
 	return strconv.ParseFloat(r.CummulativeQuoteQty, 64)
+}
+
+// spotLotFilter 进程内过滤器缓存（exchangeInfo 参考数据——venue 不改不刷；
+// 缓存只对 magnitude 负责，精度变化 venue 侧几乎不发生）。
+type spotLotFilter struct {
+	step, minQty float64
+	prec         int
+}
+
+var spotLotCache sync.Map // symbol → spotLotFilter
+
+// spotLotFloor 报量对齐 LOT_SIZE：floor(qty/step)×step；步进后 <minQty 或过滤
+// 器读败 → fail-closed 返错（上层走 pending_disposal 留仓径，不臆造报量）。
+func (e *Executor) spotLotFloor(ctx context.Context, symbol string, qty float64) (float64, error) {
+	step, minQty, prec, err := e.spotFilters(ctx, symbol)
+	if err != nil {
+		return 0, fmt.Errorf("spot filters %s: %w", symbol, err)
+	}
+	floored := math.Floor(qty/step+1e-12) * step
+	floored = math.Round(floored*math.Pow10(prec)) / math.Pow10(prec)
+	if floored < minQty {
+		return 0, fmt.Errorf("spot sell %s 步进后 %.8f < minQty %.8f（留仓径）", symbol, floored, minQty)
+	}
+	if floored <= 0 || floored > qty {
+		return 0, fmt.Errorf("spot sell %s 步进异常 %.8f（原 %.8f）", symbol, floored, qty)
+	}
+	return floored, nil
+}
+
+// spotFilters LOT_SIZE 读：测试注口优先；否则 exchangeInfo 实拉+进程缓存。
+func (e *Executor) spotFilters(ctx context.Context, symbol string) (step, minQty float64, prec int, err error) {
+	if e.SpotFiltersFn != nil {
+		return e.SpotFiltersFn(ctx, symbol)
+	}
+	if v, ok := spotLotCache.Load(symbol); ok {
+		f := v.(spotLotFilter)
+		return f.step, f.minQty, f.prec, nil
+	}
+	url := fmt.Sprintf("%s/v3/exchangeInfo?symbol=%s", strings.TrimRight(e.APIBase, "/"), symbol)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	resp, err := e.client().Do(req)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode/100 != 2 {
+		return 0, 0, 0, fmt.Errorf("exchangeInfo HTTP %d: %s", resp.StatusCode, string(b))
+	}
+	var r struct {
+		Symbols []struct {
+			Filters []struct {
+				FilterType string `json:"filterType"`
+				MinQty     string `json:"minQty"`
+				StepSize   string `json:"stepSize"`
+			} `json:"filters"`
+		} `json:"symbols"`
+	}
+	if err := json.Unmarshal(b, &r); err != nil || len(r.Symbols) == 0 {
+		return 0, 0, 0, fmt.Errorf("exchangeInfo %s 解析: %v", symbol, err)
+	}
+	for _, f := range r.Symbols[0].Filters {
+		if f.FilterType != "LOT_SIZE" {
+			continue
+		}
+		step, _ = strconv.ParseFloat(f.StepSize, 64)
+		minQty, _ = strconv.ParseFloat(f.MinQty, 64)
+		prec = qtyPrec(f.StepSize)
+		break
+	}
+	if step <= 0 {
+		return 0, 0, 0, fmt.Errorf("exchangeInfo %s LOT_SIZE 缺（stepSize=%v）", symbol, step)
+	}
+	spotLotCache.Store(symbol, spotLotFilter{step: step, minQty: minQty, prec: prec})
+	return step, minQty, prec, nil
+}
+
+// qtyPrec stepSize 字符串 → 小数位（"0.00001000"→5；1e-8 科学计数亦容）。
+func qtyPrec(step string) int {
+	if i := strings.Index(step, "."); i >= 0 {
+		s := strings.TrimRight(step[i+1:], "0")
+		return len(s)
+	}
+	v, err := strconv.ParseFloat(step, 64)
+	if err != nil || v <= 0 {
+		return 8
+	}
+	p := 0
+	for v < 1 && p < 12 {
+		v *= 10
+		p++
+	}
+	return p
 }

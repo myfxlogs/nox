@@ -11,10 +11,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"nox/internal/store/pgstore"
@@ -207,6 +209,13 @@ func (e *Executor) disposeExerciseOKX(ctx context.Context, o pgstore.FilledDCIOr
 // `POST /trade/order {instId=ccy-USDT,tdMode:cash,side:sell,ordType:market,sz}`
 // →`GET /trade/order` 回执 accFillSz×avgPx=得额（venue 实拍键）。
 func okxMarketSell(ctx context.Context, rail *okxEarnRail, ccy string, qty float64) (float64, error) {
+	// 10-15 同型核查（binance -1013 LOT_SIZE 实证）：okx sz 亦受 lotSz/minSz 约束，
+	// 先 floor 再回划（划转量与报单量一致，尾零损耗留 funding 户）。
+	if fq, ferr := okxLotFloor(ctx, rail, strings.ToUpper(ccy)+"-USDT", qty); ferr != nil {
+		return 0, ferr
+	} else {
+		qty = fq
+	}
 	tb := fmt.Sprintf(`{"ccy":"%s","amt":"%s","from":"6","to":"18","type":"0"}`,
 		ccy, strconv.FormatFloat(qty, 'f', 8, 64))
 	if _, err := rail.req(ctx, http.MethodPost, "/api/v5/asset/transfer", tb); err != nil {
@@ -244,4 +253,43 @@ func okxMarketSell(ctx context.Context, rail *okxEarnRail, ccy string, qty float
 			orows[0].AccFillSz, orows[0].AvgPx)
 	}
 	return sz * px, nil
+}
+
+// okxLotCache instruments lotSz/minSz 进程内缓存（公共参考数据——D-004 举证：
+// OKX WS 无 instruments 频道，public/instruments REST 低频拉取合规）。
+var okxLotCache sync.Map // instId → [2]float64{lotSz, minSz}
+
+// okxLotFloor sz 对齐 lotSz（floor；<minSz 或读败→fail-closed 留仓径）。
+func okxLotFloor(ctx context.Context, rail *okxEarnRail, inst string, qty float64) (float64, error) {
+	if v, ok := okxLotCache.Load(inst); ok {
+		f := v.([2]float64)
+		return okxFloorApply(inst, f[0], f[1], qty)
+	}
+	data, err := rail.req(ctx, http.MethodGet,
+		"/api/v5/public/instruments?instType=SPOT&instId="+inst, "")
+	if err != nil {
+		return 0, fmt.Errorf("okx instruments %s: %w", inst, err)
+	}
+	var rows []struct {
+		LotSz string `json:"lotSz"`
+		MinSz string `json:"minSz"`
+	}
+	if json.Unmarshal(data, &rows) != nil || len(rows) == 0 {
+		return 0, fmt.Errorf("okx instruments %s 解析/零行: %s", inst, string(data))
+	}
+	lot, _ := strconv.ParseFloat(rows[0].LotSz, 64)
+	mn, _ := strconv.ParseFloat(rows[0].MinSz, 64)
+	if lot <= 0 {
+		return 0, fmt.Errorf("okx instruments %s lotSz 缺（%q）", inst, rows[0].LotSz)
+	}
+	okxLotCache.Store(inst, [2]float64{lot, mn})
+	return okxFloorApply(inst, lot, mn, qty)
+}
+
+func okxFloorApply(inst string, lot, mn, qty float64) (float64, error) {
+	f := math.Floor(qty/lot+1e-12) * lot
+	if f < mn || f <= 0 {
+		return 0, fmt.Errorf("okx sell %s 步进后 %.8f 越 minSz %.8f（留仓径）", inst, f, mn)
+	}
+	return f, nil
 }
