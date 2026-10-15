@@ -1057,3 +1057,11 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **fixture 债清**：`TestBinanceEarnPositions` 补 dci 端点空桩+路径断言 3 件；`TestCEXAccount_OkxEarn` 补 dcd 空桩；`TestCEXAccount_OkxFunding` 翻页断言改全币枚举（D-528 改动遗留）。
 - **机检**：reconcile 包+race 绿；build/vet/gofmt 净；全量 `go test ./...` EXIT=0；pre-commit 过（subaccounts.go 312 行软警告系既有）。
 - **SG 验收残留**：部署后 earn/USDT 应回落 ~1598（1240.13+在仓 358）；`fin_dci_order` 台账↔快照 DCIOpenRefs 对拍随下拍核实；部署归复审席。
+
+## 2026-10-15 CI 红两症修 + 子账户拆分 @28e2af737 @6cdb6e840
+
+- **症①D514 鲜库必红**：`dciPremiumGate`（D-526）依赖 `fin_cex_spread` BTC 现货参照行，测试全件未 seed——共享库残留遮蔽致本地绿 CI 红。修=`d514Store` 播种 venue 标 `d514%` BTC 行（spot=90000，σ=0.001 界 ×0.992 罩住 strike=80000）+清理键。**鲜库实证**：新建 `ci_fresh_test` 空库 Migrate+三锚全绿。
+- **症②角色迁移竞态**：`CREATE ROLE` 系集簇级对象，v41/v1004 的 `IF NOT EXISTS` 检查-创建非原子——CI 并行测试库互撞 `pg_authid_rolname_index`。修=DO 块内嵌 `EXCEPTION WHEN duplicate_object THEN NULL`（1004+replay/0041 同改）。**并发实证**：`race_a_test`/`race_b_test` 双库同集群并行 Migrate 双绿。
+- **ambient 依赖扫尾（票面③）**：oppmatch 全测试面 `fin_cex_spread` 读取者仅 `dciPremiumGate` 一径，eval 两锚皆自 TRUNCATE+自 seed 无依赖——零同类残留。
+- **拆分票**：`cex_account_subaccounts.go`（312→40 行只留分派）+`cex_account_okx_subaccounts.go`（218 行）+`cex_account_gate_subaccounts.go`（50 行）；测试随迁同名件，纯搬家零语义。`check-lines.sh` 全仓软警清零。
+- **机检**：reconcile/oppmatch/pgstore 包绿、reconcile -race 绿、全量 `go test ./...` EXIT=0、build/vet/gofmt 净、pre-commit 十道过；**CI run 38694601088 success**（业主令闭环：push 后自查绿）。
