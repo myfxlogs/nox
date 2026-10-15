@@ -8,6 +8,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // VenueAccountSnapshot 账户余额快照行（原币值，currency 由 AccountMonitor 透传）。
@@ -113,4 +115,21 @@ func (s *Store) LatestVenueAccountSnapshots(ctx context.Context) ([]VenueAccount
 			dst.BalanceRaw, dst.EquityRaw, dst.FreeMarginRaw, dst.BufferMultiple, dst.FetchedAt =
 				src.BalanceRaw, src.EquityRaw, src.FreeMarginRaw, src.BufferMultiple, src.FetchedAt
 		}), nil
+}
+
+// LatestSnapshotFree D-523续①：单键最新快照 free_margin 读（执行径化石遮蔽对拍面）。
+// 无行 → ok=false；读败 → err。
+func (s *Store) LatestSnapshotFree(ctx context.Context, vn, venueType, ccy string) (float64, bool, error) {
+	var v float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT free_margin_raw FROM fin_venue_account_snapshot
+		WHERE venue=$1 AND venue_type=$2 AND currency=$3
+		ORDER BY fetched_at DESC LIMIT 1`, vn, venueType, ccy).Scan(&v)
+	if err == pgx.ErrNoRows {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("latest snapshot free: %w", err)
+	}
+	return v, true, nil
 }

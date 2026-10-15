@@ -46,7 +46,7 @@ func (e *Executor) freeBalance(ctx context.Context, asset string) (float64, erro
 		return e.BalanceFn(ctx, asset)
 	}
 	if e.streamAlive() {
-		if v, ok := e.streamBal(asset); ok {
+		if v, ok := e.streamBal(ctx, asset); ok {
 			return v, nil
 		}
 	}
@@ -161,13 +161,25 @@ func (e *Executor) streamAlive() bool {
 	return !dephealth.Degraded("binance:ws-spot-user")
 }
 
-// streamBal 流缓存读（bus.SpotAssets；资产无值→false→REST 兜底）。
-func (e *Executor) streamBal(asset string) (float64, bool) {
+// spotStreamStaleTTL 流缓存行龄阈=2×listenKey 续租周期（30min）+裕——超阈行视作
+// 化石不实读（D-523续①：WS 断窗/手工划转无帧旧值遮蔽执行径，SG#502 实证「可动=0」假贫）。
+const spotStreamStaleTTL = 65 * time.Minute
+
+// streamBal 流缓存读（bus.SpotAssets；无行/化石行→false→REST 兜底）。
+// 化石判据：a) 行龄超阈；b) 值为零且快照最新行有钱（零值遮蔽对拍——快照零/缺行
+// 则零如实回传不误 REST；快照读败 fail-open 回缓存值，REST 层仍兜底精度）。
+func (e *Executor) streamBal(ctx context.Context, asset string) (float64, bool) {
 	b, ok := bus.SpotAssets.Get("binance:spot", asset)
-	if !ok {
+	if !ok || e.Now().Sub(b.At) > spotStreamStaleTTL {
 		return 0, false
 	}
-	return b.Free + b.Locked, true
+	v := b.Free + b.Locked
+	if v == 0 && e.Store != nil {
+		if sf, has, err := e.Store.LatestSnapshotFree(ctx, "binance", "spot", asset); err == nil && has && sf > 0 {
+			return 0, false
+		}
+	}
+	return v, true
 }
 
 // refreshOrderRef D-191-R14：申购前对选中 product_ref 实时重取 product/list——

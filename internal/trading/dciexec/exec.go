@@ -69,6 +69,8 @@ type Store interface {
 	GetStrategyState(ctx context.Context, strategy string) (string, bool, error)
 	// D-286：earn 敞口闸读面——池快照（CEX 侧权益占比算）。
 	CapitalPoolSnapshots(ctx context.Context) ([]pgstore.CapitalPoolRow, error)
+	// D-523续①：单键最新快照 free_margin——流缓存零值遮蔽对拍读面。
+	LatestSnapshotFree(ctx context.Context, venue, venueType, ccy string) (float64, bool, error)
 }
 
 // Executor binance DCI 申购执行器（凭据由装配侧从 exchange_configs 注入）。

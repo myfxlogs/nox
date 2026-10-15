@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"nox/internal/data/bus"
 	"nox/internal/data/venue"
 	"nox/internal/ledger/reconcile"
 	"nox/internal/store/pgstore"
@@ -48,6 +49,11 @@ func (m *AccountMonitor) applyAcctResult(ctx context.Context, vk string, acct *r
 	m.dirtyLocked(vk)
 	m.mu.Unlock()
 	wrote := m.writeRestSnapshot(ctx, vk, snapPrev, acct, changed, snapSrc) // D-132/D-136/D-523：REST 面入库列值变→审计留痕
+	if vk == "binance:spot" {
+		// D-523续②：REST 实读成功同步刷 exec 资产缓存（SpotAssets 只认
+		// outboundAccountPosition 帧——手工划转/断窗漏帧=化石遮蔽，SG#502 实证）。
+		bus.SpotAssets.Put(vk, "USDT", acct.FreeMargin, 0, time.Now())
+	}
 	if changed {
 		m.notifyFunds() // D-568：REST 值变→funds 通知（值不变不触）
 	}

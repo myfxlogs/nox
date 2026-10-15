@@ -951,3 +951,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **fin_nav_daily**：迁移 1026 PK 升 (day_start,currency)（存量 USD-only 行 currency='USD' 不迁）；DailyCut 按桶分行落、venues jsonb 按币种分组；LatestNavDaily 返最新日全币种行。
 - **配置器 derive 键=结算币种**：`gate.StrategySettleCcy` 注册面（ExecTemplates→腿 InvestCcy、EarnTemplates→USDT、XASSET_CARRY/SWAPARB/CARRY→USD；未注册名回退 USD 桶+log——历史单桶语义保留不致存量策略断供）；每组 share=min(maxNotional, nav_ccy×(1−reserve)/组数)，桶缺席=0 预算行 fail-closed；derived_from 带 ccy/nav_ccy/live_count_ccy。
 - **消费面同迁**：deptreport 日报 NAV 行按币种分行；finance_overview proto 加 `equity_by_ccy` map（buf regen）；投资人页 NAV 卡下按币种分行展示。
+
+## 2026-10-15 执行径余额读化石遮蔽修（D-523 续·实施席）
+- **病灶**：SG#502 实证——快照真值 binance/spot/USDT=1088.80（rest_calib），autoexec 拒单「可动=0」：`dciexec freeBalance` 主源 `bus.SpotAssets` 只认 outboundAccountPosition 事件帧，业主手动划入 $1000 无帧=化石行遮蔽；dephealth 流存活标非数据新旧标。
+- **①单点兜底（bnapi freeBalance/streamBal）**：化石判据 a) 行龄>65min（=2×listenKey 续租 30min+裕）b) 值为零且快照最新行 free>0（`pgstore.LatestSnapshotFree` 单键读，Store 注面 fake 桩）——命中→REST /v3/account 实读；快照零/缺行→零如实回（真零不误兜底）；REST 读败 fail-closed 仍拒。流主源优先级零动（活值直回零 REST 打面）。
+- **②自愈拍刷缓存**：`applyAcctResult` binance:spot 成功路径 `bus.SpotAssets.Put(vk,"USDT",FreeMargin)`——D-523 reconnect_resync/rest_calib REST 实读同拍刷 exec 缓存，手工划入无帧场景一拍自愈（zero 新定时器）。
+- **③同型核查**：dciexec 为 WS 资产缓存唯一执行消费方；okx（unified+funding 合并 REST）/gate（spot accounts REST）rail 全 REST 读径无同遮蔽；capitalview Ledger.Get 自带 TTL 鲜度闸。
+- **锚**：`streambal_test` 四态对拍（化石零→REST 取 1088.80/行龄超阈→REST/快照零→真零零 REST/活值→直回零 REST）+REST 败 fail-closed。
