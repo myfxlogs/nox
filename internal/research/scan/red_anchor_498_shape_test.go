@@ -109,6 +109,7 @@ func TestD410_ConvergenceFlip(t *testing.T) {
 // 内=qty×10bps/1e4=$1.0），退出冻结收敛=dir×(last−entry)×qty/1e4。
 func TestD410_SpotOpenFeeAndExitConvergence(t *testing.T) {
 	s := d410Store(t)
+	pinPaperQty1000(t, s)
 	ctx := context.Background()
 	// uni 行带 basis=+10bps（开仓快照），funding=50（net≈49.85 在 band 内）
 	f := 50.0
@@ -165,6 +166,7 @@ func TestD410_SpotOpenFeeAndExitConvergence(t *testing.T) {
 // 每轮 last_basis 更 monitor 最新行，退出冻结收敛（翻号 +15bps）。
 func TestD410_CfdMonitorBasis(t *testing.T) {
 	s := d410Store(t)
+	pinPaperQty1000(t, s)
 	ctx := context.Background()
 	pair := "D410CUSDT-D410C"
 	d410SeedMonitor(t, s, pair, time.Now().Add(-time.Minute), 12.0) // entry=+12

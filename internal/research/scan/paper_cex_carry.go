@@ -164,13 +164,13 @@ func StepPaperCexCarryOpen(ctx context.Context, st PaperStore, cands []CexPaperC
 			VenueA: sp.Venue, VenueTypeA: sp.Type,
 			VenueB: pp.Venue, VenueTypeB: pp.Type,
 			Symbol: c.Canonical, Side: "short_perp",
-			EntryFundingAnn: c.FundingAnn, QtyUSD: PaperQtyUSD,
+			EntryFundingAnn: c.FundingAnn, QtyUSD: PaperQtyUSDAt(ctx, st),
 			Structure: "long_spot_short_perp",
 		}
 		// est_fee=两腿 CEX 真费（spot 往返+perp 往返，paper_fees 真值表；
 		// venue 未覆盖→NULL 诚实缺拒填——同 spot/cfd 轨口径）；basis=perp−spot 腿间
 		// 溢价 bps（qbus 双腿报价直取，禁 monitor 簿——FUNDING_HEDGE 本就豁免 D-335 闸）。
-		p.EstRoundTripFeeUSD = PaperSpotPerpFeeUSD(ctx, st, sp.Venue, pp.Venue, PaperQtyUSD)
+		p.EstRoundTripFeeUSD = PaperSpotPerpFeeUSD(ctx, st, sp.Venue, pp.Venue, PaperQtyUSDAt(ctx, st))
 		if c.SpotAsk > 0 && c.PerpBid > 0 {
 			bps := (c.PerpBid - c.SpotAsk) / c.SpotAsk * 1e4
 			p.EntryBasisBps, p.LastBasisBps = &bps, &bps

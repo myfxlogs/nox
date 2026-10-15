@@ -28,8 +28,9 @@ const (
 	PaperMinVol24hUSD = 1e7
 	// PaperMaxActive 活跃纸面行硬上限（候选按 net 降序开到上限止）。
 	PaperMaxActive = 12
-	// PaperQtyUSD 虚拟仓位（固定 $1000，不复利）。
-	PaperQtyUSD = 1000.0
+	// paperQtyUSDFallback 纸面名义额兜底（app_config paper_qty_usd 缺/破值时
+	// 的失效安全默认——D-545 裁定正常径读 PG 参数行，字面量仅作断链保护）。
+	paperQtyUSDFallback = 1000.0
 	// paperExitNormalizedPct 退出线：|last_funding_ann| < 10%/yr。
 	paperExitNormalizedPct = 10.0
 	// paperExitStreakRounds 连续低于退出线的轮数。
@@ -130,9 +131,9 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 		}
 		r := &pgstore.PaperSpotCarry{
 			VenueA: c.venueA, Symbol: c.u.Symbol, Side: side,
-			EntryFundingAnn: c.funding, QtyUSD: PaperQtyUSD,
+			EntryFundingAnn: c.funding, QtyUSD: PaperQtyUSDAt(ctx, st),
 			EntryBasisBps: c.u.LastBasisBps, LastBasisBps: c.u.LastBasisBps, // D-354 S2：开仓基差快照（NULL 传播）
-			EstRoundTripFeeUSD: paperSpotCarryFeeUSD(ctx, st, c.u.Venue, PaperQtyUSD), // D-474a S2：分腿真费四笔（venue 未覆盖→NULL 拒填）
+			EstRoundTripFeeUSD: paperSpotCarryFeeUSD(ctx, st, c.u.Venue, PaperQtyUSDAt(ctx, st)), // D-474a S2：分腿真费四笔（venue 未覆盖→NULL 拒填）
 		}
 		if err := st.InsertPaperSpotCarry(ctx, r); err != nil {
 			if err == pgstore.ErrPaperExists {
@@ -273,4 +274,20 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 		log.Printf("[paper spot] 边界/率源缺 fail-closed 跳过 accrue: %d 行", noFactWarn)
 	}
 	return opened, exited, nil
+}
+
+// PaperQtyUSDAt 纸面名义额读口（D-545）：app_config `paper_qty_usd` PG 真值；
+// 键缺/破值→纸面名义额兜底字面量（失效安全——纸面轨非真金径，断链降级
+// 可接受且如实记 log）。ctx/st 必传（调用点皆已持）。
+func PaperQtyUSDAt(ctx context.Context, st interface {
+	AppConfigFloat(context.Context, string) (float64, bool, error)
+}) float64 {
+	if st == nil {
+		return paperQtyUSDFallback
+	}
+	v, ok, err := st.AppConfigFloat(ctx, "paper_qty_usd")
+	if err != nil || !ok || v <= 0 {
+		return paperQtyUSDFallback
+	}
+	return v
 }

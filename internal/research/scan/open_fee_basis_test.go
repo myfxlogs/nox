@@ -24,6 +24,7 @@ func d555s2Cand(canonical, spotKey, perpKey string, funding, spotAsk, perpBid fl
 // =30bps×$1000/1e4=$3.00）+entry/last basis=(perp−spot)/spot×1e4=(50100−50000)/50000=+20bps）。
 func TestD555S2_OpenFeeBasis(t *testing.T) {
 	s := d555Store(t)
+	pinPaperQty1000(t, s)
 	ctx := context.Background()
 	cands := []CexPaperCand{d555s2Cand("XAUUSD", "gate:spot", "gate:perp", 12.5, 50000, 50100)}
 	opened, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil, nil)
@@ -64,6 +65,7 @@ func TestD555S2_OpenFeeBasis(t *testing.T) {
 // funding 翻负轮→当轮退 adverse（收敛冻结）。
 func TestD555S2_AccrueAndAdverse(t *testing.T) {
 	s := d555Store(t)
+	pinPaperQty1000(t, s)
 	ctx := context.Background()
 	// 开仓水位=INSERT last_accrue_ts=now()（DB 时钟）——结息窗从落库时刻起算（既有语义）。
 	// 时相 flake 根修：全部轮次时刻相对「真实 DB now」构造——open=now0、round2=now0+9h；

@@ -415,3 +415,8 @@ func (f *fakeMtmPaperStore) ExchangeTakerFeeBps(_ context.Context, venue, venueT
 func (f *fakeMtmPaperStore) CountDataLostExits(ctx context.Context, venueA, venueB, symbol string, since time.Time) (int, error) {
 	return 0, nil
 }
+
+// fakeMtmPaperStore 缺 AppConfigFloat → PaperQtyUSDAt 走兜底 1000（测试语义不变）。
+func (f *fakeMtmPaperStore) AppConfigFloat(context.Context, string) (float64, bool, error) {
+	return 0, false, nil
+}

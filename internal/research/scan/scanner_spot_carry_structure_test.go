@@ -95,6 +95,7 @@ func TestD350_ScannerSpotCarryStructure(t *testing.T) {
 func TestD350_PaperSpotCarryLifecycle(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
+	pinPaperQty1000(t, s)
 	now := time.Now().UTC() // 锚=真实钟相对（原冻结 2026-09-19 与 seed 真实钟 48h 闸跨日相撞，9-21 起翻红）
 	seedUni(t, s, "binance", "GUSDT", "TRADING", "T3", 72*time.Hour, 92)
 	seedUni(t, s, "binance", "NEGUSDT", "TRADING", "T3", 72*time.Hour, -30)
@@ -402,5 +403,15 @@ func TestD354_PaperBasisColumns(t *testing.T) {
 		if r.EntryBasisBps == nil || *r.EntryBasisBps != 50 {
 			t.Errorf("entry_basis 应保持开仓值 50, got %v", r.EntryBasisBps)
 		}
+	}
+}
+
+// pinPaperQty1000 D-545 锚兼容：测试内钉参数回 $1000 档位（迁移 1031 种 5000——
+// 历史任务书锚按 $1000 名义额写的数值断言不随裁定漂）。
+func pinPaperQty1000(t *testing.T, s *pgstore.Store) {
+	t.Helper()
+	if _, err := s.Pool().Exec(context.Background(),
+		`UPDATE app_config SET value='1000' WHERE key='paper_qty_usd'`); err != nil {
+		t.Fatal(err)
 	}
 }

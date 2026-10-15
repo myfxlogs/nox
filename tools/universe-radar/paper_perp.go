@@ -149,8 +149,8 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 		}
 		r := &pgstore.PaperSpotCarry{
 			VenueA: p.ShortVenue, VenueB: p.LongVenue, Symbol: p.Canon, Side: "perp_perp",
-			EntryFundingAnn: p.NetAnn, QtyUSD: scan.PaperQtyUSD, Structure: "perp_perp",
-			EstRoundTripFeeUSD: scan.PaperPerpPerpFeeUSD(ctx, st, p.ShortVenue, p.LongVenue, scan.PaperQtyUSD), // D-474a S2
+			EntryFundingAnn: p.NetAnn, QtyUSD: scan.PaperQtyUSDAt(ctx, st), Structure: "perp_perp",
+			EstRoundTripFeeUSD: scan.PaperPerpPerpFeeUSD(ctx, st, p.ShortVenue, p.LongVenue, scan.PaperQtyUSDAt(ctx, st)), // D-474a S2
 		}
 		// 开仓 basis=两腿 mark 价差（tick 缺/陈旧 → NULL 缺账诚实缺，不降级常数）。
 		if b := perpTickBasis(ctx, st, p.ShortVenue, p.ShortSym, p.LongVenue, p.LongSym, now); b != nil {

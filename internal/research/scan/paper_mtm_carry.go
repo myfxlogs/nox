@@ -119,7 +119,7 @@ func mtmBasisFee(ctx context.Context, st PaperStore, longVenue, longSym, shortVe
 		return nil, nil
 	}
 	b := (la - sb) / mid * 1e4
-	f := ((la-lb)/lm*1e4 + (sa-sb)/sm*1e4) / 2 * PaperQtyUSD / 1e4
+	f := ((la-lb)/lm*1e4 + (sa-sb)/sm*1e4) / 2 * PaperQtyUSDAt(ctx, st) / 1e4
 	return &b, &f
 }
 
@@ -200,7 +200,7 @@ func (sc *CarryUniverseScanner) StepPaperMtmCarry(ctx context.Context, st PaperS
 		shortLegVenue := sv
 		r := &pgstore.PaperSpotCarry{
 			VenueA: p.venueA, VenueB: p.venueB, Symbol: p.canonical,
-			Side: p.side, EntryFundingAnn: p.net, QtyUSD: PaperQtyUSD,
+			Side: p.side, EntryFundingAnn: p.net, QtyUSD: PaperQtyUSDAt(ctx, st),
 			EntryBasisBps: basis, LastBasisBps: basis,
 			EstRoundTripFeeUSD: fee,
 			Structure:          "cfd_cfd", MtVenue: &shortLegVenue,
