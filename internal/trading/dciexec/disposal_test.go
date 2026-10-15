@@ -144,9 +144,9 @@ func TestD517_NoDisposal_SameCcy(t *testing.T) {
 	}
 }
 
-// TestD540_LotSizeFloor 10-15 事故锚：0.00433438 BTC 越 stepSize=0.00001 精度
+// TestD542_LotSizeFloor 10-15 事故锚：0.00433438 BTC 越 stepSize=0.00001 精度
 // → -1013 必败；修后报量 floor=0.00433 成功。
-func TestD540_LotSizeFloor(t *testing.T) {
+func TestD542_LotSizeFloor(t *testing.T) {
 	st := newFake()
 	st.cfgID = 42
 	var sellQty float64
@@ -176,9 +176,9 @@ func TestD540_LotSizeFloor(t *testing.T) {
 	}
 }
 
-// TestD540_SweepPendingDisposal 清扫锚：pending_disposal OPEN 行→重试卖回成功
+// TestD542_SweepPendingDisposal 清扫锚：pending_disposal OPEN 行→重试卖回成功
 // →损益入账+关行+warn；卖败留行不刷告警（dedup 去重面交给 store）。
-func TestD540_SweepPendingDisposal(t *testing.T) {
+func TestD542_SweepPendingDisposal(t *testing.T) {
 	st := newFake()
 	st.cfgID = 42
 	qty := 0.00433
