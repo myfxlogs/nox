@@ -91,3 +91,6 @@ var DCITailGateSQL string // D-526：DCI 尾险闸约束行（σ 界 k/tenor_max
 
 //go:embed replay/1028_d526_retire_flat_bounds.sql
 var D526RetireFlatBoundsSQL string // D-526 返修③：平 OTM 界死行清退
+
+//go:embed replay/1030_perf_baseline.sql
+var PerfBaselineSQL string // D-538：业绩基线锚+fin_nav_daily 归档列

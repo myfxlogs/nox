@@ -222,4 +222,5 @@ var migrationFiles = []struct {
 	{1026, migrations.NavDailyCcySQL, false},                  // D-522：fin_nav_daily PK 升 (day_start,currency)
 	{1027, migrations.DCITailGateSQL, false},                  // D-526：DCI 尾险闸约束行（σ 界 k/tenor_max/名义帽）
 	{1028, migrations.D526RetireFlatBoundsSQL, false},         // D-526 返修③：平 OTM 界死行清退
+	{1030, migrations.PerfBaselineSQL, false},                 // D-538：业绩基线锚+nav 历史归档标记
 }

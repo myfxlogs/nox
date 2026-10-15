@@ -267,3 +267,7 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：五段信息层级=待办横幅→本金条（可动用/在息/锁定三档+非本金灰字行）→业绩条（基线以来/今日/30d年化 vs 8% 达标线）→在仓订单统一表（DCI/结构化/earn/合约/纸面跨轨列全）→风险心跳紧凑条。`getOverviewBundle` 单 RPC 一次出全段（前端零信任只渲染）。本金口径=D-534；缺显缺不显 0；provisional 挂残差对账落地前。
 - **分界**：investor.tsx 报告页不动；overview.tsx 全量重写。请求箱并入总览§0（业主动作面唯此一处）。
 - **业主令补（10-15）**：前端时间戳按 UTC 显示（CFD/CEX 全 UTC 世界——到期/交割/开仓误读本地时是错账源），总览页先行、fmt 组件留 UTC 径，他页同型后续统一。
+
+## D-538 业绩基线锚+历史归档（合并工单基线段收口）
+- **裁定**：`fin_nav_daily` 加 `archived` 列，day_start<2026-10-15 全量标归档（不删不改值）；`app_config` 落 `perf_baseline_usd=11317.00`/`perf_baseline_at=2026-10-15T00:00:00Z`（业主令 10-15 实拍，USDT+USD 池口径）——基线后业绩=Σ(USDT+USD 池 equity)−基线−Σ外部净流（fin_venue_io deposit−withdraw，D-536 台账在库；划转内部移动天然抵消不计）。
+- **拆分留痕**：本件仅落锚与归档标记；总览页五段重写+getOverviewBundle RPC+UTC 渲染径拆出另票（proto 变更面大，不与账本口径件混同 commit）。
