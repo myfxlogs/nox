@@ -75,6 +75,14 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			// 非臆造：锚值=venue 实测首行，仅语义从「入场时点」放宽为「首个可观测」。
 			if p.EntryBasisBps == nil {
 				fee := paperCfdFeeUSD(ctx, st, p.VenueB, p.QtyUSD, &entryBps)
+				// 负费=簿倒挂/模型反值病灶（毕业取证 10-15）——est_fee 不写负值，
+				// 传 nil 只补锚（缺失如实记，不误账）。
+				if fee != nil && *fee < 0 {
+					fee = nil
+					_ = st.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
+						"[cfd paper] est_fee 负值拒写（锚补径）：仓#%d 簿值 %.1fbps",
+						p.ID, entryBps))
+				}
 				anchored, aerr := st.AnchorPaperEntryBasis(ctx, p.ID, entryBps, fee)
 				if aerr != nil {
 					log.Printf("[cfd paper] entry 锚补写 %d: %v（下轮重试）", p.ID, aerr)

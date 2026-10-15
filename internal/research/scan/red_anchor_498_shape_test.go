@@ -370,3 +370,39 @@ func TestD410_DemoLockedOut(t *testing.T) {
 		t.Fatal("demo 行永不毕业（锁死回归）")
 	}
 }
+
+// TestD410_FeeNegativeReject：负簿值补锚径 est_fee 拒写负值+warn。
+// （毕业取证 10-15：fee∈−2.5~−39 反值曾把 cfd 轨经济性均值拉穿。）
+func TestD410_FeeNegativeReject(t *testing.T) {
+	s := d410Store(t)
+	pinPaperQty1000(t, s)
+	ctx := context.Background()
+	// 先开仓（无 monitor 行 → entry_basis/fee 双缺待补锚）
+	rows := []UniverseRow{d374Row("D410F", "3001157", "okx", "long_cfd_short_perp", 10.95, "")}
+	d144BookCover(t, s, "D410F", "3001157", "okx")
+	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
+	if err != nil || len(opened) != 1 {
+		t.Fatalf("open: %v opened=%v", err, opened)
+	}
+	// 补锚轮：簿值负 → fee 拒写 + warn
+	d410SeedMonitor(t, s, "D410FUSDT-D410F", time.Now(), -30.0)
+	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil {
+		t.Fatalf("accrue: %v", err)
+	}
+	var negFee int
+	if err := s.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM paper_spot_carry WHERE est_round_trip_fee_usd < 0`).Scan(&negFee); err != nil {
+		t.Fatal(err)
+	}
+	if negFee != 0 {
+		t.Fatalf("负费写库破闸: %d 行", negFee)
+	}
+	var warn int
+	if err := s.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM alerts WHERE level='warn' AND message LIKE '%est_fee 负值拒写%'`).Scan(&warn); err != nil {
+		t.Fatal(err)
+	}
+	if warn != 1 {
+		t.Fatalf("拒写 warn 未发: %d", warn)
+	}
+}

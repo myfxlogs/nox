@@ -99,6 +99,15 @@ func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, 
 	}
 	// cex 往返 2 笔 + MT 腿簿实算点差往返 + 佣金常数；簿缺→NULL 缺账。
 	p.EstRoundTripFeeUSD = paperCfdFeeUSD(ctx, st, r.CexVenue, PaperQtyUSDAt(ctx, st), spread)
+	// 毕业取证病灶修（10-15：多行 est_fee∈−2.5~−39）：费为负=模型自相矛盾
+	// （monitor 簿 entry_basis 负值曾被当 spread 分量直接喂入）→ fail-closed
+	// 拒开仓+warn，历史负行注记不改判据。
+	if p.EstRoundTripFeeUSD != nil && *p.EstRoundTripFeeUSD < 0 {
+		_ = st.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
+			"[paper] est_fee 负值拒开仓：%s %s fee=%.4f（簿/费率面异常如实记）",
+			r.Canonical, side, *p.EstRoundTripFeeUSD))
+		return nil
+	}
 	return st.InsertPaperSpotCarry(ctx, p)
 }
 
