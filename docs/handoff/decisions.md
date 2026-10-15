@@ -213,3 +213,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **完整定义**（四件全立才算完整）：①一提案一卡强制（已有：run.go 每拍复算）；②**每激活模板族带五项证源装配**——新族激活票必须随附 term 证源映射件（eval.go 硬编码 switch 是现状可接受的 fail-closed 形态，激活即补，不预先全写）；③**评估卡闸覆盖全执行径**——现状只 dciexec/earn 径吃卡，xasset engine 老轨不读卡（历史轨豁免观察，新轨必吃）；④**actual_apr 全执行径回写**——现状仅 dciexec settle 两点，earn/carry/xasset/cash_mgmt 退出点都要回写，G10→G2 校准环才有完整右腿。
 - **第五项裁定**：五项拆解对线性 payoff 族完备；**非线性/负偏度族（卖权/裸 delta carry）须第六项 `tail_apr`**（缺证→unevaluable 同例，线性族 mechanism-豁免恒 0）——D-526 σ 源落地后随件扩列，不提前建。
 - **指标面**：§4.3 ⑤预实偏差=actual_apr 回写覆盖后才入日报自算（现在 1/25 回写率，算了也是噪声）。
+
+## D-528 非稳定币现货计价入 NAV（推翻「非 USDT 不读」旧口径）
+- **背景**：现货 reconcile 按旧令只计 USDT 标（cex_account_binance.go 过滤非 USDT/LD*），当时 BTC 持仓是尘埃零头合理。业主 10-15 对账实拍：binance 现货 BTC 0.0127715（~$1034≈本金 8%）+io 表每 ~2 天一笔 0.005-0.007 BTC 外部充值持续进账——重要性阈已过。
+- **裁定**：非稳定币现货持仓按公允价计 NAV，currency 独立桶（BTC/其他），不进 USDT 桶（D-285 分币口径扩）。LD* 前缀仍不计 free（earn 持仓回显，另票修）；dust<1 USD 等价可滤行但须计合计或记豁免。
+- **域界**：账本计价口径=决策席自裁域（非业主三件），推翻旧令由决策席背账；业主 App 对账行数是唯一终判据。
