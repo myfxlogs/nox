@@ -315,3 +315,9 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **快照写径修**：`capitalview` REST 校准写行收窄到本币切片（cex 键：avail=FreeQtyByCcy[ccy]、eq=Holdings[ccy].UsdtValue 或 availBal）；MT 键 equity 回退语义保留。资金可用性 Ledger 口径零动。
 - **业主令方向**：投资人面读径不能押快照可靠性——事件驱动快照（okx_event/binance balanceUpdate 已有写口）升权威源、rest_calib 降为愈合补写；事件覆盖缺口与 binance perp 8 天断采立票查。
 - **R2 复发根因（10-15 部署后实拍）**：R1 判别「cex + Holdings 非空」不可靠——rest_calib 仍写 19.95=totalEq。真写者另有其人：`account_monitor.snapshotRows` 按**原始** `acct.VenueType` 判分币，okx 交易侧配置行 type=perp → 落单行路径把 totalEq 挂 USDT 写 unified 键（归一标签与判别口径不一=病灶本身）。双修：monitor 判别改用归一 vt；capitalview 判别改用归一池型（perp/delivery 单币池保总额径，Holdings 空亦如实零写不回落）。
+
+## D-544 快照读序权威裁定——事件行优先（业主令 10-15「事件驱动升权威源」落地）
+- **裁定**：`ExplorerIdleFunds`（ComputeNav/总览/日报同源池读径）同键（venue,venue_type,currency）读序钉死——`src∈{okx_event,binance_event,mt_frame}` 且 `fetched_at∈15min` 鲜度窗的事件行优先；事件源缺席或陈窗才落 `rest_calib`/`rest_poll`/`reconnect_resync`。
+- **角色钉死**：rest_calib/rest_poll=断流/冷启动愈合补写，非权威源；事件行=venue 原生推送真值（okx balanceUpdate/binance balanceUpdate/MT5 帧）。
+- **事件覆盖矩阵（SG 10-15 实拍）**：okx unified=okx_event 高频 ✓；binance=binance_event 低频有写径（余额变动才推——8:10 DCI 处置帧实证）；gate=无私有流仅 REST（D-206 取证在案，如实记缺口）；MT5=mt_frame ✓。
+- **遗留**：binance spot/funding 面 WS 订阅覆盖未举证（user data stream 是否覆 funding 户存疑）——后续订阅面举证补齐票随排；earn/funding 等无事件频道池由 rest_poll 愈合行如实承担。
