@@ -15,9 +15,12 @@ type fakeYieldStore struct {
 		ts  time.Time
 		has bool
 	}
-	flows  float64
-	shares map[string]float64
-	events []pgstore.IncomeEvent
+	flows   float64
+	shares  map[string]float64
+	events  []pgstore.IncomeEvent
+	orders  []pgstore.EarnPoolOrder
+	yields  float64
+	actuals map[int64]float64
 }
 
 func (f *fakeYieldStore) PrevSnapshotEquity(_ context.Context, _, _, ccy string, _ time.Time) (float64, time.Time, bool, error) {
@@ -36,6 +39,19 @@ func (f *fakeYieldStore) ExchangeConfigID(context.Context, string, string) (int6
 }
 func (f *fakeYieldStore) OwnershipShares(context.Context) (map[string]float64, error) {
 	return f.shares, nil
+}
+func (f *fakeYieldStore) ListEarnPoolOrders(context.Context, string, string) ([]pgstore.EarnPoolOrder, error) {
+	return f.orders, nil
+}
+func (f *fakeYieldStore) SumEarnYieldSince(context.Context, string, string, time.Time) (float64, error) {
+	return f.yields, nil
+}
+func (f *fakeYieldStore) UpdateOppEvalActual(_ context.Context, pid int64, apr float64) error {
+	if f.actuals == nil {
+		f.actuals = map[int64]float64{}
+	}
+	f.actuals[pid] = apr
+	return nil
 }
 
 func TestEarnYieldAttribution(t *testing.T) {
@@ -118,5 +134,61 @@ func TestEarnYieldAttribution(t *testing.T) {
 	want := 0.001 * 0.3334
 	if fs.events[2].AmountUSD < want-1e-9 || fs.events[2].AmountUSD > want+1e-9 {
 		t.Fatalf("归属系数未乘: got=%v want=%v", fs.events[2].AmountUSD, want)
+	}
+}
+
+// TestEarnActualAPRWriteback D-527①③：收益行落账同拍→池实现 APR 回写提案卡。
+func TestEarnActualAPRWriteback(t *testing.T) {
+	fs := &fakeYieldStore{prev: map[string]struct {
+		eq  float64
+		ts  time.Time
+		has bool
+	}{}}
+	m := &AccountMonitor{yieldStore: fs}
+	ctx := context.Background()
+	now := time.Now()
+
+	// 提案单在场（qty=500、2 天前申购）+窗内收益 5 → apr=5/500×365/2×100=182.5。
+	fs.orders = []pgstore.EarnPoolOrder{{ProposalID: 9, Qty: 500, CreatedAt: now.Add(-48 * time.Hour)}}
+	fs.yields = 5
+	fs.prev["USDT"] = struct {
+		eq  float64
+		ts  time.Time
+		has bool
+	}{1999.6, now.Add(-time.Minute), true}
+	m.attributeEarnYield(ctx, []pgstore.VenueAccountSnapshot{
+		{Venue: "gate", VenueType: "earn", Currency: "USDT", EquityRaw: 1999.7, FetchedAt: now},
+	})
+	want := 5.0 / 500 * 365 / 2 * 100
+	if got := fs.actuals[9]; got < want*0.98 || got > want*1.02 {
+		t.Fatalf("actual_apr=%v want≈%v", got, want)
+	}
+
+	// 负收益如实负 APR（赎回/划转负 Δ）；末次事件覆盖=累计重算。
+	fs.yields = -2.5
+	fs.prev["USDT"] = struct {
+		eq  float64
+		ts  time.Time
+		has bool
+	}{1999.7, now.Add(-time.Minute), true}
+	m.attributeEarnYield(ctx, []pgstore.VenueAccountSnapshot{
+		{Venue: "gate", VenueType: "earn", Currency: "USDT", EquityRaw: 1999.0, FetchedAt: now.Add(time.Minute)},
+	})
+	if got := fs.actuals[9]; got >= 0 {
+		t.Fatalf("负收益未如实负 APR: %v", got)
+	}
+
+	// 无提案回链单 → 收益行照记但卡不回写（无对应执行事件不编数）。
+	fs.orders = nil
+	fs.prev["USDT"] = struct {
+		eq  float64
+		ts  time.Time
+		has bool
+	}{1999.0, now.Add(-time.Minute), true}
+	m.attributeEarnYield(ctx, []pgstore.VenueAccountSnapshot{
+		{Venue: "gate", VenueType: "earn", Currency: "USDT", EquityRaw: 1999.1, FetchedAt: now.Add(2 * time.Minute)},
+	})
+	if len(fs.actuals) != 1 { // 仅前两拍写过的 #9
+		t.Fatalf("无回链误写: %+v", fs.actuals)
 	}
 }

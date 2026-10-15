@@ -23,6 +23,10 @@ type EarnYieldStore interface {
 	InsertIncomeEvents(ctx context.Context, evs []pgstore.IncomeEvent) (int64, error)
 	ExchangeConfigID(ctx context.Context, venue, venueType string) (int64, error)
 	OwnershipShares(ctx context.Context) (map[string]float64, error)
+	// D-527①③：actual_apr 回写读面——池申购本金（提案回链）+窗内收益净额+评估卡写口。
+	ListEarnPoolOrders(ctx context.Context, venue, ccy string) ([]pgstore.EarnPoolOrder, error)
+	SumEarnYieldSince(ctx context.Context, venue, ccy string, since time.Time) (float64, error)
+	UpdateOppEvalActual(ctx context.Context, proposalID int64, apr float64) error
 }
 
 // SetEarnYieldStore 注入归属读写面（main 装配 st；零注入=仅快照不写收益行）。
@@ -85,5 +89,58 @@ func (m *AccountMonitor) attributeEarnYield(ctx context.Context, rows []pgstore.
 		log.Printf("[earn-yield] insert: %v", werr)
 	} else if n > 0 {
 		log.Printf("[earn-yield] attributed %d earn_yield rows", n)
+		m.writeEarnActualAPR(ctx, shares, evs)
+	}
+}
+
+// writeEarnActualAPR D-527①③：earn 收益事件落账同拍——池实现 APR 回写提案评估卡。
+// 口径：actual_apr=Σearn_yield（自最早在持申购起）/(Σ申购本金×归属份)×365/持有天数×100。
+// 同 venue+ccy 池多单共享池实现 APR（池收益行不可拆单——不虚构单级拆分，注释即口径）；
+// 赎回负 Δ 已记负收益行→负 APR 如实；无收益事件不触发（无执行事件不写≠0）；
+// 「同一提案多执行事件取末次实现值」=每事件按累计重算覆盖，天然末次为准。
+func (m *AccountMonitor) writeEarnActualAPR(ctx context.Context, shares map[string]float64, evs []pgstore.IncomeEvent) {
+	seen := map[string]bool{}
+	for _, ev := range evs {
+		key := ev.Venue + "|" + ev.Symbol
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		orders, err := m.yieldStore.ListEarnPoolOrders(ctx, ev.Venue, ev.Symbol)
+		if err != nil {
+			log.Printf("[earn-yield] %s %s pool orders: %v", ev.Venue, ev.Symbol, err)
+			continue
+		}
+		if len(orders) == 0 {
+			continue
+		}
+		var since time.Time
+		var principal float64
+		for _, o := range orders {
+			if since.IsZero() || o.CreatedAt.Before(since) {
+				since = o.CreatedAt
+			}
+			principal += o.Qty
+		}
+		share, hasShare := pgstore.OwnershipShare(shares, ev.Venue, "earn", ev.Symbol)
+		if !hasShare {
+			share = 1 // 未配置池全归属（D-516 缺省语义，同归属径）
+		}
+		principal *= share
+		days := time.Since(since).Hours() / 24
+		if principal <= 0 || days <= 0 {
+			continue
+		}
+		income, ierr := m.yieldStore.SumEarnYieldSince(ctx, ev.Venue, ev.Symbol, since)
+		if ierr != nil {
+			log.Printf("[earn-yield] %s %s yield sum: %v", ev.Venue, ev.Symbol, ierr)
+			continue
+		}
+		apr := income / principal * 365 / days * 100
+		for _, o := range orders {
+			if uerr := m.yieldStore.UpdateOppEvalActual(ctx, o.ProposalID, apr); uerr != nil {
+				log.Printf("[earn-yield] eval actual apr proposal#%d: %v", o.ProposalID, uerr)
+			}
+		}
 	}
 }

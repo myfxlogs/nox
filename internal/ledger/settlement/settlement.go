@@ -244,6 +244,19 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 		return fmt.Errorf("settle: update strategy stat pos=%d: %w", posID, err)
 	}
 
+	// D-527②：提案回链仓位终态 actual_apr 回写——实际净 APR=position 净额/名义×年化
+	// （读 settlements 同口径 netPnl/notionalUsd/holdDays；回链 nil=非提案驱动仓不写）。
+	if w, ok := deps.(ActualAPRWriter); ok && notionalUsd > 0 && holdDays > 0 {
+		if pid, perr := w.ProposalForClosedPosition(ctx, posID); perr != nil {
+			log.Printf("[settlement] pos=%d proposal link read: %v", posID, perr)
+		} else if pid != nil {
+			apr := netPnl / notionalUsd * 365 / holdDays * 100
+			if uerr := w.UpdateOppEvalActual(ctx, *pid, apr); uerr != nil {
+				log.Printf("[settlement] pos=%d eval actual apr proposal#%d: %v", posID, *pid, uerr)
+			}
+		}
+	}
+
 	// 淘汰检查（D-261 S5：提取至 settlement_elim.go runElimination）。
 	runElimination(ctx, deps, p, elim, family)
 	// XASSET_CARRY 预测-实测对照（观测面非钱闸——失败只 log 不阻塞）。

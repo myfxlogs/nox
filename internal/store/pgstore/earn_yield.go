@@ -1,4 +1,5 @@
 // earn_yield.go —— D-524：earn 池收益增量归属读面（快照前值+已归属流窗算）。
+// D-527：actual_apr 回写读面（earn 池申购本金+提案回链、仓位↔提案桥、池收益窗算）。
 package pgstore
 
 import (
@@ -41,4 +42,72 @@ func (s *Store) EarnSubscribeSum(ctx context.Context, vn string, from, to time.T
 		return 0, fmt.Errorf("earn subscribe sum: %w", err)
 	}
 	return sum, nil
+}
+
+// EarnPoolOrder earn 池申购本金行（D-527 actual_apr 回写：提案回链+本金+申购时刻）。
+type EarnPoolOrder struct {
+	ProposalID int64
+	Qty        float64
+	CreatedAt  time.Time
+}
+
+// ListEarnPoolOrders (venue,investCcy) 下 status='filled' 且提案回链非空的 EARN 单。
+// 池收益按申购时刻窗算，多提案多单按 qty 比例分摊收入（写方如实注记不分本金）。
+func (s *Store) ListEarnPoolOrders(ctx context.Context, vn, ccy string) ([]EarnPoolOrder, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT proposal_id, qty, created_at FROM fin_dci_order
+		WHERE venue=$1 AND opt_type='EARN' AND status='filled'
+		  AND invest_ccy=$2 AND proposal_id IS NOT NULL
+		ORDER BY created_at`, vn, ccy)
+	if err != nil {
+		return nil, fmt.Errorf("list earn pool orders: %w", err)
+	}
+	defer rows.Close()
+	var out []EarnPoolOrder
+	for rows.Next() {
+		var o EarnPoolOrder
+		if err := rows.Scan(&o.ProposalID, &o.Qty, &o.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// SumEarnYieldSince (venue,ccy) 池自 since 起 income_events earn_yield 收益净额
+// （D-524③ 负 Δ 如实记负——赎出/划转台账无记轨）。零行=0 由调用方判「无收益不写」。
+func (s *Store) SumEarnYieldSince(ctx context.Context, vn, ccy string, since time.Time) (float64, error) {
+	var sum float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(amount_usd),0) FROM income_events
+		WHERE venue=$1 AND venue_type='earn' AND symbol=$2
+		  AND income_type='earn_yield' AND ts>=$3`, vn, ccy, since).Scan(&sum)
+	if err != nil {
+		return 0, fmt.Errorf("earn yield sum: %w", err)
+	}
+	return sum, nil
+}
+
+// ProposalForClosedPosition D-527②：仓位→提案回链解（双键 OR，零行=非提案驱动仓）：
+//   - fin_dci_order.request_id 与 positions.request_id 同键（提案单↔仓位共享幂等键域）；
+//   - fin_proposal.params->>'position_id' 显式回链（提案驱动执行径自声明，推不设读）。
+//
+// autotrade/手动直产仓无提案行 → nil——调用方不写 actual_apr（无对应执行事件不编数）。
+func (s *Store) ProposalForClosedPosition(ctx context.Context, posID int64) (*int64, error) {
+	var pid int64
+	err := s.pool.QueryRow(ctx, `
+		SELECT pid FROM (
+			SELECT o.proposal_id AS pid FROM fin_dci_order o
+			JOIN positions p ON p.request_id = o.request_id
+			WHERE p.id=$1 AND o.proposal_id IS NOT NULL
+			UNION
+			SELECT id AS pid FROM fin_proposal WHERE params->>'position_id' = $2
+		) t ORDER BY pid LIMIT 1`, posID, fmt.Sprintf("%d", posID)).Scan(&pid)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("proposal for position %d: %w", posID, err)
+	}
+	return &pid, nil
 }

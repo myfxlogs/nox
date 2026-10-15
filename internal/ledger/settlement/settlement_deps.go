@@ -72,6 +72,14 @@ type ElimHearer interface {
 		total int, winRate, avgPnl, medianPnl float64, reason string)
 }
 
+// ActualAPRWriter D-527②：仓位终态 actual_apr 回写面（可选注入——Deps 未实现=不写）。
+// ProposalForClosedPosition 零行=仓位非提案驱动（autotrade 引擎直产仓无提案回链），
+// 调用方不写 actual_apr——无对应执行事件不编数（不回写≠写 0）。
+type ActualAPRWriter interface {
+	ProposalForClosedPosition(ctx context.Context, posID int64) (*int64, error)
+	UpdateOppEvalActual(ctx context.Context, proposalID int64, apr float64) error
+}
+
 // FamilyResolver D-256-A S2：策略→风险族映射（避免环依赖，autotrade.riskFamily 注入）。
 // 返回同族策略名列表（如 CARRY→[CARRY,SWAPARB]），用于族级聚合。
 // nil = 无族合并（每策略独立聚合，向后兼容）。

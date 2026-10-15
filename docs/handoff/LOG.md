@@ -973,3 +973,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **选档=net 最优**：提案层 `dciPremiumGate` 与执行层 tryLeg/okx_dci 双侧——net=apy_ann−`TailCostAnn`（BS 近似 r=0：持有期波动=σ√天数）取最大；最优档 net≤0→如实拒并带 σ/界/尾损三要素注记（票面⑤）。
 - **名义帽**：`dci_open_notional_cap_usdt`（字面 1500≈NAV_USDT×0.15）——跨 venue OutstandingDCIQty(USDT) 合计≥cap→不产提案；行缺 fail-closed。
 - **锚**：gate 单测钉 SG 验收口径（σ=3.5%/16d→界 0.79 域、浅档尾损盖溢价、深档衰减、参数缺+Inf）；存量锚全量适配（testSigma 桩=0.001 宽界）；D514 溢价闸锚σ 注口后照旧绿。
+
+## 2026-10-15 actual_apr 全执行径回写（D-527，实施席）
+
+- **①③earn/cash_mgmt 回写**：`attributeEarnYield` 收益行落账同拍 → `writeEarnActualAPR`——池实现 APR=Σearn_yield（自最早在持申购起）/(Σfilled EARN 本金×归属份)×365/持有天数×100 → `UpdateOppEvalActual` 各提案卡。池收益行不可拆单→同 venue+ccy 多单共享池 APR（如实口径注记）；负 Δ→负 APR 如实；无收益事件不触发（不写≠0）；每事件累计重算=末次实现值天然覆盖。新读件 `ListEarnPoolOrders`/`SumEarnYieldSince`。
+- **②carry/xasset CLOSED**：`settlement.Settle` applied 径（stats 写成功后）挂可选 `ActualAPRWriter`——净 APR=position 净额/名义×365/持有天数×100（读 settlements 同口径 netPnl/notionalUsd/holdDays）。提案↔仓位桥=`ProposalForClosedPosition` 双键解（fin_dci_order.request_id=positions.request_id 共享幂等键域 ∪ fin_proposal.params.position_id 显式回链）——**autotrade 引擎直产仓无提案行→nil 不写**（本库仓位皆此型，回写径就位待提案驱动仓位径接入即生效；carry/xasset 仓位↔提案桥为已知结构性缺口，须 D# 立链）。
+- **禁线守**：零新表零迁移零定时器（事件驱动挂点）；DCI 双径零触；无对应执行事件全径不写（非 0）。
+- **锚**：earn 三态（APR 对拍/负如实/无单不写）；settle 双态（回链写+无链不写）。
