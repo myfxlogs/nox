@@ -238,3 +238,32 @@ func (s *Store) BrokerCommissionBps(ctx context.Context, venue string) (float64,
 	}
 	return *v, true, nil
 }
+
+// MTIOAccountIDs MT5 io 采集账户面：connected mt5 账号 id+venue
+// （fin_venue_io.config_id 挂 broker_accounts.id——MT 域账户归属锚）。
+func (s *Store) MTIOAccountIDs(ctx context.Context) ([]struct {
+	ID    int64
+	Venue string
+}, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, venue FROM broker_accounts WHERE venue_type='mt5' AND status='connected' ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("mt io accounts: %w", err)
+	}
+	defer rows.Close()
+	var out []struct {
+		ID    int64
+		Venue string
+	}
+	for rows.Next() {
+		var r struct {
+			ID    int64
+			Venue string
+		}
+		if err := rows.Scan(&r.ID, &r.Venue); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

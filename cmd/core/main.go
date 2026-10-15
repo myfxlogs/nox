@@ -111,13 +111,13 @@ func main() {
 	// D-163：探针提案机审 kick 总线（explorer 落库 → dashSvc.RunProbeAdjudicator 订阅端）。
 	probeTopic := bus.NewTopic[struct{}]()
 	// income/IO 采集器与扫描器批量装配提取（D-474a 保 main() ≤300 行门禁）
-	startCollectorsAndScanners(ctx, st, cfg, cexCfg, cexSymbols, incomeKickCh, okxIncomeKickCh, ioKickCh, refreshTopic, probeTopic)
+	execReg := exec.NewRegistry()
+	brokerMgr := dashboard.NewBrokerManager(st, qbus, execReg, cfg.SymbolsTTL)
+	startCollectorsAndScanners(ctx, st, cfg, cexCfg, cexSymbols, incomeKickCh, okxIncomeKickCh, ioKickCh, refreshTopic, probeTopic, brokerMgr)
 	// 5c. TickSampler（§4.3）采样+落库装配已拆 wire_quotes.go（D-366 S2）。
 	startTickSampler(ctx, qbus, st, cexCfg)
 
 	// 6. 执行器注册表（§13.2）+ Broker 管理器（§broker 管理器方案）——引擎与轮询源依赖其解析
-	execReg := exec.NewRegistry()
-	brokerMgr := dashboard.NewBrokerManager(st, qbus, execReg, cfg.SymbolsTTL)
 	brokerMgr.SetMarginReservePct(cfg.MarginReservePct) // D-415：动态 MT5 executor 资金预检安全垫
 
 	// D-177 报价量级校验：wildcard 订阅，首条报价触发，量级不符自动隔离

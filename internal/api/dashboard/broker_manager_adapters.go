@@ -264,6 +264,7 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		sessions:         ad.SessionsFacts, // D-029 R3：周表采集源（running 面——SessionsFacts 聚合含 running+static）
 		meta:             func(ctx context.Context) ([]fact.Fact, error) { return ad.MetaFacts(ctx) },
 		orderHistoryScan: mt5OrderHistoryScan(ad.MT5Client(), ad.Token()), // D-181 S1
+		ioScan:           mt5IOHistoryScan(ad.MT5Client(), ad.Token()),    // MT5 io：充提行扫描（fin_venue_io 接入）
 		// D-563 S4b：判定时刻实时资金（marginFloorEval 用，禁快照消费）。
 		acctSummary: func(ctx context.Context) (float64, float64, string, error) {
 			resp, err := ad.MT5Client().AccountSummary(tokenCtx(ctx, ad.Token()), &mt5pb.AccountSummaryRequest{Id: ad.Token()})
