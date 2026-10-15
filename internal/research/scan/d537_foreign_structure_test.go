@@ -26,9 +26,9 @@ func d534Store(t *testing.T) *pgstore.Store {
 	return s
 }
 
-// TestD534_SpotForeignStructureNoKill 异结构行（perp_delivery/perp_perp/cfd/cex/mtm）
+// TestD537_SpotForeignStructureNoKill 异结构行（perp_delivery/perp_perp/cfd/cex/mtm）
 // 在 spot 轨缺席universe时不得计 miss、不得退出——D-532 data_lost 58 行归因实证。
-func TestD534_SpotForeignStructureNoKill(t *testing.T) {
+func TestD537_SpotForeignStructureNoKill(t *testing.T) {
 	s := d534Store(t)
 	ctx := context.Background()
 	for _, st := range []struct{ venueA, venueB, sym, structure string }{
@@ -81,9 +81,9 @@ func TestD534_SpotForeignStructureNoKill(t *testing.T) {
 	}
 }
 
-// TestD534_CfdEntryAnchorBackfill entry_basis NULL 行（簿后生覆盖）在 accrue 轮
+// TestD537_CfdEntryAnchorBackfill entry_basis NULL 行（簿后生覆盖）在 accrue 轮
 // 簿已有时补锚+补 est_fee（锚值=实测首行，非臆造）。
-func TestD534_CfdEntryAnchorBackfill(t *testing.T) {
+func TestD537_CfdEntryAnchorBackfill(t *testing.T) {
 	s := d534Store(t)
 	ctx := context.Background()
 	now := time.Now()
