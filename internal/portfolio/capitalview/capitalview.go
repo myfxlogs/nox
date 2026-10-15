@@ -234,10 +234,16 @@ func (v *View) calibrate(ctx context.Context, venueKey string, force, exact bool
 	if acct.AssetType == "cex" && multiCcyVenueType(vt) {
 		calibAvail = acct.FreeQtyByCcy[acct.Currency]
 		calibEq = calibAvail
-		for _, h := range acct.Holdings {
-			if h.Ccy == acct.Currency {
-				calibEq = h.UsdtValue // 本币权益切片（venue 已供 eqUsd；USDT 1:1 同值）
-				break
+		// D-543R2 残波修（窄域钉死）：仅 okx unified 键——eqUsd 含仓位抵押
+		// 份额（details[].eq≈20 vs 事件 availBal 3.4e-9 同键互踩实拍），本币
+		// 行 equity 改 availBal 切片与事件同源；其余池 eqUsd 权益切片保留
+		// （无事件写者互踩，口径分立不虚改）。
+		if !(acct.Venue == "okx" && vt == "unified") {
+			for _, h := range acct.Holdings {
+				if h.Ccy == acct.Currency {
+					calibEq = h.UsdtValue // 本币权益切片（venue 已供 eqUsd；USDT 1:1 同值）
+					break
+				}
 			}
 		}
 	}

@@ -167,7 +167,18 @@ func snapshotRows(prev, acct *reconcile.AccountInfo) []pgstore.VenueAccountSnaps
 	sort.Strings(ccys)
 	rows := make([]pgstore.VenueAccountSnapshot, 0, len(ccys))
 	for _, c := range ccys {
-		rows = append(rows, mk(c, per[c]))
+		// D-543R2 残波修：okx unified 键分币行=availBal 现金余额切片
+		// （FreeQtyByCcy，与事件径 okx_event 同源口径）——h.Qty 是 cashBal
+		// （含仓位占额），写过即与事件行同键互踩（USDT 3.4e-9 vs 20 实拍）。
+		// 窄域钉死：只 okx 事件竞争池（unified）；binance/gate spot 行 cashBal
+		// 口径不动（无事件写者互踩，availBal 别名不混用）。
+		q := per[c]
+		if acct.Venue == "okx" && vt == "unified" {
+			if v, ok := acct.FreeQtyByCcy[c]; ok {
+				q = v
+			}
+		}
+		rows = append(rows, mk(c, q))
 	}
 	return rows
 }
