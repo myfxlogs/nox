@@ -40,7 +40,14 @@ func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]Explore
 			venue, venue_type, COALESCE(balance_raw,0), COALESCE(equity_raw,0),
 			COALESCE(free_margin_raw,0), COALESCE(currency,''), fetched_at, COALESCE(buffer_multiple,0)
 		FROM fin_venue_account_snapshot
-		ORDER BY venue, venue_type, currency, fetched_at DESC`)
+		ORDER BY venue, venue_type, currency,
+			-- D-544（10-15 业主令「事件驱动快照升权威源」读序裁定）：同键鲜度窗内
+			-- 事件行（okx_event/binance_event/mt_frame=venue 原生推送真值）优先；
+			-- 事件源缺席/陈于 15min 窗才落 rest_calib/rest_poll/reconnect_resync
+			-- （愈合补写角色钉死：断流/冷启动补偿，非权威）。
+			CASE WHEN src IN ('okx_event','binance_event','mt_frame')
+			      AND fetched_at > now() - interval '15 minutes' THEN 0 ELSE 1 END,
+			fetched_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("explorer idle snapshots: %w", err)
 	}
