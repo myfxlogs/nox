@@ -15,7 +15,11 @@ import (
 func (s *Service) InitMarginGuard(urgentCD, warnCD time.Duration) {
 	g := NewMarginGuard(s.store, s.qbus, s.legContractSizeOf, urgentCD, warnCD)
 	s.marginGuard = g
-	s.store.SetVenueSnapshotHook(g.OnSnapshots)
+	recon := NewResidualRecon(s.store) // D-536②：残差对账搭车同一 snapHook（异步不阻塞写径）
+	s.store.SetVenueSnapshotHook(func(ctx context.Context, snaps []pgstore.VenueAccountSnapshot) {
+		g.OnSnapshots(ctx, snaps)
+		recon.OnSnapshots(ctx, snaps)
+	})
 }
 
 // MarginFloorCheck D-405 S4 开户门槛档判定（autotrade.Gate 注入点）。

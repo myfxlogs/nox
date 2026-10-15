@@ -256,3 +256,10 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **业主令**：只统计 USDT 和 USD，其他币种不统计、不调用——这是我们的本金。
 - **裁定**：①资本分配/可动用池/收益率分母一律 USDT+USD 计——BTC/DOGE/杂币持仓为非本金资产，不调度不折算入本金（D-528 NAV 分币桶展示照旧=披露面，非本金面）；②DCI 本金按 USDT 计但在仓期=锁定档；③USDC/BFUSD 为准稳定币暂挂（业主令字面未含）——复归 USDT 还是单独计待业主一句话，当前按非本金口径处理。
 - **影响面**：金钱不眠（D-286）idle 计量、策略本金上限、≥8% 年化分母皆以本口径为准。
+
+## D-536 残差对账闭环（io 台账消费者=等式对账件+内部划转真台账）
+- **schema 裁决**：内部划转复用 `fin_venue_io`——迁移 1029 加 `from_wallet`/`to_wallet`（快照 venue_type 键域），direction='transfer'，幂等键沿用 (venue,config_id,direction,external_id)（binance tranId / okx billId / earn `se-<purchaseId|redeemId>`）。不立新表=流量同构同一账本面。
+- **划转产者**：cex-io 采集器加第三方向——binance `asset/transfer` 逐 type 枚举（20 类覆盖已建池钱包对，未列 type 漏采由残差告警自披露）+simple-earn 申购/赎回史（**D-524 申购反推升级为真台账**：申购=spot→earn、赎回=earn→spot）；okx `asset/bills` from/to 非空行（账户码 6=funding/18=unified，余如实记 acct_N）。gate 仅 sim 配置无采集账户=缺口如实记（如立 real 配置同型自动接入）。
+- **对账件**：`ResidualRecon` 搭车 snapHook（快照写径同拍，零新定时器，safego 异步不阻塞写径）。范围=非保证金池（spot/funding/earn）×稳定币——perp/unified 权益随 UPL 逐帧漂移无 UPL 台账对等式必噪（UPL 台账另票）；income 仅计 symbol=ccy 原生币收益。阈=max($1 尘埃 D-529, 0.5%×equity)，越阈→critical 24h 去重带分解（prev→cur/外部流/划转/收益/残差）。
+- **外部充提落点约定**：binance/gate→spot、okx→funding（venue 实际落点偏移会以残差告警暴露=自披露设计）。
+- **io 求和粒度=venue 级**（io 行归 canonical config，池行按 venue 聚合——config 级会错配）。

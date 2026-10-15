@@ -197,7 +197,7 @@ func (c *CexIOCollector) RunOnce(ctx context.Context) (int64, error) {
 		return 0, nil
 	}
 	for _, acc := range c.accounts() {
-		for _, dir := range []string{"deposit", "withdraw"} {
+		for _, dir := range []string{"deposit", "withdraw", "transfer"} {
 			rows, err := c.fetchDirection(ctx, acc, dir)
 			if err != nil {
 				fmt.Printf("[cex-io] %s #%d %s: %v (skip)\n", acc.Venue, acc.ID, dir, err)
