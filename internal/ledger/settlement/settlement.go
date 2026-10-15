@@ -244,18 +244,13 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 		return fmt.Errorf("settle: update strategy stat pos=%d: %w", posID, err)
 	}
 
-	// D-527②：提案回链仓位终态 actual_apr 回写——实际净 APR=position 净额/名义×年化
-	// （读 settlements 同口径 netPnl/notionalUsd/holdDays；回链 nil=非提案驱动仓不写）。
-	if w, ok := deps.(ActualAPRWriter); ok && notionalUsd > 0 && holdDays > 0 {
-		if pid, perr := w.ProposalForClosedPosition(ctx, posID); perr != nil {
-			log.Printf("[settlement] pos=%d proposal link read: %v", posID, perr)
-		} else if pid != nil {
-			apr := netPnl / notionalUsd * 365 / holdDays * 100
-			if uerr := w.UpdateOppEvalActual(ctx, *pid, apr); uerr != nil {
-				log.Printf("[settlement] pos=%d eval actual apr proposal#%d: %v", posID, *pid, uerr)
-			}
-		}
-	}
+	// D-529 封口径注记：提案族 actual_apr 仅限提案桥两径——dci settle
+	// （dciexec.bookSettlement）与 earn 池增量（dashboard.writeEarnActualAPR）。
+	// positions 全量=autotrade 引擎直产仓（dedup_key=combo.Key 幂等键域），与
+	// fin_dci_order.request_id（dci|/earn| 域）结构性不相交、fin_proposal.params
+	// ->>'position_id' 零写径——提案↔仓位回链恒空，D-527② 回读桥为死码已拆
+	// （史实在 git）。提案驱动仓位轨立项时此桥随件重建（a 路悬案=归属语义
+	// 一提案一仓/多仓合并未定，schema 变更须独立裁决行）。
 
 	// 淘汰检查（D-261 S5：提取至 settlement_elim.go runElimination）。
 	runElimination(ctx, deps, p, elim, family)
