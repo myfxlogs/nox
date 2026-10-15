@@ -164,7 +164,17 @@ func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *
 			// D-264 M4.4①③：日切钩——fin_nav_daily 幂等落行 + fin_strategy_budget
 			// 配置器重算（确定性零 LLM；boot 首切+每班各一次）。
 			OnDayCut: func(ctx context.Context, dayStart time.Time) error {
-				return budget.DailyCut(ctx, st, time.Now(), dayStart, cfg.AutoTradeMaxNotional)
+				if err := budget.DailyCut(ctx, st, time.Now(), dayStart, cfg.AutoTradeMaxNotional); err != nil {
+					return err
+				}
+				// D-545② 快照保留窗（挂既有日切拍，零新定时器）：7d 前且有更新行的老行删，
+				// 每键最新行永保（化石键=断采唯一证据）。
+				if n, perr := st.PruneVenueAccountSnapshots(ctx, time.Now().Add(-7*24*time.Hour)); perr != nil {
+					log.Printf("[daycut] snapshot prune: %v", perr)
+				} else if n > 0 {
+					log.Printf("[daycut] snapshot prune: %d 老行清除", n)
+				}
+				return nil
 			},
 		})
 	})
