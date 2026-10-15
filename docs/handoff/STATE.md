@@ -133,3 +133,10 @@
 ③执行轨实况——DCI binance 通（#342/346 executed）、earn okx/gate/binance 通（#377/378+#26）、okx DCI 堵（D-549 票在修）、xasset 轨 retired 全停、futures 腿=探针径在册但 premise 化石机审全拒（gate:futures funding facts 439h 陈旧——馈死观察项）；
 ④设计内压制非断链——休眠轨 candidate 达标不提案（D-191R7）、auto 轨 executor-missing 如实 info（funding_carry/cross_venue_spot）；
 ⑤噪音项——「待审批探针」告警先于机审拒（#60 告警 22:49:49→拒 22:49:51 顺序噪音）；浓度透视分母缺 MT 快照键（"15032313:" 空 venue_type 后缀行）。 -->
+
+<!-- 复审席 10-16 两票合并部署+G4 验收：earn-venue-float @49d056695 / okx-dci-savings @3fc3dc8b0 合并入 master（--no-ff），机检独立重跑绿（vf 全套 3734/dci 全套 3734+1 已存 flake TestD135_PendingClearedByLoop 分支与 master 各 3/3 复过=timer 时序 flake 非本票；触包+race 75 全过）。SG 部署后 boot 扫描实证：
+①venue-float 验收过——「模板venue悬空」warn 零发（对齐集静默）；新提案分 venue 各携 venue 键+venue 原生报价（#572@gate {"apr":0.000964,"venue":"gate"}、#573@okx {"apr":0.035,"venue":"okx"}）；存量 #544@binance 重评成 binance 自家价 0.02643 不再挂 okx 3.65；autoexec 对 #573 如实拒「okx USDT 可动=0」=路由通+拒因真（earn 径不赎 savings=正确边界，赎回=DCI 径专属）。
+②okx-dci 验收过（拒因侧）——首拍 dci_buy_low@okx 被 D-514 质量闸拦「premium_ann 6.03% < 3×earn 3.50%」=如实新拒因、零 qty=0 环；赎回序列（读→闸→赎 min(needed−u,sav)→18→6→申购）由单测三段断言钉死，生产遇合格档即走。
+③P1 遗留已挂票①行（并发复审席标）：run.go:163 ExpectedAPR=r.APR 未随 rv 换——prod 实证 #572/#573 expected_apr=3.65（模板顶档）vs params venue 原生值，消费面（dashboard/飞书/部门报）错价仍存；钱径零影响（卡用 rv、执行轨实时复验）。分支 wip/earn-venue-float 留存待 P1 补修，勿删。
+④run.go 309 行越 300 软警——债项登记，P1 补修时顺手拆 earnQuoteVenues/sortedVenues 机械件。
+⑤旁证告警（非本票）：[symbol-map] 110660304/USDJPY 等 canonical 停供 critical 复现——独立病灶观察项。 -->
