@@ -19,8 +19,12 @@ type VenueIO struct {
 	Fee        *float64
 	Status     string // 交易所原生状态码原样存（枚举注释见采集器）
 	TxID       string
-	ExternalID string // binance.id / okx depId·wdId
+	ExternalID string // binance.id·tranId / okx depId·wdId·billId
 	Ts         time.Time
+	// D-539①：内部划转（direction='transfer'）钱包两端——快照 venue_type 键域
+	// （spot/funding/earn/perp/unified/margin）；充提行 NULL。
+	FromWallet string
+	ToWallet   string
 }
 
 // InsertVenueIO 批量幂等写入（唯一键 (venue,config_id,direction,external_id) 冲突 DO
@@ -32,10 +36,11 @@ func (s *Store) InsertVenueIO(ctx context.Context, rows []VenueIO) (int64, error
 	batch := &pgx.Batch{}
 	for _, r := range rows {
 		batch.Queue(`
-			INSERT INTO fin_venue_io (venue, config_id, direction, ccy, amount, fee, status, txid, external_id, ts)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			INSERT INTO fin_venue_io (venue, config_id, direction, ccy, amount, fee, status, txid, external_id, ts, from_wallet, to_wallet)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 			ON CONFLICT (venue, config_id, direction, external_id) DO NOTHING`,
-			r.Venue, r.ConfigID, r.Direction, r.Ccy, r.Amount, r.Fee, r.Status, r.TxID, r.ExternalID, r.Ts)
+			r.Venue, r.ConfigID, r.Direction, r.Ccy, r.Amount, r.Fee, r.Status, r.TxID, r.ExternalID, r.Ts,
+			r.FromWallet, r.ToWallet)
 	}
 	br := s.pool.SendBatch(ctx, batch)
 	defer br.Close()

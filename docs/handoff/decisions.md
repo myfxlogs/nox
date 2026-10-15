@@ -276,7 +276,13 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **perp_perp 谓词评估结论**：「任一侧缺席=miss」非过敏——funding 差收割双腿费率缺一无法算 signedNet，分档无意义；真缺口=binance funding 覆盖 745/882（fundingInfo interval 缺符号→rate 不落）另列观察面，不动谓词。
 - **不动项**：all-in 净额判据零动；data_lost 冷却语义零动；簿缺仍诚实缺（补锚仅限簿已有实测行的场景）。
 
-## D-535 喂流断链自盯补口（D-532② 票收口——哨兵沉默归因+聚合 warn 接线）
+## D-538 喂流断链自盯补口（取号纠撞归位 D-538；D-532② 票收口——哨兵沉默归因+聚合 warn 接线）
 - **哨兵沉默归因（取证件）**：`warnMonitorBookAbsent`/`warnActiveBookAbsent` 均在位且每轮跑——沉默根因=谓词纯存在性：real 授权组合仅 XAUUSD(3001157×okx) 一行且簿已覆盖（`xasset_allow_combos` enabled∧real 实拍）；active 仓簿今全在（覆盖晚到非缺席）→ 两哨兵沉默是**正确行为**非接线断。真失明维=「簿在但 entry 锚死」（`ts<=entry` 谓词对簿后生结构性永空，存在性谓词看不见）。
-- **裁定**：①data_lost 批量退聚合 warn 六轨统一接线（scan spot/cfd/mtm/cex + radar perp_perp/perp_delivery——退出>0 一轮一轨至多一条 `WarnDataLostExits`）；②`warnActiveBookAbsent` 加第二维——簿在 ∧ entry_basis NULL ∧ 入场超 `paperCfdMonitorMaxAge` → 锚死 warn（与 D-534② 补锚径互为监督：该愈未愈才报）；③fail-open 吞错不改——既有 `log.Printf` 留痕已合规（查询败≠缺席，不误报优于误报）。
+- **裁定**：①data_lost 批量退聚合 warn 六轨统一接线（scan spot/cfd/mtm/cex + radar perp_perp/perp_delivery——退出>0 一轮一轨至多一条 `WarnDataLostExits`）；②`warnActiveBookAbsent` 加第二维——簿在 ∧ entry_basis NULL ∧ 入场超 `paperCfdMonitorMaxAge` → 锚死 warn（与 D-537② 补锚径互为监督：该愈未愈才报）；③fail-open 吞错不改——既有 `log.Printf` 留痕已合规（查询败≠缺席，不误报优于误报）。
 - **边界**：缺账判定语义零动；聚合限一条/轨/轮；锚死窗借用 15min 陈旧闸值不另造魔数。
+## D-539 残差对账闭环（取号纠撞归位 D-539）（io 台账消费者=等式对账件+内部划转真台账）
+- **schema 裁决**：内部划转复用 `fin_venue_io`——迁移 1029 加 `from_wallet`/`to_wallet`（快照 venue_type 键域），direction='transfer'，幂等键沿用 (venue,config_id,direction,external_id)（binance tranId / okx billId / earn `se-<purchaseId|redeemId>`）。不立新表=流量同构同一账本面。
+- **划转产者**：cex-io 采集器加第三方向——binance `asset/transfer` 逐 type 枚举（20 类覆盖已建池钱包对，未列 type 漏采由残差告警自披露）+simple-earn 申购/赎回史（**D-524 申购反推升级为真台账**：申购=spot→earn、赎回=earn→spot）；okx `asset/bills` from/to 非空行（账户码 6=funding/18=unified，余如实记 acct_N）。gate 仅 sim 配置无采集账户=缺口如实记（如立 real 配置同型自动接入）。
+- **对账件**：`ResidualRecon` 搭车 snapHook（快照写径同拍，零新定时器，safego 异步不阻塞写径）。范围=非保证金池（spot/funding/earn）×稳定币——perp/unified 权益随 UPL 逐帧漂移无 UPL 台账对等式必噪（UPL 台账另票）；income 仅计 symbol=ccy 原生币收益。阈=max($1 尘埃 D-529, 0.5%×equity)，越阈→critical 24h 去重带分解（prev→cur/外部流/划转/收益/残差）。
+- **外部充提落点约定**：binance/gate→spot、okx→funding（venue 实际落点偏移会以残差告警暴露=自披露设计）。
+- **io 求和粒度=venue 级**（io 行归 canonical config，池行按 venue 聚合——config 级会错配）。

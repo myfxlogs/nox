@@ -20,7 +20,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 	rowByKey map[string]UniverseRow, dirtyByKey map[string]string, silentMt map[string]bool,
 	view *assetClassView, now time.Time) (int, error) {
 	exited := 0
-	var dataLost []string // D-535①
+	var dataLost []string // D-538①
 	// cex 腿 canonical→facts symbol 索引（funding 边界事实键=venue+collector
 	// canonical 形=cexFactSymbol(Symbol)，gate XAU_USDT→XAUUSDT、okx XAU-USDT-SWAP→XAUUSDT；
 	// HedgeCanonical/Symbol 双路归一键）。D-550：原样回 raw 键（US30_USDT）直查 facts 零命中
@@ -70,7 +70,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		}
 		if ok {
 			lastBasis = &entryBps
-			// D-534②：entry 锚补写——簿后生覆盖（monitor 首行晚于 entry_ts → ts<=entry
+			// D-537②：entry 锚补写——簿后生覆盖（monitor 首行晚于 entry_ts → ts<=entry
 			// 锚谓词永空）的行以首个实测簿值补锚，est_fee 同拍补（簿值即 spread 分量）。
 			// 非臆造：锚值=venue 实测首行，仅语义从「入场时点」放宽为「首个可观测」。
 			if p.EntryBasisBps == nil {
@@ -80,7 +80,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 					log.Printf("[cfd paper] entry 锚补写 %d: %v（下轮重试）", p.ID, aerr)
 				} else if anchored {
 					p.EntryBasisBps = &entryBps
-					if err := st.AnnotatePaperNote(ctx, p.ID, "entry_basis=首测簿值补锚（簿后生覆盖，D-534②）"); err != nil {
+					if err := st.AnnotatePaperNote(ctx, p.ID, "entry_basis=首测簿值补锚（簿后生覆盖，D-537②）"); err != nil {
 						log.Printf("[cfd paper] entry 锚注记 %d: %v", p.ID, err)
 					}
 				}
@@ -219,7 +219,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			return exited, fmt.Errorf("cfd paper step: accrue %d: %w", p.ID, err)
 		}
 	}
-	WarnDataLostExits(ctx, st, "cfd", dataLost) // D-535①
+	WarnDataLostExits(ctx, st, "cfd", dataLost) // D-538①
 	if noFactWarn > 0 {
 		log.Printf("[cfd paper] 边界/率源缺 fail-closed 跳过 accrue: %d 行", noFactWarn)
 	}

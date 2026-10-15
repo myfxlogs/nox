@@ -25,7 +25,7 @@ func accrueExitCexPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 	candByKey map[string]CexPaperCand, now time.Time) (int, int, error) {
 	exited := 0
 	noFactWarn := 0
-	var dataLost []string // D-535①
+	var dataLost []string // D-538①
 	for _, p := range accrable {
 		if p.Structure != "long_spot_short_perp" {
 			continue // 仅本轨行（spot 轨/cfd 轨/mtm 轨各行归其步进）
@@ -128,7 +128,7 @@ func accrueExitCexPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			return exited, noFactWarn, fmt.Errorf("cex paper step: accrue %d: %w", p.ID, err)
 		}
 	}
-	WarnDataLostExits(ctx, st, "cex", dataLost) // D-535①
+	WarnDataLostExits(ctx, st, "cex", dataLost) // D-538①
 	return exited, noFactWarn, nil
 }
 

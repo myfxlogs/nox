@@ -1,4 +1,4 @@
-// d535_datalost_warn_test.go —— D-535①：data_lost 批量退聚合 warn——连缺 3 轮退行
+// d538_datalost_warn_test.go —— D-538①：data_lost 批量退聚合 warn——连缺 3 轮退行
 // → 一轮至多一条聚合告警落 alerts（D-532② 断链退仓静默病灶补口）。
 package scan
 

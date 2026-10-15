@@ -249,7 +249,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		}
 	}
 	warnMonitorBookAbsent(ctx, st, slots, view)      // D-419 S3：簿覆盖哨兵（不阻断开仓）
-	warnActiveBookAbsent(ctx, st, active, view, now) // D-144 ④+D-535②：active 仓簿缺席+锚死自盯
+	warnActiveBookAbsent(ctx, st, active, view, now) // D-144 ④+D-538②：active 仓簿缺席+锚死自盯
 	// ① 开仓（发现段）——D-050：干净行全量开，无数量槽（实现拆 paper_cfd_open.go）。
 	discOpened, sk, err := openCfdDiscovery(ctx, st, rows, activeStructKeys, flags, view, uni, now, opts, dataLost)
 	if err != nil {

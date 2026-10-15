@@ -16,6 +16,9 @@ import (
 
 // fetchDirection 拉单配置单方向（binance/okx 分派），返回待插行（调用方幂等落库）。
 func (c *CexIOCollector) fetchDirection(ctx context.Context, acc CexIOAccount, direction string) ([]pgstore.VenueIO, error) {
+	if direction == "transfer" {
+		return c.fetchTransfer(ctx, acc) // D-539①：水位内取（direction 自带）
+	}
 	watermark, hasWM, err := c.sink.LatestVenueIOTs(ctx, acc.ID, direction)
 	if err != nil {
 		return nil, err

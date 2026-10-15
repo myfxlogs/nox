@@ -123,7 +123,7 @@ func cfdMtTickCandidates(ctx context.Context, st PaperStore, view *assetClassVie
 
 // warnActiveBookAbsent D-144 ④：active cfd 纸面仓三元组簿存在性自盯（D-033 系统自盯
 // 口径——结构性不可覆盖/venue 断供致簿缺行的仓 basis 冻结 NULL 不可毕业，收口为可归因
-// warn）。D-535② 扩「entry 锚死」维：簿存在但 entry_basis NULL（簿后生覆盖/未成噪）
+// warn）。D-538② 扩「entry 锚死」维：簿存在但 entry_basis NULL（簿后生覆盖/未成噪）
 // 超 paperCfdMonitorMaxAge 未愈者同样透出——存在性谓词对簿后生场景结构性失明
 // （D-532 哨兵沉默 6d 实证归因）。不阻断任何流程；查询失败 fail-open 不误报；
 // 聚合节流每轮两维各至多一条。
@@ -152,7 +152,7 @@ func warnActiveBookAbsent(ctx context.Context, st PaperStore, active []pgstore.P
 			continue
 		}
 		// entry 锚死：簿有行但 entry_basis 仍 NULL 且入场已超陈旧闸——补锚径
-		// （D-534② accrue 轮自愈）该收口未收口=异常透出。
+		// （D-537② accrue 轮自愈）该收口未收口=异常透出。
 		if p.EntryBasisBps == nil && now.Sub(p.EntryTs) > paperCfdMonitorMaxAge {
 			anchorDead = append(anchorDead, p.VenueA+"×"+p.VenueB+"|"+p.Symbol)
 		}

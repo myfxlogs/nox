@@ -1,4 +1,4 @@
-// d534_foreign_structure_test.go —— D-534：①spot 轨异结构行零接触（data_lost 互杀病灶
+// d537_foreign_structure_test.go —— D-537：①spot 轨异结构行零接触（data_lost 互杀病灶
 // 实证：58 行退出全带本轨 note=唯一写手）；②cfd 轨 entry 锚补写（簿后生覆盖→首测值补锚）。
 package scan
 

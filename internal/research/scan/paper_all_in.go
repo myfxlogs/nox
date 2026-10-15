@@ -117,7 +117,7 @@ func paperExitConvergence(p pgstore.PaperSpotCarry, lastBasis *float64) *float64
 	return paperConvergenceUSD(paperBasisDir(p.Side, p.Structure), p.EntryBasisBps, lb, p.QtyUSD)
 }
 
-// WarnDataLostExits D-535①：data_lost 批量退聚合 warn——退出>0 时一轮一轨至多一条
+// WarnDataLostExits D-538①：data_lost 批量退聚合 warn——退出>0 时一轮一轨至多一条
 // （断链退仓不再静默；聚合同毕业链惯例不逐行刷）。keys=venue对|symbol 归因名。
 // 参数面=最小 InsertAlert 接口（scan 各轨 PaperStore 与 radar *pgstore.Store 同吃）。
 func WarnDataLostExits(ctx context.Context, st interface {
