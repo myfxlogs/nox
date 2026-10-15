@@ -203,3 +203,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **关键判据**：cfd_swap_hedged#505（short XAUUSD@15032313 × long PAXGUSDT@binance perp）净 carry +6.4%/yr=唯一显著跑赢 earn 基线；D-521「novel 机制」拒因对该形态不必然成立——short CFD+long CEX perp 恰是 XASSET_CARRY 执行轨同构形态（PAXGUSDT 在 binance perp 目录）。**批准仍不落地**——表达性未实证前批准=造死端；立取证票定「xasset 轨能否表达此向」，可则全族转提案模板票。
 - **USD_UM 面**：okx 交割基差晨拍 ETH-USD_UM-261030 +89%/SOL +82%/BTC +63% ann（15 天到期）=全库最强原信号；USDⓈ 结算币种/抵押面/ctVal/现货腿可行性未知，立取证票——可行→日历基差 P0 轨扩 okx venue 施工票，不可→#7 拒件记忆。
 - **gate 面**：uni-lend DCI 报价 8.22%×1d 入采集但无提案模板（venue 枚举只 binance/okx）——记缺口不立票（量小）；gate funding 极端负费率（NIL −365%/PONS −267%/SOXS −227%）=微盘币流动性面如实记，不产假设（坑>利）。
+
+## D-526 DCI 选档尾险定价（业主疑问落地——DCI=卖尾险须对尾定价非对息比价）
+- **病灶**：`dci_put_otm_bound=0.95` 平界+选档取 APY 最优→系统结构性贴界选最浅 strike（实证 #445 BTC 77500=5.3% OTM×16d≈0.3σ、#30 ETH 2280=6% OTM×6d）；溢价闸基准=3×earn——对无风险收益比价，对所卖尾险零定价。浅虚值 PUT 期望为负（16d premium≈0.65% vs 行权条件损失 4-6%×概率 35-45%）。
+- **裁**：①OTM 界改 σ 驱动——bound=1−k×σ_daily×√tenor（σ_daily 读标的实现波动率 facts/ticks 实算，k 与 tenor 上限落约束表 dci_put_otm_k/dci_tenor_max_days，禁字面量）；②选档目标改「Δ(premium_ann−tail_cost_ann) 最优」——tail_cost 估算=行权概率×条件损失×365/tenor（实现波动率定价法，同 σ 源）；③在仓 DCI 名义合计帽入约束表 `dci_open_notional_cap_usdt`（默认 NAV_USDT 的 15%——浅虚值叠加崩盘的复合风险帽）；④既有在仓不回追（#30 $10 探针 10-21 自然到期；binance #11 2d 短档自然到期）。**结果预期**：σ-safe 距离下多数提案将如实被溢价闸/尾险闸拒——那正是「安全版不值钱」的如实表达，不为追单放闸。
+- **定位**：DCI 产品本身非 venue 坑（OKX/binance 标准结算），坑在选档参数化——本裁只动选档与闸，不动产品接入面。
