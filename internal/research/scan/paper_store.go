@@ -23,6 +23,9 @@ type PaperStore interface {
 	PaperFactSource
 	// 退出冻结收敛捕获（nil→列 NULL 诚实缺）。
 	ExitPaperSpotCarry(ctx context.Context, id int64, reason string, convergenceUSD *float64) error
+	// AnchorPaperEntryBasis D-534②：entry 锚补写——簿后生覆盖时首个实测簿值补锚
+	// （IS NULL 幂等；estFee 同步补 est_round_trip_fee_usd NULL 缺账）。
+	AnchorPaperEntryBasis(ctx context.Context, id int64, entryBps float64, estFee *float64) (bool, error)
 	// cfd 轨 monitor basis 面与保底槽数据源（*pgstore.Store 原生实现）。
 	XAssetMonitorRowNear(ctx context.Context, pair, cexVenue, mtVenue string, ts time.Time, maxGap time.Duration) (entrySpreadBps float64, ok bool, err error)
 	LatestXAssetEntryGate(ctx context.Context, pair, cexVenue, mtVenue string, maxAge time.Duration) (entryBps, noiseBps, harvestFloorBps float64, hasFloor, ok bool, err error)

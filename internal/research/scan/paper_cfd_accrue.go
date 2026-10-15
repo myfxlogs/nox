@@ -69,6 +69,21 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		}
 		if ok {
 			lastBasis = &entryBps
+			// D-534②：entry 锚补写——簿后生覆盖（monitor 首行晚于 entry_ts → ts<=entry
+			// 锚谓词永空）的行以首个实测簿值补锚，est_fee 同拍补（簿值即 spread 分量）。
+			// 非臆造：锚值=venue 实测首行，仅语义从「入场时点」放宽为「首个可观测」。
+			if p.EntryBasisBps == nil {
+				fee := paperCfdFeeUSD(ctx, st, p.VenueB, p.QtyUSD, &entryBps)
+				anchored, aerr := st.AnchorPaperEntryBasis(ctx, p.ID, entryBps, fee)
+				if aerr != nil {
+					log.Printf("[cfd paper] entry 锚补写 %d: %v（下轮重试）", p.ID, aerr)
+				} else if anchored {
+					p.EntryBasisBps = &entryBps
+					if err := st.AnnotatePaperNote(ctx, p.ID, "entry_basis=首测簿值补锚（簿后生覆盖，D-534②）"); err != nil {
+						log.Printf("[cfd paper] entry 锚注记 %d: %v", p.ID, err)
+					}
+				}
+			}
 		}
 		key := p.VenuePair() + "|" + p.Symbol + "|" + p.Structure // D-028 ③：按行自身 structure 匹配 net（不借赢家）
 		r, ok := rowByKey[key]

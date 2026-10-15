@@ -131,6 +131,21 @@ func (s *Store) AccruePaperSpotCarry(ctx context.Context, id int64, lastFundingA
 	return nil
 }
 
+// AnchorPaperEntryBasis D-534②：entry_basis_bps NULL 行补锚——写入首个实测簿值
+// （簿后生覆盖场景：monitor 簿首行晚于 entry_ts，ts<=entry 锚谓词永空）。
+// est_round_trip_fee_usd 同拍补（仍 NULL 时；spread=锚值同源）。IS NULL 幂等，
+// 已锚行不受影响。返回是否实写。
+func (s *Store) AnchorPaperEntryBasis(ctx context.Context, id int64, entryBps float64, estFee *float64) (bool, error) {
+	ct, err := s.pool.Exec(ctx, `
+		UPDATE paper_spot_carry
+		SET entry_basis_bps=$2, est_round_trip_fee_usd=COALESCE(est_round_trip_fee_usd,$3)
+		WHERE id=$1 AND entry_basis_bps IS NULL`, id, entryBps, estFee)
+	if err != nil {
+		return false, fmt.Errorf("anchor paper entry basis %d: %w", id, err)
+	}
+	return ct.RowsAffected() > 0, nil
+}
+
 // ErrPaperPromoteNoActive 无 active 纸面行可升级（该 symbol 已是 demo 行）——RPC 侧映射 already_exists。
 var ErrPaperPromoteNoActive = errors.New("paper spot carry: no active row to promote")
 

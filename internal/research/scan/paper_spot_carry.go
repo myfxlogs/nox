@@ -146,6 +146,12 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 	// ②累积（active+demo；D-474a S1 结算对齐逐期实率）+ ③退出（仅 active）
 	noFactWarn := 0
 	for _, p := range accrable {
+		// 异结构行各归其轨（cfd/mtm/cex/perp/delivery 轨自管累积退出）——本环缺过滤
+		// 曾把异轨行按「universe 缺席」计 miss 并 data_lost 误杀（D-534：58 行全记
+		// 本轨 paperExitNote=唯一写手实证；delivery 24 行 churn 即此病灶非喂流断链）。
+		if p.Structure != "" && p.Structure != "spot_carry" {
+			continue
+		}
 		base := p.EntryTs
 		if p.LastAccrueTs != nil {
 			base = *p.LastAccrueTs

@@ -256,3 +256,12 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **业主令**：只统计 USDT 和 USD，其他币种不统计、不调用——这是我们的本金。
 - **裁定**：①资本分配/可动用池/收益率分母一律 USDT+USD 计——BTC/DOGE/杂币持仓为非本金资产，不调度不折算入本金（D-528 NAV 分币桶展示照旧=披露面，非本金面）；②DCI 本金按 USDT 计但在仓期=锁定档；③USDC/BFUSD 为准稳定币暂挂（业主令字面未含）——复归 USDT 还是单独计待业主一句话，当前按非本金口径处理。
 - **影响面**：金钱不眠（D-286）idle 计量、策略本金上限、≥8% 年化分母皆以本口径为准。
+
+## D-534 cfd/delivery 账源覆盖查证收口（D-532① 票——翻案+两处修法）
+- **取证翻案（D-532 归因修正，SG 10-15 三通道）**：
+  ① **cfd 25 行 basis NULL 根因≠簿未覆盖**——`fin_xasset_monitor` 三元组实际存在且新鲜（JP225USDT-JP225|okx:perp|3001157:mt5 等 62 组实拍），但簿首行晚于 paper entry_ts（簿由 demand=universe 达标行∪active 仓派生，开仓后 ≤1 cron 轮才起写；JP225 三行簿晚入场 ~2min、NAS100/XPT 簿晚 ~1d）→ `XAssetMonitorRowNear` 的 `ts<=entry_ts` 锚谓词对簿后生行**结构性永空** → entry_basis 永久 NULL + est_fee spread 分量 NULL（fee NULL 19 同根）。
+  ② **data_lost 58 行全部翻案**——exited 行 100% 带 `paperExitNote` 注记（spot 轨唯一写手签名），归因=**StepPaperSpotCarry 累积环缺 structure 过滤**：accrable 全表迭代把 perp_delivery/perp_perp/cfd_cfd/long_spot_short_perp/cfd 行按「universe 缺席」计 miss→3 连误杀（退出 ts 落 4h 扫描格点+重启轮实证）。delivery 24 行 churn=互杀非 mark/index 缺帧（premiumIndex 接线在位且每轮正常开仓）；perp_perp 34 行同此（funding 覆盖缺口只贡献 miss 计数加速）。
+  ③ exited 收敛列 NULL 68=① 的 entry NULL 传播 + delivery data_lost 退路径传 nil（无 curBps 可算，诚实缺）。
+- **修法（判据/矩阵零动）**：a) spot 累积环加异结构跳过（`structure∉{"","spot_carry"}→continue`，异轨行零接触）；b) cfd accrue 轮 entry_basis NULL ∧ 簿有行 → 以**首个实测簿值**补锚+同拍补 est_fee（`AnchorPaperEntryBasis` IS NULL 幂等，note 留痕「首测簿值补锚」——锚语义从「入场时点」放宽为「首个可观测」，值非臆造）；c) 哨兵补口见票②（warnActiveBookAbsent 加 entry-锚死维）。
+- **perp_perp 谓词评估结论**：「任一侧缺席=miss」非过敏——funding 差收割双腿费率缺一无法算 signedNet，分档无意义；真缺口=binance funding 覆盖 745/882（fundingInfo interval 缺符号→rate 不落）另列观察面，不动谓词。
+- **不动项**：all-in 净额判据零动；data_lost 冷却语义零动；簿缺仍诚实缺（补锚仅限簿已有实测行的场景）。
