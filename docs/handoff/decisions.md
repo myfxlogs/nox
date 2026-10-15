@@ -218,3 +218,11 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **背景**：现货 reconcile 按旧令只计 USDT 标（cex_account_binance.go 过滤非 USDT/LD*），当时 BTC 持仓是尘埃零头合理。业主 10-15 对账实拍：binance 现货 BTC 0.0127715（~$1034≈本金 8%）+io 表每 ~2 天一笔 0.005-0.007 BTC 外部充值持续进账——重要性阈已过。
 - **裁定**：非稳定币现货持仓按公允价计 NAV，currency 独立桶（BTC/其他），不进 USDT 桶（D-285 分币口径扩）。LD* 前缀仍不计 free（earn 持仓回显，另票修）；dust<1 USD 等价可滤行但须计合计或记豁免。
 - **域界**：账本计价口径=决策席自裁域（非业主三件），推翻旧令由决策席背账；业主 App 对账行数是唯一终判据。
+
+## D-529 现货分币快照口径落地（LD* 处置选型 + okx/gate 同型核查结论）
+- **LD* 处置选型（票裁「二选一」落=排除）**：LD* 资产从 spot 域整体排除（free/equity 皆不计），而非保留+NAV 去重——binance:earn 池行（flexible+locked 端点）已同值独立记账，spot 保留任何 LD* 形态都会与 earn 行双计且跨键去重脆弱。真 LD* 代币白名单：LDO（Lido DAO——其 earn 镜像应为 LDLDO）；venue 新增真 LD* 代币须同行补白名单。
+- **分币行载体**：快照 DISTINCT ON (venue,venue_type,currency) 原生分币行，原生量零换算（D-285）；WS 事件帧（outboundAccountPosition）同写 qty>0 非 LD 行（D-004 流主源），qty=0 不写、消失币由 REST 校准径 prev 并集补零。尘埃阈 qty×价<1 USD 滤行（价源=公开 /v3/ticker/price 全符号单读，读败 fail-closed；无 XXXUSDT 对币不滤不估价 UsdtValue=0 如实留行）；USDT=本位锚行恒留。
+- **binance spot 聚合语义**：free_margin=裸 USDT free（exec 可动读源口径）；Equity=Σ 分币×USD 价（展示域估算，非账本列）。
+- **okx/gate 同型核查结论**：okx unified details 全币枚举已接（eqUsd/availBal venue 已供零新调用，尘埃阈 eqUsd<1）；okx funding 全币枚举（无估值字段原生量）；okx savings 在 finance 户不回显 unified（无双计）；gate 现货无 spot 读径（G1 仅 perp）、gate lend 已独立 earn 键——无双计源。okx WS account 帧仍只写 USDT 聚合行（margin 域口径差异——REST 校准径补分币行，缓议不阻）。
+- **DCI 入快照口径**：binance HOLDING 行 subscriptionAmount 按 investCoin 归位 earn 分币行；okx sfp/dcd/orders live/pending_settle 行按 notionalCcy/investCcy 归位。台账↔venue 对拍（filled 单 product_ref 缺席 venue 在仓集→warn 24h 去重）。
+- **NAV**：SumNav ByCcy 放开全币种原生桶（'' 残影组仍不入）；SkippedNonUSD 语义改=非 USD/USDT 池计数（审计面，不再跳过）。
