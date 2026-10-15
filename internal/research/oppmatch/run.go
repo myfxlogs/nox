@@ -160,7 +160,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 				pid, created, err := st.CreateProposal(ctx, &pgstore.Proposal{
 					TemplateID: r.TemplateID, ExecTrack: r.ExecTrack, Venue: venue,
 					Params:      params,
-					ExpectedAPR: r.APR})
+					ExpectedAPR: rv.APR})
 				if err != nil {
 					log.Printf("[oppmatch] proposal row %s@%s: %v", r.TemplateID, venue, err)
 					continue
@@ -253,57 +253,4 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	log.Printf("[oppmatch] scan done: %d templates, %d proposals, %d new gap requests",
 		len(in), propN, gapN)
 	return propN, gapN, nil
-}
-
-// earnQuoteVenues earn_apr_lending 提案 venue 枚举：rail 覆盖集内有 USDT
-// 报价行的 venue 各出独立提案（报价所取 venue 如实写提案 venue——旧单 binance
-// venue+跨所顶档价=「okx 利率被 binance 轨执行」错 venue 错价面）。报价读败
-// venue 本拍不产（读败不臆造不静默——log 留痕）。
-func earnQuoteVenues(ctx context.Context, st *pgstore.Store) ([]string, map[string]float64) {
-	var venues []string
-	aprs := map[string]float64{}
-	for _, v := range sortedVenues(gate.EarnExecVenues) {
-		apr, ok, err := st.LatestEarnAPR(ctx, v, "USDT")
-		if err != nil {
-			log.Printf("[oppmatch] earn_apr %s 报价读败（本 venue 不产）: %v", v, err)
-			continue
-		}
-		if ok {
-			venues = append(venues, v)
-			aprs[v] = apr
-		}
-	}
-	return venues, aprs
-}
-
-// proposalParams 提案快照参数（审计锚非钉价）：dci 模板补最优档 product/strike/tenor
-// 快照；其余仅 apr——执行时实时闸复验为准（禁区：禁按提案时 strike 硬执行）。
-func proposalParams(ctx context.Context, st *pgstore.Store, r Result, venue string) map[string]any {
-	p := map[string]any{"venue": venue}
-	if r.APR != nil {
-		p["apr"] = *r.APR
-	}
-	var opt, inv string
-	switch r.TemplateID {
-	case "dci_sell_high_covered_call":
-		opt, inv = "CALL", "BTC"
-	case "dci_buy_low":
-		opt, inv = "PUT", "USDT"
-	}
-	if opt != "" {
-		// 快照同界——bound=现货参照×σ 驱动界（D-526；σ 读败→0 fail-closed
-		// 无界快照降级；快照=审计锚非钉价，执行时实时闸复验不变）。
-		sigma, _, _ := fetchSigma(ctx, st)
-		bound := dciStrikeBound(ctx, st, opt, sigma)
-		if qs, err := st.ListDCIQuotes(ctx, venue, "BTC", opt, inv, 90, bound); err == nil && len(qs) > 0 {
-			p["product_ref"] = qs[0].ProductRef
-			if qs[0].Strike != nil {
-				p["strike"] = *qs[0].Strike
-			}
-			if qs[0].TenorDays != nil {
-				p["tenor_days"] = *qs[0].TenorDays
-			}
-		}
-	}
-	return p
 }
