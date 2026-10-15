@@ -1028,3 +1028,23 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **D-527 earn 回写活**：部署后首个快照拍 `fin_opp_eval.actual_apr` 现非 DCI 行——gate:earn +0.011098→#377 cash_mgmt=0.3127（income/1999.6×365/0.648d 自洽）；binance USDT 5 卡=0.0737（共享池 APR 口径）。okx #378 仍 NULL——equity 量化走平三拍 Δ=0，无事件不写语义正确，首个非零 Δ 拍自现。
 - **carry 径**：StoreDeps 桥+`var _ settlement.ActualAPRWriter` 编译断言在产；运行态回写待 D-529 提案↔仓位桥（STATE:48 已立票）。
 - **边角口径**：`CreateProposal` ON CONFLICT 复用语义——在册 proposed 行参数冻结不补 gate_note（与 strike/tenor 同语义）；当前无 dci proposed 行，首个过闸拍产新行即带注记。
+
+## 2026-10-15 四票复审 @390740bed（复审席）
+
+### ① xasset-monitor okx 交割告警——验收达标但根因叙述证伪（TZ 误读）
+- **实施席判**：SG `bin/xasset-monitor` 构建 10-14 09:25 < fix commit 17:23 → 欠账待 `build_host_tools.sh`。
+- **复审实拍**：mtime 09:25 为 SG **UTC**=17:25+0800，恰在 398c55647（17:23:18+0800）**后 2 分**——构建即修复拍；strings 证二进制内含 `COALESCE(contract_type,'PERP')<>'FUTURES'`；USD_UM critical max(ts)=10-14 09:25，此后 20h 零产。告警自始未再发，无部署残留。
+- **取证课**：洪泛告警先查 `max(ts)` 停时点再定「仍在产」；mtime↔commit 比对先统一 UTC（SG 宿主 UTC、git +0800 混比必误）。
+- 裁定：票验收达标（交割行剔簿+okx 16 行 TRADING 全滤），根因改记为「TZ 误读——修复早已生效」。
+
+### ② explorer daily digest 投影——码面照准，SG 零待办
+- `loadExplorerDaily`（daily+new 计数+canonical top3）+`renderExplorerDaily`（N=0 照常印）+`queuesSection` 聚两队列——读败段各自跳过同死角惯例；probe 生命周期零动 ✓。
+- **机制纠记**：digest cron 是 `go run .` 源码态非宿主二进制——无「二进制欠账」，deploy_sync 后 explorer_daily.go 已在 SG，次日 06:10 段自现。
+- 机检独立重跑：tools/digest build/vet/gofmt 净、test 42 绿（含 `TestExplorerDaily`）。
+
+### ③④ 两查证票——结论照准
+- ③ cfd_swap_hedged 可表达：`xasset_allow_combos` 实拍确无 `(binance,PAXGUSDT)×(15032313,XAUUSD)` 反向行——唯一缺件=白名单授权域属实；funding 漂移致现值 net<0 如实记。
+- ④ okx USD_UM go：`paper_spot_carry` venue_a/b 双键+`venue_type∈{spot,perp,futures}` CHECK——okx 配对结构可表达属实；待补证据项归施工票清单。
+
+### 归档
+- STATE:51 翻「已修（无欠账）」+纠记段；STATE:52 补复审收口段。四票全收，零退回零部署残留。
