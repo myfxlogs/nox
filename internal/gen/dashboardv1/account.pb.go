@@ -2040,6 +2040,296 @@ func (x *GetFinanceOverviewResponse) GetPerfFlowProvisional() bool {
 	return false
 }
 
+// === D-536 总览页聚合面（本金分档/业绩/在仓订单/风险心跳/待办一次下发） ===
+type OverviewOrderRow struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`                              // dci / earn / autotrade / paper(沙箱)
+	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`                            // 可读名（venue+品名/持仓 id）
+	AmountUsd     float64                `protobuf:"fixed64,3,opt,name=amount_usd,json=amountUsd,proto3" json:"amount_usd,omitempty"` // 名义/本金（USD 口径）
+	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	Until         *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=until,proto3" json:"until,omitempty"` // 到期/交割/开仓时（UTC——venue/CFD 全 UTC 世界）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OverviewOrderRow) Reset() {
+	*x = OverviewOrderRow{}
+	mi := &file_dashboardv1_account_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OverviewOrderRow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OverviewOrderRow) ProtoMessage() {}
+
+func (x *OverviewOrderRow) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_account_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OverviewOrderRow.ProtoReflect.Descriptor instead.
+func (*OverviewOrderRow) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *OverviewOrderRow) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *OverviewOrderRow) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *OverviewOrderRow) GetAmountUsd() float64 {
+	if x != nil {
+		return x.AmountUsd
+	}
+	return 0
+}
+
+func (x *OverviewOrderRow) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *OverviewOrderRow) GetUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Until
+	}
+	return nil
+}
+
+type GetOverviewBundleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOverviewBundleRequest) Reset() {
+	*x = GetOverviewBundleRequest{}
+	mi := &file_dashboardv1_account_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOverviewBundleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOverviewBundleRequest) ProtoMessage() {}
+
+func (x *GetOverviewBundleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_account_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOverviewBundleRequest.ProtoReflect.Descriptor instead.
+func (*GetOverviewBundleRequest) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{31}
+}
+
+type GetOverviewBundleResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// §0 待办
+	PendingRequests int32 `protobuf:"varint,1,opt,name=pending_requests,json=pendingRequests,proto3" json:"pending_requests,omitempty"`
+	// §1 本金分档（USDT+USD，D-534）
+	PrincipalTotalUsd   float64                `protobuf:"fixed64,2,opt,name=principal_total_usd,json=principalTotalUsd,proto3" json:"principal_total_usd,omitempty"`
+	PrincipalIdleUsd    float64                `protobuf:"fixed64,3,opt,name=principal_idle_usd,json=principalIdleUsd,proto3" json:"principal_idle_usd,omitempty"`          // 可动用
+	PrincipalEarningUsd float64                `protobuf:"fixed64,4,opt,name=principal_earning_usd,json=principalEarningUsd,proto3" json:"principal_earning_usd,omitempty"` // 在息（earn 池）
+	PrincipalLockedUsd  float64                `protobuf:"fixed64,5,opt,name=principal_locked_usd,json=principalLockedUsd,proto3" json:"principal_locked_usd,omitempty"`    // 锁定（DCI 在仓）
+	EarliestRelease     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=earliest_release,json=earliestRelease,proto3" json:"earliest_release,omitempty"`                 // 最早回笼时（锁定档最小到期）
+	// §2 业绩（D-535 基线面）
+	PerfAvailable       bool                   `protobuf:"varint,7,opt,name=perf_available,json=perfAvailable,proto3" json:"perf_available,omitempty"`
+	BaselineUsd         float64                `protobuf:"fixed64,8,opt,name=baseline_usd,json=baselineUsd,proto3" json:"baseline_usd,omitempty"`
+	BaselineAt          *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=baseline_at,json=baselineAt,proto3" json:"baseline_at,omitempty"`
+	PerfUsd             float64                `protobuf:"fixed64,10,opt,name=perf_usd,json=perfUsd,proto3" json:"perf_usd,omitempty"`
+	PerfAnnPct          float64                `protobuf:"fixed64,11,opt,name=perf_ann_pct,json=perfAnnPct,proto3" json:"perf_ann_pct,omitempty"`
+	PerfFlowProvisional bool                   `protobuf:"varint,12,opt,name=perf_flow_provisional,json=perfFlowProvisional,proto3" json:"perf_flow_provisional,omitempty"`
+	// §3 在仓订单统一行
+	Orders     []*OverviewOrderRow `protobuf:"bytes,13,rep,name=orders,proto3" json:"orders,omitempty"`
+	PaperCount int32               `protobuf:"varint,14,opt,name=paper_count,json=paperCount,proto3" json:"paper_count,omitempty"` // 纸面沙箱计数（标沙箱不入本金）
+	// §4 风险心跳
+	KillSwitch     bool    `protobuf:"varint,15,opt,name=kill_switch,json=killSwitch,proto3" json:"kill_switch,omitempty"`
+	Net30Usd       float64 `protobuf:"fixed64,16,opt,name=net30_usd,json=net30Usd,proto3" json:"net30_usd,omitempty"` // 30d 滚动账本净额（对 −3% 硬线）
+	CritAlerts_24H int32   `protobuf:"varint,17,opt,name=crit_alerts_24h,json=critAlerts24h,proto3" json:"crit_alerts_24h,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetOverviewBundleResponse) Reset() {
+	*x = GetOverviewBundleResponse{}
+	mi := &file_dashboardv1_account_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOverviewBundleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOverviewBundleResponse) ProtoMessage() {}
+
+func (x *GetOverviewBundleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_account_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOverviewBundleResponse.ProtoReflect.Descriptor instead.
+func (*GetOverviewBundleResponse) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *GetOverviewBundleResponse) GetPendingRequests() int32 {
+	if x != nil {
+		return x.PendingRequests
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetPrincipalTotalUsd() float64 {
+	if x != nil {
+		return x.PrincipalTotalUsd
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetPrincipalIdleUsd() float64 {
+	if x != nil {
+		return x.PrincipalIdleUsd
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetPrincipalEarningUsd() float64 {
+	if x != nil {
+		return x.PrincipalEarningUsd
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetPrincipalLockedUsd() float64 {
+	if x != nil {
+		return x.PrincipalLockedUsd
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetEarliestRelease() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EarliestRelease
+	}
+	return nil
+}
+
+func (x *GetOverviewBundleResponse) GetPerfAvailable() bool {
+	if x != nil {
+		return x.PerfAvailable
+	}
+	return false
+}
+
+func (x *GetOverviewBundleResponse) GetBaselineUsd() float64 {
+	if x != nil {
+		return x.BaselineUsd
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetBaselineAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.BaselineAt
+	}
+	return nil
+}
+
+func (x *GetOverviewBundleResponse) GetPerfUsd() float64 {
+	if x != nil {
+		return x.PerfUsd
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetPerfAnnPct() float64 {
+	if x != nil {
+		return x.PerfAnnPct
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetPerfFlowProvisional() bool {
+	if x != nil {
+		return x.PerfFlowProvisional
+	}
+	return false
+}
+
+func (x *GetOverviewBundleResponse) GetOrders() []*OverviewOrderRow {
+	if x != nil {
+		return x.Orders
+	}
+	return nil
+}
+
+func (x *GetOverviewBundleResponse) GetPaperCount() int32 {
+	if x != nil {
+		return x.PaperCount
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetKillSwitch() bool {
+	if x != nil {
+		return x.KillSwitch
+	}
+	return false
+}
+
+func (x *GetOverviewBundleResponse) GetNet30Usd() float64 {
+	if x != nil {
+		return x.Net30Usd
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetCritAlerts_24H() int32 {
+	if x != nil {
+		return x.CritAlerts_24H
+	}
+	return 0
+}
+
 var File_dashboardv1_account_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_account_proto_rawDesc = "" +
@@ -2217,7 +2507,38 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\x15perf_flow_provisional\x18\x10 \x01(\bR\x13perfFlowProvisional\x1a>\n" +
 	"\x10EquityByCcyEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01J\x04\b\x01\x10\x02J\x04\b\x03\x10\x04R\rdeposited_usdR\vnet_pnl_usdB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01J\x04\b\x01\x10\x02J\x04\b\x03\x10\x04R\rdeposited_usdR\vnet_pnl_usd\"\xa5\x01\n" +
+	"\x10OverviewOrderRow\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\x12\x1d\n" +
+	"\n" +
+	"amount_usd\x18\x03 \x01(\x01R\tamountUsd\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x120\n" +
+	"\x05until\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x05until\"\x1a\n" +
+	"\x18GetOverviewBundleRequest\"\x8c\x06\n" +
+	"\x19GetOverviewBundleResponse\x12)\n" +
+	"\x10pending_requests\x18\x01 \x01(\x05R\x0fpendingRequests\x12.\n" +
+	"\x13principal_total_usd\x18\x02 \x01(\x01R\x11principalTotalUsd\x12,\n" +
+	"\x12principal_idle_usd\x18\x03 \x01(\x01R\x10principalIdleUsd\x122\n" +
+	"\x15principal_earning_usd\x18\x04 \x01(\x01R\x13principalEarningUsd\x120\n" +
+	"\x14principal_locked_usd\x18\x05 \x01(\x01R\x12principalLockedUsd\x12E\n" +
+	"\x10earliest_release\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x0fearliestRelease\x12%\n" +
+	"\x0eperf_available\x18\a \x01(\bR\rperfAvailable\x12!\n" +
+	"\fbaseline_usd\x18\b \x01(\x01R\vbaselineUsd\x12;\n" +
+	"\vbaseline_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"baselineAt\x12\x19\n" +
+	"\bperf_usd\x18\n" +
+	" \x01(\x01R\aperfUsd\x12 \n" +
+	"\fperf_ann_pct\x18\v \x01(\x01R\n" +
+	"perfAnnPct\x122\n" +
+	"\x15perf_flow_provisional\x18\f \x01(\bR\x13perfFlowProvisional\x12:\n" +
+	"\x06orders\x18\r \x03(\v2\".nox.dashboard.v1.OverviewOrderRowR\x06orders\x12\x1f\n" +
+	"\vpaper_count\x18\x0e \x01(\x05R\n" +
+	"paperCount\x12\x1f\n" +
+	"\vkill_switch\x18\x0f \x01(\bR\n" +
+	"killSwitch\x12\x1b\n" +
+	"\tnet30_usd\x18\x10 \x01(\x01R\bnet30Usd\x12&\n" +
+	"\x0fcrit_alerts_24h\x18\x11 \x01(\x05R\rcritAlerts24hB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_account_proto_rawDescOnce sync.Once
@@ -2231,7 +2552,7 @@ func file_dashboardv1_account_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_account_proto_rawDescData
 }
 
-var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_dashboardv1_account_proto_goTypes = []any{
 	(*KnowledgeEntry)(nil),                  // 0: nox.dashboard.v1.KnowledgeEntry
 	(*ListKnowledgeEntriesRequest)(nil),     // 1: nox.dashboard.v1.ListKnowledgeEntriesRequest
@@ -2263,34 +2584,41 @@ var file_dashboardv1_account_proto_goTypes = []any{
 	(*FinanceIncomeRow)(nil),                // 27: nox.dashboard.v1.FinanceIncomeRow
 	(*FinanceFlowRow)(nil),                  // 28: nox.dashboard.v1.FinanceFlowRow
 	(*GetFinanceOverviewResponse)(nil),      // 29: nox.dashboard.v1.GetFinanceOverviewResponse
-	nil,                                     // 30: nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
-	(*timestamppb.Timestamp)(nil),           // 31: google.protobuf.Timestamp
+	(*OverviewOrderRow)(nil),                // 30: nox.dashboard.v1.OverviewOrderRow
+	(*GetOverviewBundleRequest)(nil),        // 31: nox.dashboard.v1.GetOverviewBundleRequest
+	(*GetOverviewBundleResponse)(nil),       // 32: nox.dashboard.v1.GetOverviewBundleResponse
+	nil,                                     // 33: nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
+	(*timestamppb.Timestamp)(nil),           // 34: google.protobuf.Timestamp
 }
 var file_dashboardv1_account_proto_depIdxs = []int32{
-	31, // 0: nox.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
-	31, // 1: nox.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
+	34, // 0: nox.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
+	34, // 1: nox.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: nox.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> nox.dashboard.v1.KnowledgeEntry
-	31, // 3: nox.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	31, // 4: nox.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	34, // 3: nox.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	34, // 4: nox.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
 	10, // 5: nox.dashboard.v1.ListKBEntriesResponse.entries:type_name -> nox.dashboard.v1.KBEntry
 	3,  // 6: nox.dashboard.v1.ListDailyIncomeResponse.items:type_name -> nox.dashboard.v1.PositionDailyIncome
-	31, // 7: nox.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
+	34, // 7: nox.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
 	21, // 8: nox.dashboard.v1.AccountInfo.holdings:type_name -> nox.dashboard.v1.Holding
-	31, // 9: nox.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
+	34, // 9: nox.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
 	19, // 10: nox.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> nox.dashboard.v1.AccountMarginStatus
 	17, // 11: nox.dashboard.v1.ListAccountsResponse.accounts:type_name -> nox.dashboard.v1.AccountInfo
-	31, // 12: nox.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
-	31, // 13: nox.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
+	34, // 12: nox.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
+	34, // 13: nox.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
 	26, // 14: nox.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> nox.dashboard.v1.FinancePnlByEnv
 	27, // 15: nox.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> nox.dashboard.v1.FinanceIncomeRow
 	28, // 16: nox.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> nox.dashboard.v1.FinanceFlowRow
-	30, // 17: nox.dashboard.v1.GetFinanceOverviewResponse.equity_by_ccy:type_name -> nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
-	31, // 18: nox.dashboard.v1.GetFinanceOverviewResponse.baseline_at:type_name -> google.protobuf.Timestamp
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	33, // 17: nox.dashboard.v1.GetFinanceOverviewResponse.equity_by_ccy:type_name -> nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
+	34, // 18: nox.dashboard.v1.GetFinanceOverviewResponse.baseline_at:type_name -> google.protobuf.Timestamp
+	34, // 19: nox.dashboard.v1.OverviewOrderRow.until:type_name -> google.protobuf.Timestamp
+	34, // 20: nox.dashboard.v1.GetOverviewBundleResponse.earliest_release:type_name -> google.protobuf.Timestamp
+	34, // 21: nox.dashboard.v1.GetOverviewBundleResponse.baseline_at:type_name -> google.protobuf.Timestamp
+	30, // 22: nox.dashboard.v1.GetOverviewBundleResponse.orders:type_name -> nox.dashboard.v1.OverviewOrderRow
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_account_proto_init() }
@@ -2304,7 +2632,7 @@ func file_dashboardv1_account_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_account_proto_rawDesc), len(file_dashboardv1_account_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   31,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

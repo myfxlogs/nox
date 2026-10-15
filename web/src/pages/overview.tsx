@@ -1,148 +1,117 @@
-// overview.tsx —— 总览：净值卡/持仓聚合/告警/机会流/资金提醒。
-// RPC 首载补全量；case 1-5/10/15/16/14(funds,finance) 流增量。
-import { useCallback, useEffect, useState } from "react";
+// overview.tsx —— D-536 总览页五段（§0 待办→§1 本金→§2 业绩→§3 在仓订单→§4 风险心跳）。
+// 前端零运算只渲染；缺数据显缺不显 0；时戳 UTC 口径（业主令 10-15——venue/CFD 全 UTC）。
+import { useEffect, useState } from "react";
 import { client, errText } from "../api";
-import { onCase } from "../stream";
-import type { Position } from "../gen/dashboardv1/position_pb";
-import type { Alert, Opportunity } from "../gen/dashboardv1/market_pb";
-import type { FundingNeedNotice } from "../gen/dashboardv1/stream_pb";
-import { fmtUsd, ts } from "../components/fmt";
+import { timestampDate } from "@bufbuild/protobuf/wkt";
+import type { GetOverviewBundleResponse, OverviewOrderRow } from "../gen/dashboardv1/account_pb";
+import type { RequestBoxItem } from "../gen/dashboardv1/request_box_pb";
+import { ResolveRequestState } from "../gen/dashboardv1/request_box_pb";
+import { fmtUsd } from "../components/fmt";
 
-// ACTIVE 域=status:"ACTIVE" 后端谓词同款（OPEN/OPENING/LEGGED/CLOSING——
-// 源：pgstore.ListPositions 注释+service_positions_enrich.go activeStatuses）。
-const ACTIVE_STATUSES = new Set(["OPEN", "OPENING", "LEGGED", "CLOSING"]);
+const utc = (t: Date | undefined) =>
+  t ? t.toISOString().replace("T", " ").slice(0, 19) + "Z" : "—";
 
 export default function OverviewPage() {
-  const [equity, setEquity] = useState<number | null>(null);
-  const [realized, setRealized] = useState<number | null>(null);
-  const [floatNet, setFloatNet] = useState<number | null>(null);
-  const [ann30, setAnn30] = useState<number | null>(null);
-  const [positions, setPositions] = useState<Map<number, Position>>(new Map());
-  const [alerts, setAlerts] = useState<Map<number, Alert>>(new Map());
-  const [opps, setOpps] = useState<Opportunity[]>([]);
-  const [funding, setFunding] = useState<FundingNeedNotice | null>(null);
-  const [minNetBps, setMinNetBps] = useState<number | null>(null);
+  const [b, setB] = useState<GetOverviewBundleResponse | null>(null);
+  const [box, setBox] = useState<RequestBoxItem[]>([]);
+  const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState("");
 
-  const load = useCallback(async () => {
+  const load = async () => {
     try {
-      const [fin, pnl, pos, al, op, cfg] = await Promise.all([
-        client.getFinanceOverview({}),
-        client.getPnlAnchor({}),
-        client.listPositions({ status: "ACTIVE", limit: 200 }),
-        client.listAlerts({ limit: 20 }),
-        client.listOpportunities({ limit: 20 }),
-        client.getFrontConfig({}),
+      const [bd, bx] = await Promise.all([
+        client.getOverviewBundle({}),
+        client.listRequestBox({}),
       ]);
-      setEquity(fin.totalEquityUsd);
-      setRealized(fin.totalRealizedUsd);
-      setFloatNet(pnl.floatingNetUsd);
-      setAnn30(pnl.netAnn30dPct);
-      setPositions(new Map(pos.positions.map((p) => [Number(p.id), p])));
-      setAlerts(new Map(al.alerts.map((a) => [Number(a.id), a])));
-      setOpps(op.opportunities);
-      setMinNetBps(cfg.notifyMinNetBps);
-      setErr("");
-    } catch (e) {
-      setErr(errText(e));
-    }
-  }, []);
+      setB(bd); setBox(bx.items); setErr("");
+    } catch (e) { setErr(errText(e)); }
+  };
+  useEffect(() => { void load(); }, []);
 
-  useEffect(() => {
-    void load();
-    const offs = [
-      onCase("position", (v) => {
-        const p = v as Position;
-        // 本页=ACTIVE 域（load 拉 status:"ACTIVE"）：回放/事件推全量行，
-        // 非活跃态须从表剔除而非塞入——否则 CLOSED 行进表，下次 load 再抹=行闪。
-        setPositions((m) => {
-          const n = new Map(m);
-          if (ACTIVE_STATUSES.has(p.status)) n.set(Number(p.id), p);
-          else n.delete(Number(p.id));
-          return n;
-        });
-      }),
-      onCase("alert", (v) => {
-        const a = v as Alert;
-        setAlerts((m) => new Map(m).set(Number(a.id), a));
-      }),
-      onCase("opportunity", (v) => {
-        const o = v as Opportunity;
-        setOpps((l) => [o, ...l.filter((x) => x.id !== o.id)].slice(0, 20));
-      }),
-      onCase("fundingNeed", (v) => setFunding(v as FundingNeedNotice)),
-      onCase("dataRefresh", (v) => {
-        const t = (v as { topic: string }).topic;
-        if (t === "funds" || t === "finance") void load();
-      }),
-    ];
-    return () => offs.forEach((f) => f());
-  }, [load]);
+  const resolve = async (id: number, state: ResolveRequestState) => {
+    setBusy(id);
+    try {
+      await client.resolveRequest({ id: BigInt(id), state });
+      await load();
+    } catch (e) { setErr(errText(e)); } finally { setBusy(null); }
+  };
 
-  const posList = [...positions.values()];
-  const alertList = [...alerts.values()];
+  const pending = box; // 请求箱行本身即待办面
   return (
     <div>
+      <h1>总览</h1>
       {err && <div className="err">{err}</div>}
-      {funding && (
-        <div className="card crit" style={{ marginBottom: 8 }}>
-          资金需求：{funding.canonical} {funding.aliasLong || funding.venueLong}→
-          {funding.aliasShort || funding.venueShort} 缺 {fmtUsd(funding.needUsd)}（{funding.reason}）
+
+      {/* §0 待办横幅 */}
+      {pending.length > 0 && (
+        <div className="card" style={{ borderColor: "#d97706" }}>
+          <h2>待办（{pending.length}）</h2>
+          <table><tbody>
+            {pending.map((r) => (
+              <tr key={Number(r.id)}>
+                <td>#{Number(r.id)}</td><td>{r.kind}</td><td>{r.subject}</td>
+                <td className="muted">{r.requestText}</td>
+                <td>
+                  <button disabled={busy === Number(r.id)} onClick={() => resolve(Number(r.id), ResolveRequestState.FULFILLED)}>已喂条件</button>{" "}
+                  <button disabled={busy === Number(r.id)} onClick={() => resolve(Number(r.id), ResolveRequestState.WAIVED)}>放弃</button>
+                </td>
+              </tr>
+            ))}
+          </tbody></table>
         </div>
       )}
+
+      {/* §1 本金条（USDT+USD，D-534） */}
+      <h2>本金（USDT+USD）</h2>
       <div className="cards">
-        <div className="card"><div className="k">总权益</div><div className="v">{fmtUsd(equity)}</div></div>
-        <div className="card"><div className="k">已实现累计</div><div className="v">{fmtUsd(realized)}</div></div>
-        <div className="card"><div className="k">浮动净值</div><div className="v">{fmtUsd(floatNet)}</div></div>
-        <div className="card"><div className="k">30d 净年化</div><div className="v">{ann30 == null ? "—" : ann30.toFixed(2) + "%"}</div></div>
-        <div className="card"><div className="k">活跃持仓</div><div className="v">{posList.length}</div></div>
+        <div className="card"><div className="k">本金合计</div><div className="v">{b ? fmtUsd(b.principalTotalUsd) : "—"}</div></div>
+        <div className="card"><div className="k">可动用</div><div className="v">{b ? fmtUsd(b.principalIdleUsd) : "—"}</div></div>
+        <div className="card"><div className="k">在息</div><div className="v">{b ? fmtUsd(b.principalEarningUsd) : "—"}</div></div>
+        <div className="card"><div className="k">锁定</div><div className="v">{b ? fmtUsd(b.principalLockedUsd) : "—"}</div>
+          {b?.earliestRelease && <div className="muted" style={{fontSize:"12px"}}>最早回笼 {utc(timestampDate(b.earliestRelease))}</div>}
+        </div>
       </div>
 
-      <h2>持仓</h2>
-      <table>
-        <thead><tr><th>ID</th><th>类型</th><th>状态</th><th>预期净bps</th><th>净盈亏</th><th>开仓时间</th></tr></thead>
-        <tbody>
-          {posList.map((p) => (
-            <tr key={Number(p.id)}>
-              <td>{Number(p.id)}</td><td>{p.type}</td><td>{p.status}</td>
-              <td>{p.expectedNetBps.toFixed(1)}</td>
-              <td className={(p.netPnlUsd ?? 0) >= 0 ? "good" : "crit"}>{fmtUsd(p.netPnlUsd)}</td>
-              <td>{ts(p.openedAt)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* §2 业绩条（D-535 基线） */}
+      <h2>业绩</h2>
+      {b?.perfAvailable ? (
+        <div className="cards">
+          <div className="card"><div className="k">基线</div><div className="v">{fmtUsd(b.baselineUsd)}</div>
+            <div className="muted" style={{fontSize:"12px"}}>{utc(b.baselineAt ? timestampDate(b.baselineAt) : undefined)} 起算</div></div>
+          <div className="card"><div className="k">基线后业绩{b.perfFlowProvisional ? "（provisional）" : ""}</div>
+            <div className={b.perfUsd >= 0 ? "v good" : "v crit"}>{(b.perfUsd >= 0 ? "+" : "") + fmtUsd(b.perfUsd)}</div>
+            <div className="muted" style={{fontSize:"12px"}}>年化 {b.perfAnnPct.toFixed(2)}%</div></div>
+        </div>
+      ) : <div className="muted">业绩基线未配置（perf_baseline_*）</div>}
 
-      <h2>机会流</h2>
-      <table>
-        <thead><tr><th>品种</th><th>买</th><th>卖</th><th>净bps</th><th>净USD</th><th>过期</th></tr></thead>
-        <tbody>
-          {opps.map((o) => (
-            <tr key={o.id} className={minNetBps != null && o.netBps < minNetBps ? "muted" : ""}>
-              <td>{o.type}</td>
-              <td>{o.aliasBuy || o.venueBuy}</td>
-              <td>{o.aliasSell || o.venueSell}</td>
-              <td className={o.netBps >= 0 ? "good" : "crit"}>{o.netBps.toFixed(2)}</td>
-              <td>{fmtUsd(o.netUsd)}</td>
-              <td>{ts(o.expiresAt)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* §3 在仓订单统一表 */}
+      <h2>在仓订单</h2>
+      {b && b.orders.length > 0 ? (
+        <table>
+          <thead><tr><th>类</th><th>对象</th><th>额 USD</th><th>态</th><th>时点（UTC）</th></tr></thead>
+          <tbody>
+            {b.orders.map((o: OverviewOrderRow, i: number) => (
+              <tr key={i}>
+                <td>{o.kind}</td><td>{o.label}</td>
+                <td>{fmtUsd(o.amountUsd)}</td><td>{o.status}</td>
+                <td className="muted">{o.until ? utc(timestampDate(o.until)) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : <div className="muted">无在仓订单</div>}
+      {b && b.paperCount > 0 && <div className="muted">纸面沙箱 {b.paperCount} 条（不入本金）</div>}
 
-      <h2>告警</h2>
-      <table>
-        <thead><tr><th>时间</th><th>级别</th><th>内容</th></tr></thead>
-        <tbody>
-          {alertList.map((a) => (
-            <tr key={Number(a.id)}>
-              <td>{ts(a.ts)}</td>
-              <td className={a.level === "crit" ? "crit" : a.level === "warn" ? "warn" : ""}>{a.level}</td>
-              <td style={{ whiteSpace: "normal" }}>{a.message}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* §4 风险心跳 */}
+      <h2>风险心跳</h2>
+      <div className="cards">
+        <div className="card"><div className="k">KillSwitch</div>
+          <div className={b?.killSwitch ? "v crit" : "v good"}>{b ? (b.killSwitch ? "ON" : "off") : "—"}</div></div>
+        <div className="card"><div className="k">30d 净额（对 −3% 硬线）</div>
+          <div className={b && b.net30Usd < 0 ? "v crit" : "v"}>{b ? fmtUsd(b.net30Usd) : "—"}</div></div>
+        <div className="card"><div className="k">24h critical</div>
+          <div className={b && b.critAlerts24h > 0 ? "v crit" : "v"}>{b ? String(b.critAlerts24h) : "—"}</div></div>
+      </div>
     </div>
   );
 }

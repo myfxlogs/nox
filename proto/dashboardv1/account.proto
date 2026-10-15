@@ -228,3 +228,37 @@ message GetFinanceOverviewResponse {
   bool perf_available = 15;               // false=锚缺/读败（前端显缺不显 0）
   bool perf_flow_provisional = 16;        // 净流扣减 provisional 标（perf_flow_provisional 键）
 }
+
+// === D-536 总览页聚合面（本金分档/业绩/在仓订单/风险心跳/待办一次下发） ===
+message OverviewOrderRow {
+  string kind = 1;            // dci / earn / autotrade / paper(沙箱)
+  string label = 2;           // 可读名（venue+品名/持仓 id）
+  double amount_usd = 3;      // 名义/本金（USD 口径）
+  string status = 4;
+  google.protobuf.Timestamp until = 5; // 到期/交割/开仓时（UTC——venue/CFD 全 UTC 世界）
+}
+message GetOverviewBundleRequest {}
+message GetOverviewBundleResponse {
+  // §0 待办
+  int32 pending_requests = 1;
+  // §1 本金分档（USDT+USD，D-534）
+  double principal_total_usd = 2;
+  double principal_idle_usd = 3;    // 可动用
+  double principal_earning_usd = 4; // 在息（earn 池）
+  double principal_locked_usd = 5;  // 锁定（DCI 在仓）
+  google.protobuf.Timestamp earliest_release = 6; // 最早回笼时（锁定档最小到期）
+  // §2 业绩（D-535 基线面）
+  bool perf_available = 7;
+  double baseline_usd = 8;
+  google.protobuf.Timestamp baseline_at = 9;
+  double perf_usd = 10;
+  double perf_ann_pct = 11;
+  bool perf_flow_provisional = 12;
+  // §3 在仓订单统一行
+  repeated OverviewOrderRow orders = 13;
+  int32 paper_count = 14; // 纸面沙箱计数（标沙箱不入本金）
+  // §4 风险心跳
+  bool kill_switch = 15;
+  double net30_usd = 16;      // 30d 滚动账本净额（对 −3% 硬线）
+  int32 crit_alerts_24h = 17;
+}
