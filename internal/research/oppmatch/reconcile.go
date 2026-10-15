@@ -9,6 +9,7 @@ import (
 
 	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
+	"time"
 )
 
 // checkVenueFloat D-193①：venue 悬空自检——仅对已接执行轨模板（executor 映射集内），
@@ -16,9 +17,9 @@ import (
 // （episode 防抖）。未接执行轨模板声明新 venue=合法投资人请求不报。
 // 内部不一致报系统不修数据（修种子=策略治理权）。
 func checkVenueFloat(ctx context.Context, st *pgstore.Store, in []Template) {
-	execVenue := gate.ExecTemplateVenues()
+	execVenues := gate.ExecTemplateVenueSets()
 	for _, t := range in {
-		ev, ok := execVenue[t.ID]
+		ev, ok := execVenues[t.ID]
 		if !ok {
 			continue // 未接执行轨=不报
 		}
@@ -30,10 +31,12 @@ func checkVenueFloat(ctx context.Context, st *pgstore.Store, in []Template) {
 			if i := strings.Index(ven, ":"); i > 0 {
 				ven = ven[:i]
 			}
-			if ven != ev {
-				if err := st.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
-					"模板venue悬空：%s 声明凭据 %s，执行轨 venue=%s（需求行漂移，报系统不修数据）",
-					t.ID, c.Subject, ev)); err != nil {
+			if !ev[ven] {
+				// episode 防抖：24h 去重窗（旧 InsertAlert 每扫描拍重发，
+				// 与「warn 一次」注释承诺相悖）。
+				if err := st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
+					"模板venue悬空：%s 声明凭据 %s 不在执行轨 venue 集（需求行漂移，报系统不修数据）",
+					t.ID, c.Subject), 24*time.Hour); err != nil {
 					log.Printf("[oppmatch] venue-float alert %s: %v", t.ID, err)
 				}
 			}

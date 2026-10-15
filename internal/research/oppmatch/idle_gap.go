@@ -11,12 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 )
-
-// earnExecVenues earn 提案可执行 venue 面（dciexec.goEarn rail 化：binance/okx/gate
-// 三径；新 venue 接上执行径时在此补名——缺口扫描自动收口不再报）。
-var earnExecVenues = map[string]bool{"binance": true, "okx": true, "gate": true}
 
 // idleGapDustUSD 粉尘阈：闲置权益 <$100 不出缺口行（okx:earn $169 类尘额
 // 手工 waived 实证——尘池缺口骚扰收益不抵）。
@@ -39,7 +36,7 @@ func idleGapScan(ctx context.Context, st *pgstore.Store) {
 		}
 		// 有执行径的闲池（earnExecVenues 面）→直接产 cash_mgmt 提案（pending 唯一锚
 		// 1024 含 venue——同模板异所各行其位幂等）。USDT 先行域（earn 提案定值域）。
-		if earnExecVenues[p.Venue] {
+		if gate.EarnExecVenues[p.Venue] {
 			if p.Currency != "USDT" {
 				continue
 			}
