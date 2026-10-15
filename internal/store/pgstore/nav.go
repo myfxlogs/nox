@@ -34,7 +34,9 @@ type NavReport struct {
 
 // SumNav 池集→NAV 聚合规则唯一实现（ComputeNav/测试 fake 同径复用）。
 // D-522：USD/USDT 各归其桶（USDⓈ=同一记帐单位族不混桶——USD 桶只收 currency='USD' 池，
-// USDT 桶只收 'USDT' 池，二者从不相加）；其它币种池跳过+计数。
+// USDT 桶只收 'USDT' 池，二者从不相加）。
+// D-528：非 USD/USDT 池同样入 ByCcy 原生量桶（分币持仓入账——BTC 现货漏计实证；
+// 各桶原生单位零换算，跨币永不加总）；SkippedNonUSD 留=非 USD/USDT 池计数（审计面）。
 func SumNav(pools []ExplorerIdlePool, now time.Time) *NavReport {
 	r := &NavReport{Pools: pools, ByCcy: map[string]NavBucket{}, ComputedAt: now}
 	for _, p := range pools {
@@ -42,9 +44,12 @@ func SumNav(pools []ExplorerIdlePool, now time.Time) *NavReport {
 			r.SkippedGhost++
 			continue
 		}
+		if p.Currency == "" {
+			r.SkippedNonUSD++
+			continue // 纯 '' 残影组不入桶（blank 合并已并主币行；残组无币名不立账）
+		}
 		if p.Currency != "USD" && p.Currency != "USDT" {
 			r.SkippedNonUSD++
-			continue
 		}
 		b := r.ByCcy[p.Currency]
 		b.Nav += p.Equity

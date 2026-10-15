@@ -112,19 +112,21 @@ func (m *AccountMonitor) writeRestSnapshot(ctx context.Context, vk string, prev,
 		log.Printf("[account-mon] %s rest_poll snapshot write: %v", vk, err)
 		return false
 	}
-	m.attributeEarnYield(ctx, rows) // D-524：earn 池行新写同拍增量归属入账
+	m.attributeEarnYield(ctx, rows)     // D-524：earn 池行新写同拍增量归属入账
+	m.checkDCILedgerCoverage(ctx, acct) // DCI 台账↔venue 在仓对拍（断点告警）
 	return true
 }
 
-// snapshotRows 组装写行：默认单行；earn 面多币持仓（binance earn 分币枚举，D-285 零换算）
-// 时每币种一行（读端 DISTINCT ON 含 currency），并入 prev 币种并集——消失的币种
-// 补 0 行防陈旧残值永久滞留。
+// snapshotRows 组装写行：默认单行；分币读面（earn/spot/unified 持仓分币枚举，
+// D-285 零换算 + D-528 现货非稳定币入账）时每币种一行（读端 DISTINCT ON 含
+// currency），并入 prev 币种并集——消失的币种补 0 行防陈旧残值永久滞留。
+// free_margin 源=acct.FreeQtyByCcy（填则分币真值；nil=0——earn 池行零可动概念）。
 func snapshotRows(prev, acct *reconcile.AccountInfo) []pgstore.VenueAccountSnapshot {
 	vt := venue.NormalizeVenueType(acct.AssetType, acct.Venue, acct.VenueType)
 	mk := func(ccy string, eq float64) pgstore.VenueAccountSnapshot {
 		row := pgstore.VenueAccountSnapshot{
 			Venue: acct.Venue, VenueType: vt,
-			BalanceRaw: eq, EquityRaw: eq, FreeMarginRaw: 0, // 分币行零重复保证金概念
+			BalanceRaw: eq, EquityRaw: eq, FreeMarginRaw: acct.FreeQtyByCcy[ccy],
 			Currency: ccy, FetchedAt: time.Now(), Src: "rest_poll",
 		}
 		if acct.BufferMultiple > 0 {
@@ -133,7 +135,9 @@ func snapshotRows(prev, acct *reconcile.AccountInfo) []pgstore.VenueAccountSnaps
 		}
 		return row
 	}
-	if acct.VenueType != "earn" || len(acct.Holdings) == 0 {
+	multiCcy := acct.VenueType == "earn" || acct.VenueType == "spot" ||
+		acct.VenueType == "unified" || acct.VenueType == "funding" || acct.VenueType == "futures"
+	if !multiCcy || len(acct.Holdings) == 0 {
 		return []pgstore.VenueAccountSnapshot{{
 			Venue: acct.Venue, VenueType: vt,
 			BalanceRaw: acct.Balance, EquityRaw: acct.Equity, FreeMarginRaw: acct.FreeMargin,

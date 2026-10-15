@@ -9,10 +9,12 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 	"time"
 
+	"nox/internal/ledger/reconcile"
 	"nox/internal/store/pgstore"
 )
 
@@ -27,6 +29,9 @@ type EarnYieldStore interface {
 	ListEarnPoolOrders(ctx context.Context, venue, ccy string) ([]pgstore.EarnPoolOrder, error)
 	SumEarnYieldSince(ctx context.Context, venue, ccy string, since time.Time) (float64, error)
 	UpdateOppEvalActual(ctx context.Context, proposalID int64, apr float64) error
+	// DCI 台账对拍读面（快照写径搭车——台账 filled 单 vs venue 在仓引用集）。
+	ListFilledDCIOrders(ctx context.Context) ([]pgstore.FilledDCIOrder, error)
+	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
 }
 
 // SetEarnYieldStore 注入归属读写面（main 装配 st；零注入=仅快照不写收益行）。
@@ -141,6 +146,35 @@ func (m *AccountMonitor) writeEarnActualAPR(ctx context.Context, shares map[stri
 			if uerr := m.yieldStore.UpdateOppEvalActual(ctx, o.ProposalID, apr); uerr != nil {
 				log.Printf("[earn-yield] eval actual apr proposal#%d: %v", o.ProposalID, uerr)
 			}
+		}
+	}
+}
+
+// checkDCILedgerCoverage 台账↔venue 在仓对拍（快照写径搭车，earn 读径采回的
+// DCIOpenRefs vs fin_dci_order filled 单）：台账说在仓但 venue 在仓引用集无该
+// product_ref=断点告警（settle 漏翻/venue 移行/手工干预实证坑候选）。
+// venue→台账方向不查（业主手动申购属正常在仓）。nil refs=该径未读 DCI 不判。
+func (m *AccountMonitor) checkDCILedgerCoverage(ctx context.Context, acct *reconcile.AccountInfo) {
+	if m.yieldStore == nil || acct == nil || acct.DCIOpenRefs == nil {
+		return
+	}
+	orders, err := m.yieldStore.ListFilledDCIOrders(ctx)
+	if err != nil {
+		log.Printf("[dci-cover] %s 台账读败（对拍跳拍）: %v", acct.VenueKey, err)
+		return
+	}
+	present := map[string]bool{}
+	for _, ref := range acct.DCIOpenRefs {
+		present[ref] = true
+	}
+	for _, o := range orders {
+		if o.Venue != acct.Venue || o.ProductRef == "" || present[o.ProductRef] {
+			continue
+		}
+		if err := m.yieldStore.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
+			"DCI 台账断点：%s order#%d %s filled 在仓但 venue 在仓集无行（快照对拍）",
+			acct.VenueKey, o.ID, o.ProductRef), 24*time.Hour); err != nil {
+			log.Printf("[dci-cover] %s alert: %v", acct.VenueKey, err)
 		}
 	}
 }

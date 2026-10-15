@@ -59,8 +59,8 @@ func (q *CEXAccountQuerier) VenueKey() string {
 func (q *CEXAccountQuerier) SetKeyOverride(k string) { q.keyOverride = k }
 
 // Account 查询账户余额/权益。CEX 的 Margin/Credit/Profit=0（无对应概念）；
-// FreeMargin 实采——binance spot=Σ USDT 标 free / perp=availableBalance /
-// okx=Σ details[USDT].availBal / gate=available（缺字段回退 equity 不猜负）。
+// FreeMargin 实采——binance spot=裸 USDT free（LD* earn 镜像不入，D-528）/
+// perp=availableBalance / okx=Σ details[USDT].availBal / gate=available（缺字段回退 equity 不猜负）。
 func (q *CEXAccountQuerier) Account(ctx context.Context) (*AccountInfo, error) {
 	// 资金（funding）/理财（earn）子账户先于交易账户分派（同函数签名零新管道）。
 	if q.venueType == "funding" || q.venueType == "earn" {
@@ -117,12 +117,26 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 	}
 	// 币种明细（实采语义核验 2026-09-10——qty=cashBal 缺失 fallback availBal；usdt_value=eqUsd
 	//（设计原写 eq，实采证明 eq 为本币权益，BTC eq=1 而 eqUsd=76757，按 eq 存会差 4 个数量级）；解析失败跳过该币）。
-	// holdings 同「不读取」语义——details 循环只保留 Ccy=="USDT" 行，
-	// 其余币种连明细行都不进（业主明谕非 USDT 标不读取不统计）。
+	// D-528：非 USDT 标同型病灶修复——全币枚举进 holdings（venue 已供 eqUsd/availBal
+	// 零新调用），尘埃阈（eqUsd<1）滤行；分币行落快照见 snapshotRows。
 	var holdings []*v1.Holding
+	eq := 0.0    // equity=Σ details[*].eqUsd（venue 权威 USD 总权益——统一账户保证金
+	avail := 0.0 // 域全币同账，聚合语义=totalEq 同值；分币真值在快照行）
+	freeByCcy := map[string]float64{}
 	for _, d := range resp.Data[0].Details {
-		if d.Ccy != "USDT" {
-			continue
+		usd, usdOK := 0.0, false
+		if v, perr := strconv.ParseFloat(d.EqUsd, 64); perr == nil {
+			usd, usdOK = v, true
+		}
+		eq += usd
+		if a, perr := strconv.ParseFloat(d.AvailBal, 64); perr == nil {
+			if d.Ccy == "USDT" {
+				avail += a // D-542：free_margin=Σ details[USDT].availBal（USDT 1:1）
+			}
+			freeByCcy[d.Ccy] += a
+		}
+		if usdOK && usd < 1 {
+			continue // 尘埃阈 <1 USD 滤行（同 binance spot 口径；无价不滤如实留行）
 		}
 		qtyStr := d.CashBal
 		if qtyStr == "" {
@@ -132,28 +146,7 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 		if perr != nil || qty <= 0 {
 			continue
 		}
-		usd, perr := f64z(d.EqUsd)
-		if perr != nil {
-			return nil, fmt.Errorf("parse %s=%q: %w", "d.EqUsd", d.EqUsd, perr)
-		}
 		holdings = append(holdings, &v1.Holding{Ccy: d.Ccy, Qty: qty, UsdtValue: usd})
-	}
-	// equity 只计 USDT 标（业主令）——eq=Σ details[USDT].EqUsd（USDT eqUsd=
-	// 本币 1:1，复用已解析字段零新增）；details 无 USDT 行 → eq=0 不 panic。
-	// 旧 TotalEq=统一账户全币总权益（含 DOGE/PENGU 类杂币折算），不再采用。
-	// holdings 明细不动（全币展示保留，D-273 S2）。
-	eq := 0.0
-	avail := 0.0 // D-542：free_margin=Σ details[USDT].availBal（统一账户可用，USDT 1:1）
-	for _, d := range resp.Data[0].Details {
-		if d.Ccy != "USDT" {
-			continue
-		}
-		if usd, perr := strconv.ParseFloat(d.EqUsd, 64); perr == nil {
-			eq += usd
-		}
-		if a, perr := strconv.ParseFloat(d.AvailBal, 64); perr == nil {
-			avail += a
-		}
 	}
 	// + D-434 S3：buffer_multiple=equity/MMR 三层回落——pos502 实采实证本账户
 	// 口径下顶层 mgnRatio 空而 details[USDT] 供 mmr/mgnRatio（venue 已供未读字段）。
@@ -165,6 +158,7 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, FreeMargin: avail, Currency: "USDT",
 		Simulated: q.simulated, Website: q.website, Holdings: holdings,
+		FreeQtyByCcy:   freeByCcy,
 		BufferMultiple: buffer,
 	}, nil
 }

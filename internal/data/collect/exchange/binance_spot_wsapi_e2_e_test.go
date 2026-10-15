@@ -16,6 +16,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"nox/internal/data/bus"
+	"nox/internal/store/pgstore"
 )
 
 // wsapiFakeServer 起 ws-api 假服务端：对 start 回 listenKey、ping/stop 回空 result，
@@ -132,8 +133,18 @@ func TestBinanceSpotWsapiE2E(t *testing.T) {
 	if ev, ok := b.orderCache.get("binance:spot", "777", "", EventFreshTTL, b.now()); !ok || ev.State != "filled" || ev.AccFillQty != 1.5 || ev.AvgPx != 2500 || ev.FeeUSD != 0.02 {
 		t.Fatalf("order cache wrong: %+v", ev)
 	}
-	if rows := snaps.snapshot(); len(rows) != 1 || rows[0].EquityRaw != 850 || rows[0].VenueType != "spot" {
+	// D-528：分币行随帧同写——USDT 850 + BTC 1（原生量）两行。
+	if rows := snaps.snapshot(); len(rows) != 2 {
 		t.Fatalf("snapshot wrong: %+v", rows)
+	} else {
+		per := map[string]pgstore.VenueAccountSnapshot{}
+		for _, r := range rows {
+			per[r.Currency] = r
+		}
+		if per["USDT"].EquityRaw != 850 || per["USDT"].VenueType != "spot" ||
+			per["BTC"].EquityRaw != 1 || per["BTC"].FreeMarginRaw != 1 {
+			t.Fatalf("snapshot wrong: %+v", rows)
+		}
 	}
 	// 全资产落活缓存——BTC 行同帧入资产级面（USDT 池聚合径不变）。
 	if ab, ok := bus.SpotAssets.Get("binance:spot", "BTC"); !ok || ab.Free != 1 {

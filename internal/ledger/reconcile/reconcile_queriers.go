@@ -61,6 +61,12 @@ type AccountInfo struct {
 	// Holdings 币种明细（D-273 S2：CEX 现货采集器填充，qty>0； earn 持币判断与余额展开行的数据源）。
 	// CFD 账户无此概念，恒 nil。
 	Holdings []*v1.Holding
+	// FreeQtyByCcy D-528：分币可用量（分币快照行的 free_margin 源；仅 CEX 分币
+	// 读径填充——binance spot 每非 LD 币 free；CFD/earn 恒 nil）。
+	FreeQtyByCcy map[string]float64
+	// DCIOpenRefs：venue 侧在仓 DCI 仓位引用集（earn 读径搭车采集，product_ref/
+	// ordId 等引用键全集）——台账 filled 单对拍锚；nil=该径未读 DCI（不判）。
+	DCIOpenRefs []string
 	// BufferMultiple D-405 S2：CEX「距强平缓冲倍数」=equity/MMR，写时归一
 	// （binance=marginBalance/maintMargin；okx=mgnRatio/100）。<=0=未采（MT/spot 恒 0）。
 	BufferMultiple float64
