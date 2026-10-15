@@ -406,7 +406,7 @@ func TestD354_PaperBasisColumns(t *testing.T) {
 	}
 }
 
-// pinPaperQty1000 D-545 锚兼容：测试内钉参数回 $1000 档位（迁移 1031 种 5000——
+// pinPaperQty1000 D-546 锚兼容：测试内钉参数回 $1000 档位（迁移 1032 种 5000——
 // 历史任务书锚按 $1000 名义额写的数值断言不随裁定漂）。
 func pinPaperQty1000(t *testing.T, s *pgstore.Store) {
 	t.Helper()

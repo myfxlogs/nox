@@ -98,5 +98,5 @@ var VenueIOTransferWalletSQL string // D-536①：fin_venue_io 划转列（from/
 //go:embed replay/1030_perf_baseline.sql
 var PerfBaselineSQL string // D-535：业绩基线锚+历史行归档（nav_daily/income_events archived）
 
-//go:embed replay/1031_paper_qty_param.sql
-var PaperQtyParamSQL string // D-545：纸面名义额参数化（app_config paper_qty_usd）
+//go:embed replay/1032_paper_qty_param.sql
+var PaperQtyParamSQL string // D-546：纸面名义额参数化（app_config paper_qty_usd）

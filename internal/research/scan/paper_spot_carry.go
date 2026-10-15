@@ -29,7 +29,7 @@ const (
 	// PaperMaxActive 活跃纸面行硬上限（候选按 net 降序开到上限止）。
 	PaperMaxActive = 12
 	// paperQtyUSDFallback 纸面名义额兜底（app_config paper_qty_usd 缺/破值时
-	// 的失效安全默认——D-545 裁定正常径读 PG 参数行，字面量仅作断链保护）。
+	// 的失效安全默认——D-546 裁定正常径读 PG 参数行，字面量仅作断链保护）。
 	paperQtyUSDFallback = 1000.0
 	// paperExitNormalizedPct 退出线：|last_funding_ann| < 10%/yr。
 	paperExitNormalizedPct = 10.0
@@ -276,9 +276,9 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 	return opened, exited, nil
 }
 
-// PaperQtyUSDAt 纸面名义额读口（D-545）：app_config `paper_qty_usd` PG 真值；
+// PaperQtyUSDAt 纸面名义额读口（D-546）：app_config `paper_qty_usd` PG 真值；
 // 键缺/破值→纸面名义额兜底字面量（失效安全——纸面轨非真金径，断链降级
-// 可接受且如实记 log）。ctx/st 必传（调用点皆已持）。
+// 可接受——调用点同周期 log 行承载可见性）。ctx/st 必传（调用点皆已持）。
 func PaperQtyUSDAt(ctx context.Context, st interface {
 	AppConfigFloat(context.Context, string) (float64, bool, error)
 }) float64 {

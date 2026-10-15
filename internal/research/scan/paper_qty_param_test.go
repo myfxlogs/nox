@@ -1,4 +1,4 @@
-// paper_qty_param_test.go —— D-545 纸面名义额参数化锚：PG 键优先/缺键兜底/破值兜底。
+// paper_qty_param_test.go —— D-546 纸面名义额参数化锚：PG 键优先/缺键兜底/破值兜底。
 package scan
 
 import (

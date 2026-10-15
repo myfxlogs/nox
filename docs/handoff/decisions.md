@@ -322,8 +322,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **事件覆盖矩阵（SG 10-15 实拍）**：okx unified=okx_event 高频 ✓；binance=binance_event 低频有写径（余额变动才推——8:10 DCI 处置帧实证）；gate=无私有流仅 REST（D-206 取证在案，如实记缺口）；MT5=mt_frame ✓。
 - **遗留**：binance spot/funding 面 WS 订阅覆盖未举证（user data stream 是否覆 funding 户存疑）——后续订阅面举证补齐票随排；earn/funding 等无事件频道池由 rest_poll 愈合行如实承担。
 
-## D-545 纸面名义额裁定——paper_qty_usd=$5,000 参数化（D-532 遗留断链）
-- **裁定**：纸面仓位名义额落 app_config `paper_qty_usd`=5000（迁移 1031 种子；
+## D-546 纸面名义额裁定——paper_qty_usd=$5,000 参数化（D-532 遗留断链）
+- **裁定**：纸面仓位名义额落 app_config `paper_qty_usd`=5000（迁移 1032 种子；
   改值须新 D#）。依据三约束取 max：①真金意图额度级=本金池 $11,317×~4.4%/单仓
   （与 DCI/earn 实单量级同族）；②venue 最小名义额（binance $5 起、okx lotSz 折
   $数级）远低于此；③费率覆盖按线性模型无门槛效应（见下如实注记）。

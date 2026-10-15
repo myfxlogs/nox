@@ -60,7 +60,7 @@ func TestDeliveryStep(t *testing.T) {
 	now := time.Now()
 	srcs := []Source{fakeDeliverySrc{spreads: map[string]float64{}}}
 	rows := deliveryTestRows(now)
-	// D-545 锚兼容：钉参数回 $1000 档（迁移 1031 种 5000——Δbasis 数值断言按 1000 写）。
+	// D-546 锚兼容：钉参数回 $1000 档（迁移 1032 种 5000——Δbasis 数值断言按 1000 写）。
 	if _, err := st.Pool().Exec(ctx,
 		`UPDATE app_config SET value='1000' WHERE key='paper_qty_usd'`); err != nil {
 		t.Fatal(err)
