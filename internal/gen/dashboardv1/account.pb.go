@@ -1898,9 +1898,18 @@ type GetFinanceOverviewResponse struct {
 	Flows            []*FinanceFlowRow   `protobuf:"bytes,6,rep,name=flows,proto3" json:"flows,omitempty"`                                                   // ts 倒序 LIMIT 200
 	TotalRealizedUsd float64             `protobuf:"fixed64,7,opt,name=total_realized_usd,json=totalRealizedUsd,proto3" json:"total_realized_usd,omitempty"` // D-508 S8：Σ pnl_by_env.realized_pnl（前端直读不再聚合）
 	// D-522④：NAV 按结算币种分账（USD/USDT 各键，跨币永不加总——total_equity_usd 保留=USD 桶）。
-	EquityByCcy   map[string]float64 `protobuf:"bytes,8,rep,name=equity_by_ccy,json=equityByCcy,proto3" json:"equity_by_ccy,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	EquityByCcy map[string]float64 `protobuf:"bytes,8,rep,name=equity_by_ccy,json=equityByCcy,proto3" json:"equity_by_ccy,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	// D-535 业绩基线面（本金口径 USDT+USD，D-534）：锚缺 → perf_available=false 全组如实缺。
+	BaselineUsd         float64                `protobuf:"fixed64,9,opt,name=baseline_usd,json=baselineUsd,proto3" json:"baseline_usd,omitempty"` // 基线锚（app_config baseline_usd）
+	BaselineAt          *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=baseline_at,json=baselineAt,proto3" json:"baseline_at,omitempty"`
+	PrincipalNowUsd     float64                `protobuf:"fixed64,11,opt,name=principal_now_usd,json=principalNowUsd,proto3" json:"principal_now_usd,omitempty"`            // 本金池现值=USDT+USD 两桶 NAV 合计
+	NetExternalFlowUsd  float64                `protobuf:"fixed64,12,opt,name=net_external_flow_usd,json=netExternalFlowUsd,proto3" json:"net_external_flow_usd,omitempty"` // 基线后外部充提净额（充正提负；内部划转不计）
+	PerfUsd             float64                `protobuf:"fixed64,13,opt,name=perf_usd,json=perfUsd,proto3" json:"perf_usd,omitempty"`                                      // 真业绩=本金池变动−净流
+	PerfAnnPct          float64                `protobuf:"fixed64,14,opt,name=perf_ann_pct,json=perfAnnPct,proto3" json:"perf_ann_pct,omitempty"`                           // 年化=perf/天数×365/基线×100（days>0）
+	PerfAvailable       bool                   `protobuf:"varint,15,opt,name=perf_available,json=perfAvailable,proto3" json:"perf_available,omitempty"`                     // false=锚缺/读败（前端显缺不显 0）
+	PerfFlowProvisional bool                   `protobuf:"varint,16,opt,name=perf_flow_provisional,json=perfFlowProvisional,proto3" json:"perf_flow_provisional,omitempty"` // 净流扣减 provisional 标（perf_flow_provisional 键）
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *GetFinanceOverviewResponse) Reset() {
@@ -1973,6 +1982,62 @@ func (x *GetFinanceOverviewResponse) GetEquityByCcy() map[string]float64 {
 		return x.EquityByCcy
 	}
 	return nil
+}
+
+func (x *GetFinanceOverviewResponse) GetBaselineUsd() float64 {
+	if x != nil {
+		return x.BaselineUsd
+	}
+	return 0
+}
+
+func (x *GetFinanceOverviewResponse) GetBaselineAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.BaselineAt
+	}
+	return nil
+}
+
+func (x *GetFinanceOverviewResponse) GetPrincipalNowUsd() float64 {
+	if x != nil {
+		return x.PrincipalNowUsd
+	}
+	return 0
+}
+
+func (x *GetFinanceOverviewResponse) GetNetExternalFlowUsd() float64 {
+	if x != nil {
+		return x.NetExternalFlowUsd
+	}
+	return 0
+}
+
+func (x *GetFinanceOverviewResponse) GetPerfUsd() float64 {
+	if x != nil {
+		return x.PerfUsd
+	}
+	return 0
+}
+
+func (x *GetFinanceOverviewResponse) GetPerfAnnPct() float64 {
+	if x != nil {
+		return x.PerfAnnPct
+	}
+	return 0
+}
+
+func (x *GetFinanceOverviewResponse) GetPerfAvailable() bool {
+	if x != nil {
+		return x.PerfAvailable
+	}
+	return false
+}
+
+func (x *GetFinanceOverviewResponse) GetPerfFlowProvisional() bool {
+	if x != nil {
+		return x.PerfFlowProvisional
+	}
+	return false
 }
 
 var File_dashboardv1_account_proto protoreflect.FileDescriptor
@@ -2130,7 +2195,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"amount_usd\x18\x05 \x01(\x01R\tamountUsd\x12\x1f\n" +
 	"\vposition_id\x18\x06 \x01(\x03R\n" +
 	"positionId\x12\x12\n" +
-	"\x04note\x18\a \x01(\tR\x04note\"\x82\x04\n" +
+	"\x04note\x18\a \x01(\tR\x04note\"\xd9\x06\n" +
 	"\x1aGetFinanceOverviewResponse\x12(\n" +
 	"\x10total_equity_usd\x18\x02 \x01(\x01R\x0etotalEquityUsd\x12?\n" +
 	"\n" +
@@ -2138,7 +2203,18 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\x0eincome_by_kind\x18\x05 \x03(\v2\".nox.dashboard.v1.FinanceIncomeRowR\fincomeByKind\x126\n" +
 	"\x05flows\x18\x06 \x03(\v2 .nox.dashboard.v1.FinanceFlowRowR\x05flows\x12,\n" +
 	"\x12total_realized_usd\x18\a \x01(\x01R\x10totalRealizedUsd\x12a\n" +
-	"\requity_by_ccy\x18\b \x03(\v2=.nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntryR\vequityByCcy\x1a>\n" +
+	"\requity_by_ccy\x18\b \x03(\v2=.nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntryR\vequityByCcy\x12!\n" +
+	"\fbaseline_usd\x18\t \x01(\x01R\vbaselineUsd\x12;\n" +
+	"\vbaseline_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"baselineAt\x12*\n" +
+	"\x11principal_now_usd\x18\v \x01(\x01R\x0fprincipalNowUsd\x121\n" +
+	"\x15net_external_flow_usd\x18\f \x01(\x01R\x12netExternalFlowUsd\x12\x19\n" +
+	"\bperf_usd\x18\r \x01(\x01R\aperfUsd\x12 \n" +
+	"\fperf_ann_pct\x18\x0e \x01(\x01R\n" +
+	"perfAnnPct\x12%\n" +
+	"\x0eperf_available\x18\x0f \x01(\bR\rperfAvailable\x122\n" +
+	"\x15perf_flow_provisional\x18\x10 \x01(\bR\x13perfFlowProvisional\x1a>\n" +
 	"\x10EquityByCcyEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01J\x04\b\x01\x10\x02J\x04\b\x03\x10\x04R\rdeposited_usdR\vnet_pnl_usdB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
@@ -2209,11 +2285,12 @@ var file_dashboardv1_account_proto_depIdxs = []int32{
 	27, // 15: nox.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> nox.dashboard.v1.FinanceIncomeRow
 	28, // 16: nox.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> nox.dashboard.v1.FinanceFlowRow
 	30, // 17: nox.dashboard.v1.GetFinanceOverviewResponse.equity_by_ccy:type_name -> nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
-	18, // [18:18] is the sub-list for method output_type
-	18, // [18:18] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	31, // 18: nox.dashboard.v1.GetFinanceOverviewResponse.baseline_at:type_name -> google.protobuf.Timestamp
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_account_proto_init() }

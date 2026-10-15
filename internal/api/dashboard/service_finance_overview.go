@@ -10,6 +10,7 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 // financeOverviewTTL 聚合缓存 TTL（D-331 ActiveOpportunityIDs 15s 先例——聚合查询防热路径重压）。
@@ -85,7 +86,28 @@ func (s *Service) buildFinanceOverview(ctx context.Context) (*v1.GetFinanceOverv
 		}
 		resp.Flows = append(resp.Flows, row)
 	}
+	// D-535：业绩基线面——本金池变动−外部净流；锚缺/读败 → available=false 如实缺（不冒充 0）。
+	if perf, err := s.perfSinceBaseline(ctx); err == nil && perf != nil {
+		resp.PerfAvailable = true
+		resp.BaselineUsd = perf.BaselineUSD
+		resp.BaselineAt = timestamppb.New(perf.BaselineAt)
+		resp.PrincipalNowUsd = perf.PrincipalNowUSD
+		resp.NetExternalFlowUsd = perf.NetExternalUSD
+		resp.PerfUsd = perf.PerfUSD
+		resp.PerfAnnPct = perf.PerfAnnPct
+		resp.PerfFlowProvisional = perf.FlowProvisional
+	} else if err != nil {
+		log.Printf("[finance] perf baseline: %v（业绩面如实缺）", err)
+	}
 	return resp, nil
+}
+
+// perfSinceBaseline 业绩基线读面（store 未接线 → nil,nil 如实缺；读败上抛由调用方标缺）。
+func (s *Service) perfSinceBaseline(ctx context.Context) (*pgstore.PerfReport, error) {
+	if s.store == nil {
+		return nil, nil
+	}
+	return s.store.PerfSinceBaseline(ctx, time.Now())
 }
 
 // equityTotalUSD —— D-264 M4.4②：改读 pgstore.ComputeNav 单函数（NAV 口径单源，

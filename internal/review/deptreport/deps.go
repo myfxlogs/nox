@@ -34,6 +34,8 @@ type Store interface {
 	// ListDeptReports D-249②：昨日 company 行读面（待办闭环跨日对拍；零新表）。
 	ListDeptReports(ctx context.Context, date time.Time) ([]pgstore.DeptReport, error)
 	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
+	// PerfSinceBaseline D-535 业绩基线读面（锚缺→nil,nil 不阻日报）。
+	PerfSinceBaseline(ctx context.Context, now time.Time) (*pgstore.PerfReport, error)
 }
 
 // Notifier 飞书推送面（*notify.FeishuClient 原生满足；nil=不推）。

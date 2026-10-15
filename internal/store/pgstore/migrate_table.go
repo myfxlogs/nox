@@ -223,4 +223,5 @@ var migrationFiles = []struct {
 	{1027, migrations.DCITailGateSQL, false},                  // D-526：DCI 尾险闸约束行（σ 界 k/tenor_max/名义帽）
 	{1028, migrations.D526RetireFlatBoundsSQL, false},         // D-526 返修③：平 OTM 界死行清退
 	{1029, migrations.VenueIOTransferWalletSQL, false},        // D-536①：fin_venue_io 内部划转列
+	{1030, migrations.PerfBaselineSQL, false},                 // D-535：业绩基线锚+历史行归档
 }

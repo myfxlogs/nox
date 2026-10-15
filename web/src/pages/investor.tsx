@@ -5,6 +5,7 @@ import type { PositionDailyIncome } from "../gen/dashboardv1/account_pb";
 import type { Position } from "../gen/dashboardv1/position_pb";
 import type { RequestBoxItem } from "../gen/dashboardv1/request_box_pb";
 import { ResolveRequestState } from "../gen/dashboardv1/request_box_pb";
+import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { NOX_NAME, NOX_REPORT_FOOTER } from "../nox";
 import { fmtUsd, fmtAge } from "../components/fmt";
 
@@ -15,6 +16,10 @@ export default function InvestorPage() {
   const [today, setToday] = useState<number | null>(null);
   const [floatNet, setFloatNet] = useState<number | null>(null);
   const [ann30, setAnn30] = useState<number | null>(null);
+  const [perf, setPerf] = useState<{
+    baseline: number; at: Date | null; principal: number;
+    netFlow: number; perf: number; ann: number; provisional: boolean;
+  } | null>(null);
   const [income, setIncome] = useState<PositionDailyIncome[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [box, setBox] = useState<RequestBoxItem[]>([]);
@@ -33,6 +38,18 @@ export default function InvestorPage() {
         ]);
         setNav(fin.totalEquityUsd);
         setNavCcy(fin.equityByCcy ?? {});
+        // D-535：业绩基线面（本金口径 USDT+USD——后端算定，前端零算）。
+        if (fin.perfAvailable) {
+          setPerf({
+            baseline: fin.baselineUsd,
+            at: fin.baselineAt ? timestampDate(fin.baselineAt) : null,
+            principal: fin.principalNowUsd,
+            netFlow: fin.netExternalFlowUsd,
+            perf: fin.perfUsd,
+            ann: fin.perfAnnPct,
+            provisional: fin.perfFlowProvisional,
+          });
+        }
         setRealized(pnl.realizedSinceAnchor);
         setToday(pnl.realizedToday);
         setFloatNet(pnl.floatingNetUsd);
@@ -80,6 +97,14 @@ export default function InvestorPage() {
         <div className="card"><div className="k">今日已实现</div><div className="v">{fmtUsd(today)}</div></div>
         <div className="card"><div className="k">浮动净值</div><div className="v">{fmtUsd(floatNet)}</div></div>
         <div className="card"><div className="k">30d 净年化</div><div className="v">{ann30 == null ? "—" : ann30.toFixed(2) + "%"}</div></div>
+        {/* D-535：业绩基线（10-15 锚 $11,317 起算；净流扣减 provisional 标） */}
+        <div className="card"><div className="k">本金池（USDT+USD）</div><div className="v">{perf ? fmtUsd(perf.principal) : "—"}</div>
+          {perf && <div className="muted" style={{fontSize: "12px"}}>基线 {fmtUsd(perf.baseline)}（{perf.at ? perf.at.toISOString().slice(0, 10) : "—"} 起算）</div>}
+        </div>
+        <div className="card"><div className="k">基线后业绩{perf?.provisional ? "（provisional）" : ""}</div>
+          <div className="v">{perf ? (perf.perf >= 0 ? "+" : "") + fmtUsd(perf.perf) : "—"}</div>
+          {perf && <div className="muted" style={{fontSize: "12px"}}>净流扣减 {fmtUsd(perf.netFlow)} ｜ 年化 {perf.ann.toFixed(2)}%</div>}
+        </div>
         <div className="card"><div className="k">在持仓位</div><div className="v">{positions.length}</div></div>
       </div>
 
