@@ -65,6 +65,9 @@ func TestD543_CalibSnapshotUsdtSlice(t *testing.T) {
 		VenueKey: "okx:unified", Venue: "okx", VenueType: "unified", AssetType: "cex",
 		Balance: 43.5, Equity: 43.5, FreeMargin: 0, Currency: "USDT", // Equity=全币总权益
 		Holdings: []*v1.Holding{
+			// D-543R2 残波锚：USDT eqUsd=20.02（含仓位抵押份额）——rest_calib 若取
+			// eqUsd 将与事件径 availBal=3.4e-9 同键互踩（10-15 SG 实拍两口径并存）。
+			{Ccy: "USDT", Qty: 20.02, UsdtValue: 20.02},
 			{Ccy: "DOGE", Qty: 250, UsdtValue: 20},
 			{Ccy: "PENGU", Qty: 1000, UsdtValue: 23.5},
 		},
