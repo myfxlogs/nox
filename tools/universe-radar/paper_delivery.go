@@ -149,6 +149,19 @@ func stepPaperDelivery(ctx context.Context, st *pgstore.Store, srcs []Source, ro
 			QtyUSD:             scan.PaperQtyUSDAt(ctx, st),
 			EstRoundTripFeeUSD: scan.PaperSpotPerpFeeUSD(ctx, st, c.Venue, c.Venue, scan.PaperQtyUSDAt(ctx, st)),
 		}
+		// 回本窗闸（毕业取证：到期窗<回本期=数学上永不可毕业，开仓即拦）：
+		// 回本天数=fee/(qty×ann/365)；存活窗=expiry−T−1d−now；闸不过不开仓。
+		// fee/expiry 缺→fail-closed 不开不编。
+		if r.EstRoundTripFeeUSD == nil || c.Expiry.IsZero() {
+			continue
+		}
+		daysCover := *r.EstRoundTripFeeUSD / (r.QtyUSD * c.BasisAnn / 100 / 365)
+		aliveD := c.Expiry.Add(-deliveryExitBeforeExpiry).Sub(now).Hours() / 24
+		if daysCover >= aliveD {
+			log.Printf("[universe-radar] perp_delivery %s 回本窗闸拦（回本 %.1fd ≥ 存活 %.1fd）",
+				c.FutSym, daysCover, aliveD)
+			continue
+		}
 		if c.SpreadBps == nil {
 			r.Note = "滑点未知"
 		}
