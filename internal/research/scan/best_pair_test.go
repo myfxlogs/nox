@@ -225,6 +225,16 @@ func (f *fakeMtmPaperStore) LoadXAssetAllowCombos(context.Context, string) ([]pg
 func (f *fakeMtmPaperStore) LatestPaperExitTs(context.Context, string, string, string) (*time.Time, error) {
 	return nil, nil
 }
+func (f *fakeMtmPaperStore) AnchorPaperEntryBasis(_ context.Context, id int64, bps float64, fee *float64) (bool, error) {
+	if r, ok := f.rows[id]; ok && r.EntryBasisBps == nil {
+		r.EntryBasisBps = &bps
+		if r.EstRoundTripFeeUSD == nil {
+			r.EstRoundTripFeeUSD = fee
+		}
+		return true, nil
+	}
+	return false, nil
+}
 func (f *fakeMtmPaperStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
 	f.alerts = append(f.alerts, level+"|"+msg) // D-144：闸/哨兵断言面
 	return nil
