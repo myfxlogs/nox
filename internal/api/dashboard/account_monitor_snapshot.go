@@ -135,8 +135,12 @@ func snapshotRows(prev, acct *reconcile.AccountInfo) []pgstore.VenueAccountSnaps
 		}
 		return row
 	}
-	multiCcy := acct.VenueType == "earn" || acct.VenueType == "spot" ||
-		acct.VenueType == "unified" || acct.VenueType == "funding" || acct.VenueType == "futures"
+	// 判别用归一化 vt 而非原始 acct.VenueType——okx 交易侧配置行原始 type 可为
+	// spot/perp/futures（归一才钉 unified）；按原始型判 perp→单行路径把
+	// totalEq 挂 USDT 标签写 unified 键=rest_calib 19.95 伪 USDT 行实证（10-15
+	// SG：与 okx_event 分币尘埃行同键互踩，NAV 池 flap ±43.5）。
+	multiCcy := vt == "earn" || vt == "spot" || vt == "unified" ||
+		vt == "funding" || vt == "futures"
 	if !multiCcy || len(acct.Holdings) == 0 {
 		return []pgstore.VenueAccountSnapshot{{
 			Venue: acct.Venue, VenueType: vt,

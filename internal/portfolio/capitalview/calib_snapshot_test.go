@@ -92,3 +92,40 @@ func TestD543_CalibSnapshotUsdtSlice(t *testing.T) {
 		t.Fatalf("USDT 行应记本币切片尘埃而非全币权益: %+v", r)
 	}
 }
+
+// D-543R2：判别=归一化池型非 Holdings 非空——okx 交易侧配置行原始 type=perp
+// （归一钉 unified 池键）仍须切片；Holdings 空缺证时如实零写，禁回落总额
+// 伪 USDT（10-15 部署后 rest_calib 仍写 19.95=totalEq 的复发路径）。
+func TestD543_CalibSnapshotUnifiedPerpSlice(t *testing.T) {
+	ctx := context.Background()
+	var rows []pgstore.VenueAccountSnapshot
+	fq := &fakeQ{acct: &reconcile.AccountInfo{
+		VenueKey: "okx:unified", Venue: "okx", VenueType: "perp", AssetType: "cex",
+		Balance: 19.95, Equity: 19.95, FreeMargin: 0, Currency: "USDT",
+		FreeQtyByCcy: map[string]float64{"USDT": 0.0000000034, "DOGE": 250},
+	}}
+	v := New(Deps{
+		Ledger: bus.NewBalanceLedger(),
+		QuerierFor: func(context.Context, string) (reconcile.AccountQuerier, string, bool) {
+			return fq, "okx:unified", true
+		},
+		SnapWrite: func(_ context.Context, snaps []pgstore.VenueAccountSnapshot) error {
+			rows = append(rows, snaps...)
+			return nil
+		},
+		RestTTL: func() time.Duration { return 0 },
+	})
+	if _, ok := v.Live(ctx, "okx:unified"); !ok {
+		t.Fatal("live miss")
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows=%+v", rows)
+	}
+	r := rows[0]
+	if r.VenueType != "unified" && r.VenueType != "perp" {
+		t.Fatalf("venue_type: %+v", r)
+	}
+	if r.Currency != "USDT" || r.EquityRaw > 0.001 || r.BalanceRaw > 0.001 {
+		t.Fatalf("perp 配置行归一 unified 池应切片尘埃非总额: %+v", r)
+	}
+}

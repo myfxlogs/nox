@@ -16,6 +16,7 @@ import (
 
 	"nox/internal/data/bus"
 	"nox/internal/data/keydomain"
+	"nox/internal/data/venue"
 	"nox/internal/ledger/reconcile"
 	"nox/internal/store/pgstore"
 )
@@ -224,10 +225,13 @@ func (v *View) calibrate(ctx context.Context, venueKey string, force, exact bool
 	// 快照行写本币真值：cex 分币池 acct.Equity=Σdetails[*].eqUsd（全币 USD 总权益，
 	// 保证金口径用）挂 acct.Currency 单币标签即伪账（okx unified 实证：rest_calib
 	// 写 43.5 vs okx_event 写 availBal 3.4e-9——同键双写致 NAV 池 flap ±43.5）。
-	// 判别=带多币 Holdings 明细的 cex 账户才收窄（perp 单币池 Equity 即本币真值；
-	// 分币残值由 rest_poll 各行披露不混入本金池）。资金可用性 Ledger 语义零动。
+	// 判别=归一化 venue_type 属分币池型（Holdings 非空判不可靠——unified 路径
+	// Holdings 可为空，缺证回退总额=重犯同错，10-15 部署后 rest_calib 仍写
+	// 19.95=totalEq 实拍）；perp/delivery 单币池 Equity 即本币真值保总额径。
+	// 资金可用性 Ledger 语义零动。
 	calibAvail, calibEq := avail, acct.Equity
-	if acct.AssetType == "cex" && len(acct.Holdings) > 0 {
+	vt := venue.NormalizeVenueType(acct.AssetType, acct.Venue, acct.VenueType)
+	if acct.AssetType == "cex" && multiCcyVenueType(vt) {
 		calibAvail = acct.FreeQtyByCcy[acct.Currency]
 		calibEq = calibAvail
 		for _, h := range acct.Holdings {
@@ -242,6 +246,17 @@ func (v *View) calibrate(ctx context.Context, venueKey string, force, exact bool
 		VenueKey: poolKey, Available: avail, Equity: acct.Equity,
 		Currency: acct.Currency, At: at, Src: SrcRest,
 	}), true
+}
+
+// multiCcyVenueType 分币池型（归一化 venue_type 口径）：与 account_monitor
+// snapshotRows 的 multiCcy 名单同族——这些池的 Equity 是跨币折算总额，单行落库
+// 只能挂本币切片；perp/delivery 等单币池 Equity 即本币真值不在此列。
+func multiCcyVenueType(vt string) bool {
+	switch vt {
+	case "earn", "spot", "unified", "funding", "futures":
+		return true
+	}
+	return false
 }
 
 // mtFrame D-572 S2：MT 键流帧读口——帧命中且龄≤MTFrameTTL（快照龄闸同值注入）→

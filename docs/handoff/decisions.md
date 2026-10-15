@@ -314,3 +314,4 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **总览 17,199 根因**：§1 锁定档把 `fin_dci_order` filled 行 qty 叠加进总计，但 filled 行含 earn 申购单（cash_mgmt/earn_apr_lending/结构化合计 5,878）——同一笔钱已在 earn 快照桶计过 → 双计 ~5.8k。修法：总计=idle+earning（快照池即真值），锁定改披露子行「其中锁定（含于在息）」。
 - **快照写径修**：`capitalview` REST 校准写行收窄到本币切片（cex 键：avail=FreeQtyByCcy[ccy]、eq=Holdings[ccy].UsdtValue 或 availBal）；MT 键 equity 回退语义保留。资金可用性 Ledger 口径零动。
 - **业主令方向**：投资人面读径不能押快照可靠性——事件驱动快照（okx_event/binance balanceUpdate 已有写口）升权威源、rest_calib 降为愈合补写；事件覆盖缺口与 binance perp 8 天断采立票查。
+- **R2 复发根因（10-15 部署后实拍）**：R1 判别「cex + Holdings 非空」不可靠——rest_calib 仍写 19.95=totalEq。真写者另有其人：`account_monitor.snapshotRows` 按**原始** `acct.VenueType` 判分币，okx 交易侧配置行 type=perp → 落单行路径把 totalEq 挂 USDT 写 unified 键（归一标签与判别口径不一=病灶本身）。双修：monitor 判别改用归一 vt；capitalview 判别改用归一池型（perp/delivery 单币池保总额径，Holdings 空亦如实零写不回落）。

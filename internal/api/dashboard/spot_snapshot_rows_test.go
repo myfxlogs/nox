@@ -45,6 +45,36 @@ func TestSnapshotRowsSpotMultiCcy(t *testing.T) {
 	}
 }
 
+// TestSnapshotRowsOkxPerpUnified：okx 原始 type=perp 配置行归一 unified——
+// 分币行照出（10-15 SG：按原始型判走单行路径，totalEq 19.95 挂 USDT 标签写
+// unified 键，与 okx_event 尘埃行互踩致 NAV 池 flap）。
+func TestSnapshotRowsOkxPerpUnified(t *testing.T) {
+	acct := &reconcile.AccountInfo{
+		Venue: "okx", VenueType: "perp", AssetType: "cex", Currency: "USDT",
+		Balance: 19.95, Equity: 19.95, FreeMargin: 0,
+		Holdings: []*v1.Holding{
+			{Ccy: "USDT", Qty: 0.0000000034, UsdtValue: 0},
+			{Ccy: "DOGE", Qty: 250, UsdtValue: 9.95},
+			{Ccy: "PENGU", Qty: 1000, UsdtValue: 10},
+		},
+		FreeQtyByCcy: map[string]float64{"USDT": 0.0000000034, "DOGE": 250, "PENGU": 1000},
+	}
+	rows := snapshotRows(nil, acct)
+	per := map[string]pgstore.VenueAccountSnapshot{}
+	for _, r := range rows {
+		if r.VenueType != "unified" || r.Venue != "okx" {
+			t.Fatalf("归一键错: %+v", r)
+		}
+		per[r.Currency] = r
+	}
+	if len(rows) != 3 {
+		t.Fatalf("want 3 分币行, got %+v", rows)
+	}
+	if per["USDT"].EquityRaw > 0.001 || per["DOGE"].EquityRaw != 250 {
+		t.Fatalf("USDT 行应为原生尘埃非 totalEq: %+v", per["USDT"])
+	}
+}
+
 // TestCheckDCILedgerCoverage：台账 filled 单 product_ref 缺席 venue 在仓集 → warn 告警。
 func TestCheckDCILedgerCoverage(t *testing.T) {
 	fs := &fakeYieldStore{dciOrders: []pgstore.FilledDCIOrder{
