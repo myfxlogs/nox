@@ -1048,3 +1048,12 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 
 ### 归档
 - STATE:51 翻「已修（无欠账）」+纠记段；STATE:52 补复审收口段。四票全收，零退回零部署残留。
+
+## 2026-10-15 binance DCI 持仓字段名返修 @4b4866fe8
+
+- **病灶**：`binanceDCPosRow` 读 `status` 键（恒空）→空串穿透 `!= "HOLDING"` 过滤 → 4 行全计入，earn/USDT 虚计 ~1441（3 笔 SETTLED 542+358+541）。
+- **修**：字段改 `purchaseStatus`；空键 fail-closed 返错；在仓谓词=仅 `PURCHASE_SUCCESS`。锚 `TestBinanceDCIPos_PurchaseStatus`（358 PURCHASE_SUCCESS+542/358/541 SETTLED→仅 358 计）+`_StatusKeyEmpty_FailClosed`。
+- **同型核（okx）**：`accountOkxEarn` 已并 `/finance/sfp/dcd/orders` 径，`state` 键读真（live/pending_settle 收、终态 skip、ccy/amount 双键缺 fail-closed）——非 binance 同病灶，无返修面。
+- **fixture 债清**：`TestBinanceEarnPositions` 补 dci 端点空桩+路径断言 3 件；`TestCEXAccount_OkxEarn` 补 dcd 空桩；`TestCEXAccount_OkxFunding` 翻页断言改全币枚举（D-528 改动遗留）。
+- **机检**：reconcile 包+race 绿；build/vet/gofmt 净；全量 `go test ./...` EXIT=0；pre-commit 过（subaccounts.go 312 行软警告系既有）。
+- **SG 验收残留**：部署后 earn/USDT 应回落 ~1598（1240.13+在仓 358）；`fin_dci_order` 台账↔快照 DCIOpenRefs 对拍随下拍核实；部署归复审席。
