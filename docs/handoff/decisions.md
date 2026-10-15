@@ -303,3 +303,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **事故**：DCI#11 行权接货 0.00433438 BTC，`%.8f` 报量越 BTCUSDT stepSize=0.00001 → -1013 LOT_SIZE 三次尽败留仓。留仓径（pending_disposal+warn）按 D-517 正确触发，但**无清扫件**——留仓=永等人工，违「事故仓不过夜」本意。
 - **修法**：①`spotMarketSell` 前置 `spotLotFloor`——exchangeInfo LOT_SIZE（stepSize/minQty）floor 报量，进程内缓存（D-004 举证：filters 无 WS 频道，低频 REST 合规）；读败/<minQty→fail-closed 留仓径不臆造。②`SweepPendingDisposals` 挂 cex_scan 拍——note~pending_disposal OPEN 行重试卖回，成则 `dci_exercise_disposal` 入账+关行+warn，败则 24h 去重 warn 不刷屏。③okx 同型——`okxLotFloor`（instruments lotSz/minSz）前置 disposeExerciseOKX。④残差对账补 DCI 交割腿——`SumDCISettleWindow` 本拍窗内 settled 行：earn 池减 outflow（本金离桶可归因）、充提钱包加 inflow——DCI 还本不再误触 critical。
 - **边界**：市价即卖语义零动；取整尾零损耗如实留仓 dust；残差腿不回溯只认窗内 settled_at。
+
+## D-543 基线测量修正——baseline_usd 11317→11360.5（okx unified 漏记补正）
+- **实证**：基线 11,317 为手工清点（10-15 07:19 UTC 拍），漏记 `okx unified` 账户 ~$43.5（该户 9-20 起恒有余额）。部署后业绩式显示 +37.41 的分解：+43.5 漏记回补 +10.1 结构化入桶 −6.4 DCI#11 实亏 +0.2 利息 −0.16 浮动 → 真业绩 ≈ −6.2 非 +37。
+- **修正**：baseline_usd=**11360.5**（11317+43.5），baseline_at 不变。规则加固——本金锚值今后一律取「管道路径实算值」非手工清点（快照鲜度过滤+fossil 剔除语义与读径一致）。
+- **次生发现立据**：okx unified/USDT 快照行双写振荡（43.6↔3.4e-9）——两个产者交替写同键，NAV 读最新值随写序 flap ±43；binance perp 快照曾断采 8 天（10-07 化石行）。两症转票由实施席查。
