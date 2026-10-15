@@ -7,7 +7,11 @@
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'arb_ro') THEN
-        CREATE ROLE arb_ro NOLOGIN;
+        BEGIN
+            CREATE ROLE arb_ro NOLOGIN;
+        EXCEPTION WHEN duplicate_object THEN
+            NULL; -- 集簇级对象：并行测试库互撞时后者如实跳过
+        END;
     END IF;
 END $$;
 

@@ -37,10 +37,19 @@ func d514Store(t *testing.T) (*pgstore.Store, context.Context) {
 		`DELETE FROM fin_opp_hypothesis WHERE category_key LIKE 'cfd_swap|d514%'`,
 		`DELETE FROM facts WHERE venue LIKE 'd514%'`,
 		`DELETE FROM app_config WHERE key LIKE 'ownership_share:d514%'`,
+		`DELETE FROM fin_cex_spread WHERE venue_buy LIKE 'd514%'`,
 	} {
 		if _, err := st.Pool().Exec(ctx, q); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// D-526 尾险闸依赖 BTC 现货参照（LatestSpreadSpotRef）——鲜库无行必拒
+	// 「BTC 现货参照缺」（CI 红病灶）；spot=90000 使 σ=0.001 界（×0.992≈89262）
+	// 罩住 fixture strike=80000。venue 列打 d514 标供清理。
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO fin_cex_spread (symbol, venue_buy, venue_sell, price_buy, price_sell, spread_bps)
+		 VALUES ('BTC','d514a','d514b',90000,90000,0)`); err != nil {
+		t.Fatal(err)
 	}
 	return st, ctx
 }
