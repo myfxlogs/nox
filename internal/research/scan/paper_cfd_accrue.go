@@ -20,6 +20,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 	rowByKey map[string]UniverseRow, dirtyByKey map[string]string, silentMt map[string]bool,
 	view *assetClassView, now time.Time) (int, error) {
 	exited := 0
+	var dataLost []string // D-535①
 	// cex 腿 canonical→facts symbol 索引（funding 边界事实键=venue+collector
 	// canonical 形=cexFactSymbol(Symbol)，gate XAU_USDT→XAUUSDT、okx XAU-USDT-SWAP→XAUUSDT；
 	// HedgeCanonical/Symbol 双路归一键）。D-550：原样回 raw 键（US30_USDT）直查 facts 零命中
@@ -112,6 +113,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 				}
 				paperExitNote(ctx, st, p.ID, "data_lost", 0, lastFundingAnnOf(p), 0, miss)
 				exited++
+				dataLost = append(dataLost, p.VenuePair()+"|"+p.Symbol)
 				continue
 			}
 			prev := 0.0
@@ -217,6 +219,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			return exited, fmt.Errorf("cfd paper step: accrue %d: %w", p.ID, err)
 		}
 	}
+	WarnDataLostExits(ctx, st, "cfd", dataLost) // D-535①
 	if noFactWarn > 0 {
 		log.Printf("[cfd paper] 边界/率源缺 fail-closed 跳过 accrue: %d 行", noFactWarn)
 	}

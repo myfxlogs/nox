@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"nox/internal/data/keydomain"
+	"sort"
 	"strings"
 	"time"
 
@@ -114,6 +115,23 @@ func paperExitConvergence(p pgstore.PaperSpotCarry, lastBasis *float64) *float64
 		lb = p.LastBasisBps
 	}
 	return paperConvergenceUSD(paperBasisDir(p.Side, p.Structure), p.EntryBasisBps, lb, p.QtyUSD)
+}
+
+// WarnDataLostExits D-535①：data_lost 批量退聚合 warn——退出>0 时一轮一轨至多一条
+// （断链退仓不再静默；聚合同毕业链惯例不逐行刷）。keys=venue对|symbol 归因名。
+// 参数面=最小 InsertAlert 接口（scan 各轨 PaperStore 与 radar *pgstore.Store 同吃）。
+func WarnDataLostExits(ctx context.Context, st interface {
+	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
+}, track string, keys []string) {
+	if len(keys) == 0 {
+		return
+	}
+	sort.Strings(keys)
+	if err := st.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
+		"[%s 纸面] %d 行 data_lost 断链退出（喂流断链/数据缺席可归因）: %s",
+		track, len(keys), strings.Join(keys, ", "))); err != nil {
+		log.Printf("[paper] data_lost warn(%s): %v", track, err)
+	}
 }
 
 // paperExitNote D-056④：退出判定值留痕——统一「exit=<reason> net=%.2f

@@ -169,6 +169,7 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 	// 连缺 perpMissExitRounds 轮 → data_lost；S3：signedNet<0 → 当轮退 adverse。
 	fundByKey, symByVenueCanon := buildFundIndex(rows)
 	noFactWarn := 0
+	var dataLost []string // D-535①：data_lost 聚合 warn（一轮至多一条）
 	for _, p := range accrable {
 		if p.Structure != "perp_perp" {
 			continue
@@ -196,6 +197,7 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 					return opened, exited, fmt.Errorf("perp paper step: exit miss %d: %w", p.ID, err)
 				}
 				exited++
+				dataLost = append(dataLost, p.VenuePair()+"|"+p.Symbol)
 				continue
 			}
 			prev := 0.0
@@ -267,6 +269,7 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 			return opened, exited, fmt.Errorf("perp paper step: accrue %d: %w", p.ID, err)
 		}
 	}
+	scan.WarnDataLostExits(ctx, st, "perp_perp", dataLost) // D-535①
 	if noFactWarn > 0 {
 		fmt.Printf("[perp paper] 边界/率源缺 fail-closed 跳过 accrue: %d 行\n", noFactWarn)
 	}

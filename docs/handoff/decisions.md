@@ -275,3 +275,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **修法（判据/矩阵零动）**：a) spot 累积环加异结构跳过（`structure∉{"","spot_carry"}→continue`，异轨行零接触）；b) cfd accrue 轮 entry_basis NULL ∧ 簿有行 → 以**首个实测簿值**补锚+同拍补 est_fee（`AnchorPaperEntryBasis` IS NULL 幂等，note 留痕「首测簿值补锚」——锚语义从「入场时点」放宽为「首个可观测」，值非臆造）；c) 哨兵补口见票②（warnActiveBookAbsent 加 entry-锚死维）。
 - **perp_perp 谓词评估结论**：「任一侧缺席=miss」非过敏——funding 差收割双腿费率缺一无法算 signedNet，分档无意义；真缺口=binance funding 覆盖 745/882（fundingInfo interval 缺符号→rate 不落）另列观察面，不动谓词。
 - **不动项**：all-in 净额判据零动；data_lost 冷却语义零动；簿缺仍诚实缺（补锚仅限簿已有实测行的场景）。
+
+## D-535 喂流断链自盯补口（D-532② 票收口——哨兵沉默归因+聚合 warn 接线）
+- **哨兵沉默归因（取证件）**：`warnMonitorBookAbsent`/`warnActiveBookAbsent` 均在位且每轮跑——沉默根因=谓词纯存在性：real 授权组合仅 XAUUSD(3001157×okx) 一行且簿已覆盖（`xasset_allow_combos` enabled∧real 实拍）；active 仓簿今全在（覆盖晚到非缺席）→ 两哨兵沉默是**正确行为**非接线断。真失明维=「簿在但 entry 锚死」（`ts<=entry` 谓词对簿后生结构性永空，存在性谓词看不见）。
+- **裁定**：①data_lost 批量退聚合 warn 六轨统一接线（scan spot/cfd/mtm/cex + radar perp_perp/perp_delivery——退出>0 一轮一轨至多一条 `WarnDataLostExits`）；②`warnActiveBookAbsent` 加第二维——簿在 ∧ entry_basis NULL ∧ 入场超 `paperCfdMonitorMaxAge` → 锚死 warn（与 D-534② 补锚径互为监督：该愈未愈才报）；③fail-open 吞错不改——既有 `log.Printf` 留痕已合规（查询败≠缺席，不误报优于误报）。
+- **边界**：缺账判定语义零动；聚合限一条/轨/轮；锚死窗借用 15min 陈旧闸值不另造魔数。
