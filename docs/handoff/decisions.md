@@ -354,3 +354,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **实证**（SG）：okx USDT 全躺 earn 池（savings~2117.9+结构化 10），unified/funding 双零；`tryLegOKX` 余额源只认 unified+funding→qty=0 每拍撞约束闸（#445 存活期 critical×24 至 SLA 过期方止），结构性必复演。
 - **裁定**：dci rail 申购装配链加 savings 赎回前置步——shortfall=needed−(unified+funding)>0 时赎 min(shortfall, savings_avail) 落 funding，再走既有 18→6 划转→申购。提案质量闸（D-514 溢价≥3×earn、D-526 σ界/尾损）已保证赎回换仓经济性——为更优提案腾挪所内资金=金钱不眠同向裁定，不属新风险面。
 - **边界**：赎回额不放大不预赎攒资金户；结构化在仓（dcd positions）不进可赎面；savings 可赎额读败 fail-closed；提案额口径核=可装配额。
+
+## D-550 cfd_swap_hedged S2 试单轨授权归属裁定（决策席 10-16）
+- **实证**（SG 工作流审计）：假设#505（D-547 批、D-548 $200 封顶）经 S2 桥落 `xasset_allow_combos`#16（enabled+live、$200 帽）~10h——positions=0，三层封死：①`engine.go:172` `isStrategyDisabled(o.Type)` 检测侧掐产出（宿主 XASSET_CARRY 10-14 retired）；②`engine_opp.go:163` `!IsMTVenue(opp.VenueBuy)` 入口闸钉死买腿=MT 单向（side=short 桥出 buy=CEX×sell=MT 反向即拒）；③gate.Submit `IsStrategyDisabled` 兜底同拒。
+- **裁定**：S2 批准试单=委员会级独立授权挂**组合行**（max_gross_usd=敞口硬顶）——宿主策略退役只冻结其存量组合域，不溯及委员会后批的试单授权；combo#16 属试单属员非 XASSET_CARRY 复活。反向腿向（空 CFD 收 swap×多 perp 付 funding）执行链须镜像完整（monitor/安全边/regime/econ/退出链）方可点火，缺一 fail-closed。
+- **边界**：retired 语义不破（存量组合不复活不产机会）；试单豁免只认桥写组合行不扩散；判据额度 DB 驱动零字面量；零 LLM 零新定时器。
