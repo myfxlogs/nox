@@ -12,22 +12,14 @@ import (
 
 	v1 "nox/internal/gen/dashboardv1"
 	"nox/internal/gen/dashboardv1/dashboardv1connect"
-	"nox/internal/platform/testutil"
-	"nox/internal/store/pgstore"
+	"nox/internal/platform/testutil/storetest"
 
 	"connectrpc.com/connect"
 )
 
 func d388Service(t *testing.T) *Service {
 	t.Helper()
-	s, err := pgstore.New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	if err := s.Migrate(context.Background()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	t.Cleanup(s.Close)
+	s := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	if _, err := s.Pool().Exec(context.Background(), `TRUNCATE broker_accounts CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}

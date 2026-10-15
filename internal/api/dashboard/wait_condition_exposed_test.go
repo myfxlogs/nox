@@ -12,6 +12,7 @@ import (
 	"nox/internal/data/bus"
 	v1 "nox/internal/gen/dashboardv1"
 	"nox/internal/platform/testutil"
+	"nox/internal/platform/testutil/storetest"
 	"nox/internal/store/pgstore"
 )
 
@@ -20,14 +21,7 @@ import (
 // monitor 行+快照+MT 保证金率 fact+perp 杠杆缝全就位，仅差 qbus 报价由用例自喂。
 func d580ReadySvc(t *testing.T) *Service {
 	t.Helper()
-	st, err := pgstore.New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := st.Migrate(context.Background()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	t.Cleanup(func() { st.Close() })
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	testutil.EnsureTicksPartition(t, st) // 全新席位库迁移只建历史月分区——闸 4 ticks now() 插入需当月（D-016 R1）
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE xasset_allow_combos, autotrade_allow_rules,

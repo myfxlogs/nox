@@ -9,21 +9,14 @@ import (
 	"connectrpc.com/connect"
 
 	v1 "nox/internal/gen/dashboardv1"
-	"nox/internal/platform/testutil"
+	"nox/internal/platform/testutil/storetest"
 	"nox/internal/store/pgstore"
 )
 
 // TestListDeptReports 公司日报单键（dept='company' upsert 幂等覆盖——1 日 1 行）+
 // 空日期回落最新有报日 + 指定日读回。
 func TestListDeptReports(t *testing.T) {
-	st, err := pgstore.New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	if err := st.Migrate(context.Background()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	t.Cleanup(st.Close)
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE fin_dept_reports`); err != nil {
 		t.Fatalf("truncate: %v", err)

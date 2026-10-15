@@ -10,20 +10,13 @@ import (
 	"strings"
 
 	"nox/internal/platform/combo"
-	"nox/internal/platform/testutil"
+	"nox/internal/platform/testutil/storetest"
 	"nox/internal/store/pgstore"
 )
 
 func d478Svc(t *testing.T) (*Service, *pgstore.Store) {
 	t.Helper()
-	st, err := pgstore.New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := st.Migrate(context.Background()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	t.Cleanup(func() { st.Close() })
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE xasset_allow_combos, autotrade_allow_rules,
 		fin_venue_symbol_flags, fin_venue_account_snapshot, positions, position_legs, alerts, ticks RESTART IDENTITY CASCADE`); err != nil {
