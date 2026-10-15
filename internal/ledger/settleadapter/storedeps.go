@@ -150,19 +150,6 @@ func (d *StoreDeps) Settle(ctx context.Context, posID int64) error {
 // compile-time: settleStoreDeps 实现 exec.Settler（D-193-A 扩包 S5）。
 var _ exec.Settler = (*StoreDeps)(nil)
 
-// D-527 返修①：ActualAPRWriter 两委托——提案回链读+评估卡 actual_apr 写
-// （缺桥时 settlement.go 可选接口断言对生产 StoreDeps 恒 false，回写死路）。
-func (d *StoreDeps) ProposalForClosedPosition(ctx context.Context, posID int64) (*int64, error) {
-	return d.store.ProposalForClosedPosition(ctx, posID)
-}
-func (d *StoreDeps) UpdateOppEvalActual(ctx context.Context, proposalID int64, apr float64) error {
-	return d.store.UpdateOppEvalActual(ctx, proposalID, apr)
-}
-
-// compile-time: 生产 StoreDeps 实现 settlement.ActualAPRWriter（D-527 返修①锚——
-// 本行在则断言恒真，删委托即编译败防二次断桥）。
-var _ settlement.ActualAPRWriter = (*StoreDeps)(nil)
-
 // 预测-实测对照三委托（写旗/查旗/纸面行回查）。
 func (d *StoreDeps) InsertFlag(ctx context.Context, f *pgstore.VenueSymbolFlag) error {
 	return d.store.InsertFlag(ctx, f)

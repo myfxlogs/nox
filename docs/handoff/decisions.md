@@ -226,3 +226,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **okx/gate 同型核查结论**：okx unified details 全币枚举已接（eqUsd/availBal venue 已供零新调用，尘埃阈 eqUsd<1）；okx funding 全币枚举（无估值字段原生量）；okx savings 在 finance 户不回显 unified（无双计）；gate 现货无 spot 读径（G1 仅 perp）、gate lend 已独立 earn 键——无双计源。okx WS account 帧仍只写 USDT 聚合行（margin 域口径差异——REST 校准径补分币行，缓议不阻）。
 - **DCI 入快照口径**：binance HOLDING 行 subscriptionAmount 按 investCoin 归位 earn 分币行；okx sfp/dcd/orders live/pending_settle 行按 notionalCcy/investCcy 归位。台账↔venue 对拍（filled 单 product_ref 缺席 venue 在仓集→warn 24h 去重）。
 - **NAV**：SumNav ByCcy 放开全币种原生桶（'' 残影组仍不入）；SkippedNonUSD 语义改=非 USD/USDT 池计数（审计面，不再跳过）。
+
+## D-530 提案↔仓位桥封口径（b 路裁定——「提案驱动仓位桥定径」票）
+- **取证**：①提案轨产物=fin_dci_order 行+fin_personal_position 表象行，从不写 `positions`（dciexec bookSettlement/earn 径核实）；actual_apr 提案族回写已由 dci settle 与 earn 池增量两径覆盖，不依赖仓位桥。②positions 全量=autotrade 引擎直产（dedup_key=combo.Key），request_id 属引擎幂等键域，与 fin_dci_order.request_id（dci|/earn| 域）结构性不相交；fin_proposal.params->>'position_id' 全库零写径。③carry/xasset 的实测-预实对照已在 settle 同点位（UpsertVerificationSample/UpdateStrategyStat/checkXassetPredictVsActual）——提案回链非其真值环载体。④(a) 路成立前置=提案驱动仓位执行轨（归属语义一提案一仓/多仓合并+schema+引擎改造），属 M 阶段方案级另票，现无轨可接。
+- **裁定**：carry/xasset 及一切 autotrade 直产仓永不经提案轨（引擎直产=终态语义）——如实封口径，删 `ProposalForClosedPosition` 回链读径+`ActualAPRWriter` 接口+adapter 双委托+编译断言+fake 锚测（死码全清，史实在 git）。settlement.go 挂点留注记指回链语义。
+- **重开条件**：提案驱动仓位轨立项（a 路）时此桥随件重建——届时须先裁「提案→仓位」归属语义并落 schema 裁决行。

@@ -87,27 +87,3 @@ func (s *Store) SumEarnYieldSince(ctx context.Context, vn, ccy string, since tim
 	}
 	return sum, nil
 }
-
-// ProposalForClosedPosition D-527②：仓位→提案回链解（双键 OR，零行=非提案驱动仓）：
-//   - fin_dci_order.request_id 与 positions.request_id 同键（提案单↔仓位共享幂等键域）；
-//   - fin_proposal.params->>'position_id' 显式回链（提案驱动执行径自声明，推不设读）。
-//
-// autotrade/手动直产仓无提案行 → nil——调用方不写 actual_apr（无对应执行事件不编数）。
-func (s *Store) ProposalForClosedPosition(ctx context.Context, posID int64) (*int64, error) {
-	var pid int64
-	err := s.pool.QueryRow(ctx, `
-		SELECT pid FROM (
-			SELECT o.proposal_id AS pid FROM fin_dci_order o
-			JOIN positions p ON p.request_id = o.request_id
-			WHERE p.id=$1 AND o.proposal_id IS NOT NULL
-			UNION
-			SELECT id AS pid FROM fin_proposal WHERE params->>'position_id' = $2
-		) t ORDER BY pid LIMIT 1`, posID, fmt.Sprintf("%d", posID)).Scan(&pid)
-	if err == pgx.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("proposal for position %d: %w", posID, err)
-	}
-	return &pid, nil
-}
