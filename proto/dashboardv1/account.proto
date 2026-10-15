@@ -218,4 +218,13 @@ message GetFinanceOverviewResponse {
   double total_realized_usd = 7;      // D-508 S8：Σ pnl_by_env.realized_pnl（前端直读不再聚合）
   // D-522④：NAV 按结算币种分账（USD/USDT 各键，跨币永不加总——total_equity_usd 保留=USD 桶）。
   map<string, double> equity_by_ccy = 8;
+  // D-535 业绩基线面（本金口径 USDT+USD，D-534）：锚缺 → perf_available=false 全组如实缺。
+  double baseline_usd = 9;                // 基线锚（app_config baseline_usd）
+  google.protobuf.Timestamp baseline_at = 10;
+  double principal_now_usd = 11;          // 本金池现值=USDT+USD 两桶 NAV 合计
+  double net_external_flow_usd = 12;      // 基线后外部充提净额（充正提负；内部划转不计）
+  double perf_usd = 13;                   // 真业绩=本金池变动−净流
+  double perf_ann_pct = 14;               // 年化=perf/天数×365/基线×100（days>0）
+  bool perf_available = 15;               // false=锚缺/读败（前端显缺不显 0）
+  bool perf_flow_provisional = 16;        // 净流扣减 provisional 标（perf_flow_provisional 键）
 }

@@ -89,6 +89,18 @@ func gather(ctx context.Context, d *Deps, dayStart, dayEnd time.Time) (string, e
 		fmt.Fprintf(&b, "- NAV=%.2f USD｜闲置=%.2f USD（%.1f%%）\n", nav, idle, idlePct)
 	}
 	fmt.Fprintf(&b, "- 30d 净额=%.2f USD%s\n", net30, hardLine)
+	// D-535：业绩基线面（本金口径 USDT+USD——池变动−外部净流；锚缺/读败如实标缺不阻班）。
+	if perf, perr := d.Store.PerfSinceBaseline(ctx, dayEnd); perr == nil && perf != nil {
+		prov := ""
+		if perf.FlowProvisional {
+			prov = "（净流扣减 provisional——划转台账观察期）"
+		}
+		fmt.Fprintf(&b, "- 业绩基线=%.0f USD（%s 起算）｜本金池=%.2f｜基线后业绩=%+.2f USD（净流扣减 %+.2f）%s\n",
+			perf.BaselineUSD, perf.BaselineAt.In(BJTime).Format("01-02"),
+			perf.PrincipalNowUSD, perf.PerfUSD, perf.NetExternalUSD, prov)
+	} else if perr != nil {
+		b.WriteString("- 业绩基线：读取失败（如实标缺）\n")
+	}
 	fmt.Fprintf(&b, "- 提案中位龄=%s\n", ageFmt(medianAge(props, dayEnd)))
 	fmt.Fprintf(&b, "- 最老投资人侧请求龄=%s\n", ageFmt(oldestGapAge(gaps, dayEnd)))
 	fmt.Fprintf(&b, "- funding 当日实收=%.2f｜预估=%.2f USD（估实偏离=%s）\n",

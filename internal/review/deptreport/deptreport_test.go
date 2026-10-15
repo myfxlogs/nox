@@ -26,6 +26,7 @@ type fakeStore struct {
 	disabled map[string]bool
 	llmUSD   float64
 	llmN     int
+	perf     *pgstore.PerfReport
 }
 
 func (f *fakeStore) RetroDailyStats(context.Context, time.Time, time.Time) (*pgstore.RetroDaily, error) {
@@ -68,6 +69,9 @@ func (f *fakeStore) UpsertDeptReport(_ context.Context, r pgstore.DeptReport) er
 func (f *fakeStore) InsertAlertDedup(_ context.Context, _, msg string, _ time.Duration) error {
 	f.alerts = append(f.alerts, msg)
 	return nil
+}
+func (f *fakeStore) PerfSinceBaseline(context.Context, time.Time) (*pgstore.PerfReport, error) {
+	return f.perf, nil
 }
 
 type fakeNotifier struct{ sent []string }

@@ -94,3 +94,6 @@ var D526RetireFlatBoundsSQL string // D-526 返修③：平 OTM 界死行清退
 
 //go:embed replay/1029_venue_io_transfer_wallet.sql
 var VenueIOTransferWalletSQL string // D-536①：fin_venue_io 划转列（from/to_wallet）
+
+//go:embed replay/1030_perf_baseline.sql
+var PerfBaselineSQL string // D-535：业绩基线锚+历史行归档（nav_daily/income_events archived）
