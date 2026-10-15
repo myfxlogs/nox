@@ -21,6 +21,9 @@ type fakeYieldStore struct {
 	orders  []pgstore.EarnPoolOrder
 	yields  float64
 	actuals map[int64]float64
+	// DCI 台账对拍注面。
+	dciOrders []pgstore.FilledDCIOrder
+	alerts    []string
 }
 
 func (f *fakeYieldStore) PrevSnapshotEquity(_ context.Context, _, _, ccy string, _ time.Time) (float64, time.Time, bool, error) {
@@ -45,6 +48,13 @@ func (f *fakeYieldStore) ListEarnPoolOrders(context.Context, string, string) ([]
 }
 func (f *fakeYieldStore) SumEarnYieldSince(context.Context, string, string, time.Time) (float64, error) {
 	return f.yields, nil
+}
+func (f *fakeYieldStore) ListFilledDCIOrders(context.Context) ([]pgstore.FilledDCIOrder, error) {
+	return f.dciOrders, nil
+}
+func (f *fakeYieldStore) InsertAlertDedup(_ context.Context, level, message string, _ time.Duration) error {
+	f.alerts = append(f.alerts, level+"|"+message)
+	return nil
 }
 func (f *fakeYieldStore) UpdateOppEvalActual(_ context.Context, pid int64, apr float64) error {
 	if f.actuals == nil {
