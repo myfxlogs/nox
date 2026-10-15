@@ -208,3 +208,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **病灶**：`dci_put_otm_bound=0.95` 平界+选档取 APY 最优→系统结构性贴界选最浅 strike（实证 #445 BTC 77500=5.3% OTM×16d≈0.3σ、#30 ETH 2280=6% OTM×6d）；溢价闸基准=3×earn——对无风险收益比价，对所卖尾险零定价。浅虚值 PUT 期望为负（16d premium≈0.65% vs 行权条件损失 4-6%×概率 35-45%）。
 - **裁**：①OTM 界改 σ 驱动——bound=1−k×σ_daily×√tenor（σ_daily 读标的实现波动率 facts/ticks 实算，k 与 tenor 上限落约束表 dci_put_otm_k/dci_tenor_max_days，禁字面量）；②选档目标改「Δ(premium_ann−tail_cost_ann) 最优」——tail_cost 估算=行权概率×条件损失×365/tenor（实现波动率定价法，同 σ 源）；③在仓 DCI 名义合计帽入约束表 `dci_open_notional_cap_usdt`（默认 NAV_USDT 的 15%——浅虚值叠加崩盘的复合风险帽）；④既有在仓不回追（#30 $10 探针 10-21 自然到期；binance #11 2d 短档自然到期）。**结果预期**：σ-safe 距离下多数提案将如实被溢价闸/尾险闸拒——那正是「安全版不值钱」的如实表达，不为追单放闸。
 - **定位**：DCI 产品本身非 venue 坑（OKX/binance 标准结算），坑在选档参数化——本裁只动选档与闸，不动产品接入面。
+
+## D-527 评估席完整判据（业主问「评估席如何完整」的裁定口径）
+- **完整定义**（四件全立才算完整）：①一提案一卡强制（已有：run.go 每拍复算）；②**每激活模板族带五项证源装配**——新族激活票必须随附 term 证源映射件（eval.go 硬编码 switch 是现状可接受的 fail-closed 形态，激活即补，不预先全写）；③**评估卡闸覆盖全执行径**——现状只 dciexec/earn 径吃卡，xasset engine 老轨不读卡（历史轨豁免观察，新轨必吃）；④**actual_apr 全执行径回写**——现状仅 dciexec settle 两点，earn/carry/xasset/cash_mgmt 退出点都要回写，G10→G2 校准环才有完整右腿。
+- **第五项裁定**：五项拆解对线性 payoff 族完备；**非线性/负偏度族（卖权/裸 delta carry）须第六项 `tail_apr`**（缺证→unevaluable 同例，线性族 mechanism-豁免恒 0）——D-526 σ 源落地后随件扩列，不提前建。
+- **指标面**：§4.3 ⑤预实偏差=actual_apr 回写覆盖后才入日报自算（现在 1/25 回写率，算了也是噪声）。
