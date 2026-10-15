@@ -8,8 +8,9 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nox_ro') THEN
         BEGIN
             CREATE ROLE nox_ro NOLOGIN;
-        EXCEPTION WHEN duplicate_object THEN
-            NULL; -- 集簇级对象：并行测试库/实例互撞时后者如实跳过
+        EXCEPTION WHEN duplicate_object OR unique_violation THEN
+            NULL; -- 集簇级对象：并行测试库互撞——双查 pg_roles 同窗时 CREATE
+                  -- 撞 pg_authid_rolname_index 出 23505（非 42710），两码同吞
         END;
     END IF;
 END $$;
