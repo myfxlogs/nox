@@ -52,6 +52,7 @@ type running struct {
 	requiredMargin   func(ctx context.Context, symbol string, lots float64, side string) (float64, error)      // D-068：仓位级保证金原生值（RequiredMargin RPC，price=0=网关侧现价）；nil=未接线
 	meta             func(ctx context.Context) ([]fact.Fact, error)                                            // D-140 S2：MT5 符号元数据 facts（CS 采集）
 	orderHistoryScan orderHistoryScan                                                                          // D-181 S1：拉历史已平仓订单（BackfillSwapHistory RPC 用），nil=未接线
+	ioScan           ioScan                                                                                    // MT5 io：OrderType=Balance 充提行扫描（fin_venue_io MT 覆盖），nil=未接线
 	acctSummary      func(ctx context.Context) (float64, float64, string, error)                               // D-563 S4b：MT 实时 equity/freeMargin/currency（AccountSummary RPC）；nil=非 MT 或未接线
 
 	// per-venue symbolGroups TTL 缓存（D-045 §3.2.1）：避免矩阵页全量拉取时 N 账号 × SymbolList+SymbolParamsMany
@@ -74,6 +75,19 @@ func (m *BrokerManager) MTAccountSummary(ctx context.Context, venueKey string) (
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return r.acctSummary(ctx)
+}
+
+// MTAccountCurrency venue 账户币种（AccountSummary 读，io 行 ccy 用）；
+// 未接线/RPC 败→("",false)。
+func (m *BrokerManager) MTAccountCurrency(ctx context.Context, venue string) (string, bool) {
+	m.mu.Lock()
+	r, ok := m.running[venue]
+	m.mu.Unlock()
+	if !ok || r.acctSummary == nil {
+		return "", false
+	}
+	_, _, ccy, err := r.acctSummary(ctx)
+	return ccy, err == nil && ccy != ""
 }
 
 // staticQuerier 环境变量适配器的 querier（不被动态管理，boot 时与 DB venue 去重）。
@@ -174,6 +188,16 @@ func (m *BrokerManager) SetHistQuerierHook(f func([]reconcile.OrderHistoryQuerie
 // SetBPM D-121：注入 BrokerPositionMonitor（CEX 平仓需查快照获取 side/volume）。
 // 读点在 CEX 平仓路径（boot 窗口不可达），已审计同型晚写不迁（D-581）。
 func (m *BrokerManager) SetBPM(bpm *BrokerPositionMonitor) { m.bpm = bpm }
+
+// IOScan 返回指定 venue 的充提事件扫描闭包（nil=未连接/无扫描器）。
+func (m *BrokerManager) IOScan(venue string) ioScan {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if r, ok := m.running[venue]; ok {
+		return r.ioScan
+	}
+	return nil
+}
 
 // OrderHistoryScan D-181 S1：返回指定 venue 的历史订单扫描闭包（nil=未连接/无扫描器）。
 // BackfillSwapHistory RPC 用——拉 venue 已平仓订单计算 usdLotDay → swap_settled facts。

@@ -182,3 +182,56 @@ func medianFloats(vals []float64) float64 {
 	}
 	return (sorted[n/2-1] + sorted[n/2]) / 2
 }
+
+// MT5IOEvent 一次充提操作（OrderType=Balance 订单行——MT5 协议层 deposit/withdraw
+// 以 balance order 落历史，见 LOG.md 10-15 取证段）。
+type MT5IOEvent struct {
+	Ticket    int64
+	Amount    float64 // >0 入金 / <0 出金（账户币种）
+	CloseTime time.Time
+}
+
+// ioScan 闭包：拉指定窗口内的充提事件（D-541 provisional 摘标前置）。
+type ioScan func(ctx context.Context, from, to time.Time) ([]MT5IOEvent, error)
+
+// mt5IOHistoryScan 与 orderHistoryScan 同 RPC（OrderHistory）——过滤面相反：
+// 只收 OrderType_Balance（充提）；买卖单跳过。Profit=净额（deposit>0/withdraw<0）。
+func mt5IOHistoryScan(client mt5pb.MT5Client, token string) ioScan {
+	return func(ctx context.Context, from, to time.Time) ([]MT5IOEvent, error) {
+		ctx = metadata.AppendToOutgoingContext(ctx, "id", token)
+		ascending := false
+		resp, err := client.OrderHistory(ctx, &mt5pb.OrderHistoryRequest{
+			Id:        token,
+			From:      from.Format("2006-01-02T15:04:05"),
+			To:        to.Format("2006-01-02T15:04:05"),
+			Ascending: &ascending,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("mt5 io history: %w", err)
+		}
+		if e := resp.GetError(); e != nil {
+			return nil, fmt.Errorf("mt5 io history: %s", e.GetMessage())
+		}
+		var out []MT5IOEvent
+		for _, ord := range resp.GetResult() {
+			if ord.GetOrderType() != mt5pb.OrderType_OrderType_Balance {
+				continue
+			}
+			closeT := time.Time{}
+			if ms := ord.GetCloseTimestampUTC(); ms != 0 {
+				closeT = time.UnixMilli(ms).UTC()
+			} else if ts := ord.GetCloseTime(); ts != nil {
+				closeT = ts.AsTime()
+			}
+			if closeT.IsZero() || ord.GetProfit() == 0 {
+				continue // 未平仓/零额跳
+			}
+			out = append(out, MT5IOEvent{
+				Ticket:    ord.GetTicket(),
+				Amount:    ord.GetProfit(),
+				CloseTime: closeT,
+			})
+		}
+		return out, nil
+	}
+}

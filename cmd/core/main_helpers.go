@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"nox/internal/api/dashboard"
 	"nox/internal/data/bus"
 	"nox/internal/data/collect/exchange"
 	"nox/internal/data/fact"
@@ -152,10 +153,10 @@ func startDisabledStrategiesListener(ctx context.Context, st *pgstore.Store, eng
 func startCollectorsAndScanners(ctx context.Context, st *pgstore.Store, cfg *config.Config,
 	cexCfg exchange.Config, cexSymbols []string,
 	incomeKickCh, okxIncomeKickCh, ioKickCh chan struct{}, refreshTopic *bus.Topic[string],
-	probeTopic *bus.Topic[struct{}]) {
+	probeTopic *bus.Topic[struct{}], brokerMgr *dashboard.BrokerManager) {
 	startIncomeCollector(ctx, st, cexCfg, cexSymbols, incomeKickCh)         // D-334ab S3：income 实数轨结算对齐采集
 	startOKXIncomeCollector(ctx, st, cexCfg, okxIncomeKickCh)               // D-385 S3：okx bills→income_events（15min 轮询）
-	startCexIOCollector(ctx, st, ioKickCh)                                  // D-365 S3：CEX 进出账采集 15min 水位增量
+	startCexIOCollector(ctx, st, ioKickCh, brokerMgr)                       // D-365 S3：CEX 进出账采集 15min 水位增量
 	WarnXAssetEnvDeprecated(cfg)                                            // D-338 S4：env 白名单弃用告警
 	startCarryUniverseScanner(ctx, st, cfg.TradeModeTTL, cfg, refreshTopic) // D-336 S1：carry 宇宙扫描器（发现层 4h）
 	startKbReporter(ctx, st, cfg)                                           // D-442 S3：KB 元分析周报器（周 ticker 落档）
