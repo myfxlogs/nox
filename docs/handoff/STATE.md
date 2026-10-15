@@ -99,3 +99,5 @@
 > 票文权威出处=`docs/搬迁清单.md` §9；M0/M1 全文票面在归档仓 STATE。
 
 <!-- 复审收口 10-15（@8b434a4a3 部署拍 SG 实拍）：spot/USDT 0.0504=真零尘埃、BTC 0.01277121/BFUSD 1.0987 与业主 App 全对、LD* 假影除；DCI 票返修见本表行 -->
+
+<!-- 复审收口 10-15 三票：CI run 38694601088 全绿（D514 spread seed+迁移幂等生效）；check-lines 软警清零；D-530 取证核——positions=autotrade 直产与提案 request_id 键域不相交、params->>position_id 零写径，回链恒空属实，删码照准；SG 已部署 -->
