@@ -988,3 +988,30 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **锚**：`TestD526_GateNoteInProposal` 扫拍级——fixture 全条件（cond 改指 binance:spot 凭据/permission/cap/报价/earn 基准）→RunOnce→提案行 params 断言 σ=/界=/tail=/net= 四键。
 - **验证**：build/vet/gofmt 净 ✅；oppmatch/gate/dciexec 全包+oppmatch -race 绿 ✅；全量套件仅 dashboard `TestD388_SetBrokerDisabled_WireE2E` 测试环境 flake（同族 D580/D587/D466 型——mock/连接面非本票径，隔离 0.10s 绿）🔄。
 - **留续**：SG `schema_migrations=1027`——1028 死行删除待容器重建跑迁移生效（部署欠账归 D-527 返修收口）；过闸提案 `gate_note` 三要素待重建后下拍 SG 实拍。
+
+## 2026-10-15 四票交付（实施席）
+
+### xasset-monitor okx 交割腿告警收口——根因=SG 宿主二进制欠账（零码改）
+- **三通道取证**：SG `fin_cex_universe` okx FUTURES=16 行 contract_type 已是 'FUTURES'（398c5564 过滤键 venue 无关、`COALESCE(contract_type,'PERP')<>'FUTURES'` 覆盖全 venue）；`derive_test.go` 锚 fixture 正是 `okx XMON-USD_UM-270326`——**码面无漏排**；gate 1014 行 contract_type 空值行全为现货符号（无日期后缀），okx 唯一空值行 `ICX-USDT-SWAP` 为 perp——无交割漏网。
+- **真病灶**：`/opt/nox/bin/xasset-monitor` 构建于 10-14 09:25 < 398c5564（10-14 17:23）——cron 宿主裸二进制未随 fix 重建，过滤从未在 SG 生效。**修法**=SG 跑 `scripts/build_host_tools.sh`（宿主工具重建标准径，归部署域）。
+- **处置**：零码改；STATE 行翻「根因=二进制欠账」；重建属复审席部署径（本机不构建生产二进制）。
+
+### explorer daily 提案死产出处置——digest 段接入（裁定①）
+- `tools/digest/explorer_daily.go`：`loadExplorerDaily`（`scan_kind='daily' AND status='new'` 计数+canonical top3）+`renderExplorerDaily`（N=0 照常印行同死角段惯例）；两队列段聚 `queuesSection`（main.go 行数约束，读败各自跳过）。
+- 禁线守：probe 行生命周期零动（scan_kind 限定）、零告警级、零新表、只读聚合。
+- 锚 `TestExplorerDaily`：daily+new 计 3、top1 `xedq_a×2`、probe/weekly/expired 行不计、N=0 印行。
+
+### cfd_swap_hedged#505 xasset 轨表达性查证——**可表达**
+- **执行轨**：`XAssetCarryDetector` 双腿 venue 组合双向全试（tryPair 反向 `buy cb sell ca`）；净息差公式=卖腿 perp 收 funding + 买腿 perp 付 funding + MT 腿 swap_long/short——「long PAXGUSDT@binance:perp（付 funding）× short XAUUSD@15032313:mt5（收 swap_short）」正是反向形，公式直接表达。
+- **SG 实拍前置全在**：asset_equiv GOLD 类 `PAXGUSDT|perp|binance`+`XAUUSD|mt5|15032313` enabled；broker 15032313 mt5 connected；quotes `binance:perp PAXGUSDT`/`15032313:mt5 XAUUSD` 实时流；facts `swap_short 15032313 XAUUSD=0.916`（bps_daily×365/100≈3.34%/yr 收息）+`funding binance PAXGUSDT` 在刷。
+- **唯一缺件=白名单授权行**：`xasset_allow_combos` 方向性键现只有 (277842155→binance XAUUSD→PAXGUSDT) 等 MT 买向行；本形态需反向行 `venue_buy=binance,canonical_buy=PAXGUSDT / venue_sell=15032313,canonical_sell=XAUUSD`——白名单=授权域非码改。
+- **经济学如实**：今 funding binance PAXGUSDT=+10.03%/yr（假设采样时 −2.8% 已漂移）→ 现价 net=3.34−10.03=**负**——轨可表达但现值不进；detector 净息差门实时判，转有利自发射。
+- **模板原型**：xasset_allow_combos 行 `(binance,PAXGUSDT,15032313,XAUUSD, notional_usd=<席位定>)`+监控簿 watch 行——开仓即 `sell XAUUSD@MT5(收 swap_short≈3.3%/yr) × buy PAXGUSDT@binance:perp(付 funding)`。
+
+### okx USD_UM 日历基差可行性取证——**go**
+- **合约规格实拍**（`/api/v5/public/instruments`）：`ETH-USD_UM-261030` `ctType=linear`、`ctValCcy=ETH`/`ctVal=0.001`、`settleCcy=USD`、`tickSz=0.01`、`lotSz=minSz=1`、`lever=20`——linear 交割合约非币本位（票禁线「settleCcy=币不收」过；`ETH-USD-261030` 同到期还有 inverse/settleCcy=ETH 的币本位兄弟档，选档务必按 `_UM` instId 精确匹配）。XAU/SOL/BTC 同族在列；`BTC-USDT-261030` 类 USDT 结算交割档 venue 不存在。
+- **结算币种口径**：OKX USDⓈ-margined——settleCcy 默认 USD，可选 USDC/USDG（文档：Seychelles/AU/SG 实体 USD 不可选→本账号大概率须选 USDC/USDG，属账户设置项）；负权益免息额 ≈$20k 超限自动转 USDC 负债计息——口径注记不挡 P0 纸面。
+- **抵押**：文档「deposit 所选结算币种或其他支持资产作保」——unified 账户 USDT 可作抵押资产（折算率按 venue 折扣率表，须实现期读账户面证实不臆值）。
+- **现货腿可得**：BTC/ETH/SOL/XAUT-USDT spot 全 live（XAUT 实拍 live）。
+- **配对兼容**：`paper_spot_carry` 双腿 venue 键已是 `binance:futures/binance:spot` 文本键——`okx:futures`/`okx:spot` 同构可表达；universe `last_basis_ann` 已在喂（+89% 源即此行）；`fin_cex_universe` okx FUTURES 16 行含 expiry_ts。
+- **go 判定**：可行——立「日历基差 P0 轨扩 okx venue」施工票依据足；**待补证据项**（施工票内）：交割手续费率档位（账户 VIP 实拍）、USDⓈ结算币种账户设置确认（USDC/USDG）、USDT 抵押折算率读数、`_UM`/`非_UM` 同名档 instId 精确匹配闸。

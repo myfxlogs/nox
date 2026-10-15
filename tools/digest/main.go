@@ -191,13 +191,8 @@ func run(commitFlag bool) error {
 	} else {
 		pendingMd += renderDeadCornerSection(corners)
 	}
-	// 裁决队列浮面（D-521 续——proposed 积压推送非环境态）。
-	aqN, aqTops, err := loadAdjudicationQueue(ctx, pool)
-	if err != nil {
-		log.Printf("digest: adjudication queue load: %v (段跳过)", err)
-	} else {
-		pendingMd += renderAdjudicationQueue(aqN, aqTops)
-	}
+	// 裁决/探矿两队列浮面（D-521 续+daily 死产出投影——读败段各自跳过）。
+	pendingMd += queuesSection(ctx, pool)
 	if err := os.WriteFile(pendingPath, []byte(pendingMd), 0644); err != nil {
 		return fmt.Errorf("write pending: %w", err)
 	}
