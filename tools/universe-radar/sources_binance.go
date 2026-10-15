@@ -145,6 +145,33 @@ func (b binance) Scan(ctx context.Context) ([]Row, error) {
 			rows[i].Index = indexes[rows[i].Symbol]
 		}
 	}
+	// 交割行 flap 修源（data_lost flap 根因 10-15：premiumIndex 间歇读败→
+	// marks/indexes nil→Mark/Index=0→miss++→3 轮即退→复供重开循环）。
+	// 缺值行回落 fin_cex_radar 最新实值（2h 窗——雷达同表既有拍新鲜度界）；
+	// 窗内无档仍零值如实缺（真断供照退，不修阈值只修供给）。
+	var futSyms []string
+	for _, n := range rows {
+		if n.ContractType == ctFutures && (n.Mark <= 0 || n.Index <= 0) {
+			futSyms = append(futSyms, n.Symbol)
+		}
+	}
+	if len(futSyms) > 0 {
+		fbm, fbi := latestRadarMarkIndex(ctx, b.pool, "binance", futSyms, "2 hours")
+		for i := range rows {
+			n := &rows[i]
+			if n.ContractType == ctFutures && (n.Mark <= 0 || n.Index <= 0) {
+				if m, ok := fbm[n.Symbol]; ok {
+					n.Mark = m
+				}
+				if ix, ok := fbi[n.Symbol]; ok {
+					n.Index = ix
+				}
+				if n.Mark > 0 && n.Index > 0 {
+					log.Printf("[universe-radar] binance 交割行 %s mark/index radar 回填（premiumIndex 缺）", n.Symbol)
+				}
+			}
+		}
+	}
 	funded := 0
 	for i := range rows {
 		sym := rows[i].Symbol
@@ -211,6 +238,33 @@ func (b binance) fundingIntervals(ctx context.Context) (map[string]int, error) {
 		out[r.Symbol] = int(r.FundingIntervalHours)
 	}
 	return out, nil
+}
+
+// latestRadarMarkIndex fin_cex_radar 最新 mark/idx 回填面（venue|symbol 逐符号
+// 最新行，maxAge 窗内才认——交割行 premiumIndex 缺值修复源，非臆造）。
+func latestRadarMarkIndex(ctx context.Context, pool *pgxpool.Pool, venue string, symbols []string, maxAge string) (marks, idxs map[string]float64) {
+	marks, idxs = map[string]float64{}, map[string]float64{}
+	if pool == nil || len(symbols) == 0 {
+		return marks, idxs
+	}
+	rows, err := pool.Query(ctx, `
+		SELECT DISTINCT ON (symbol) symbol, mark, idx FROM fin_cex_radar
+		WHERE venue=$1 AND symbol=ANY($2) AND ts > now()-$3::interval
+		ORDER BY symbol, ts DESC`, venue, symbols, maxAge)
+	if err != nil {
+		log.Printf("[universe-radar] radar mark/index 回填读败（留零如实缺）: %v", err)
+		return marks, idxs
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sym string
+		var m, ix float64
+		if err := rows.Scan(&sym, &m, &ix); err != nil {
+			return marks, idxs
+		}
+		marks[sym], idxs[sym] = m, ix
+	}
+	return marks, idxs
 }
 
 // latestFacts 批查 venue kind 最新值（src 非空则锚定；funding_interval 落点 src 异构不过滤）。
