@@ -10,7 +10,7 @@ import (
 	"nox/internal/store/pgstore"
 )
 
-func TestD535_SpotDataLostAggregateWarn(t *testing.T) {
+func TestD538_SpotDataLostAggregateWarn(t *testing.T) {
 	s := d534Store(t)
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx, `DELETE FROM alerts`); err != nil {
