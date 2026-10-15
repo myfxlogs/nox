@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"nox/internal/data/bus"
+	v1 "nox/internal/gen/dashboardv1"
 	"nox/internal/ledger/reconcile"
 	"nox/internal/store/pgstore"
 )
@@ -52,5 +53,42 @@ func TestD523_CalibSnapshotWrites(t *testing.T) {
 	v.LiveFresh(ctx, "binance:perp")
 	if len(rows) != 2 {
 		t.Fatalf("值变未写: %d", len(rows))
+	}
+}
+
+// D-543R1：cex 分币池校准行只写本币切片——okx unified 实证 rest_calib 把
+// ΣeqUsd 全币权益挂 USDT 标签（43.5 vs okx_event 真 USDT 3.4e-9 双写 flap）。
+func TestD543_CalibSnapshotUsdtSlice(t *testing.T) {
+	ctx := context.Background()
+	var rows []pgstore.VenueAccountSnapshot
+	fq := &fakeQ{acct: &reconcile.AccountInfo{
+		VenueKey: "okx:unified", Venue: "okx", VenueType: "unified", AssetType: "cex",
+		Balance: 43.5, Equity: 43.5, FreeMargin: 0, Currency: "USDT", // Equity=全币总权益
+		Holdings: []*v1.Holding{
+			{Ccy: "DOGE", Qty: 250, UsdtValue: 20},
+			{Ccy: "PENGU", Qty: 1000, UsdtValue: 23.5},
+		},
+		FreeQtyByCcy: map[string]float64{"USDT": 0.0000000034, "DOGE": 250, "PENGU": 1000},
+	}}
+	v := New(Deps{
+		Ledger: bus.NewBalanceLedger(),
+		QuerierFor: func(context.Context, string) (reconcile.AccountQuerier, string, bool) {
+			return fq, "okx:unified", true
+		},
+		SnapWrite: func(_ context.Context, snaps []pgstore.VenueAccountSnapshot) error {
+			rows = append(rows, snaps...)
+			return nil
+		},
+		RestTTL: func() time.Duration { return 0 },
+	})
+	if _, ok := v.Live(ctx, "okx:unified"); !ok {
+		t.Fatal("live miss")
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows=%+v", rows)
+	}
+	r := rows[0]
+	if r.Currency != "USDT" || r.EquityRaw > 0.001 || r.BalanceRaw > 0.001 {
+		t.Fatalf("USDT 行应记本币切片尘埃而非全币权益: %+v", r)
 	}
 }

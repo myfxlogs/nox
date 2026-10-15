@@ -224,10 +224,11 @@ func (v *View) calibrate(ctx context.Context, venueKey string, force, exact bool
 	// 快照行写本币真值：cex 分币池 acct.Equity=Σdetails[*].eqUsd（全币 USD 总权益，
 	// 保证金口径用）挂 acct.Currency 单币标签即伪账（okx unified 实证：rest_calib
 	// 写 43.5 vs okx_event 写 availBal 3.4e-9——同键双写致 NAV 池 flap ±43.5）。
-	// 资金可用性 Ledger/liveFunds 语义零动，仅校准快照行收窄到本币切片。
+	// 判别=带多币 Holdings 明细的 cex 账户才收窄（perp 单币池 Equity 即本币真值；
+	// 分币残值由 rest_poll 各行披露不混入本金池）。资金可用性 Ledger 语义零动。
 	calibAvail, calibEq := avail, acct.Equity
-	if acct.AssetType == "cex" {
-		calibAvail = acct.FreeQtyByCcy[acct.Currency] // 未填→0 诚实（与 rest_poll 分币行同径）
+	if acct.AssetType == "cex" && len(acct.Holdings) > 0 {
+		calibAvail = acct.FreeQtyByCcy[acct.Currency]
 		calibEq = calibAvail
 		for _, h := range acct.Holdings {
 			if h.Ccy == acct.Currency {
