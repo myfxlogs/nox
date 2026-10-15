@@ -99,6 +99,8 @@ func (s *Store) throttleRestSnaps(ctx context.Context, snaps []VenueAccountSnaps
 	if len(keys) == 0 {
 		return snaps
 	}
+	// 探针限 rest 组内上次写——跨 src 比会被事件径不同口径（如 unified/USDT
+	// 事件尘埃值 vs rest 切片值）顶穿 ε 使闸失效（10-15 部署后实拍 5s 连写）。
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT ON (venue, venue_type, currency)
 			venue||'|'||venue_type||'|'||COALESCE(currency,''),
@@ -106,6 +108,7 @@ func (s *Store) throttleRestSnaps(ctx context.Context, snaps []VenueAccountSnaps
 			fetched_at
 		FROM fin_venue_account_snapshot
 		WHERE (venue||'|'||venue_type||'|'||COALESCE(currency,'')) = ANY($1)
+		  AND src IN ('rest_calib','rest_poll')
 		ORDER BY venue, venue_type, currency, fetched_at DESC`, keys)
 	if err != nil {
 		return snaps // 读败放行——吞真值风险大于冗余写
