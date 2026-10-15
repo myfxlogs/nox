@@ -18,10 +18,11 @@ type fakeOppStore struct {
 	upserts map[string]bool
 	last    *pgstore.Opportunity // D-300：列断言用
 	calls   int                  // D-004 P1#8：调用次数（去重后应与 publish 次数一致）
+	trial   map[string]bool      // D-550：试单组合键集种子
 }
 
 func newFakeOppStore() *fakeOppStore {
-	return &fakeOppStore{upserts: make(map[string]bool)}
+	return &fakeOppStore{upserts: make(map[string]bool), trial: make(map[string]bool)}
 }
 
 func (f *fakeOppStore) UpsertOpportunity(_ context.Context, o *pgstore.Opportunity) (bool, error) {
@@ -34,6 +35,13 @@ func (f *fakeOppStore) UpsertOpportunity(_ context.Context, o *pgstore.Opportuni
 	}
 	f.upserts[o.ID] = true
 	return true, nil
+}
+
+// IsTrialXAssetCombo D-550 接口面（试单判种子=trial 键集——断言豁免/不豁免两态）。
+func (f *fakeOppStore) IsTrialXAssetCombo(_ context.Context, cb, cs, vb, vs, _ string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.trial[cb+"|"+cs+"|"+vb+"|"+vs], nil
 }
 
 func (f *fakeOppStore) count() int {

@@ -158,17 +158,27 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	//（advisory 管钱 vs D-328 risk-gate 管命，设计显式裁定，防未来误同步）。
 	// FUNDING_HEDGE 不适用——monitor 安全边际语义专指 MT×CEX 顺价差。
 	if opp.Type == "XASSET_CARRY" {
-		// 反向组合（CEX 为买腿/无 MT 腿）monitor 方向未定义 → 拒开（钉死防放行）。
+		// 腿向判定（D-550 试单轨镜像）：buyMT=正向（买 MT 卖 CEX，顺价=cexBid>mtAsk）；
+		// sellMT=反向（买 CEX 卖 MT——空 CFD 收 swap×多 perp 付 funding，顺价镜像=
+		// mtBid>cexAsk，分母换 cexAsk）；双 CEX/双 MT 无 MT 腿 → monitor 方向未定义拒开。
+		sellCanonical := opp.Canonical
+		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
+			sellCanonical = *opp.CanonicalSell
+		}
 		cexVenue, mtVenue := xassetLegVenues(opp.VenueBuy, opp.VenueSell)
-		if mtVenue == "" || !gate.IsMTVenue(opp.VenueBuy) {
-			log.Printf("[autotrade] skip %s: 反向/无MT腿组合 monitor 方向未定义 (%s×%s，拒开)", opp.ID, opp.VenueBuy, opp.VenueSell)
+		buyMT, sellMT := gate.IsMTVenue(opp.VenueBuy), gate.IsMTVenue(opp.VenueSell)
+		if mtVenue == "" || buyMT == sellMT {
+			log.Printf("[autotrade] skip %s: 无MT腿/双MT组合 monitor 方向未定义 (%s×%s，拒开)", opp.ID, opp.VenueBuy, opp.VenueSell)
 			return
 		}
-		// pair 键以 monitor 工具存储现值为准（"XAUUSDT-XAU"，S2 钉死）：第二段=canonical 去 USD 后缀。
-		pairKey := opp.Canonical
-		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
-			pairKey = *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD")
+		// 腿位镜像：MT 腿 canonical/venue 与 CEX 腿 canonical/venue 按向取位。
+		mtCanon, cexCanon, mtVK, cexVK := opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell
+		if !buyMT {
+			mtCanon, cexCanon, mtVK, cexVK = sellCanonical, opp.Canonical, opp.VenueSell, opp.VenueBuy
 		}
+		// pair 键以 monitor 工具存储现值为准（"XAUUSDT-XAU"/"PAXGUSDT-XAU"，S2 钉死）：
+		// 首段=CEX 腿 canonical，第二段=MT 腿 canonical 去 USD 后缀——两向同构。
+		pairKey := cexCanon + "-" + strings.TrimSuffix(mtCanon, "USD")
 		// 判定时刻价差改双腿实时报价现算（monitor 簿 5min 轮询退出决策面；
 		// 簿内只留 noise_bps 统计阈值）。公式同 monitor 写入：entry=(cexBid−mtAsk)/mtAsk。
 		// 双腿任一报价缺/超龄（>5min 同 tickFreshWindow 口径）→ fail-closed 拒开。
@@ -182,19 +192,20 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 			log.Printf("[autotrade] skip %s: quote bus 未接线（实时报价不可得）fail-closed 拒开", opp.ID)
 			return
 		} else {
-			mtQ, ok1 := e.quotes.Latest(opp.Canonical, opp.VenueBuy)
-			cexCanon := opp.Canonical
-			if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
-				cexCanon = *opp.CanonicalSell
-			}
-			cexQ, ok2 := e.quotes.Latest(cexCanon, opp.VenueSell)
-			if !ok1 || !ok2 || mtQ.Ask <= 0 || cexQ.Bid <= 0 ||
+			mtQ, ok1 := e.quotes.Latest(mtCanon, mtVK)
+			cexQ, ok2 := e.quotes.Latest(cexCanon, cexVK)
+			if !ok1 || !ok2 || mtQ.Bid <= 0 || mtQ.Ask <= 0 || cexQ.Bid <= 0 || cexQ.Ask <= 0 ||
 				time.Since(mtQ.Time) > 5*time.Minute || time.Since(cexQ.Time) > 5*time.Minute {
 				log.Printf("[autotrade] skip %s: 实时报价缺（mt@%s ok=%v cex@%s ok=%v）fail-closed 拒开",
-					opp.ID, opp.VenueBuy, ok1, opp.VenueSell, ok2)
+					opp.ID, mtVK, ok1, cexVK, ok2)
 				return
 			}
+			// 顺价方向镜像：正向=(cexBid−mtAsk)/mtAsk；反向=(mtBid−cexAsk)/cexAsk
+			// （同 pair 价差摆幅序列共源 noise_bps 阈——两向分母差 <tracking 量级）。
 			entryBps := (cexQ.Bid - mtQ.Ask) / mtQ.Ask * 1e4
+			if !buyMT {
+				entryBps = (mtQ.Bid - cexQ.Ask) / cexQ.Ask * 1e4
+			}
 			switch {
 			case entryBps <= 0:
 				log.Printf("[autotrade] skip %s: safety margin entry %.2fbps <= 0 (逆价不开)", opp.ID, entryBps)
@@ -252,15 +263,20 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 		}
 	}
 	// [exec-entry:gate] D-262 M4.3①：正规径——intent.Execute→ExecuteOpportunityInternal。
+	var intentSellCanonical string
+	if opp.CanonicalSell != nil {
+		intentSellCanonical = *opp.CanonicalSell // D-550：gate 试单豁免四元组对拍需卖腿 canonical
+	}
 	intent := gate.TradeIntent{
-		Strategy:    opp.Type,
-		Canonical:   opp.Canonical,
-		VenueBuy:    opp.VenueBuy,
-		VenueSell:   opp.VenueSell,
-		Qty:         qty,
-		NotionalUSD: intentNotional,
-		DedupKey:    opp.ID,
-		NetBps:      opp.NetBps,
+		Strategy:      opp.Type,
+		Canonical:     opp.Canonical,
+		CanonicalSell: intentSellCanonical,
+		VenueBuy:      opp.VenueBuy,
+		VenueSell:     opp.VenueSell,
+		Qty:           qty,
+		NotionalUSD:   intentNotional,
+		DedupKey:      opp.ID,
+		NetBps:        opp.NetBps,
 		Execute: func(ctx context.Context) (string, string, int64) {
 			reqID := fmt.Sprintf("autotrade-%d-%s", time.Now().UnixMilli(), opp.ID)
 			return e.service.ExecuteOpportunityInternal(ctx, opp.ID, reqID, qty)

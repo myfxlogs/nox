@@ -9,15 +9,18 @@ import (
 // TradeIntent 三 loop 产出的统一开仓意图（D-072 §3.1）。
 // Execute 闭包内才调 service.Execute*——三 loop 零直连执行。
 type TradeIntent struct {
-	Strategy    string // SWAPARB / MEANREVERT / CROSS_VENUE / CARRY / FUNDING_HEDGE / PERP_FUNDING
-	Canonical   string
-	VenueBuy    string
-	VenueSell   string
-	Qty         float64
-	NotionalUSD float64 // 本笔名义额（swap=余额推导，其余=cfg.NotionalUSD）
-	DedupKey    string  // 幂等键（SWAPARB:CANONICAL:vLong:vShort / MEANREVERT:... / detector oppID）
-	NetBps      float64 // 开仓时净 bps（日志用）
-	Execute     func(ctx context.Context) (status, msg string, posID int64)
+	Strategy  string // SWAPARB / MEANREVERT / CROSS_VENUE / CARRY / FUNDING_HEDGE / PERP_FUNDING
+	Canonical string
+	// CanonicalSell XASSET_CARRY 跨 canonical 卖腿（D-550 试单豁免判据四元组
+	// 需卖腿 canonical——组合行 canonical_sell 对拍；空=同 canonical 组合，试单判不中）。
+	CanonicalSell string
+	VenueBuy      string
+	VenueSell     string
+	Qty           float64
+	NotionalUSD   float64 // 本笔名义额（swap=余额推导，其余=cfg.NotionalUSD）
+	DedupKey      string  // 幂等键（SWAPARB:CANONICAL:vLong:vShort / MEANREVERT:... / detector oppID）
+	NetBps        float64 // 开仓时净 bps（日志用）
+	Execute       func(ctx context.Context) (status, msg string, posID int64)
 }
 
 // GateResult Submit 返回值。

@@ -105,6 +105,26 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		g.rejectLog(ctx, *intent, fmt.Sprintf("check strategy disabled: %v", err), false)
 		return GateResult{Status: "REJECTED", Reason: "strategy disabled check failed"}
 	}
+	// D-550 试单豁免：S2 桥写组合行（note 'S2桥%'）挂委员会级独立授权——宿主策略
+	// 退役冻结其存量组合域，不溯及后批试单。仅精确四元组组合行豁免（canonical_sell
+	// 缺失=四元组不齐不豁免）；读败 fail-closed 维持拒；其余闸全量照走。
+	if disabled {
+		sell := intent.CanonicalSell
+		if sell == "" {
+			sell = intent.Canonical
+		}
+		trial, terr := g.store.IsTrialXAssetCombo(ctx, intent.Canonical, sell,
+			intent.VenueBuy, intent.VenueSell, g.cfg.Environment)
+		if terr != nil {
+			g.rejectLog(ctx, *intent, fmt.Sprintf("trial combo check: %v", terr), false)
+			return GateResult{Status: "REJECTED", Reason: "trial combo check failed"}
+		}
+		if trial {
+			disabled = false // 试单属员——宿主退役豁免仅本组合行
+			log.Printf("[gate] 试单豁免 %s %s×%s（S2 桥组合行授权，D-550）",
+				intent.Strategy, intent.VenueBuy, intent.VenueSell)
+		}
+	}
 
 	// 检查 3: 日亏损（fail-closed：查询失败 = 拒绝）
 	dailyPnl, err := g.store.DailyRealizedPnl(ctx)
