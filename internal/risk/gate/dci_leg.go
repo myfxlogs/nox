@@ -1,4 +1,5 @@
-// dci_leg.go —— DCI 腿参数+%OTM/期限 自带闸（dciexec/leg.go 拆出，D-212 拆搬；纯移动零语义）。
+// dci_leg.go —— DCI 腿参数+σ 界/期限 自带闸（dciexec/leg.go 拆出，D-212 拆搬；
+// D-526 返修：平界径 OTMBoundRatios/RatioOf 零调用清退，约束行迁 1028 删）。
 package gate
 
 import (
@@ -6,29 +7,6 @@ import (
 
 	"nox/internal/store/pgstore"
 )
-
-// %OTM 闸界读约束表（D-191-R9：字面量入库——subject=dci_call_otm_bound/
-// dci_put_otm_bound；行缺=nil 由调用方落 constraint 缺口，同 custody_share 例）。
-// OTMBoundRatios 返回 (CALL 界, PUT 界)；界语义=乘现货的比率。
-func OTMBoundRatios(cons []pgstore.CapabilityConstraint) (call, put *float64) {
-	for _, c := range cons {
-		switch c.Subject {
-		case "dci_call_otm_bound":
-			call = c.ValueNum
-		case "dci_put_otm_bound":
-			put = c.ValueNum
-		}
-	}
-	return
-}
-
-// RatioOf 腿→界比率指针（nil=约束行缺——调用方落 constraint 缺口）。
-func (l DCILeg) RatioOf(call, put *float64) *float64 {
-	if l.OptType == "CALL" {
-		return call
-	}
-	return put
-}
 
 // BoundSubject 腿→约束 subject（D-526 尾险闸 σ 界键；缺界缺口键直用）。
 func (l DCILeg) BoundSubject() string {

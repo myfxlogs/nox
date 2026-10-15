@@ -49,8 +49,6 @@ func TestD204_BareGoSkipsDormant(t *testing.T) {
 		{Subject: "dormant:dci_sell_high_covered_call@binance", ValueNum: &one},
 		{Subject: "custody_share", ValueNum: f64(0.34)},
 		{Subject: "custody_redeemable", Qualifier: "always"},
-		{Subject: "dci_call_otm_bound", ValueNum: f64(1.10)},
-		{Subject: "dci_put_otm_bound", ValueNum: f64(1.00)},
 		{Subject: "dci_put_otm_k", ValueNum: f64(1.5)},
 		{Subject: "dci_call_otm_k", ValueNum: f64(1.5)},
 		{Subject: "dci_tenor_max_days", ValueNum: f64(30)},

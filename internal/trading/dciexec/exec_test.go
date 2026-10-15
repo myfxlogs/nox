@@ -93,9 +93,7 @@ func newFake() *fakeStore {
 		cons: []pgstore.CapabilityConstraint{
 			{Subject: "custody_share", Qualifier: "max", ValueNum: &share},
 			{Subject: "custody_redeemable", Qualifier: "always", ValueNum: f64(90)},
-			{Subject: "dci_call_otm_bound", Qualifier: "min", ValueNum: f64(1.10)},
-			{Subject: "dci_put_otm_bound", Qualifier: "max", ValueNum: f64(1.00)}, // R9 PUT 1.00 贴现货
-			{Subject: "dci_put_otm_k", Qualifier: "k", ValueNum: f64(1.5)},        // D-526 σ 界 k
+			{Subject: "dci_put_otm_k", Qualifier: "k", ValueNum: f64(1.5)}, // D-526 σ 界 k
 			{Subject: "dci_call_otm_k", Qualifier: "k", ValueNum: f64(1.5)},
 			{Subject: "dci_tenor_max_days", Qualifier: "max", ValueNum: f64(30)},
 			{Subject: "dci_open_notional_cap_usdt", Qualifier: "max", ValueNum: f64(1e9)},
@@ -425,8 +423,6 @@ func TestD191R3_TenorCapFromConstraint(t *testing.T) {
 	for _, c := range cases {
 		fs := newFake()
 		fs.cons = append(c.cons,
-			pgstore.CapabilityConstraint{Subject: "dci_call_otm_bound", ValueNum: f64(1.10)},
-			pgstore.CapabilityConstraint{Subject: "dci_put_otm_bound", ValueNum: f64(1.00)},
 			pgstore.CapabilityConstraint{Subject: "dci_call_otm_k", ValueNum: f64(1.5)},
 			pgstore.CapabilityConstraint{Subject: "dci_put_otm_k", ValueNum: f64(1.5)},
 			pgstore.CapabilityConstraint{Subject: "dci_tenor_max_days", ValueNum: f64(30)})

@@ -88,3 +88,6 @@ var NavDailyCcySQL string // D-522：fin_nav_daily PK 升 (day_start,currency)
 
 //go:embed replay/1027_dci_tail_gate.sql
 var DCITailGateSQL string // D-526：DCI 尾险闸约束行（σ 界 k/tenor_max/名义帽）
+
+//go:embed replay/1028_d526_retire_flat_bounds.sql
+var D526RetireFlatBoundsSQL string // D-526 返修③：平 OTM 界死行清退

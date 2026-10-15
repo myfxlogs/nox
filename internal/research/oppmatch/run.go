@@ -100,16 +100,19 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 				if dormant[r.TemplateID+"@"+venue] {
 					continue
 				}
-				// D-514 DCI 溢价闸：venue 维度判——本 venue 无达标档只压本 venue
-				// 提案（权利金坍缩期不卖 tail 险；闸只挡 DCI 不碰 earn）。
+				// D-514+D-526 DCI 选档闸：venue 维度判——本 venue 无达标档只压本
+				// venue 提案（权利金坍缩期不卖 tail 险；闸只挡 DCI 不碰 earn）。
+				var gateNote string // D-526 返修①：过闸 σ/界/尾损注记落提案 params 可检索
 				if r.TemplateID == "dci_buy_low" {
-					if ok, why := dciPremiumGate(ctx, st, venue); !ok {
+					ok, why := dciPremiumGate(ctx, st, venue)
+					if !ok {
 						if aerr := st.InsertAlertDedup(ctx, "info", fmt.Sprintf(
-							"D-514 溢价闸：dci_buy_low@%s %s——本拍「无达标档」不产提案", venue, why), 6*time.Hour); aerr != nil {
-							log.Printf("[oppmatch] 溢价闸 alert: %v", aerr)
+							"DCI 选档闸：dci_buy_low@%s %s——本拍「无达标档」不产提案", venue, why), 6*time.Hour); aerr != nil {
+							log.Printf("[oppmatch] 选档闸 alert: %v", aerr)
 						}
 						continue
 					}
+					gateNote = why
 				}
 				propN++
 				// 保活键=tid@venue 对；earn 族提案由 idleGapScan 分 venue 产
@@ -130,9 +133,13 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 				}
 				// 提案实体化——行即稳定 id（同模板 pending 复用），
 				// params=快照审计锚（执行时实时闸复验，非钉价）。
+				params := proposalParams(ctx, st, r, venue)
+				if gateNote != "" {
+					params["gate_note"] = gateNote
+				}
 				pid, created, err := st.CreateProposal(ctx, &pgstore.Proposal{
 					TemplateID: r.TemplateID, ExecTrack: r.ExecTrack, Venue: venue,
-					Params:      proposalParams(ctx, st, r, venue),
+					Params:      params,
 					ExpectedAPR: r.APR})
 				if err != nil {
 					log.Printf("[oppmatch] proposal row %s@%s: %v", r.TemplateID, venue, err)
