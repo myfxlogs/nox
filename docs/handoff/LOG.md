@@ -1015,3 +1015,16 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **现货腿可得**：BTC/ETH/SOL/XAUT-USDT spot 全 live（XAUT 实拍 live）。
 - **配对兼容**：`paper_spot_carry` 双腿 venue 键已是 `binance:futures/binance:spot` 文本键——`okx:futures`/`okx:spot` 同构可表达；universe `last_basis_ann` 已在喂（+89% 源即此行）；`fin_cex_universe` okx FUTURES 16 行含 expiry_ts。
 - **go 判定**：可行——立「日历基差 P0 轨扩 okx venue」施工票依据足；**待补证据项**（施工票内）：交割手续费率档位（账户 VIP 实拍）、USDⓈ结算币种账户设置确认（USDC/USDG）、USDT 抵押折算率读数、`_UM`/`非_UM` 同名档 instId 精确匹配闸。
+
+## 2026-10-15 SG 部署收口 + 验收实拍（复审席）
+
+### 部署欠账清零（D-526 返修③ + D-527 返修③同径）
+- 本机 `docker build --network=host` → save/load → `deploy_sync.sh` 源码面同步 → compose up；`nox-core` healthy，boot 扫照常。
+- `schema_migrations` max=1028（1027+1028 皆生效）；`dci_put_otm_bound`/`dci_call_otm_bound` 死行=0。
+- SG 源树 D-526/D-527 全件在列（dci_tail.go、两包 dci_sigma.go、1027/1028 迁移、gate_note 锚、storedeps 桥接+断言）。
+
+### SG 验收实拍
+- **D-526 σ 闸活**：新前缀「DCI 选档闸：」上拍——binance `σ 界 67870 内无档`（界随 spot/σ 实算重算 67592→67870）、okx `premium_ann 4.07%<10.50%`（D-514 语义零动）；贴界浅档不出提案 ✓。本拍两 venue 皆拒，`gate_note` 无过闸提案可挂——拒径已证+锚钉死，首个过闸拍自现。
+- **D-527 earn 回写活**：部署后首个快照拍 `fin_opp_eval.actual_apr` 现非 DCI 行——gate:earn +0.011098→#377 cash_mgmt=0.3127（income/1999.6×365/0.648d 自洽）；binance USDT 5 卡=0.0737（共享池 APR 口径）。okx #378 仍 NULL——equity 量化走平三拍 Δ=0，无事件不写语义正确，首个非零 Δ 拍自现。
+- **carry 径**：StoreDeps 桥+`var _ settlement.ActualAPRWriter` 编译断言在产；运行态回写待 D-529 提案↔仓位桥（STATE:48 已立票）。
+- **边角口径**：`CreateProposal` ON CONFLICT 复用语义——在册 proposed 行参数冻结不补 gate_note（与 strike/tenor 同语义）；当前无 dci proposed 行，首个过闸拍产新行即带注记。
