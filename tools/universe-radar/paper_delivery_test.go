@@ -76,6 +76,14 @@ func TestDeliveryStep(t *testing.T) {
 	now := time.Now()
 	srcs := []Source{fakeDeliverySrc{spreads: map[string]float64{}}}
 	rows := deliveryTestRows(now)
+	// D-545/回本窗闸前置：费档种子（exchange_configs.taker_fee_bps 测试库无行→
+	// est_fee nil 闸拦）。幂等种子幂等冲突跳。
+	if _, err := st.Pool().Exec(ctx, `
+		INSERT INTO exchange_configs (venue, venue_type, api_key, api_secret, taker_fee_bps) VALUES
+		('binance','spot','x','y',10),('binance','perp','x','y',5),('okx','spot','x','y',10),('okx','perp','x','y',5)
+		ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
 	// 共享库清场：fixture 符号历史行退避（幂等——跑过多轮的残留）。
 	if _, err := st.Pool().Exec(ctx, `DELETE FROM paper_spot_carry
 		WHERE symbol IN ('BTCUSDT_261225','SOL-USD_UM-261030','ETH-USD_UM-261030','XAUUSDT_261225')`); err != nil {
@@ -93,7 +101,9 @@ func TestDeliveryStep(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(opened) != 2 {
-		t.Fatalf("开仓破：%v（want 2——binance BTC + okx SOL_UM）", opened)
+		// BTC+SOL_UM 均回本窗可达（fixture exp=now+100d、ann 充足）；
+		// 近到期拦载由 TestDeliveryPaybackGate 专锚。
+		t.Fatalf("开仓破：%v（want 2）", opened)
 	}
 	var struct_, vta, vtb, note string
 	var entryBps float64
@@ -135,7 +145,7 @@ func TestDeliveryStep(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if exited != 1 {
+	if exited != 1 { // 只 BTC expiry 前推——SOL_UM 远档不退
 		t.Fatalf("T−1 退破：%d", exited)
 	}
 	var reason string
@@ -146,7 +156,58 @@ func TestDeliveryStep(t *testing.T) {
 	if reason != "expiry_t_minus_1" {
 		t.Fatalf("退因破：%s", reason)
 	}
-	if _, err := st.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE symbol='BTCUSDT_261225'`); err != nil {
+	if _, err := st.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE symbol IN ('BTCUSDT_261225','SOL-USD_UM-261030')`); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestDeliveryPaybackGate 回本窗闸：临期符号（expiry−T−1 < 回本天数）拒开；
+// 远期符号放行；fee/expiry 缺=不开不编。
+func TestDeliveryPaybackGate(t *testing.T) {
+	now := time.Now()
+	near := now.Add(10 * 24 * time.Hour) // 回本 ~30d（fee 3.0/ann 3.65%）> 存活 9d → 拦
+	far := now.Add(120 * 24 * time.Hour)
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
+	ctx := context.Background()
+	if _, err := st.Pool().Exec(ctx, `
+		INSERT INTO exchange_configs (venue, venue_type, api_key, api_secret, taker_fee_bps) VALUES
+		('binance','spot','x','y',10),('binance','perp','x','y',5),('okx','spot','x','y',10),('okx','perp','x','y',5)
+		ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+	rows := []normRow{
+		{Venue: "binance", Canonical: "BTC",
+			Row: Row{Symbol: "BTCUSDT", ContractType: ctPerp}},
+		{Venue: "binance", Canonical: "BTC",
+			Row: Row{Symbol: "BTCUSDT_NEAR", ContractType: ctFutures, Mark: 100100, Index: 100000, ExpiryTS: near}},
+		{Venue: "binance", Canonical: "ETH",
+			Row: Row{Symbol: "ETHUSDT", ContractType: ctPerp}},
+		{Venue: "binance", Canonical: "ETH",
+			Row: Row{Symbol: "ETHUSDT_FAR", ContractType: ctFutures, Mark: 4100, Index: 4000, ExpiryTS: far}},
+	}
+	pairs := deliveryPairs(rows, map[string]*float64{}, now)
+	if len(pairs) != 2 {
+		t.Fatalf("pairs=%v", pairs)
+	}
+	// 闸验：临期行拒开（回本 ~30d > 存活 9d），远期放行。
+	if _, err := st.Pool().Exec(ctx,
+		`DELETE FROM paper_spot_carry WHERE symbol IN ('BTCUSDT_NEAR','ETHUSDT_FAR');
+		 UPDATE app_config SET value='1000' WHERE key='paper_qty_usd'`); err != nil {
+		t.Fatal(err)
+	}
+	opened, _, err := stepPaperDelivery(ctx, st, nil, rows, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(opened) != 1 || opened[0] != "ETHUSDT_FAR" {
+		t.Fatalf("回本窗闸破：opened=%v（want 仅远期 ETHUSDT_FAR）", opened)
+	}
+	var nearRow int
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM paper_spot_carry WHERE symbol='BTCUSDT_NEAR'`).Scan(&nearRow); err != nil {
+		t.Fatal(err)
+	}
+	if nearRow != 0 {
+		t.Fatalf("临期行入库破闸")
 	}
 }
