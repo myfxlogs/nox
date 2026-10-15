@@ -267,3 +267,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：五段信息层级=待办横幅→本金条（可动用/在息/锁定三档+非本金灰字行）→业绩条（基线以来/今日/30d年化 vs 8% 达标线）→在仓订单统一表（DCI/结构化/earn/合约/纸面跨轨列全）→风险心跳紧凑条。`getOverviewBundle` 单 RPC 一次出全段（前端零信任只渲染）。本金口径=D-534；缺显缺不显 0；provisional 挂残差对账落地前。
 - **分界**：investor.tsx 报告页不动；overview.tsx 全量重写。请求箱并入总览§0（业主动作面唯此一处）。
 - **业主令补（10-15）**：前端时间戳按 UTC 显示（CFD/CEX 全 UTC 世界——到期/交割/开仓误读本地时是错账源），总览页先行、fmt 组件留 UTC 径，他页同型后续统一。
+
+## D-537 okx 结构化产品持仓入快照（binance DCI 同型补口）
+- **端点举证**：okx sfp（structured financial products）通配在仓单端点 `GET /api/v5/finance/sfp/orders`——dcd 专径（已接）之外的品类域（鲨鱼鳍/雪球等）。`[核证]` ccxt/okx-api SDK 端点表核对：sfp 域仅 dcd/* 公开文档化，`sfp/orders` 为通配面推断径——若 404/非 0 仅记日志不杀 earn 主读面，漏采由 D-536 残差对账告警自披露。
+- **口径**：state∈{live,pending_settle} 计入 earn 分币行（本金键 notionalSz/investCcy 容错双键）；空 state fail-closed 报错；SETTLED 等终态排除（binance purchaseStatus 教训复用）。
+- **域界**：本金计入 earn/USDT 行（binance DCI 混计先例同型）；binance/gate 同型已覆盖（binance DCI positions 端点 D-526 返修后接入；gate 无 real 账户=缺口如实记）。

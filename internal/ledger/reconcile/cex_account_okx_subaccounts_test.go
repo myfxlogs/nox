@@ -87,6 +87,8 @@ func TestCEXAccount_OkxEarn(t *testing.T) {
 			fmt.Fprint(w, `{"code":"0","data":[{"amt":"5261.25174278","ccy":"USDT","earnings":"69.64","rate":"0.01"}]}`)
 		case "/api/v5/finance/sfp/dcd/orders":
 			fmt.Fprint(w, `{"code":"0","data":[]}`) // DCI 零在仓单（不扰 equity 断言）
+		case "/api/v5/finance/sfp/orders":
+			fmt.Fprint(w, `{"code":"0","data":[]}`) // D-537：sfp 结构化零在仓
 		default:
 			t.Errorf("unexpected path %s", r.URL.Path)
 		}

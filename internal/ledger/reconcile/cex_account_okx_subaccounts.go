@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -118,6 +119,19 @@ func (q *CEXAccountQuerier) accountOkxEarn(ctx context.Context) (*AccountInfo, e
 	if err != nil {
 		return nil, err
 	}
+	// D-537：sfp 结构化产品通配读（dcd 之外的 structured 持仓——10 USDT 在仓
+	// 快照零行业主实拍）。端点未证实枚举全产品域 → 读败仅记日志不杀 earn 主读面
+	// （漏采由残差对账告警自披露）；dcd 已覆盖的子集幂等去重按 ordId。
+	sfpRefs, serr := q.okxSfpOrders(ctx, func(c string, v float64) {
+		if _, ok := per[c]; !ok {
+			ccys = append(ccys, c)
+		}
+		per[c] += v
+	})
+	if serr != nil {
+		log.Printf("[okx earn] sfp structured orders 读败（该域漏采将对账告警暴露）: %v", serr)
+	}
+	dciRefs = append(dciRefs, sfpRefs...)
 	eq := 0.0
 	holdings = holdings[:0]
 	for _, c := range ccys {
@@ -195,6 +209,69 @@ func (q *CEXAccountQuerier) okxDCIOrders(ctx context.Context, add func(string, f
 		qty, perr := strconv.ParseFloat(amt, 64)
 		if perr != nil {
 			return nil, fmt.Errorf("parse okx dcd %s amount=%q: %w", r.OrdID, amt, perr)
+		}
+		if qty > 0 {
+			add(ccy, qty)
+		}
+	}
+	return refs, nil
+}
+
+// okxSfpOrders D-537：sfp 结构化产品在仓单——GET /api/v5/finance/sfp/orders
+// （dcd 专径之外的通配面；响应行复用 dcd 字段形 notionalCcy/investCcy+
+// notionalSz/investAmt）。state∈{live,pending_settle} 才入（SETTLED 等终态排除，
+// 空 state fail-closed 报错不过滤——binance DCI purchaseStatus 教训复用）。
+func (q *CEXAccountQuerier) okxSfpOrders(ctx context.Context, add func(string, float64)) ([]string, error) {
+	body, err := q.okxSubaccountSignedGet(ctx, "/api/v5/finance/sfp/orders")
+	if err != nil {
+		return nil, fmt.Errorf("okx sfp orders: %w", err)
+	}
+	var resp struct {
+		Code string `json:"code"`
+		Msg  string `json:"msg"`
+		Data []struct {
+			OrdID     string `json:"ordId"`
+			ProductID string `json:"productId"`
+			State     string `json:"state"`
+			Ccy       string `json:"notionalCcy"`
+			CcyAlt    string `json:"investCcy"`
+			Amt       string `json:"notionalSz"`
+			AmtAlt    string `json:"investAmt"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("okx sfp orders json: %w", err)
+	}
+	if resp.Code != "0" {
+		return nil, fmt.Errorf("okx sfp orders: code=%s msg=%s", resp.Code, resp.Msg)
+	}
+	var refs []string
+	for _, r := range resp.Data {
+		if r.State == "" {
+			return nil, fmt.Errorf("okx sfp orders %s 行 state 空（fail-closed 不过滤）", r.OrdID)
+		}
+		if r.State != "live" && r.State != "pending_settle" {
+			continue
+		}
+		for _, ref := range []string{r.OrdID, r.ProductID} {
+			if ref != "" {
+				refs = append(refs, ref)
+			}
+		}
+		ccy := r.Ccy
+		if ccy == "" {
+			ccy = r.CcyAlt
+		}
+		amt := r.Amt
+		if amt == "" {
+			amt = r.AmtAlt
+		}
+		if ccy == "" || amt == "" {
+			return nil, fmt.Errorf("okx sfp orders %s 行 ccy/amount 字段缺", r.OrdID)
+		}
+		qty, perr := strconv.ParseFloat(amt, 64)
+		if perr != nil {
+			return nil, fmt.Errorf("parse okx sfp %s amount=%q: %w", r.OrdID, amt, perr)
 		}
 		if qty > 0 {
 			add(ccy, qty)
