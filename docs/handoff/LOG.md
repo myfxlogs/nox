@@ -1094,3 +1094,7 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **新病灶**：`short_cfd_long_perp`/`long_cfd_short_perp` 多行 fee<0（−2.5~−39）——est_round_trip_fee 为负=纸面费模型出反值（spread 项取负或腿序倒挂），fee 负值行把 structure 均值拉穿，**费率账面自身有病先修账再判经济性**（立票面）。
 - **结论行**：在当前信号带 accrued:fee 可达线=ann≥~15–20%×持有≥10d 组合；现 active 面仅 JP225/XPT 两行在可达域，其余结构性不达——**判据如实，病灶在信号强度×持有期×账面负费三处，非名义额**。
 
+
+### MT5 io 源位取证（ticket 76 前置）
+- **源=mtapi OrderHistory 的 DEAL_BALANCE 类 deal（proto `DealType_Balance=2`，`internal/data/adapter/gen/mtapi/mt5/mt5.pb.go:462`）**：MT5 充提在协议层以 balance deal 落历史，现有 `orderHistoryScan`（broker_order_history_scan.go，D-181 swap 回溯复用径）可直读——过滤 DealType=Balance/Profit_Balance 入 fin_venue_io direction=deposit/withdraw。
+- **实现面**：扫频挂既有日拍或 5min 拍（零新定时器），幂等键=deal ticket→external_id。**本段为取证留档，施工件须另续——剩余 ctx 不足以交付代码+机检五件套。**
