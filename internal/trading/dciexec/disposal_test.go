@@ -27,6 +27,9 @@ func TestD517_ExerciseSellback(t *testing.T) {
 			}}, nil
 		},
 		PriceFn: func(context.Context, string) (float64, error) { return 80000, nil },
+		SpotFiltersFn: func(context.Context, string) (float64, float64, int, error) {
+			return 0.00001, 0.00001, 5, nil
+		},
 		SpotSellFn: func(_ context.Context, sym string, qty float64) (float64, error) {
 			sellSym, sellQty = sym, qty
 			return 350.0, nil // 卖回得 350 USDT（付额 541→亏 191 如实记负）
@@ -81,6 +84,9 @@ func TestD517_SellFail_PendingDisposal(t *testing.T) {
 			}}, nil
 		},
 		PriceFn: func(context.Context, string) (float64, error) { return 80000, nil },
+		SpotFiltersFn: func(context.Context, string) (float64, float64, int, error) {
+			return 0.00001, 0.00001, 5, nil
+		},
 		SpotSellFn: func(context.Context, string, float64) (float64, error) {
 			calls++
 			return 0, fmt.Errorf("venue 权限缺")
@@ -135,5 +141,78 @@ func TestD517_NoDisposal_SameCcy(t *testing.T) {
 	}
 	if st.posRows != 0 {
 		t.Fatal("未行权仍落 pending_disposal")
+	}
+}
+
+// TestD540_LotSizeFloor 10-15 事故锚：0.00433438 BTC 越 stepSize=0.00001 精度
+// → -1013 必败；修后报量 floor=0.00433 成功。
+func TestD540_LotSizeFloor(t *testing.T) {
+	st := newFake()
+	st.cfgID = 42
+	var sellQty float64
+	ex := &Executor{SigmaFn: testSigma,
+		Store: st, BnKey: "k", Now: time.Now,
+		SpotFiltersFn: func(context.Context, string) (float64, float64, int, error) {
+			return 0.00001, 0.00001, 5, nil
+		},
+		PositionsFn: func(context.Context) ([]DCIPosition, error) {
+			return []DCIPosition{{
+				ID: "PUTP", OptionType: "PUT", Status: "SETTLED",
+				ExercisedCoin: "BTC", ExercisedAmt: `0.00433438`, InterestAmt: `0`,
+			}}, nil
+		},
+		PriceFn: func(context.Context, string) (float64, error) { return 80000, nil },
+		SpotSellFn: func(_ context.Context, _ string, qty float64) (float64, error) {
+			sellQty = qty
+			return 346.64, nil
+		},
+	}
+	st.filledOrders = []pgstore.FilledDCIOrder{d207Order()}
+	if n, err := ex.SettleExpiredOrders(context.Background()); err != nil || n != 1 {
+		t.Fatalf("settle n=%d err=%v", n, err)
+	}
+	if sellQty != 0.00433 {
+		t.Fatalf("floor 报量对拍败: %.8f（want 0.00433）", sellQty)
+	}
+}
+
+// TestD540_SweepPendingDisposal 清扫锚：pending_disposal OPEN 行→重试卖回成功
+// →损益入账+关行+warn；卖败留行不刷告警（dedup 去重面交给 store）。
+func TestD540_SweepPendingDisposal(t *testing.T) {
+	st := newFake()
+	st.cfgID = 42
+	qty := 0.00433
+	st.positions = []pgstore.PersonalPosition{{
+		ID: 9, Asset: "BTC", Kind: "other", Status: "OPEN", Qty: &qty,
+		Note: "pending_disposal D-517：DCI#11 行权接货待卖回（LOT_SIZE 尽败）",
+	}}
+	st.orders = map[string]*pgstore.DCIOrder{"r11": {ID: 11, Qty: 351.0, Underlying: "BTCUSDT"}}
+	ex := &Executor{Store: st, BnKey: "k", Now: time.Now,
+		SpotFiltersFn: func(context.Context, string) (float64, float64, int, error) {
+			return 0.00001, 0.00001, 5, nil
+		},
+		SpotSellFn: func(context.Context, string, float64) (float64, error) { return 346.4, nil },
+	}
+	n, err := ex.SweepPendingDisposals(context.Background())
+	if err != nil || n != 1 {
+		t.Fatalf("sweep n=%d err=%v", n, err)
+	}
+	var disp bool
+	for _, ev := range st.incomeEvs {
+		if ev.IncomeType == "dci_exercise_disposal" && ev.AmountUSD > -4.61 && ev.AmountUSD < -4.59 {
+			disp = true
+		}
+	}
+	if !disp {
+		t.Fatalf("清扫损益行未落或对拍败: %+v", st.incomeEvs)
+	}
+	var closed bool
+	for _, a := range st.alerts {
+		if strings.Contains(a, "已市价卖回得") {
+			closed = true
+		}
+	}
+	if !closed {
+		t.Fatalf("清扫 warn 未发: %+v", st.alerts)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // FilledDCIOrder 交割观察行——response 原值携带由观察方解析 settleDate。
@@ -91,4 +92,21 @@ func (s *Store) ExchangeConfigID(ctx context.Context, venue, venueType string) (
 		return 0, err
 	}
 	return id, nil
+}
+
+// SumDCISettleWindow 残差对账补腿（10-15 实证：DCI 到期还本离 earn 桶 → -358
+// critical 无可归因项）：本拍窗内 settled 行——outflow=Σ qty WHERE
+// invest_ccy=ccy（本金离 earn 池）；inflow=Σ settle_qty WHERE settle_ccy=ccy
+// （本息到 venue 默认钱包）。不回溯——只认窗内 settled_at。
+func (s *Store) SumDCISettleWindow(ctx context.Context, venue, ccy string, from, to time.Time) (outflow, inflow float64, err error) {
+	err = s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(qty) FILTER (WHERE invest_ccy=$2), 0),
+		       COALESCE(SUM(settle_qty) FILTER (WHERE settle_ccy=$2), 0)
+		FROM fin_dci_order
+		WHERE venue=$1 AND status='settled' AND settled_at > $3 AND settled_at <= $4`,
+		venue, ccy, from, to).Scan(&outflow, &inflow)
+	if err != nil {
+		return 0, 0, fmt.Errorf("dci settle window: %w", err)
+	}
+	return outflow, inflow, nil
 }
