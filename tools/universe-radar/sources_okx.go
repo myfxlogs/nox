@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -266,4 +267,30 @@ func (o okx) fundingRate(ctx context.Context, instID string) (okxFunding, error)
 		ivlH = int(math.Round(float64(d.NextFundingTime-d.FundingTime) / 3600000))
 	}
 	return okxFunding{rate: float64(d.FundingRate), ivlH: ivlH}, nil
+}
+
+// DeliverySpreadBps okx 交割腿盘口价差（滑点前置，D-525 go 件）：公共
+// `GET /api/v5/market/books?instId=&sz=1` 最优档→价差 bps（统计参考用途=
+// venue WS books 频道存在但纸面滑点预估属低频参考径非判定实时数据，
+// D-004 拉取豁免同 binance bookTicker 先例）。价破→err fail-closed。
+func (o okx) DeliverySpreadBps(ctx context.Context, sym string) (float64, error) {
+	var env struct {
+		Code string `json:"code"`
+		Data []struct {
+			Bids [][]string `json:"bids"`
+			Asks [][]string `json:"asks"`
+		} `json:"data"`
+	}
+	if err := getJSON(ctx, o.hc, o.base+"/api/v5/market/books?instId="+sym+"&sz=1", &env); err != nil {
+		return 0, err
+	}
+	if env.Code != "0" || len(env.Data) == 0 || len(env.Data[0].Bids) == 0 || len(env.Data[0].Asks) == 0 {
+		return 0, fmt.Errorf("okx books %s 空档 code=%s", sym, env.Code)
+	}
+	bid, berr := strconv.ParseFloat(env.Data[0].Bids[0][0], 64)
+	ask, aerr := strconv.ParseFloat(env.Data[0].Asks[0][0], 64)
+	if berr != nil || aerr != nil || bid <= 0 || ask < bid {
+		return 0, fmt.Errorf("okx books %s 价破 bid=%v ask=%v", sym, bid, ask)
+	}
+	return (ask - bid) / ((ask + bid) / 2) * 1e4, nil
 }

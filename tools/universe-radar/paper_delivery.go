@@ -43,28 +43,40 @@ type calPair struct {
 	SpreadBps *float64
 }
 
-// deliveryPairs P0 配对：binance 交割行 ∧ 同 canonical 有 binance PERP 行（方向=正基差
+// calPair 携带 venue（okx USD_UM 轨扩——同所内配对，跨所禁建）。
+type calPairWithVenue struct {
+	calPair
+	Venue string
+}
+
+// deliveryPairs P0 配对：同所交割行 ∧ 同所同 canonical PERP 行（方向=正基差
 // contango 空交割×多现货；basis≤0 backwardation P0 不收——设计 §1）。basis_ann 缺=不开仓。
-func deliveryPairs(rows []normRow, spreadBySym map[string]*float64, now time.Time) []calPair {
+// 覆盖所=binance（USDT 季度）+ okx（USD_UM 线性交割，settleCcy=USDⓈ D-525 取证 go）；
+// 币本位（settleCcy=币）不收——universe 过滤层已只放行 USDT/USDC/USD_UM 中段。
+func deliveryPairs(rows []normRow, spreadBySym map[string]*float64, now time.Time) []calPairWithVenue {
 	perpCanon := make(map[string]bool)
 	for _, n := range rows {
-		if n.Venue == "binance" && n.ContractType == ctPerp {
-			perpCanon[n.Canonical] = true
+		if (n.Venue == "binance" || n.Venue == "okx") && n.ContractType == ctPerp {
+			perpCanon[n.Venue+"|"+n.Canonical] = true
 		}
 	}
-	var out []calPair
+	var out []calPairWithVenue
 	for _, n := range rows {
-		if n.Venue != "binance" || n.ContractType != ctFutures || !perpCanon[n.Canonical] {
+		if (n.Venue != "binance" && n.Venue != "okx") || n.ContractType != ctFutures ||
+			!perpCanon[n.Venue+"|"+n.Canonical] {
 			continue
 		}
 		ba := basisAnn(n.Mark, n.Index, n.ExpiryTS, now)
 		if ba == nil || *ba <= 0 {
 			continue // 基差缺/非正=不开仓不编（禁线）
 		}
-		out = append(out, calPair{
-			Canon: n.Canonical, FutSym: n.Symbol, Expiry: n.ExpiryTS,
-			BasisAnn: *ba, BasisFrac: n.Mark/n.Index - 1,
-			SpreadBps: spreadBySym[n.Symbol],
+		out = append(out, calPairWithVenue{
+			calPair: calPair{
+				Canon: n.Canonical, FutSym: n.Symbol, Expiry: n.ExpiryTS,
+				BasisAnn: *ba, BasisFrac: n.Mark/n.Index - 1,
+				SpreadBps: spreadBySym[n.Venue+"|"+n.Symbol],
+			},
+			Venue: n.Venue,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].BasisAnn > out[j].BasisAnn })
@@ -76,27 +88,27 @@ func stepPaperDelivery(ctx context.Context, st *pgstore.Store, srcs []Source, ro
 	if st == nil {
 		return nil, 0, nil
 	}
-	// 滑点前置：binance bookTicker 逐交割符号读 → facts（delivery_depth_spread_bps）。
+	// 滑点前置：逐所交割符号盘口读 → facts（delivery_depth_spread_bps）。
 	// 读败→该符号 map 缺→行标「滑点未知」诚实降级不判死。
-	var spreadSrc deliverySpreadSource
+	spreadSrcs := map[string]deliverySpreadSource{}
 	for _, s := range srcs {
-		if ds, ok := s.(deliverySpreadSource); ok && s.Venue() == "binance" {
-			spreadSrc = ds
+		if ds, ok := s.(deliverySpreadSource); ok {
+			spreadSrcs[s.Venue()] = ds
 		}
 	}
 	spreadBySym := map[string]*float64{}
 	var facts []fact.Fact
 	for _, n := range rows {
-		if n.Venue != "binance" || n.ContractType != ctFutures {
+		if (n.Venue != "binance" && n.Venue != "okx") || n.ContractType != ctFutures {
 			continue
 		}
-		if spreadSrc != nil {
+		if spreadSrc := spreadSrcs[n.Venue]; spreadSrc != nil {
 			if sp, serr := spreadSrc.DeliverySpreadBps(ctx, n.Symbol); serr == nil {
-				spreadBySym[n.Symbol] = &sp
-				facts = append(facts, fact.Fact{Kind: "delivery_depth_spread_bps", Venue: "binance",
+				spreadBySym[n.Venue+"|"+n.Symbol] = &sp
+				facts = append(facts, fact.Fact{Kind: "delivery_depth_spread_bps", Venue: n.Venue,
 					Symbol: n.Symbol, Value: sp, Unit: fact.UnitBps, Ts: now, Src: "universe-radar"})
 			} else {
-				log.Printf("[universe-radar] bookTicker %s 读败（滑点未知）: %v", n.Symbol, serr)
+				log.Printf("[universe-radar] %s depth %s 读败（滑点未知）: %v", n.Venue, n.Symbol, serr)
 			}
 		}
 	}
@@ -124,18 +136,18 @@ func stepPaperDelivery(ctx context.Context, st *pgstore.Store, srcs []Source, ro
 	}
 	// ① 开仓（basis_ann 降序防 cap 饿死）
 	for _, c := range deliveryPairs(rows, spreadBySym, now) {
-		key := "binance|binance|" + c.FutSym
+		key := c.Venue + "|" + c.Venue + "|" + c.FutSym
 		if _, ok := activeByKey[key]; ok || delActive+len(opened) >= paperDeliveryMaxActive {
 			continue
 		}
 		bps := c.BasisFrac * 1e4
 		r := &pgstore.PaperSpotCarry{
-			VenueA: "binance", VenueB: "binance",
+			VenueA: c.Venue, VenueB: c.Venue,
 			VenueTypeA: "futures", VenueTypeB: "spot",
 			Symbol: c.FutSym, Side: "perp_delivery", Structure: "perp_delivery",
 			EntryFundingAnn: c.BasisAnn, EntryBasisBps: &bps, LastBasisBps: &bps,
 			QtyUSD:             scan.PaperQtyUSD,
-			EstRoundTripFeeUSD: scan.PaperSpotPerpFeeUSD(ctx, st, "binance", "binance", scan.PaperQtyUSD),
+			EstRoundTripFeeUSD: scan.PaperSpotPerpFeeUSD(ctx, st, c.Venue, c.Venue, scan.PaperQtyUSD),
 		}
 		if c.SpreadBps == nil {
 			r.Note = "滑点未知"

@@ -30,9 +30,16 @@ func deliveryTestRows(now time.Time) []normRow {
 			Row: Row{Symbol: "BTCUSDT", ContractType: ctPerp, FundingRate: 0.0001, IntervalH: 8}},
 		{Venue: "binance", Canonical: "BTC",
 			Row: Row{Symbol: "BTCUSDT_261225", ContractType: ctFutures, Mark: 101000, Index: 100000, ExpiryTS: exp}},
-		// okx USD_UM 行=已知高基差但 P0 禁线（跨结算币）——必不进配对
+		// okx USD_UM 行（D-525 go：USDⓈ 结算线性交割）+ 同所 perp → 应入配对
 		{Venue: "okx", Canonical: "SOL",
 			Row: Row{Symbol: "SOL-USD_UM-261030", ContractType: ctFutures, Mark: 210, Index: 200, ExpiryTS: exp}},
+		{Venue: "okx", Canonical: "SOL",
+			Row: Row{Symbol: "SOL-USDT-SWAP", ContractType: ctPerp}},
+		// okx USD_UM 无同所 perp 腿（跨所配对禁建——binance perp 不算腿）
+		{Venue: "okx", Canonical: "ETH",
+			Row: Row{Symbol: "ETH-USD_UM-261030", ContractType: ctFutures, Mark: 4100, Index: 4000, ExpiryTS: exp}},
+		{Venue: "binance", Canonical: "ETH",
+			Row: Row{Symbol: "ETHUSDT", ContractType: ctPerp}},
 		// 负基差 backwardation P0 不收
 		{Venue: "binance", Canonical: "XAUUSD",
 			Row: Row{Symbol: "XAUUSDT_261225", ContractType: ctFutures, Mark: 9900, Index: 10000, ExpiryTS: exp}},
@@ -45,11 +52,20 @@ func deliveryTestRows(now time.Time) []normRow {
 func TestDeliveryPairs(t *testing.T) {
 	now := time.Now()
 	pairs := deliveryPairs(deliveryTestRows(now), map[string]*float64{}, now)
-	if len(pairs) != 1 || pairs[0].FutSym != "BTCUSDT_261225" {
-		t.Fatalf("P0 配对域破：%+v", pairs)
+	if len(pairs) != 2 {
+		t.Fatalf("P0 配对域破（want 2 行——binance BTC + okx SOL_UM）：%+v", pairs)
 	}
-	if pairs[0].BasisFrac < 0.009 || pairs[0].BasisFrac > 0.011 {
-		t.Fatalf("basis frac 破：%v", pairs[0].BasisFrac)
+	bySym := map[string]calPairWithVenue{}
+	for _, p := range pairs {
+		bySym[p.FutSym] = p
+	}
+	if p, ok := bySym["BTCUSDT_261225"]; !ok || p.Venue != "binance" ||
+		p.BasisFrac < 0.009 || p.BasisFrac > 0.011 {
+		t.Fatalf("binance 对破：%+v", p)
+	}
+	p, ok := bySym["SOL-USD_UM-261030"]
+	if !ok || p.Venue != "okx" || p.BasisFrac < 0.049 || p.BasisFrac > 0.051 {
+		t.Fatalf("okx USD_UM 对破：%+v", p)
 	}
 }
 
@@ -60,14 +76,19 @@ func TestDeliveryStep(t *testing.T) {
 	now := time.Now()
 	srcs := []Source{fakeDeliverySrc{spreads: map[string]float64{}}}
 	rows := deliveryTestRows(now)
+	// 共享库清场：fixture 符号历史行退避（幂等——跑过多轮的残留）。
+	if _, err := st.Pool().Exec(ctx, `DELETE FROM paper_spot_carry
+		WHERE symbol IN ('BTCUSDT_261225','SOL-USD_UM-261030','ETH-USD_UM-261030','XAUUSDT_261225')`); err != nil {
+		t.Fatal(err)
+	}
 
 	// 开仓：滑点源返回空 map→BTCUSDT_261225 行标「滑点未知」
 	opened, _, err := stepPaperDelivery(ctx, st, srcs, rows, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(opened) != 1 || opened[0] != "BTCUSDT_261225" {
-		t.Fatalf("开仓破：%v", opened)
+	if len(opened) != 2 {
+		t.Fatalf("开仓破：%v（want 2——binance BTC + okx SOL_UM）", opened)
 	}
 	var struct_, vta, vtb, note string
 	var entryBps float64
