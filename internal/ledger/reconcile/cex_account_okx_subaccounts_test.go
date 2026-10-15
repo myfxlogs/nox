@@ -85,7 +85,7 @@ func TestCEXAccount_OkxEarn(t *testing.T) {
 		case "/api/v5/finance/savings/balance":
 			gotPath, gotQuery = r.URL.Path, r.URL.RawQuery
 			fmt.Fprint(w, `{"code":"0","data":[{"amt":"5261.25174278","ccy":"USDT","earnings":"69.64","rate":"0.01"}]}`)
-		case "/api/v5/finance/sfp/dcd/orders":
+		case "/api/v5/finance/sfp/dcd/order-history":
 			fmt.Fprint(w, `{"code":"0","data":[]}`) // DCI 零在仓单（不扰 equity 断言）
 		default:
 			t.Errorf("unexpected path %s", r.URL.Path)
@@ -107,5 +107,60 @@ func TestCEXAccount_OkxEarn(t *testing.T) {
 	}
 	if len(acct.Holdings) != 1 || acct.Holdings[0].Ccy != "USDT" || acct.Holdings[0].Qty < 5261.25 {
 		t.Errorf("holdings want 单行 USDT 5261.25, got %+v", acct.Holdings)
+	}
+}
+
+// TestOkxDCIOrders_OrderHistoryLive 10-15 SG 实拍锚：/sfp/dcd/orders venue 恒 500
+// 换读 /sfp/dcd/order-history——在仓 LIVE 行（大写态名+数字 code 0 双形态）本金
+// 并入 earn 池；SETTLED/终态行剔除；缺 ccy/amt 行 fail-closed。
+func TestOkxDCIOrders_OrderHistoryLive(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v5/finance/savings/balance":
+			fmt.Fprint(w, `{"code":"0","data":[{"amt":"2117.82","ccy":"USDT"}]}`)
+		case "/api/v5/finance/sfp/dcd/order-history":
+			// SG 实拍形态：code=数字 0、state=LIVE 大写（SETTLED 行同表须剔除）。
+			fmt.Fprint(w, `{"code":0,"data":[
+				{"ordId":"11401353","productId":"ETH-USDT-261021-2280-P","state":"LIVE","notionalCcy":"USDT","notionalSz":"10.0000000000000000"},
+				{"ordId":"99","productId":"OLD","state":"SETTLED","notionalCcy":"USDT","notionalSz":"999"}],"msg":""}`)
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	okxSubaccountBase = srv.URL
+	q := NewCEXAccountQuerier("okx", "earn", "key", "secret", "pass", srv.URL, "", false)
+	acct, err := q.Account(context.Background())
+	if err != nil {
+		t.Fatalf("okx earn: %v", err)
+	}
+	// 2117.82 savings + 10.00 DCI 在仓本金 = 2127.82（SETTLED 999 不入）。
+	if acct.Equity < 2127.81 || acct.Equity > 2127.83 {
+		t.Fatalf("equity want ~2127.82, got %v", acct.Equity)
+	}
+	if len(acct.DCIOpenRefs) == 0 {
+		t.Fatal("DCIOpenRefs 空——在仓单引用未回传")
+	}
+}
+
+// TestOkxDCIOrders_MissingFieldFailClosed 缺 ccy/amt 双键行 fail-closed 返错（不静默跳）。
+func TestOkxDCIOrders_MissingFieldFailClosed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v5/finance/savings/balance":
+			fmt.Fprint(w, `{"code":"0","data":[{"amt":"1","ccy":"USDT"}]}`)
+		case "/api/v5/finance/sfp/dcd/order-history":
+			fmt.Fprint(w, `{"code":0,"data":[{"ordId":"x1","state":"LIVE"}],"msg":""}`)
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	okxSubaccountBase = srv.URL
+	q := NewCEXAccountQuerier("okx", "earn", "key", "secret", "pass", srv.URL, "", false)
+	if _, err := q.Account(context.Background()); err == nil {
+		t.Fatal("缺 ccy/amt 行应 fail-closed 返错")
 	}
 }
