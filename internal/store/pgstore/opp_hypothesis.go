@@ -51,3 +51,36 @@ func (s *Store) UpdateHypothesisMemo(ctx context.Context, id int64, familyFit, m
 	}
 	return nil
 }
+
+// ListApprovedHypotheses S2 桥输入：approved 态假设行（trialing 已入册不再返）。
+func (s *Store) ListApprovedHypotheses(ctx context.Context) ([]OppHypothesis, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, venue, category_key, COALESCE(inst_type,''), COALESCE(shape,''),
+		       COALESCE(family_fit,''), COALESCE(detail,'')
+		FROM fin_opp_hypothesis WHERE status='approved' ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("list approved hypotheses: %w", err)
+	}
+	defer rows.Close()
+	var out []OppHypothesis
+	for rows.Next() {
+		var h OppHypothesis
+		if err := rows.Scan(&h.ID, &h.Venue, &h.CategoryKey, &h.InstType,
+			&h.Shape, &h.FamilyFit, &h.Detail); err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+// MarkHypothesisTrialing approved→trialing（入册完成标记+detail 尾注去向）。
+func (s *Store) MarkHypothesisTrialing(ctx context.Context, id int64, sink string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE fin_opp_hypothesis SET status='trialing', detail=detail||' ｜S2桥→'||$2,
+		last_seen=now() WHERE id=$1 AND status='approved'`, id, sink)
+	if err != nil {
+		return fmt.Errorf("mark hypothesis trialing #%d: %w", id, err)
+	}
+	return nil
+}
