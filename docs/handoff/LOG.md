@@ -980,3 +980,11 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **②carry/xasset CLOSED**：`settlement.Settle` applied 径（stats 写成功后）挂可选 `ActualAPRWriter`——净 APR=position 净额/名义×365/持有天数×100（读 settlements 同口径 netPnl/notionalUsd/holdDays）。提案↔仓位桥=`ProposalForClosedPosition` 双键解（fin_dci_order.request_id=positions.request_id 共享幂等键域 ∪ fin_proposal.params.position_id 显式回链）——**autotrade 引擎直产仓无提案行→nil 不写**（本库仓位皆此型，回写径就位待提案驱动仓位径接入即生效；carry/xasset 仓位↔提案桥为已知结构性缺口，须 D# 立链）。
 - **禁线守**：零新表零迁移零定时器（事件驱动挂点）；DCI 双径零触；无对应执行事件全径不写（非 0）。
 - **锚**：earn 三态（APR 对拍/负如实/无单不写）；settle 双态（回链写+无链不写）。
+
+## 2026-10-15 D-526 返修（实施席 @ab523ebe0）
+- **①过闸注记落库**：`run.go` DCI 支路接住 `dciPremiumGate` 成功 why → `params["gate_note"]` 随 `CreateProposal` 落 `fin_proposal.params`（σ/σ 源/界/tail/net 全量复用闸注记原文，拒径语义/三闸序/dedup 零动）。
+- **③死行清退**：迁移 1028 `DELETE fin_capability_constraint dci_*_otm_bound`（STATE 票面「删或注弃用」取删——防化石行被误读为活约束）；`gate/dci_leg.go` 零调用 `OTMBoundRatios`/`RatioOf` 清退，`BoundSubject` 直指 σ 界键；dciexec/oppmatch 测试桩死行种子同摘。
+- **②SG 源码**：`deploy_sync.sh` 实跑——1028 sql/d526_gate_note_test 新增件+run.go/dci_leg/migrate_table/exec_test 五件传毕（dci_tail/dci_sigma/1027 此前已在 SG 镜像期同步，干跑对拍无差）；SSH 抽查 `run.go:138 params["gate_note"]` 在位。
+- **锚**：`TestD526_GateNoteInProposal` 扫拍级——fixture 全条件（cond 改指 binance:spot 凭据/permission/cap/报价/earn 基准）→RunOnce→提案行 params 断言 σ=/界=/tail=/net= 四键。
+- **验证**：build/vet/gofmt 净 ✅；oppmatch/gate/dciexec 全包+oppmatch -race 绿 ✅；全量套件仅 dashboard `TestD388_SetBrokerDisabled_WireE2E` 测试环境 flake（同族 D580/D587/D466 型——mock/连接面非本票径，隔离 0.10s 绿）🔄。
+- **留续**：SG `schema_migrations=1027`——1028 死行删除待容器重建跑迁移生效（部署欠账归 D-527 返修收口）；过闸提案 `gate_note` 三要素待重建后下拍 SG 实拍。
