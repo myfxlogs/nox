@@ -95,8 +95,14 @@ func (q *CEXAccountQuerier) dciPositionsEarn(ctx context.Context, base string, h
 	var refs []string
 	for _, l := range [][]binanceDCIPosRow{resp.Data, resp.List, resp.Rows} {
 		for _, r := range l {
-			if r.Status != "" && r.Status != "HOLDING" {
-				continue // 非在仓行（SETTLED/PENDING 等）不入 earn 池、不入对拍锚集
+			// venue 实拍键=purchaseStatus（"status" 键不存在恒空——空串穿透
+			// HOLDING 过滤致 SETTLED 单虚计 1441 实证）。在仓谓词=仅
+			// PURCHASE_SUCCESS；键空=fail-closed 返错不静默收（同 ccy/qty 例）。
+			if r.PurchaseStatus == "" {
+				return nil, fmt.Errorf("binance dci positions %s 行 purchaseStatus 键空（venue 字段名再漂移）", r.ID)
+			}
+			if r.PurchaseStatus != "PURCHASE_SUCCESS" {
+				continue // SETTLED/到期等非在仓行不入 earn 池、不入对拍锚集
 			}
 			for _, ref := range []string{r.ID, r.Instrument, r.ProductRef} {
 				if ref != "" {
@@ -129,14 +135,14 @@ func (q *CEXAccountQuerier) dciPositionsEarn(ctx context.Context, base string, h
 // binanceDCIPosRow /v1/dci/product/positions 行（键名多形同 DCIPosition 惯例——
 // venue 实拍为准双键容错）。
 type binanceDCIPosRow struct {
-	ID           string `json:"id"`
-	Instrument   string `json:"instrumentName"`
-	ProductRef   string `json:"productRef"`
-	Status       string `json:"status"`
-	InvestCcy    string `json:"investCoin"`
-	InvestCcyAlt string `json:"investCcy"`
-	SubAmount    string `json:"subscriptionAmount"`
-	SubAmountAlt string `json:"amount"`
+	ID             string `json:"id"`
+	Instrument     string `json:"instrumentName"`
+	ProductRef     string `json:"productRef"`
+	PurchaseStatus string `json:"purchaseStatus"` // venue 实拍键（status 键不存在恒空）
+	InvestCcy      string `json:"investCoin"`
+	InvestCcyAlt   string `json:"investCcy"`
+	SubAmount      string `json:"subscriptionAmount"`
+	SubAmountAlt   string `json:"amount"`
 }
 
 // earnPositions simple-earn 仓位端点翻页全采（size=100，页内行<size 或累计≥total 止）。

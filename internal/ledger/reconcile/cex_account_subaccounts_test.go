@@ -47,8 +47,8 @@ func TestCEXAccount_OkxFunding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("okx funding: %v", err)
 	}
-	if gotPath != "/api/v5/asset/balances" || gotQuery != "ccy=USDT" {
-		t.Errorf("request = %s?%s, want /api/v5/asset/balances?ccy=USDT", gotPath, gotQuery)
+	if gotPath != "/api/v5/asset/balances" || gotQuery != "" {
+		t.Errorf("request = %s?%s, want /api/v5/asset/balances（全币枚举）", gotPath, gotQuery)
 	}
 	if acct.Equity != 0 {
 		t.Errorf("equity want 0（真探实证资金空）, got %v", acct.Equity)
@@ -102,8 +102,15 @@ func TestCEXAccount_OkxSubaccountPrefersConfigBase(t *testing.T) {
 func TestCEXAccount_OkxEarn(t *testing.T) {
 	var gotPath, gotQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath, gotQuery = r.URL.Path, r.URL.RawQuery
-		fmt.Fprint(w, `{"code":"0","data":[{"amt":"5261.25174278","ccy":"USDT","earnings":"69.64","rate":"0.01"}]}`)
+		switch r.URL.Path {
+		case "/api/v5/finance/savings/balance":
+			gotPath, gotQuery = r.URL.Path, r.URL.RawQuery
+			fmt.Fprint(w, `{"code":"0","data":[{"amt":"5261.25174278","ccy":"USDT","earnings":"69.64","rate":"0.01"}]}`)
+		case "/api/v5/finance/sfp/dcd/orders":
+			fmt.Fprint(w, `{"code":"0","data":[]}`) // DCI 零在仓单（不扰 equity 断言）
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
 	}))
 	defer srv.Close()
 
@@ -135,19 +142,25 @@ func TestBinanceEarnPositions(t *testing.T) {
 		if r.Header.Get("X-MBX-APIKEY") == "" {
 			t.Error("missing X-MBX-APIKEY")
 		}
-		if r.URL.Query().Get("size") != "100" || r.URL.Query().Get("current") != "1" {
-			t.Errorf("翻页参数缺: %s", r.URL.RawQuery)
-		}
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/flexible/position"):
+			if r.URL.Query().Get("size") != "100" || r.URL.Query().Get("current") != "1" {
+				t.Errorf("翻页参数缺: %s", r.URL.RawQuery)
+			}
 			fmt.Fprint(w, `{"total":4,"rows":[
 				{"asset":"USDT","totalAmount":"500"},
 				{"asset":"USDT","totalAmount":"42"},
 				{"asset":"BTC","totalAmount":"0.01"},
 				{"asset":"XYZ","totalAmount":"0"}]}`)
 		case strings.HasSuffix(r.URL.Path, "/locked/position"):
+			if r.URL.Query().Get("size") != "100" || r.URL.Query().Get("current") != "1" {
+				t.Errorf("翻页参数缺: %s", r.URL.RawQuery)
+			}
 			// locked 端点额字段=amount（USDT 定期仓位在此——SG 实证主嫌犯径）。
 			fmt.Fprint(w, `{"total":1,"rows":[{"asset":"USDT","amount":"1160.69"}]}`)
+		case strings.HasSuffix(r.URL.Path, "/v1/dci/product/positions"):
+			// DCI 持仓端点（DCI 在仓入 earn 池径）：fixture 零在仓单不扰对拍。
+			fmt.Fprint(w, `{"data":[]}`)
 		default:
 			t.Errorf("unexpected path %s", r.URL.Path)
 		}
@@ -159,8 +172,9 @@ func TestBinanceEarnPositions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(paths) != 2 || !strings.HasSuffix(paths[0], "/flexible/position") ||
-		!strings.HasSuffix(paths[1], "/locked/position") {
+	if len(paths) != 3 || !strings.HasSuffix(paths[0], "/flexible/position") ||
+		!strings.HasSuffix(paths[1], "/locked/position") ||
+		!strings.HasSuffix(paths[2], "/v1/dci/product/positions") {
 		t.Fatalf("paths=%v", paths)
 	}
 	if acct.Currency != "MULTI" || acct.Equity != 1702.7 {
