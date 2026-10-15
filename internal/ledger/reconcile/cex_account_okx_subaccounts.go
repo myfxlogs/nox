@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	v1 "nox/internal/gen/dashboardv1"
@@ -142,19 +143,23 @@ func (q *CEXAccountQuerier) accountOkxEarn(ctx context.Context) (*AccountInfo, e
 	}, nil
 }
 
-// okxDCIOrders okx 双币（DCI）在仓单读：GET /api/v5/finance/sfp/dcd/orders
-// （在仓单列表端点；order-status 需逐单 ordId 不适用快照面）。state 非
-// live/pending 行不入；本金键 notionalSz/investAmt、币种键 notionalCcy/investCcy
-// 多形容错（venue 实拍为准）；行缺 ccy/amt fail-closed 返错。
-// 返回在仓单引用全集（ordId/productId——台账对拍锚）。
+// okxDCIOrders okx 双币（DCI）在仓单读：GET /api/v5/finance/sfp/dcd/order-history
+// （在仓单列表端点；order-status 需逐单 ordId 不适用快照面）。
+// 2026-10-15 SG 实拍换端点：`/sfp/dcd/orders`（在仓单专用端点）venue 侧恒 500
+// （Spring 形错误体，带/不带 state 参同败——业主 10 USDT 在仓期间每逢 earn 轮询即
+// first-poll error，快照只剩 savings=2117.82 漏读在仓本金）；`/sfp/dcd/order-history`
+// 同凭据 200 且含在仓行（state=LIVE/PENDING_SETTLE/SETTLED 全史），改读之并本端按
+// state 过滤在仓态（EqualFold——venue 实拍全大写 LIVE）。终态/撤单行不入；
+// 本金键 notionalSz/investAmt、币种键 notionalCcy/investCcy 多形容错（venue 实拍为准）；
+// 行缺 ccy/amt fail-closed 返错。返回在仓单引用全集（ordId/productId——台账对拍锚）。
 func (q *CEXAccountQuerier) okxDCIOrders(ctx context.Context, add func(string, float64)) ([]string, error) {
-	body, err := q.okxSubaccountSignedGet(ctx, "/api/v5/finance/sfp/dcd/orders")
+	body, err := q.okxSubaccountSignedGet(ctx, "/api/v5/finance/sfp/dcd/order-history")
 	if err != nil {
-		return nil, fmt.Errorf("okx dcd orders: %w", err)
+		return nil, fmt.Errorf("okx dcd order-history: %w", err)
 	}
 	var resp struct {
-		Code string `json:"code"`
-		Msg  string `json:"msg"`
+		Code json.Number `json:"code"` // sfp/dcd 族实拍回数字 0（earn_rail.go 已注两形容错）
+		Msg  string      `json:"msg"`
 		Data []struct {
 			OrdID     string `json:"ordId"`
 			ProductID string `json:"productId"`
@@ -166,14 +171,14 @@ func (q *CEXAccountQuerier) okxDCIOrders(ctx context.Context, add func(string, f
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("okx dcd orders json: %w", err)
+		return nil, fmt.Errorf("okx dcd order-history json: %w", err)
 	}
-	if resp.Code != "0" {
-		return nil, fmt.Errorf("okx dcd orders: code=%s msg=%s", resp.Code, resp.Msg)
+	if resp.Code.String() != "0" {
+		return nil, fmt.Errorf("okx dcd order-history: code=%s msg=%s", resp.Code, resp.Msg)
 	}
 	var refs []string
 	for _, r := range resp.Data {
-		if r.State != "" && r.State != "live" && r.State != "pending_settle" {
+		if r.State != "" && !strings.EqualFold(r.State, "live") && !strings.EqualFold(r.State, "pending_settle") {
 			continue // 终态/撤单行不入 earn 池、不入对拍锚集
 		}
 		for _, ref := range []string{r.OrdID, r.ProductID} {
