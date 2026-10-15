@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -49,14 +50,17 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 		return nil, fmt.Errorf("binance account json: %w", err)
 	}
 
-	// 权益估算：Σ (free+locked) × USDT 价；USDT 价=1，其余取公开 ticker/price（失败该币跳过，诚实估算）。
-	// 非 USDT 标资产不读取不统计（业主明谕「其他的币种都不用读取和统计」
-	// ——USDT=CEX 本位币对标 CFD USD）——循环首行过滤，非 USDT 标不进 total/holdings/
-	// 不发 ticker 定价请求（~90 个 LD* 杂币每轮省 ~90 次 ticker 调用）。
-	// 计价链（binanceUsdtPrice 兜底序）随「不读取」不可达，整段删除（史实在 git）。
-	total := 0.0
-	freeTotal := 0.0 // D-542：free_margin=Σ USDT 标 free（弹窗实拉校准+快照列真值）
-	var holdings []*v1.Holding
+	// D-528：非稳定币现货计价入 NAV——「非 USDT 不读取」旧口径推翻（BTC 现货
+	// ~$1034 全账本不可见实证）。分币持仓全枚举原生量落快照分币行（D-285 零换算），
+	// 聚合 Equity 仍 USDT 估算展示（公开 ticker/price 全符号单读，读败 fail-closed）。
+	// LD* 前缀=earn 持仓现货镜像（simple-earn 申购仓位回显）——earn 池行已独立记账，
+	// spot 域整体排除（free/equity 皆不计；计则与 binance:earn 行双计 NAV——
+	// LDUSDT=1088.8 假 free 致 autoexec #502 venue 真拒单实证）。
+	// 注意「真 LD* 代币」白名单：LDO=Lido DAO 真资产非 earn 回显（其 earn 镜像应
+	// 为 LDLDO）——误排则现货 LDO 持仓凭空消失。
+	freeMargin := 0.0 // free_margin=裸 USDT free（exec 可动读源口径；LD* 不入）
+	type bal struct{ free, qty float64 }
+	per := map[string]bal{}
 	for _, b := range acc.Balances {
 		free, perr := f64z(b.Free)
 		if perr != nil {
@@ -70,19 +74,128 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 		if qty <= 0 {
 			continue
 		}
-		if b.Asset != "USDT" && strings.TrimPrefix(b.Asset, "LD") != "USDT" {
-			continue // 非 USDT 标（LDUSDC/LDTRX/LDO/BFUSD/杂币）：不读取不统计
+		if isBinanceLDEcho(b.Asset) {
+			continue // earn 镜像排除（注释头）
 		}
-		// USDT/LDUSDT 皆 1:1 计 qty，无需价
-		total += qty
-		freeTotal += free
-		holdings = append(holdings, &v1.Holding{Ccy: b.Asset, Qty: qty, UsdtValue: qty})
+		per[b.Asset] = bal{free: free, qty: qty}
+	}
+	if f, ok := per["USDT"]; ok {
+		freeMargin = f.free
+	}
+	// 计价面：稳定币集 1:1，其余取 /v3/ticker/price 全符号表（单读非逐币）。
+	// 尘埃阈 <$1 滤行（雪崩杂币零头防快照行洪）；无价币（无 XXXUSDT 对）不滤
+	// 不估价——如实留行 UsdtValue=0。
+	total := 0.0
+	usdVal := map[string]float64{}
+	var priced bool
+	for asset, b := range per {
+		px, ok := binanceSpotUSDPrice(asset, nil)
+		if !ok {
+			if !priced {
+				pxm, err := q.binanceSpotPrices(ctx, spotBase)
+				if err != nil {
+					return nil, err
+				}
+				usdVal = pxm
+				priced = true
+			}
+			px, ok = binanceSpotUSDPrice(asset, usdVal)
+		}
+		if ok && b.qty*px < spotDustUSD && asset != "USDT" {
+			delete(per, asset) // 尘埃行滤除（<1 USD 等价；USDT=本位锚行恒留）
+			continue
+		}
+		if ok {
+			total += b.qty * px
+		}
+	}
+	var holdings []*v1.Holding
+	freeByCcy := map[string]float64{}
+	ccys := make([]string, 0, len(per))
+	for c := range per {
+		ccys = append(ccys, c)
+	}
+	sort.Strings(ccys)
+	for _, c := range ccys {
+		b := per[c]
+		px, _ := binanceSpotUSDPrice(c, usdVal)
+		holdings = append(holdings, &v1.Holding{Ccy: c, Qty: b.qty, UsdtValue: b.qty * px})
+		freeByCcy[c] = b.free
 	}
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
-		Balance: total, Equity: total, FreeMargin: freeTotal, Currency: "USDT",
+		Balance: total, Equity: total, FreeMargin: freeMargin, Currency: "USDT",
 		Simulated: q.simulated, Website: q.website, Holdings: holdings,
+		FreeQtyByCcy: freeByCcy,
 	}, nil
+}
+
+// spotDustUSD 现货尘埃阈（USD 等价）——低于此值的零头币不进持仓分币行。
+const spotDustUSD = 1.0
+
+// binanceStablePx USD 族稳定币 1:1 计价集（无 XXXUSDT 对的 USD 锚资产同域——
+// BFUSD 保证金币等归入；缺对 ≠ 编价，USD 族属同记帐单位非编）。
+var binanceStablePx = map[string]bool{
+	"USD": true, "USDT": true, "USDC": true, "BUSD": true, "FDUSD": true,
+	"DAI": true, "TUSD": true, "USDP": true, "USD1": true, "BFUSD": true,
+}
+
+// binanceSpotUSDPrice 资产→USD 价：稳定币集 1:1；余者查 pxm["<A>USDT"]；
+// 无价/未采 → ok=false（不编价）。
+func binanceSpotUSDPrice(asset string, pxm map[string]float64) (float64, bool) {
+	if binanceStablePx[asset] {
+		return 1, true
+	}
+	if pxm != nil {
+		if p, ok := pxm[asset+"USDT"]; ok && p > 0 {
+			return p, true
+		}
+	}
+	return 0, false
+}
+
+// binanceSpotPrices /v3/ticker/price 全符号表（公开端点免签名单读）→
+// symbol→price map。读败/解析败 fail-closed 返错（不编价不静默）。
+func (q *CEXAccountQuerier) binanceSpotPrices(ctx context.Context, spotBase string) (map[string]float64, error) {
+	body, err := q.get(ctx, spotBase+"/v3/ticker/price", http.Header{})
+	if err != nil {
+		return nil, fmt.Errorf("binance ticker/price: %w", err)
+	}
+	var rows []struct {
+		Symbol string `json:"symbol"`
+		Price  string `json:"price"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		// 单符号形态（{"symbol":..,"price":..}）兼容——部分镜像回对象非数组
+		var one struct {
+			Symbol string `json:"symbol"`
+			Price  string `json:"price"`
+		}
+		if err2 := json.Unmarshal(body, &one); err2 != nil || one.Symbol == "" {
+			return nil, fmt.Errorf("binance ticker/price json: %w", err)
+		}
+		rows = append(rows, struct {
+			Symbol string `json:"symbol"`
+			Price  string `json:"price"`
+		}{Symbol: one.Symbol, Price: one.Price})
+	}
+	m := map[string]float64{}
+	for _, r := range rows {
+		p, perr := strconv.ParseFloat(r.Price, 64)
+		if perr == nil && p > 0 {
+			m[r.Symbol] = p
+		}
+	}
+	return m, nil
+}
+
+// isBinanceLDEcho LD* earn 镜像判定：LD 前缀+尾段非空=earn 持仓回显；
+// 白名单「真 LD* 代币」（LDO=Lido DAO——其 earn 镜像为 LDLDO）不排。
+func isBinanceLDEcho(asset string) bool {
+	if asset == "LDO" {
+		return false
+	}
+	return strings.HasPrefix(asset, "LD") && len(asset) > 2
 }
 
 // accountBinancePerp 合约账户权益：GET /fapi/v2/account，totalWalletBalance 为权威 USDT 权益

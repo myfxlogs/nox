@@ -70,40 +70,166 @@ func (q *CEXAccountQuerier) okxSubaccountSignedGet(ctx context.Context, pathWith
 	return q.get(ctx, base+pathWithQuery, headers)
 }
 
-// accountOkxFunding okx 资金账户：GET /api/v5/asset/balances?ccy=USDT → USDT 行 bal（真探
-// 9-20：USDT 0=资金账户空）。
+// accountOkxFunding okx 资金账户：GET /api/v5/asset/balances 全币枚举（D-528 同型
+// 病灶修——旧 ?ccy=USDT 过滤使资金户非 USDT 持仓零账面；该端点无估值字段，
+// 分币行原生量零换算，聚合 equity 仍=ΣUSDT.bal 旧口径）。
 func (q *CEXAccountQuerier) accountOkxFunding(ctx context.Context) (*AccountInfo, error) {
-	body, err := q.okxSubaccountSignedGet(ctx, "/api/v5/asset/balances?ccy=USDT")
+	body, err := q.okxSubaccountSignedGet(ctx, "/api/v5/asset/balances")
 	if err != nil {
 		return nil, fmt.Errorf("okx funding: %w", err)
 	}
-	eq, holdings, err := parseOkxUSDTBalance(body, "bal")
-	if err != nil {
+	var resp struct {
+		Code string `json:"code"`
+		Msg  string `json:"msg"`
+		Data []struct {
+			Ccy   string `json:"ccy"`
+			Bal   string `json:"bal"`
+			Avail string `json:"availBal"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("okx funding json: %w", err)
+	}
+	if resp.Code != "0" {
+		return nil, fmt.Errorf("okx funding: code=%s msg=%s", resp.Code, resp.Msg)
+	}
+	var eq float64
+	var holdings []*v1.Holding
+	freeByCcy := map[string]float64{}
+	for _, d := range resp.Data {
+		v, perr := strconv.ParseFloat(d.Bal, 64)
+		if perr != nil || v <= 0 {
+			continue
+		}
+		uv := 0.0
+		if d.Ccy == "USDT" {
+			uv = v
+			eq += v
+		}
+		holdings = append(holdings, &v1.Holding{Ccy: d.Ccy, Qty: v, UsdtValue: uv})
+		if a, perr := strconv.ParseFloat(d.Avail, 64); perr == nil {
+			freeByCcy[d.Ccy] += a
+		}
 	}
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
-		Balance: eq, Equity: eq, Currency: "USDT",
+		Balance: eq, Equity: eq, Currency: "USDT", FreeMargin: freeByCcy["USDT"],
 		Simulated: q.simulated, Website: q.website, Holdings: holdings,
+		FreeQtyByCcy: freeByCcy,
 	}, nil
 }
 
-// accountOkxEarn okx 理财（活期储蓄）：GET /api/v5/finance/savings/balance?ccy=USDT →
-// USDT 行 amt（真探 9-20：amt=5261.25/rate=0.01/earnings=$69.64 在档）→ equity=amt。
+// accountOkxEarn okx 理财：savings 余额（USDT 行 amt）+ DCI（dcd）在仓单并入。
+// DCI 同型病灶修（binance 漏 $358 先例）——okx 双币仓位走 sfp/dcd 独立产品域
+// 不在 savings 读面；在仓单本金按 notionalCcy/investCcy 归位分币行。
+// savings 端点读败 fail-closed；dcd/orders 读败同规（如实缺不编）。
 func (q *CEXAccountQuerier) accountOkxEarn(ctx context.Context) (*AccountInfo, error) {
 	body, err := q.okxSubaccountSignedGet(ctx, "/api/v5/finance/savings/balance?ccy=USDT")
 	if err != nil {
 		return nil, fmt.Errorf("okx earn: %w", err)
 	}
-	eq, holdings, err := parseOkxUSDTBalance(body, "amt")
+	_, holdings, err := parseOkxUSDTBalance(body, "amt")
 	if err != nil {
 		return nil, fmt.Errorf("okx earn json: %w", err)
 	}
+	per := map[string]float64{}
+	var ccys []string
+	for _, h := range holdings {
+		per[h.Ccy] += h.Qty
+		ccys = append(ccys, h.Ccy)
+	}
+	dciRefs, err := q.okxDCIOrders(ctx, func(c string, v float64) {
+		if _, ok := per[c]; !ok {
+			ccys = append(ccys, c)
+		}
+		per[c] += v
+	})
+	if err != nil {
+		return nil, err
+	}
+	eq := 0.0
+	holdings = holdings[:0]
+	for _, c := range ccys {
+		eq += per[c]
+		uv := 0.0
+		if c == "USDT" {
+			uv = per[c]
+		}
+		holdings = append(holdings, &v1.Holding{Ccy: c, Qty: per[c], UsdtValue: uv})
+	}
+	ccy := "USDT"
+	if len(ccys) == 1 {
+		ccy = ccys[0]
+	} else if len(ccys) > 1 {
+		ccy = "MULTI"
+	}
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
-		Balance: eq, Equity: eq, Currency: "USDT",
+		Balance: eq, Equity: eq, Currency: ccy,
 		Simulated: q.simulated, Website: q.website, Holdings: holdings,
+		DCIOpenRefs: dciRefs,
 	}, nil
+}
+
+// okxDCIOrders okx 双币（DCI）在仓单读：GET /api/v5/finance/sfp/dcd/orders
+// （在仓单列表端点；order-status 需逐单 ordId 不适用快照面）。state 非
+// live/pending 行不入；本金键 notionalSz/investAmt、币种键 notionalCcy/investCcy
+// 多形容错（venue 实拍为准）；行缺 ccy/amt fail-closed 返错。
+// 返回在仓单引用全集（ordId/productId——台账对拍锚）。
+func (q *CEXAccountQuerier) okxDCIOrders(ctx context.Context, add func(string, float64)) ([]string, error) {
+	body, err := q.okxSubaccountSignedGet(ctx, "/api/v5/finance/sfp/dcd/orders")
+	if err != nil {
+		return nil, fmt.Errorf("okx dcd orders: %w", err)
+	}
+	var resp struct {
+		Code string `json:"code"`
+		Msg  string `json:"msg"`
+		Data []struct {
+			OrdID     string `json:"ordId"`
+			ProductID string `json:"productId"`
+			State     string `json:"state"`
+			Ccy       string `json:"notionalCcy"`
+			CcyAlt    string `json:"investCcy"`
+			Amt       string `json:"notionalSz"`
+			AmtAlt    string `json:"investAmt"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("okx dcd orders json: %w", err)
+	}
+	if resp.Code != "0" {
+		return nil, fmt.Errorf("okx dcd orders: code=%s msg=%s", resp.Code, resp.Msg)
+	}
+	var refs []string
+	for _, r := range resp.Data {
+		if r.State != "" && r.State != "live" && r.State != "pending_settle" {
+			continue // 终态/撤单行不入 earn 池、不入对拍锚集
+		}
+		for _, ref := range []string{r.OrdID, r.ProductID} {
+			if ref != "" {
+				refs = append(refs, ref)
+			}
+		}
+		ccy := r.Ccy
+		if ccy == "" {
+			ccy = r.CcyAlt
+		}
+		amt := r.Amt
+		if amt == "" {
+			amt = r.AmtAlt
+		}
+		if ccy == "" || amt == "" {
+			return nil, fmt.Errorf("okx dcd orders %s 行 ccy/amount 字段缺（notionalCcy/notionalSz 双键皆空）", r.OrdID)
+		}
+		qty, perr := strconv.ParseFloat(amt, 64)
+		if perr != nil {
+			return nil, fmt.Errorf("parse okx dcd %s amount=%q: %w", r.OrdID, amt, perr)
+		}
+		if qty > 0 {
+			add(ccy, qty)
+		}
+	}
+	return refs, nil
 }
 
 // parseOkxUSDTBalance okx 子账户响应（/asset/balances 与 /finance/savings/balance 同形：

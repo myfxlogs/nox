@@ -77,12 +77,24 @@ func TestM44_DailyCut(t *testing.T) {
 	if err := DailyCut(ctx, st, now, dayStart, 1000); err != nil {
 		t.Fatalf("DailyCut: %v", err)
 	}
-	// nav=6000+4000=10000（EUR 池跳过）；idle=8000；deployable=7000/2=3500→cap 1000
+	// nav=6000+4000=10000（USD 桶）；idle=8000；deployable=7000/2=3500→cap 1000
+	// D-528：EUR 池不再跳过——独立 currency=EUR 行入 fin_nav_daily（跨币零加总）。
 	rows, err := st.LatestNavDaily(ctx)
-	if err != nil || len(rows) != 1 || rows[0].Currency != "USD" {
+	if err != nil || len(rows) != 2 {
 		t.Fatalf("nav 行错: %v %v", rows, err)
 	}
-	row := rows[0]
+	var row pgstore.NavDailyRow
+	for _, r := range rows {
+		if r.Currency == "EUR" && r.NavUSD != 999 {
+			t.Fatalf("EUR 桶错（原生量零换算）: %+v", r)
+		}
+		if r.Currency == "USD" {
+			row = r
+		}
+	}
+	if row.Currency != "USD" {
+		t.Fatalf("USD 行缺席: %v", rows)
+	}
 	if row.NavUSD != 10000 || row.IdleUSD != 8000 {
 		t.Fatalf("nav/idle 错: %.0f/%.0f", row.NavUSD, row.IdleUSD)
 	}
@@ -109,7 +121,13 @@ func TestM44_DailyCut(t *testing.T) {
 		t.Fatalf("DailyCut 复跑: %v", err)
 	}
 	rows2, _ := st.LatestNavDaily(ctx)
-	if len(rows2) != 1 || rows2[0].NavUSD != 6000 {
+	usd := 0.0
+	for _, r := range rows2 {
+		if r.Currency == "USD" {
+			usd = r.NavUSD
+		}
+	}
+	if len(rows2) != 2 || usd != 6000 {
 		t.Fatalf("幂等覆盖错: %v", rows2)
 	}
 }
