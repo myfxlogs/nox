@@ -79,3 +79,6 @@ var GapKindExecutorSQL string // okx idle 缺口：fin_condition_gap kind 放 ex
 
 //go:embed 1024_proposal_pending_venue.sql
 var ProposalPendingVenueSQL string // earn 多 venue 化：pending 唯一锚加 venue
+
+//go:embed 1025_gate_earn_config.sql
+var GateEarnConfigSQL string // D-523③：gate:earn 子账户配置回种

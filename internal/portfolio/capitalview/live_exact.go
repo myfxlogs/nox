@@ -5,9 +5,11 @@ package capitalview
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"nox/internal/data/keydomain"
+	"nox/internal/data/venue"
 	"nox/internal/store/pgstore"
 )
 
@@ -88,4 +90,45 @@ func (v *View) live(ctx context.Context, venueKey string, snaps []pgstore.VenueA
 		return Funds{}, false
 	}
 	return SnapFundsOf(r, time.Now()), true
+}
+
+// writeCalibSnapshot D-523①：REST 校准成功且值变 → fin_venue_account_snapshot
+// src=rest_calib（活账本自愈同愈快照读面；WS 覆盖键同径——同值经 calibBase/
+// 展示态两层去重零写）。写败只 log 基准不前进。
+func (v *View) writeCalibSnapshot(ctx context.Context, poolKey string, avail, eq float64, ccy string, at time.Time, simulated bool) {
+	if v.d.SnapWrite == nil || simulated { // sim 行不落库（同 buildVenueSnapshotRows 证真过滤）
+		return
+	}
+	k := keydomain.Parse(poolKey)
+	vt := venue.NormalizeVenueType("cex", k.Venue, k.Type)
+	row := pgstore.VenueAccountSnapshot{
+		Venue: k.Venue, VenueType: vt,
+		BalanceRaw: avail, EquityRaw: eq, FreeMarginRaw: avail,
+		Currency: ccy, FetchedAt: at, Src: "rest_calib",
+	}
+	v.calibMu.Lock()
+	prev, ok := v.calibBase[poolKey]
+	if ok && prev.BalanceRaw == row.BalanceRaw && prev.EquityRaw == row.EquityRaw &&
+		prev.Currency == row.Currency {
+		v.calibMu.Unlock()
+		return // 同值零写
+	}
+	v.calibMu.Unlock()
+	if err := v.d.SnapWrite(ctx, []pgstore.VenueAccountSnapshot{row}); err != nil {
+		log.Printf("[capitalview] %s rest_calib snapshot write: %v", poolKey, err)
+		return
+	}
+	v.calibMu.Lock()
+	if v.calibBase == nil {
+		v.calibBase = map[string]pgstore.VenueAccountSnapshot{}
+	}
+	v.calibBase[poolKey] = row
+	v.calibMu.Unlock()
+}
+
+func (v *View) restTTL() time.Duration {
+	if v.d.RestTTL != nil {
+		return v.d.RestTTL()
+	}
+	return DefaultRestTTL
 }

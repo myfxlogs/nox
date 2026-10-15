@@ -936,3 +936,12 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **行权对账票（@3f998ebe 起）**：复审补三刀——`368a4293` earn 行滤出 okx 轮询；`6fc0fecf` envelope code 数字/字符串两形容错（sfp/dcd 族实证数字）；`6a8709c8` 到期闸（未到期不轮防 50011）。**补登记**：探针真单 11401353 手工落 `fin_dci_order` #30（manual_probe 如实标）→10-21 起自动对账。
 - **坑库补碑**：venue 应答字段类型按端点分族（sfp/dcd 数字 code）——同型病灶第 N 发；Go `060102` 两位年 69-99→19xx。
 - **裁决队列浮面（@24afa392）**：digest 待裁假设行随源码同步进 SG，明早 06:10 cron 自首拍生效。
+
+## 2026-10-15 快照读面=账本真值对齐 D-523（实施席）
+- **①REST 校准落写**：`writeRestSnapshot` 撤 WS 覆盖键豁免——流覆盖键值变（vs 账本 patch 后展示态 changed 位）落 `src=rest_calib`，REST-only 键沿用 snapBase 去重 `src=rest_poll`；capitalview `Deps.SnapWrite` 新挂点（校准成功→`calibBase` 内存基准比对→异值落行 `rest_calib`，同值零写，sim 不落）。
+- **②重连回环**：`KickResync` 新径——kick 集合带 resync 标→定向读值变落 `src=reconnect_resync`；cexStreamMgr `AcctResync`（bn/okx/gate 三所 `SetOnReconnect` 复钩 onReconnected）+ MT5 `BrokerManager.acctResync`（kickKey=venue:mt5）同径零新定时器。
+- **③gate:earn**：迁移 1025 回种配置行（凭据拷 gate:perp real 行 *_enc）；`accountGateEarn` 走 `gateSignedGet /earn/uni/lends`→分币 holdings（lent_amount=出借中本金，D-285 零换算）。
+- **④字段修**：`/earn/uni/lends` 真实字段=amount/lent_amount/frozen_amount——`current_amount` 恒空旧解把 1999.64 读成 0；`parseGateUniLendRows` 共享面 availability+accountGateEarn 同修。
+- **⑤binance spot user-ws**：根因=续租 ping 复用 start 的 ws-api ctrl 长连，30min idle 被断管→broken-pipe→无谓全量重连；修=续租每拍拨短连一用一弃。
+- **⑥目标款消失提案**：`ExpireProposalsOutsideVenues`（tid+venue 集外 CAS 过期）挂 idleGapScan 拍尾——cash_mgmt 提案 pool 不再闲/尘阈以下同拍 expired 不挂 SLA。
+- **binance:funding=0 落行偏差如实记**：binance funding 钱包官方废面已摘除（0182 删行+分支死码清退），无配置行=无读径→不落行（写即臆造）；fossil 行保留。若 SG 要 0 行封口须另立径。

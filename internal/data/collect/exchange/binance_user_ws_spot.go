@@ -82,8 +82,8 @@ func (b *BinanceUserWS) runOnceSpot(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("dial ws-api: %w", err)
 	}
-	defer ctrl.Close()
 	res, err := b.wsapiCall(ctrl, "userDataStream.start", map[string]any{"apiKey": b.apiKey})
+	ctrl.Close() // D-523⑤：ctrl 只服务 start——30min idle 后服务端/NAT 断管，复用即 broken-pipe
 	if err != nil {
 		return fmt.Errorf("userDataStream.start: %w", err)
 	}
@@ -124,10 +124,22 @@ func (b *BinanceUserWS) runOnceSpot(ctx context.Context) error {
 		for {
 			select {
 			case <-ticker.C:
-				if _, err := b.wsapiCall(ctrl, "userDataStream.ping", map[string]any{
-					"apiKey": b.apiKey, "listenKey": r.ListenKey,
-				}); err != nil {
-					log.Printf("[binance-user-ws] spot ws-api ping failed: %v (reconnecting for fresh key)", err)
+				// D-523⑤：续租每拍新拨 ws-api 短连——旧实现复用 start 的 ctrl 长连，
+				// 30min 纯 idle 被 venue/NAT 断管 → ping 写 broken-pipe → 每轮续租都
+				// 无谓全量重连（断窗=事件漏面同型风险）。短连一用一弃无 idle 死管。
+				perr := func() error {
+					c, derr := b.dialFailover(ctx, wsapi)
+					if derr != nil {
+						return derr
+					}
+					defer c.Close()
+					_, cerr := b.wsapiCall(c, "userDataStream.ping", map[string]any{
+						"apiKey": b.apiKey, "listenKey": r.ListenKey,
+					})
+					return cerr
+				}()
+				if perr != nil {
+					log.Printf("[binance-user-ws] spot ws-api ping failed: %v (reconnecting for fresh key)", perr)
 					_ = conn.Close()
 					return
 				}

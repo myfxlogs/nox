@@ -16,7 +16,7 @@ import (
 // applyAcctResult REST 结果落态：err→restOnline=false（在线翻转则脏化，离线保留最近
 // 成功快照 D-052）；ok→restOnline=true+acct 落态+dirty。cooldown Record 在锁内。
 // D-136 R1 自 account_monitor.go 迁入（REST 落态+快照留痕写径同文件）。
-func (m *AccountMonitor) applyAcctResult(ctx context.Context, vk string, acct *reconcile.AccountInfo, err error) {
+func (m *AccountMonitor) applyAcctResult(ctx context.Context, vk string, acct *reconcile.AccountInfo, err error, snapSrc string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cooldown.Record(vk, err)
@@ -47,7 +47,7 @@ func (m *AccountMonitor) applyAcctResult(ctx context.Context, vk string, acct *r
 	m.states[vk] = st
 	m.dirtyLocked(vk)
 	m.mu.Unlock()
-	wrote := m.writeRestSnapshot(ctx, vk, snapPrev, acct) // D-132/D-136：REST-only 面入库列值变→审计留痕
+	wrote := m.writeRestSnapshot(ctx, vk, snapPrev, acct, changed, snapSrc) // D-132/D-136/D-523：REST 面入库列值变→审计留痕
 	if changed {
 		m.notifyFunds() // D-568：REST 值变→funds 通知（值不变不触）
 	}
@@ -68,25 +68,40 @@ func (m *AccountMonitor) SetSnapshotWriter(fn func(ctx context.Context, snaps []
 
 // writeRestSnapshot D-132：REST-only CEX 面（HasPrivateStream=false：okx funding/earn
 // 等无 WS 余额频道键，D-006 已举证）poll 成功且值变 → fin_venue_account_snapshot
-// 搭车落库（src=rest_poll）。WS 覆盖键不写（私有流事件径已有，禁双写）、sim/非 cex 不写。
-// D-136：去重口径按「入库列」比较（snapSame=balance/equity/free_margin/currency/
-// buffer_multiple，MT acctFrameState 三值先例的忠实化），且基准是调用方传入的
-// snapBase=上次成功写行副本——不可用 st.acct（可变展示态，OnLedgerAcct 会把
-// capitalview REST 校准回写的 equity-fallback available patch 进 FreeMargin，
-// 生产实证 earn 入库列全同却每轮照写）。事件驱动搭车（kick→poll→列值变→写）
-// 非定时器，不违 D-004；nil 写口/写败只 log、基准不前进（同值下轮重试）。
-func (m *AccountMonitor) writeRestSnapshot(ctx context.Context, vk string, prev, acct *reconcile.AccountInfo) bool {
+// 搭车落库（src=rest_poll）。sim/非 cex 不写。
+// D-523①②：WS 覆盖键不再豁免——REST 校准/重连回环读值变同落行（src=rest_calib/
+// reconnect_resync）；流覆盖键去重基准=账本 patch 后的展示态（changed 位：WS 事件
+// 经 OnLedgerAcct 已回写 st.acct，同值 REST 读不再重复落行），REST-only 键仍用
+// snapBase（st.acct 会被账本 patch 污染见 D-136）。
+// 去重口径按「入库列」比较（snapSame=balance/equity/free_margin/currency/
+// buffer_multiple，MT acctFrameState 三值先例的忠实化）。事件驱动搭车
+// （kick→poll→列值变→写）非定时器，不违 D-004；nil 写口/写败只 log、基准不前进。
+func (m *AccountMonitor) writeRestSnapshot(ctx context.Context, vk string, prev, acct *reconcile.AccountInfo, changed bool, snapSrc string) bool {
 	if m.snapWriter == nil || acct == nil {
 		return false
 	}
-	if acct.AssetType != "cex" || acct.Simulated ||
-		venue.HasPrivateStream(acct.Venue, acct.VenueType, acct.Simulated) {
+	if acct.AssetType != "cex" || acct.Simulated {
 		return false
 	}
-	if snapSame(prev, acct) {
+	streamCovered := venue.HasPrivateStream(acct.Venue, acct.VenueType, acct.Simulated)
+	if streamCovered {
+		if !changed {
+			return false
+		}
+	} else if snapSame(prev, acct) {
 		return false
+	}
+	src := snapSrc
+	if src == "" {
+		src = "rest_poll"
+		if streamCovered {
+			src = "rest_calib"
+		}
 	}
 	rows := snapshotRows(prev, acct)
+	for i := range rows {
+		rows[i].Src = src
+	}
 	if err := m.snapWriter(ctx, rows); err != nil {
 		log.Printf("[account-mon] %s rest_poll snapshot write: %v", vk, err)
 		return false

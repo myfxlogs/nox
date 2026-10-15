@@ -31,6 +31,7 @@ func idleGapScan(ctx context.Context, st *pgstore.Store) {
 		log.Printf("[oppmatch] idle gap pools: %v", err)
 		return
 	}
+	cashLive := map[string]bool{} // D-523⑥：本轮仍持款的 cash_mgmt venue 集
 	for _, p := range pools {
 		if p.Ghost || p.VenueType == "mt4" || p.VenueType == "mt5" ||
 			!p.Idle || p.Equity < idleGapDustUSD {
@@ -42,6 +43,7 @@ func idleGapScan(ctx context.Context, st *pgstore.Store) {
 			if p.Currency != "USDT" {
 				continue
 			}
+			cashLive[p.Venue] = true
 			pid, _, err := st.CreateProposal(ctx, &pgstore.Proposal{
 				TemplateID: "cash_mgmt", ExecTrack: "auto", Venue: p.Venue})
 			if err != nil {
@@ -79,5 +81,16 @@ func idleGapScan(ctx context.Context, st *pgstore.Store) {
 		if err := st.RequestConditionGap(ctx, id); err != nil {
 			log.Printf("[oppmatch] idle gap request %s: %v", subj, err)
 		}
+	}
+	// D-523⑥：目标款已消失（池不再闲/权益<尘阈）→同拍 expired 不挂 SLA；
+	// 决策面由 expired 态如实提示（existed-but-dead 提案不再占待裁面）。
+	liveVenues := make([]string, 0, len(cashLive))
+	for v := range cashLive {
+		liveVenues = append(liveVenues, v)
+	}
+	if n, err := st.ExpireProposalsOutsideVenues(ctx, "cash_mgmt", liveVenues); err != nil {
+		log.Printf("[oppmatch] cash target expire: %v", err)
+	} else if n > 0 {
+		log.Printf("[oppmatch] cash_mgmt target gone → expired %d proposals", n)
 	}
 }

@@ -147,7 +147,9 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 		},
 	}
 	// D-469a S3/S4：余额快照 kick acctMon；binance a.m 事件原因 kick income/io 通道。
-	cexStreamMgr.AcctKick = func(vk string) { acctMon.Kick(vk) } // D-571 包B：venue 定向
+	cexStreamMgr.AcctKick = func(vk string) { acctMon.Kick(vk) }         // D-571 包B：venue 定向
+	cexStreamMgr.AcctResync = func(vk string) { acctMon.KickResync(vk) } // D-523②：重连回环→快照 resync
+	brokerMgr.SetAcctResync(func(vk string) { acctMon.KickResync(vk) })  // D-523②：mt5 会话重连同径
 	cexStreamMgr.BinanceHooks = exchange.BinanceUserHooks{
 		OnFundingFee: func() { kickChanSend(a.incomeKickCh) },
 		OnIO:         func() { kickChanSend(a.ioKickCh) },

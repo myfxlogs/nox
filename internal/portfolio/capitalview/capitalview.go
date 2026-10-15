@@ -51,6 +51,9 @@ type Deps struct {
 	RestTTL    func() time.Duration // 校准缓存期（动态求值，测试可调）；nil=DefaultRestTTL
 	QuerierFor func(ctx context.Context, venueKey string) (reconcile.AccountQuerier, string, bool)
 	Snapshots  func(ctx context.Context) ([]pgstore.VenueAccountLatest, error)
+	// SnapWrite D-523①：REST 校准落快照写口（装配=st.InsertVenueAccountSnapshots；
+	// nil=只回写活账本不落库）。值变跨阈才写，同值零写（calibBase 内存基准）。
+	SnapWrite func(ctx context.Context, snaps []pgstore.VenueAccountSnapshot) error
 	// MTFrames D-572 S2：MT 键先走 AccountMonitor.StreamAccount 帧缓存（装配处包装，
 	// 零新依赖方向）；nil=帧源未接线→快照直通。帧龄窗=MTFrameTTL（快照龄闸同值注入，
 	// 单一常量两处消费）。
@@ -72,18 +75,13 @@ const DefaultRestTTL = 30 * time.Second
 
 // View 统一读口（全消费点共享一实例——mu=REST 校准单飞）。
 type View struct {
-	d  Deps
-	mu sync.Mutex
+	d         Deps
+	mu        sync.Mutex // REST 校准单飞
+	calibMu   sync.Mutex // D-523①：快照去重基准独立锁（mu 持锁段内不可再取）
+	calibBase map[string]pgstore.VenueAccountSnapshot
 }
 
 func New(d Deps) *View { return &View{d: d} }
-
-func (v *View) restTTL() time.Duration {
-	if v.d.RestTTL != nil {
-		return v.d.RestTTL()
-	}
-	return DefaultRestTTL
-}
 
 // IsCEXVenue 腿 venue 是否 CEX（活账本通道覆盖三所；MT venue 段=数字账户号不走此径）。
 func IsCEXVenue(venueKey string) bool {
@@ -223,6 +221,7 @@ func (v *View) calibrate(ctx context.Context, venueKey string, force, exact bool
 	if v.d.Ledger != nil {
 		v.d.Ledger.Put(poolKey, avail, acct.Equity, acct.Currency, SrcRest, at)
 	}
+	v.writeCalibSnapshot(ctx, poolKey, avail, acct.Equity, acct.Currency, at, acct.Simulated) // D-523①
 	return liveFunds(bus.BalanceEntry{
 		VenueKey: poolKey, Available: avail, Equity: acct.Equity,
 		Currency: acct.Currency, At: at, Src: SrcRest,

@@ -66,7 +66,7 @@ func TestD571B_T1_PollPerVenueEvents(t *testing.T) {
 		{"277842155", "277842155:mt5", 200},
 		{"gate:perp", "gate:perp", 300},
 	} {
-		m.pollVenueKeys(ctx, tc.kick)
+		m.pollVenueKeys(ctx, tc.kick, false)
 		evs := drainAcctEvents(ch)
 		if len(evs) != 1 {
 			t.Fatalf("%s events=%d want 1", tc.vk, len(evs))
@@ -77,7 +77,7 @@ func TestD571B_T1_PollPerVenueEvents(t *testing.T) {
 		}
 	}
 	// 同值重 poll → proto.Equal 抑制零事件。
-	m.pollVenueKeys(ctx, "binance")
+	m.pollVenueKeys(ctx, "binance", false)
 	if evs := drainAcctEvents(ch); len(evs) != 0 {
 		t.Fatalf("no-change poll emitted %d events", len(evs))
 	}
@@ -129,11 +129,11 @@ func TestD571B_T4_TargetedKickREST(t *testing.T) {
 	qg := &countingAcctQuerier{fakeAccountQuerier: fakeAccountQuerier{key: "gate:perp",
 		acct: &reconcile.AccountInfo{VenueKey: "gate:perp", Equity: 200}}}
 	m, _, _ := newAcctMonV1(t, qb, qg)
-	m.pollVenueKeys(context.Background(), "binance")
+	m.pollVenueKeys(context.Background(), "binance", false)
 	if qb.calls.Load() != 1 || qg.calls.Load() != 0 {
 		t.Fatalf("bare kick calls binance=%d gate=%d want 1,0", qb.calls.Load(), qg.calls.Load())
 	}
-	m.pollVenueKeys(context.Background(), "gate:perp")
+	m.pollVenueKeys(context.Background(), "gate:perp", false)
 	if qb.calls.Load() != 1 || qg.calls.Load() != 1 {
 		t.Fatalf("full kick calls binance=%d gate=%d want 1,1", qb.calls.Load(), qg.calls.Load())
 	}

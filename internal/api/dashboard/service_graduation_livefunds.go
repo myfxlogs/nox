@@ -36,6 +36,12 @@ func (s *Service) capitalView() *capitalview.View {
 			}
 			return s.liveAccountLatest(ctx) // #1c：快照兜底面=实时态
 		},
+		SnapWrite: func(ctx context.Context, rows []pgstore.VenueAccountSnapshot) error {
+			if s.store == nil {
+				return nil // 部分构造 nil 安全
+			}
+			return s.store.InsertVenueAccountSnapshots(ctx, rows) // D-523①：rest_calib 落写
+		},
 		MTFrames:   s.mtFrameAt,                                         // D-572 S2：MT 键流帧读口
 		MTFrameTTL: func() time.Duration { return snapshotStaleWindow }, // 帧龄窗=快照龄闸同值
 	})

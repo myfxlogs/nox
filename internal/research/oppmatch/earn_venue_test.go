@@ -97,3 +97,33 @@ func TestEarnRailVenues_IdleProposal(t *testing.T) {
 		t.Fatalf("重跑重产: %d", okxP)
 	}
 }
+
+// D-523⑥：cash_mgmt 提案目标款消失（池不再闲）→同拍 expired 不挂 SLA。
+func TestCashMgmtTargetGone_ExpiresInScan(t *testing.T) {
+	st, ctx := d514Store(t)
+	for _, q := range []string{
+		`DELETE FROM fin_proposal WHERE venue='xgdead'`,
+	} {
+		if _, err := st.Pool().Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer func() {
+		_, _ = st.Pool().Exec(ctx, `DELETE FROM fin_proposal WHERE venue='xgdead'`)
+	}()
+	// 挂一条 xgdead venue 的 proposed cash_mgmt（该 venue 无闲池=目标款消失）。
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO fin_proposal (template_id, exec_track, venue, status, created_at)
+		 VALUES ('cash_mgmt','auto','xgdead','proposed',now())`); err != nil {
+		t.Fatal(err)
+	}
+	idleGapScan(ctx, st)
+	var st2 string
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT status FROM fin_proposal WHERE venue='xgdead' AND template_id='cash_mgmt'`).Scan(&st2); err != nil {
+		t.Fatal(err)
+	}
+	if st2 != "expired" {
+		t.Fatalf("target 消失提案应同拍 expired, got %s", st2)
+	}
+}

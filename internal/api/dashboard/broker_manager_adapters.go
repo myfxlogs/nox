@@ -53,7 +53,10 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	// D-104 P2 U2：AlertSink 须在 Connect 前注入（quoteReconnectBackoff 封顶档读此字段）。
 	ad.AlertSink = m.AlertSink
 	// D-004 P1#6：dispatch 晚绑定（同 D-581 三 sink）——SetReconKick 晚接自生效。
-	ad.OnReconnect = m.dispatchReconKick
+	ad.OnReconnect = func() {
+		m.dispatchReconKick()
+		m.dispatchAcctResync(kickKey) // D-523②：mt5 会话重连→账户实读+值变落快照
+	}
 	// D-170：zeroframe venue 级闭市闸（session 表判，表缺席→不拦照报）。
 	ad.ClosedCheck = func() bool {
 		cctx, ccancel := context.WithTimeout(context.Background(), 10*time.Second)

@@ -109,15 +109,15 @@ func (m *AccountMonitor) Events() []*v1.AccountEvent {
 	return out
 }
 
-// drainKicks 取走并清空待回读 venue 集（合并语义：集合去重）。镜像 bpMon。
-func (m *AccountMonitor) drainKicks() []string {
+// drainKicks 取走并清空待回读 venue 集（合并语义：集合去重；resync 标随键走）。镜像 bpMon。
+func (m *AccountMonitor) drainKicks() []acctKick {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	out := make([]string, 0, len(m.pendingKick))
-	for vk := range m.pendingKick {
-		out = append(out, vk)
+	out := make([]acctKick, 0, len(m.pendingKick))
+	for vk, resync := range m.pendingKick {
+		out = append(out, acctKick{vk: vk, resync: resync})
 	}
-	m.pendingKick = make(map[string]struct{})
+	m.pendingKick = make(map[string]bool)
 	return out
 }
 

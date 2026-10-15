@@ -38,33 +38,41 @@ func (q *CEXAccountQuerier) availabilityGate(ctx context.Context) (*VenueAvailab
 	return out, nil
 }
 
-// availabilityGateEarn /earn/uni/lends 理财面（官方 EarnUni 端点，D-547 S0③核实）：
-// current_amount=出借中本金→锁定慢动（按时点赎回语义）；权限不足/无单如实注记。
+// availabilityGateEarn /earn/uni/lends 理财面（官方 EarnUni 端点，D-547 S0③核实；
+// D-523④ 字段修：venue 实拍 10-15 真实字段=amount/lent_amount/frozen_amount，
+// current_amount 系误字段恒 0 致 1999.64 出借读成 0）：
+// lent_amount=出借中本金→锁定慢动（按时点赎回语义）；权限不足/无单如实注记。
 func (q *CEXAccountQuerier) availabilityGateEarn(ctx context.Context) (*AvailabilityNode, error) {
 	body, err := q.gateSignedGet(ctx, "/earn/uni/lends")
 	if err != nil {
 		return nil, fmt.Errorf("gate earn availability: %w", err)
 	}
-	var rows []struct {
-		Currency string `json:"currency"`
-		Amount   string `json:"current_amount"`
-	}
-	if err := json.Unmarshal(body, &rows); err != nil {
+	rows, err := parseGateUniLendRows(body)
+	if err != nil {
 		return nil, fmt.Errorf("gate earn availability json: %w", err)
 	}
 	n := &AvailabilityNode{Wallet: "earn", At: time.Now()}
 	for _, r := range rows {
-		v, _ := strconv.ParseFloat(r.Amount, 64)
+		v, _ := strconv.ParseFloat(r.Lent, 64)
 		if v <= 0 {
 			continue
 		}
 		if r.Currency == "USDT" {
 			n.LockedUSD += v
 		} else {
-			n.Detail += fmt.Sprintf("%s amt=%s(未折价); ", r.Currency, r.Amount)
+			n.Detail += fmt.Sprintf("%s lent=%s(未折价); ", r.Currency, r.Lent)
 		}
 	}
 	return n, nil
+}
+
+// parseGateUniLendRows lends 响应行解析（availability 与 accountGateEarn 共享面）。
+func parseGateUniLendRows(body []byte) ([]gateUniLendRow, error) {
+	var rows []gateUniLendRow
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 func (q *CEXAccountQuerier) gateSignedGet(ctx context.Context, endpoint string) ([]byte, error) {

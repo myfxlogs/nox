@@ -121,6 +121,7 @@ internal/platform/testutil/storetest -> internal/store/pgstore
 internal/platform/usdnotional -> internal/data/bus
 internal/portfolio/budget -> internal/store/pgstore
 internal/portfolio/capitalview -> internal/data/bus
+internal/portfolio/capitalview -> internal/data/venue
 internal/portfolio/capitalview -> internal/data/keydomain
 internal/portfolio/capitalview -> internal/ledger/reconcile
 internal/portfolio/capitalview -> internal/store/pgstore

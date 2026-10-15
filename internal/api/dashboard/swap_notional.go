@@ -59,7 +59,7 @@ func (s *Service) AccountEquityUSDAt(venueKey string) (value float64, currency s
 // D-032 权益闸 MT 腿缺/超龄时的判定点一次回读；nil 安全）。
 func (s *Service) RefreshAccountEquity(ctx context.Context, venueKey string) {
 	if s.acctMon != nil {
-		s.acctMon.pollVenueKeys(ctx, venueKey)
+		s.acctMon.pollVenueKeys(ctx, venueKey, false)
 	}
 }
 

@@ -99,3 +99,18 @@ func (m *BrokerManager) dispatchReconKick() {
 		f()
 	}
 }
+
+// SetAcctResync D-523②：MT5 会话重连成功 → 该键账户定向实读+快照 resync 写口。
+func (m *BrokerManager) SetAcctResync(f func(vk string)) {
+	m.sinkMu.Lock()
+	m.acctResync = f
+	m.sinkMu.Unlock()
+}
+func (m *BrokerManager) dispatchAcctResync(vk string) {
+	m.sinkMu.RLock()
+	f := m.acctResync
+	m.sinkMu.RUnlock()
+	if f != nil {
+		f(vk)
+	}
+}

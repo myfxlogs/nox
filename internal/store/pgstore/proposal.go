@@ -212,3 +212,21 @@ func (s *Store) ExpireProposalsOverAge(ctx context.Context, age time.Duration) (
 	}
 	return ids, rows.Err()
 }
+
+// ExpireProposalsOutsideVenues D-523⑥：提案目标款已消失（cash_mgmt 闲池被申购/划转
+// 吃掉）→拍内翻 expired 不挂 SLA。liveVenues=本轮仍达标的 venue 集；空集=该模板
+// proposed 行全过期（同 ExpireProposalsExcept 空集语义）。CAS 仅 proposed 态动。
+func (s *Store) ExpireProposalsOutsideVenues(ctx context.Context, template string, liveVenues []string) (int, error) {
+	q := `UPDATE fin_proposal SET status='expired', decided_at=now()
+		WHERE status='proposed' AND template_id=$1`
+	args := []any{template}
+	if len(liveVenues) > 0 {
+		q += ` AND NOT (venue = ANY($2))`
+		args = append(args, liveVenues)
+	}
+	res, err := s.pool.Exec(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	return int(res.RowsAffected()), nil
+}

@@ -45,7 +45,7 @@ type AccountMonitor struct {
 	flushT       *time.Timer                // 尾沿合批
 	streamKnown  map[string]bool            // venue 流状态已知（MT5 域；CEX 永不置位→restOnline 兜底）
 	streamOnline map[string]bool            // 流权威在线态
-	pendingKick  map[string]struct{}
+	pendingKick  map[string]bool            // vk→resync（D-523：重连回环定向读 src=reconnect_resync）
 	kickSig      chan struct{}
 	// 热修 hotfix-loops（OOM 19:01 实证）：kick 防抖——帧 nil-acct 10s/键、账本事件 2s/键；
 	// 无防抖时 REST 失败+acct 持续 nil → 每帧 kick → poll 风暴。
@@ -83,7 +83,7 @@ func NewAccountMonitor(bm *BrokerManager, evTopic *bus.Topic[*v1.AccountEvent]) 
 		dirty:        make(map[string]struct{}),
 		streamKnown:  make(map[string]bool),
 		streamOnline: make(map[string]bool),
-		pendingKick:  make(map[string]struct{}),
+		pendingKick:  make(map[string]bool),
 		frameKickAt:  make(map[string]time.Time),
 		ledgerKickAt: make(map[string]time.Time),
 		cooldown:     NewCooldown(2, 10*time.Second), // D-077 修复⑩ G2
@@ -109,12 +109,24 @@ func (m *AccountMonitor) AddStatic(q reconcile.AccountQuerier) {
 // （D-099 先例）；定向 kick（vk≠""）无防抖直读（镜像 bpMon reconcileVenueKeys 即时语义）。
 var accountKickDebounce = 30 * time.Second // D-469a S5：事件化后 5min 防抖失去意义降 30s
 
+// acctKick 定向回读请求（resync=D-523 重连回环快照 src 标）。
+type acctKick struct {
+	vk     string
+	resync bool
+}
+
 // Kick 事件触发账户回读（D-107 P2 起，D-571 包B 改 venue 定向）。
 // venueKey 完整键（"acct:mt5"/"binance:perp"）或裸 venue 名（"binance"→全部类型键）；
 // 集合去重 + cap1 信号 = 事件合并。空串 = 全 venue（走防抖）。
-func (m *AccountMonitor) Kick(venueKey string) {
+func (m *AccountMonitor) Kick(venueKey string) { m.enqueueKick(venueKey, false) }
+
+// KickResync D-523②：WS 重连就绪 → 该键立即 REST 实读一次，值变落快照
+// src=reconnect_resync（断窗漏事件自愈，复用定向 kick 合并/信号径零新定时器）。
+func (m *AccountMonitor) KickResync(venueKey string) { m.enqueueKick(venueKey, true) }
+
+func (m *AccountMonitor) enqueueKick(venueKey string, resync bool) {
 	m.mu.Lock()
-	m.pendingKick[venueKey] = struct{}{}
+	m.pendingKick[venueKey] = m.pendingKick[venueKey] || resync // resync 请求不被普通 kick 覆盖
 	m.mu.Unlock()
 	select {
 	case m.kickSig <- struct{}{}:
@@ -152,10 +164,10 @@ func (m *AccountMonitor) Run(ctx context.Context) {
 			return
 		case <-m.kickSig:
 			for _, kick := range m.drainKicks() {
-				if kick == "" {
+				if kick.vk == "" {
 					m.pollIfDue(ctx)
 				} else {
-					m.pollVenueKeys(ctx, kick)
+					m.pollVenueKeys(ctx, kick.vk, kick.resync)
 				}
 			}
 		}
@@ -199,21 +211,25 @@ func (m *AccountMonitor) EquityObserved(venueKey string) (equity float64, curren
 // D-460 S1 两阶段拆分（D-447 遗留 wart 真修）：无锁段跑网络 RPC，锁内只做内存
 // merge——旧实现持写锁跨逐 venue RPC 循环，Snapshot（ListAccounts 拉路径）全程排队。
 func (m *AccountMonitor) poll(ctx context.Context) {
-	m.pollImpl(ctx, nil)
+	m.pollImpl(ctx, nil, "")
 	m.flushBounded(ctx)
 }
 
 // pollVenueKeys 定向回读（kick 键：完整 venueKey 直查；裸 venue 名=其全部类型键——
 // 镜像 broker_position_events.go reconcileVenueKeys 匹配法）。无防抖直读。
-func (m *AccountMonitor) pollVenueKeys(ctx context.Context, kick string) {
+func (m *AccountMonitor) pollVenueKeys(ctx context.Context, kick string, resync bool) {
+	src := ""
+	if resync {
+		src = "reconnect_resync"
+	}
 	m.pollImpl(ctx, func(vk string) bool {
 		return vk == kick || keydomain.BareOf(vk) == kick
-	})
+	}, src)
 	m.flushBounded(ctx)
 }
 
 // pollImpl 轮询骨架：match==nil=全量；否则仅命中键回读。RPC 在无锁段，merge 在锁内段。
-func (m *AccountMonitor) pollImpl(ctx context.Context, match func(vk string) bool) {
+func (m *AccountMonitor) pollImpl(ctx context.Context, match func(vk string) bool, snapSrc string) {
 	// queriers() 内部取 m.mu.RLock——必须先于写锁获取（RWMutex 非重入，持写锁再读锁会自锁）。
 	qs := m.queriers(ctx)
 
@@ -246,7 +262,7 @@ func (m *AccountMonitor) pollImpl(ctx context.Context, match func(vk string) boo
 		results = append(results, pollRes{vk: vk, acct: acct, err: err})
 	}
 	for _, r := range results {
-		m.applyAcctResult(ctx, r.vk, r.acct, r.err)
+		m.applyAcctResult(ctx, r.vk, r.acct, r.err, snapSrc)
 	}
 }
 

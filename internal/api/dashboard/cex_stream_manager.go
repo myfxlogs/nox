@@ -53,6 +53,8 @@ type CexStreamManager struct {
 	// BalLedger D-542：可用资金活账本（透传各私有流——事件喂入+重连标脏；nil 安全）。
 	BalLedger *bus.BalanceLedger
 	// ReconKick D-004 P1#6：私有流（重）连就绪 → 对账 kick（断流期事件漏发补救）。
+	// AcctResync D-523②：重连就绪 → 该键账户 REST 实读+值变落快照（src=reconnect_resync）。
+	AcctResync func(vk string)
 	// 装配于 Run 启动前（sync 起 ws 晚于字段赋值，happens-before 经 goroutine 启动传递）。
 	ReconKick func()
 
@@ -169,14 +171,14 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 		case "gate":
 			ws := exchange.NewGatePrivateWS(c.APIKey, c.APISecret, c.BaseURL, vk, c.Simulated, snapSink, m.sinks, m.orderCache, m.posCache)
 			ws.SetBalanceLedger(m.BalLedger)
-			ws.SetOnReconnect(m.ReconKick) // D-004 P1#6：重连就绪→对账 kick
-			ws.SetGateHooks(m.GateHooks)   // D-570 包C S7：风险频道族整帧转发钩
-			m.gateWS.Store(ws)             // D-570 包C S6③：contract_info 失效回调寻址
+			ws.SetOnReconnect(m.onReconnected(vk)) // D-004 P1#6 + D-523②：对账 kick+快照 resync
+			ws.SetGateHooks(m.GateHooks)           // D-570 包C S7：风险频道族整帧转发钩
+			m.gateWS.Store(ws)                     // D-570 包C S6③：contract_info 失效回调寻址
 			safego.GoLoop("cex-stream:gate", func() { ws.Run(sctx) })
 		case "binance":
 			ws := exchange.NewBinanceUserWS(c.APIKey, c.APISecret, c.BaseURL, c.VenueType, vk, c.Simulated, snapSink, m.sinks, m.orderCache, m.posCache, m.BinanceHooks)
 			ws.SetBalanceLedger(m.BalLedger)
-			ws.SetOnReconnect(m.ReconKick) // D-004 P1#6：重连就绪→对账 kick
+			ws.SetOnReconnect(m.onReconnected(vk)) // D-004 P1#6 + D-523②：对账 kick+快照 resync
 			safego.GoLoop("cex-stream:binance", func() { ws.Run(sctx) })
 		case "okx":
 			// D-469b S1：OKX 私有流纳入 manager 生命周期（boot 一次性装配已移除）。
@@ -189,7 +191,7 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 				return ctVal, err
 			})
 			ws.SetBalanceLedger(m.BalLedger)
-			ws.SetOnReconnect(m.ReconKick) // D-004 P1#6：重连就绪→对账 kick
+			ws.SetOnReconnect(m.onReconnected(vk)) // D-004 P1#6 + D-523②：对账 kick+快照 resync
 			safego.GoLoop("cex-stream:okx", func() { ws.Run(sctx) })
 		}
 		m.streams[id] = cancel
@@ -213,4 +215,17 @@ func streamable(c pgstore.ExchangeConfig) bool {
 		return c.VenueType == "perp" && c.APIKey != "" && c.APISecret != "" && c.Passphrase != ""
 	}
 	return false
+}
+
+// onReconnected 重连就绪复合钩：对账补漏 kick（D-004 P1#6）+ 该键快照 resync（D-523②——
+// 断窗漏发余额事件的自愈面：REST 实读值变才落行 src=reconnect_resync，同值零写）。
+func (m *CexStreamManager) onReconnected(vk string) func() {
+	return func() {
+		if m.ReconKick != nil {
+			m.ReconKick()
+		}
+		if m.AcctResync != nil {
+			m.AcctResync(vk)
+		}
+	}
 }

@@ -171,7 +171,7 @@ func TestKickNostreamAccounts(t *testing.T) {
 	}
 	// 防抖：清 pending 后立即再调 → 不再入队。
 	s.acctMon.mu.Lock()
-	s.acctMon.pendingKick = map[string]struct{}{}
+	s.acctMon.pendingKick = map[string]bool{}
 	s.acctMon.mu.Unlock()
 	s.kickNostreamAccounts()
 	if len(kicked()) != 0 {
