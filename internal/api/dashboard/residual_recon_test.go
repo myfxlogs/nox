@@ -35,7 +35,7 @@ func d536Snap(vt, ccy string, equity float64, ts time.Time) pgstore.VenueAccount
 		EquityRaw: equity, FetchedAt: ts, Src: "test"}
 }
 
-func TestD536_ResidRecon(t *testing.T) {
+func TestD539_ResidRecon(t *testing.T) {
 	s := d536Store(t)
 	ctx := context.Background()
 	base := time.Now().Add(-time.Hour)
