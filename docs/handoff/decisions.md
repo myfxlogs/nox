@@ -339,3 +339,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
   毕业判据按各行 qty 算仍一致），新拍开仓走 5000。
 - **实现**：`scan.PaperQtyUSDAt(ctx,st)` 读 PG 键；键缺/破值→兜底 1000（失效
   安全，纸面轨断链降级可接受并注记）。
+
+## D-547 假设裁决首批（决策席 10-15——裁决队列积压清零动作）
+- **approved ×2**：#505 cfd_swap_hedged XAUUSD short×binance PAXGUSDT（D-532 取证唯一跑赢基线的对冲形态）；#7 okx FUTURES USD_UM_XPERP（品类已由 perp_delivery 纸面轨实盘覆盖——侦测→批准→在跑闭环）。**后果**：S2 票按触发条件转待领。
+- **rejected ×7**：裸 cfd_swap 方向性单腿（#51/52/56/78/81/82/83 AUDJPY/BRENT/XAUUSD 等）——裸方向敞口在套利/对冲息差口径外（D-030 风控优先），同族对冲形态已批且严格占优；category_key 幂等抑重推由表结构承担。
+- **留 proposed ×11**：#5 binance TRADIFI_PERPETUAL（对 MT5 指数 CFD 跨所对冲腿未取证）；其余 XAGUSD/XAUUSD 对冲变体同族未逐腿取证——待 S2 评估或后续证据。

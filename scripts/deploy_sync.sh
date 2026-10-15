@@ -11,3 +11,6 @@ EXTRA=(); [ "${1:-}" = "-n" ] && EXTRA=(-n)
 # core.quotepath=false：CJK 文件名原样输出（默认 C 引用转义会让 rsync link_stat 失配）。
 # shellcheck disable=SC2046
 rsync -az "${EXTRA[@]}" --files-from=<(git -c core.quotepath=false ls-files) ./ "$SG:$DEST"
+# D-547 补：宿主侧二进制（universe-radar/xasset-monitor/credread）随源码重建——
+# rsync 只推 git 跟踪面，不重建则 cron 跑旧码（10-15 部署漏步实证）。
+ssh "$SG" "cd $DEST && bash scripts/build_host_tools.sh" >/dev/null
