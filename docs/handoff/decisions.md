@@ -349,3 +349,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **试单名义额**：`app_config.s2_trial_notional_usd=200`（迁移 1033 种子；本金 ~1.8%/结构——盖 venue 最小名义与费率信噪，试错损失噪音级；改值须新 D#）。钱径参数**禁代码字面量**——键缺/破值 fail-closed 拒桥（无兜底常量）。
 - **复审修（实施缺陷）**：`category_key` 的 side 字段原实现只进注记未进映射——`long` 向假设会错桥成反向仓（真金白名单径方向性 bug）。修=side 进腿位映射（short=空 CFD 收 swap/多 CEX 腿；long 反之；其余拒桥+warn），`TestS2Bridge_LongSideLegs` 钉死。
 - **MaxLongQty/ShortQty=5** base 单位宽松（5oz 金≈$13k 远超 gross 帽）——照准：MaxGrossUSD 先绑，腿量帽仅防单腿失衡，不视为敞口闸。
+
+## D-549 okx DCI 资金装配——savings 赎回前置步（决策席 10-16）
+- **实证**（SG）：okx USDT 全躺 earn 池（savings~2117.9+结构化 10），unified/funding 双零；`tryLegOKX` 余额源只认 unified+funding→qty=0 每拍撞约束闸（#445 存活期 critical×24 至 SLA 过期方止），结构性必复演。
+- **裁定**：dci rail 申购装配链加 savings 赎回前置步——shortfall=needed−(unified+funding)>0 时赎 min(shortfall, savings_avail) 落 funding，再走既有 18→6 划转→申购。提案质量闸（D-514 溢价≥3×earn、D-526 σ界/尾损）已保证赎回换仓经济性——为更优提案腾挪所内资金=金钱不眠同向裁定，不属新风险面。
+- **边界**：赎回额不放大不预赎攒资金户；结构化在仓（dcd positions）不进可赎面；savings 可赎额读败 fail-closed；提案额口径核=可装配额。
