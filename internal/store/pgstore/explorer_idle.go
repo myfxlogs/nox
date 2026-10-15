@@ -35,19 +35,41 @@ type ExplorerIdlePool struct {
 // ExplorerIdleFunds ⑤资金不眠异常：fin_venue_account_snapshot 每 venue 最新行 +
 // income_events 近30d 合计 + 快照 buffer_multiple，闲置/破地板标记 Go 算。
 func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]ExplorerIdlePool, error) {
+	// 每键最新行=键枚举 + 逐键 LATERAL 下探（1031 覆盖索引前 DISTINCT ON 全表序
+	// 实测 SG 60.8s——834k 行 seq scan+磁盘外排；改造后两探针走 index-only 单点
+	// 取行）。D-544 读序：ev=同键 15min 鲜度窗内最新事件行（okx_event/
+	// binance_event/mt_frame=venue 原生推送真值）存在即优先；否则落 la=全类型
+	// 最新行（rest_calib/rest_poll/reconnect_resync=断流/冷启动愈合补写非权威）。
+	// currency 可 NULL→键等值用 IS NOT DISTINCT FROM 防键丢失。
 	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT ON (venue, venue_type, currency)
-			venue, venue_type, COALESCE(balance_raw,0), COALESCE(equity_raw,0),
-			COALESCE(free_margin_raw,0), COALESCE(currency,''), fetched_at, COALESCE(buffer_multiple,0)
-		FROM fin_venue_account_snapshot
-		ORDER BY venue, venue_type, currency,
-			-- D-544（10-15 业主令「事件驱动快照升权威源」读序裁定）：同键鲜度窗内
-			-- 事件行（okx_event/binance_event/mt_frame=venue 原生推送真值）优先；
-			-- 事件源缺席/陈于 15min 窗才落 rest_calib/rest_poll/reconnect_resync
-			-- （愈合补写角色钉死：断流/冷启动补偿，非权威）。
-			CASE WHEN src IN ('okx_event','binance_event','mt_frame')
-			      AND fetched_at > now() - interval '15 minutes' THEN 0 ELSE 1 END,
-			fetched_at DESC`)
+		SELECT k.venue, k.venue_type,
+			COALESCE(ev.balance_raw,      la.balance_raw, 0),
+			COALESCE(ev.equity_raw,       la.equity_raw, 0),
+			COALESCE(ev.free_margin_raw,  la.free_margin_raw, 0),
+			COALESCE(k.currency, ''),
+			COALESCE(ev.fetched_at,       la.fetched_at),
+			COALESCE(ev.buffer_multiple,  la.buffer_multiple, 0)
+		FROM (
+			SELECT DISTINCT venue, venue_type, currency FROM fin_venue_account_snapshot
+		) k
+		CROSS JOIN LATERAL (
+			SELECT s.balance_raw, s.equity_raw, s.free_margin_raw, s.fetched_at, s.buffer_multiple
+			FROM fin_venue_account_snapshot s
+			WHERE s.venue = k.venue AND s.venue_type = k.venue_type
+				AND s.currency IS NOT DISTINCT FROM k.currency
+			ORDER BY s.fetched_at DESC, s.id DESC
+			LIMIT 1
+		) la
+		LEFT JOIN LATERAL (
+			SELECT s.balance_raw, s.equity_raw, s.free_margin_raw, s.fetched_at, s.buffer_multiple
+			FROM fin_venue_account_snapshot s
+			WHERE s.venue = k.venue AND s.venue_type = k.venue_type
+				AND s.currency IS NOT DISTINCT FROM k.currency
+				AND s.src IN ('okx_event','binance_event','mt_frame')
+				AND s.fetched_at > now() - interval '15 minutes'
+			ORDER BY s.fetched_at DESC
+			LIMIT 1
+		) ev ON true`)
 	if err != nil {
 		return nil, fmt.Errorf("explorer idle snapshots: %w", err)
 	}

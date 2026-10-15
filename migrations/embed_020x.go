@@ -97,3 +97,6 @@ var VenueIOTransferWalletSQL string // D-536①：fin_venue_io 划转列（from/
 
 //go:embed replay/1030_perf_baseline.sql
 var PerfBaselineSQL string // D-535：业绩基线锚+历史行归档（nav_daily/income_events archived）
+
+//go:embed replay/1031_snapshot_key_ts_idx.sql
+var SnapshotKeyTsIdxSQL string // 快照键+时序覆盖索引（每键最新行 LATERAL 探针化）
