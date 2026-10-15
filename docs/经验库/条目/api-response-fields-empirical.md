@@ -8,7 +8,7 @@ keywords: [API, 响应字段, positionRisk, initialMargin, okx sim, imr, 假值,
 scope: [reconcile, cex, adapter]
 summary: 交易所 API 的响应字段与环境行为必须以实测响应为准（文档/直觉字段可能不存在或环境异变）——binance positionRisk 文档级 initialMargin 实测响应不存在（全仓无 per-position margin，须 notional/leverage 计算）；okx sim 环境 imr 为恒定假值（$1 名义也占 ~$333）；同族前例 gate-api-shape-must-match-sdk
 first_seen: 2026-08-29
-last_verified: 2026-08-29
+last_verified: 2026-10-15
 skills: [KB维护, 生产取证]
 evidence_refs:
   - type: code
@@ -21,4 +21,5 @@ repro_or_symptom: 按 API 文档假想字段（如 initialMargin）写解析→�
 root_cause: 第三方 API 的文档字段集≠实际响应字段集（版本/账户模式裁剪：binance 全仓 positionRisk 无 per-position margin）；模拟环境（okx sim）的保证金类字段可为无意义恒定值
 fix_and_prevention: ①接新端点先带签名 curl 实测，把真实响应样本贴进单测 fixture（防再次字段想当然）②全仓模式保证金用 notional/leverage 计算③simulated 环境的存疑字段置 0 不展示（宁缺毋假），真金自然恢复④同族检查 gate-api-shape-must-match-sdk
 notes: 检测信号：某字段全环境恒 0（想当然）或恒常数且与名义无关（环境假值）——两种都该触发实测复查
+  - 10-15 变种实证：binance DCI positions 真键名 `purchaseStatus` 非 `status`——错键解析得空串，过滤条件 `Status!=""` 被空值穿透变恒真，三笔 SETTLED 历史单（1441 USDT）混入在仓读面，earn/USDT 虚高 1240→3039；教训②增补：状态类字段空值必须 fail-closed 报错不过滤（@4b4866fe8）
 ---
