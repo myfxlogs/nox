@@ -101,7 +101,6 @@ type XAssetComboAllowSpec struct {
 	MaxGrossUSD   float64
 	NotionalUSD   *float64 // D-367 S3：组合级 sizing 名义额；nil=回退全局 env（表来源映射；env 来源恒 nil）
 	MarginUSD     *float64 // D-010：组合保证金总预算（双腿占用和；与 NotionalUSD 互斥）
-	Trial         bool     // D-550：S2 桥试单行（note 前缀标）——宿主策略退役豁免属员位
 }
 
 // ParseXAssetComboAllow 解析 NOX_XASSET_ALLOW_COMBOS（分号分隔记录，每条
