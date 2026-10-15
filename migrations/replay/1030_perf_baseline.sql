@@ -7,7 +7,7 @@ INSERT INTO app_config (key, value, note) VALUES
  ('baseline_usd', '11317', 'D-535 业绩基线=10-15 实拍 USDT+USD 本金（可动用10949+锁定368：binance DCI 358 + okx 结构化 10）'),
  ('baseline_at', '2026-10-15T00:00:00+08:00', 'D-535 基线时戳（BJ 历日零时口径，与 fin_nav_daily.day_start 同族）'),
  ('baseline_ccy', 'USDT+USD', 'D-534 本金口径——非 U 币种涨跌/计息不入业绩，走披露行'),
- ('perf_flow_provisional', 'false', 'D-535④ 净流扣减依赖 io+划转台账（D-539 已落）；需回标 provisional 时置 true'),
+ ('perf_flow_provisional', 'true', 'D-535④ 净流扣减依赖 io+划转台账——fin_venue_io 仅覆盖 CEX（binance/okx），MT5 充提无 io 行（业主 $1K 提款式事件会成假亏损）→provisional 保留至 mt5 io 覆盖落地后翻 false'),
  ('NOX_CAPITAL_BASE_USD', '11317', 'D-535⑤：D-030 年化分母换本金锚（原缺省 10000）')
 ON CONFLICT (key) DO NOTHING;
 

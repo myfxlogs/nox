@@ -286,3 +286,15 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **对账件**：`ResidualRecon` 搭车 snapHook（快照写径同拍，零新定时器，safego 异步不阻塞写径）。范围=非保证金池（spot/funding/earn）×稳定币——perp/unified 权益随 UPL 逐帧漂移无 UPL 台账对等式必噪（UPL 台账另票）；income 仅计 symbol=ccy 原生币收益。阈=max($1 尘埃 D-529, 0.5%×equity)，越阈→critical 24h 去重带分解（prev→cur/外部流/划转/收益/残差）。
 - **外部充提落点约定**：binance/gate→spot、okx→funding（venue 实际落点偏移会以残差告警暴露=自披露设计）。
 - **io 求和粒度=venue 级**（io 行归 canonical config，池行按 venue 聚合——config 级会错配）。
+
+## D-540 okx/gate 结构化产品持仓入快照（取号纠撞归位——实施席自取 D-537 撞已入库 cfd 覆盖号）
+- **实证**：okx `/sfp/dcd/orders`（在仓单端点）venue 侧恒 500（Spring 错误体，带/不带 state 同败——10 USDT 在仓期间每轮 earn 轮询 first-poll error，快照只剩 savings 2117.82 漏在仓本金）；`/sfp/dcd/order-history` 同凭据 200 含全史行，本端按 state 过滤（EqualFold LIVE/PENDING_SETTLE 在仓，终态/撤单不入）。
+- **同族补齐**：gate `/earn/dual/orders`+`/earn/structured/orders` 同型独立端点并入 earn 池（okx 10 USDT 零行实证同类）；binance DCI 已走 purchaseStatus 径本票不重复。
+- **口径**：结构化在仓本金并入 venue:earn 池 USDT 行（与 binance DCI 混计先例同轨）；state 字段缺=fail-closed 返错不过滤。
+
+## D-541 业绩基线锚+本金口径收益链（取号纠撞归位——实施席自取 D-538 撞已入库自盯票号；D-534/535 落地件）
+- **锚键**：`app_config` 四键——baseline_usd=11317 / baseline_at=2026-10-15T00:00+08:00（BJ 历日零时，与 fin_nav_daily.day_start 同族）/ baseline_ccy=USDT+USD / NOX_CAPITAL_BASE_USD=11317（D-030 年化分母换锚）。写死改须新 D#。
+- **业绩真值式**：perf = 本金池现值（USDT+USD 桶 NAV 合计）− baseline − 外部净流（fin_venue_io deposit+/withdraw−，transfer 不计）。
+- **历史归档**：fin_nav_daily/income_events 加 `archived` 列，<baseline_at 行标 true——可查不入指标（行不删不改值）。
+- **provisional 裁（决策席纠实施席=false 提案）**：fin_venue_io 仅覆盖 CEX 两所，**MT5 充提无 io 行**——业主级提款式事件（今 $1K 例）会成假亏损 → `perf_flow_provisional=true` 保留，MT5 io 覆盖落地后翻 false。
+- **展示面**：GetFinanceOverviewResponse 加 perf_* 字段组（perf_available=false=锚缺如实缺）；investor.tsx 加本金池/基线后业绩两卡（前端零算只渲染）。
