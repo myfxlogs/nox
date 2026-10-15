@@ -196,6 +196,7 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 	acctMon.SetBalanceLedger(balLedger)                                                 // D-571 包B：CEX 余额活账本注入
 	acctMon.SetFundsHook(dashSvc.NotifyFunds)                                           // D-568：MT5 流帧+轮询变更→funds 通知
 	acctMon.SetSnapshotWriter(st.InsertVenueAccountSnapshots)                           // D-132：REST-only CEX 面值变→审计留痕搭车写口
+	acctMon.SetEarnYieldStore(st)                                                       // D-524：earn 池收益增量归属入账（快照写径同拍）
 	dashSvc.SetSecretResolver(a.secRes)                                                 // D-545：密钥管理面+热读轨注入
 	dashSvc.SetCrossCap(cfg.CrossNotionalEquityCap)                                     // D-478 S4
 	cexStreamMgr.TierKickFn = func() { dashSvc.TierKickAll(ctx) }                       // D-478 S4：余额快照→档位重算（恶化转移告警）装配（*pgstore.Store 满足 alertInserter）

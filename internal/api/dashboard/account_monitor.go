@@ -71,6 +71,8 @@ type AccountMonitor struct {
 	// snapWriter D-132：REST-only CEX 面审计留痕搭车写口（SetSnapshotWriter 注入；
 	// nil=未接线跳过）。WS 覆盖键不写（事件径已有），值不变不写（acctSame 去重）。
 	snapWriter func(ctx context.Context, snaps []pgstore.VenueAccountSnapshot) error
+	// yieldStore D-524：earn 池收益增量归属读写面（快照写径同拍；nil=关）。
+	yieldStore EarnYieldStore
 }
 
 // NewAccountMonitor 创建 monitor（D-571 包B：interval 参死净——ticker 已删，事件驱动）。

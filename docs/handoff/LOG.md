@@ -958,3 +958,11 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **②自愈拍刷缓存**：`applyAcctResult` binance:spot 成功路径 `bus.SpotAssets.Put(vk,"USDT",FreeMargin)`——D-523 reconnect_resync/rest_calib REST 实读同拍刷 exec 缓存，手工划入无帧场景一拍自愈（zero 新定时器）。
 - **③同型核查**：dciexec 为 WS 资产缓存唯一执行消费方；okx（unified+funding 合并 REST）/gate（spot accounts REST）rail 全 REST 读径无同遮蔽；capitalview Ledger.Get 自带 TTL 鲜度闸。
 - **锚**：`streambal_test` 四态对拍（化石零→REST 取 1088.80/行龄超阈→REST/快照零→真零零 REST/活值→直回零 REST）+REST 败 fail-closed。
+
+## 2026-10-15 earn 收益增量归属入账（D-524·实施席）
+- **挂点**：`writeRestSnapshot` earn 行新写成功同拍→`attributeEarnYield`（快照写径搭车零新定时器）；装配 `acctMon.SetEarnYieldStore(st)`（nil=关不阻塞）。
+- **口径**：Δ(equity_raw)−已归属流→`income_events income_type='earn_yield'`（venue/venue_type='earn'/symbol=ccy/config_id 实解/tran_id=行 fetched_at ns+序偏移）。已归属流=`pgstore.EarnSubscribeSum`——窗内 fin_dci_order opt_type='EARN' filled 申购量；赎出/划转无台账记轨=无扣减项，负 Δ 如实负收益行（票面③禁臆造）。
+- **基线化**：`PrevSnapshotEquity` 取 `fetched_at<新行` 最近行——无前值=首拍立基线不入账（存量池本金不一笔记收益）。
+- **D-516 系数**：OwnershipShares 表按 (venue,earn,ccy) 乘归属份（binance earn BTC share=0.3334）；未配置=1.0 零变。
+- **如实留续**：venue 逐笔回执面（gate lend_records reinvest/okx savings earnings 明细）现无读径接点——池增量兜底为唯一口径，回执径接入后按「回执>池增量」防双记。
+- **锚**：`earn_yield_test` 五态（首拍零入账/申购流入全冲销零行/复投 +0.0434 归账/赎出 −500 如实负/BTC 系数 0.3334 同乘）；浮点残差 1e-6 档零防噪声行。

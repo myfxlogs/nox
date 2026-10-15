@@ -112,6 +112,7 @@ func (m *AccountMonitor) writeRestSnapshot(ctx context.Context, vk string, prev,
 		log.Printf("[account-mon] %s rest_poll snapshot write: %v", vk, err)
 		return false
 	}
+	m.attributeEarnYield(ctx, rows) // D-524：earn 池行新写同拍增量归属入账
 	return true
 }
 
