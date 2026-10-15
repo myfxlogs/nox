@@ -146,8 +146,8 @@ func stepPaperDelivery(ctx context.Context, st *pgstore.Store, srcs []Source, ro
 			VenueTypeA: "futures", VenueTypeB: "spot",
 			Symbol: c.FutSym, Side: "perp_delivery", Structure: "perp_delivery",
 			EntryFundingAnn: c.BasisAnn, EntryBasisBps: &bps, LastBasisBps: &bps,
-			QtyUSD:             scan.PaperQtyUSD,
-			EstRoundTripFeeUSD: scan.PaperSpotPerpFeeUSD(ctx, st, c.Venue, c.Venue, scan.PaperQtyUSD),
+			QtyUSD:             scan.PaperQtyUSDAt(ctx, st),
+			EstRoundTripFeeUSD: scan.PaperSpotPerpFeeUSD(ctx, st, c.Venue, c.Venue, scan.PaperQtyUSDAt(ctx, st)),
 		}
 		if c.SpreadBps == nil {
 			r.Note = "滑点未知"

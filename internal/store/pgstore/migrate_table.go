@@ -225,4 +225,5 @@ var migrationFiles = []struct {
 	{1029, migrations.VenueIOTransferWalletSQL, false},        // D-536①：fin_venue_io 内部划转列
 	{1030, migrations.PerfBaselineSQL, false},                 // D-535：业绩基线锚+历史行归档
 	{1031, migrations.SnapshotKeyTsIdxSQL, false},             // 快照键+时序覆盖索引（ExplorerIdleFunds LATERAL 化）
+	{1032, migrations.PaperQtyParamSQL, false},                // D-546：纸面名义额参数化
 }

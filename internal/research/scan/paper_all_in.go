@@ -80,7 +80,7 @@ func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, 
 		VenueA: mtVenue, VenueB: cexVenue, Symbol: r.Canonical, Side: side,
 		// D-060②：entry 列记入场闸判定值（7d 均值净 carry=NetAnnual）——原记瞬时值
 		// FundingInst 周末开仓落 0 → 面板承诺列恒「—」读不出承诺（D-034 展示列口径让位承诺口径）。
-		EntryFundingAnn: r.NetAnnual, QtyUSD: PaperQtyUSD,
+		EntryFundingAnn: r.NetAnnual, QtyUSD: PaperQtyUSDAt(ctx, st),
 		Structure: r.Structure, MtVenue: &mv,
 		Note: "MT佣金未计（无常数实值）", // D-474a S2：分腿真费佣金项缺省注记
 	}
@@ -98,7 +98,7 @@ func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, 
 		}
 	}
 	// cex 往返 2 笔 + MT 腿簿实算点差往返 + 佣金常数；簿缺→NULL 缺账。
-	p.EstRoundTripFeeUSD = paperCfdFeeUSD(ctx, st, r.CexVenue, PaperQtyUSD, spread)
+	p.EstRoundTripFeeUSD = paperCfdFeeUSD(ctx, st, r.CexVenue, PaperQtyUSDAt(ctx, st), spread)
 	return st.InsertPaperSpotCarry(ctx, p)
 }
 

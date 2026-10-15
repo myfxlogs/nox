@@ -100,3 +100,6 @@ var PerfBaselineSQL string // D-535：业绩基线锚+历史行归档（nav_dail
 
 //go:embed replay/1031_snapshot_key_ts_idx.sql
 var SnapshotKeyTsIdxSQL string // 快照键+时序覆盖索引（每键最新行 LATERAL 探针化）
+
+//go:embed replay/1032_paper_qty_param.sql
+var PaperQtyParamSQL string // D-546：纸面名义额参数化（app_config paper_qty_usd）

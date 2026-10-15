@@ -81,6 +81,11 @@ func TestDeliveryStep(t *testing.T) {
 		WHERE symbol IN ('BTCUSDT_261225','SOL-USD_UM-261030','ETH-USD_UM-261030','XAUUSDT_261225')`); err != nil {
 		t.Fatal(err)
 	}
+	// D-546 锚兼容：钉参数回 $1000 档（迁移 1032 种 5000——Δbasis 数值断言按 1000 写）。
+	if _, err := st.Pool().Exec(ctx,
+		`UPDATE app_config SET value='1000' WHERE key='paper_qty_usd'`); err != nil {
+		t.Fatal(err)
+	}
 
 	// 开仓：滑点源返回空 map→BTCUSDT_261225 行标「滑点未知」
 	opened, _, err := stepPaperDelivery(ctx, st, srcs, rows, now)

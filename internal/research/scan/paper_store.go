@@ -42,6 +42,8 @@ type PaperStore interface {
 	TicksWindow(ctx context.Context, venue, symbol string, since time.Time) ([]pgstore.TickRow, error)
 	// 费率源 exchange_configs.taker_fee_bps（*pgstore.Store 原生实现；缺→拒填）。
 	ExchangeTakerFeeBps(ctx context.Context, venue, venueType string) (float64, bool, error)
+	// AppConfigFloat D-546：paper_qty_usd 名义额参数读口（PG 单源）。
+	AppConfigFloat(ctx context.Context, key string) (float64, bool, error)
 	// ListAssetEquiv D-043：等价类映射（class 键行 legs/pair 解析单源；*pgstore.Store 原生实现）。
 	ListAssetEquiv(ctx context.Context) ([]pgstore.AssetEquivEntry, error)
 }
