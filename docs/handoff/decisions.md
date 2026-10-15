@@ -344,3 +344,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **approved ×2**：#505 cfd_swap_hedged XAUUSD short×binance PAXGUSDT（D-532 取证唯一跑赢基线的对冲形态）；#7 okx FUTURES USD_UM_XPERP（品类已由 perp_delivery 纸面轨实盘覆盖——侦测→批准→在跑闭环）。**后果**：S2 票按触发条件转待领。
 - **rejected ×7**：裸 cfd_swap 方向性单腿（#51/52/56/78/81/82/83 AUDJPY/BRENT/XAUUSD 等）——裸方向敞口在套利/对冲息差口径外（D-030 风控优先），同族对冲形态已批且严格占优；category_key 幂等抑重推由表结构承担。
 - **留 proposed ×11**：#5 binance TRADIFI_PERPETUAL（对 MT5 指数 CFD 跨所对冲腿未取证）；其余 XAGUSD/XAUUSD 对冲变体同族未逐腿取证——待 S2 评估或后续证据。
+
+## D-548 S2 桥复审裁（试单名义额+腿位方向——悬置项落档）
+- **试单名义额**：`app_config.s2_trial_notional_usd=200`（迁移 1033 种子；本金 ~1.8%/结构——盖 venue 最小名义与费率信噪，试错损失噪音级；改值须新 D#）。钱径参数**禁代码字面量**——键缺/破值 fail-closed 拒桥（无兜底常量）。
+- **复审修（实施缺陷）**：`category_key` 的 side 字段原实现只进注记未进映射——`long` 向假设会错桥成反向仓（真金白名单径方向性 bug）。修=side 进腿位映射（short=空 CFD 收 swap/多 CEX 腿；long 反之；其余拒桥+warn），`TestS2Bridge_LongSideLegs` 钉死。
+- **MaxLongQty/ShortQty=5** base 单位宽松（5oz 金≈$13k 远超 gross 帽）——照准：MaxGrossUSD 先绑，腿量帽仅防单腿失衡，不视为敞口闸。

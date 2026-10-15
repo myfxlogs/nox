@@ -2,8 +2,8 @@
 // fin_opp_hypothesis status='approved' 行 → 可跑参数入册。族→沉点映射：
 //
 //	cfd_swap_hedged|v|sym|side|cven|csym → xasset_allow_combos 白名单行
-//	  （小额试单 notional=$500/上限 gross=$500——额度封顶设计稿 §8 待决策项
-//	  暂取保守值随行注记，decision 落 D# 后改 PG 键）。
+//	  （试单名义额=app_config s2_trial_notional_usd PG 读——D-548 裁定 $200，
+//	  side 进腿位映射：short=空CFD收swap/多CEX腿，long 反之，未知拒桥）。
 //	okx FUTURES *_XPERP（USD_UM 日历基差）→ perp_delivery 纸面轨已覆盖
 //	  （wip/okx-um-basis 并入面）→ 标 trialing 注记去向即可，零新参数。
 //	family_fit='generic_yield' → 参数面 schema 未建 → 告警待立施工票
@@ -23,7 +23,19 @@ import (
 	"nox/internal/store/pgstore"
 )
 
-const s2TrialNotionalUSD = 500.0 // 小额试单额度（设计稿「额度封顶」待定 D# 前保守值）
+// s2TrialNotionalAt 试单名义额读口（D-548）：app_config `s2_trial_notional_usd`
+// PG 真值（迁移 1033 种 200）。钱径闸 fail-closed——键缺/破值→拒桥返 err，
+// 不硬编码兜底（额度=真金敞口上限，禁代码字面量）。
+func s2TrialNotionalAt(ctx context.Context, st *pgstore.Store) (float64, error) {
+	v, ok, err := st.AppConfigFloat(ctx, "s2_trial_notional_usd")
+	if err != nil {
+		return 0, err
+	}
+	if !ok || v <= 0 {
+		return 0, fmt.Errorf("s2_trial_notional_usd 键缺/破值（ok=%v v=%v）——拒桥", ok, v)
+	}
+	return v, nil
+}
 
 // s2Bridge approved 假设→可跑桥主径（RunOnce 拍内调用）。
 func s2Bridge(ctx context.Context, st *pgstore.Store) {
@@ -39,20 +51,42 @@ func s2Bridge(ctx context.Context, st *pgstore.Store) {
 	}
 }
 
+// s2LegCombo cfd_swap_hedged 方向→腿位映射（D-548 复审修）：category_key
+// side=CFD 腿方向。short=空 CFD 收 swap/多 CEX 腿；long=反之。其余方向
+// 拒桥（不臆造腿位——方向错=真金反向仓）。
+func s2LegCombo(h pgstore.OppHypothesis, mtVenue, mtSym, side, cexVenue, cexSym string, notional float64) (*pgstore.XAssetComboInsert, error) {
+	c := &pgstore.XAssetComboInsert{
+		MaxLongQty: 5, MaxShortQty: 5, // 腿量上限（base 单位；gross 上限先绑）
+		MaxGrossUSD: notional, NotionalUSD: &notional,
+		Note: fmt.Sprintf("S2桥 假设#%d（%s腿 %s side）", h.ID, mtSym, side),
+	}
+	switch side {
+	case "short":
+		c.CanonicalBuy, c.VenueBuy = cexSym, cexVenue+":perp" // CEX 腿=funding 收付侧
+		c.CanonicalSell, c.VenueSell = mtSym, mtVenue+":mt5"  // MT 腿=swap 收息侧
+	case "long":
+		c.CanonicalBuy, c.VenueBuy = mtSym, mtVenue+":mt5"
+		c.CanonicalSell, c.VenueSell = cexSym, cexVenue+":perp"
+	default:
+		return nil, fmt.Errorf("side=%s 方向未知拒桥", side)
+	}
+	return c, nil
+}
+
 func bridgeOne(ctx context.Context, st *pgstore.Store, h pgstore.OppHypothesis) error {
 	parts := strings.Split(h.CategoryKey, "|")
 	switch {
 	case parts[0] == "cfd_swap_hedged" && len(parts) == 6:
 		// {mtVenue}|{mtSym}|{side}|{cexVenue}|{cexSym}
 		mtVenue, mtSym, side, cexVenue, cexSym := parts[1], parts[2], parts[3], parts[4], parts[5]
-		combo := &pgstore.XAssetComboInsert{
-			CanonicalBuy: cexSym, CanonicalSell: mtSym,
-			VenueBuy:   cexVenue + ":perp", // CEX 腿=funding 收付侧（P0 口径 perp）
-			VenueSell:  mtVenue + ":mt5",   // MT 腿=swap 收息侧
-			MaxLongQty: 5, MaxShortQty: 5,  // 试单腿量封顶（base 单位；gross 上限双闸）
-			MaxGrossUSD: s2TrialNotionalUSD,
-			NotionalUSD: &[]float64{s2TrialNotionalUSD}[0],
-			Note:        fmt.Sprintf("S2桥 假设#%d（%s腿 %s side）", h.ID, mtSym, side),
+		notional, nerr := s2TrialNotionalAt(ctx, st)
+		if nerr != nil {
+			return nerr
+		}
+		combo, cerr := s2LegCombo(h, mtVenue, mtSym, side, cexVenue, cexSym, notional)
+		if cerr != nil {
+			return st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
+				"S2桥：approved 假设#%d（%s）%v", h.ID, h.CategoryKey, cerr), 24*time.Hour)
 		}
 		if _, err := st.InsertXAssetAllowCombo(ctx, combo); err != nil && err != pgstore.ErrXAssetComboExists {
 			return fmt.Errorf("allow combo insert: %w", err)
@@ -62,7 +96,7 @@ func bridgeOne(ctx context.Context, st *pgstore.Store, h pgstore.OppHypothesis) 
 		}
 		return st.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
 			"S2桥：approved 假设#%d（%s）→ xasset_allow_combos 白名单行已入册（notional=$%.0f 试单封顶）",
-			h.ID, h.CategoryKey, s2TrialNotionalUSD))
+			h.ID, h.CategoryKey, notional))
 	case h.InstType == "FUTURES" && strings.HasSuffix(h.Shape, "_XPERP"):
 		// okx USD_UM 日历基差——perp_delivery 纸面轨覆盖（同 canonical 配对+Δbasis 记账已产）。
 		if err := st.MarkHypothesisTrialing(ctx, h.ID, "perp_delivery 纸面轨已覆盖（okx USD_UM）"); err != nil {

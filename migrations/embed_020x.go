@@ -103,3 +103,6 @@ var SnapshotKeyTsIdxSQL string // 快照键+时序覆盖索引（每键最新行
 
 //go:embed replay/1032_paper_qty_param.sql
 var PaperQtyParamSQL string // D-546：纸面名义额参数化（app_config paper_qty_usd）
+
+//go:embed replay/1033_s2_trial_notional.sql
+var S2TrialNotionalSQL string // D-548：S2 桥试单名义额参数化（app_config s2_trial_notional_usd）
