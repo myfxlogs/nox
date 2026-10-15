@@ -122,3 +122,5 @@
 <!-- 复审收口 10-15（@8b434a4a3 部署拍 SG 实拍）：spot/USDT 0.0504=真零尘埃、BTC 0.01277121/BFUSD 1.0987 与业主 App 全对、LD* 假影除；DCI 票返修见本表行 -->
 
 <!-- 复审收口 10-15 三票：CI run 38694601088 全绿（D514 spread seed+迁移幂等生效）；check-lines 软警清零；D-530 取证核——positions=autotrade 直产与提案 request_id 键域不相交、params->>position_id 零写径，回链恒空属实，删码照准；SG 已部署 -->
+
+<!-- 决策席 10-16 收口：delivery-grad @71cee6b92 / delivery-flap @3a5afceb6 / mt-io @7a1c68beb 三件均为 master 祖先且已部署（nox-core up 9h）——「两票未合并未部署」回执为施工时态，现已不成立。flap 修源 24h 验收点过：data_lost 末次=10-15 04:05Z（修源部署前 churn 残留，部署后零发、当前容器 9h 零发）；okx 候选 4 行（BTC/XAU/ETH-261030、ETH-261127 USD_UM）12:37Z 进 cap=8 在册（binance 4+okx 4 满载）。 -->
