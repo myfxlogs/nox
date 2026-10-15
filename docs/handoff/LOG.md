@@ -1073,3 +1073,24 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **自盯次缺陷（票②预断命中）**：data_lost 58 行退出零告警（paperExitNote 只注 note）；warnMonitorBookAbsent 哨兵 6d 零推送——两自盯面未捕断链。
 - **裁定 D-532**（decisions.md）：修喂流自愈为主（立票①簿/账源覆盖查证②断链告警补口），qty_usd 名义额另票评估；all-in 判据/合格矩阵零动。
 - 交付=STATE 翻✅+D-532 裁定行+新立两票行；零代码改动故无机检项。
+
+## 2026-10-15 毕业经济性敏感性取证（实施席——产出=accrued:fee 可达线分析，判据零动）
+
+**输入口径**：SG `paper_spot_carry` 实拍（34 active + exited 93）；fee=est_round_trip_fee_usd（分腿真费率模型），accrued=逐轮累计。
+
+### 可达线表（active 行按 needed_ann 升序 top）
+
+| 结构 | 行 | 均 qty | 均 accrued | 均 fee | acc:fee | 均 ann | 均龄(d) |
+|---|---|---|---|---|---|---|---|
+| long_cfd_short_perp | 13 | 1000 | 1.47 | 0.96（均含负费行偏置） | 0.54 | 26.2 | 3.5 |
+| short_cfd_long_perp | 11 | 1000 | 2.31 | −11.11 | 0.11 | −6.7 | 3.4 |
+| perp_delivery | 8 | 3000 | −0.07 | 8.95 | −0.03 | 17.5 | 0.2 |
+| perp_perp | 3 | 1000 | 0.00 | 1.90 | 0.00 | 29.5 | 0.2 |
+
+### 读数
+
+- **可达区间**：JP225 类（ann 89%）1d 内回本；XPT（22%）≈5d；SILVER（0.7–10.7%）16–197d——已超毕业观察窗；perp_delivery binance 档 ann 4–6% 需 20–25d **但 T−1 到期窗强退（交割 90d 级→名义可活到）**，现龄 0.2d 待实证能否活到回本日；perp_perp 0.4d 均龄 accrued=0（funding 差累积未开闸）。
+- **needed_ann 分布**（fee/(qty·days/365)×100 反解）：多数行 20–600%——现信号带（4–30% ann）**结构性盖不住**；qty 无关（线性模型 accrued/fee 同步缩放，D-546 注记已实锤）。
+- **新病灶**：`short_cfd_long_perp`/`long_cfd_short_perp` 多行 fee<0（−2.5~−39）——est_round_trip_fee 为负=纸面费模型出反值（spread 项取负或腿序倒挂），fee 负值行把 structure 均值拉穿，**费率账面自身有病先修账再判经济性**（立票面）。
+- **结论行**：在当前信号带 accrued:fee 可达线=ann≥~15–20%×持有≥10d 组合；现 active 面仅 JP225/XPT 两行在可达域，其余结构性不达——**判据如实，病灶在信号强度×持有期×账面负费三处，非名义额**。
+
