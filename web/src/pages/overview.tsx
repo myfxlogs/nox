@@ -67,7 +67,7 @@ export default function OverviewPage() {
         <div className="card"><div className="k">本金合计</div><div className="v">{b ? fmtUsd(b.principalTotalUsd) : "—"}</div></div>
         <div className="card"><div className="k">可动用</div><div className="v">{b ? fmtUsd(b.principalIdleUsd) : "—"}</div></div>
         <div className="card"><div className="k">在息</div><div className="v">{b ? fmtUsd(b.principalEarningUsd) : "—"}</div></div>
-        <div className="card"><div className="k">锁定</div><div className="v">{b ? fmtUsd(b.principalLockedUsd) : "—"}</div>
+        <div className="card"><div className="k">其中锁定（含于在息）</div><div className="v">{b ? fmtUsd(b.principalLockedUsd) : "—"}</div>
           {b?.earliestRelease && <div className="muted" style={{fontSize:"12px"}}>最早回笼 {utc(timestampDate(b.earliestRelease))}</div>}
         </div>
       </div>

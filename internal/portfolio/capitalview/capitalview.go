@@ -221,7 +221,22 @@ func (v *View) calibrate(ctx context.Context, venueKey string, force, exact bool
 	if v.d.Ledger != nil {
 		v.d.Ledger.Put(poolKey, avail, acct.Equity, acct.Currency, SrcRest, at)
 	}
-	v.writeCalibSnapshot(ctx, poolKey, avail, acct.Equity, acct.Currency, at, acct.Simulated) // D-523①
+	// 快照行写本币真值：cex 分币池 acct.Equity=Σdetails[*].eqUsd（全币 USD 总权益，
+	// 保证金口径用）挂 acct.Currency 单币标签即伪账（okx unified 实证：rest_calib
+	// 写 43.5 vs okx_event 写 availBal 3.4e-9——同键双写致 NAV 池 flap ±43.5）。
+	// 资金可用性 Ledger/liveFunds 语义零动，仅校准快照行收窄到本币切片。
+	calibAvail, calibEq := avail, acct.Equity
+	if acct.AssetType == "cex" {
+		calibAvail = acct.FreeQtyByCcy[acct.Currency] // 未填→0 诚实（与 rest_poll 分币行同径）
+		calibEq = calibAvail
+		for _, h := range acct.Holdings {
+			if h.Ccy == acct.Currency {
+				calibEq = h.UsdtValue // 本币权益切片（venue 已供 eqUsd；USDT 1:1 同值）
+				break
+			}
+		}
+	}
+	v.writeCalibSnapshot(ctx, poolKey, calibAvail, calibEq, acct.Currency, at, acct.Simulated) // D-523①
 	return liveFunds(bus.BalanceEntry{
 		VenueKey: poolKey, Available: avail, Equity: acct.Equity,
 		Currency: acct.Currency, At: at, Src: SrcRest,

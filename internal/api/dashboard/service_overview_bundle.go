@@ -36,7 +36,10 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 		resp.PrincipalIdleUsd = idle
 		resp.PrincipalEarningUsd = earning
 	}
-	// 锁定档=DCI 在仓单（status=filled 本金 qty 按 invest_ccy USDT 计）；最早回笼=最小到期。
+	// 锁定档=在仓单披露子行（不进本金总计——D-543R1 实证 17,199 双计：fin_dci_order
+	// 的 filled 行含 earn 申购单（cash_mgmt/earn_apr_lending/结构化），其本金已在
+	// venue earn 快照桶内，再叠加必双计）。若某产品本金不在任何快照桶=快照覆盖缺口，
+	// 该修快照写径而非订单加总。最早回笼=最小到期（信息面）。
 	locked := 0.0
 	var earliest *time.Time
 	if orders, err := s.store.ListDCIOrders(ctx, 100); err == nil {
@@ -60,11 +63,11 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 			})
 		}
 	}
-	resp.PrincipalLockedUsd = locked
+	resp.PrincipalLockedUsd = locked // 披露值：在息面中锁定子档，非第三桶钱
 	if earliest != nil {
 		resp.EarliestRelease = timestamppb.New(*earliest)
 	}
-	resp.PrincipalTotalUsd = resp.PrincipalIdleUsd + resp.PrincipalEarningUsd + locked
+	resp.PrincipalTotalUsd = resp.PrincipalIdleUsd + resp.PrincipalEarningUsd // 快照池即账本真值
 	// §2 业绩（D-535 锚面——缺锚/读败 available=false 如实缺）。
 	if perf, err := s.store.PerfSinceBaseline(ctx, now); err == nil && perf != nil {
 		resp.PerfAvailable = true

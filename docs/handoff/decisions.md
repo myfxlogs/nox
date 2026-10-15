@@ -308,3 +308,9 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **实证**：基线 11,317 为手工清点（10-15 07:19 UTC 拍），漏记 `okx unified` 账户 ~$43.5（该户 9-20 起恒有余额）。部署后业绩式显示 +37.41 的分解：+43.5 漏记回补 +10.1 结构化入桶 −6.4 DCI#11 实亏 +0.2 利息 −0.16 浮动 → 真业绩 ≈ −6.2 非 +37。
 - **修正**：baseline_usd=**11360.5**（11317+43.5），baseline_at 不变。规则加固——本金锚值今后一律取「管道路径实算值」非手工清点（快照鲜度过滤+fossil 剔除语义与读径一致）。
 - **次生发现立据**：okx unified/USDT 快照行双写振荡（43.6↔3.4e-9）——两个产者交替写同键，NAV 读最新值随写序 flap ±43；binance perp 快照曾断采 8 天（10-07 化石行）。两症转票由实施席查。
+
+## D-543R1 基线修正翻案 + 总览双计/快照错标三修（业主指正+生产 src 列实证）
+- **翻案**：D-543 的 +43.5「okx unified 漏记」**不成立**——src 列取证：`okx_event`（WS 事件写）balance=3.4e-9（真 USDT availBal），`rest_calib`/`reconnect_resync` 写 19.97~43.7（Σdetails[*].eqUsd=全币 USD 总权益，挂 USDT 标签=伪账；业主确认该户全是非 U 币）。baseline_usd 回滚 **11,317**（手工清点原值即真）。
+- **总览 17,199 根因**：§1 锁定档把 `fin_dci_order` filled 行 qty 叠加进总计，但 filled 行含 earn 申购单（cash_mgmt/earn_apr_lending/结构化合计 5,878）——同一笔钱已在 earn 快照桶计过 → 双计 ~5.8k。修法：总计=idle+earning（快照池即真值），锁定改披露子行「其中锁定（含于在息）」。
+- **快照写径修**：`capitalview` REST 校准写行收窄到本币切片（cex 键：avail=FreeQtyByCcy[ccy]、eq=Holdings[ccy].UsdtValue 或 availBal）；MT 键 equity 回退语义保留。资金可用性 Ledger 口径零动。
+- **业主令方向**：投资人面读径不能押快照可靠性——事件驱动快照（okx_event/binance balanceUpdate 已有写口）升权威源、rest_calib 降为愈合补写；事件覆盖缺口与 binance perp 8 天断采立票查。
