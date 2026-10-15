@@ -219,6 +219,28 @@ func (r *okxEarnRail) FreeBalance(ctx context.Context, ccy string) (float64, err
 	return u + f, nil
 }
 
+// savingsAvail `GET /finance/savings/balance?ccy=` → data[].amt（余币宝在册
+// 可赎面——D-549 装配第三源实读；行缺=零在册如实 0，读败 fail-closed 不赎不申）。
+func (r *okxEarnRail) savingsAvail(ctx context.Context, ccy string) (float64, error) {
+	data, err := r.req(ctx, http.MethodGet, "/api/v5/finance/savings/balance?ccy="+ccy, "")
+	if err != nil {
+		return 0, err
+	}
+	var rows []struct {
+		Ccy string `json:"ccy"`
+		Amt string `json:"amt"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return 0, fmt.Errorf("okx savings balance 解析: %w", err)
+	}
+	for _, row := range rows {
+		if row.Ccy == ccy {
+			return parseF(row.Amt), nil
+		}
+	}
+	return 0, nil
+}
+
 // unifiedAvail `GET /account/balance?ccy=` → data[].details[].availBal（交易户）。
 func (r *okxEarnRail) unifiedAvail(ctx context.Context, ccy string) (float64, error) {
 	data, err := r.req(ctx, http.MethodGet, "/api/v5/account/balance?ccy="+ccy, "")
