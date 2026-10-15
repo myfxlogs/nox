@@ -19,6 +19,7 @@ func accrueExitMtmPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 	longBook, shortBook map[string]mtSwap, silentMt map[string]bool, now time.Time) (int, error) {
 	exited := 0
 	noFactWarn := 0
+	var dataLost []string // D-535①
 	for _, p := range accrable {
 		if p.Structure != "cfd_cfd" {
 			continue
@@ -68,6 +69,7 @@ func accrueExitMtmPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 				}
 				paperExitNote(ctx, st, p.ID, "data_lost", 0, 0, 0, miss)
 				exited++
+				dataLost = append(dataLost, p.VenuePair()+"|"+p.Symbol)
 				continue
 			}
 			prev := 0.0
@@ -136,6 +138,7 @@ func accrueExitMtmPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			return exited, fmt.Errorf("mtm paper step: accrue %d: %w", p.ID, err)
 		}
 	}
+	WarnDataLostExits(ctx, st, "mtm", dataLost) // D-535①
 	if noFactWarn > 0 {
 		log.Printf("[mtm paper] 率源缺 fail-closed 跳过 accrue: %d 行", noFactWarn)
 	}

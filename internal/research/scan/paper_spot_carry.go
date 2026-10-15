@@ -145,6 +145,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 	}
 	// ②累积（active+demo；D-474a S1 结算对齐逐期实率）+ ③退出（仅 active）
 	noFactWarn := 0
+	var dataLost []string // D-535①：data_lost 聚合 warn 收集（一轮至多一条）
 	for _, p := range accrable {
 		// 异结构行各归其轨（cfd/mtm/cex/perp/delivery 轨自管累积退出）——本环缺过滤
 		// 曾把异轨行按「universe 缺席」计 miss 并 data_lost 误杀（D-534：58 行全记
@@ -198,6 +199,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 				}
 				paperExitNote(ctx, st, p.ID, "data_lost", 0, lastFundingAnnOf(p), 0, miss)
 				exited++
+				dataLost = append(dataLost, p.VenuePair()+"|"+p.Symbol)
 				continue
 			}
 			prev := 0.0
@@ -266,6 +268,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 			return opened, exited, fmt.Errorf("paper step: accrue %d: %w", p.ID, err)
 		}
 	}
+	WarnDataLostExits(ctx, st, "spot", dataLost) // D-535①
 	if noFactWarn > 0 {
 		log.Printf("[paper spot] 边界/率源缺 fail-closed 跳过 accrue: %d 行", noFactWarn)
 	}

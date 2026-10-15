@@ -155,6 +155,7 @@ func stepPaperDelivery(ctx context.Context, st *pgstore.Store, srcs []Source, ro
 			futBySym[n.Venue+"|"+n.Symbol] = n
 		}
 	}
+	var dataLost []string // D-535①：data_lost 聚合 warn（一轮至多一条）
 	for _, p := range accrable {
 		if p.Structure != "perp_delivery" {
 			continue
@@ -168,6 +169,7 @@ func stepPaperDelivery(ctx context.Context, st *pgstore.Store, srcs []Source, ro
 					return opened, exited, fmt.Errorf("delivery paper step: exit miss %d: %w", p.ID, err)
 				}
 				exited++
+				dataLost = append(dataLost, p.VenuePair()+"|"+p.Symbol)
 				continue
 			}
 			lastAnn := 0.0
@@ -202,6 +204,7 @@ func stepPaperDelivery(ctx context.Context, st *pgstore.Store, srcs []Source, ro
 			return opened, exited, fmt.Errorf("delivery paper step: accrue %d: %w", p.ID, err)
 		}
 	}
+	scan.WarnDataLostExits(ctx, st, "perp_delivery", dataLost) // D-535①
 	return opened, exited, nil
 }
 
