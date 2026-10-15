@@ -58,7 +58,7 @@ func s2LegCombo(h pgstore.OppHypothesis, mtVenue, mtSym, side, cexVenue, cexSym 
 	c := &pgstore.XAssetComboInsert{
 		MaxLongQty: 5, MaxShortQty: 5, // 腿量上限（base 单位；gross 上限先绑）
 		MaxGrossUSD: notional, NotionalUSD: &notional,
-		Note: fmt.Sprintf("S2桥 假设#%d（%s腿 %s side）", h.ID, mtSym, side),
+		Note: fmt.Sprintf("%s 假设#%d（%s腿 %s side）", pgstore.XAssetTrialNotePrefix, h.ID, mtSym, side),
 	}
 	switch side {
 	case "short":

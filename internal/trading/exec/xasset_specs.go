@@ -2,7 +2,11 @@
 // engine 热重载 ReloadXAssetAllowCombos 同源禁复制；exec→pgstore 既有依赖方向合法）。
 package exec
 
-import "nox/internal/store/pgstore"
+import (
+	"strings"
+
+	"nox/internal/store/pgstore"
+)
 
 // XAssetSpecsFromRows pgstore 白名单行映射为 exec spec（结构同构零信息损失约束同
 // pgstore.XAssetAllowRow）。D-367 S3 加载期校验（fail-closed 零信任）规则单点在此：
@@ -29,6 +33,7 @@ func XAssetSpecsFromRows(rows []pgstore.XAssetAllowRow) (specs []XAssetComboAllo
 			VenueBuy: r.VenueBuy, VenueSell: r.VenueSell,
 			MaxLongQty: r.MaxLongQty, MaxShortQty: r.MaxShortQty, MaxGrossUSD: r.MaxGrossUSD,
 			NotionalUSD: r.NotionalUSD, MarginUSD: r.MarginUSD,
+			Trial: strings.HasPrefix(r.Note, pgstore.XAssetTrialNotePrefix),
 		})
 	}
 	return specs, dropped

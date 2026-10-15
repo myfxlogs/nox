@@ -3,6 +3,7 @@ package engine
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 
@@ -25,6 +26,9 @@ type AssetEquivView interface {
 // bool 返回值仅保留以维持测试语义（fake 仍按 id 去重判定 inserted）。
 type opportunityStore interface {
 	UpsertOpportunity(ctx context.Context, o *pgstore.Opportunity) (bool, error)
+	// IsTrialXAssetCombo D-550 试单属员判（S2 桥写组合行 note 前缀标）——
+	// 宿主策略退役掐流点的组合级豁免判据；pgstore.Store 生产实现，测试 fake 同实。
+	IsTrialXAssetCombo(ctx context.Context, canonicalBuy, canonicalSell, venueKeyBuy, venueKeySell, environment string) (bool, error)
 }
 
 // Engine 事件驱动管线：QuoteBus 报价事件 → 检测 → 评估 → 存储。
@@ -169,7 +173,7 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 		}
 		// §1 自动淘汰闭环：strategy_stats.disabled=true 的策略产出不入库——系统已自证亏损，
 		// 展示假机会误导。与 gate 层 disabled 检查呼应（gate 阻执行，此处阻产出+展示）。
-		if e.isStrategyDisabled(o.Type) {
+		if e.isStrategyDisabled(o.Type) && !e.trialComboExempt(ctx, o) {
 			continue
 		}
 		// round-trip 入库门槛：CROSS_VENUE net 为一次性 bps，低于门槛不入库（从源头消除垃圾）。
@@ -229,6 +233,22 @@ func netStoreGate(o *pgstore.Opportunity, e *Engine) bool {
 	default:
 		return true
 	}
+}
+
+// trialComboExempt D-550：退役策略产出的试单属员豁免——机会四元组精确命中
+// S2 桥写组合行（note 'S2桥%' enabled）才放行入库；未命中/查询败 → false
+// （fail-closed 维持掐流，存量组合域退役语义不破）。
+func (e *Engine) trialComboExempt(ctx context.Context, o *pgstore.Opportunity) bool {
+	sell := o.Canonical
+	if o.CanonicalSell != nil && *o.CanonicalSell != "" {
+		sell = *o.CanonicalSell
+	}
+	ok, err := e.store.IsTrialXAssetCombo(ctx, o.Canonical, sell, o.VenueBuy, o.VenueSell, "")
+	if err != nil {
+		log.Printf("[engine] trial combo check %s: %v", o.ID, err)
+		return false
+	}
+	return ok
 }
 
 func findQuote(snapshot map[string]map[string]bus.Quote, canonical, venueKey string) *bus.Quote {
