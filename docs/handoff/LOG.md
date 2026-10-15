@@ -966,3 +966,10 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 - **D-516 系数**：OwnershipShares 表按 (venue,earn,ccy) 乘归属份（binance earn BTC share=0.3334）；未配置=1.0 零变。
 - **如实留续**：venue 逐笔回执面（gate lend_records reinvest/okx savings earnings 明细）现无读径接点——池增量兜底为唯一口径，回执径接入后按「回执>池增量」防双记。
 - **锚**：`earn_yield_test` 五态（首拍零入账/申购流入全冲销零行/复投 +0.0434 归账/赎出 −500 如实负/BTC 系数 0.3334 同乘）；浮点残差 1e-6 档零防噪声行。
+
+## 2026-10-15 DCI 选档尾险定价闸（D-526·实施席）
+- **σ 源**：`exchange.SigmaDaily`——binance `/fapi/v1/klines?interval=1d` / okx `history-candles?bar=1D` 日 K 对数收益样本 stddev（窗口 `dci_sigma_window_days` app_config 可调缺省 28d；统计参考用途 D-004 豁免，源全败→fail-closed）。
+- **σ 界**：`gate.SigmaTailParams`（dci_put_otm_k/dci_call_otm_k/dci_tenor_max_days 约束行，迁移 1027 落 k=1.5/30d）+`SigmaBoundRatio`=1∓kσ√天数；界行缺/σ 缺→constraint 缺口 fail-closed（提案层 bound=0 无档、执行层 gap 拒单）。旧 dci_*_otm_bound 平界行弃用（BoundSubject 改指新键）。
+- **选档=net 最优**：提案层 `dciPremiumGate` 与执行层 tryLeg/okx_dci 双侧——net=apy_ann−`TailCostAnn`（BS 近似 r=0：持有期波动=σ√天数）取最大；最优档 net≤0→如实拒并带 σ/界/尾损三要素注记（票面⑤）。
+- **名义帽**：`dci_open_notional_cap_usdt`（字面 1500≈NAV_USDT×0.15）——跨 venue OutstandingDCIQty(USDT) 合计≥cap→不产提案；行缺 fail-closed。
+- **锚**：gate 单测钉 SG 验收口径（σ=3.5%/16d→界 0.79 域、浅档尾损盖溢价、深档衰减、参数缺+Inf）；存量锚全量适配（testSigma 桩=0.001 宽界）；D514 溢价闸锚σ 注口后照旧绿。

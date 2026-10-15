@@ -21,7 +21,7 @@ import (
 
 // tryLegOKX okx 单腿：合并余额×share→qty、达标档选取→幂等→funding 短差划转
 // →dcd/quote→dcd/trade→order-status 回执→fin_dci_order venue=okx 同形落账。
-func (e *Executor) tryLegOKX(ctx context.Context, l gate.DCILeg, share float64, tenorCap int, bound, spot float64, propID *int64) (string, error) {
+func (e *Executor) tryLegOKX(ctx context.Context, l gate.DCILeg, share float64, tenorCap int, bound, spot, sigma float64, propID *int64) (string, error) {
 	cred, ok := e.EarnCreds["okx"]
 	if !ok || cred.Key == "" {
 		return "", e.gap(ctx, l, "credential", "okx:dual",
@@ -46,8 +46,10 @@ func (e *Executor) tryLegOKX(ctx context.Context, l gate.DCILeg, share float64, 
 	if err != nil {
 		return "", err
 	}
+	// D-526③：选档=net(premium−tail) 最优（okx annualizedYield 小数形原值）。
 	var q *pgstore.CexDCIQuote
 	var sawStrikeOK bool
+	var bestNet, bestTail, bestPrem float64
 	for i := range qs {
 		if !l.StrikePass(&qs[i], bound) || qs[i].ProductRef == "" {
 			continue
@@ -56,8 +58,14 @@ func (e *Executor) tryLegOKX(ctx context.Context, l gate.DCILeg, share float64, 
 		if qs[i].MinAmount == nil || qs[i].PurchaseDecimal == nil {
 			continue // 约束行缺=不可申购参数（fail-closed 不臆默认——binance 径同语义）
 		}
-		q = &qs[i]
-		break
+		tenor := tenorCap
+		if qs[i].TenorDays != nil && *qs[i].TenorDays > 0 {
+			tenor = *qs[i].TenorDays
+		}
+		tail := gate.TailCostAnn(l.OptType, spot, *qs[i].Strike, sigma, tenor)
+		if net := qs[i].APY - tail; q == nil || net > bestNet {
+			q, bestNet, bestTail, bestPrem = &qs[i], net, tail, qs[i].APY
+		}
 	}
 	if q == nil {
 		if sawStrikeOK {
@@ -66,6 +74,11 @@ func (e *Executor) tryLegOKX(ctx context.Context, l gate.DCILeg, share float64, 
 		}
 		return "", e.gap(ctx, l, "runtime", "dual_quote",
 			"%s腿 okx 无达标档在售（spot %.0f，strike 界 %s）", l.Name, spot, l.BoundText(bound))
+	}
+	if bestNet <= 0 {
+		return "", e.gap(ctx, l, "runtime", "dual_quote",
+			"%s腿 okx 尾损盖溢价：net %.2f%%=prem %.2f%%−tail %.2f%%（σ=%.2f%% 界=%.0f strike=%.0f）——如实拒",
+			l.Name, bestNet*100, bestPrem*100, bestTail*100, sigma*100, bound, *q.Strike)
 	}
 	// 申购量界闸：notional floor 至 stepSz 小数位；界外 fail-closed 如实败不打
 	// venue（不补不截——binance 径同语义，低于 minSize 靠 venue 拒兜底不体面）。

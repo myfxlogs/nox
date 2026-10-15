@@ -85,3 +85,6 @@ var GateEarnConfigSQL string // D-523③：gate:earn 子账户配置回种
 
 //go:embed 1026_nav_daily_ccy.sql
 var NavDailyCcySQL string // D-522：fin_nav_daily PK 升 (day_start,currency)
+
+//go:embed replay/1027_dci_tail_gate.sql
+var DCITailGateSQL string // D-526：DCI 尾险闸约束行（σ 界 k/tenor_max/名义帽）

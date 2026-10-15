@@ -71,6 +71,8 @@ type Store interface {
 	CapitalPoolSnapshots(ctx context.Context) ([]pgstore.CapitalPoolRow, error)
 	// D-523续①：单键最新快照 free_margin——流缓存零值遮蔽对拍读面。
 	LatestSnapshotFree(ctx context.Context, venue, venueType, ccy string) (float64, bool, error)
+	// D-526：σ 窗口期配置读面（dci_sigma_window_days）。
+	AppConfigInt64(ctx context.Context, key string) (int64, bool, error)
 }
 
 // Executor binance DCI 申购执行器（凭据由装配侧从 exchange_configs 注入）。
@@ -92,6 +94,7 @@ type Executor struct {
 	EarnCreds          map[string]EarnCred                                                    // earn 多 venue 凭据（exchange_configs 装配注入）
 	EarnRails          map[string]EarnRail                                                    // 测试注面：venue→rail 替真发（nil=按 EarnCreds 建）
 	StreamFn           func() bool                                                            // 流存活闸（nil=dephealth 实读）
+	SigmaFn            func(ctx context.Context) (float64, error)                             // D-526：σ_daily 测试注口（nil=venue 日 K 实读）
 	HoldingFn          func(ctx context.Context, productRef, optType string) (bool, error)    // venue 持仓读（D-198 返修①；nil=实 GET）
 	PositionsFn        func(ctx context.Context) ([]DCIPosition, error)                       // D-207 venue 持仓全列表（settle 观察；nil=实 GET）
 	SettledPositionsFn func(ctx context.Context) ([]DCIPosition, error)                       // M3-④ venue SETTLED 终态行全列表（settle 死端切源；nil=实 GET）
@@ -206,16 +209,17 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	}
 	var msgs []string
 	var succeeded bool
-	cb, pb := gate.OTMBoundRatios(cons)
+	sigma, serr := e.sigmaDaily(ctx) // D-526：σ_daily 实算（读败=fail-closed 全腿拒）
 	for _, l := range legs {
-		ratio := l.RatioOf(cb, pb)
-		if ratio == nil { // R9：界值行缺=constraint 缺口拒单（同 custody_share 例）
+		k, tmax, ok := gate.SigmaTailParams(cons, l.OptType)
+		if !ok || serr != nil { // 界参/σ 缺=constraint 缺口拒单（同 custody_share 例）
 			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.Name,
 				e.gap(ctx, l, "constraint", l.BoundSubject(),
-					"请喂约束 %s（%s腿 OTM 闸界比率）", l.BoundSubject(), l.Name)))
+					"请喂约束 dci_*_otm_k/dci_tenor_max_days 或 σ 源可用（%v）——D-526 尾险闸 fail-closed", serr)))
 			continue
 		}
-		msg, err := try(ctx, l, *share, tenorCap, spot*(*ratio), spot, &p.ID)
+		msg, err := try(ctx, l, *share, tenorCap,
+			spot*gate.SigmaBoundRatio(l.OptType, sigma, k, tmax), spot, sigma, &p.ID)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.Name, err))
 			continue

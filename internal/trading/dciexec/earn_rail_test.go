@@ -39,7 +39,7 @@ func railFixture(venue string, rail EarnRail) (*Executor, *fakeStore) {
 	f.poolRows = []pgstore.CapitalPoolRow{
 		{Venue: venue, VenueType: "unified", Equity: 1956, Currency: "USDT"},
 	}
-	ex := &Executor{
+	ex := &Executor{SigmaFn: testSigma,
 		Store: f, Now: time.Now,
 		EarnRails: map[string]EarnRail{venue: rail},
 	}
@@ -78,7 +78,7 @@ func TestEarnRail_OKX(t *testing.T) {
 // TestEarnRail_GateCredMissing gate 凭据/ rail 缺席→credential 缺口行（不臆造）。
 func TestEarnRail_GateCredMissing(t *testing.T) {
 	f := newFake()
-	ex := &Executor{Store: f, Now: time.Now}
+	ex := &Executor{SigmaFn: testSigma, Store: f, Now: time.Now}
 	f.nextProp++
 	f.proposals[f.nextProp] = &pgstore.Proposal{
 		ID: f.nextProp, TemplateID: "cash_mgmt", ExecTrack: "auto",
@@ -132,7 +132,7 @@ func TestGateAPIBase(t *testing.T) {
 		w.Write([]byte(`[{"currency":"USDT","available":"10"}]`))
 	}))
 	defer srv.Close()
-	ex := &Executor{Client: srv.Client(), Now: time.Now}
+	ex := &Executor{SigmaFn: testSigma, Client: srv.Client(), Now: time.Now}
 	rail := &gateEarnRail{e: ex, c: EarnCred{Key: "k", Secret: "s", BaseURL: srv.URL + "/api/v4"}}
 	if _, err := rail.FreeBalance(context.Background(), "USDT"); err != nil {
 		t.Fatalf("free balance: %v", err)
@@ -165,7 +165,7 @@ func TestOkxRail_FundingAwareSubscribe(t *testing.T) {
 			}
 		}))
 	}
-	ex := &Executor{Client: http.DefaultClient, Now: time.Now}
+	ex := &Executor{SigmaFn: testSigma, Client: http.DefaultClient, Now: time.Now}
 	mkRail := func(srv *httptest.Server) *okxEarnRail {
 		ex.Client = srv.Client()
 		return &okxEarnRail{e: ex, c: EarnCred{Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}

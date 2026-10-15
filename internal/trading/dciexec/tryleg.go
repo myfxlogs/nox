@@ -15,7 +15,7 @@ import (
 
 // tryLeg 单腿：池余额×share→qty、spot 不足→活期赎回缺口→重读、候选档 strike 闸
 // →最优、幂等→签名 POST→回执（R6 前置 redeem 步）。
-func (e *Executor) tryLeg(ctx context.Context, l gate.DCILeg, share float64, tenorCap int, bound, spot float64, propID *int64) (string, error) {
+func (e *Executor) tryLeg(ctx context.Context, l gate.DCILeg, share float64, tenorCap int, bound, spot, sigma float64, propID *int64) (string, error) {
 	bal, err := e.poolBalance(ctx, l.QtyCcy)
 	if err != nil {
 		if venueErrKind(err) == "permission" {
@@ -63,8 +63,11 @@ func (e *Executor) tryLeg(ctx context.Context, l gate.DCILeg, share float64, ten
 	if err != nil {
 		return "", err
 	}
+	// D-526③：选档目标=net(premium_ann−tail_cost_ann) 最优（APY 最优但
+	// 尾损盖溢价的档如实拒；σ/界/尾损三要素随拒因可审计）。
 	var q *pgstore.CexDCIQuote
 	var sawStrikeOK bool
+	var bestNet, bestTail, bestPrem float64
 	for i := range qs {
 		if !l.StrikePass(&qs[i], bound) {
 			continue
@@ -76,8 +79,15 @@ func (e *Executor) tryLeg(ctx context.Context, l gate.DCILeg, share float64, ten
 		if qs[i].MinAmount == nil {
 			continue // R12：min_amount 缺行跳次档（floor 位真源缺=不可发参）
 		}
-		q = &qs[i]
-		break
+		tenor := tenorCap
+		if qs[i].TenorDays != nil && *qs[i].TenorDays > 0 {
+			tenor = *qs[i].TenorDays
+		}
+		prem := qs[i].APY / 100 // binance apy=%口径归一小数
+		tail := gate.TailCostAnn(l.OptType, spot, *qs[i].Strike, sigma, tenor)
+		if net := prem - tail; q == nil || net > bestNet {
+			q, bestNet, bestTail, bestPrem = &qs[i], net, tail, prem
+		}
 	}
 	if q == nil {
 		if sawStrikeOK {
@@ -86,6 +96,11 @@ func (e *Executor) tryLeg(ctx context.Context, l gate.DCILeg, share float64, ten
 		}
 		return "", e.gap(ctx, l, "runtime", "dual_quote",
 			"%s腿无达标档在售（spot %.0f，strike 界 %s）", l.Name, spot, l.BoundText(bound))
+	}
+	if bestNet <= 0 {
+		return "", e.gap(ctx, l, "runtime", "dual_quote",
+			"%s腿尾损盖溢价：net %.2f%%=prem %.2f%%−tail %.2f%%（σ=%.2f%% 界=%.0f strike=%.0f）——如实拒",
+			l.Name, bestNet*100, bestPrem*100, bestTail*100, sigma*100, bound, *q.Strike)
 	}
 	// R11/R12：depositAmount floor 至 min_amount 小数位；界外 fail-closed
 	// 如实败（不补不截——补到 min=多交、截到 max=少投，皆改提案语义）。

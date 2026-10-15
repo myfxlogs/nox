@@ -241,9 +241,10 @@ func proposalParams(ctx context.Context, st *pgstore.Store, r Result, venue stri
 		opt, inv = "PUT", "USDT"
 	}
 	if opt != "" {
-		// 快照同界——bound=现货参照×约束表 OTM 界（无参照/界行缺
-		// →无界快照降级；快照=审计锚非钉价，执行时实时闸复验不变）。
-		bound := dciStrikeBound(ctx, st, opt)
+		// 快照同界——bound=现货参照×σ 驱动界（D-526；σ 读败→0 fail-closed
+		// 无界快照降级；快照=审计锚非钉价，执行时实时闸复验不变）。
+		sigma, _, _ := fetchSigma(ctx, st)
+		bound := dciStrikeBound(ctx, st, opt, sigma)
 		if qs, err := st.ListDCIQuotes(ctx, venue, "BTC", opt, inv, 90, bound); err == nil && len(qs) > 0 {
 			p["product_ref"] = qs[0].ProductRef
 			if qs[0].Strike != nil {

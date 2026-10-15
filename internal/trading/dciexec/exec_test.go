@@ -79,7 +79,11 @@ func dciListOK(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func f64(v float64) *float64 { return &v }
-func idec(v int) *int        { return &v }
+
+// testSigma D-526：σ 注入桩（venue klines 不打测）——0.001 小 σ 宽界保 fixtures
+// strike 达标（尾损≈0 net>0 过闸）；尾险断言在各专项锚另注 σ。
+func testSigma(context.Context) (float64, error) { return 0.001, nil }
+func idec(v int) *int                            { return &v }
 
 func newFake() *fakeStore {
 	share := 0.34
@@ -91,6 +95,10 @@ func newFake() *fakeStore {
 			{Subject: "custody_redeemable", Qualifier: "always", ValueNum: f64(90)},
 			{Subject: "dci_call_otm_bound", Qualifier: "min", ValueNum: f64(1.10)},
 			{Subject: "dci_put_otm_bound", Qualifier: "max", ValueNum: f64(1.00)}, // R9 PUT 1.00 贴现货
+			{Subject: "dci_put_otm_k", Qualifier: "k", ValueNum: f64(1.5)},        // D-526 σ 界 k
+			{Subject: "dci_call_otm_k", Qualifier: "k", ValueNum: f64(1.5)},
+			{Subject: "dci_tenor_max_days", Qualifier: "max", ValueNum: f64(30)},
+			{Subject: "dci_open_notional_cap_usdt", Qualifier: "max", ValueNum: f64(1e9)},
 		},
 		quotes: []pgstore.CexDCIQuote{
 			{Venue: "binance", Underlying: "BTC", InvestCcy: "BTC",
@@ -352,7 +360,7 @@ func (f *fakeStore) InsertAlert(_ context.Context, _ *int64, level, msg string) 
 
 // execR3 R3 形态 executor：PriceFn/BalanceFn 注入、Sapi=测试服。
 func execR3(fs *fakeStore, url string, cli *http.Client, bals map[string]float64) *Executor {
-	return &Executor{Store: fs, BnKey: "k", BnSec: "s", Sapi: url, Client: cli, Now: time.Now,
+	return &Executor{SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: url, Client: cli, Now: time.Now,
 		PriceFn: func(context.Context, string) (float64, error) { return 100000, nil },
 		BalanceFn: func(_ context.Context, a string) (float64, error) {
 			return bals[a], nil
@@ -364,7 +372,7 @@ func execR3(fs *fakeStore, url string, cli *http.Client, bals map[string]float64
 
 // TestD191_SignQuery：签名串构造对拍——query 字段齐+HMAC 可验。
 func TestD191_SignQuery(t *testing.T) {
-	e := &Executor{BnKey: "k", BnSec: "s", Sapi: "https://x.test", Now: time.Now}
+	e := &Executor{SigmaFn: testSigma, BnKey: "k", BnSec: "s", Sapi: "https://x.test", Now: time.Now}
 	at := time.UnixMilli(1700000000000)
 	q, url := e.SubscribeBody("PROJ1", "ORD1", 0.018, at)
 	// R10①：venue 参数面四参对拍（原 projectId/lots 错代）。
@@ -418,7 +426,10 @@ func TestD191R3_TenorCapFromConstraint(t *testing.T) {
 		fs := newFake()
 		fs.cons = append(c.cons,
 			pgstore.CapabilityConstraint{Subject: "dci_call_otm_bound", ValueNum: f64(1.10)},
-			pgstore.CapabilityConstraint{Subject: "dci_put_otm_bound", ValueNum: f64(1.00)})
+			pgstore.CapabilityConstraint{Subject: "dci_put_otm_bound", ValueNum: f64(1.00)},
+			pgstore.CapabilityConstraint{Subject: "dci_call_otm_k", ValueNum: f64(1.5)},
+			pgstore.CapabilityConstraint{Subject: "dci_put_otm_k", ValueNum: f64(1.5)},
+			pgstore.CapabilityConstraint{Subject: "dci_tenor_max_days", ValueNum: f64(30)})
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if dciListOK(w, r) {
 				return
@@ -437,11 +448,11 @@ func TestD191R3_TenorCapFromConstraint(t *testing.T) {
 	}
 }
 
-// TestD191R3_StrikeGate：%OTM 闸——CALL 档 strike=100000<100000×1.10 滤出→无达标档 gap；
-// PUT 档 strike=80000≤100000×0.93 达标成交。
+// TestD191R3_StrikeGate：%OTM 闸（D-526 σ 界）——CALL 档 strike 低于 σ 界滤出→
+// 无达标档 gap；PUT 档 strike=80000≤σ 界达标成交。
 func TestD191R3_StrikeGate(t *testing.T) {
 	fs := newFake()
-	fs.quotes[0].Strike = f64(105000) // CALL 档低于 110000 界→滤出
+	fs.quotes[0].Strike = f64(100500) // D-526：CALL 档低于 σ 界≈100820→滤出
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if dciListOK(w, r) {
@@ -471,7 +482,7 @@ func TestD191R3_StrikeGate(t *testing.T) {
 	}
 	// 反转：PUT strike 高于 100000 界（R9=1.00 贴现货）→两腿皆无档。
 	fs2 := newFake()
-	fs2.quotes[0].Strike = f64(105000)
+	fs2.quotes[0].Strike = f64(100500) // D-526：低于 σ 界≈100820→CALL 亦无档
 	fs2.quotes[1].Strike = f64(101000)
 	e2 := execR3(fs2, srv.URL, srv.Client(), map[string]float64{"BTC": 0.06, "USDT": 5000})
 	if _, err := e2.GoWheel(context.Background()); err != nil { // 双腿无档全 gap 面用 wheel 径
@@ -636,7 +647,7 @@ func TestD191R4_URLJoin(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	e := &Executor{Store: newFake(), BnKey: "k", BnSec: "s",
+	e := &Executor{SigmaFn: testSigma, Store: newFake(), BnKey: "k", BnSec: "s",
 		Sapi: srv.URL + "/sapi", APIBase: srv.URL + "/api",
 		Client: srv.Client(), Now: time.Now}
 	if _, err := e.spotPrice(context.Background(), "BTCUSDT"); err != nil {
@@ -702,7 +713,7 @@ func TestD191R5_LargeAccountJSON(t *testing.T) {
 		fmt.Fprint(w, sb.String())
 	}))
 	defer srv.Close()
-	e := &Executor{Store: newFake(), BnKey: "k", BnSec: "s",
+	e := &Executor{SigmaFn: testSigma, Store: newFake(), BnKey: "k", BnSec: "s",
 		APIBase: srv.URL + "/api", Client: srv.Client(), Now: time.Now}
 	bal, err := e.freeBalance(context.Background(), "BTC")
 	if err != nil || bal != 0.5 {
@@ -726,7 +737,7 @@ func TestD191R6_PoolEarnAndRedeem(t *testing.T) {
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
 	defer srv.Close()
-	e := &Executor{Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
+	e := &Executor{SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
 		Client: srv.Client(), Now: time.Now,
 		PriceFn: func(context.Context, string) (float64, error) { return 100000, nil },
 		BalanceFn: func(_ context.Context, a string) (float64, error) {
@@ -804,7 +815,7 @@ func TestD192_StreamBalanceGate(t *testing.T) {
 	}))
 	defer srv.Close()
 	// 存活+有值→流值 0.32，REST 零调。
-	e := &Executor{Store: newFake(), BnKey: "k", BnSec: "s",
+	e := &Executor{SigmaFn: testSigma, Store: newFake(), BnKey: "k", BnSec: "s",
 		APIBase: srv.URL + "/api", Client: srv.Client(), Now: time.Now,
 		StreamFn: func() bool { return true }}
 	if v, err := e.freeBalance(context.Background(), "BTC"); err != nil || v != 0.32 {
@@ -859,10 +870,10 @@ func TestD191R8_DeepPutSelectable(t *testing.T) {
 // （同 custody_share 例，不回退字面量兜底）。
 func TestD191R9_BoundFromConstraint(t *testing.T) {
 	fs := newFake()
-	// 摘 PUT 界行→PUT 腿缺口拒、CALL 腿正常（CALL 界仍在）。
+	// 摘 PUT σ 界 k 行→PUT 腿缺口拒、CALL 腿正常（CALL k 仍在）。
 	var cons []pgstore.CapabilityConstraint
 	for _, c := range fs.cons {
-		if c.Subject != "dci_put_otm_bound" {
+		if c.Subject != "dci_put_otm_k" {
 			cons = append(cons, c)
 		}
 	}
@@ -882,7 +893,7 @@ func TestD191R9_BoundFromConstraint(t *testing.T) {
 	}
 	found := false
 	for _, g := range fs.gaps {
-		if g.Subject == "dci_put_otm_bound" && g.Kind == "constraint" {
+		if g.Subject == "dci_put_otm_k" && g.Kind == "constraint" {
 			found = true
 		}
 	}
@@ -1021,7 +1032,7 @@ func TestD196R1_SpotErrClass(t *testing.T) {
 // TestD191R11_AmountBoundLease：①floor dec 格式对拍；②界外 runtime 如实败；
 // ③120s 租约二发零 venue 调用；④runtime err 无双前缀。
 func TestD191R11_AmountBoundLease(t *testing.T) {
-	e := &Executor{BnKey: "k", BnSec: "s", Sapi: "https://x.test", Now: time.Now}
+	e := &Executor{SigmaFn: testSigma, BnKey: "k", BnSec: "s", Sapi: "https://x.test", Now: time.Now}
 	at := time.UnixMilli(1700000000000)
 	q, _ := e.SubscribeBody("P1", "O1", 541.0, at)
 	if !strings.Contains(q, "depositAmount=541&") { // dec0 floor→"541" 非 "541.00000000"
@@ -1324,6 +1335,9 @@ func (f *fakeStore) InsertIncomeEvents(_ context.Context, evs []pgstore.IncomeEv
 	f.incomeEvs = append(f.incomeEvs, evs...)
 	return int64(len(evs)), nil
 }
+func (f *fakeStore) AppConfigInt64(context.Context, string) (int64, bool, error) {
+	return 0, false, nil
+}
 func (f *fakeStore) LatestSnapshotFree(_ context.Context, _, _, ccy string) (float64, bool, error) {
 	v, ok := f.snapFree[ccy]
 	return v, ok, nil
@@ -1332,7 +1346,7 @@ func (f *fakeStore) LatestSnapshotFree(_ context.Context, _, _, ccy string) (flo
 // TestM41_EvalGate 评估卡闸（D-258 M4.1③）：无卡/非 viable 拒单，viable 过闸。
 func TestM41_EvalGate(t *testing.T) {
 	st := newFake()
-	e := &Executor{Store: st, BnKey: "k", BnSec: "s", Now: time.Now}
+	e := &Executor{SigmaFn: testSigma, Store: st, BnKey: "k", BnSec: "s", Now: time.Now}
 	pid := st.addProposal("dci_buy_low")
 
 	delete(st.evals, pid)

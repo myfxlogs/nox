@@ -25,7 +25,7 @@ func TestD207_SettleConfirmed(t *testing.T) {
 	st := newFake()
 	st.filledOrders = []pgstore.FilledDCIOrder{d207Order()}
 	st.cfgID = 42
-	ex := &Executor{
+	ex := &Executor{SigmaFn: testSigma,
 		Store: st,
 		Now:   time.Now,
 		PositionsFn: func(context.Context) ([]DCIPosition, error) {
@@ -86,7 +86,7 @@ func TestD207_SettleSkips(t *testing.T) {
 		o := d207Order()
 		o.Response = `{"settleDate":` + fmt.Sprint(time.Now().Add(settleAgo).UnixMilli()) + `}`
 		st.filledOrders = []pgstore.FilledDCIOrder{o}
-		return st, &Executor{
+		return st, &Executor{SigmaFn: testSigma,
 			Store: st, Now: time.Now,
 			PositionsFn: func(context.Context) ([]DCIPosition, error) { return pos, nil },
 		}

@@ -55,10 +55,10 @@ func TestOkxDCILeg_QuoteTradeSequence(t *testing.T) {
 		Strike: f64(80000), TenorDays: &tenor, APY: 0.11,
 		ProductRef: "BTC-USDT-260327-80000-P", DeliveryTs: &deliv,
 		MinAmount: f64(10), PurchaseDecimal: idec(0)})
-	ex := &Executor{Store: st, Client: srv.Client(), Now: time.Now,
+	ex := &Executor{SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	propID := int64(9)
-	msg, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, &propID)
+	msg, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, 0.02, &propID)
 	if err != nil {
 		t.Fatalf("tryLegOKX: %v", err)
 	}
@@ -98,10 +98,10 @@ func TestOkxDCILeg_ExpiredQuoteFails(t *testing.T) {
 		Strike: f64(80000), TenorDays: &tenor, APY: 0.11,
 		ProductRef: "BTC-USDT-260327-80000-P", DeliveryTs: &deliv,
 		MinAmount: f64(10), PurchaseDecimal: idec(0)})
-	ex := &Executor{Store: st, Client: srv.Client(), Now: time.Now,
+	ex := &Executor{SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	propID := int64(9)
-	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, &propID); err == nil {
+	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, 0.02, &propID); err == nil {
 		t.Fatal("过期报价应如实败")
 	}
 	for _, c := range calls {
@@ -113,9 +113,9 @@ func TestOkxDCILeg_ExpiredQuoteFails(t *testing.T) {
 
 func TestOkxDCILeg_NoCredGap(t *testing.T) {
 	st := newFake()
-	ex := &Executor{Store: st, Now: time.Now, EarnCreds: map[string]EarnCred{}}
+	ex := &Executor{SigmaFn: testSigma, Store: st, Now: time.Now, EarnCreds: map[string]EarnCred{}}
 	propID := int64(9)
-	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, &propID); err == nil {
+	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, 0.02, &propID); err == nil {
 		t.Fatal("凭据缺应 credential 缺口")
 	}
 }
@@ -127,7 +127,7 @@ func TestOkxDCILeg_ConstraintGate(t *testing.T) {
 		srv := okxDCISrv(t, calls, false)
 		st := newFake()
 		st.quotes = append(st.quotes, q)
-		return srv, &Executor{Store: st, Client: srv.Client(), Now: time.Now,
+		return srv, &Executor{SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
 			EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	}
 	tenor := 7
@@ -144,7 +144,7 @@ func TestOkxDCILeg_ConstraintGate(t *testing.T) {
 	srv, ex := mk(q, &calls)
 	defer srv.Close()
 	propID := int64(9)
-	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 0.005, 90, 100000, 90000, &propID); err == nil {
+	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 0.005, 90, 100000, 90000, 0.02, &propID); err == nil {
 		t.Fatal("约束不达标应拒")
 	}
 	for _, c := range calls {
@@ -158,7 +158,7 @@ func TestOkxDCILeg_ConstraintGate(t *testing.T) {
 	q2.MinAmount, q2.PurchaseDecimal = nil, nil
 	srv2, ex2 := mk(q2, &calls)
 	defer srv2.Close()
-	if _, err := ex2.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, &propID); err == nil {
+	if _, err := ex2.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, 0.02, &propID); err == nil {
 		t.Fatal("约束行缺应 fail-closed")
 	}
 	for _, c := range calls {
@@ -200,11 +200,11 @@ func TestOkxDCILeg_DustShortfall(t *testing.T) {
 		Strike: f64(80000), TenorDays: &tenor, APY: 0.11,
 		ProductRef: "P1", DeliveryTs: &deliv,
 		MinAmount: f64(10), PurchaseDecimal: idec(0)})
-	ex := &Executor{Store: st, Client: srv.Client(), Now: time.Now,
+	ex := &Executor{SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	propID := int64(9)
 	// qty=(99.9999995+5e-7)→floor=100 ≥min10；needed=5e-7 尘差→跳划转照常申购。
-	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, &propID); err != nil {
+	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, 0.02, &propID); err != nil {
 		t.Fatalf("尘差应跳划转照常申购: %v", err)
 	}
 	for _, c := range calls {
@@ -233,7 +233,7 @@ func TestOkxSettle_SettledBooks(t *testing.T) {
 	defer srv.Close()
 	st := newFake()
 	st.cfgID = 42
-	ex := &Executor{Store: st, Client: srv.Client(), Now: time.Now,
+	ex := &Executor{SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	td := 7
 	pid := int64(9)
@@ -285,7 +285,7 @@ func TestOkxSettle_EarnRowSkipped(t *testing.T) {
 			OptType: "PUT", ProductRef: "BTC-USDT-301231-80000-P",
 			Response: `{"ordId":"2"}`}, // 远月未到期——不轮（50011 实证）
 	}
-	ex := &Executor{Store: st, Client: srv.Client(), Now: time.Now,
+	ex := &Executor{SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	if _, err := ex.SettleExpiredOrders(context.Background()); err != nil {
 		t.Fatalf("settle: %v", err)

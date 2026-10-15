@@ -18,7 +18,7 @@ func TestD517_ExerciseSellback(t *testing.T) {
 	st.cfgID = 42
 	var sellSym string
 	var sellQty float64
-	ex := &Executor{
+	ex := &Executor{SigmaFn: testSigma,
 		Store: st, BnKey: "k", Now: time.Now,
 		PositionsFn: func(context.Context) ([]DCIPosition, error) {
 			return []DCIPosition{{
@@ -72,7 +72,7 @@ func TestD517_SellFail_PendingDisposal(t *testing.T) {
 	st := newFake()
 	st.cfgID = 42
 	calls := 0
-	ex := &Executor{
+	ex := &Executor{SigmaFn: testSigma,
 		Store: st, BnKey: "k", Now: time.Now,
 		PositionsFn: func(context.Context) ([]DCIPosition, error) {
 			return []DCIPosition{{
@@ -115,7 +115,7 @@ func TestD517_SellFail_PendingDisposal(t *testing.T) {
 func TestD517_NoDisposal_SameCcy(t *testing.T) {
 	st := newFake()
 	st.cfgID = 42
-	ex := &Executor{
+	ex := &Executor{SigmaFn: testSigma,
 		Store: st, BnKey: "k", Now: time.Now,
 		PositionsFn: func(context.Context) ([]DCIPosition, error) {
 			return []DCIPosition{{

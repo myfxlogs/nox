@@ -14,6 +14,11 @@ import (
 
 func d514Store(t *testing.T) (*pgstore.Store, context.Context) {
 	t.Helper()
+	// D-526：σ 注口小值（0.001 宽界保 fixture strike 达标、tail≈0 不挡溢价锚）。
+	sigmaFn = func(context.Context, *pgstore.Store) (float64, string, error) {
+		return 0.001, "test-stub", nil
+	}
+	t.Cleanup(func() { sigmaFn = nil })
 	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	st, err := pgstore.New(context.Background(), dsn)
 	if err != nil {

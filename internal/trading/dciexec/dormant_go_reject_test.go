@@ -25,7 +25,7 @@ func TestD204_DormantGoReject(t *testing.T) {
 		fmt.Fprint(w, `{}`)
 	}))
 	defer srv.Close()
-	e := &Executor{Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
+	e := &Executor{SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
 		Client: srv.Client(), Now: time.Now,
 		PriceFn: func(context.Context, string) (float64, error) { return 100000, nil }}
 	pid := fs.addProposal("dci_sell_high_covered_call")
@@ -51,6 +51,10 @@ func TestD204_BareGoSkipsDormant(t *testing.T) {
 		{Subject: "custody_redeemable", Qualifier: "always"},
 		{Subject: "dci_call_otm_bound", ValueNum: f64(1.10)},
 		{Subject: "dci_put_otm_bound", ValueNum: f64(1.00)},
+		{Subject: "dci_put_otm_k", ValueNum: f64(1.5)},
+		{Subject: "dci_call_otm_k", ValueNum: f64(1.5)},
+		{Subject: "dci_tenor_max_days", ValueNum: f64(30)},
+		{Subject: "dci_open_notional_cap_usdt", ValueNum: f64(1e9)},
 	}
 	fs.quotes = []pgstore.CexDCIQuote{{Venue: "binance", Underlying: "BTC", ProductRef: "PUTP", OptType: "PUT", InvestCcy: "USDT",
 		OrderRef: "O1", Strike: f64(80000), APY: 0.1, MinAmount: f64(10)}}
@@ -65,7 +69,7 @@ func TestD204_BareGoSkipsDormant(t *testing.T) {
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
 	defer srv.Close()
-	e := &Executor{Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
+	e := &Executor{SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
 		Client: srv.Client(), Now: time.Now,
 		PriceFn:   func(context.Context, string) (float64, error) { return 100000, nil },
 		BalanceFn: func(context.Context, string) (float64, error) { return 100.0, nil },

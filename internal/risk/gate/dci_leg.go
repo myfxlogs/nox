@@ -30,12 +30,12 @@ func (l DCILeg) RatioOf(call, put *float64) *float64 {
 	return put
 }
 
-// BoundSubject 腿→约束 subject（缺界缺口键直用）。
+// BoundSubject 腿→约束 subject（D-526 尾险闸 σ 界键；缺界缺口键直用）。
 func (l DCILeg) BoundSubject() string {
 	if l.OptType == "CALL" {
-		return "dci_call_otm_bound"
+		return "dci_call_otm_k"
 	}
-	return "dci_put_otm_bound"
+	return "dci_put_otm_k"
 }
 
 // DCILeg 腿参数（CALL=持币卖高 covered-call；PUT=持 USDT 买低 cash-put）。

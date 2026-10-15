@@ -29,7 +29,7 @@ func TestStreamBalFossilFallback(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := &Executor{
+	e := &Executor{SigmaFn: testSigma,
 		Store: newFake(), APIBase: srv.URL, BnKey: "k", BnSec: "s",
 		Client: srv.Client(), Now: time.Now,
 		StreamFn: func() bool { return true },
@@ -85,7 +85,7 @@ func TestStreamBalFossilFailClosed(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
-	e := &Executor{
+	e := &Executor{SigmaFn: testSigma,
 		Store: newFake(), APIBase: srv.URL, BnKey: "k", BnSec: "s",
 		Client: srv.Client(), Now: time.Now,
 		StreamFn: func() bool { return true },

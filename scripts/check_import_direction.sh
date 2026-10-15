@@ -140,7 +140,9 @@ internal/research/explorer -> internal/gen/explorer/v1
 internal/research/explorer -> internal/ir/inboxfmt
 internal/research/explorer -> internal/platform/analyst
 internal/research/explorer -> internal/store/pgstore
+internal/research/oppmatch -> internal/data/collect/exchange
 internal/research/oppmatch -> internal/data/keydomain
+internal/research/oppmatch -> internal/platform/httpx
 internal/research/oppmatch -> internal/portfolio/lifecycle
 internal/research/oppmatch -> internal/research/econ
 internal/research/oppmatch -> internal/risk/gate
@@ -214,6 +216,7 @@ internal/trading/autotrade -> internal/risk/position
 internal/trading/autotrade -> internal/store/pgstore
 internal/trading/autotrade -> internal/trading/exec
 internal/trading/dciexec -> internal/data/bus
+internal/trading/dciexec -> internal/data/collect/exchange
 internal/trading/dciexec -> internal/infra/dephealth
 internal/trading/dciexec -> internal/kbsearch
 internal/trading/dciexec -> internal/risk/gate

@@ -35,16 +35,17 @@ func (e *Executor) GoWheel(ctx context.Context) (string, error) {
 			"系统侧病灶：BTC 现货价读取失败：%v", err)
 	}
 	var msgs []string
-	cb, pb := gate.OTMBoundRatios(cons)
+	sigma, serr := e.sigmaDaily(ctx) // D-526：σ_daily 实算（读败=fail-closed 全腿拒）
 	for _, l := range []gate.DCILeg{gate.CallLeg, gate.PutLeg} {
-		ratio := l.RatioOf(cb, pb)
-		if ratio == nil {
+		k, tmax, ok := gate.SigmaTailParams(cons, l.OptType)
+		if !ok || serr != nil {
 			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.Name,
 				e.gap(ctx, l, "constraint", l.BoundSubject(),
-					"请喂约束 %s（%s腿 OTM 闸界比率）", l.BoundSubject(), l.Name)))
+					"请喂约束 dci_*_otm_k/dci_tenor_max_days 或 σ 源可用（%v）——D-526 尾险闸 fail-closed", serr)))
 			continue
 		}
-		msg, err := e.tryLeg(ctx, l, *share, tenorCap, spot*(*ratio), spot, nil)
+		msg, err := e.tryLeg(ctx, l, *share, tenorCap,
+			spot*gate.SigmaBoundRatio(l.OptType, sigma, k, tmax), spot, sigma, nil)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.Name, err))
 			continue

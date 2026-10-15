@@ -220,4 +220,5 @@ var migrationFiles = []struct {
 	{1024, migrations.ProposalPendingVenueSQL, false},         // earn 多 venue 化：pending 唯一锚加 venue
 	{1025, migrations.GateEarnConfigSQL, false},               // D-523③：gate:earn 配置行回种
 	{1026, migrations.NavDailyCcySQL, false},                  // D-522：fin_nav_daily PK 升 (day_start,currency)
+	{1027, migrations.DCITailGateSQL, false},                  // D-526：DCI 尾险闸约束行（σ 界 k/tenor_max/名义帽）
 }
