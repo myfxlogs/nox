@@ -197,3 +197,9 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **实证**：okx savings `earnings` 累计 70.89、`loanAmt` 复投增（#26 下单 1938.00→现 2117.77 含业主另入）；gate `lend_records` type=reinvest ~0.0054 USDT/h 落 `lent_amount`（venue 实拍 1999.5978→1999.6412）；binance earn 同构。`income_events` 全期 earn 收益=0 行——D-030 ≥8% 缺账本证据面。
 - **裁**：earn 池（venue_type=earn / dci_order 理财形 filled 行 venue_key 面）收益归属=**增量法**——池行 equity 新写时 Δ(equity)−已归属流（本系统申购/赎回单、已知划转）=收益增量 → income_events 行（income_type=earn_yield，amount_usd=Δ 面值——零换算面各币种同视）；venue 侧逐笔可查的（gate lend_records reinvest、binance earn history 如可取）优先按 venue 回执归，取不到走池增量。负 Δ 无对应赎单=如实负收益行。
 - **边界**：增量归属挂快照写径（D-523 写口同源同拍），零新定时器零轮询；BTC 归属份（D-516 share=0.3334）收益同乘系数；收益归属不做税/费拆（venue 净值即实收）。
+
+## D-525 假设裁决第三拍+两取证票（2026-10-15 晨检拍）
+- **裁决**：18 条 proposed——**拒 1**（#2 binance PERPETUAL|USDC：报价币种变体非机会假设，属宇宙枚举覆盖面轴，弃件记忆）；**留 17**——cfd_swap_hedged 8 条与 cfd_swap 裸向 6 条、TRADIFI_PERPETUAL|USD1（样本薄观察）、okx FUTURES|USD_UM_XPERP（待取证）维持 proposed。
+- **关键判据**：cfd_swap_hedged#505（short XAUUSD@15032313 × long PAXGUSDT@binance perp）净 carry +6.4%/yr=唯一显著跑赢 earn 基线；D-521「novel 机制」拒因对该形态不必然成立——short CFD+long CEX perp 恰是 XASSET_CARRY 执行轨同构形态（PAXGUSDT 在 binance perp 目录）。**批准仍不落地**——表达性未实证前批准=造死端；立取证票定「xasset 轨能否表达此向」，可则全族转提案模板票。
+- **USD_UM 面**：okx 交割基差晨拍 ETH-USD_UM-261030 +89%/SOL +82%/BTC +63% ann（15 天到期）=全库最强原信号；USDⓈ 结算币种/抵押面/ctVal/现货腿可行性未知，立取证票——可行→日历基差 P0 轨扩 okx venue 施工票，不可→#7 拒件记忆。
+- **gate 面**：uni-lend DCI 报价 8.22%×1d 入采集但无提案模板（venue 枚举只 binance/okx）——记缺口不立票（量小）；gate funding 极端负费率（NIL −365%/PONS −267%/SOXS −227%）=微盘币流动性面如实记，不产假设（坑>利）。
