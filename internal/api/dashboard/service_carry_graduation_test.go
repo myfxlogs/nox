@@ -577,3 +577,41 @@ func TestD488_Approve_SpotCarry_WritesCombo(t *testing.T) {
 		t.Errorf("落账 = %s, want approved", f.decision)
 	}
 }
+
+// TestApprovePerpDelivery 毕业兑现口：perp_delivery approve→combo 行
+// （buy=spot / sell=futures，canonical=剥日期尾基础币）。
+func TestApprovePerpDelivery(t *testing.T) {
+	f, s := gradFixture("perp_delivery")
+	f.grad.VenueA = "binance"
+	f.grad.VenueB = "binance"
+	f.grad.Symbol = "BTCUSDT_261225"
+	f.paper.VenueA, f.paper.VenueB = "binance", "binance"
+	f.paper.Symbol = "BTCUSDT_261225"
+	s.allowVenuesSource = func(context.Context) (map[string]bool, error) {
+		return map[string]bool{"binance:spot": true, "binance:futures": true}, nil
+	}
+	resp, err := s.ApproveCarryGraduation(context.Background(), approveReq())
+	if err != nil || !resp.Msg.Ok {
+		t.Fatalf("approve 破闸: ok=%v err=%v errstr=%s", resp.Msg.Ok, err, resp.Msg.Error)
+	}
+	if f.combo == nil {
+		t.Fatal("combo 未写入")
+	}
+	if f.combo.CanonicalBuy != "BTC" || f.combo.CanonicalSell != "BTC" {
+		t.Errorf("canonical 应剥日期尾: %s|%s", f.combo.CanonicalBuy, f.combo.CanonicalSell)
+	}
+	if f.combo.VenueBuy != "binance:spot" || f.combo.VenueSell != "binance:futures" {
+		t.Errorf("venues: %s×%s（want spot×futures）", f.combo.VenueBuy, f.combo.VenueSell)
+	}
+	if f.decision != "approved" {
+		t.Errorf("decision=%s", f.decision)
+	}
+	// 闸外结构仍拒
+	f, s = gradFixture("perp_perp") // perp_perp 走体检径不受影响
+	f.grad.Structure = "spot_x"     // 未知结构
+	f.paper.Structure = "spot_x"
+	resp, _ = s.ApproveCarryGraduation(context.Background(), approveReq())
+	if resp.Msg.Ok || !contains2(resp.Msg.Error, "非可批结构") {
+		t.Errorf("未知结构应拒: ok=%v err=%s", resp.Msg.Ok, resp.Msg.Error)
+	}
+}
