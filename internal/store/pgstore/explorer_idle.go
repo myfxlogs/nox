@@ -35,36 +35,47 @@ type ExplorerIdlePool struct {
 // ExplorerIdleFunds ⑤资金不眠异常：fin_venue_account_snapshot 每 venue 最新行 +
 // income_events 近30d 合计 + 快照 buffer_multiple，闲置/破地板标记 Go 算。
 func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]ExplorerIdlePool, error) {
-	// 每键最新行=键枚举 + 逐键 LATERAL 下探（1031 覆盖索引前 DISTINCT ON 全表序
-	// 实测 SG 60.8s——834k 行 seq scan+磁盘外排；改造后两探针走 index-only 单点
-	// 取行）。D-544 读序：ev=同键 15min 鲜度窗内最新事件行（okx_event/
-	// binance_event/mt_frame=venue 原生推送真值）存在即优先；否则落 la=全类型
-	// 最新行（rest_calib/rest_poll/reconnect_resync=断流/冷启动愈合补写非权威）。
-	// currency 可 NULL→键等值用 IS NOT DISTINCT FROM 防键丢失。
+	// 每键最新行=递归松索引扫描键枚举 + 逐键 LATERAL 下探（1031 覆盖索引前
+	// DISTINCT ON 全表序实测 SG 60.8s——834k 行 seq scan+磁盘外排；朴素 LATERAL
+	// 余 3.8s 瓶颈在 DISTINCT 键枚举 seq 扫）。loose index scan=递归按
+	// (venue,venue_type,currency) 索引序逐键跳跃下探（~115 键×O(log n)）；
+	// ev=同键 15min 鲜度窗内最新事件行（D-544 读序：okx_event/binance_event/
+	// mt_frame=venue 原生推送真值优先），缺席/陈窗才落 la=全类型最新行
+	// （rest_calib/rest_poll/reconnect_resync=愈合补写非权威）。
+	// 键列 NOT NULL（实拍零 NULL，'' 残影行由 collapse 段处理）→等值用 `=`。
 	rows, err := s.pool.Query(ctx, `
+		WITH RECURSIVE keys AS (
+			(SELECT venue, venue_type, currency FROM fin_venue_account_snapshot
+			 ORDER BY venue, venue_type, currency LIMIT 1)
+			UNION ALL
+			SELECT n.* FROM keys k
+			CROSS JOIN LATERAL (
+				SELECT s.venue, s.venue_type, s.currency
+				FROM fin_venue_account_snapshot s
+				WHERE (s.venue, s.venue_type, s.currency) > (k.venue, k.venue_type, k.currency)
+				ORDER BY s.venue, s.venue_type, s.currency
+				LIMIT 1
+			) n
+		)
 		SELECT k.venue, k.venue_type,
 			COALESCE(ev.balance_raw,      la.balance_raw, 0),
 			COALESCE(ev.equity_raw,       la.equity_raw, 0),
 			COALESCE(ev.free_margin_raw,  la.free_margin_raw, 0),
-			COALESCE(k.currency, ''),
+			k.currency,
 			COALESCE(ev.fetched_at,       la.fetched_at),
 			COALESCE(ev.buffer_multiple,  la.buffer_multiple, 0)
-		FROM (
-			SELECT DISTINCT venue, venue_type, currency FROM fin_venue_account_snapshot
-		) k
+		FROM keys k
 		CROSS JOIN LATERAL (
 			SELECT s.balance_raw, s.equity_raw, s.free_margin_raw, s.fetched_at, s.buffer_multiple
 			FROM fin_venue_account_snapshot s
-			WHERE s.venue = k.venue AND s.venue_type = k.venue_type
-				AND s.currency IS NOT DISTINCT FROM k.currency
+			WHERE s.venue = k.venue AND s.venue_type = k.venue_type AND s.currency = k.currency
 			ORDER BY s.fetched_at DESC, s.id DESC
 			LIMIT 1
 		) la
 		LEFT JOIN LATERAL (
 			SELECT s.balance_raw, s.equity_raw, s.free_margin_raw, s.fetched_at, s.buffer_multiple
 			FROM fin_venue_account_snapshot s
-			WHERE s.venue = k.venue AND s.venue_type = k.venue_type
-				AND s.currency IS NOT DISTINCT FROM k.currency
+			WHERE s.venue = k.venue AND s.venue_type = k.venue_type AND s.currency = k.currency
 				AND s.src IN ('okx_event','binance_event','mt_frame')
 				AND s.fetched_at > now() - interval '15 minutes'
 			ORDER BY s.fetched_at DESC
