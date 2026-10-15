@@ -2,6 +2,7 @@
 // 前端零运算只渲染；缺数据显缺不显 0；时戳 UTC 口径（业主令 10-15——venue/CFD 全 UTC）。
 import { useEffect, useState } from "react";
 import { client, errText } from "../api";
+import { onCase } from "../stream";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import type { GetOverviewBundleResponse, OverviewOrderRow } from "../gen/dashboardv1/account_pb";
 import type { RequestBoxItem } from "../gen/dashboardv1/request_box_pb";
@@ -26,7 +27,23 @@ export default function OverviewPage() {
       setB(bd); setBox(bx.items); setErr("");
     } catch (e) { setErr(errText(e)); }
   };
-  useEffect(() => { void load(); }, []);
+  // D-536 复审收口：首载 RPC + 事件流驱动重取——账户事件/域刷新/持仓事件/告警
+  // 任一到帧即拖尾重取 bundle（2s 拖尾合突发帧，venue 轮询节拍高频不连发）。
+  useEffect(() => {
+    void load();
+    let t: number | undefined;
+    const re = () => { window.clearTimeout(t); t = window.setTimeout(() => void load(), 2000); };
+    const offs = [
+      onCase("accountEvent", re),
+      onCase("dataRefresh", re),
+      onCase("brokerPositionEvent", re),
+      onCase("position", re),
+      onCase("alert", re),
+      onCase("fundingNeed", re),
+    ];
+    return () => { window.clearTimeout(t); offs.forEach((f) => f()); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const resolve = async (id: number, state: ResolveRequestState) => {
     setBusy(id);
