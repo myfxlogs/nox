@@ -261,4 +261,18 @@ message GetOverviewBundleResponse {
   bool kill_switch = 15;
   double net30_usd = 16;      // 30d 滚动账本净额（对 −3% 硬线）
   int32 crit_alerts_24h = 17;
+  // §5 十段工序实时状态（S3′-b：后端阶段健康读模——每段聚合 emit 时戳+
+  // wait_reason+错误面；禁前端拿 dept 拼状态/禁前端判故障）。
+  repeated PipelineStageHealth stages = 18;
+}
+
+// PipelineStageHealth 工序段健康行（十段固定枚举 key 后文注释面）。
+// state 枚举：working=🟢工作 / waiting=◐等待带因 / idle=—闲置 / error=🔴故障。
+message PipelineStageHealth {
+  string key = 1;            // collect/research/opp_publish/gate_eval/assembly/execution/holding/exit/ledger/review
+  string state = 2;
+  string narrative = 3;      // 一行实况叙事（后端聚合原文）
+  string wait_reason = 4;    // 等待因（waiting 态有值）
+  string error = 5;          // 故障面（error 态有值）
+  int64 last_event_unix = 6; // 最近 emit 时戳（0=无）
 }
