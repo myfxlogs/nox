@@ -56,8 +56,20 @@ func (e *CEXExecutor) gateMarginPrecheck(ctx context.Context, o Order) error {
 	}
 	required := o.Qty * mark / lev
 	if required > avail*(1-e.marginReservePct) {
-		return fmt.Errorf("gate margin insufficient: need %.2f > avail %.2f × %.2f (lev %.0f mark %.4g)",
-			required, avail, 1-e.marginReservePct, lev, mark)
+		// D-549 通用化：futures 池缺口 → spot→futures 装配后重读 accounts 复判；
+		// 装配败=fail-closed 如实拒因（min(缺口,spot可用) 禁放大禁预腾）。
+		need := required - avail*(1-e.marginReservePct)
+		if _, aerr := e.gateAssembleMargin(ctx, need); aerr != nil {
+			return fmt.Errorf("gate margin insufficient（装配败: %v）: need %.2f > avail %.2f × %.2f (lev %.0f mark %.4g)",
+				aerr, required, avail, 1-e.marginReservePct, lev, mark)
+		}
+		if aerr := e.gateFuturesAvail(ctx, &avail, &equity); aerr != nil {
+			return fmt.Errorf("gate margin 装配后重读 %s: %w", o.Symbol, aerr)
+		}
+		if required > avail*(1-e.marginReservePct) {
+			return fmt.Errorf("gate margin insufficient（装配后仍不足）: need %.2f > avail %.2f × %.2f (lev %.0f mark %.4g)",
+				required, avail, 1-e.marginReservePct, lev, mark)
+		}
 	}
 	return e.liqDistanceGuard(ctx, o, liqInput{venue: "gate", mark: mark, equity: equity})
 }
@@ -91,3 +103,35 @@ func (e *CEXExecutor) gateMarkPrice(ctx context.Context, contract string) (float
 }
 
 // liqInput D-472 S4：强平距离闸输入（venue 分支各自实拉）。
+
+// gateFuturesAvail futures 账户 available/total 重读（装配后复判用）——指针回写。
+func (e *CEXExecutor) gateFuturesAvail(ctx context.Context, avail, equity *float64) error {
+	endpoint := "/futures/usdt/accounts"
+	ts := gateNow()
+	h := http.Header{
+		"KEY":       {e.apiKey},
+		"Timestamp": {strconv.FormatInt(ts, 10)},
+		"SIGN":      {signutil.GateSign(e.apiSecret, "GET", "/api/v4"+endpoint, "", "", ts)},
+	}
+	body, err := e.get(ctx, e.baseURL+endpoint, h)
+	if err != nil {
+		return err
+	}
+	var acc struct {
+		Available string `json:"available"`
+		Total     string `json:"total"`
+	}
+	if err := json.Unmarshal(body, &acc); err != nil {
+		return err
+	}
+	a, err := f64z(acc.Available)
+	if err != nil {
+		return err
+	}
+	tot, err := f64z(acc.Total)
+	if err != nil {
+		return err
+	}
+	*avail, *equity = a, tot
+	return nil
+}

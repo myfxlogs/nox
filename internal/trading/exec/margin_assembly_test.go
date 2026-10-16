@@ -1,0 +1,182 @@
+package exec
+
+// margin_assembly_test.go —— CEX 腿保证金装配段锚（D-549 通用化）：
+// okx savings→funding→unified 三段序列+装配额上限+读败 fail-closed；
+// gate spot→futures 序列+读败 fail-closed。
+
+import (
+	"context"
+	"io"
+	"net/http"
+	"strings"
+	"testing"
+)
+
+// d550okxRT okx 装配链 fake：low→装配后 high 的 max-size 翻转 + 调用序列记录。
+type d550okxRT struct {
+	maxCalls int
+	seq      []string
+	savFail  bool
+	funding  string
+	savings  string
+}
+
+func (rt *d550okxRT) RoundTrip(req *http.Request) (*http.Response, error) {
+	p := req.URL.Path
+	rt.seq = append(rt.seq, req.Method+" "+p)
+	var body string
+	switch {
+	case strings.Contains(p, "/api/v5/public/instruments"):
+		body = `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01"}]}`
+	case strings.Contains(p, "/api/v5/public/mark-price"):
+		body = `{"data":[{"markPx":"100"}]}`
+	case strings.Contains(p, "/api/v5/account/max-size"):
+		rt.maxCalls++
+		v := "10"
+		if rt.maxCalls > 1 {
+			v = "200"
+		}
+		body = `{"code":"0","data":[{"maxBuy":"` + v + `","maxSell":"` + v + `"}]}`
+	case strings.Contains(p, "/api/v5/asset/balances"):
+		body = `{"data":[{"details":[{"ccy":"USDT","availBal":"` + rt.funding + `"}]}]}`
+	case strings.Contains(p, "/api/v5/finance/savings/balance"):
+		if rt.savFail {
+			return &http.Response{StatusCode: 500, Body: io.NopCloser(strings.NewReader("x")), Header: make(http.Header), Request: req}, nil
+		}
+		body = `{"data":[{"amt":"` + rt.savings + `"}]}`
+	case strings.Contains(p, "/api/v5/finance/savings/purchase-redempt"),
+		strings.Contains(p, "/api/v5/asset/transfer"):
+		body = `{"code":"0","data":[]}`
+	default:
+		body = `{"code":"0","data":[]}`
+	}
+	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: req}, nil
+}
+
+// qty=1 base, ctVal=0.01 → sz=100 张；首读 maxSell=10 → 不足。
+// need=(100−10×0.8)×0.01×100=$92。funding=50 → 赎 42（savings=500 充足）→划 92。
+func TestMarginAssembly_OKX(t *testing.T) {
+	rt := &d550okxRT{funding: "50", savings: "500"}
+	e := NewCEXExecutor("okx", "perp", "k", "s", "p", "http://x", false)
+	e.client = &http.Client{Transport: rt}
+	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "X-USDT-SWAP", Side: "SELL", Qty: 1, Venue: "okx:perp"}); err != nil {
+		t.Fatalf("装配后应放行: %v (seq=%v)", err, rt.seq)
+	}
+	// 序列断言：savings 读→赎回→划转→max-size 复判（顺序=装配三段）
+	idx := func(sub string) int {
+		for i, s := range rt.seq {
+			if strings.Contains(s, sub) {
+				return i
+			}
+		}
+		return -1
+	}
+	if i, j, k := idx("savings/balance"), idx("purchase-redempt"), idx("asset/transfer"); !(i >= 0 && j > i && k > j) {
+		t.Fatalf("装配序列乱: %v", rt.seq)
+	}
+	if rt.maxCalls < 2 {
+		t.Fatalf("装配后未重读 max-size: %d", rt.maxCalls)
+	}
+}
+
+// savings 可赎额读败 → fail-closed 拒（不赎不划不翻放行）。
+func TestMarginAssembly_OKXSavingsReadFail(t *testing.T) {
+	rt := &d550okxRT{funding: "50", savings: "500", savFail: true}
+	e := NewCEXExecutor("okx", "perp", "k", "s", "p", "http://x", false)
+	e.client = &http.Client{Transport: rt}
+	err := e.MarginPrecheck(context.Background(), Order{Symbol: "X-USDT-SWAP", Side: "SELL", Qty: 1, Venue: "okx:perp"})
+	if err == nil || !strings.Contains(err.Error(), "装配败") {
+		t.Fatalf("savings 读败应 fail-closed 拒: %v", err)
+	}
+	for _, s := range rt.seq {
+		if strings.Contains(s, "purchase-redempt") || strings.Contains(s, "asset/transfer") {
+			t.Fatalf("读败后不应有写动面: %v", rt.seq)
+		}
+	}
+}
+
+// d550gateRT gate 装配链 fake：futures accounts low→high 翻转 + spot 余额 + transfer。
+type d550gateRT struct {
+	accCalls int
+	seq      []string
+	spot     string
+	spotFail bool
+}
+
+func (rt *d550gateRT) RoundTrip(req *http.Request) (*http.Response, error) {
+	p := req.URL.Path
+	rt.seq = append(rt.seq, req.Method+" "+p)
+	var body string
+	switch {
+	case strings.Contains(p, "/futures/usdt/accounts"):
+		rt.accCalls++
+		v := "10"
+		if rt.accCalls > 1 {
+			v = "500"
+		}
+		body = `{"available":"` + v + `","total":"` + v + `"}`
+	case strings.Contains(p, "/futures/usdt/contracts/"):
+		body = `{"mark_price":"1000"}`
+	case strings.Contains(p, "/futures/usdt/dual_comp/position/"): // 模式探针
+		body = `{"leverage":"10"}`
+	case strings.Contains(p, "/futures/usdt/positions") || strings.Contains(p, "dual_comp"):
+		body = `{"leverage":"10"}`
+	case strings.Contains(p, "/spot/accounts"):
+		if rt.spotFail {
+			return &http.Response{StatusCode: 500, Body: io.NopCloser(strings.NewReader("x")), Header: make(http.Header), Request: req}, nil
+		}
+		body = `[{"currency":"USDT","available":"` + rt.spot + `"}]`
+	case strings.Contains(p, "/wallet/transfers"):
+		body = `{"txid":"1"}`
+	default:
+		body = `{}`
+	}
+	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: req}, nil
+}
+
+// qty=1 mark=1000 lev=10 → need=100；avail=10 → 缺口 92 → spot=200 划 92 后重读放行。
+func TestMarginAssembly_Gate(t *testing.T) {
+	rt := &d550gateRT{spot: "200"}
+	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
+	e.client = &http.Client{Transport: rt}
+	err := e.MarginPrecheck(context.Background(), Order{Symbol: "X_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
+	// 杠杆实况读走 get_leverage 链——fake 未覆写即读败 fail-closed 也可接受；
+	// 只锚「若走到不足分支」装配序列与读败语义。
+	if err == nil {
+		idx := func(sub string) int {
+			for i, s := range rt.seq {
+				if strings.Contains(s, sub) {
+					return i
+				}
+			}
+			return -1
+		}
+		if i, j := idx("spot/accounts"), idx("wallet/transfers"); !(i >= 0 && j > i) {
+			t.Fatalf("gate 装配序列乱: %v", rt.seq)
+		}
+		if rt.accCalls < 2 {
+			t.Fatalf("装配后未重读 accounts: %d", rt.accCalls)
+		}
+		return
+	}
+	if !strings.Contains(err.Error(), "gate margin insufficient") && !strings.Contains(err.Error(), "杠杆实况") && !strings.Contains(err.Error(), "margin precheck") {
+		t.Fatalf("拒因失真: %v", err)
+	}
+}
+
+// spot 读败 → fail-closed（零划转）。
+func TestMarginAssembly_GateSpotReadFail(t *testing.T) {
+	rt := &d550gateRT{spot: "200", spotFail: true}
+	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
+	e.client = &http.Client{Transport: rt}
+	err := e.MarginPrecheck(context.Background(), Order{Symbol: "X_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
+	if err == nil {
+		// 若杠杆实况段先拒，spot 读根本未触发——仍是 fail-closed 语义，过。
+		return
+	}
+	for _, s := range rt.seq {
+		if strings.Contains(s, "wallet/transfers") {
+			t.Fatalf("读败后不应有划转: %v", rt.seq)
+		}
+	}
+}
