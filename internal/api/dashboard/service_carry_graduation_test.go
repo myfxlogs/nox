@@ -282,8 +282,10 @@ func TestD403_Approve_LongCfd_ShortPerp_Direction(t *testing.T) {
 		t.Errorf("venues got %s×%s", f.combo.VenueBuy, f.combo.VenueSell)
 	}
 	// D-584 出处锚：approve 写径必带 graduation 血缘（禁 NULL 出处过闸）。
-	if f.combo.Source != "graduation" || f.combo.ProvenanceID == nil || *f.combo.ProvenanceID <= 0 {
-		t.Errorf("source=%q provenance=%v（须 graduation+毕业行 id）", f.combo.Source, f.combo.ProvenanceID)
+	// D-584 出处锚收紧：approve 写径必带 graduation 血缘且 provenance_id
+	// =请求 graduation_id（本测 GraduationId=5——因果链非任 id）。
+	if f.combo.Source != "graduation" || f.combo.ProvenanceID == nil || *f.combo.ProvenanceID != 5 {
+		t.Errorf("source=%q provenance=%v（须 graduation+毕业行 id=5）", f.combo.Source, f.combo.ProvenanceID)
 	}
 	if f.combo.Simulated {
 		t.Error("simulated 必须 false（真仓白名单）")
