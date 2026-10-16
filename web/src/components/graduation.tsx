@@ -1,5 +1,5 @@
-// graduation.tsx —— 毕业授权段（投资人页挂段）：pending 表 + dry_run 试算 +
-// 三模互斥批准 + decided 历史只读。前端零信任：折算/池映射/风险判全后端回显。
+// graduation.tsx —— 毕业授权段（投资人页挂段）：待批表 + 试算预览 +
+// 三种额度方式互斥批准 + 已裁定历史只读。前端零信任：折算/池映射/风险判全后端回显。
 import { useEffect, useState } from "react";
 import { client, errText } from "../api";
 import type {
@@ -10,10 +10,31 @@ import { fmtUsd } from "./fmt";
 
 type Mode = "pct" | "usd" | "explicit";
 
+const STRUCTURE_CN: Record<string, string> = {
+  short_cfd_long_perp: "卖CFD·买永续",
+  short_perp_long_cfd: "卖永续·买CFD",
+  short_perp_long_spot: "卖永续·买现货",
+};
+
+const STATUS_CN: Record<string, string> = {
+  approved: "已批准",
+  rejected: "已拒绝",
+  expired: "已过期",
+};
+
+function structCN(s: string): string {
+  return STRUCTURE_CN[s] || s;
+}
+
+function statusCN(s: string): string {
+  return STATUS_CN[s] || s;
+}
+
 function covBadge(r: CarryGraduationRow): string {
   const c = r.coverageRatio;
   if (c == null) return "—";
-  return (c * 100).toFixed(0) + "%" + (c < 0.5 ? "🔴" : c < 0.8 ? "🟡" : "");
+  const tag = c < 0.5 ? "（偏低）" : c < 0.8 ? "（一般）" : "";
+  return (c * 100).toFixed(0) + "%" + tag;
 }
 
 export default function GraduationPanel() {
@@ -81,7 +102,7 @@ export default function GraduationPanel() {
   };
 
   const reject = async (id: number) => {
-    const why = window.prompt("拒绝理由（回写旗标 warn）:");
+    const why = window.prompt("拒绝理由（将记入旗标 warn）:");
     if (why == null) return;
     setBusy(true);
     try {
@@ -102,15 +123,15 @@ export default function GraduationPanel() {
 
   return (
     <div>
-      <h2>毕业授权{pending.length > 0 ? `（${pending.length} 待批）` : ""}</h2>
+      <h2>毕业授权{pending.length > 0 ? `（${pending.length} 条待批）` : ""}</h2>
       {err && <div className="err">{err}</div>}
-      {pending.length === 0 && decided.length === 0 && <div className="muted">无毕业提案</div>}
+      {pending.length === 0 && decided.length === 0 && <div className="muted">暂无毕业提案</div>}
       {pending.length > 0 && (
         <table>
           <thead>
             <tr>
-              <th>#</th><th>symbol</th><th>结构</th><th>venue 对</th><th>age</th>
-              <th>accrued</th><th>net_all_in</th><th>funding_ann</th><th>coverage</th><th></th>
+              <th>#</th><th>品种</th><th>结构</th><th>场所对</th><th>天数</th>
+              <th>已计息</th><th>全费净额</th><th>资金费年化</th><th>覆盖度</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -118,9 +139,9 @@ export default function GraduationPanel() {
               <tr key={Number(r.id)}>
                 <td>{Number(r.id)}</td>
                 <td>{r.symbol}{r.flagWarn ? <span className="warn"> ⚠{r.flagWarn}</span> : null}</td>
-                <td>{r.structure}</td>
+                <td>{structCN(r.structure)}</td>
                 <td>{r.venue}</td>
-                <td>{r.ageDays.toFixed(1)}d</td>
+                <td>{r.ageDays.toFixed(1)}天</td>
                 <td className={r.accruedUsd >= 0 ? "good" : "crit"}>{fmtUsd(r.accruedUsd)}</td>
                 <td>{r.netAllInUsd != null ? fmtUsd(r.netAllInUsd) : "—"}</td>
                 <td>{r.lastFundingAnn != null ? r.lastFundingAnn.toFixed(2) + "%" : "—"}</td>
@@ -139,32 +160,32 @@ export default function GraduationPanel() {
 
       {openId != null && (
         <div className="card" style={{ marginTop: "8px" }}>
-          <div className="k">批准 #{openId} —— 三模互斥（先 dry_run 试算再批准）</div>
+          <div className="k">批准 #{openId} —— 三种额度方式任选其一，先试算再批准</div>
           <div style={{ margin: "8px 0" }}>
-            {([["pct", "占比 %"], ["usd", "金额 USD"], ["explicit", "显式四字段"]] as [Mode, string][]).map(([m, label]) => (
+            {([["pct", "按可用资金占比 %"], ["usd", "按固定金额 USD"], ["explicit", "显式四字段（数量/额度上限）"]] as [Mode, string][]).map(([m, label]) => (
               <label key={m} style={{ marginRight: "12px" }}>
                 <input type="radio" checked={mode === m} onChange={() => { setMode(m); setPreview(null); }} /> {label}
               </label>
             ))}
           </div>
           {mode === "pct" && (
-            <input placeholder="可用基准占比 %（如 5）" value={pct} onChange={(e) => setPct(e.target.value)} />
+            <input placeholder="可用资金占比 %（如 5 表示 5%）" value={pct} onChange={(e) => setPct(e.target.value)} />
           )}
           {mode === "usd" && (
             <input placeholder="分配金额 USD（如 200）" value={usd} onChange={(e) => setUsd(e.target.value)} />
           )}
           {mode === "explicit" && (
             <div>
-              <input placeholder="买腿 qty 上限" value={lq} onChange={(e) => setLq(e.target.value)} />{" "}
-              <input placeholder="卖腿 qty 上限" value={sq} onChange={(e) => setSq(e.target.value)} />{" "}
-              <input placeholder="双腿名义上限 USD" value={gross} onChange={(e) => setGross(e.target.value)} />{" "}
-              <input placeholder="名义额 USD（可缺）" value={notional} onChange={(e) => setNotional(e.target.value)} />
+              <input placeholder="买腿数量上限" value={lq} onChange={(e) => setLq(e.target.value)} />{" "}
+              <input placeholder="卖腿数量上限" value={sq} onChange={(e) => setSq(e.target.value)} />{" "}
+              <input placeholder="双腿总敞口上限 USD" value={gross} onChange={(e) => setGross(e.target.value)} />{" "}
+              <input placeholder="名义金额 USD（可留空）" value={notional} onChange={(e) => setNotional(e.target.value)} />
             </div>
           )}
-          <input placeholder="note（可缺）" value={note} onChange={(e) => setNote(e.target.value)}
+          <input placeholder="备注（可留空）" value={note} onChange={(e) => setNote(e.target.value)}
             style={{ marginTop: "6px", width: "60%" }} />
           <div style={{ marginTop: "8px" }}>
-            <button disabled={busy} onClick={() => submit(openId, true)}>dry_run 试算</button>{" "}
+            <button disabled={busy} onClick={() => submit(openId, true)}>试算预览</button>{" "}
             <button disabled={busy || preview == null || !preview.ok} onClick={() => submit(openId, false)}>
               确认批准
             </button>
@@ -175,18 +196,18 @@ export default function GraduationPanel() {
               {!preview.ok && <div className="err">{preview.error}</div>}
               {preview.ok && (
                 <>
-                  <div>est_gross={fmtUsd(preview.estGrossUsd)} ｜ 腿名义={fmtUsd(preview.estLegNotionalUsd)}
-                    ｜ qty 双算 long={preview.estLongQty.toFixed(4)} short={preview.estShortQty.toFixed(4)}
-                    ｜ alloc={fmtUsd(preview.estAllocUsd)}（{(preview.estAllocPct * 100).toFixed(2)}%）</div>
-                  <div>基准 {fmtUsd(preview.allocBaseUsd)}{preview.allocBaseNote ? `（${preview.allocBaseNote}）` : ""}
-                    ｜ risk={preview.riskLevel}{preview.suggestedAllocUsd > 0 ? ` 建议 ${fmtUsd(preview.suggestedAllocUsd)}` : ""}</div>
+                  <div>预估总敞口={fmtUsd(preview.estGrossUsd)} ｜ 单腿名义={fmtUsd(preview.estLegNotionalUsd)}
+                    ｜ 双腿数量 买={preview.estLongQty.toFixed(4)} 卖={preview.estShortQty.toFixed(4)}
+                    ｜ 实际分配={fmtUsd(preview.estAllocUsd)}（{(preview.estAllocPct * 100).toFixed(2)}%）</div>
+                  <div>可用基准 {fmtUsd(preview.allocBaseUsd)}{preview.allocBaseNote ? `（${preview.allocBaseNote}）` : ""}
+                    ｜ 风险等级={preview.riskLevel}{preview.suggestedAllocUsd > 0 ? ` 建议额度 ${fmtUsd(preview.suggestedAllocUsd)}` : ""}</div>
                   {preview.riskReasons.map((x, i) => <div key={i} className="warn">⚠ {x}</div>)}
                   {preview.legPools.map((lp) => (
                     <div key={lp.venueKey}>
-                      {lp.venueKey}: {lp.found ? `${fmtUsd(lp.equity)} ${lp.currency}@${lp.poolVenue}:${lp.poolVenueType}${lp.isMin ? "（约束池）" : ""} src=${lp.source}` : "未采集"}
+                      {lp.venueKey}: {lp.found ? `${fmtUsd(lp.equity)} ${lp.currency}@${lp.poolVenue}:${lp.poolVenueType}${lp.isMin ? "（约束池）" : ""} 来源=${lp.source}` : "未采集"}
                     </div>
                   ))}
-                  {preview.venueGaps.length > 0 && <div className="warn">venue 缺口: {preview.venueGaps.join("；")}</div>}
+                  {preview.venueGaps.length > 0 && <div className="warn">场所缺口: {preview.venueGaps.join("；")}</div>}
                   {preview.sizingNotes.map((x, i) => <div key={i}>· {x}</div>)}
                 </>
               )}
@@ -197,14 +218,14 @@ export default function GraduationPanel() {
 
       {decided.length > 0 && (
         <>
-          <h3 className="muted">历史（只读）</h3>
+          <h3 className="muted">已裁定（只读）</h3>
           <table>
-            <thead><tr><th>#</th><th>symbol</th><th>venue 对</th><th>状态</th><th>裁定人</th><th>combo</th><th>note</th></tr></thead>
+            <thead><tr><th>#</th><th>品种</th><th>场所对</th><th>状态</th><th>裁定方</th><th>组合</th><th>备注</th></tr></thead>
             <tbody>
               {decided.map((r) => (
                 <tr key={Number(r.id)}>
                   <td>{Number(r.id)}</td><td>{r.symbol}</td><td>{r.venue}</td>
-                  <td>{r.status}</td><td>{r.decidedBy || "委员会"}</td>
+                  <td>{statusCN(r.status)}</td><td>{r.decidedBy || "委员会"}</td>
                   <td>{r.comboId != null ? "#" + Number(r.comboId) : "—"}</td>
                   <td className="muted">{r.decidedNote}</td>
                 </tr>
