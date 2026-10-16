@@ -219,8 +219,8 @@ func TestD587_ReadyWaitKindText(t *testing.T) {
 		st := svc.store
 		ctx := context.Background()
 		if _, err := st.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
-			(id, canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated)
-			VALUES (908,'FHSYM','FHSYM','binance','spot','gate','perp',1,1,1000,100,true,false)`); err != nil {
+			(id, canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated, source)
+			VALUES (908,'FHSYM','FHSYM','binance','spot','gate','perp',1,1,1000,100,true,false,'manual_seed')`); err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() {

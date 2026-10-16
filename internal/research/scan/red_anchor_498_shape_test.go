@@ -228,8 +228,8 @@ func d410SeedCombo(t *testing.T, s *pgstore.Store, canonBuy, venueBuy, canonSell
 	t.Helper()
 	if _, err := s.Pool().Exec(context.Background(), `
 		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell,
-			max_long_qty, max_short_qty, max_gross_usd, enabled, simulated)
-		VALUES ($1,$2,split_part($3,':',1),split_part($3,':',2),split_part($4,':',1),split_part($4,':',2),1,1,10000,true,$5)`,
+			max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, source)
+		VALUES ($1,$2,split_part($3,':',1),split_part($3,':',2),split_part($4,':',1),split_part($4,':',2),1,1,10000,true,$5,'manual_seed')`,
 		canonBuy, canonSell, venueBuy, venueSell, simulated); err != nil {
 		t.Fatalf("seed combo: %v", err)
 	}

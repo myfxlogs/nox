@@ -23,8 +23,8 @@ func TestD547_T1_ComboGrossAlignedByMigration(t *testing.T) {
 	// 干跑锚：自锁行（2×notional>gross）+幽灵键按生产形态先播（0159 未跑时它们在场）。
 	if _, err := st.Pool().Exec(ctx, `
 		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell,
-			max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated)
-		VALUES ('BTCUSDT','BTCUSD','okx','perp','3001157','mt5', 1000, 1, 1000, 1200, true, false)
+			max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated, source)
+		VALUES ('BTCUSDT','BTCUSD','okx','perp','3001157','mt5', 1000, 1, 1000, 1200, true, false, 'manual_seed')
 		ON CONFLICT DO NOTHING`); err != nil {
 		t.Fatalf("seed combo: %v", err)
 	}

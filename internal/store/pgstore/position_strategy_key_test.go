@@ -85,9 +85,9 @@ func TestCreatePosition_StrategyKey_Provenance(t *testing.T) {
 		`INSERT INTO fin_position_strategy_map (source_kind, source_val, strategy_key) VALUES
 		 ('engine_type','CARRY','carry_generic'),('structure','long_cfd_short_perp','cfd_carry')`,
 		// SGP1 命中毕业 combo（venue 对=gate×binance）；SGP2 指向非毕业 note combo（不解链）。
-		`INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note) VALUES
-		 ('SGPX','SGPX','gate','perp','binance','perp',1,1,100,true,false,'D-403毕业 paper#` + itoa(paperID) + `'),
-		 ('SGPX','SGPX','okx','perp','binance','perp',1,1,100,true,false,'S2桥 trial')`,
+		`INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note, source) VALUES
+		 ('SGPX','SGPX','gate','perp','binance','perp',1,1,100,true,false,'D-403毕业 paper#` + itoa(paperID) + `','graduation'),
+		 ('SGPX','SGPX','okx','perp','binance','perp',1,1,100,true,false,'S2桥 trial','s2_trial')`,
 	} {
 		if _, err := s.pool.Exec(ctx, q); err != nil {
 			t.Fatal(err)

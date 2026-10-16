@@ -23,6 +23,11 @@ func (e *Engine) xassetSpecs() []exec.XAssetComboAllowSpec {
 // （exec.XAssetSpecsFromRows 单源，D-367 剔除规则随源），atomic 指针整体替换。
 // XAssetReloader 最小接口的实现侧（dashboard→autotrade 接口注入防循环依赖，D-195-A 先例）。
 func (e *Engine) ReloadXAssetAllowCombos(ctx context.Context) error {
+	// D-584 venue 退役守卫：armed 评估环每拍——venue 双簿消失组合自动
+	// enabled=false+note 留痕（best-effort 不阻塞重载）。
+	if n, err := e.store.RetireCombosMissingVenue(ctx); err == nil && n > 0 {
+		log.Printf("[whitelist] venue 退役: %d 组合自动摘牌（broker_accounts+exchange_configs 双簿消失）", n)
+	}
 	rows, err := e.store.LoadXAssetAllowCombos(ctx, e.cfg.Environment)
 	if err != nil {
 		return fmt.Errorf("reload xasset allow combos: %w", err)

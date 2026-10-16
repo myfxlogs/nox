@@ -118,3 +118,6 @@ var CanonicalProductClassSQL string // D-558：SWAPARB 配对等价键表（cano
 
 //go:embed 1038_grad_sizing_mode.sql
 var GradSizingModeSQL string // D-581：毕业批准拆层 sizing_mode 三态（fixed/pct/system）+funding_pct 原样落表
+
+//go:embed 1039_combo_source.sql
+var ComboSourceSQL string // D-584：armed 白名单出处约束（source CHECK+provenance_id+enable 闸）

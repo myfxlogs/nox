@@ -122,8 +122,8 @@ func TestNullCap_PctRow(t *testing.T) {
 	var pid int64
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell,
-			sizing_mode, funding_pct, enabled, note)
-		VALUES ('NCAPBUY','NCAPSELL','a','perp','b','perp','pct',0.1,false,'pct行') RETURNING id`).Scan(&pid); err != nil {
+			sizing_mode, funding_pct, enabled, note, source)
+		VALUES ('NCAPBUY','NCAPSELL','a','perp','b','perp','pct',0.1,false,'pct行','manual_seed') RETURNING id`).Scan(&pid); err != nil {
 		t.Fatalf("seed pct row: %v", err)
 	}
 	// fixed 行对照

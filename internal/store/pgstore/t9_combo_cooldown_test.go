@@ -31,8 +31,8 @@ func TestD512_T9_ComboCooldown(t *testing.T) {
 			vs = "okx"
 		}
 		if _, err := st.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
-			(id, canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated)
-			VALUES ($1,$2,$3,'3001157','mt5',$4,'perp',1,1,1000,true,false)`,
+			(id, canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, source)
+			VALUES ($1,$2,$3,'3001157','mt5',$4,'perp',1,1,1000,true,false,'manual_seed')`,
 			c.id, c.cb, c.vs, vs); err != nil {
 			t.Fatal(err)
 		}

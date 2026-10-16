@@ -231,4 +231,5 @@ var migrationFiles = []struct {
 	{1036, migrations.PositionStrategyKeySQL, false},          // 仓位归组键：positions.strategy_key+fin_position_strategy_map 判据表
 	{1037, migrations.CanonicalProductClassSQL, false},        // D-558：SWAPARB 配对等价键 fin_canonical_product_class（canonical→产品类）
 	{1038, migrations.GradSizingModeSQL, false},               // D-581：毕业拆层 sizing_mode+funding_pct（pct/system 档腿帽 NULL 活池折算）
+	{1039, migrations.ComboSourceSQL, false},                  // D-584：armed 白名单出处约束
 }

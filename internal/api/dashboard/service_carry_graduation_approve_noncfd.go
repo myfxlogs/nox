@@ -72,6 +72,7 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 			return fail("重载器未接线（SetXAssetReloader 缺装配），fail-closed 拒绝授权")
 		}
 		combo := &pgstore.XAssetComboInsert{
+			Source: "graduation", ProvenanceID: &g.GraduationId, // D-584 出处约束——批准链+毕业行 id
 			CanonicalBuy: grad.Symbol, CanonicalSell: grad.Symbol,
 			VenueBuy: venueSpot, VenueSell: venuePerp,
 			MaxLongQty: longQty, MaxShortQty: shortQty,
@@ -132,6 +133,7 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 			return fail("重载器未接线（SetXAssetReloader 缺装配），fail-closed 拒绝授权")
 		}
 		combo := &pgstore.XAssetComboInsert{
+			Source: "graduation", ProvenanceID: &g.GraduationId, // D-584 出处约束——批准链+毕业行 id
 			CanonicalBuy: canon, CanonicalSell: canon,
 			VenueBuy: venueSpot, VenueSell: venueFut,
 			MaxLongQty: g.MaxLongQty, MaxShortQty: g.MaxShortQty,

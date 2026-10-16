@@ -234,6 +234,7 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 		return fail("重载器未接线（SetXAssetReloader 缺装配），fail-closed 拒绝授权")
 	}
 	combo := &pgstore.XAssetComboInsert{
+		Source: "graduation", ProvenanceID: &g.GraduationId, // D-584 出处约束——批准链+毕业行 id
 		CanonicalBuy: canonBuy, CanonicalSell: canonSell,
 		VenueBuy: venueBuy, VenueSell: venueSell,
 		MaxLongQty:  longQty,  // 买腿上限（MT 腿=手数、CEX 腿=张数，跟 venue_buy 走）

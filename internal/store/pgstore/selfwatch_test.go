@@ -148,13 +148,13 @@ func TestD033_StageReadPorts(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `
 		INSERT INTO fin_venue_exposure_caps (venue_key, cap_usd, enabled) VALUES ('okx:perp', 840, true);
 		INSERT INTO fin_canonical_exposure_caps (canonical, cap_usd, enabled) VALUES ('XAUUSD', 5000, true);
-		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_sell, max_long_qty, max_short_qty, max_gross_usd, enabled)
-		VALUES ('XAUUSD','XAUUSDT','3001157','okx',1,1,6000,true)`); err != nil {
+		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, source)
+		VALUES ('XAUUSD','XAUUSDT','3001157','okx',1,1,6000,true,'manual_seed')`); err != nil {
 		t.Fatalf("seed caps: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx, `
-		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated)
-		VALUES ('XAGUSD','XAGUSDT','3001157','okx',1,1,6000,true,true)`); err != nil {
+		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, source)
+		VALUES ('XAGUSD','XAGUSDT','3001157','okx',1,1,6000,true,true,'manual_seed')`); err != nil {
 		t.Fatalf("seed sim combo: %v", err)
 	}
 	vc, cc, _ = s.ExposureCapCounts(ctx)
