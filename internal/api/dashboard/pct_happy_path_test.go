@@ -102,27 +102,27 @@ func TestD490_UsdHappyAndEcho(t *testing.T) {
 	if !strings.Contains(f.decisionNote, "分配$200.0(直填=20.0%×可用基准$1000)") {
 		t.Errorf("decisionNote 缺直填标记: %q", f.decisionNote)
 	}
-	// usd > minPool → 拒批不写库
+	// D-581 拆层：usd>minPool → 过批+池域警示落 note（armed 径活池面闸每拍重查）
 	f2, s2 := d490Fixture(t, d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
 	resp2, _ := s2.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
 		GraduationId: 5, FundingUsd: d490f(1100),
 	}))
-	if resp2.Msg.Ok || f2.combo != nil {
-		t.Error("usd>minPool 应拒批（必然超档）")
+	if !resp2.Msg.Ok || f2.combo == nil {
+		t.Errorf("usd>minPool 应过批+警示（拆层后池域非拒批域）: ok=%v combo=%+v err=%s", resp2.Msg.Ok, f2.combo, resp2.Msg.Error)
 	}
-	if !strings.Contains(resp2.Msg.Error, "超过小池") {
-		t.Errorf("err=%s", resp2.Msg.Error)
+	if !strings.Contains(f2.decisionNote, "超当前小池") {
+		t.Errorf("decisionNote 缺池域警示: %q", f2.decisionNote)
 	}
-	// usd/pool > crossCap(0.5) → 拒批（同安全线判据）
+	// usd/pool > crossCap(0.5) → 过批+超安全线警示
 	f3, s3 := d490Fixture(t, d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
 	resp3, _ := s3.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
 		GraduationId: 5, FundingUsd: d490f(600),
 	}))
-	if resp3.Msg.Ok || f3.combo != nil {
-		t.Error("usd/pool>0.5 应拒批（超安全线）")
+	if !resp3.Msg.Ok || f3.combo == nil {
+		t.Errorf("usd/pool>0.5 应过批+警示: ok=%v err=%s", resp3.Msg.Ok, resp3.Msg.Error)
 	}
-	if !strings.Contains(resp3.Msg.Error, "安全线") {
-		t.Errorf("err=%s", resp3.Msg.Error)
+	if !strings.Contains(f3.decisionNote, "超安全线") {
+		t.Errorf("decisionNote 缺安全线警示: %q", f3.decisionNote)
 	}
 }
 
@@ -147,8 +147,8 @@ func TestD490_FailClosed(t *testing.T) {
 		{name: "pct与usd同传", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1), FundingUsd: d490f(50)}, snaps: goodSnaps, step: 0.01, want: "互斥"},
 		{name: "与显式cap混传", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingUsd: d490f(100), MaxGrossUsd: 500}, snaps: goodSnaps, step: 0.01, want: "互斥"},
 		// D-565 S4：批钱面禁快照兜底——实况双败+快照在场（含陈旧）仍拒。
-		{name: "实况缺失", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: nil, step: 0.01, want: "实况"},
-		{name: "实况缺陈旧快照不救", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: staleSnaps, step: 0.01, noLive: true, want: "实况"},
+		{name: "实况缺失_pct零基准拒", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: nil, step: 0.01, want: "可用基准"},
+		{name: "实况缺陈旧快照不救_pct零基准拒", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: staleSnaps, step: 0.01, noLive: true, want: "可用基准"},
 		{name: "币种非USD系", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: jpySnaps, step: 0.01, want: "币种"},
 		{name: "买腿qty低于minStep", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: goodSnaps, step: 5.0, want: "买腿"},
 		// short_cfd：MT 腿在卖侧——卖腿 qty 同须过 minStep 预检（否则死额度漏网）。
