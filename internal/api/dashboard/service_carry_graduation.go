@@ -195,11 +195,23 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 	// D-490 S3：资金分配模式→服务端折算四字段（快照固化绝对值）；显式模式=请求原值。
 	longQty, shortQty, grossUSD := g.MaxLongQty, g.MaxShortQty, g.MaxGrossUsd
 	notionalUSD := g.NotionalUsd
-	if funding {
+	mode := allocSizingMode(g)
+	if funding && (mode == "fixed" || g.DryRun) { // usd 档=批准时折算固化；pct=批准原样落表（dry_run 仍预览折算）
 		var estr string
 		longQty, shortQty, grossUSD, notionalUSD, userNote, estr = s.allocApply(ctx, resp, venueBuy, venueSell, canonBuy, canonSell, g, userNote)
-		if estr != "" {
+		if estr != "" && mode != "pct" {
 			return fail("%s", estr)
+		}
+		userNote += " 预览:" + estr // pct dry_run 预览失败只注记
+		if mode == "pct" {        // 批准不取折算值——pct 原样落表 armed 径活池折算
+			longQty, shortQty, grossUSD, notionalUSD = 0, 0, 0, nil
+		}
+	}
+	if mode == "pct" || mode == "system" {
+		// 池域警示随行（best-effort 预览失败不拦——armed 径每拍活池折算兜底）。
+		userNote = strings.TrimSpace(userNote + " sizing_mode=" + mode)
+		if mode == "pct" {
+			userNote += fmt.Sprintf("(funding_pct=%.4f 原样落表)", *g.FundingPct)
 		}
 	}
 	// D-471 S2：复核闸已上移至 isCfdStructure 分叉前（全结构硬前置，B-013）——
@@ -230,6 +242,8 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 		NotionalUSD: notionalUSD,
 		Simulated:   false, // 真仓白名单；venue env 门仍是实际真钱闸（双层不矛盾）
 		Note:        "D-403毕业 paper#" + strconv.FormatInt(paper.ID, 10),
+		SizingMode:  mode,
+		FundingPct:  g.FundingPct,
 	}
 	comboID, err := db.InsertXAssetAllowCombo(ctx, combo)
 	if err != nil {

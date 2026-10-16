@@ -115,3 +115,6 @@ var PositionStrategyKeySQL string // 仓位归组键：positions.strategy_key+�
 
 //go:embed 1037_canonical_product_class.sql
 var CanonicalProductClassSQL string // D-558：SWAPARB 配对等价键表（canonical→产品类，111 行种子）
+
+//go:embed 1038_grad_sizing_mode.sql
+var GradSizingModeSQL string // D-581：毕业批准拆层 sizing_mode 三态（fixed/pct/system）+funding_pct 原样落表

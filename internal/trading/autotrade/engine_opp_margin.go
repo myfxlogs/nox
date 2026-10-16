@@ -5,7 +5,9 @@ package autotrade
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"math"
 
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/exec"
@@ -55,4 +57,53 @@ func (e *Engine) marginLegNotional(ctx context.Context, opp pgstore.Opportunity,
 		return 0, false
 	}
 	return *spec.MarginUSD / (fracB + fracS), true
+}
+
+// resolveXAssetSizing D-581：pct/system 档 armed 进场径活池折算——gross=
+// pct×min(双腿池权益)（AccountEquityUSDAt 活快照；equity 口径保守不放大）。
+// pct=行原样落表值；system=app_config grad_system_alloc_pct（决策席域判据）。
+// 池缺/非正 → 条件请求落 fin_condition_gap（kind=capital，缺资自动化）+拒开。
+func (e *Engine) resolveXAssetSizing(ctx context.Context, opp pgstore.Opportunity, spec *exec.XAssetComboAllowSpec) bool {
+	if spec == nil || spec.SizingMode == "" || spec.SizingMode == "fixed" {
+		return true
+	}
+	pct := 0.0
+	if spec.SizingMode == "pct" && spec.FundingPct != nil {
+		pct = *spec.FundingPct
+	}
+	if spec.SizingMode == "system" {
+		if v, ok, err := e.store.AppConfigFloat(ctx, "grad_system_alloc_pct"); err == nil && ok {
+			pct = v
+		}
+	}
+	if !(pct > 0) {
+		log.Printf("[autotrade] skip %s: sizing_mode=%s pct 不可得（fail-closed）", opp.ID, spec.SizingMode)
+		return false
+	}
+	eqB, curB, _, okB := e.service.AccountEquityUSDAt(spec.VenueBuy)
+	eqS, curS, _, okS := e.service.AccountEquityUSDAt(spec.VenueSell)
+	usdLike := func(c string) bool { return c == "USD" || c == "USDT" || c == "UST" }
+	if okB && !usdLike(curB) || okS && !usdLike(curS) {
+		log.Printf("[autotrade] skip %s: sizing %s 池币种非 USD 系（%s/%s，fail-closed 不猜汇率）", opp.ID, spec.SizingMode, curB, curS)
+		return false
+	}
+	if !okB || !okS {
+		log.Printf("[autotrade] skip %s: sizing %s 腿池权益读缺（%s ok=%v %s ok=%v）", opp.ID, spec.SizingMode, spec.VenueBuy, okB, spec.VenueSell, okS)
+		return false
+	}
+	base := math.Min(eqB, eqS)
+	if base <= 0 {
+		// 池短fall → 条件请求自动化（D-581④）：armed 组合缺资机制化落箱。
+		if id, err := e.store.OpenConditionGap(ctx, &pgstore.ConditionGap{
+			TemplateID: "xasset_combo", Kind: "capital",
+			Subject: spec.VenueBuy + "|" + spec.VenueSell,
+			RequestText: fmt.Sprintf("毕业组合 armed 腿池缺资（%s=%.2f/%s=%.2f，sizing_mode=%s）——注资/装配后活池折算自动生效",
+				spec.VenueBuy, eqB, spec.VenueSell, eqS, spec.SizingMode)}); err == nil {
+			_ = e.store.RequestConditionGap(ctx, id)
+		}
+		log.Printf("[autotrade] skip %s: sizing %s 池净值非正（%.2f/%.2f，条件请求已落）", opp.ID, spec.SizingMode, eqB, eqS)
+		return false
+	}
+	exec.XAssetSpecApplyPoolCaps(spec, base*pct)
+	return true
 }

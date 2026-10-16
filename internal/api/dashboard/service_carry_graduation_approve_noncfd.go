@@ -43,12 +43,20 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 		// D-490：同所双池（现货池现金×永续池保证金）资金分配折算——与 cfd 分支同模型。
 		longQty, shortQty, grossUSD := g.MaxLongQty, g.MaxShortQty, g.MaxGrossUsd
 		notionalUSD := g.NotionalUsd
-		if funding {
+		mode := allocSizingMode(g)
+		if funding && (mode == "fixed" || g.DryRun) { // usd 固化；pct=批准原样落表（dry_run 预览折算）
 			var estr string
 			longQty, shortQty, grossUSD, notionalUSD, userNote, estr = s.allocApply(ctx, resp, venueSpot, venuePerp, grad.Symbol, grad.Symbol, g, userNote)
-			if estr != "" {
+			if estr != "" && mode != "pct" {
 				return fail("%s", estr)
 			}
+			userNote += " 预览:" + estr
+			if mode == "pct" { // 批准不取折算值——pct 原样落表
+				longQty, shortQty, grossUSD, notionalUSD = 0, 0, 0, nil
+			}
+		}
+		if mode != "fixed" {
+			userNote = strings.TrimSpace(userNote + " sizing_mode=" + mode)
 		}
 		capLegs := []exposureLeg{{VenueKey: venueSpot, Canonical: grad.Symbol}, {VenueKey: venuePerp, Canonical: grad.Symbol, SellLeg: true}}
 		capWarns, capErr := s.exposureCapGate(ctx, capLegs, grossUSD, notionalUSD)
@@ -68,8 +76,10 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 			VenueBuy: venueSpot, VenueSell: venuePerp,
 			MaxLongQty: longQty, MaxShortQty: shortQty,
 			MaxGrossUSD: grossUSD, NotionalUSD: notionalUSD,
-			Simulated: false,
-			Note:      "D-403毕业 paper#" + strconv.FormatInt(paper.ID, 10),
+			Simulated:  false,
+			Note:       "D-403毕业 paper#" + strconv.FormatInt(paper.ID, 10),
+			SizingMode: mode,
+			FundingPct: g.FundingPct,
 		}
 		comboID, err := db.InsertXAssetAllowCombo(ctx, combo)
 		if err != nil {

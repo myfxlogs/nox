@@ -24,11 +24,22 @@ func XAssetSpecsFromRows(rows []pgstore.XAssetAllowRow) (specs []XAssetComboAllo
 			dropped++
 			continue
 		}
+		// D-581：pct 档须 funding_pct>0（DB CHECK 已钉，加载期防御纵深）；
+		// fixed 档腿帽零值=坏行剔除（NULL 帽属非 fixed 档专属）。
+		if r.SizingMode == "pct" && (r.FundingPct == nil || *r.FundingPct <= 0) {
+			dropped++
+			continue
+		}
+		if (r.SizingMode == "" || r.SizingMode == "fixed") && !(r.MaxGrossUSD > 0) {
+			dropped++
+			continue
+		}
 		specs = append(specs, XAssetComboAllowSpec{
 			CanonicalBuy: r.CanonicalBuy, CanonicalSell: r.CanonicalSell,
 			VenueBuy: r.VenueBuy, VenueSell: r.VenueSell,
 			MaxLongQty: r.MaxLongQty, MaxShortQty: r.MaxShortQty, MaxGrossUSD: r.MaxGrossUSD,
 			NotionalUSD: r.NotionalUSD, MarginUSD: r.MarginUSD,
+			SizingMode: r.SizingMode, FundingPct: r.FundingPct,
 		})
 	}
 	return specs, dropped

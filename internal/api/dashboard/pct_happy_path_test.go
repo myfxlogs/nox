@@ -62,23 +62,28 @@ func TestD490_PctHappyPath(t *testing.T) {
 	if f.combo == nil {
 		t.Fatal("combo 未写入")
 	}
-	if math.Abs(f.combo.MaxGrossUSD-100) > 1e-9 || f.combo.NotionalUSD == nil || math.Abs(*f.combo.NotionalUSD-50) > 1e-9 {
-		t.Errorf("gross/notional 落值错: %+v", f.combo)
+	// D-581 终裁：pct 原样落表——sizing_mode=pct+funding_pct=0.1，腿帽 NULL
+	// （armed 径活池折算 XAssetSpecApplyPoolCaps 落帽），批准不取折算值。
+	if f.combo.SizingMode != "pct" || f.combo.FundingPct == nil || math.Abs(*f.combo.FundingPct-0.1) > 1e-9 {
+		t.Errorf("pct 原样落表错: %+v", f.combo)
 	}
-	if math.Abs(f.combo.MaxLongQty-1.1) > 1e-6 || math.Abs(f.combo.MaxShortQty-0.11) > 1e-6 {
-		t.Errorf("派生 qty 错: long=%v short=%v（want 1.1/0.11）", f.combo.MaxLongQty, f.combo.MaxShortQty)
+	if f.combo.MaxGrossUSD != 0 || f.combo.MaxLongQty != 0 || f.combo.MaxShortQty != 0 || f.combo.NotionalUSD != nil {
+		t.Errorf("pct 档腿帽应留 NULL/零值占位: %+v", f.combo)
 	}
-	// est_* 回显（pct 侧互算=USD 折算值）
-	if math.Abs(resp.Msg.EstAllocUsd-100) > 1e-9 || math.Abs(resp.Msg.EstGrossUsd-100) > 1e-9 ||
-		math.Abs(resp.Msg.EstLegNotionalUsd-50) > 1e-9 {
-		t.Errorf("est_* 回显错: %+v", resp.Msg)
+	// dry_run 预览折算=同件 est_* 回显（armed 落帽值随活池，批准态不写死）。
+	f2, s2 := d490Fixture(t, d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
+	dr, err := s2.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
+		GraduationId: 5, FundingPct: d490f(0.1), DryRun: true,
+	}))
+	if err != nil || !dr.Msg.Ok || math.Abs(dr.Msg.EstAllocUsd-100) > 1e-9 || math.Abs(dr.Msg.EstGrossUsd-100) > 1e-9 {
+		t.Errorf("pct dry_run 预览折算错: ok=%v %+v", dr.Msg.Ok, dr.Msg)
 	}
-	// note 审计标记：pct 侧「分配$X(=P%×可用基准$Nperp)」（行首另有 [gaps:] 前缀）
-	if !strings.Contains(f.decisionNote, "首批") || !strings.Contains(f.decisionNote, "分配$100.0(=10.0%×可用基准$1000perp)") {
-		t.Errorf("decisionNote 缺分配标记: %q", f.decisionNote)
+	if f2.combo != nil {
+		t.Error("dry_run 不得写库")
 	}
-	if len(resp.Msg.SizingNotes) == 0 {
-		t.Error("sizing_notes 应回显池口径注记")
+	// note 审计标记：pct 原样落表语义。
+	if !strings.Contains(f.decisionNote, "首批") || !strings.Contains(f.decisionNote, "pct") {
+		t.Errorf("decisionNote 缺落表标记: %q", f.decisionNote)
 	}
 }
 
@@ -140,19 +145,17 @@ func TestD490_FailClosed(t *testing.T) {
 
 	}
 	goodSnaps := d490Snaps(2000, 1000, "USD", time.Minute)
-	staleSnaps := d490Snaps(2000, 1000, "USD", 10*time.Minute)
 	jpySnaps := d490Snaps(2000, 1000, "JPY", time.Minute)
 	longCfd := "long_cfd_short_perp"
 	cases := []tc{
 		{name: "pct与usd同传", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1), FundingUsd: d490f(50)}, snaps: goodSnaps, step: 0.01, want: "互斥"},
 		{name: "与显式cap混传", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingUsd: d490f(100), MaxGrossUsd: 500}, snaps: goodSnaps, step: 0.01, want: "互斥"},
-		// D-565 S4：批钱面禁快照兜底——实况双败+快照在场（含陈旧）仍拒。
-		{name: "实况缺失_pct零基准拒", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: nil, step: 0.01, want: "可用基准"},
-		{name: "实况缺陈旧快照不救_pct零基准拒", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: staleSnaps, step: 0.01, noLive: true, want: "可用基准"},
-		{name: "币种非USD系", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: jpySnaps, step: 0.01, want: "币种"},
-		{name: "买腿qty低于minStep", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: goodSnaps, step: 5.0, want: "买腿"},
+		// D-581 终裁：pct 档零池不拒（原样落表 armed 折算），fail-closed 面收
+		// 缩到 usd/显式档——池读缺降级警示、币种/死额度仍批准时硬拒。
+		{name: "币种非USD系", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingUsd: d490f(50)}, snaps: jpySnaps, step: 0.01, want: "币种"},
+		{name: "买腿qty低于minStep", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingUsd: d490f(50)}, snaps: goodSnaps, step: 5.0, want: "买腿"},
 		// short_cfd：MT 腿在卖侧——卖腿 qty 同须过 minStep 预检（否则死额度漏网）。
-		{name: "short_cfd卖腿qty低于minStep", structure: "short_cfd_long_perp", req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: goodSnaps, step: 5.0, want: "卖腿"},
+		{name: "short_cfd卖腿qty低于minStep", structure: "short_cfd_long_perp", req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingUsd: d490f(50)}, snaps: goodSnaps, step: 5.0, want: "卖腿"},
 	}
 	for _, c := range cases {
 		f, s := d490FixtureStruct(t, c.structure, c.snaps, c.step)

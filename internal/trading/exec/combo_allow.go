@@ -101,6 +101,19 @@ type XAssetComboAllowSpec struct {
 	MaxGrossUSD   float64
 	NotionalUSD   *float64 // D-367 S3：组合级 sizing 名义额；nil=回退全局 env（表来源映射；env 来源恒 nil）
 	MarginUSD     *float64 // D-010：组合保证金总预算（双腿占用和；与 NotionalUSD 互斥）
+	// D-581：fixed=腿帽固化（空串同义）；pct/system=腿帽零值占位，armed 进场径
+	// 按活池折算落帽（XAssetSpecApplyPoolCaps），折算不可得 fail-closed 拒开。
+	SizingMode string
+	FundingPct *float64
+}
+
+// XAssetSpecApplyPoolCaps D-581：pct/system 档 armed 态活池折算落帽——
+// gross=pct×min(双腿池权益) 由调用方算好传入，腿 qty 维不限（gross 闸约束）。
+func XAssetSpecApplyPoolCaps(spec *XAssetComboAllowSpec, grossUSD float64) {
+	spec.MaxGrossUSD = grossUSD
+	n := grossUSD / 2
+	spec.NotionalUSD = &n
+	spec.MaxLongQty, spec.MaxShortQty = 0, 0
 }
 
 // ParseXAssetComboAllow 解析 NOX_XASSET_ALLOW_COMBOS（分号分隔记录，每条

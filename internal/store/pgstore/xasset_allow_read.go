@@ -25,12 +25,19 @@ type XAssetAllowRow struct {
 	MaxGrossUSD   float64
 	NotionalUSD   *float64 // D-367 S2：组合级 sizing 名义额；NULL=回退全局 env
 	MarginUSD     *float64 // D-010：组合保证金总预算（双腿占用和上限；与 notional_usd 互斥）
-	Note          string
+	// D-581：sizing 模式——fixed=腿帽固化（现值语义）；pct=funding_pct 原样，
+	// 腿帽 NULL→armed 径活池折算；system=同 pct 但比率源=app_config
+	// grad_system_alloc_pct（决策席域可调，业主零 sizing 必填）。
+	SizingMode string
+	FundingPct *float64
+	Note       string
 }
 
 func (s *Store) LoadXAssetAllowCombos(ctx context.Context, environment string) ([]XAssetAllowRow, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT canonical_buy, canonical_sell, venue_key_buy AS venue_buy, venue_key_sell AS venue_sell, max_long_qty, max_short_qty, max_gross_usd, notional_usd, margin_usd, note
+		SELECT canonical_buy, canonical_sell, venue_key_buy AS venue_buy, venue_key_sell AS venue_sell,
+		       COALESCE(max_long_qty,0), COALESCE(max_short_qty,0), COALESCE(max_gross_usd,0),
+		       notional_usd, margin_usd, COALESCE(sizing_mode,'fixed'), funding_pct, note
 		FROM xasset_allow_combos
 		WHERE enabled AND (simulated IS NULL OR simulated = ($1='demo'))`, environment)
 	if err != nil {
@@ -41,7 +48,8 @@ func (s *Store) LoadXAssetAllowCombos(ctx context.Context, environment string) (
 	for rows.Next() {
 		var r XAssetAllowRow
 		if err := rows.Scan(&r.CanonicalBuy, &r.CanonicalSell, &r.VenueBuy, &r.VenueSell,
-			&r.MaxLongQty, &r.MaxShortQty, &r.MaxGrossUSD, &r.NotionalUSD, &r.MarginUSD, &r.Note); err != nil {
+			&r.MaxLongQty, &r.MaxShortQty, &r.MaxGrossUSD, &r.NotionalUSD, &r.MarginUSD,
+			&r.SizingMode, &r.FundingPct, &r.Note); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

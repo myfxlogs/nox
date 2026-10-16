@@ -25,10 +25,29 @@ func TestD581_PoolDemotion(t *testing.T) {
 	if len(res.Warns) == 0 {
 		t.Fatalf("池读缺应落警示 warn: %+v", res)
 	}
+	// D-581 终裁：pct 零池不拒批——estr 在 pct 档仅作 dry_run 预览提示。
 	pct := 0.5
-	_, estr = s.deriveAllocSizing(context.Background(), "gate:perp", "binance:perp", "TRX", "TRX", &pct, nil)
-	if estr == "" || strings.Contains(estr, "每手名义") {
-		t.Fatalf("pct 零基准应结构性拒批: %q", estr)
+	res2, _ := s.deriveAllocSizing(context.Background(), "gate:perp", "binance:perp", "TRX", "TRX", &pct, nil)
+	if len(res2.Warns) == 0 {
+		t.Fatalf("pct 零池应落警示: %+v", res2)
 	}
-	_ = v1.ApproveCarryGraduationRequest{}
+	// sizing 模式判定：零输入=system，pct=pct 落表，usd/显式=fixed。
+	req := &v1.ApproveCarryGraduationRequest{}
+	if m := allocSizingMode(req); m != "system" {
+		t.Fatalf("零 sizing 应 system: %s", m)
+	}
+	req.FundingPct = &pct
+	if m := allocSizingMode(req); m != "pct" {
+		t.Fatalf("funding_pct 应 pct: %s", m)
+	}
+	req.FundingPct = nil
+	req.FundingUsd = &usd
+	if m := allocSizingMode(req); m != "fixed" {
+		t.Fatalf("funding_usd 应 fixed: %s", m)
+	}
+	// 模式互斥仍拒：funding+显式混传。
+	req.MaxGrossUsd = 10
+	if _, merr := allocModeInputs(req); merr == "" {
+		t.Fatalf("资金+显式混传应互斥拒")
+	}
 }
