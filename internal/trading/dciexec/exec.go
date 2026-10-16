@@ -64,6 +64,9 @@ type Store interface {
 	ListProposals(ctx context.Context, status string, limit int) ([]pgstore.Proposal, error)
 	LatestPendingProposal(ctx context.Context, templates []string) (*pgstore.Proposal, error)
 	GetProposal(ctx context.Context, id int64) (*pgstore.Proposal, error)
+	// PaperFirstGate/HasPaperEvidence D-593 纸面先行闸（提案→executed 唯一收口接线）。
+	PaperFirstGate(ctx context.Context, templateID string, hasPaperEvidence func() (bool, error)) (bool, string, error)
+	HasPaperEvidence(ctx context.Context, templateID string) (bool, error)
 	SetProposalStatus(ctx context.Context, id int64, status string) error
 	// D-258 M4.1：评估卡消费面——无卡/非 viable=不算候选拒单；settle 回写实绩。
 	GetOppEval(ctx context.Context, proposalID int64) (*pgstore.OppEval, error)
@@ -153,6 +156,17 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	p, err := e.Store.GetProposal(ctx, id)
 	if err != nil {
 		return "", fmt.Errorf("提案#%d 查询败: %w", id, err)
+	}
+	// D-593 纸面先行闸（补洞②——提案→executed 唯一收口前置；earn/resume
+	// 回环同径自盖）。证据域=paper_structures ∩ paper_spot_carry.structure。
+	ok, why, gerr := e.Store.PaperFirstGate(ctx, p.TemplateID, func() (bool, error) {
+		return e.Store.HasPaperEvidence(ctx, p.TemplateID)
+	})
+	if gerr != nil {
+		return "", fmt.Errorf("提案#%d 纸面闸读败: %w", id, gerr)
+	}
+	if !ok {
+		return "", fmt.Errorf("提案#%d 纸面先行闸拒: %s", id, why)
 	}
 	// D-262 M4.3②：检面归 risk/gate 单包（命名闸 CheckDCI；读库 fail-closed 留本层）。
 	card, cerr := e.Store.GetOppEval(ctx, id)

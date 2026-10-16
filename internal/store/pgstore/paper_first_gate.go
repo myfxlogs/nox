@@ -42,3 +42,17 @@ func (s *Store) PaperFirstGate(ctx context.Context, templateID string, hasPaperE
 	}
 	return true, "", nil
 }
+
+// HasPaperEvidence 模板级纸面证据判（D-593 复审⑧——证据域=paper_structures
+// ∩ paper_spot_carry.structure；列 NULL/空=无映射结构零放行）。
+func (s *Store) HasPaperEvidence(ctx context.Context, templateID string) (bool, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM paper_spot_carry psc
+		WHERE psc.structure = ANY(
+			SELECT paper_structures FROM fin_opp_template WHERE id=$1)`, templateID).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("paper evidence %s: %w", templateID, err)
+	}
+	return n > 0, nil
+}
