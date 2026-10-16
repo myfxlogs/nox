@@ -41,6 +41,7 @@ type Position struct {
 	DecisionRef            *string    // D-047：决策席批准引用（PROBE 仓；migration 0175 列）
 	AutoCloseAt            *time.Time // D-047：PROBE 到期自动平仓时刻（migration 0175 列）
 	ExitKind               string     // D-047：exit_kind 透传（ListProbes 展示用；其它查询路径不填）
+	StrategyKey            *string    // D-577：归组键（fin_position_strategy_map 写径落列；NULL=未归组）
 }
 
 func (s *Store) CreatePosition(ctx context.Context, p *Position) (int64, error) {
@@ -62,12 +63,19 @@ func (s *Store) CreatePosition(ctx context.Context, p *Position) (int64, error) 
 	if p.AutoCloseAt != nil {
 		autoCloseAt = *p.AutoCloseAt
 	}
+	// D-577：归组键前向写——engine_type→strategy_key 判据表解析（DB 驱动禁
+	// 硬编码）；map 无行→NULL→读面 unassigned 如实落未归组格（读败不吞，
+	// 归组键缺不阻塞开仓——NULL 即未归组语义）。
+	var strategyKey *string
+	_ = s.pool.QueryRow(ctx,
+		`SELECT strategy_key FROM fin_position_strategy_map WHERE engine_type=$1`,
+		p.Type).Scan(&strategyKey)
 	q := `INSERT INTO positions (opportunity_id, type, status, expected_net_bps, opened_at, notional_usd,
-			request_id, dedup_key, environment, decision_ref, auto_close_at)
-		VALUES ($1, $2, $3, $4, now(), $5, $6, $7, $8, $9, $10) RETURNING id`
+			request_id, dedup_key, environment, decision_ref, auto_close_at, strategy_key)
+		VALUES ($1, $2, $3, $4, now(), $5, $6, $7, $8, $9, $10, $11) RETURNING id`
 	var id int64
 	err := s.pool.QueryRow(ctx, q, p.OpportunityID, p.Type, p.Status, p.ExpectedNetBps, p.NotionalUSD,
-		reqID, dedupKey, env, decisionRef, autoCloseAt).Scan(&id)
+		reqID, dedupKey, env, decisionRef, autoCloseAt, strategyKey).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create position: %w", err)
 	}
