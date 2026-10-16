@@ -394,3 +394,7 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **背景**：`ApproveCarryGraduation` 把「策略授权」与「当下池面可行性」打包——#47 占小池 500.7%、#48 gate:perp $0 批不过，而装配径（earn 赎回）与进场活池闸在下游根本够不着，授权时序死结。
 - **裁定**：①批准=授权——结构域硬闸全留（证据复核/旗标/canonical/平台），池域判据降级 decided_note 警示不拦写白名单；②进场=可行性——armed 后 equityDisciplineGate 等按活池面每拍跑，池短fall持续→自动落 fin_condition_gap；③**批准无 sizing 字段必填**——业主令「本金我出、分配公司定」：白名单行增 sizing_mode=system 档，额度=app_config 相对包络判据（pct×活池净值每拍折算，随净值自缩放）；funding_pct/usd/显式四字段降级可选覆盖。真金授权边界=策略级 yes/no（业主域）+额度上限=配置判据（决策席域，落表可调）。
 - **理由**：D-184 总纲权责归位——业主=出资+回条件请求，配置权=基金管理人；固定 USD 批准额随池面陈化（批时贴线的数明天就错），相对包络不陈化；pct 零池腿批准不算基数不拒批，池回正自动生效。
+
+## D-582 grad_system_alloc_pct 初值=0.30（复审席裁——system 档默认包络）
+- **裁定**：armed 组合 sizing_mode=system 时额度=30%×min(双腿池权益)，每拍活池折算。
+- **理由**：低于存量跨名义帽档（NOX_CROSS_NOTIONAL_EQUITY_CAP=0.5）不打架；显著保守于业主亲批先例（armed #16/#17 ~$700/$1000 池≈0.7）；首季观测期宁小勿大，证据攒量后决策席可调（配置判据非业主逐单域）。缺值 fail-closed skip 不误放。
