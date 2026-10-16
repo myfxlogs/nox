@@ -136,4 +136,3 @@ fi
 
 # 9. diff 通读提示（不自动拦截，提醒人工检查）
 echo "OK: pre-commit gate passed. Remember: diff 通读无死代码/TODO/调试残留."
-echo "记忆系统自问（D-075 触发锚）: 本次 commit 解决了什么坑? docs/经验库/ 有无对应条目或更新? 有则同 commit 入库."

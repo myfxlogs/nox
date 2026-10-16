@@ -408,3 +408,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **实证**（SG 10-16 双通道）：①DCI 已结算 4 单——#7/8/10 USDT 结算利息 +$1.41/+$1.40/+$1.14=**+$3.94**；#11 PUT 83,000 被行权收 0.00433438 BTC（结算时指数 $81,300）≈**−$5.6~−7.3**——**3 赚不够 1 亏坐实，净 −$1.7~−3.4**；且残 0.00433 BTC 裸敞口（binance earn ownership_share 0.3334）违 D-019。②fin_proposal 显 dci_buy_low 全程 `proposal→executed` 同日批——**零纸面沙箱**（paper_spot_carry 只接 carry 模板）。③`xasset_allow_combos` **零出处列**——无 graduation_id/source，armed 白名单可直插绕过整个管道（#1-#4 demo 种子行实证 venue 已拆仍 enabled 直到 D-583 清场）。
 - **裁定**：①`dci_buy_low` 停板（fin_opp_template.enabled=f 已落 SG）——卖 put=裸下行负偏结构，收权利金≠套利，违 D-019 第一性；`dci_sell_high_covered_call` 留 enabled 但**只许跑托管库存径**（BTC 托管线在能力账本）。②行权残余 0.00433 BTC 裸敞口处置挂条件面票（earn 赎回+USDT 化 or 归入托管仓待裁定执行径）。③真金门槛补两洞立票：armed 白名单出处约束（enable 须有 graduation/paper 出处）、全模板纸面先行不变量（任何模板上真金径前须有沙箱证据或 D# 豁免）。
 - **理由**：armed 表是进真金前最后一闸，不校验血缘=管道形同虚设；卖 put 的期望结构=小赚大亏负偏（premium 封顶/下行不封顶），数学上就不是套利是卖保险；4 单样本 N<30 不引统计判据，停板依据=结构性违 D-019 非胜率。
+
+## D-585 坑条目自问改条件触发（决策席裁——D-075 无差别 echo 摆设病灶修）
+- **实证**：`pre-commit:139`「记忆系统自问」=无条件 echo——3347 commit 全印、带经验库条目仅 14 次（0.4%）；且 pre-commit 时点拿不到 commit message 做不了「修复类」判断，属挂错时点的噪音非门禁。真门禁=其上 D-130 schema 校验（只管入库条目格式，不管该不该入库）。
+- **裁定**：①新增 `scripts/hooks/commit-msg`——message 含修复类信号（fix/修/bug/病灶/坑/回归/revert）且暂存面未触碰 `docs/经验库/`|待归纳 → warn 提醒（exit 0 不拦）；带条目即静默；非修复类不问。②pre-commit 无差别 echo 行删除。③D-551 收口注记块必填字段+「**坑处置：<条目指针|无坑>**」——判断位在复审收口（坑刚钉死、证据最全），commit-msg warn 只负责把时点从「每次」改成「该问时」。
+- **理由**：提醒机制有效性=问对时点×有判断位。无条件 echo=3347 响 14 听的噪音；commit-msg 条件触发+收口必填字段=「该问时才问、收口时必须答」。不拦是因坑有无是判断非格式（格式归 D-130 闸），拦截会逼出凑数条目。

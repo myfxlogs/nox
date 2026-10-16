@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# commit-msg 门禁——坑条目自问（D-585 替代 D-075 无差别 echo 摆设）
+# 触发条件：commit message 含修复类信号 且 暂存面未触碰 docs/经验库/ 或 待归纳 文件
+#   → warn 提醒（exit 0 不拦；坑是否成立的判断在复审收口「坑处置」字段，此处只把时点从「每次」改为「该问时」）
+MSG_FILE="$1"
+MSG=$(cat "$MSG_FILE" 2>/dev/null || true)
+
+# 非修复类提交不问
+printf '%s' "$MSG" | grep -qiE 'fix|修复|修|bug|bugfix|hotfix|regression|回归|病灶|坑|patch|revert' || exit 0
+
+# 带了坑条目/待归纳沉淀的修复=合规，静默
+if git -c core.quotepath=off diff --cached --name-only | grep -qE '^docs/经验库/|待归纳'; then
+  exit 0
+fi
+
+echo "WARN(D-585): 疑似修复类提交但未触碰 docs/经验库/或待归纳——" >&2
+echo "  坑成立→条目同 commit 入库；坑不成立→复审收口注记块『坑处置:无坑』显式声明。" >&2
+echo "  （本条是提醒非拦截——复审席收口时核验坑处置字段）" >&2
+exit 0
