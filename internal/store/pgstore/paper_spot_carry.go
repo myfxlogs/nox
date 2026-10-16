@@ -110,14 +110,15 @@ func (s *Store) ListPaperSpotCarryBoard(ctx context.Context, recentWindow time.D
 // 累积，非快照外推）；回写 last_funding_ann/last_accrue_ts/low_streak/miss_streak/last_basis_bps。
 // accrueTo：本轮结算对齐推进到的边界 ts（语义=「已结算至」；nil=保持列值不动——
 // 存量行回迁哨兵 NULL 或缺席轮不前推水位用）。
-// lastBasisBps：D-354 S2 每轮随 uni 更新（nil=当轮缺，保持 NULL）。
+// lastBasisBps：D-354 S2 每轮随 uni 更新；nil=当轮缺→保持 last-good 不覆写
+// （瞬断≠永损——断供事实由 miss_streak/coverage 表达，basis 列非载体）。
 // accruedReplace=true 时 accrued_usd 直接置 accruedAdd（D-474a S1 存量行重算覆盖写）。
 // D-475a S5：accrue_ticks 只在 accrueTo 非 nil（实结轮）+1；min_accrued_usd 随写取低水位。
 func (s *Store) AccruePaperSpotCarry(ctx context.Context, id int64, lastFundingAnn float64, accruedAdd float64, lowStreak, missStreak int, lastBasisBps *float64, accrueTo *time.Time, accruedReplace bool) error {
 	ct, err := s.pool.Exec(ctx, `
 		UPDATE paper_spot_carry
 		SET accrued_usd = CASE WHEN $8 THEN $2 ELSE accrued_usd + $2 END, last_funding_ann = $3,
-		    last_accrue_ts = COALESCE($7, last_accrue_ts), low_streak = $4, miss_streak = $6, last_basis_bps = $5,
+		    last_accrue_ts = COALESCE($7, last_accrue_ts), low_streak = $4, miss_streak = $6, last_basis_bps = COALESCE($5, last_basis_bps),
 		    accrue_ticks = accrue_ticks + CASE WHEN $7 IS NULL THEN 0 ELSE 1 END, -- 实结期数：缺席/哨兵轮（accrueTo=nil）不计
 		    min_accrued_usd = LEAST(COALESCE(min_accrued_usd, CASE WHEN $8 THEN $2 ELSE accrued_usd + $2 END),
 		                            CASE WHEN $8 THEN $2 ELSE accrued_usd + $2 END)
