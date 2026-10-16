@@ -62,6 +62,8 @@ type Entry struct {
 	LastVerified  string                   `yaml:"last_verified"`
 	Skills        []string                 `yaml:"skills"`
 	EvidenceRefs  []map[string]interface{} `yaml:"evidence_refs"`
+	// EALink 经济案例挂判据指针（EA-xx；D-587 工程库条目可空）。
+	EALink string `yaml:"ea_link"`
 }
 
 // header 是索引文件的固定头部（标题 + 说明 + 表头 + 分隔行）。
@@ -276,6 +278,8 @@ func main() {
 	applyKBDirEnv() // NOX_KB_DIR 工具引导覆写（同 digest 先例）
 	var err error
 	switch os.Args[1] {
+	case "gen-econ":
+		err = econGen(len(os.Args) > 2 && os.Args[2] == "--check")
 	case "gen":
 		if len(os.Args) > 2 && os.Args[2] == "--check" {
 			err = genCheck()

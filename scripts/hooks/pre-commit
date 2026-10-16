@@ -71,9 +71,15 @@ if [ -n "$STAGED_GO" ]; then
 fi
 
 # 6. 经验库 schema 门禁（D-130 P4：格式错/索引过期=拒绝提交；Devin 旧格式 5 条入库实证）
-if git -c core.quotepath=off diff --cached --name-only | grep -qE '^docs/经验库/'; then
+if git -c core.quotepath=off diff --cached --name-only | grep -qE '^docs/经验库/|^docs/经济经验库/'; then
   (cd tools/noxkb && go run . gen --check) || {
     echo "FAIL: noxkb gen --check 未过——条目 frontmatter 须符合 Schema v2（模板 docs/经验库/模板.md），索引自动生成禁手编；修复后重试" >&2
+    exit 1
+  }
+fi
+if git -c core.quotepath=off diff --cached --name-only | grep -qE '^docs/经济经验库/'; then
+  (cd tools/noxkb && go run . gen-econ --check) || {
+    echo "FAIL: noxkb gen-econ --check 未过——经济条目须含 判据挂接 EA-xx 字段，索引自动生成禁手编；修复后重试" >&2
     exit 1
   }
 fi
