@@ -227,4 +227,5 @@ var migrationFiles = []struct {
 	{1031, migrations.SnapshotKeyTsIdxSQL, false},             // 快照键+时序覆盖索引（ExplorerIdleFunds LATERAL 化）
 	{1032, migrations.PaperQtyParamSQL, false},                // D-546：纸面名义额参数化
 	{1033, migrations.S2TrialNotionalSQL, false},              // D-548：S2 桥试单名义额参数
+	{1034, migrations.GraduationUnqualifiedSQL, false},        // 毕业准入闸漏洞修：status 域补 unqualified/stale
 }

@@ -139,6 +139,26 @@ func (s *Store) UpdateCarryGraduationDecision(ctx context.Context, id int64, sta
 	return nil
 }
 
+// RevalidateCarryGraduation D-576③：pending↔unqualified 定期重校验翻转——
+// 机修径（非业主裁决）不动 decided_at/decided_by/combo_id；摘牌因落 decided_note
+// 留痕，快照列（accrued/last_funding_ann/net_all_in/age_days）翻回时刷新现值。
+// 终态行（approved/rejected）与 stale 存量行不动（WHERE 域内两态才翻）。
+func (s *Store) RevalidateCarryGraduation(ctx context.Context, id int64, status, note string,
+	accrued float64, fundingAnn *float64, netAllIn *float64, ageDays float64, flagWarn *string) error {
+	ct, err := s.pool.Exec(ctx, `
+		UPDATE carry_graduations SET status = $2, decided_note = $3, accrued_usd = $4,
+		    last_funding_ann = $5, net_all_in_usd = $6, age_days = $7, flag_warn = $8
+		WHERE id = $1 AND status IN ('pending','unqualified')`,
+		id, status, note, accrued, fundingAnn, netAllIn, ageDays, flagWarn)
+	if err != nil {
+		return fmt.Errorf("revalidate carry graduation %d: %w", id, err)
+	}
+	if ct.RowsAffected() == 0 {
+		return fmt.Errorf("revalidate carry graduation %d: not in pending/unqualified", id)
+	}
+	return nil
+}
+
 // DelegateApproveCarryGraduation D-513 委任批落账：status=approved + decided_by='delegate:D-513'
 // +combo_id/decided_note，pending 守卫同人工径（并发/已裁决零行更新→err 由调用方转跳过）。
 func (s *Store) DelegateApproveCarryGraduation(ctx context.Context, id int64, comboID *int64, note string) error {

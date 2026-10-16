@@ -1,6 +1,10 @@
-// graduate_stale.go D-474b S3：pending 建议自动过期——每轮扫描回查 paper 行
-// 当前态，不再 qualified → status='stale'（终态；快照留档不参与放行）。
-// 从 graduate.go 拆出保 300 行门禁。
+// graduate_stale.go —— pending/unqualified 定期重校验（D-576 双洞修②：
+// 快照冻结洞——qualified 只在提案时点跑一次曾致衰减行挂 pending 显幽灵利润）。
+// 行现值回跑同一判据 GraduationQualifiedReason（单判据源禁第二径）：
+// pending ∧ 不达标 → 'unqualified'（摘牌，decided_note 记拒因留痕）；
+// unqualified ∧ 复活达标 → 翻回 'pending'（同行翻转——paper_id UNIQUE 幂等
+// 禁新插行，摘牌行须可回牌否则永不再提案）；快照列刷新现值防冻结。
+// approved/rejected/stale 终态不碰。
 package scan
 
 import (
@@ -8,34 +12,57 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"nox/internal/store/pgstore"
 )
 
-// stalePendingGraduations pending 建议逐条回查 paper 行当前态，
-// 不再 qualified → status='stale'（终态；快照留作历史不参与放行）。返回过期数。
-func stalePendingGraduations(ctx context.Context, st GraduationStore, now time.Time) (int, error) {
+// revalidatePendingGraduations 返回 (摘牌数, 复活数, err)。
+func revalidatePendingGraduations(ctx context.Context, st GraduationStore, now time.Time,
+	flags map[string]pgstore.VenueSymbolFlag) (int, int, error) {
 	grads, err := st.ListCarryGraduations(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("graduation stale: list: %w", err)
+		return 0, 0, fmt.Errorf("graduation revalidate: list: %w", err)
 	}
-	staleN := 0
+	var unpending, revived int
 	for _, g := range grads {
-		if g.Status != "pending" {
+		if g.Status != "pending" && g.Status != "unqualified" {
 			continue
 		}
 		p, err := st.GetPaperSpotCarryByID(ctx, g.PaperID)
-		if err != nil { // 行读失败→不动作（不明态不误过期，下轮重试）
-			log.Printf("[graduation] stale check paper#%d: %v", g.PaperID, err)
+		if err != nil { // 行读失败→不动作（不明态不误翻转，下轮重试）
+			log.Printf("[graduation] revalidate paper#%d: %v", g.PaperID, err)
 			continue
 		}
-		if graduationQualified(*p, now) {
+		ok, reason := GraduationQualifiedReason(*p, now)
+		var target, note string
+		switch {
+		case g.Status == "pending" && !ok:
+			target, note = "unqualified", "摘牌："+reason
+		case g.Status == "unqualified" && ok:
+			target, note = "pending", "引擎复活回牌（现值达标）"
+		default:
 			continue
 		}
-		if err := st.UpdateCarryGraduationDecision(ctx, g.ID, "stale", nil,
-			"自动过期：行状态不再满足毕业判据"); err != nil {
-			log.Printf("[graduation] stale #%d: %v", g.ID, err) // 单行失败不炸整轮
+		var net *float64
+		if conv := effectiveConvergenceUSD(*p); conv != nil && p.EstRoundTripFeeUSD != nil {
+			n := netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, conv)
+			net = &n
+		}
+		fw := graduationFlagWarn(*p, flags)
+		if target == "unqualified" {
+			w := "⚠" + note
+			fw = &w // 摘牌因透出面板徽标列（D-576 令：flag_warn 记摘牌因）
+		}
+		if err := st.RevalidateCarryGraduation(ctx, g.ID, target, note,
+			p.AccruedUSD, p.LastFundingAnn, net, graduationAgeDays(*p, now), fw); err != nil {
+			log.Printf("[graduation] revalidate #%d: %v", g.ID, err) // 单行失败不炸整轮
 			continue
 		}
-		staleN++
+		if target == "unqualified" {
+			unpending++
+		} else {
+			revived++
+		}
 	}
-	return staleN, nil
+	return unpending, revived, nil
 }
