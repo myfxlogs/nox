@@ -30,6 +30,9 @@ type GraduationStore interface {
 	ListCarryGraduations(ctx context.Context) ([]pgstore.CarryGraduation, error)
 	GetPaperSpotCarryByID(ctx context.Context, id int64) (*pgstore.PaperSpotCarry, error)
 	UpdateCarryGraduationDecision(ctx context.Context, id int64, status string, comboID *int64, note string) error
+	// D-576：pending↔unqualified 重校验翻转+快照刷新（机修径，终态不动）。
+	RevalidateCarryGraduation(ctx context.Context, id int64, status, note string,
+		accrued float64, fundingAnn *float64, netAllIn *float64, ageDays float64, flagWarn *string) error
 }
 
 // StepCarryGraduation 每轮 carry 扫描后调用（wire_scan 同轮串行单写者）：
@@ -97,14 +100,23 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 			return newCount, fmt.Errorf("graduation alert: %w", err)
 		}
 	}
-	// pending 建议回查 paper 行——行已衰减（exited/不再 qualified）→
-	// status='stale' 终态（approve 守卫 status='pending' 天然拦），聚合 warn 每轮至多一条。
-	if staleN, serr := stalePendingGraduations(ctx, st, now); serr != nil {
-		return newCount, serr
-	} else if staleN > 0 {
+	// D-576③：pending/unqualified 定期重校验——衰减行摘牌转 unqualified
+	// （approve 守卫 status='pending' 天然拦），引擎复活同行翻回 pending；
+	// 聚合 warn 各至多一条。
+	unp, rev, rerr := revalidatePendingGraduations(ctx, st, now, flags)
+	if rerr != nil {
+		return newCount, rerr
+	}
+	if unp > 0 {
 		if err := st.InsertAlert(ctx, nil, "warn",
-			fmt.Sprintf("[毕业链] %d 条 pending 建议证据衰减自动过期（status=stale，不可批）", staleN)); err != nil {
-			return newCount, fmt.Errorf("graduation stale alert: %w", err)
+			fmt.Sprintf("[毕业链] %d 条 pending 建议引擎衰减自动摘牌（status=unqualified，复活可回牌）", unp)); err != nil {
+			return newCount, fmt.Errorf("graduation unpending alert: %w", err)
+		}
+	}
+	if rev > 0 {
+		if err := st.InsertAlert(ctx, nil, "info",
+			fmt.Sprintf("[毕业链] %d 条 unqualified 建议引擎复活翻回 pending", rev)); err != nil {
+			return newCount, fmt.Errorf("graduation revive alert: %w", err)
 		}
 	}
 	log.Printf("[graduation] scanned=%d qualified=%d new=%d", len(rows), qualified, newCount)
@@ -161,6 +173,13 @@ func GraduationQualifiedReason(p pgstore.PaperSpotCarry, now time.Time) (bool, s
 		}
 		if p.LowStreak != 0 {
 			return false, "低息衰减在轨（low_streak 未清零）"
+		}
+		// 引擎存活检（D-576/业主令 10-16 双洞实证修②）：息差引擎现值率须达
+		// D-030 净年化门槛（8%）——浮盈顶包的死引擎行不得挂 pending（WTI
+		// #1-3 accrued 微薄+conv 已回吐+funding_ann≈0 仍显幽灵利润的病灶）。
+		// 率字段为原生量口径（10.95=10.95%）；NULL=无存活率证据如实拒进不造假。
+		if p.LastFundingAnn == nil || *p.LastFundingAnn < 8.0 {
+			return false, "引擎熄（last_funding_ann 缺或<8%）"
 		}
 		return true, ""
 	case "exited":
