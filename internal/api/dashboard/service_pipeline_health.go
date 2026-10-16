@@ -7,6 +7,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"nox/internal/gen/dashboardv1"
@@ -28,6 +29,23 @@ func stageNow(key, state, narrative, wait, errStr string, last time.Time) *stage
 // stageEvidence 段级 liveness 证据分型（S3′-c）：beat=周期心跳（last_event
 // 超龄=断流嫌疑该转 waiting）；event=事件驱动（零事件=如实 idle 非病态）；
 // none=无簿（凭据缺如实标）。判据各段自填——本表是消费面单源。
+// beatStaleWindow beat 断流判定阈（看门狗级非业务数据刷——D-004 心
+// 跳检测面）。
+const beatStaleWindow = 15 * time.Minute
+
+// applyBeatStaleness 超龄降级缝（S3′-c 返修抽纯函数便锚测）：beat 型段
+// last_event 超窗且 working → waiting「心跳断流嫌疑」；超龄 last_event=0
+// （从未拍）不翻——如实「未记账」非断流。
+func applyBeatStaleness(rows []*stageRow, now time.Time) {
+	for _, r := range rows {
+		if r.EvidenceKind == "beat" && r.State == "working" && r.LastEventUnix > 0 &&
+			now.Sub(time.Unix(r.LastEventUnix, 0)) > beatStaleWindow {
+			r.State = "waiting"
+			r.WaitReason = "心跳超龄（beat 断流嫌疑）"
+		}
+	}
+}
+
 var stageEvidence = map[string]string{
 	"collect": "beat", "research": "event", "opp_publish": "event",
 	"gate_eval": "beat", "assembly": "event", "execution": "event",
@@ -42,15 +60,7 @@ func (s *Service) pipelineStages(ctx context.Context) []*stageRow {
 		s.stageGateEval(ctx), s.stageAssembly(ctx), s.stageExecution(ctx),
 		s.stageHolding(ctx), s.stageExit(ctx), s.stageLedger(ctx), s.stageReview(ctx),
 	}
-	// S3′-c 超龄降级缝：beat 型段 last_event 超 15min 且 working → waiting
-	// 「心跳断流」（降级非翻 error——读模不停摆只是断流嫌疑如实透出）。
-	for _, r := range rows {
-		if r.EvidenceKind == "beat" && r.State == "working" && r.LastEventUnix > 0 &&
-			time.Since(time.Unix(r.LastEventUnix, 0)) > 15*time.Minute {
-			r.State = "waiting"
-			r.WaitReason = "心跳超龄（beat 断流嫌疑）"
-		}
-	}
+	applyBeatStaleness(rows, time.Now())
 	return rows
 }
 
@@ -62,6 +72,12 @@ func (s *Service) stageCollect(_ context.Context) *stageRow {
 	var last time.Time
 	var suspect dephealth.Row
 	for _, d := range dephealth.Snapshot() {
+		// 跨段键过滤：engine:/scan:/gate_eval: 等非采集键染红采集卡=错段
+		// 归责——采集段只聚合采集面键（venue/ws/egress 族）。
+		if strings.HasPrefix(d.Key, "engine:") || strings.HasPrefix(d.Key, "scan:") ||
+			strings.HasPrefix(d.Key, "gate_eval:") {
+			continue
+		}
 		if d.LastEventUnix > last.Unix() {
 			last = time.Unix(d.LastEventUnix, 0)
 		}
@@ -144,8 +160,10 @@ func (s *Service) stageGateEval(ctx context.Context) *stageRow {
 	}
 	// S3′-c：beat 键真时戳（engine:opp 每帧记账——假 time.Now() 摘除）
 	var last time.Time
+	// S3′-c 返修：beat 源=watch 环每拍重扫（engine:opp 是事件帧非周期环——
+	// 静默期假断流病灶）。engine:opp Mark 保留作机会消费面证据不作闸评源。
 	for _, d := range dephealth.Snapshot() {
-		if d.Key == "engine:opp" && d.LastEventUnix > 0 {
+		if d.Key == "gate_eval:watch" && d.LastEventUnix > 0 {
 			last = time.Unix(d.LastEventUnix, 0)
 		}
 	}

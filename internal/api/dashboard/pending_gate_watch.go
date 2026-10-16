@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"nox/internal/infra/dephealth"
 )
 
 // pendingGateFlushInterval 尾沿合批窗（帧洪峰合并成单次 emit；对齐 fundsNotifier 形态）。
@@ -94,6 +96,8 @@ func (s *Service) RunPendingGateWatch(ctx context.Context) {
 			}
 		case <-watchdog.C:
 			w.markAll()
+			// S3′-c 真心跳：闸评活着的证据=watch 环每拍重扫（非有 opp 帧）。
+			dephealth.Mark("gate_eval:watch", true, nil)
 		}
 		w.kick(ctx)
 	}
