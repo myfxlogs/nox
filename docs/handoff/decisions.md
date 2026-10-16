@@ -458,3 +458,10 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：投资人域收窄为**出资/撤资 + 条件请求回执（凭据/权限/约束喂入）**两事；真金动用授权与方向锚变更移交投委会（决策席）全权裁定并背账——投资人接口只剩「条件请求响应」，提案批准从「业主飞书 go N」改为**决策席授权制**（执行 UX 改造另票）。§1「方向锚修改须业主明示」同步修订为「投委会 D# 裁定+业主持有撤资/否决退出权」。
 - **理由**：业主已明示投资人职责=出钱+满足条件请求；真金判断与方向裁定属基金管理人本分——业主亲自裁决每笔真金动用恰是 D-184 分工的反例。
 - **对价约束（决策席自律，因移交而更重）**：真金授权裁定必带反证锚（什么证据=本裁定错）+到期自验行；裁定→盈亏归因表机器滚动（连败自动告警升级）——两配套件随 D-594 同批立项。
+
+## D-561（2026-10-16 实施席）裁定归因簿 fin_decision_outcomes——扫描幂等物化+30d 结算归因+连败 warn 边沿（决策席问责机制②系统件）
+
+- **选型**：新表非复用 position_settlements——结算簿=每仓一行事实账（position_id 键），裁定=决策事件（类别×对象键），粒度/键域/生命周期不同，复用=决策语义错挂结算行。
+- **裁定**：物化径=扫描幂等（UNIQUE(category,object_key) ON CONFLICT DO NOTHING）——裁定源行（carry_graduations approved / fin_proposal executed@dciexec 两写点）本身携带全部决策事实（decided_by/decided_at/structure/combo_id），单漏斗零漏路径，部署首拍回填存量已批行（首批裁定行落库实拍=免等新裁定）；30d 归因=positions（开仓∈[decided_at,+30d] ∧ strategy_key 匹配 ∧ canonical 段窄化）JOIN 其后 settlements 净额；告警=累计净亏 ∨ 连败≥3（票面定阈值）→ warn **边沿推送**（alert_state 态机防刷屏，D-389 先例）。归因是呈现非裁决——零自动改判据/零自动禁用（禁线遵行）。
+- **类别域**：graduation_approved（人工 RPC+delegate:D-513 双径）/ proposal_go / gate_exempt（枚举预留——现码无豁免写径，落地即入册不改码）。
+- **实施事故留痕**：迁移初版撞 1038（D-581 sizing_mode 已占）→ 测试库 schema_migrations 记 1038 跳过 GradSizingMode → 23 席位库 sizing_mode 列缺失连坐假绿；修=改 1040+批删席位库 1038 版本记录重放。教训：**新迁移开工先查 migrate_table.go 尾部已占号**（master 高频并线，开工时空闲≠合并时空闲）。

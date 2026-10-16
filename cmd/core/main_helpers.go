@@ -164,6 +164,7 @@ func startCollectorsAndScanners(ctx context.Context, st *pgstore.Store, cfg *con
 	startOppMatch(ctx, st, cfg)                                             // D-187：模板×账本日频匹配→提案/缺口
 	startExplorer(ctx, st, cfg, probeTopic)                                 // D-513 S5：探矿员壳（env 闸缺省关=零 goroutine）
 	startSleepmon(ctx, st, cfg)                                             // D-534 B4：睡钱触发层（BJ 日检 7d 破地板→alert+inbox）
+	startDecisionOutcomeRunner(ctx, st)                                     // D-561：裁定归因簿（物化+30d 归因+连败告警）
 }
 
 // seedConfigFromEnv D-515 S4：app_config/app_secrets **空表时**把 env 值一次性入库
