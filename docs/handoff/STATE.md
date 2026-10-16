@@ -140,3 +140,11 @@
 ③P1 遗留已挂票①行（并发复审席标）：run.go:163 ExpectedAPR=r.APR 未随 rv 换——prod 实证 #572/#573 expected_apr=3.65（模板顶档）vs params venue 原生值，消费面（dashboard/飞书/部门报）错价仍存；钱径零影响（卡用 rv、执行轨实时复验）。分支 wip/earn-venue-float 留存待 P1 补修，勿删。
 ④run.go 309 行越 300 软警——债项登记，P1 补修时顺手拆 earnQuoteVenues/sortedVenues 机械件。
 ⑤旁证告警（非本票）：[symbol-map] 110660304/USDJPY 等 canonical 停供 critical 复现——独立病灶观察项。 -->
+
+<!-- 复审席② 10-16 trial-rail 票复审收口：cfd_swap_hedged 试单轨 @377cf6da4 已并 @c4639a6fc（并发复审席并入）+复审修孤儿 e0133856a 本席 cherry-pick 落 @f5b217ede——修件曾提交 detached HEAD 未随并（pairKey 同 canonical 回退+spec.Trial 死字段剔除），不补=同 canonical 组合 monitor 键漂移回归+死字段双遗留。机检独立重跑绿：build/vet/gofmt 净、全量 3740、race 触包 941。
+①五链镜像亲证全方向敏——monitor（腿位镜像 (cexBid−mtAsk)/mtAsk ↔ (mtBid−cexAsk)/cexAsk、pairKey=cex−mt 对跨 canonical 正确）/安全边（两向同阈 entry>0∧>noise_bps，noise=venue-pair 摆幅统计共源合规）/regime（逐腿符号 buy=−1 sell=+1，perp 买腿=付息腿正确豁免 non-income；MT swap 收益面=econ 管界内如实）/econ（xassetLegCarryAnnual venue 型驱动、双腿 MT 闭市各取对 canonical）/退出链（legs 原生迭代「不假设买=perp」天然方向敏）。
+②豁免面合规——IsTrialXAssetCombo=enabled∧'S2桥%'前缀∧四元组精确∧env，读败/行缺 fail-closed；三断点（检测掐流/MT 入口闸/gate.Submit）全接通；未标行/四元组错配实测仍拒；checkAllStrategiesDisabled 全局停闸正确未豁免。
+③$200 帽合规——app_config s2_trial_notional_usd（D-548 PG 源零字面量）→MaxGrossUSD→既有 gross 闸链（qty 预闸+canonicalCapRejectLog+gate 终审），非新口径。
+④retired 语义零破——豁免=行级非策略级，存量组合域仍退役拒。
+⑤P3 观察——检测侧 trialComboExempt 传 env="" 只配 real/NULL 行（demo 域试单仍掐流，保守向）；noise_bps 同 pair 分向序列=明示近似。
+⑥待办——SG 部署由并发复审席在途（STATE 行已同步含 f5b217ede）；验收=combo#16 出 position 行或如实拒因告警（五链缺项 fail-closed 面由断言钉死）。 -->
