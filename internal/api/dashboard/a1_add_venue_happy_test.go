@@ -241,7 +241,7 @@ func TestD492_R1_BareProbeGapKeys(t *testing.T) {
 		grad: &pgstore.CarryGraduation{ID: 6, PaperID: 43, VenueA: "gate", VenueB: "okx", Symbol: "BTC", Structure: "perp_perp", Status: "pending"},
 		paper: &pgstore.PaperSpotCarry{ID: 43, VenueA: "gate", VenueB: "okx", Structure: "perp_perp",
 			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
-			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
+			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB, LastFundingAnn: &gradLiveAnn},
 	}
 	s := &Service{gradStore: f, xassetReloader: &fakeReloader{}, allowVenuesSource: func(context.Context) (map[string]bool, error) {
 		return map[string]bool{"gate:perp": true}, nil
@@ -262,7 +262,7 @@ func TestD492_R1_BareProbeGapKeys(t *testing.T) {
 		grad: &pgstore.CarryGraduation{ID: 7, PaperID: 44, VenueA: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"},
 		paper: &pgstore.PaperSpotCarry{ID: 44, VenueA: "binance", Symbol: "SKLUSDT", Structure: "spot_carry",
 			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
-			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
+			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB, LastFundingAnn: &gradLiveAnn},
 	}
 	s2 := &Service{gradStore: f2, xassetReloader: &fakeReloader{}, allowVenuesSource: func(context.Context) (map[string]bool, error) {
 		return map[string]bool{"binance:perp": true}, nil

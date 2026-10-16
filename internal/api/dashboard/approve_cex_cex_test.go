@@ -28,7 +28,7 @@ func d555CexFixture() (*fakeGradDB, *Service, *int) {
 			Symbol: "BTC", Structure: "long_spot_short_perp", Side: "short_perp",
 			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
 			QtyUSD:             1000,
-			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
+			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB, LastFundingAnn: &gradLiveAnn},
 		accts: []pgstore.BrokerAccount{{Venue: "1279967", Platform: 0}}, // MT4 退役平台——误触 MT 径必拒
 	}
 	s := &Service{

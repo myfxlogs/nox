@@ -206,6 +206,9 @@ func (f *fakeGradDB) LoadXAssetAllowCombos(_ context.Context, environment string
 	}}, nil
 }
 
+// gradLiveAnn D-576 存活检夹具值：20%（%口径）≥8=引擎健在——散件字面量共用。
+var gradLiveAnn = 20.0
+
 type fakeReloader struct{ calls int }
 
 func (f *fakeReloader) ReloadXAssetAllowCombos(context.Context) error { f.calls++; return nil }
@@ -214,12 +217,13 @@ func gradFixture(structure string) (*fakeGradDB, *Service) {
 	mt := "1279967"
 	// D-474b S2：approve 复核闸按同一判据现算——fixture paper 行必须是合格证据行
 	// （active≥5d+accrued>0+est_fee/basis 齐），否则旧用例全被复核闸拦。
-	fee, entryB, lastB := 0.5, 10.0, 12.0
+	fee, entryB, lastB, liveAnn := 0.5, 10.0, 12.0, 20.0 // D-576 存活检：funding_ann=20%≥8 引擎健在
 	f := &fakeGradDB{
 		grad: &pgstore.CarryGraduation{ID: 5, PaperID: 42, VenueA: "1279967", VenueB: "gate", Symbol: "BTC", Structure: structure, MtVenue: &mt, Status: "pending"},
 		paper: &pgstore.PaperSpotCarry{ID: 42, VenueA: "1279967", VenueB: "gate", Symbol: "BTC", Structure: structure,
 			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
-			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB, Side: "long"},
+			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB, Side: "long",
+			LastFundingAnn: &liveAnn},
 		maps:  []pgstore.SymbolMapping{{Venue: "1279967", BrokerSymbol: "BTCUSD", Canonical: "BTCUSD", IsPrimary: true}},
 		accts: []pgstore.BrokerAccount{{Venue: "1279967", Platform: 1}},
 	}
@@ -345,12 +349,12 @@ func TestD403_Approve_Guards(t *testing.T) {
 
 func TestD403_Approve_NonCfd_LinkReport_NoCombo(t *testing.T) {
 	// D-471 S2：非 cfd 亦走全结构硬前置——fixture 须合格（active≥5d+accrued>0+est_fee/basis 齐）。
-	fee, entryB, lastB := 0.5, 10.0, 12.0
+	fee, entryB, lastB, liveAnn := 0.5, 10.0, 12.0, 20.0 // D-576 存活检：funding_ann=20%≥8 引擎健在
 	f := &fakeGradDB{
 		grad: &pgstore.CarryGraduation{ID: 6, PaperID: 43, VenueA: "gate", VenueB: "okx", Symbol: "BTC", Structure: "perp_perp", Status: "pending"},
 		paper: &pgstore.PaperSpotCarry{ID: 43, VenueA: "gate", VenueB: "okx", Structure: "perp_perp",
 			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
-			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
+			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB, LastFundingAnn: &liveAnn},
 	}
 	s := &Service{gradStore: f, xassetReloader: &fakeReloader{}, allowVenuesSource: func(context.Context) (map[string]bool, error) {
 		return map[string]bool{"gate:perp": true}, nil
@@ -539,12 +543,12 @@ func TestD474b_ApproveMT4Reject(t *testing.T) {
 // TestD488_Approve_SpotCarry_WritesCombo D-488：spot_carry 授权=组合进真金白名单
 // （venue_buy=同所:spot × venue_sell=同所:perp，canonical 双腿同值；venue gap 如实透出）。
 func TestD488_Approve_SpotCarry_WritesCombo(t *testing.T) {
-	fee, entryB, lastB := 0.5, 10.0, 12.0
+	fee, entryB, lastB, liveAnn := 0.5, 10.0, 12.0, 20.0 // D-576 存活检：funding_ann=20%≥8 引擎健在
 	f := &fakeGradDB{
 		grad: &pgstore.CarryGraduation{ID: 7, PaperID: 44, VenueA: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"},
 		paper: &pgstore.PaperSpotCarry{ID: 44, VenueA: "binance", Symbol: "SKLUSDT", Structure: "spot_carry",
 			Status: "active", AccruedUSD: 22.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
-			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
+			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB, LastFundingAnn: &liveAnn},
 	}
 	reload := &fakeReloader{}
 	s := &Service{gradStore: f, xassetReloader: reload, xassetEnv: "real", allowVenuesSource: func(context.Context) (map[string]bool, error) {
