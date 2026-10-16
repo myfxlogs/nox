@@ -109,7 +109,10 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 			var venueAPR map[string]float64
 			if _, ok := gate.ExecTemplates[r.TemplateID]; ok {
 				venues = dciProposalVenues
-			} else if r.TemplateID == "earn_apr_lending" {
+			} else if gate.EarnTemplates[r.TemplateID] {
+				// earn 族（earn_apr_lending/cash_mgmt）按有 USDT 报价行的 rail
+				// venue 各出（P3 同源修：cash_mgmt 主环单 binance+跨所顶档
+				// APR 是同型错价残留——报价所取 venue 如实写提案）。
 				venues, venueAPR = earnQuoteVenues(ctx, st)
 			}
 			for _, venue := range venues {
