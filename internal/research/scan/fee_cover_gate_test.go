@@ -56,3 +56,21 @@ func TestFeeCoverGate(t *testing.T) {
 		t.Fatalf("exited 拒因应含息差未盖费: %q", why)
 	}
 }
+
+func TestFeeCoverGate_NegFee(t *testing.T) {
+	fee, fa, conv := -7.0, 20.0, 9.0
+	eb, lb := 10.0, 0.0
+	p := pgstore.PaperSpotCarry{
+		Status: "active", Structure: "long_cfd_short_perp", Side: "short_cfd",
+		EntryTs: time.Now().Add(-6 * 24 * time.Hour), AccruedUSD: 1.5,
+		EstRoundTripFeeUSD: &fee,
+		EntryBasisBps:      &eb, LastBasisBps: &lb, ConvergenceUSD: &conv,
+		QtyUSD: 90000, LastFundingAnn: &fa,
+	}
+	ok, why := GraduationQualifiedReason(p, time.Now())
+	if ok {
+		t.Fatal("neg-fee should reject")
+	} else if !strings.Contains(why, "未盖费") {
+		t.Fatalf("reason=%q", why)
+	}
+}
