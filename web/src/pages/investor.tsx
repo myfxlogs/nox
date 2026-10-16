@@ -8,6 +8,7 @@ import { ResolveRequestState } from "../gen/dashboardv1/request_box_pb";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { NOX_NAME, NOX_REPORT_FOOTER } from "../nox";
 import { fmtUsd, fmtAge } from "../components/fmt";
+import GraduationPanel from "../components/graduation";
 
 export default function InvestorPage() {
   const [nav, setNav] = useState<number | null>(null);
@@ -135,6 +136,8 @@ export default function InvestorPage() {
           </tbody>
         </table>
       )}
+
+      <GraduationPanel />
 
       <h2>持仓摘要</h2>
       <table>
