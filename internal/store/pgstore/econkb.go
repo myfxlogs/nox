@@ -21,7 +21,13 @@ func econKBDir() string {
 	if d := os.Getenv("NOX_ECONKB_DIR"); d != "" {
 		return d
 	}
-	return "docs/经济经验库" // 部署 CWD=/opt/nox 仓库根
+	// 容器面探针（D-587 返修选型裁定——探针优先于 compose env 补键）：
+	// ./docs:/kn/docs 挂载在 → 结算写穿透落宿主（compose.yml:43）；
+	// 宿主直跑（cron/工具）回落相对路径仓库根。
+	if st, err := os.Stat("/kn/docs"); err == nil && st.IsDir() {
+		return "/kn/docs/经济经验库"
+	}
+	return "docs/经济经验库"
 }
 
 // econPendingHeader 待归纳文件头（两产线口径钉死：机械行无前缀；LLM 起
