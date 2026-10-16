@@ -48,13 +48,14 @@ type fakeStore struct {
 		ccy         string
 		qty, income float64
 	}
-	closedMarkers []string
-	closeN        *int64
-	cfgID         int64
-	incomeEvs     []pgstore.IncomeEvent
-	pits          []pgstore.VenueReject    // D-255：坑表种子/学习捕获
-	poolRows      []pgstore.CapitalPoolRow // D-286：earn 敞口闸池快照种子
-	snapFree      map[string]float64       // D-523续①：快照 free 种子（化石对拍面）
+	closedMarkers  []string
+	closeN         *int64
+	cfgID          int64
+	incomeEvs      []pgstore.IncomeEvent
+	pits           []pgstore.VenueReject    // D-255：坑表种子/学习捕获
+	poolRows       []pgstore.CapitalPoolRow // D-286：earn 敞口闸池快照种子
+	snapFree       map[string]float64       // D-523续①：快照 free 种子（化石对拍面）
+	paperGateBlock string                   // D-593 接线锚种子：非空=纸面闸拒因
 }
 
 // dciListJSON R14 重取产品面测试具——全候选品 canPurchase+orderId 齐帧。
@@ -1377,8 +1378,28 @@ func TestM41_EvalGate(t *testing.T) {
 	}
 }
 
-// D-593 桩：纸面闸默认放行（测试路径不判模板——闸生效验在 pgstore 锚）。
+// D-593 桩：纸面闸默认放行（测试路径不判模板——闸生效验在 pgstore 锚）；
+// paperGateBlock 非空=拒（TestD593_GateWired 接线锚专用）。
 func (f *fakeStore) PaperFirstGate(_ context.Context, _ string, _ func() (bool, error)) (bool, string, error) {
+	if f.paperGateBlock != "" {
+		return false, f.paperGateBlock, nil
+	}
 	return true, "", nil
 }
 func (f *fakeStore) HasPaperEvidence(context.Context, string) (bool, error) { return true, nil }
+
+// TestD593_GateWired 接线锚（复审⑧修件）：闸拒=原本可推进的提案被拦——
+// 删 exec.go 闸调用则本测红（闸存在≠接线，防三轮「函数在无人调」病灶再犯）。
+func TestD593_GateWired(t *testing.T) {
+	fs := newFake()
+	e := execR3(fs, "http://x", nil, map[string]float64{"BTC": 0.06})
+	pid := fs.addProposal("dci_sell_high_covered_call")
+	fs.paperGateBlock = "无纸面证据且无豁免"
+	_, err := e.GoProposal(context.Background(), pid)
+	if err == nil || !strings.Contains(err.Error(), "纸面先行闸拒") {
+		t.Fatalf("闸拒必拦执行径: %v", err)
+	}
+	if fs.proposals[pid].Status == "executed" {
+		t.Fatal("闸拒后提案不得进 executed")
+	}
+}
