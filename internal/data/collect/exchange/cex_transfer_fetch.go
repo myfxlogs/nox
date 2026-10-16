@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/url"
 	"strconv"
 	"time"
@@ -27,10 +28,19 @@ var binanceTransferTypes = []string{
 	"MAIN_FUNDING", "FUNDING_MAIN",
 	"FUNDING_UMFUTURE", "UMFUTURE_FUNDING",
 	"FUNDING_CMFUTURE", "CMFUTURE_FUNDING",
-	"MAIN_ISOLATED_MARGIN", "ISOLATED_MARGIN_MAIN",
-	"ISOLATED_MARGIN_UMFUTURE", "UMFUTURE_ISOLATED_MARGIN",
 	"MAIN_PORTFOLIO", "PORTFOLIO_MAIN",
 	"MAIN_MINING", "MINING_MAIN",
+}
+
+// binanceIsolatedMarginTypes 不可采域（裁定=标域不逐 symbol 拉）：
+// *_ISOLATED_MARGIN* 四型端点需逐 symbol 参数（不带必 400「Symbol is null
+// or empty!」，SG 实证灭整批病灶）；本账户 isolated margin 钱包池未建
+// （capability 账本无凭据行），逐 symbol 枚举面不存在=如实标域外——域
+// 启用时须先立 isolated margin symbol 采集面再回接。每拍 log warn 一次
+// 钉缺席原因（防静默）。
+var binanceIsolatedMarginTypes = []string{
+	"MAIN_ISOLATED_MARGIN", "ISOLATED_MARGIN_MAIN",
+	"ISOLATED_MARGIN_UMFUTURE", "UMFUTURE_ISOLATED_MARGIN",
 }
 
 // binanceWalletOf asset/transfer type 两段码 → 快照 venue_type 键域名。
@@ -127,13 +137,17 @@ func (c *CexIOCollector) fetchBinanceTransfer(ctx context.Context, acc CexIOAcco
 		extra.Set("startTime", strconv.FormatInt(startMS, 10))
 		body, err := signedBinanceGet(ctx, httpx.Client(), sapiBase, "/sapi/v1/asset/transfer", acc.APIKey, acc.APISecret, extra)
 		if err != nil {
-			return nil, fmt.Errorf("transfer %s: %w", typ, err)
+			// per-type skip：单型错只跳该型记 warn，不弃整批（一颗雷灭全部
+			// =SG 实证病灶，fail-fast 禁回潮）。
+			log.Printf("[io] binance transfer %s 型错跳过（留痕防静默）: %v", typ, err)
+			continue
 		}
 		var resp struct {
 			Rows []binanceTransferRow `json:"rows"`
 		}
 		if err := json.Unmarshal(body, &resp); err != nil {
-			return nil, fmt.Errorf("transfer %s decode: %w", typ, err)
+			log.Printf("[io] binance transfer %s 解码错跳过: %v", typ, err)
+			continue
 		}
 		for _, r := range resp.Rows {
 			if r.Status != "CONFIRMED" {
@@ -173,13 +187,15 @@ func (c *CexIOCollector) fetchBinanceTransfer(ctx context.Context, acc CexIOAcco
 		extra.Set("startTime", strconv.FormatInt(startMS, 10))
 		body, err := signedBinanceGet(ctx, httpx.Client(), sapiBase, leg.path, acc.APIKey, acc.APISecret, extra)
 		if err != nil {
-			return nil, fmt.Errorf("earn hist %s: %w", leg.path, err)
+			log.Printf("[io] binance earn hist %s 错跳过: %v", leg.path, err)
+			continue
 		}
 		var resp struct {
 			Rows []binanceEarnHistRow `json:"rows"`
 		}
 		if err := json.Unmarshal(body, &resp); err != nil {
-			return nil, fmt.Errorf("earn hist %s decode: %w", leg.path, err)
+			log.Printf("[io] binance earn hist %s 解码错跳过: %v", leg.path, err)
+			continue
 		}
 		for _, r := range resp.Rows {
 			if r.Status != "SUCCESS" {
@@ -204,6 +220,9 @@ func (c *CexIOCollector) fetchBinanceTransfer(ctx context.Context, acc CexIOAcco
 				FromWallet: leg.from, ToWallet: leg.to,
 			})
 		}
+	}
+	if len(binanceIsolatedMarginTypes) > 0 {
+		log.Printf("[io] binance isolated-margin 四型域外未采（需逐 symbol 参数，域未启用）: %v", binanceIsolatedMarginTypes)
 	}
 	return out, nil
 }
