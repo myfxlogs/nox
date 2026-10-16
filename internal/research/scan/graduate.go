@@ -176,6 +176,14 @@ func GraduationQualifiedReason(p pgstore.PaperSpotCarry, now time.Time) (bool, s
 	if netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, convArg) <= 0 {
 		return false, "全账净额非正" // 全账未盈利=零证据
 	}
+	// 息差引擎独立盖费闸（业主令 10-16「必须要修」——net 顶包病灶：#147 XPD
+	// accrued +$1.49<est_fee −$7.08 转正全靠收敛 +$9.40 一次性价差，息差引擎
+	// 本身费下亏被放行）。观测窗内 accrued 单独回本=结构可自养证据；收敛降级
+	// 加分非救命（conv 仍入 net 透出只是不再顶包）。convNA（perp_perp）径此闸
+	// 与既有 net>0 等价（net=accrued−fee）天然不引入新拒因。
+	if fee := *p.EstRoundTripFeeUSD; p.AccruedUSD < fee {
+		return false, fmt.Sprintf("息差未盖费（accrued %.2f<fee %.2f）", p.AccruedUSD, fee)
+	}
 	switch p.Status {
 	case "active":
 		if now.Sub(p.EntryTs).Hours() < GradMinAgeDays*24 {
