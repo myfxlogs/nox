@@ -17,7 +17,21 @@ import DciPage from "./pages/dci";
 import SettingsPage from "./pages/settings";
 import ReportsPage from "./pages/reports";
 import WatchPage from "./pages/watch";
+// S1′ 设计体系基建：app.css 旧轨暂并存 + arb styles/ 12 件整批挂入
+// （逐页迁完再退役旧轨——双轨叠加期样式冲突出则以新 token 为准迭代修）。
 import "./app.css";
+import "./styles/00-base.css";
+import "./styles/01-header-card.css";
+import "./styles/02-collapse.css";
+import "./styles/03-table-chip.css";
+import "./styles/04-freshness-opp.css";
+import "./styles/05-insights-review.css";
+import "./styles/06-buttons.css";
+import "./styles/07-bell-tabs.css";
+import "./styles/08-facts-ledger.css";
+import "./styles/09-sim.css";
+import "./styles/10-testnet-quote.css";
+import "./styles/11-account-responsive.css";
 
 const ROUTES: Record<string, { title: string; el: () => React.JSX.Element }> = {
   "/": { title: "总览", el: OverviewPage },

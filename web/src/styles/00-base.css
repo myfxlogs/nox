@@ -1,0 +1,65 @@
+/* arbcn 仪表盘样式。
+   调色板：品牌中性默认实例（状态色固定不随主题；文本/表面双主题，暗色为同色阶步进）。
+   状态色永不带字面语义：徽标 = 色点 + 文字标签；数值符号由 "-" 字符本身承载。 */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --ink-3: #898781;
+  --line: #e1e0d9;
+  --ring: rgba(11, 11, 11, 0.1);
+  --accent: #2a78d6;
+  --delta-down: #b3382f;
+  --good: #0ca30c;
+  --warn: #fab219;
+  --critical: #d03b3b;
+  --good-ink: #006300;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --ink-3: #898781;
+    --line: #2c2c2a;
+    --ring: rgba(255, 255, 255, 0.1);
+    --accent: #3987e5;
+    --delta-down: #e66767;
+    --good-ink: #0ca30c;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --ink-3: #898781;
+  --line: #2c2c2a;
+  --ring: rgba(255, 255, 255, 0.1);
+  --accent: #3987e5;
+  --delta-down: #e66767;
+  --good-ink: #0ca30c;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+main {
+  /* 对话 #82：画布整体加宽（1100→1440，桌面宽屏下网格留白更大）；经验库/平仓/
+     确认右列随之变宽。max-width 兜底小屏自然回退 100%。 */
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}

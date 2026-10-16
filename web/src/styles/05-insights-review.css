@@ -1,0 +1,184 @@
+/* —— D-064 7d 费率窗口卡：判据徽标 + 自明备注 + 逐标的表 —— */
+.window-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 10px;
+  flex-wrap: wrap;
+}
+.window-note {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+/* —— 进化建议卡（D-044 L0）：只读证据候选 —— */
+.insights-sub {
+  margin: -4px 0 8px;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+/* D-060 建议复核警示条：证据方向翻转 → 待决策层清单入口（只警示，不自动改判定） */
+.recheck-banner {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  color: var(--ink);
+  font-size: 12px;
+}
+.insights {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.insight-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.insight-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.insight-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.insight-cat {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.insight-title {
+  font-weight: 600;
+}
+.insight-ts {
+  margin-left: auto;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.insight-detail {
+  margin: 4px 0 0;
+  color: var(--ink-2);
+}
+/* D-059 复核自动证据：系统算给复核人看的当前核验，独立底色区别于人工 rationale */
+.evidence-note {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.evidence-label {
+  margin-right: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--accent, #4f7cff);
+  color: #fff;
+  font-size: 11px;
+}
+.insight-actions {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.insight-actions li {
+  margin-top: 2px;
+}
+/* —— 经验库人工复核（D-054） —— */
+.review-bar {
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-end;
+}
+.review-open {
+  font-size: 12px;
+  padding: 2px 10px;
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  background: none;
+  color: var(--accent);
+}
+.review-open:hover {
+  background: var(--surface);
+}
+/* D-060 建议复核按钮：方向翻转时用警示色，与「仍适用/待复核」的普通按钮区分 */
+.review-open.recheck-open {
+  border-color: var(--warn);
+  color: var(--warn);
+  font-weight: 600;
+}
+.review-form {
+  display: grid;
+  /* 对话 #82：3 列 110px 1fr auto——行 1 = 生命周期 | 判定文本；行 2 = 复核结论
+     （span 2 宽输入）+ 第三列 auto 放取消/确认复核按钮，按钮与复核结论同 1 行。 */
+  grid-template-columns: 110px 1fr auto;
+  gap: 8px;
+  align-items: end;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.review-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.review-form input,
+.review-form select {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.review-form .review-note {
+  grid-column: span 2;
+}
+.review-actions {
+  /* 对话 #82：按钮放第三列（auto 宽），与复核结论同 1 行、右对齐。仍防 auto-placement
+     变形（此前桌面无 grid-column 被塞进 110px 首列挤变形；现在显式 col 3）。 */
+  grid-column: 3;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.review-submit {
+  font-size: 12px;
+  padding: 4px 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--surface);
+}
+.review-submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.review-err {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--critical);
+  font-size: 12px;
+}
+@media (max-width: 640px) {
+  .review-form {
+    grid-template-columns: 1fr 1fr;
+  }
+  .review-form .review-note {
+    grid-column: span 2;
+  }
+  /* 对话 #82：桌面基值 grid-column:3 在 2 列网格会隐式建第三轨道——手机改整行 */
+  .review-actions {
+    grid-column: span 2;
+  }
+}

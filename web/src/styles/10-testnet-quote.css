@@ -1,0 +1,54 @@
+/* D-040 测试网账户区（SimExec tab）：账户卡 + 权益 + 资产明细。 */
+.testnet-accounts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+.testnet-account {
+  border: 1px solid var(--ring);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+}
+.testnet-account h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.account-equity {
+  margin: 0 0 6px;
+}
+.account-equity strong {
+  font-size: 16px;
+}
+
+/* D-056 Part B 实时报价条（QuoteStrip）：秒级跳动，看盘第一眼数据。 */
+.quote-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--ring);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.quote-tile {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 14px;
+}
+.quote-tile strong {
+  font-variant-numeric: tabular-nums;
+}
+.quote-venue {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.quote-ts {
+  margin-left: auto;
+  font-size: 12px;
+}
+

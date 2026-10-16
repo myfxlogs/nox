@@ -10,6 +10,7 @@ import { NOX_NAME, NOX_REPORT_FOOTER } from "../nox";
 import { fmtUsd, fmtAge } from "../components/fmt";
 import GraduationPanel from "../components/graduation";
 import { Collapse } from "../components/collapse";
+import { EmptyState } from "../components/EmptyState";
 import type { DCIOrderRow } from "../gen/dashboardv1/dci_panel_pb";
 
 // strategyCN D-577：fin_opp_template 键→中文名静态映射（票钉：错配显原 key
@@ -223,7 +224,7 @@ export default function InvestorPage() {
       {/* D-577 一策略一格：按后端 strategy_key 分格（禁前端猜挂——
           unassigned=NULL 如实落未归组格；中文名走静态映射，错配显原 key 不造名） */}
       {positions.length === 0 && (
-        <Collapse title="持仓" hint="0 仓"><div className="muted">零在跑仓</div></Collapse>
+        <Collapse title="持仓" hint="0 仓"><EmptyState>零在跑仓</EmptyState></Collapse>
       )}
       {strategyGroups(positions).map(([key, rows]) => (
         <Collapse key={key} title={"持仓·" + strategyCN(key)} hint={rows.length + " 仓"}>

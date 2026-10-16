@@ -1,0 +1,147 @@
+/* —— 通知中心铃铛（M2-a §1.3） —— */
+.bell {
+  position: relative;
+}
+.bell-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  color: var(--ink-2);
+}
+.bell-btn:hover {
+  color: var(--ink);
+}
+.bell-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--critical);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+.bell-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--ring);
+}
+.bell-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+.bell-count {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 400;
+}
+.bell-empty {
+  padding: 24px 14px;
+  text-align: center;
+}
+.bell-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bell-list li {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.bell-list li:last-child {
+  border-bottom: none;
+}
+.bell-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bell-rule {
+  font-weight: 600;
+}
+.bell-ts {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.bell-msg {
+  margin: 4px 0 6px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.bell-ack {
+  margin-left: auto;
+}
+.bell-foot {
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+}
+.bell-ack-all {
+  width: 100%;
+}
+/* 移动端：抽屉全屏化（D-030 PWA 后置） */
+@media (max-width: 600px) {
+  .bell-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    border: none;
+    border-radius: 0;
+  }
+}
+/* —— 顶部分页（M2-b：监控总览 / 事实快照 / 出入金台账） —— */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.tab {
+  padding: 6px 14px;
+  border: 1px solid var(--ring);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.tab:hover {
+  color: var(--ink);
+}
+.tab-on {
+  background: var(--ink);
+  color: var(--page);
+  border-color: transparent;
+}
+.tab-on:hover {
+  color: var(--page);
+}

@@ -1,0 +1,102 @@
+/* —— 表格 —— */
+.table-scroll {
+  overflow-x: auto;
+}
+/* D-052 长列表统一高度封顶（对话 #70 全局阅读协调）：机会面板实算卡 / 经验库 /
+   进化建议列表高度有界，内容超高时卡内滚动，不向下无限拉伸挤占后续卡片；
+   与对话 #54 告警流高度封顶同机制。max-height 仅在内容超高时生效（短列表无感）。 */
+.scroll-cap {
+  max-height: min(68vh, 520px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* 市场数据矩阵卡内表格纵向封顶（defi 矩阵多行会把卡撑到 ~900px）——
+   横向滚动保留（.table-scroll），纵向超高走卡内滚动。 */
+.card[aria-labelledby="matrix-title"] .table-scroll {
+  max-height: min(62vh, 440px);
+  overflow-y: auto;
+}
+@media (max-width: 600px) {
+  /* 小屏视口矮，滚动区再收紧，避免占满整屏 */
+  .scroll-cap {
+    max-height: min(52vh, 360px);
+  }
+  .card[aria-labelledby="matrix-title"] .table-scroll {
+    max-height: min(52vh, 320px);
+  }
+}
+table.matrix,
+table.rows {
+  border-collapse: collapse;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+table.matrix th,
+table.matrix td,
+table.rows th,
+table.rows td {
+  padding: 6px 10px;
+  text-align: right;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+table.matrix th,
+table.rows th {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+table.matrix th[scope="row"],
+table.rows th[scope="row"] {
+  text-align: left;
+}
+table.matrix tr:last-child td,
+table.matrix tr:last-child th,
+table.rows tr:last-child td,
+table.rows tr:last-child th {
+  border-bottom: none;
+}
+td.neg {
+  color: var(--delta-down);
+}
+/* —— 徽标（状态色 + 点 + 标签；warn 黄底黑字、critical 红底白字两主题皆 ≥3:1） —— */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--ring);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.chip .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+.chip-neutral {
+  color: var(--ink-2);
+}
+.chip-good {
+  color: var(--good-ink);
+}
+.chip-good .dot {
+  background: var(--good);
+}
+.chip-warn {
+  color: #0b0b0b;
+  background: var(--warn);
+  border-color: transparent;
+}
+.chip-warn .dot {
+  background: #0b0b0b;
+}
+.chip-critical {
+  color: #ffffff;
+  background: var(--critical);
+  border-color: transparent;
+}
+.chip-critical .dot {
+  background: #ffffff;
+}
