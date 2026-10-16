@@ -234,6 +234,7 @@ internal/trading/exec -> internal/data/bus
 internal/trading/exec -> internal/data/fact
 internal/trading/exec -> internal/data/keydomain
 internal/trading/exec -> internal/data/marketstate
+internal/trading/autotrade -> internal/infra/dephealth
 internal/trading/exec -> internal/infra/dephealth
 internal/trading/exec -> internal/platform/combo
 internal/trading/exec -> internal/platform/httpx
