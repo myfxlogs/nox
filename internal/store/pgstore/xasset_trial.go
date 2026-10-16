@@ -13,6 +13,17 @@ import (
 // XAssetTrialNotePrefix S2 桥写组合行 note 前缀（s2bridge 写侧与三本读侧单源）。
 const XAssetTrialNotePrefix = "S2桥"
 
+// XAssetGradNotePrefix 毕业链授权行 note 前缀（approve 径写 'D-403毕业 paper#N'，
+// D-552 扩面——业主真金授权与 S2 委员会试单同级豁免属员）。
+const XAssetGradNotePrefix = "D-403毕业"
+
+// XAssetExemptNoteLikePatterns 豁免 note 前缀集（D-550+D-552 授权标集合：
+// {'S2桥'=委员会试单,'D-403毕业'=业主真金授权}）——行级窄豁免判据其余四项
+// （enabled/四元组/env/simulated）不变；集合外前缀不豁免（未授权行维持掐死）。
+func XAssetExemptNoteLikePatterns() []string {
+	return []string{XAssetTrialNotePrefix + "%", XAssetGradNotePrefix + "%"}
+}
+
 // IsTrialXAssetCombo 试单属员判：enabled ∧ note 前缀命中 ∧ (canonical 买/卖 +
 // venue_key 买/卖) 四元组精确匹配 → true。environment 过滤同 LoadXAssetAllowCombos
 // （simulated IS NULL 两域通用 / false=real / true=demo）。行缺=false 非错；
@@ -21,12 +32,12 @@ func (s *Store) IsTrialXAssetCombo(ctx context.Context, canonicalBuy, canonicalS
 	var id int64
 	err := s.pool.QueryRow(ctx, `
 		SELECT id FROM xasset_allow_combos
-		WHERE enabled AND note LIKE $1
+		WHERE enabled AND note LIKE ANY($1)
 		  AND canonical_buy = $2 AND canonical_sell = $3
 		  AND venue_key_buy = $4 AND venue_key_sell = $5
 		  AND (simulated IS NULL OR simulated = ($6='demo'))
 		LIMIT 1`,
-		XAssetTrialNotePrefix+"%", canonicalBuy, canonicalSell, venueKeyBuy, venueKeySell, environment).Scan(&id)
+		XAssetExemptNoteLikePatterns(), canonicalBuy, canonicalSell, venueKeyBuy, venueKeySell, environment).Scan(&id)
 	if err == pgx.ErrNoRows {
 		return false, nil
 	}

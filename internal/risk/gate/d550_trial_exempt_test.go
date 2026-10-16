@@ -71,3 +71,40 @@ func TestD550_TrialComboExemptsDisabled(t *testing.T) {
 		t.Fatalf("canonical_sell 缺不应豁免: %+v", r3)
 	}
 }
+
+// TestD552_GradComboExemptsDisabled D-552 扩面锚：approve 径写 'D-403毕业
+// paper#N' note 行与 'S2桥%' 同级豁免；未授权行/集合外前缀维持掐死。
+func TestD552_GradComboExemptsDisabled(t *testing.T) {
+	s := setupGateDisabledStore(t, "XASSET_CARRY")
+	ctx := context.Background()
+	for _, note := range []string{"D-403毕业 paper#46", "D-403毕业 paper#47", "非授权行"} {
+		if _, err := s.Pool().Exec(ctx, `DELETE FROM xasset_allow_combos
+			WHERE canonical_buy='TRXUSDT' AND canonical_sell='TRXUSD'
+			  AND venue_key_buy='binance:perp' AND venue_key_sell='15032313:mt5'`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
+			(canonical_buy, canonical_sell, venue_buy, venue_sell, venue_type_buy, venue_type_sell,
+			 max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note)
+			VALUES ('TRXUSDT','TRXUSD','binance','15032313','perp','mt5',5,5,200,true,false,$1)`, note); err != nil {
+			t.Fatal(err)
+		}
+		g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5}, nil)
+		r := g.Submit(ctx, &TradeIntent{
+			Strategy: "XASSET_CARRY", Canonical: "TRXUSDT", CanonicalSell: "TRXUSD",
+			VenueBuy: "binance:perp", VenueSell: "15032313:mt5",
+			Qty: 0.01, NetBps: 10, DedupKey: "XASSET_CARRY:TRX:binance:15032313:" + note,
+			Execute: func(context.Context) (string, string, int64) { return "EXECUTED", "ok", 1 },
+		})
+		disabledReject := r.Status == "REJECTED" && strings.Contains(r.Reason, "strategy XASSET_CARRY disabled")
+		if note == "非授权行" && !disabledReject {
+			t.Fatalf("未授权行应 disabled 拒: %+v", r)
+		}
+		if note != "非授权行" && disabledReject {
+			t.Fatalf("授权标行（%s）应豁免 disabled 拒: %+v", note, r)
+		}
+	}
+	t.Cleanup(func() {
+		_, _ = s.Pool().Exec(ctx, `DELETE FROM xasset_allow_combos WHERE canonical_buy='TRXUSDT'`)
+	})
+}
