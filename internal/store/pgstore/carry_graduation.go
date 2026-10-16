@@ -195,20 +195,34 @@ type XAssetComboInsert struct {
 	NotionalUSD   *float64
 	Simulated     bool
 	Note          string
+	// D-581：fixed=四字段固化（现值语义不变）；pct=funding_pct 原样落表进场径
+	// 活池折算（腿帽留 NULL）；system=零 sizing 输入默认档（app_config 包络）。
+	SizingMode string
+	FundingPct *float64
 }
 
 // InsertXAssetAllowCombo approve 写组合白名单（simulated=false=真仓白名单；venue env 门
 // 仍是实际真钱闸，双层不矛盾）。撞唯一键 → ErrXAssetComboExists（调用方报「已在白名单」）。
+// 非 fixed 档腿帽写 NULL（CHECK 钉死 sizing_caps_check），armed 径按活池折算。
 func (s *Store) InsertXAssetAllowCombo(ctx context.Context, r *XAssetComboInsert) (int64, error) {
 	var id int64
 	vb, vs := keydomain.Parse(r.VenueBuy), keydomain.Parse(r.VenueSell) // D-496 复合键拆两列
+	mode := r.SizingMode
+	if mode == "" {
+		mode = "fixed"
+	}
+	var lq, sq, gr, nt any
+	if mode == "fixed" {
+		lq, sq, gr = r.MaxLongQty, r.MaxShortQty, r.MaxGrossUSD
+		nt = r.NotionalUSD
+	}
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell,
-			max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated, note)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11,$12)
+			max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated, note, sizing_mode, funding_pct)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11,$12,$13,$14)
 		RETURNING id`,
 		r.CanonicalBuy, r.CanonicalSell, vb.Venue, vb.Type, vs.Venue, vs.Type,
-		r.MaxLongQty, r.MaxShortQty, r.MaxGrossUSD, r.NotionalUSD, r.Simulated, r.Note).Scan(&id)
+		lq, sq, gr, nt, r.Simulated, r.Note, mode, r.FundingPct).Scan(&id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {

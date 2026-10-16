@@ -36,6 +36,7 @@ type allocSizing struct {
 	RiskLevel      string   // ok / insufficient / liquidation
 	SuggestedAlloc float64  // 建议分配额（risk≠ok 时给）
 	RiskReasons    []string // 风险理由逐项
+	Warns          []string // 池域警示（D-581 拆层：降级 decided_note 警示不拦写白名单）
 }
 
 // deriveAllocSizing D-490 S3 共用折算器（approveNonCfd+cfd 两分支同源）：
@@ -52,6 +53,8 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 	if pct == nil && usd == nil {
 		return res, "资金分配模式缺输入（funding_pct/funding_usd 至少传一，或走显式上限）"
 	}
+	// 调用约定：D-581 起 pct 档批准=原样落表，本函数只作 dry_run 预览/警示
+	// 数据源——estr 返回值在 pct 档仅作提示不拦批（armed 径活池折算兜底）。
 	if pct != nil && !(*pct > 0) {
 		return res, "funding_pct 必须 >0（NaN/非正同拒）"
 	}
@@ -65,10 +68,15 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 	for _, vk := range []string{venueBuy, venueSell} {
 		p, ok, failNote := s.legPoolSizing(ctx, vk)
 		if !ok {
-			return res, fmt.Sprintf("腿池 %s %s（fail-closed 不批钱）", vk, failNote)
+			// D-581 拆层：池读缺=池域警示降级（armed 径活池面闸每拍重查——
+			// 批准绑死当下池面致死结修）；pct 模式无基准=结构性不成立仍拒。
+			res.Warns = append(res.Warns, fmt.Sprintf("腿池 %s 读缺（%s）——armed 径活池面闸每拍重查", vk, failNote))
+			continue
 		}
 		if p.equity <= 0 {
-			return res, fmt.Sprintf("腿池 %s 净值非正（$%.2f），拒绝折算", p.key, p.equity)
+			// D-581 终裁：pct 零池不拒批——pct 原样落表，armed 径活池折算池回正自动生效。
+			res.Warns = append(res.Warns, fmt.Sprintf("腿池 %s 净值非正（$%.2f）——armed 径活池面闸每拍重查", p.key, p.equity))
+			continue
 		}
 		if !allocPoolUSDLike(p.currency) {
 			return res, fmt.Sprintf("腿池 %s 币种 %s 不支持（仅 USD/USDT/UST 不猜汇率；逃生=显式上限模式）", p.key, p.currency)
@@ -92,8 +100,8 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 		allocUSD = base * *pct // D-540：% 基准=可用资金（业主令；旧净值口径随动）
 	} else {
 		allocUSD = *usd
-		if allocUSD > minPool {
-			return res, fmt.Sprintf("分配额 $%.0f 超过小池 %s 净值 $%.0f（必然超档，拒）", allocUSD, bind.key, minPool)
+		if minPool > 0 && allocUSD > minPool {
+			res.Warns = append(res.Warns, fmt.Sprintf("分配额 $%.0f 超当前小池 %s 净值 $%.0f（池域警示——armed 径活池面闸每拍重查）", allocUSD, bind.key, minPool))
 		}
 	}
 	allocPct := 0.0
@@ -105,8 +113,10 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 		cap = defaultCrossCap
 	}
 	// 安全线闸口径不变——占小池净值比（equity 口径；与回显的可用基准比分轨）。
-	if equityPct := allocUSD / minPool; equityPct > cap {
-		return res, fmt.Sprintf("占小池净值 %.1f%% 超安全线（上限 %.0f%%，同待入场区档位判据 NOX_CROSS_NOTIONAL_EQUITY_CAP；逃生=显式上限模式）", equityPct*100, cap*100)
+	if minPool > 0 {
+		if equityPct := allocUSD / minPool; equityPct > cap {
+			res.Warns = append(res.Warns, fmt.Sprintf("占小池净值 %.1f%% 超安全线 %.0f%%（池域警示——armed 径 NOX_CROSS_NOTIONAL_EQUITY_CAP 同档每拍重查）", equityPct*100, cap*100))
+		}
 	}
 	// ④ perLot 折算（USDPerLotForLeg 复用；报价/CS/FX 缺 → fail-closed）
 	notional := allocUSD / 2 // L=1 最坏占用：两腿资金占用上界≈2×腿名义
@@ -133,7 +143,10 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 	if s.QtyBelowMinStep(venueSell, legSym(canonSell, venueSell), qtySell) {
 		return res, fmt.Sprintf("分配额折算后卖腿 qty %.4f 低于 %s 最小下单单位（死额度不批；调大分配额或走显式上限）", qtySell, venueSell)
 	}
+	// D-581：前文池域警示先存——字面量重建会清 Warns，须携带进新实例。
+	priorWarns := res.Warns
 	res = allocSizing{
+		Warns:    priorWarns,
 		AllocUSD: allocUSD, AllocPct: allocPct,
 		GrossUSD: allocUSD, LegNotional: notional,
 		LongQty: qtyBuy * 1.1, ShortQty: qtySell * 1.1,
@@ -152,6 +165,18 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 	return res, ""
 }
 
+// allocSizingMode D-581 终裁：批准 sizing 模式判定——pct=funding_pct 原样落表；
+// usd/显式四字段=fixed 固化；零 sizing 输入=system 默认档（批准仅策略 yes/no）。
+func allocSizingMode(g *v1.ApproveCarryGraduationRequest) string {
+	if g.FundingPct != nil {
+		return "pct"
+	}
+	if g.FundingUsd == nil && !(g.MaxLongQty > 0) && !(g.MaxShortQty > 0) && !(g.MaxGrossUsd > 0) && g.NotionalUsd == nil {
+		return "system"
+	}
+	return "fixed"
+}
+
 // allocModeInputs D-490 模式分流校验（approve 入口共用）：funding=资金分配模式
 // （pct/usd 任一非 nil）。互斥①：资金输入与显式四字段混传拒；互斥②：显式模式
 // caps 必填>0（禁默认=防盲签；!>0 写法一并拒 NaN）、notional 显式传禁非正
@@ -159,15 +184,19 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 func allocModeInputs(g *v1.ApproveCarryGraduationRequest) (funding bool, errStr string) {
 	funding = g.FundingPct != nil || g.FundingUsd != nil
 	explicit := g.MaxLongQty > 0 || g.MaxShortQty > 0 || g.MaxGrossUsd > 0 || g.NotionalUsd != nil
+	if g.FundingPct != nil && g.FundingUsd != nil {
+		return true, "funding_pct 与 funding_usd 互斥（分配额二选一：填 % 或填 $）"
+	}
 	if funding && explicit {
 		return true, "资金分配模式与显式上限互斥（funding_pct/funding_usd 不得与 max_*_qty/max_gross_usd/notional_usd 混传）"
 	}
-	if !funding && !explicit && g.DryRun {
-		return false, "" // D-492 R1：dry_run 裸探针豁免——无 sizing/显式入参放行回 gap 体检字段（零副作用）
+	if !funding && !explicit {
+		return false, "" // D-581 终裁：零 sizing=system 档（批准仅策略 yes/no；dry_run 裸探针同径放行）
 	}
 	if !funding {
+		// 显式档=可选覆盖：传了任一显式字段则三 cap 仍必填 >0（半截授权不成立）。
 		if !(g.MaxLongQty > 0) || !(g.MaxShortQty > 0) || !(g.MaxGrossUsd > 0) {
-			return false, "三 cap 必填且 >0（max_long_qty/max_short_qty/max_gross_usd，跟 venue_buy/venue_sell 腿走）；或改用资金分配（funding_pct/funding_usd）"
+			return false, "显式上限模式三 cap 必填且 >0（max_long_qty/max_short_qty/max_gross_usd）；不填=system 默认档"
 		}
 		if g.NotionalUsd != nil && !(*g.NotionalUsd > 0) {
 			return false, "notional_usd 显式传值禁非正（D-367 加载期会整行剔除=假授权）"
@@ -184,7 +213,12 @@ func (s *Service) allocApply(ctx context.Context, resp *v1.ApproveCarryGraduatio
 		return 0, 0, 0, nil, note, estr
 	}
 	fillSizingEst(resp, res)
-	return res.LongQty, res.ShortQty, res.GrossUSD, &res.LegNotional, allocNoteMarker(note, res, g.FundingPct != nil), ""
+	note = allocNoteMarker(note, res, g.FundingPct != nil)
+	// D-581：池域警示随 decided_note 落账（降级不拦写白名单，业主知情）。
+	if len(res.Warns) > 0 {
+		note += " | 池域警示:" + strings.Join(res.Warns, ";")
+	}
+	return res.LongQty, res.ShortQty, res.GrossUSD, &res.LegNotional, note, ""
 }
 
 // gradDryRunResp dry_run 共用回显组装：venue gaps + 敞口闸 warns + est_* ——纯响应

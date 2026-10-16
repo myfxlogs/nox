@@ -104,6 +104,10 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 			// 9h 2500+ 行同义 skip 刷屏根除点）。
 			return
 		}
+		// D-581：pct/system 档进场径活池折算落帽（池缺→条件请求+拒开）。
+		if !e.resolveXAssetSizing(ctx, opp, xassetSpec) {
+			return
+		}
 		var gateOK bool // D-010 S3：margin 折算+canonical 聚簇闸（engine_opp_margin.go）
 		if marginLegN, gateOK = e.xassetMarginGate(ctx, opp, sellCanonical, xassetSpec); !gateOK {
 			return
