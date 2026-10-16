@@ -168,3 +168,5 @@
 分支清理：wip/earn-venue-float+wip/trial-rail 远端已删、worktree 全拆。critical×10=symbol-map 110660304 FX 双腿停供（独立病灶观察项，与本部署无关）。 -->
 
 <!-- 复审席 10-16 grad-exempt @c66d9a7d3 照准并入 @c72dfa448：豁免标集合 {'S2桥','D-403毕业'} 实现=前缀集 LIKE ANY 单判据源（XAssetExemptNoteLikePatterns），enabled/四元组/env/simulated 四判据不动、读败 fail-closed 依旧；TestD552_GradComboExemptsDisabled 双向断言（授权行过/未授权行仍 disabled 拒）独立重跑过；机检 build/vet/gofmt/触包/race gate 130 全绿全套件零败。SG 已部署（镜像含 f5b217ede+P1P3+D-552 全量）。**SG 验收挂账**：业主批准 carry_graduations#46-48 → 白名单行落册后首拍出 position（业主定帽）或如实拒因告警；未批前链路 armed 零动作。 -->
+
+> 收口注记（决策席 10-16 01:20Z）：**业主令批 #46 落账**——ApproveCarryGraduation RPC 实走（$700 gross/腿 $350，双池实拉校准 binance:perp $1344×15032313:mt5 $1000，绑定=MT 池 69.98%<cross_cap），`carry_graduations#46→approved`、`xasset_allow_combos#17` 落册（`D-403毕业 paper#67010` 前缀命 D-552 豁免集、enabled、max_gross=700、simulated=f）；白名单热重载 rows 2→3 在案。armed 态验收锚=同 D-550：首拍合格候选→position≤$700 或如实拒因告警（TRX perp funding 衰中，零机会=如实不产）。#47/#48 仍 pending 待 CEX 腿装配段票。
