@@ -7,6 +7,8 @@ import type {
   CarryGraduationRow,
 } from "../gen/dashboardv1/graduation_pb";
 import { fmtUsd } from "./fmt";
+import { Chip, type ChipTone } from "./Chip";
+import { StatTile } from "./StatTile";
 
 type Mode = "pct" | "usd" | "explicit";
 
@@ -35,6 +37,16 @@ function covBadge(r: CarryGraduationRow): string {
   if (c == null) return "—";
   const tag = c < 0.5 ? "（偏低）" : c < 0.8 ? "（一般）" : "";
   return (c * 100).toFixed(0) + "%" + tag;
+}
+
+// S2b 卡阵徽标：净额现值正+覆盖度达标=「可批」绿；覆盖度偏低或净额负=「观望」黄
+// /「净负」红——显示映射非准入判据（判据全在 GraduationQualifiedReason）。
+function gradTone(r: CarryGraduationRow): { tone: ChipTone; cn: string } {
+  const net = r.liveNetAllInUsd ?? r.netAllInUsd;
+  const cov = r.coverageRatio;
+  if (net != null && net < 0) return { tone: "critical", cn: "净负" };
+  if (cov != null && cov < 0.5) return { tone: "warn", cn: "覆盖偏低" };
+  return { tone: "good", cn: "可批" };
 }
 
 export default function GraduationPanel() {
@@ -130,40 +142,47 @@ export default function GraduationPanel() {
       {err && <div className="err">{err}</div>}
       {pending.length === 0 && decided.length === 0 && <div className="muted">暂无毕业提案</div>}
       {pending.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>#</th><th>品种</th><th>结构</th><th>场所对</th><th>天数</th>
-              <th>已计息</th><th>收敛浮盈（现值）</th><th>费估</th><th>全费净额（现值/提案时）</th><th>资金费年化</th><th>覆盖度</th><th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {pending.map((r) => (
-              <tr key={Number(r.id)}>
-                <td>{Number(r.id)}</td>
-                <td>{r.symbol}{r.flagWarn ? <span className="warn"> ⚠{r.flagWarn}</span> : null}</td>
-                <td>{structCN(r.structure)}</td>
-                <td>{r.venue}</td>
-                <td>{r.ageDays.toFixed(1)}天</td>
-                <td className={r.accruedUsd >= 0 ? "good" : "crit"}>{fmtUsd(r.accruedUsd)}</td>
-                <td className={(r.liveConvergenceUsd ?? 0) >= 0 ? "" : "crit"}>
-                  {r.liveConvergenceUsd != null ? fmtUsd(r.liveConvergenceUsd) : "—"}</td>
-                <td>{r.estFeeUsd != null ? fmtUsd(-r.estFeeUsd) : "—"}</td>
-                <td className={(r.liveNetAllInUsd ?? r.netAllInUsd ?? 0) >= 0 ? "good" : "crit"}>
-                  {r.liveNetAllInUsd != null ? fmtUsd(r.liveNetAllInUsd) : "—"}
-                  {r.netAllInUsd != null ? <span className="muted">（提案 {fmtUsd(r.netAllInUsd)}）</span> : null}</td>
-                <td>{r.lastFundingAnn != null ? r.lastFundingAnn.toFixed(2) + "%" : "—"}</td>
-                <td>{covBadge(r)}</td>
-                <td>
+        /* S2b arb 式全候选卡阵（Opportunity.tsx 范式）：徽标/StatTile 阵/
+           narrative 三区，卡顶=裁决徽标+品种+结构+场所对 */
+        <ul className="opp-cards scroll-cap">
+          {pending.map((r) => {
+            const t = gradTone(r);
+            const net = r.liveNetAllInUsd ?? r.netAllInUsd;
+            const ann = r.lastFundingAnn;
+            return (
+              <li key={Number(r.id)} className="opp-card">
+                <div className="opp-card-head">
+                  <Chip tone={t.tone}>{t.cn}</Chip>
+                  <span className="opp-card-kind">#{Number(r.id)} {r.symbol}</span>
+                  <span className="opp-card-who">{structCN(r.structure)} · {r.venue}</span>
+                  {r.flagWarn ? <Chip tone="warn">⚠{r.flagWarn}</Chip> : null}
+                  <span className="opp-card-friction">{r.ageDays.toFixed(1)}天</span>
+                </div>
+                <div className="stats opp-card-stats">
+                  <StatTile label="已计息" value={fmtUsd(r.accruedUsd)} />
+                  <StatTile label="收敛浮盈（现值）" value={r.liveConvergenceUsd != null ? fmtUsd(r.liveConvergenceUsd) : "—"} />
+                  <StatTile label="费估" value={r.estFeeUsd != null ? fmtUsd(-r.estFeeUsd) : "—"} />
+                  <StatTile label="全费净额" value={net != null ? fmtUsd(net) : "—"}
+                    sub={r.netAllInUsd != null ? `提案 ${fmtUsd(r.netAllInUsd)}` : undefined} />
+                  {/* 8% 线=毕业存活闸语义（last_funding_ann≥8 后端判据），
+                      前端只标过线与否不裁准入 */}
+                  <StatTile label="资金费年化" value={ann != null ? ann.toFixed(2) + "%" : "—"}
+                    sub={ann != null ? (ann >= 8 ? "≥8% 存活线" : "<8% 存活线下") : undefined} />
+                  <StatTile label="覆盖度" value={covBadge(r)} />
+                </div>
+                <p className="opp-card-narrative muted">
+                  {r.decidedNote || "纸面沙箱达标待业主授权"}
+                </p>
+                <div>
                   <button onClick={() => { setOpenId(openId === Number(r.id) ? null : Number(r.id)); setPreview(null); }}>
                     {openId === Number(r.id) ? "收起" : "批准"}
                   </button>{" "}
                   <button disabled={busy} onClick={() => reject(Number(r.id))}>拒绝</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       {openId != null && (
@@ -253,7 +272,7 @@ export default function GraduationPanel() {
               {decided.map((r) => (
                 <tr key={Number(r.id)}>
                   <td>{Number(r.id)}</td><td>{r.symbol}</td><td>{r.venue}</td>
-                  <td>{statusCN(r.status)}</td><td>{r.decidedBy || "委员会"}</td>
+                  <td><Chip tone={r.status==="approved"?"good":r.status==="rejected"?"critical":"neutral"}>{statusCN(r.status)}</Chip></td><td>{r.decidedBy || "委员会"}</td>
                   <td>{r.comboId != null ? "#" + Number(r.comboId) : "—"}</td>
                   <td className="muted">{r.decidedNote}</td>
                 </tr>
