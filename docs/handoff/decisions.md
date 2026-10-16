@@ -447,3 +447,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **实证**：arb `docs/handoff/dialogue.md`（§8+check-out 第 4 步「本次对话落 dialogue」）419 行健在——每次实质对话追加结构化纪要（日期/参与方/议题/需求/结论/决策号），>450 行滚 LOG.md；NOX 9-30 重置（D-001）后该层未随契约过来，`docs/handoff/` 无此文件、AGENTS.md 零命中。
 - **裁定**：建 `docs/handoff/dialogue.md` 并入 §2 文档清单+§4 流程条——实质对话（决策/追问/纠偏/授权类）收工追加纪要，纯执行回执不记；decisions 层只收「成了决策的裁定」，dialogue 层收「追问→纠偏」过程链（被否提案/理解修正/授权来由），两面互补不重复。历史对话不回填（工具 session 记录兜底），前向记录。
 - **理由**：业主「为什么这么做」可追溯权+换会话后上下文重建都靠这层；arb 实证有效件直接移植不重造。
+
+## D-593 全模板纸面先行不变量+payoff 分类闸（补洞② 设计裁定——D-584 审计病灶收口）
+- **实证**（SG 10-16 亲证）：`fin_opp_template` 9 模板中 proposal 轨 4 条（dci_buy_low/dci_sell_high_covered_call/option_spread/term_basis）零纸面管线——`paper_spot_carry.structure` 实拍仅 4 值（short_cfd_long_perp/long_cfd_short_perp/perp_perp/perp_delivery）全属 hedged/carry 族；dci_buy_low 14 提案 4 结算净亏坐实「proposal 轨直批真金零沙箱」。提案执行唯一收口=`dciexec.Executor.GoProposal`（飞书 go N→执行腿→SetProposalStatus；earn 腿在其内、resume 续执回环同径）。
+- **裁定**：①`fin_opp_template` 加 `payoff_class`（CHECK 枚举 directional_hedged|yield_on_holdings|defined_risk_vol|naked_short_vol，9 行按 id 显式回填禁默认臆分）+`paper_gate`(required|exempt)+`paper_gate_ref`（exempt 时非空 CHECK 钉死）+`paper_structures text[]`（paper_spot_carry.structure 证据键）；②`GoProposal` 前置模板闸——模板无档拒、naked_short_vol 结构性拒（dci_buy_low 落此类）、required 且 `paper_structures` 无对应 paper 行→「待纸面」拒；③豁免种子：`cash_mgmt`/`earn_apr_lending` 引 D-286 承接位（无方向敞口）、`dci_sell_high_covered_call` 引本 D#（持仓资产上卖 call=yield_on_holdings 非裸卖尾险，托管 carry 主线不可断）；`option_spread`/`term_basis` 留 required+空证据键=如实待纸面（纸面管线另票建）。
+- **理由**：真金闸不能靠「记得跳过坏模板」——判据落表+单收口前置检=结构性不可绕；豁免显式 D# 可审计。
