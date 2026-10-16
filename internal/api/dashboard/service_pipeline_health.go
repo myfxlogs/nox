@@ -61,6 +61,9 @@ func (s *Service) stageCollect(_ context.Context) *stageRow {
 	if firstErr.Key != "" {
 		return stageNow("collect", "error", fmt.Sprintf("依赖 %s 断供", firstErr.Key), "", firstErr.State, last)
 	}
+	if suspect.Key != "" {
+		return stageNow("collect", "waiting", fmt.Sprintf("%d 路依赖在通", okN), fmt.Sprintf("%s 连败未达阈（suspect）", suspect.Key), "", last)
+	}
 	if okN > 0 {
 		return stageNow("collect", "working", fmt.Sprintf("%d 路依赖在通", okN), "", "", last)
 	}
@@ -125,7 +128,8 @@ func (s *Service) stageGateEval(ctx context.Context) *stageRow {
 // ⑤ 装配：executor dephealth 键 + 缺资条件缺口——故障键/缺口原文透出。
 func (s *Service) stageAssembly(ctx context.Context) *stageRow {
 	for _, d := range dephealth.Snapshot() {
-		if d.State == "error" || d.State == "down" {
+		// dephealth 状态域=healthy/suspect/degraded/idle/unknown——故障面=degraded。
+		if d.State == dephealth.StateDegraded {
 			return stageNow("assembly", "error", fmt.Sprintf("装配径 %s 故障", d.Key), "", d.State, time.Unix(d.LastEventUnix, 0))
 		}
 	}
