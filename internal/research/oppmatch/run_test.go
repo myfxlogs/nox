@@ -122,9 +122,9 @@ func TestD193_Sentinel(t *testing.T) {
 	}
 	// 三枚裁判模板：t193_ok 满足/holding=0、t193_miss 恒缺、t193_unk 权限未知。
 	if _, err := st.Pool().Exec(ctx, `
-		INSERT INTO fin_opp_template (id, mechanism, net_apr, exec_track, risk_level, enabled) VALUES
-		('t193_ok','ok','x','proposal','low',true),('t193_miss','miss','x','proposal','low',true),
-		('t193_unk','unk','x','proposal','low',true);
+		INSERT INTO fin_opp_template (id, mechanism, net_apr, exec_track, risk_level, enabled, payoff_class) VALUES
+		('t193_ok','ok','x','proposal','low',true,'other'),('t193_miss','miss','x','proposal','low',true,'other'),
+		('t193_unk','unk','x','proposal','low',true,'other');
 		INSERT INTO fin_opp_template_cond (template_id, seq, kind, subject, qualifier, min_val) VALUES
 		('t193_ok',1,'holding','BTC','min_qty',0),
 		('t193_miss',1,'holding','ZZZ','min_qty',999),
@@ -274,8 +274,8 @@ func TestZombieProposalSemantics(t *testing.T) {
 	// A：auto 轨无执行器（tzombie_auto 不在 IsExecTemplate 族）；holding BTC min 0=恒满足。
 	// B：proposal 轨（不触①），tid 无证据源 → 评估卡 unevaluable 连拍。
 	if _, err := st.Pool().Exec(ctx, `
-		INSERT INTO fin_opp_template (id, mechanism, net_apr, exec_track, risk_level, enabled) VALUES
-		('tzombie_auto','x','x','auto','low',true),('tzombie_eval','x','x','proposal','low',true);
+		INSERT INTO fin_opp_template (id, mechanism, net_apr, exec_track, risk_level, enabled, payoff_class) VALUES
+		('tzombie_auto','x','x','auto','low',true,'other'),('tzombie_eval','x','x','proposal','low',true,'other');
 		INSERT INTO fin_opp_template_cond (template_id, seq, kind, subject, qualifier, min_val) VALUES
 		('tzombie_auto',1,'holding','BTC','min_qty',0),
 		('tzombie_eval',1,'holding','BTC','min_qty',0)`); err != nil {
