@@ -131,7 +131,7 @@ export default function GraduationPanel() {
           <thead>
             <tr>
               <th>#</th><th>品种</th><th>结构</th><th>场所对</th><th>天数</th>
-              <th>已计息</th><th>全费净额</th><th>资金费年化</th><th>覆盖度</th><th></th>
+              <th>已计息</th><th>收敛浮盈（现值）</th><th>费估</th><th>全费净额（现值/提案时）</th><th>资金费年化</th><th>覆盖度</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -143,7 +143,12 @@ export default function GraduationPanel() {
                 <td>{r.venue}</td>
                 <td>{r.ageDays.toFixed(1)}天</td>
                 <td className={r.accruedUsd >= 0 ? "good" : "crit"}>{fmtUsd(r.accruedUsd)}</td>
-                <td>{r.netAllInUsd != null ? fmtUsd(r.netAllInUsd) : "—"}</td>
+                <td className={(r.liveConvergenceUsd ?? 0) >= 0 ? "" : "crit"}>
+                  {r.liveConvergenceUsd != null ? fmtUsd(r.liveConvergenceUsd) : "—"}</td>
+                <td>{r.estFeeUsd != null ? fmtUsd(-r.estFeeUsd) : "—"}</td>
+                <td className={(r.liveNetAllInUsd ?? r.netAllInUsd ?? 0) >= 0 ? "good" : "crit"}>
+                  {r.liveNetAllInUsd != null ? fmtUsd(r.liveNetAllInUsd) : "—"}
+                  {r.netAllInUsd != null ? <span className="muted">（提案 {fmtUsd(r.netAllInUsd)}）</span> : null}</td>
                 <td>{r.lastFundingAnn != null ? r.lastFundingAnn.toFixed(2) + "%" : "—"}</td>
                 <td>{covBadge(r)}</td>
                 <td>

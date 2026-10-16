@@ -115,6 +115,16 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 // active=entry/last basis 现算。同一公式（paperConvergenceUSD）同一语义只差时间锚：
 // 退出冻结=退出时点 last，现算=当前 last_basis（accrue 每轮在更新）。helper 单点
 // 防「判据读一套、建议行透出另一套」的公式漂移。
+// EffectiveConvergenceUSD 对外导出口径单源（dashboard 毕业行构成拆分透出复用——
+// 禁另算口径漂移）。
+func EffectiveConvergenceUSD(p pgstore.PaperSpotCarry) *float64 { return effectiveConvergenceUSD(p) }
+
+// NetAllInUSD 全账净额单源导出（accrued−estFee+conv；fee/conv nil→缺账保 NULL 语义由
+// 调用方判 nil 另拒）。
+func NetAllInUSD(accrued float64, estFee, conv *float64) float64 {
+	return netAllInUSD(accrued, estFee, conv)
+}
+
 func effectiveConvergenceUSD(p pgstore.PaperSpotCarry) *float64 {
 	if p.Status != "active" {
 		return p.ConvergenceUSD
