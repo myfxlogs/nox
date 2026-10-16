@@ -6,6 +6,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -623,5 +624,40 @@ func TestApprovePerpDelivery(t *testing.T) {
 	resp, _ = s.ApproveCarryGraduation(context.Background(), approveReq())
 	if resp.Msg.Ok || !contains2(resp.Msg.Error, "非可批结构") {
 		t.Errorf("未知结构应拒: ok=%v err=%s", resp.Msg.Ok, resp.Msg.Error)
+	}
+}
+
+// TestPitHits_Passthrough D-587④ 锚：坑签名命中行 pit_hits 透出
+// （「⚠命中坑 <id>（EA-xx）」；未命中=空集；库缺=空集非阻塞）。
+func TestPitHits_Passthrough(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(dir+"/xau-pit.md",
+		[]byte("# x\n**判据挂接**：EA-01\nmatch:\n  canonicals: [XAUUSD]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NOX_ECONKB_DIR", dir)
+	f, svc := gradFixture("spot_carry")
+	f.list = []pgstore.CarryGraduation{
+		{ID: 1, Symbol: "XAUUSD", VenueA: "gate", VenueB: "3001157", Status: "pending", Structure: "cfd"},
+		{ID: 2, Symbol: "TRXUSD", VenueA: "gate", VenueB: "3001157", Status: "pending", Structure: "cfd"},
+	}
+	resp, err := svc.ListCarryGraduations(context.Background(), connect.NewRequest(&v1.ListCarryGraduationsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hit, miss *v1.CarryGraduationRow
+	for _, r := range resp.Msg.Rows {
+		if r.Symbol == "XAUUSD" {
+			hit = r
+		}
+		if r.Symbol == "TRXUSD" {
+			miss = r
+		}
+	}
+	if hit == nil || len(hit.PitHits) != 1 || hit.PitHits[0] != "⚠命中坑 xau-pit（EA-01）" {
+		t.Fatalf("hit pit_hits=%v", hit.PitHits)
+	}
+	if miss == nil || len(miss.PitHits) != 0 {
+		t.Fatalf("miss pit_hits=%v", miss.PitHits)
 	}
 }
