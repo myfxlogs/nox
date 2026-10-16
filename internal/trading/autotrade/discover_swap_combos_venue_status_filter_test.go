@@ -25,6 +25,7 @@ func d388Seed(t *testing.T, s *pgstore.Store, longStatus, shortStatus string) {
 		}
 	}
 	now := time.Now().UTC()
+	seedTestClass(t, s, "AUDJPY", "fx") // D-558：配对闸 fail-closed，fixture 自带裁定
 	if err := s.InsertFacts(ctx, []fact.Fact{
 		{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
 		{Kind: fact.KindSwapShort, Venue: "vB", Symbol: "AUDJPY", Value: -3.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},

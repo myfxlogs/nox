@@ -382,3 +382,10 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **理由**：4 个 structure 值与模板机制名空间一一无歧义（perp×perp=CEX funding 收租、cfd×perp=swap 息差、perp×delivery=期限基差）；engine_type 只种旧引擎名与模板唯一对应的五行。
 - **故意不种**：XASSET_CARRY（引擎名域内歧义——同 type 可产 funding_carry/cfd_swap_carry/term_basis 仓，provenance 链才是真键，种静态映射=错挂面）；PROBE（探针仓非策略持仓，unassigned 如实）；MEANREVERT（活跃模板集无对应，落未归组格）。
 - **边界**：新 structure/engine_type 出现→map 无行→unassigned 自披露，种子随模板册扩展走本表追加非改码。
+
+## D-558（2026-10-16 实施席）SWAPARB 配对等价键改锚 canonical 产品类表——broker 组名退役出产品身份
+
+- **实证**：`broker_symbol_map.product_group`=broker 本地 MT5 CalcMode 目录分类，SG 实拍同 canonical 跨所异组（XAUUSD=110660304:cfd_leverage/15032313:fx/3001157:cfd_spot；110660304 连 BTCUSDT 现货都归 cfd_leverage）→ `sameProductGroup` 跨所配对全灭（STATE 票：发现径结构性零产出）。组值=broker 房规目录，非产品身份。
+- **裁定**：等价键=`fin_canonical_product_class`（canonical→产品类直挂：fx/crypto/index/energy/metal 闭集 CHECK，迁移 1037 种子 111 行=SG `DISTINCT canonical` 全集实拍，diff 校验零差）。`sameProductClass`：两腿类同放行（同品异组放行——病灶修复面）；类异拒（真异品如 BTCUSDT×WTI= crypto×energy，470 防护语义保留）；未归类 fail-closed 拒+日志留痕（`product class unclassified`）促归类 INSERT。470 型同 canonical 现货/期货价基变体差异不再由组名预判（组名已证伪），由下游基差闸（D-169 basisAvailable fail-closed+payback 门）与 S2 试单承接。
+- **选型理由**：写径归一化（ingest 按 canonical 写类进 product_group 列）被否——覆写 venue 原生分类违 §5「腿级数据只认 venue 返回值」且需回填历史行；组等价集表（(canonical,group)→类）仍以组名为半键，新组值出现即需人工裁定才放行=病灶换形复发。canonical 直挂=等价键纯锚产品类（票面明令），新 canonical 走表 INSERT 追加非改码（D-554 fin_position_strategy_map 同范式：无行→拒+自披露）。
+- **降级声明**：product_group 列与采集写径（mt_symbol_product→UpdateProductGroupByCanonical）保留为 venue 分类存档面（零读口）；ListProductGroups/ProductGroupByVenueCanonical 死读口已删，后续确无消费可另票退役列。

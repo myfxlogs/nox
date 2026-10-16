@@ -41,12 +41,25 @@ func seedDemoAccounts(t *testing.T, s *pgstore.Store, venues ...string) {
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE broker_accounts CASCADE`); err != nil {
 		t.Fatalf("truncate broker_accounts: %v", err)
 	}
+	// D-558：本 helper=discover fixture 引导器，swap 配对 canonical（AUDJPY）顺带裁定。
+	seedTestClass(t, s, "AUDJPY", "fx")
 	for _, v := range venues {
 		if _, err := s.Pool().Exec(ctx,
 			`INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, status, is_real)
 			 VALUES ($1, 'mt5', 'h', 443, 'p', 's', 'connected', false)`, v); err != nil {
 			t.Fatalf("seedDemoAccounts %s: %v", v, err)
 		}
+	}
+}
+
+// seedTestClass D-558：落产品类裁定行（discoverSwapCombos 配对闸 fail-closed——
+// canonical 无裁定行即拒配对，类测试 fixture 须自带裁定）。
+func seedTestClass(t *testing.T, s *pgstore.Store, canonical, class string) {
+	t.Helper()
+	if _, err := s.Pool().Exec(context.Background(),
+		`INSERT INTO fin_canonical_product_class (canonical, product_class) VALUES ($1, $2)
+		 ON CONFLICT (canonical) DO NOTHING`, canonical, class); err != nil {
+		t.Fatalf("seedTestClass %s: %v", canonical, err)
 	}
 }
 

@@ -112,3 +112,6 @@ var GraduationUnqualifiedSQL string // 毕业准入闸漏洞修：status 域补 
 
 //go:embed 1036_position_strategy_key.sql
 var PositionStrategyKeySQL string // 仓位归组键：positions.strategy_key+判据表
+
+//go:embed 1037_canonical_product_class.sql
+var CanonicalProductClassSQL string // D-558：SWAPARB 配对等价键表（canonical→产品类，111 行种子）

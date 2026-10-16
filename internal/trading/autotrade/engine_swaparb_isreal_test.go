@@ -27,6 +27,9 @@ func insertIsRealTestFacts(t *testing.T, s *pgstore.Store, facts []fact.Fact, re
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE broker_accounts CASCADE`); err != nil {
 		t.Fatalf("truncate broker_accounts: %v", err)
 	}
+	// D-558：配对闸 fail-closed，fixture canonical（AUDJPY/EURUSD）自带产品类裁定。
+	seedTestClass(t, s, "AUDJPY", "fx")
+	seedTestClass(t, s, "EURUSD", "fx")
 	if err := s.InsertFacts(ctx, facts); err != nil {
 		t.Fatalf("insert facts: %v", err)
 	}

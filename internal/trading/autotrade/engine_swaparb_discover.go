@@ -26,11 +26,13 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 	if err != nil || len(shortFacts) == 0 {
 		return nil
 	}
-	// 批量预取 product_group 映射（venue+canonical → product_group）。
-	// fail-open：查询失败=空 map，配对放行（sameProductGroup 空值放行语义）。
-	productGroupMap, err := e.store.ListProductGroups(ctx)
+	// 批量预取 canonical → 产品类映射（D-558 等价键锚 canonical 产品类；
+	// broker_symbol_map.product_group 本地目录分类退役出配对判定）。
+	// 查询失败 → 空 map，sameProductClass fail-closed 拒（未裁定面禁配对——
+	// 不同于旧 product_group fail-open 放行，真金闸禁吞）。
+	classMap, err := e.store.ListCanonicalProductClasses(ctx)
 	if err != nil {
-		log.Printf("[autotrade] SWAPARB ListProductGroups failed (fail-open): %v", err)
+		log.Printf("[autotrade] SWAPARB ListCanonicalProductClasses failed (fail-closed): %v", err)
 	}
 	// broker 托管 venue 非 connected → facts 退出配对（停用即剔除，不等 facts
 	// 自然过期——52993526 停用后 facts 残留窗口内仍刷配对的实证缺陷）。fail-open 先例同
@@ -113,13 +115,18 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 			if sfKey.canonical != lf.Symbol {
 				continue
 			}
-			// 产品维度校验——同 canonical 但不同 product_group 不配对
-			// （470 根因：FxPro BRENT cfd_spot × PXBT BRENT cfd_leverage）。
-			longPG := productGroupMap[pgstore.VenueCanonKey{Venue: lf.Venue, Canonical: lf.Symbol}]
-			shortPG := productGroupMap[pgstore.VenueCanonKey{Venue: sfKey.venue, Canonical: sfKey.canonical}]
-			if !sameProductGroup(longPG, shortPG) {
-				log.Printf("[autotrade] SWAPARB skip %s: product group mismatch (long=%s/%s, short=%s/%s)",
-					lf.Symbol, lf.Venue, longPG, sfKey.venue, shortPG)
+			// 产品维度校验 D-558——等价键=canonical 产品类（470 防护语义保留）。
+			// 同 canonical 异组放行（XAUUSD fx×cfd_spot 同=metal）；未归类 fail-closed
+			// 拒（新 canonical 留痕促归类 fin_canonical_product_class INSERT）。
+			longClass := classMap[lf.Symbol]
+			shortClass := classMap[sfKey.canonical]
+			if !sameProductClass(longClass, shortClass) {
+				why := "mismatch"
+				if longClass == "" || shortClass == "" {
+					why = "unclassified"
+				}
+				log.Printf("[autotrade] SWAPARB skip %s: product class %s (long=%s/%s, short=%s/%s)",
+					lf.Symbol, why, lf.Venue, longClass, sfKey.venue, shortClass)
 				continue
 			}
 			if sfKey.venue == lf.Venue {
