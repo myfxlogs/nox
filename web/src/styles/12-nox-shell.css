@@ -42,3 +42,22 @@
   .nox-nav-group .grp-label { display: none; }
   .nox-side nav { flex-direction: row; flex-wrap: wrap; }
 }
+
+/* S3′-b 补正：工序卡改流程图形态——十段小卡横排连线（纯布局，读模不动）。
+   段间连线=::after 伪元素箭头，窄屏换行续连（横滚不折布局）。 */
+.pipe-flow { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding: 4px 0 8px; }
+.pipe-flow .pipe-card {
+  position: relative; flex: 0 0 148px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--surface); padding: 8px 10px;
+  margin-right: 20px; box-sizing: border-box;
+}
+.pipe-flow .pipe-card::after {
+  content: "→"; position: absolute; right: -16px; top: 50%; transform: translateY(-50%);
+  color: var(--ink-3); font-size: 12px;
+}
+.pipe-flow .pipe-card:last-child { margin-right: 0; }
+.pipe-flow .pipe-card:last-child::after { content: none; }
+.pipe-flow .pipe-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.pipe-flow .pipe-head .nm { font-size: 13px; font-weight: 600; color: var(--ink); }
+.pipe-flow .pipe-ts { font-size: 10px; color: var(--ink-3); margin-left: auto; }
+.pipe-flow .pipe-line { font-size: 11px; color: var(--ink-3); line-height: 1.35; }
