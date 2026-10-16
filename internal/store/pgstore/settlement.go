@@ -96,6 +96,9 @@ func (s *Store) InsertSettlement(ctx context.Context, r *SettlementRow) (won boo
 		}
 		return false, fmt.Errorf("insert settlement pos=%d: %w", r.PositionID, err)
 	}
+	// D-587 经济经验库接线：负结算（非事故归因）机械产待归纳行——
+	// best-effort 不阻塞账本落账。
+	s.econPendingForSettlement(ctx, posID)
 	return true, nil
 }
 
