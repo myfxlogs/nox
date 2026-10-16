@@ -374,3 +374,11 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **实证**：业主 IBKR 户 FPS 入金 HKD 已到账保户；NOX 现有 venue=MT5×3户+CEX×3所，$10k 基已碎片（MT 池 $1000/$3247/$0）；在册病灶=数据断供（basis NULL×9行）、资本缺口、审批闸缺账——瓶颈在链路健康非 venue 数。IBKR 适配器=行情/执行/对账/符号映射/保证金模型重施工；其新增机会集（股票借券、股指期货基差、期权）在 $10k 体量≈零，FX carry 已由 MT5 覆盖。
 - **裁定**：IBKR **凭据在册·适配器不立项**——户头已保（HKD 余额无需转 USD、无闲置费、勿清零）；记「凭据在册未接线」态保留选项价值。专精裁定坐实：当前离净年化 8% 最近的工程=修断供/补资本缺口/让在册提案可批，不扩 venue 面。户内 HKD 属业主资产非系统运营金（入系统池须业主另行真金授权）。
 - **边界**：立项触发条件=出现现有 venue 覆盖不了的机会实证（如股指期货基差持续优于 crypto funding、闲置 USD>阈需国债/货基承接）再立适配器票；禁为「有户」而施工；凭据/账号明细不落库表不落本文档（业主侧保管）。
+
+## D-554（2026-10-16 决策席）仓位归组判据表种子——structure/engine_type→template 映射
+
+- **实证**：`fin_position_strategy_map` 建表后空表=inert（@0f50113ed 挂账）；paper_spot_carry.structure 域实拍 4 值（perp_perp×85/long_cfd_short_perp×33/perp_delivery×32/short_cfd_long_perp×23），fin_opp_template 9 行活跃集名空间在案。
+- **裁定**：种子 9 行已落库（SG 直栽 PG 配置域）——structure 键：perp_perp→funding_carry、long_cfd_short_perp/short_cfd_long_perp→cfd_swap_carry、perp_delivery→term_basis；engine_type 回落键：CARRY/FUNDING_HEDGE/PERP_FUNDING→funding_carry、SWAPARB→cfd_swap_carry、CROSS_VENUE→cross_venue_spot。
+- **理由**：4 个 structure 值与模板机制名空间一一无歧义（perp×perp=CEX funding 收租、cfd×perp=swap 息差、perp×delivery=期限基差）；engine_type 只种旧引擎名与模板唯一对应的五行。
+- **故意不种**：XASSET_CARRY（引擎名域内歧义——同 type 可产 funding_carry/cfd_swap_carry/term_basis 仓，provenance 链才是真键，种静态映射=错挂面）；PROBE（探针仓非策略持仓，unassigned 如实）；MEANREVERT（活跃模板集无对应，落未归组格）。
+- **边界**：新 structure/engine_type 出现→map 无行→unassigned 自披露，种子随模板册扩展走本表追加非改码。
