@@ -29,6 +29,23 @@ var residReconVenueDepositWallet = map[string]string{
 	"okx":     "funding",
 }
 
+// residReconOrderSrcWallet 申购单扣款池（venue→EARN 活期源池/DCI 双币源池）：
+// binance 两类申购皆扣 spot 主账户；okx EARN=savings purchase 只认 funding
+// 户（D-549 装配实证），okx sfp 扣 unified 交易户=快照键域 'spot'
+// （/account/balance 同账别名）；gate=现货户。
+var residReconOrderSrcWallet = map[string][2]string{ // [0]=EARN 源池 [1]=DCI 源池
+	"binance": {"spot", "spot"},
+	"okx":     {"funding", "spot"},
+	"gate":    {"spot", "spot"},
+}
+
+// residReconOrderDstEarn 申购入流落 earn 池快照的判定：binance 双币持仓计入
+// earn 池（dciPositionsEarn 同源实证）、EARN 活期天然计入；okx sfp 结构化持仓
+// 不入 savings 余额（earn 池口径）→ okx DCI 零 earn 腿。EARN 全 venue 计入。
+func residReconOrderEarnDst(venue string, isDCI bool) bool {
+	return !isDCI || venue == "binance"
+}
+
 var residReconPoolTypes = map[string]bool{"spot": true, "funding": true, "earn": true}
 var residReconStableCcy = map[string]bool{
 	"USDT": true, "USDC": true, "USD": true, "FDUSD": true, "BUSD": true, "TUSD": true, "DAI": true,
@@ -43,6 +60,12 @@ type residReconStore interface {
 	// SumDCISettleWindow DCI 交割腿（本拍窗内 settled：outflow=本金离 earn 池、
 	// inflow=本息到默认钱包——不可归因残差的自解释项）。
 	SumDCISettleWindow(ctx context.Context, venue, ccy string, from, to time.Time) (outflow, inflow float64, err error)
+	// SumDCIFilledWindow 申购腿（窗内翻 filled/settled：earnQty=EARN 申购额、
+	// dciQty=双币申购额——源池−qty∧earn 池+qty 对称解释）。
+	SumDCIFilledWindow(ctx context.Context, venue, ccy string, from, to time.Time) (earnQty, dciQty float64, err error)
+	// SumDisposalProceedsWindow 处置回款腿（窗内 dci_exercise_disposal 损益行
+	// join 原单 → 卖回得额，venue_type=回款落池）。
+	SumDisposalProceedsWindow(ctx context.Context, venue, venueType string, from, to time.Time) (float64, error)
 	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
 }
 
@@ -112,15 +135,42 @@ func (r *ResidualRecon) evaluate(ctx context.Context, sn *pgstore.VenueAccountSn
 	if err != nil {
 		return fmt.Errorf("dci settle window: %w", err)
 	}
-	dciNet := 0.0
+	// 申购腿：窗内翻 filled 的订单——本金源池−qty∧earn 桶+qty 对称解释
+	// （源池/入池 venue 差分见 residReconOrderSrcWallet/residReconOrderEarnDst）。
+	// status 域实查 {pending,filled,failed,rejected,settled} 已接全——pending/
+	// failed/rejected 无资金动；EARN 活期赎回 venue 端无订单行属 io 台账域。
+	earnQty, dciQty, err := r.store.SumDCIFilledWindow(ctx, sn.Venue, ccy, prevTS, sn.FetchedAt)
+	if err != nil {
+		return fmt.Errorf("dci filled window: %w", err)
+	}
+	src := residReconOrderSrcWallet[sn.Venue]
+	lifecycle := 0.0
 	if sn.VenueType == "earn" {
-		dciNet -= dciOut // 本金离 earn 桶=权益正当下降（归进项）
+		lifecycle += earnQty - dciOut // 申购入池；本金离 earn 桶=正当下降
+		if residReconOrderEarnDst(sn.Venue, true) {
+			lifecycle += dciQty
+		}
 	}
 	if residReconVenueDepositWallet[sn.Venue] == sn.VenueType {
-		dciNet += dciIn // 本息落到充提钱包
+		lifecycle += dciIn // 本息落到充提钱包
+	}
+	if src[0] == sn.VenueType {
+		lifecycle -= earnQty // EARN 申购出源池
+	}
+	if src[1] == sn.VenueType {
+		lifecycle -= dciQty // DCI 申购出源池
+	}
+	// 处置回款：接货卖回得额=USDT，落 venue 记 venue_type 池（binance spot；
+	// okx 交易户在快照键域别名 spot——venue_normalize 同键实证）。
+	if ccy == "USDT" {
+		proceeds, derr := r.store.SumDisposalProceedsWindow(ctx, sn.Venue, sn.VenueType, prevTS, sn.FetchedAt)
+		if derr != nil {
+			return fmt.Errorf("disposal proceeds window: %w", derr)
+		}
+		lifecycle += proceeds
 	}
 	delta := sn.EquityRaw - prev
-	residual := delta - external - transfers - income - dciNet
+	residual := delta - external - transfers - income - lifecycle
 	thr := 1.0
 	if t := 0.005 * absF(sn.EquityRaw); t > thr {
 		thr = t
@@ -129,8 +179,8 @@ func (r *ResidualRecon) evaluate(ctx context.Context, sn *pgstore.VenueAccountSn
 		return nil
 	}
 	return r.store.InsertAlertDedup(ctx, "critical", fmt.Sprintf(
-		"[残差对账] %s:%s %s 权益变动无台账解释: prev=%.4f → %.4f (Δ%.4f), 外部流%.4f 划转%.4f 收益%.4f, 未解释残差%.4f (阈%.4f) —— 查 io/划转/收益账缺项",
-		sn.Venue, sn.VenueType, ccy, prev, sn.EquityRaw, delta, external, transfers, income, residual, thr), 24*time.Hour)
+		"[残差对账] %s:%s %s 权益变动无台账解释: prev=%.4f → %.4f (Δ%.4f), 外部流%.4f 划转%.4f 收益%.4f 订单腿%.4f, 未解释残差%.4f (阈%.4f) —— 查 io/划转/收益/订单账缺项",
+		sn.Venue, sn.VenueType, ccy, prev, sn.EquityRaw, delta, external, transfers, income, lifecycle, residual, thr), 24*time.Hour)
 }
 
 func absF(v float64) float64 {
