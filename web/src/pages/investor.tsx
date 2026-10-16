@@ -41,7 +41,6 @@ export default function InvestorPage() {
           client.listPositions({ status: "ACTIVE", limit: 100 }),
           client.listRequestBox({}),
         ]);
-        void 0
         setNav(fin.totalEquityUsd);
         setNavCcy(fin.equityByCcy ?? {});
         // D-535：业绩基线面（本金口径 USDT+USD——后端算定，前端零算）。
