@@ -2350,6 +2350,10 @@ type PipelineStageHealth struct {
 	WaitReason    string                 `protobuf:"bytes,4,opt,name=wait_reason,json=waitReason,proto3" json:"wait_reason,omitempty"`             // 等待因（waiting 态有值）
 	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`                                         // 故障面（error 态有值）
 	LastEventUnix int64                  `protobuf:"varint,6,opt,name=last_event_unix,json=lastEventUnix,proto3" json:"last_event_unix,omitempty"` // 最近 emit 时戳（0=无）
+	// S3′-c liveness 证据分型：beat=周期性心跳（超龄=断流嫌疑）/event=事件
+	// 驱动（零事件≠病态）/none=无簿（如实缺凭据）。idle/waiting 语义分离：
+	// idle=设计性闲置无活可干；waiting=被卡带因（wait_reason 必填）。
+	EvidenceKind  string `protobuf:"bytes,7,opt,name=evidence_kind,json=evidenceKind,proto3" json:"evidence_kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2424,6 +2428,13 @@ func (x *PipelineStageHealth) GetLastEventUnix() int64 {
 		return x.LastEventUnix
 	}
 	return 0
+}
+
+func (x *PipelineStageHealth) GetEvidenceKind() string {
+	if x != nil {
+		return x.EvidenceKind
+	}
+	return ""
 }
 
 var File_dashboardv1_account_proto protoreflect.FileDescriptor
@@ -2635,7 +2646,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"killSwitch\x12\x1b\n" +
 	"\tnet30_usd\x18\x10 \x01(\x01R\bnet30Usd\x12&\n" +
 	"\x0fcrit_alerts_24h\x18\x11 \x01(\x05R\rcritAlerts24h\x12=\n" +
-	"\x06stages\x18\x12 \x03(\v2%.nox.dashboard.v1.PipelineStageHealthR\x06stages\"\xba\x01\n" +
+	"\x06stages\x18\x12 \x03(\v2%.nox.dashboard.v1.PipelineStageHealthR\x06stages\"\xdf\x01\n" +
 	"\x13PipelineStageHealth\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05state\x18\x02 \x01(\tR\x05state\x12\x1c\n" +
@@ -2643,7 +2654,8 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\vwait_reason\x18\x04 \x01(\tR\n" +
 	"waitReason\x12\x14\n" +
 	"\x05error\x18\x05 \x01(\tR\x05error\x12&\n" +
-	"\x0flast_event_unix\x18\x06 \x01(\x03R\rlastEventUnixB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x0flast_event_unix\x18\x06 \x01(\x03R\rlastEventUnix\x12#\n" +
+	"\revidence_kind\x18\a \x01(\tR\fevidenceKindB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_account_proto_rawDescOnce sync.Once

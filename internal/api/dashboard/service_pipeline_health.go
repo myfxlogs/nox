@@ -18,10 +18,20 @@ type stageRow = dashboardv1.PipelineStageHealth
 
 func stageNow(key, state, narrative, wait, errStr string, last time.Time) *stageRow {
 	r := &stageRow{Key: key, State: state, Narrative: narrative, WaitReason: wait, Error: errStr}
+	r.EvidenceKind = stageEvidence[key]
 	if !last.IsZero() {
 		r.LastEventUnix = last.Unix()
 	}
 	return r
+}
+
+// stageEvidence 段级 liveness 证据分型（S3′-c）：beat=周期心跳（last_event
+// 超龄=断流嫌疑该转 waiting）；event=事件驱动（零事件=如实 idle 非病态）；
+// none=无簿（凭据缺如实标）。判据各段自填——本表是消费面单源。
+var stageEvidence = map[string]string{
+	"collect": "beat", "research": "event", "opp_publish": "event",
+	"gate_eval": "beat", "assembly": "event", "execution": "event",
+	"holding": "event", "exit": "event", "ledger": "beat", "review": "beat",
 }
 
 // pipelineStages 十段工序健康行（序=闭环序：采集→研究→机会发布→闸评→装配→

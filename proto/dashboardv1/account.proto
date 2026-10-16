@@ -275,4 +275,8 @@ message PipelineStageHealth {
   string wait_reason = 4;    // 等待因（waiting 态有值）
   string error = 5;          // 故障面（error 态有值）
   int64 last_event_unix = 6; // 最近 emit 时戳（0=无）
+  // S3′-c liveness 证据分型：beat=周期性心跳（超龄=断流嫌疑）/event=事件
+  // 驱动（零事件≠病态）/none=无簿（如实缺凭据）。idle/waiting 语义分离：
+  // idle=设计性闲置无活可干；waiting=被卡带因（wait_reason 必填）。
+  string evidence_kind = 7;
 }

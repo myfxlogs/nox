@@ -129,6 +129,7 @@ export default function OverviewPage() {
                 <div className="pipe-head">
                   <FreshDot dot={{ status: tone, title: st.state }} />
                   <span className="nm">{STAGE_CN[st.key] ?? st.key}</span>
+                  <span className="pipe-ts" title="liveness 证据分型">{st.evidenceKind === "beat" ? "⏱" : st.evidenceKind === "event" ? "⚡" : "—"}</span>
                   {st.lastEventUnix > 0 && (
                     <span className="pipe-ts">
                       {new Date(Number(st.lastEventUnix) * 1000).toISOString().slice(5, 16).replace("T", " ")}
