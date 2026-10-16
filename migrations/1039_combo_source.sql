@@ -16,8 +16,8 @@ ALTER TABLE xasset_allow_combos ADD CONSTRAINT xasset_allow_combos_source_check
 
 -- 存量回填如实（复审二次返修选型裁定=因果链优先）：combos note
 -- 'D-403毕业 paper#N' → graduation.paper_id=N 且 status='approved' 回链
--- provenance_id=g.id——因果实证非 id 硬对位（fresh 库面亦真，SG #46/47/48
--- 预期落 (graduation,17/18/19)）。无 paper# 注行不碰（manual_seed 如实）。
+-- provenance_id=g.id——因果实证非 id 硬对位（fresh 库面亦真，SG 实拍预期
+-- combos #17/18/19 落 (graduation,46/47/48)）。无 paper# 注行不碰（manual_seed 如实）。
 UPDATE xasset_allow_combos a SET source='graduation', provenance_id=g.id
     FROM carry_graduations g
     WHERE g.status='approved'

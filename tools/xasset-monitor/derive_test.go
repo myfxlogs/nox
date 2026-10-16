@@ -124,8 +124,8 @@ func TestD552_LoadDerivationInputsDeliversKeyedColumns(t *testing.T) {
 	}
 	if _, err := s.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
 		(canonical_buy, venue_buy, venue_type_buy, canonical_sell, venue_sell, venue_type_sell,
-		 max_long_qty, max_short_qty, max_gross_usd, enabled)
-		VALUES ('XAUUSD', '3001157', 'mt5', 'XAUUSDT', 'gate', 'perp', 1, 1, 100, true)`); err != nil {
+		 max_long_qty, max_short_qty, max_gross_usd, enabled, source)
+		VALUES ('XAUUSD', '3001157', 'mt5', 'XAUUSDT', 'gate', 'perp', 1, 1, 100, true, 'manual_seed')`); err != nil {
 		t.Fatalf("insert combo: %v", err)
 	}
 	combos, _, _, _, _, err := loadDerivationInputs(ctx, s)

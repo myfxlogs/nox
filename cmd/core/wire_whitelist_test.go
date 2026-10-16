@@ -57,8 +57,8 @@ func TestD338_XassetAllowFromTableRows(t *testing.T) {
 		t.Fatalf("self-heal column: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx, `
-		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, simulated, note)
-		VALUES ('XAUUSD','XAUUSDT','a','mt5','b','perp',0.01,5,10000,true,'seed')`); err != nil {
+		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, simulated, note, source)
+		VALUES ('XAUUSD','XAUUSDT','a','mt5','b','perp',0.01,5,10000,true,'seed','manual_seed')`); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	got := xassetAllowFromTable(ctx, s, "demo")
@@ -108,7 +108,21 @@ func TestD338_LoadErrorFatal(t *testing.T) {
 				CHECK (venue_buy NOT LIKE '%:%' AND venue_sell NOT LIKE '%:%');
 			ALTER TABLE xasset_allow_combos ADD CONSTRAINT xasset_venue_type_chk
 				CHECK (venue_type_buy IN ('mt4','mt5','perp','spot','funding','earn','option','unified','')
-				   AND venue_type_sell IN ('mt4','mt5','perp','spot','funding','earn','option','unified',''))`); err != nil {
+				   AND venue_type_sell IN ('mt4','mt5','perp','spot','funding','earn','option','unified',''));
+			-- D-581/1038 sizing 列 + D-584/1039 出处列（重建面须补齐最新形态否则
+			-- LoadXAssetAllowCombos 的 COALESCE(sizing_mode)/funding_pct 读列即炸）
+			ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS sizing_mode text,
+				ADD COLUMN IF NOT EXISTS funding_pct double precision,
+				ADD COLUMN IF NOT EXISTS source text,
+				ADD COLUMN IF NOT EXISTS provenance_id bigint;
+			-- 1039 同构序：先回填（4 颗 demo 种子行 enabled+NULL 出处）再加 required CHECK
+			UPDATE xasset_allow_combos SET source='manual_seed' WHERE source IS NULL;
+			ALTER TABLE xasset_allow_combos DROP CONSTRAINT IF EXISTS xasset_allow_combos_source_check;
+			ALTER TABLE xasset_allow_combos ADD CONSTRAINT xasset_allow_combos_source_check
+				CHECK (source IS NULL OR source IN ('graduation','s2_trial','manual_seed'));
+			ALTER TABLE xasset_allow_combos DROP CONSTRAINT IF EXISTS xasset_allow_combos_source_required;
+			ALTER TABLE xasset_allow_combos ADD CONSTRAINT xasset_allow_combos_source_required
+				CHECK (NOT enabled OR source IS NOT NULL)`); err != nil {
 			t.Logf("cleanup 0142 形态重建失败（后续测试可能误炸）: %v", err)
 		}
 	})
@@ -161,10 +175,10 @@ func TestD367_NotionalNonPositiveDropped(t *testing.T) {
 		t.Fatalf("self-heal column: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx, `
-		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, notional_usd, simulated)
-		VALUES ('XAUUSD','XAUUSDT','a','mt5','b','perp',0.01,5,10000,-5,true),
-		       ('PAXGUSDT','PAXGUSDT','c','perp','d','perp',0.01,5,10000,NULL,true),
-		       ('NAS100','NAS100','e','mt5','f','mt5',0.05,5,100000,5000,true)`); err != nil {
+		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, notional_usd, simulated, source)
+		VALUES ('XAUUSD','XAUUSDT','a','mt5','b','perp',0.01,5,10000,-5,true,'manual_seed'),
+		       ('PAXGUSDT','PAXGUSDT','c','perp','d','perp',0.01,5,10000,NULL,true,'manual_seed'),
+		       ('NAS100','NAS100','e','mt5','f','mt5',0.05,5,100000,5000,true,'manual_seed')`); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	orig := xassetAllowFatal

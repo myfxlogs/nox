@@ -66,9 +66,14 @@ func TestXAssetAllowReload_ReflectsNextDiscoveryFrame(t *testing.T) {
 	}
 	// 插 enabled 行（venue_key_* 为生成列，插 venue+venue_type 基列）→ reload → 下一帧发现立即反映（1 候选）
 	if _, err := st.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
-		(canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note)
-		VALUES ('BTCUSDT','BTCUSDT','gate','spot','gate','perp',1000,1000,50000,true,false,'D-017 R1 验收锚')`); err != nil {
+		(canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note, source)
+		VALUES ('BTCUSDT','BTCUSDT','gate','spot','gate','perp',1000,1000,50000,true,false,'D-017 R1 验收锚','manual_seed')`); err != nil {
 		t.Fatalf("insert allow row: %v", err)
+	}
+	// D-584 venue 退役守卫：reload 前摘牌双簿消失组合——gate 须落簿否则被退役。
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO exchange_configs (venue, venue_type, api_key, api_secret)
+		SELECT 'gate','perp','t','t' WHERE NOT EXISTS (SELECT 1 FROM exchange_configs WHERE venue='gate')`); err != nil {
+		t.Fatalf("seed venue book: %v", err)
 	}
 	if err := eng.ReloadXAssetAllowCombos(ctx); err != nil {
 		t.Fatalf("reload: %v", err)

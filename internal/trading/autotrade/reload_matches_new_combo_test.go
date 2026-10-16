@@ -29,6 +29,16 @@ func newReloadEngine(t *testing.T) *Engine {
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE xasset_allow_combos`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	// D-584 venue 退役守卫：reload 前 RetireCombosMissingVenue 摘牌双簿消失组合——
+	// 测试 venue 须先在 broker_accounts/exchange_configs 落簿否则组合被自动退役。
+	for _, q := range []string{
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password) SELECT '1279967','mt5','t',0,'t' WHERE NOT EXISTS (SELECT 1 FROM broker_accounts WHERE venue='1279967')`,
+		`INSERT INTO exchange_configs (venue, venue_type, api_key, api_secret) SELECT 'gate','perp','t','t' WHERE NOT EXISTS (SELECT 1 FROM exchange_configs WHERE venue='gate')`,
+	} {
+		if _, err := st.Pool().Exec(ctx, q); err != nil {
+			t.Fatalf("seed venue book: %v", err)
+		}
+	}
 	t.Cleanup(func() {
 		_, _ = st.Pool().Exec(ctx, `TRUNCATE xasset_allow_combos`)
 	})
