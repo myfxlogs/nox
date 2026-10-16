@@ -30,6 +30,11 @@ message CarryGraduationRow {
   optional GraduationRiskReport risk = 22; // S1 风险档案（pending 即时算；decided NULL）
   string entry_window = 23;                // S2 open / closed:<reason>（pending 即时算）
   string decided_by = 24;                  // D-513：裁决主体——''=人工委员会；delegate:D-513=委任规则自动放行
+  // D-576 净额构成拆分透出（pending 行即时算——快照列 accrued/net_all_in 保持
+  // 提案时值作对照，本三列=现值）：conv 现算口径=scan.EffectiveConvergenceUSD 单源。
+  optional double live_convergence_usd = 25; // 收敛浮盈现值（dir×(last−entry)×qty/1e4；basis 缺→NULL 缺账）
+  optional double est_fee_usd = 26;          // 往返费估（paper 列原值）
+  optional double live_net_all_in_usd = 27;  // 现值全账净额=accrued−fee+conv（构成拆分后业主不读幻影厚度）
 }
 
 // —— D-471 S1 风险档案 + S3 白名单管理面 ——

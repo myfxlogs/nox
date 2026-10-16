@@ -169,6 +169,19 @@ func (s *Service) fillPendingExtras(ctx context.Context, g *pgstore.CarryGraduat
 	if paper, err := s.gradDB().GetPaperSpotCarryByID(ctx, g.PaperID); err == nil {
 		row.Risk = s.gradDossier(ctx, g, paper)
 		row.EntryWindow = s.entryWindowOf(ctx, g, paper)
+		// D-576：净额构成拆分现值透出——快照列（accrued/net_all_in）保持提案时
+		// 值作对照，本三列=paper 行现值现算（conv 口径=scan.EffectiveConvergenceUSD
+		// 单源，禁另算；fee 缺=缺账 NULL 如实缺）。
+		if conv := scan.EffectiveConvergenceUSD(*paper); conv != nil {
+			row.LiveConvergenceUsd = conv
+		}
+		if fee := paper.EstRoundTripFeeUSD; fee != nil {
+			row.EstFeeUsd = fee
+			if conv := row.LiveConvergenceUsd; conv != nil {
+				net := scan.NetAllInUSD(paper.AccruedUSD, fee, conv)
+				row.LiveNetAllInUsd = &net
+			}
+		}
 	} else {
 		row.EntryWindow = "closed:paper 行读取失败"
 	}

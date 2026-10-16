@@ -103,11 +103,16 @@ type CarryGraduationRow struct {
 	CoverageRatio   *float64 `protobuf:"fixed64,20,opt,name=coverage_ratio,json=coverageRatio,proto3,oneof" json:"coverage_ratio,omitempty"`      // accrue_ticks/expected_periods（<0.8 黄 <0.5 红 徽标）
 	MinAccruedUsd   *float64 `protobuf:"fixed64,21,opt,name=min_accrued_usd,json=minAccruedUsd,proto3,oneof" json:"min_accrued_usd,omitempty"`    // 存续期 accrued 最低水位（回撤观测）
 	// D-471：18/19 已被 475a 观测列占用→顺延 22/23。
-	Risk          *GraduationRiskReport `protobuf:"bytes,22,opt,name=risk,proto3,oneof" json:"risk,omitempty"`                            // S1 风险档案（pending 即时算；decided NULL）
-	EntryWindow   string                `protobuf:"bytes,23,opt,name=entry_window,json=entryWindow,proto3" json:"entry_window,omitempty"` // S2 open / closed:<reason>（pending 即时算）
-	DecidedBy     string                `protobuf:"bytes,24,opt,name=decided_by,json=decidedBy,proto3" json:"decided_by,omitempty"`       // D-513：裁决主体——''=人工委员会；delegate:D-513=委任规则自动放行
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Risk        *GraduationRiskReport `protobuf:"bytes,22,opt,name=risk,proto3,oneof" json:"risk,omitempty"`                            // S1 风险档案（pending 即时算；decided NULL）
+	EntryWindow string                `protobuf:"bytes,23,opt,name=entry_window,json=entryWindow,proto3" json:"entry_window,omitempty"` // S2 open / closed:<reason>（pending 即时算）
+	DecidedBy   string                `protobuf:"bytes,24,opt,name=decided_by,json=decidedBy,proto3" json:"decided_by,omitempty"`       // D-513：裁决主体——''=人工委员会；delegate:D-513=委任规则自动放行
+	// D-576 净额构成拆分透出（pending 行即时算——快照列 accrued/net_all_in 保持
+	// 提案时值作对照，本三列=现值）：conv 现算口径=scan.EffectiveConvergenceUSD 单源。
+	LiveConvergenceUsd *float64 `protobuf:"fixed64,25,opt,name=live_convergence_usd,json=liveConvergenceUsd,proto3,oneof" json:"live_convergence_usd,omitempty"` // 收敛浮盈现值（dir×(last−entry)×qty/1e4；basis 缺→NULL 缺账）
+	EstFeeUsd          *float64 `protobuf:"fixed64,26,opt,name=est_fee_usd,json=estFeeUsd,proto3,oneof" json:"est_fee_usd,omitempty"`                            // 往返费估（paper 列原值）
+	LiveNetAllInUsd    *float64 `protobuf:"fixed64,27,opt,name=live_net_all_in_usd,json=liveNetAllInUsd,proto3,oneof" json:"live_net_all_in_usd,omitempty"`      // 现值全账净额=accrued−fee+conv（构成拆分后业主不读幻影厚度）
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *CarryGraduationRow) Reset() {
@@ -306,6 +311,27 @@ func (x *CarryGraduationRow) GetDecidedBy() string {
 		return x.DecidedBy
 	}
 	return ""
+}
+
+func (x *CarryGraduationRow) GetLiveConvergenceUsd() float64 {
+	if x != nil && x.LiveConvergenceUsd != nil {
+		return *x.LiveConvergenceUsd
+	}
+	return 0
+}
+
+func (x *CarryGraduationRow) GetEstFeeUsd() float64 {
+	if x != nil && x.EstFeeUsd != nil {
+		return *x.EstFeeUsd
+	}
+	return 0
+}
+
+func (x *CarryGraduationRow) GetLiveNetAllInUsd() float64 {
+	if x != nil && x.LiveNetAllInUsd != nil {
+		return *x.LiveNetAllInUsd
+	}
+	return 0
 }
 
 // —— D-471 S1 风险档案 + S3 白名单管理面 ——
@@ -2672,7 +2698,7 @@ var File_dashboardv1_graduation_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\n" +
-	"\x1cdashboardv1/graduation.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf4\a\n" +
+	"\x1cdashboardv1/graduation.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc4\t\n" +
 	"\x12CarryGraduationRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x19\n" +
 	"\bpaper_id\x18\x02 \x01(\x03R\apaperId\x12\x14\n" +
@@ -2703,7 +2729,11 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x04risk\x18\x16 \x01(\v2&.nox.dashboard.v1.GraduationRiskReportH\tR\x04risk\x88\x01\x01\x12!\n" +
 	"\fentry_window\x18\x17 \x01(\tR\ventryWindow\x12\x1d\n" +
 	"\n" +
-	"decided_by\x18\x18 \x01(\tR\tdecidedByB\v\n" +
+	"decided_by\x18\x18 \x01(\tR\tdecidedBy\x125\n" +
+	"\x14live_convergence_usd\x18\x19 \x01(\x01H\n" +
+	"R\x12liveConvergenceUsd\x88\x01\x01\x12#\n" +
+	"\vest_fee_usd\x18\x1a \x01(\x01H\vR\testFeeUsd\x88\x01\x01\x121\n" +
+	"\x13live_net_all_in_usd\x18\x1b \x01(\x01H\fR\x0fliveNetAllInUsd\x88\x01\x01B\v\n" +
 	"\t_mt_venueB\x13\n" +
 	"\x11_last_funding_annB\v\n" +
 	"\t_combo_idB\x11\n" +
@@ -2714,7 +2744,10 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x11_expected_periodsB\x11\n" +
 	"\x0f_coverage_ratioB\x12\n" +
 	"\x10_min_accrued_usdB\a\n" +
-	"\x05_risk\"\x80\x02\n" +
+	"\x05_riskB\x17\n" +
+	"\x15_live_convergence_usdB\x0e\n" +
+	"\f_est_fee_usdB\x16\n" +
+	"\x14_live_net_all_in_usd\"\x80\x02\n" +
 	"\x11GraduationRiskLeg\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x16\n" +
 	"\x06symbol\x18\x02 \x01(\tR\x06symbol\x12\x12\n" +
