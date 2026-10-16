@@ -1,5 +1,6 @@
-// overview.tsx —— D-536 总览页五段（§0 待办→§1 本金→§2 业绩→§3 在仓订单→§4 风险心跳）。
-// 前端零运算只渲染；缺数据显缺不显 0；时戳 UTC 口径（业主令 10-15——venue/CFD 全 UTC）。
+// overview.tsx —— S3′-a 默认首页重建（arb 骨架范式：StatTile 横排+
+// 行动卡置顶+缩览卡阵；§0 待办→§1 KPI→§2 缩览→§3 风险心跳）。
+// 前端零运算只渲染；缺数据显缺不显 0；时戳 UTC 口径（业主令 10-15）。
 import { useEffect, useState } from "react";
 import { client, errText } from "../api";
 import { onCase } from "../stream";
@@ -8,23 +9,36 @@ import type { GetOverviewBundleResponse, OverviewOrderRow } from "../gen/dashboa
 import type { RequestBoxItem } from "../gen/dashboardv1/request_box_pb";
 import { ResolveRequestState } from "../gen/dashboardv1/request_box_pb";
 import { fmtUsd } from "../components/fmt";
+import { StatTile } from "../components/StatTile";
+import { Chip } from "../components/Chip";
+import { EmptyState } from "../components/EmptyState";
 
 const utc = (t: Date | undefined) =>
   t ? t.toISOString().replace("T", " ").slice(0, 19) + "Z" : "—";
 
+// orderTone 在仓订单态→徽标色（status 枚举显示映射非判据）
+function orderTone(s: string): "good" | "warn" | "critical" | "neutral" {
+  if (s === "open" || s === "holding" || s === "active") return "good";
+  if (s === "pending" || s === "waiting") return "warn";
+  if (s === "error" || s === "failed") return "critical";
+  return "neutral";
+}
+
 export default function OverviewPage() {
   const [b, setB] = useState<GetOverviewBundleResponse | null>(null);
+  const [nav, setNav] = useState<number | null>(null);
   const [box, setBox] = useState<RequestBoxItem[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState("");
 
   const load = async () => {
     try {
-      const [bd, bx] = await Promise.all([
+      const [bd, bx, fin] = await Promise.all([
         client.getOverviewBundle({}),
         client.listRequestBox({}),
+        client.getFinanceOverview({}), // NAV/敞口顶壳瓦片（既有 RPC 复用零新增）
       ]);
-      setB(bd); setBox(bx.items); setErr("");
+      setB(bd); setBox(bx.items); setNav(fin.totalEquityUsd); setErr("");
     } catch (e) { setErr(errText(e)); }
   };
   // D-536 复审收口：首载 RPC + 事件流驱动重取——账户事件/域刷新/持仓事件/告警
@@ -53,81 +67,70 @@ export default function OverviewPage() {
     } catch (e) { setErr(errText(e)); } finally { setBusy(null); }
   };
 
-  const pending = box; // 请求箱行本身即待办面
   return (
     <div>
       <h1>总览</h1>
       {err && <div className="err">{err}</div>}
 
-      {/* §0 待办横幅 */}
-      {pending.length > 0 && (
-        <div className="card" style={{ borderColor: "#d97706" }}>
-          <h2>待办（{pending.length}）</h2>
-          <table><tbody>
-            {pending.map((r) => (
-              <tr key={Number(r.id)}>
-                <td>#{Number(r.id)}</td><td>{r.kind}</td><td>{r.subject}</td>
-                <td className="muted">{r.requestText}</td>
-                <td>
+      {/* §0 行动卡置顶（业主第一眼=该我做的——待办横幅升 opp-card 卡阵态） */}
+      {box.length > 0 && (
+        <section className="card" style={{ borderColor: "#d97706" }} aria-labelledby="todo-h">
+          <h2 id="todo-h">待办（{box.length}）</h2>
+          <ul className="opp-cards">
+            {box.map((r) => (
+              <li key={Number(r.id)} className="opp-card">
+                <div className="opp-card-head">
+                  <Chip tone="warn">{r.kind}</Chip>
+                  <span className="opp-card-kind">#{Number(r.id)} {r.subject}</span>
+                </div>
+                <p className="opp-card-narrative muted">{r.requestText}</p>
+                <div>
                   <button disabled={busy === Number(r.id)} onClick={() => resolve(Number(r.id), ResolveRequestState.FULFILLED)}>已喂条件</button>{" "}
                   <button disabled={busy === Number(r.id)} onClick={() => resolve(Number(r.id), ResolveRequestState.WAIVED)}>放弃</button>
-                </td>
-              </tr>
+                </div>
+              </li>
             ))}
-          </tbody></table>
-        </div>
+          </ul>
+        </section>
       )}
 
-      {/* §1 本金条（USDT+USD，D-534） */}
-      <h2>本金（USDT+USD）</h2>
-      <div className="cards">
-        <div className="card"><div className="k">本金合计</div><div className="v">{b ? fmtUsd(b.principalTotalUsd) : "—"}</div></div>
-        <div className="card"><div className="k">可动用</div><div className="v">{b ? fmtUsd(b.principalIdleUsd) : "—"}</div></div>
-        <div className="card"><div className="k">在息</div><div className="v">{b ? fmtUsd(b.principalEarningUsd) : "—"}</div></div>
-        <div className="card"><div className="k">其中锁定（含于在息）</div><div className="v">{b ? fmtUsd(b.principalLockedUsd) : "—"}</div>
-          {b?.earliestRelease && <div className="muted" style={{fontSize:"12px"}}>最早回笼 {utc(timestampDate(b.earliestRelease))}</div>}
-        </div>
+      {/* §1 KPI 横排（StatTile 阵——NAV/可动用/在息/年化/敞口粗列） */}
+      <h2>盘面</h2>
+      <div className="stats">
+        <StatTile label="NAV 总权益" value={nav != null ? fmtUsd(nav) : "—"} />
+        <StatTile label="本金合计（USDT+USD）" value={b ? fmtUsd(b.principalTotalUsd) : "—"} />
+        <StatTile label="可动用" value={b ? fmtUsd(b.principalIdleUsd) : "—"} />
+        <StatTile label="在息" value={b ? fmtUsd(b.principalEarningUsd) : "—"}
+          sub={b && b.principalLockedUsd > 0 ? `含锁定 ${fmtUsd(b.principalLockedUsd)}${b.earliestRelease ? "·最早回笼 " + utc(timestampDate(b.earliestRelease)) : ""}` : undefined} />
+        <StatTile label="基线后业绩" value={b?.perfAvailable ? (b.perfUsd >= 0 ? "+" : "") + fmtUsd(b.perfUsd) : "—"}
+          sub={b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"} />
       </div>
 
-      {/* §2 业绩条（D-535 基线） */}
-      <h2>业绩</h2>
-      {b?.perfAvailable ? (
-        <div className="cards">
-          <div className="card"><div className="k">基线</div><div className="v">{fmtUsd(b.baselineUsd)}</div>
-            <div className="muted" style={{fontSize:"12px"}}>{utc(b.baselineAt ? timestampDate(b.baselineAt) : undefined)} 起算</div></div>
-          <div className="card"><div className="k">基线后业绩{b.perfFlowProvisional ? "（provisional）" : ""}</div>
-            <div className={b.perfUsd >= 0 ? "v good" : "v crit"}>{(b.perfUsd >= 0 ? "+" : "") + fmtUsd(b.perfUsd)}</div>
-            <div className="muted" style={{fontSize:"12px"}}>年化 {b.perfAnnPct.toFixed(2)}%</div></div>
-        </div>
-      ) : <div className="muted">业绩基线未配置（perf_baseline_*）</div>}
-
-      {/* §3 在仓订单统一表 */}
+      {/* §2 在仓订单缩览卡阵（kind 徽标+对象+额+态——替旧表） */}
       <h2>在仓订单</h2>
       {b && b.orders.length > 0 ? (
-        <table>
-          <thead><tr><th>类</th><th>对象</th><th>额 USD</th><th>态</th><th>时点（UTC）</th></tr></thead>
-          <tbody>
-            {b.orders.map((o: OverviewOrderRow, i: number) => (
-              <tr key={i}>
-                <td>{o.kind}</td><td>{o.label}</td>
-                <td>{fmtUsd(o.amountUsd)}</td><td>{o.status}</td>
-                <td className="muted">{o.until ? utc(timestampDate(o.until)) : "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : <div className="muted">无在仓订单</div>}
+        <ul className="opp-cards scroll-cap">
+          {b.orders.map((o: OverviewOrderRow, i: number) => (
+            <li key={i} className="opp-card">
+              <div className="opp-card-head">
+                <Chip tone={orderTone(o.status)}>{o.status}</Chip>
+                <span className="opp-card-kind">{o.kind}</span>
+                <span className="opp-card-who">{o.label}</span>
+                <span className="opp-card-friction">{fmtUsd(o.amountUsd)}</span>
+              </div>
+              <p className="opp-card-narrative muted">{o.until ? "到期 " + utc(timestampDate(o.until)) : "持续中"}</p>
+            </li>
+          ))}
+        </ul>
+      ) : <EmptyState>无在仓订单</EmptyState>}
       {b && b.paperCount > 0 && <div className="muted">纸面沙箱 {b.paperCount} 条（不入本金）</div>}
 
-      {/* §4 风险心跳 */}
+      {/* §3 风险心跳 */}
       <h2>风险心跳</h2>
-      <div className="cards">
-        <div className="card"><div className="k">KillSwitch</div>
-          <div className={b?.killSwitch ? "v crit" : "v good"}>{b ? (b.killSwitch ? "ON" : "off") : "—"}</div></div>
-        <div className="card"><div className="k">30d 净额（对 −3% 硬线）</div>
-          <div className={b && b.net30Usd < 0 ? "v crit" : "v"}>{b ? fmtUsd(b.net30Usd) : "—"}</div></div>
-        <div className="card"><div className="k">24h critical</div>
-          <div className={b && b.critAlerts24h > 0 ? "v crit" : "v"}>{b ? String(b.critAlerts24h) : "—"}</div></div>
+      <div className="stats">
+        <StatTile label="KillSwitch" value={b ? (b.killSwitch ? "ON" : "off") : "—"} />
+        <StatTile label="30d 净额（对 −3% 硬线）" value={b ? fmtUsd(b.net30Usd) : "—"} />
+        <StatTile label="24h critical" value={b ? String(b.critAlerts24h) : "—"} />
       </div>
     </div>
   );
