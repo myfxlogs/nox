@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"time"
 
@@ -181,7 +182,9 @@ func GraduationQualifiedReason(p pgstore.PaperSpotCarry, now time.Time) (bool, s
 	// 本身费下亏被放行）。观测窗内 accrued 单独回本=结构可自养证据；收敛降级
 	// 加分非救命（conv 仍入 net 透出只是不再顶包）。convNA（perp_perp）径此闸
 	// 与既有 net>0 等价（net=accrued−fee）天然不引入新拒因。
-	if fee := *p.EstRoundTripFeeUSD; p.AccruedUSD < fee {
+	// est_fee 落库为负值口径（成本列——#147=-7.08）——与 accrued 比较须取
+	// 绝对值，否则 fee<0 使 accrued<fee 恒假=死闸（负费豁免漏修实证）。
+	if fee := math.Abs(*p.EstRoundTripFeeUSD); p.AccruedUSD < fee {
 		return false, fmt.Sprintf("息差未盖费（accrued %.2f<fee %.2f）", p.AccruedUSD, fee)
 	}
 	switch p.Status {
