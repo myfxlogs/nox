@@ -359,3 +359,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **实证**（SG 工作流审计）：假设#505（D-547 批、D-548 $200 封顶）经 S2 桥落 `xasset_allow_combos`#16（enabled+live、$200 帽）~10h——positions=0，三层封死：①`engine.go:172` `isStrategyDisabled(o.Type)` 检测侧掐产出（宿主 XASSET_CARRY 10-14 retired）；②`engine_opp.go:163` `!IsMTVenue(opp.VenueBuy)` 入口闸钉死买腿=MT 单向（side=short 桥出 buy=CEX×sell=MT 反向即拒）；③gate.Submit `IsStrategyDisabled` 兜底同拒。
 - **裁定**：S2 批准试单=委员会级独立授权挂**组合行**（max_gross_usd=敞口硬顶）——宿主策略退役只冻结其存量组合域，不溯及委员会后批的试单授权；combo#16 属试单属员非 XASSET_CARRY 复活。反向腿向（空 CFD 收 swap×多 perp 付 funding）执行链须镜像完整（monitor/安全边/regime/econ/退出链）方可点火，缺一 fail-closed。
 - **边界**：retired 语义不破（存量组合不复活不产机会）；试单豁免只认桥写组合行不扩散；判据额度 DB 驱动零字面量；零 LLM 零新定时器。
+
+## D-551 复审收口单行转发格式裁定（决策席 10-16）
+- **实证**：复审收口长文堆聊天不可转发交接（10-16 trial-rail 收口长段被退「转发这么长？」）；并行席已自发用 STATE.md 尾 `<!-- 复审席 -->` 注记块存细节=事实标准。
+- **裁定**：复审收口尾行固定单行 `[复审收口:<票号>] <裁定一词> @<合并hash[+修件hash]>`；裁定理由/亲证要点/机检数字/待办验收锚一律落 STATE.md 尾注记块（一票一块），收口行只带裁定+hash+STATE 指针。
+- **边界**：实施报审 `[施工完成]` 规不变；注记块追加不覆盖前块；退回裁定同格式，P# 清单指针指注记块不贴全文。
