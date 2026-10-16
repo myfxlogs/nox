@@ -64,6 +64,16 @@ type Entry struct {
 	EvidenceRefs  []map[string]interface{} `yaml:"evidence_refs"`
 	// EALink 经济案例挂判据指针（EA-xx；D-587 工程库条目可空）。
 	EALink string `yaml:"ea_link"`
+	// Match 坑签名段（D-587④ 续段——无段=不参与匹配；非空键全部命中才中）。
+	Match *PitMatch `yaml:"match"`
+}
+
+// PitMatch 坑签名（match: 段）——canonicals/venues 任一命中、
+// payoff_class 精确相等；全部非空键过才命中（保守=宁漏不误中）。
+type PitMatch struct {
+	PayoffClass string   `yaml:"payoff_class"`
+	Canonicals  []string `yaml:"canonicals"`
+	Venues      []string `yaml:"venues"`
 }
 
 // header 是索引文件的固定头部（标题 + 说明 + 表头 + 分隔行）。
@@ -268,32 +278,4 @@ func genCheck() error {
 		return fmt.Errorf("skills index out of date")
 	}
 	return nil
-}
-
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: noxkb gen | gen --check | induct")
-		os.Exit(2)
-	}
-	applyKBDirEnv() // NOX_KB_DIR 工具引导覆写（同 digest 先例）
-	var err error
-	switch os.Args[1] {
-	case "gen-econ":
-		err = econGen(len(os.Args) > 2 && os.Args[2] == "--check")
-	case "gen":
-		if len(os.Args) > 2 && os.Args[2] == "--check" {
-			err = genCheck()
-		} else {
-			err = gen()
-		}
-	case "induct":
-		err = inductCmd()
-	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
-		os.Exit(2)
-	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 }

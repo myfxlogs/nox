@@ -111,6 +111,7 @@ type CarryGraduationRow struct {
 	LiveConvergenceUsd *float64 `protobuf:"fixed64,25,opt,name=live_convergence_usd,json=liveConvergenceUsd,proto3,oneof" json:"live_convergence_usd,omitempty"` // 收敛浮盈现值（dir×(last−entry)×qty/1e4；basis 缺→NULL 缺账）
 	EstFeeUsd          *float64 `protobuf:"fixed64,26,opt,name=est_fee_usd,json=estFeeUsd,proto3,oneof" json:"est_fee_usd,omitempty"`                            // 往返费估（paper 列原值）
 	LiveNetAllInUsd    *float64 `protobuf:"fixed64,27,opt,name=live_net_all_in_usd,json=liveNetAllInUsd,proto3,oneof" json:"live_net_all_in_usd,omitempty"`      // 现值全账净额=accrued−fee+conv（构成拆分后业主不读幻影厚度）
+	PitHits            []string `protobuf:"bytes,28,rep,name=pit_hits,json=pitHits,proto3" json:"pit_hits,omitempty"`                                            // D-587④ 坑签名命中标注（「⚠命中坑 <id>（EA-xx）」；只读透出非判据）
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -332,6 +333,13 @@ func (x *CarryGraduationRow) GetLiveNetAllInUsd() float64 {
 		return *x.LiveNetAllInUsd
 	}
 	return 0
+}
+
+func (x *CarryGraduationRow) GetPitHits() []string {
+	if x != nil {
+		return x.PitHits
+	}
+	return nil
 }
 
 // —— D-471 S1 风险档案 + S3 白名单管理面 ——
@@ -2698,7 +2706,7 @@ var File_dashboardv1_graduation_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\n" +
-	"\x1cdashboardv1/graduation.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc4\t\n" +
+	"\x1cdashboardv1/graduation.proto\x12\x10nox.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xdf\t\n" +
 	"\x12CarryGraduationRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x19\n" +
 	"\bpaper_id\x18\x02 \x01(\x03R\apaperId\x12\x14\n" +
@@ -2733,7 +2741,8 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x14live_convergence_usd\x18\x19 \x01(\x01H\n" +
 	"R\x12liveConvergenceUsd\x88\x01\x01\x12#\n" +
 	"\vest_fee_usd\x18\x1a \x01(\x01H\vR\testFeeUsd\x88\x01\x01\x121\n" +
-	"\x13live_net_all_in_usd\x18\x1b \x01(\x01H\fR\x0fliveNetAllInUsd\x88\x01\x01B\v\n" +
+	"\x13live_net_all_in_usd\x18\x1b \x01(\x01H\fR\x0fliveNetAllInUsd\x88\x01\x01\x12\x19\n" +
+	"\bpit_hits\x18\x1c \x03(\tR\apitHitsB\v\n" +
 	"\t_mt_venueB\x13\n" +
 	"\x11_last_funding_annB\v\n" +
 	"\t_combo_idB\x11\n" +
