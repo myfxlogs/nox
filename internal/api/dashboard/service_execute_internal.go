@@ -130,28 +130,6 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 		case errors.Is(err, exec.ErrEmptyPositionType), errors.Is(err, exec.ErrEmptyLegs):
 			return "FAILED", "执行参数缺失（持仓类型或腿为空）", 0
 		}
-		// D-593 纸面先行不变量闸（补洞②）：真金执行须模板级纸面证据或 D# 豁免——
-		// 提案轨同日批零沙箱病灶（dci_buy_low 4 结算净亏实证）不再可穿。
-		// 证据探针：模板对应策略键的纸面/毕业簿在案（paper_spot_carry 或
-		// carry_graduations 行存在即本域已沙箱——模板无纸面簿的结构如实拒）。
-		tmplID := found.Type // opp.Type=模板键（fin_opp_template.id 同域）
-		okGate, why, gerr := s.store.PaperFirstGate(ctx, tmplID, func() (bool, error) {
-			var n int
-			// 证据域=本品种纸面行（paper_spot_carry symbol 列）——他品种纸面不充
-			// 本模板证据（模板×品种二维先行口径）。
-			err := s.store.Pool().QueryRow(ctx,
-				`SELECT count(*) FROM paper_spot_carry WHERE symbol=$1`, found.Canonical).Scan(&n)
-			if err != nil {
-				return false, err
-			}
-			return n > 0, nil
-		})
-		if gerr != nil {
-			return "FAILED", fmt.Sprintf("纸面闸读败: %v", gerr), 0
-		}
-		if !okGate {
-			return "FAILED", "纸面先行闸拒: " + why, 0
-		}
 		return "FAILED", fmt.Sprintf("执行失败\n原始明细：%v", err), 0
 	}
 	// D-070：回填 position 元数据（expected_net_bps/expected_annual_pct；type 已在创建时写入，修复⑭ S4）
