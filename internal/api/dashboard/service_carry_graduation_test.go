@@ -281,6 +281,10 @@ func TestD403_Approve_LongCfd_ShortPerp_Direction(t *testing.T) {
 	if f.combo.VenueBuy != "1279967:mt5" || f.combo.VenueSell != "gate:perp" {
 		t.Errorf("venues got %s×%s", f.combo.VenueBuy, f.combo.VenueSell)
 	}
+	// D-584 出处锚：approve 写径必带 graduation 血缘（禁 NULL 出处过闸）。
+	if f.combo.Source != "graduation" || f.combo.ProvenanceID == nil || *f.combo.ProvenanceID <= 0 {
+		t.Errorf("source=%q provenance=%v（须 graduation+毕业行 id）", f.combo.Source, f.combo.ProvenanceID)
+	}
 	if f.combo.Simulated {
 		t.Error("simulated 必须 false（真仓白名单）")
 	}
