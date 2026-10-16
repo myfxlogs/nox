@@ -29,6 +29,8 @@ func stageNow(key, state, narrative, wait, errStr string, last time.Time) *stage
 // stageEvidence 段级 liveness 证据分型（S3′-c）：beat=周期心跳（last_event
 // 超龄=断流嫌疑该转 waiting）；event=事件驱动（零事件=如实 idle 非病态）；
 // none=无簿（凭据缺如实标）。判据各段自填——本表是消费面单源。
+// 注：ledger/review 归 event——日频业务事件时戳非 worker 心跳，自带
+// 48h/7d 业务节奏阈（stageLedger/stageReview），15min beat 缝会误伤。
 // beatStaleWindow beat 断流判定阈（看门狗级非业务数据刷——D-004 心
 // 跳检测面）。
 const beatStaleWindow = 15 * time.Minute
@@ -49,7 +51,7 @@ func applyBeatStaleness(rows []*stageRow, now time.Time) {
 var stageEvidence = map[string]string{
 	"collect": "beat", "research": "event", "opp_publish": "event",
 	"gate_eval": "beat", "assembly": "event", "execution": "event",
-	"holding": "event", "exit": "event", "ledger": "beat", "review": "beat",
+	"holding": "event", "exit": "event", "ledger": "event", "review": "event",
 }
 
 // pipelineStages 十段工序健康行（序=闭环序：采集→研究→机会发布→闸评→装配→
