@@ -96,8 +96,8 @@ func TestStage1_ExemptComboUnblocks(t *testing.T) {
 	// ①豁免组合在册（毕业授权行）→ 全灭判 false
 	if _, err := s.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
 		(canonical_buy,canonical_sell,venue_buy,venue_type_buy,venue_sell,venue_type_sell,
-		 max_long_qty,max_short_qty,max_gross_usd,enabled,simulated,note)
-		VALUES ('TRX','TRXUSD','binance','perp','15032313','mt5',1,1,100,true,false,'D-403毕业 paper#1')`); err != nil {
+		 max_long_qty,max_short_qty,max_gross_usd,enabled,simulated,note,source)
+		VALUES ('TRX','TRXUSD','binance','perp','15032313','mt5',1,1,100,true,false,'D-403毕业 paper#1','graduation')`); err != nil {
 		t.Fatalf("seed exempt combo: %v", err)
 	}
 	if e.checkAllStrategiesDisabled(ctx) {
@@ -113,8 +113,8 @@ func TestStage1_ExemptComboUnblocks(t *testing.T) {
 	// ③非豁免 note 行不豁免（未授权行维持掐死）
 	if _, err := s.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
 		(canonical_buy,canonical_sell,venue_buy,venue_type_buy,venue_sell,venue_type_sell,
-		 max_long_qty,max_short_qty,max_gross_usd,enabled,simulated,note)
-		VALUES ('BTC','BTCUSD','binance','perp','15032313','mt5',1,1,100,true,false,'裸行无授权')`); err != nil {
+		 max_long_qty,max_short_qty,max_gross_usd,enabled,simulated,note,source)
+		VALUES ('BTC','BTCUSD','binance','perp','15032313','mt5',1,1,100,true,false,'裸行无授权','manual_seed')`); err != nil {
 		t.Fatal(err)
 	}
 	if !e.checkAllStrategiesDisabled(ctx) {
