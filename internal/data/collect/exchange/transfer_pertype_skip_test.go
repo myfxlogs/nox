@@ -23,10 +23,10 @@ func TestCexIO_BinanceTransfer_PerTypeSkip(t *testing.T) {
 				return
 			}
 			fmt.Fprintf(w, `{"rows":[{"tranId":%d,"asset":"USDT","amount":"10","status":"CONFIRMED","timestamp":1789600000000}]}`, len(typ))
-		case r.URL.Path == "/sapi/v1/simple-earn/flexible/history/subscriptionHistory":
-			fmt.Fprint(w, `{"rows":[{"purchaseId":"p1","asset":"USDT","amount":"100","status":"SUCCESS","time":1789600000000}]}`)
-		case r.URL.Path == "/sapi/v1/simple-earn/flexible/history/redemptionHistory":
-			fmt.Fprint(w, `{"rows":[{"redeemId":"r1","asset":"USDT","amount":"50","status":"SUCCESS","time":1789600000000}]}`)
+		case r.URL.Path == "/sapi/v1/simple-earn/flexible/history/subscriptionRecord":
+			fmt.Fprint(w, `{"rows":[{"purchaseId":26055,"asset":"USDT","amount":"100","status":"SUCCESS","time":1789600000000}]}`)
+		case r.URL.Path == "/sapi/v1/simple-earn/flexible/history/redemptionRecord":
+			fmt.Fprint(w, `{"rows":[{"redeemId":26056,"asset":"USDT","amount":"50","status":"SUCCESS","time":1789600000000}]}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -47,10 +47,10 @@ func TestCexIO_BinanceTransfer_PerTypeSkip(t *testing.T) {
 	var seRow, normal bool
 	for i := range sink.inserted {
 		e := sink.inserted[i]
-		if e.ExternalID == "se-p1" || e.ExternalID == "se-r1" {
+		if e.ExternalID == "se-26055" || e.ExternalID == "se-26056" {
 			seRow = true // earn 史段未灭
 		}
-		if e.Direction == "transfer" && e.ExternalID != "" && e.ExternalID != "se-p1" && e.ExternalID != "se-r1" {
+		if e.Direction == "transfer" && e.ExternalID != "" && e.ExternalID != "se-26055" && e.ExternalID != "se-26056" {
 			normal = true // 正常 transfer 型落账
 		}
 	}
