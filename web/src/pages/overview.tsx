@@ -119,31 +119,29 @@ export default function OverviewPage() {
           状态点+一行实况叙事直渲；禁前端拼 dept/判故障） */}
       <h2>工序状态</h2>
       {b && b.stages.length > 0 ? (
-        <ul className="opp-cards">
+        /* S3′-b 补正：流程图形态——十段小卡横排连线（闭环序读模原序直排） */
+        <div className="pipe-flow">
           {b.stages.map((st) => {
             const tone: FreshDotData["status"] =
-              st.state === "working" ? "live" : st.state === "waiting" ? "stale" : st.state === "error" ? "down" : "down";
-            const chipTone = st.state === "working" ? "good" : st.state === "waiting" ? "warn" : st.state === "error" ? "critical" : "neutral";
+              st.state === "working" ? "live" : st.state === "waiting" ? "stale" : "down";
             return (
-              <li key={st.key} className="opp-card">
-                <div className="opp-card-head">
+              <div key={st.key} className="pipe-card" title={st.narrative + (st.waitReason ? "｜" + st.waitReason : "") + (st.error ? "｜" + st.error : "")}>
+                <div className="pipe-head">
                   <FreshDot dot={{ status: tone, title: st.state }} />
-                  <Chip tone={chipTone}>{STAGE_CN[st.key] ?? st.key}</Chip>
+                  <span className="nm">{STAGE_CN[st.key] ?? st.key}</span>
                   {st.lastEventUnix > 0 && (
-                    <span className="opp-card-friction">
-                      {new Date(Number(st.lastEventUnix) * 1000).toISOString().slice(5, 16).replace("T", " ")}Z
+                    <span className="pipe-ts">
+                      {new Date(Number(st.lastEventUnix) * 1000).toISOString().slice(5, 16).replace("T", " ")}
                     </span>
                   )}
                 </div>
-                <p className="opp-card-narrative muted">
-                  {st.narrative || "—"}
-                  {st.waitReason ? `｜${st.waitReason}` : ""}
-                  {st.error ? <span className="crit">｜{st.error}</span> : null}
-                </p>
-              </li>
+                <div className="pipe-line">
+                  {st.error ? <span className="crit">{st.error}</span> : (st.waitReason || st.narrative || "—")}
+                </div>
+              </div>
             );
           })}
-        </ul>
+        </div>
       ) : <EmptyState>工序健康读模未供</EmptyState>}
 
       {/* §2 在仓订单缩览卡阵（kind 徽标+对象+额+态——替旧表） */}
