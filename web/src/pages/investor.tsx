@@ -1,5 +1,6 @@
 // investor.tsx —— 投资人页 v0（NOX 露面②）：只读 NAV/收益/持仓摘要，零写径零运维件。
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { onCase } from "../stream";
 import { client, errText } from "../api";
 import type { PositionDailyIncome } from "../gen/dashboardv1/account_pb";
 import type { Position } from "../gen/dashboardv1/position_pb";
@@ -11,6 +12,7 @@ import { fmtUsd, fmtAge } from "../components/fmt";
 import GraduationPanel from "../components/graduation";
 import { Collapse } from "../components/collapse";
 import type { DCIOrderRow } from "../gen/dashboardv1/dci_panel_pb";
+import type { XAssetPendingEntryRow } from "../gen/dashboardv1/graduation_pb";
 
 export default function InvestorPage() {
   const [nav, setNav] = useState<number | null>(null);
@@ -30,9 +32,9 @@ export default function InvestorPage() {
   const [err, setErr] = useState("");
   const [showDust, setShowDust] = useState(false); // NAV 尘币折叠
   const [orders, setOrders] = useState<DCIOrderRow[]>([]); // DCI/earn 收益轨透出（D-577）
+  const [watchRows, setWatchRows] = useState<XAssetPendingEntryRow[]>([]); // D-578 观察中·待入场区
 
-  useEffect(() => {
-    (async () => {
+  const load = useCallback(async () => {
       try {
         const [fin, pnl, inc, pos, bx] = await Promise.all([
           client.getFinanceOverview({}),
@@ -64,12 +66,25 @@ export default function InvestorPage() {
         setBox(bx.items);
         const od = await client.listDCIOrders({});
         setOrders(od.orders);
+        const pe = await client.listXAssetPendingEntries({});
+        setWatchRows(pe.rows);
         setErr("");
       } catch (e) {
         setErr(errText(e));
       }
-    })();
   }, []);
+
+  useEffect(() => {
+    void load();
+    // D-578：接 StreamUpdates 流件（D-004 禁轮询）——dataRefresh/position/
+    // opportunity 事件驱动重取既有 RPC（与 positions 页同件复用）。
+    const offs = [
+      onCase("dataRefresh", () => void load()),
+      onCase("position", () => void load()),
+      onCase("opportunity", () => void load()),
+    ];
+    return () => offs.forEach((f) => f());
+  }, [load]);
 
   // D-268 M4.6：请求箱回执——按钮只发 id+二态，态机判权全后端（前端零信任）。
   const resolve = async (id: number, state: ResolveRequestState) => {
@@ -176,6 +191,26 @@ export default function InvestorPage() {
           区块分型抽屉——持仓/收益轨/毕业授权/收益流水） */}
       <Collapse title="毕业授权" hint={""} defaultOpen>
         <GraduationPanel />
+      </Collapse>
+
+      {/* D-578 观察中面板：armed 组合待入场区（ListXAssetPendingEntries
+          单源读面——wait_reason/ready/差值全后端算定，前端零重算）；
+          空态显式「引擎评估中·暂无候选」非段消失。 */}
+      <Collapse title="观察中（armed 待入场）" hint={watchRows.length + " 组合"}>
+        <table>
+          <thead><tr><th>组合</th><th>类别</th><th>拦路原因</th><th>差值 bps</th><th>状态</th></tr></thead>
+          <tbody>
+            {watchRows.map((r) => (
+              <tr key={Number(r.comboId)}>
+                <td>{r.comboLabel}</td><td>{r.entryKind}</td>
+                <td className="muted">{r.waitReason || "—"}</td>
+                <td>{r.waitGapBps != null ? r.waitGapBps.toFixed(1) : "—"}</td>
+                <td>{r.ready ? <span className="good">就绪·等机会</span> : <span className="warn">未过闸</span>}</td>
+              </tr>
+            ))}
+            {watchRows.length === 0 && <tr><td colSpan={5} className="muted">引擎评估中·暂无候选</td></tr>}
+          </tbody>
+        </table>
       </Collapse>
 
       <Collapse title="收益轨（DCI/earn 成交订单）" hint={orders.length + " 单"}>

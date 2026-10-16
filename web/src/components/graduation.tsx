@@ -66,7 +66,10 @@ export default function GraduationPanel() {
   }, []);
 
   const pending = rows.filter((r) => r.status === "pending");
-  const decided = rows.filter((r) => r.status !== "pending");
+  // D-578 观察中：unqualified=摘牌待复活（引擎复活回牌语义非终态）；
+  // approved/rejected/stale=终态。
+  const watching = rows.filter((r) => r.status === "unqualified");
+  const decided = rows.filter((r) => r.status !== "pending" && r.status !== "unqualified");
 
   const approveReq = (id: number, dryRun: boolean) => {
     const req = { graduationId: BigInt(id), dryRun, note };
@@ -221,6 +224,26 @@ export default function GraduationPanel() {
         </div>
       )}
 
+      {watching.length > 0 && (
+        <>
+          <h3 className="muted">观察中（摘牌待复活——引擎复活自动回牌）</h3>
+          <table>
+            <thead><tr><th>#</th><th>品种</th><th>场所对</th><th>存活率</th><th>现值净额</th><th>摘牌因</th></tr></thead>
+            <tbody>
+              {watching.map((r) => (
+                <tr key={Number(r.id)}>
+                  <td>{Number(r.id)}</td><td>{r.symbol}</td><td>{r.venue}</td>
+                  <td className={(r.lastFundingAnn ?? 0) >= 8 ? "good" : "crit"}>
+                    {r.lastFundingAnn != null ? r.lastFundingAnn.toFixed(2) + "%" : "—"}</td>
+                  <td className={(r.liveNetAllInUsd ?? 0) >= 0 ? "good" : "crit"}>
+                    {r.liveNetAllInUsd != null ? fmtUsd(r.liveNetAllInUsd) : "—"}</td>
+                  <td className="muted">{r.decidedNote}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
       {decided.length > 0 && (
         <>
           <h3 className="muted">已裁定（只读）</h3>
