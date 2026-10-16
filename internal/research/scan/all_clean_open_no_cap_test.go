@@ -40,13 +40,13 @@ func d548SeedActive(t *testing.T, s *pgstore.Store, mtVenue, cexVenue, symbol, s
 func TestD050_AllCleanOpen_NoCap(t *testing.T) {
 	s := d410Store(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE symbol LIKE 'US30%' OR symbol LIKE 'NC%'`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE symbol LIKE 'NCX%' OR symbol LIKE 'NC%'`); err != nil {
 		t.Fatalf("clean paper rows: %v", err)
 	}
-	// 6 账户×US30 + 6 异 canonical（net 降序均可开）——无槽额，全开。
+	// 6 账户×NCX + 6 异 canonical（net 降序均可开）——无槽额，全开。
 	rows := []UniverseRow{}
 	for i := 1; i <= 6; i++ {
-		rows = append(rows, d374Row("US30", fmt.Sprintf("acct%d", i), "gate", "long_cfd_short_perp", 10, ""))
+		rows = append(rows, d374Row("NCX", fmt.Sprintf("acct%d", i), "gate", "long_cfd_short_perp", 10, ""))
 	}
 	for i := 1; i <= 6; i++ {
 		rows = append(rows, d374Row(fmt.Sprintf("NC%d", i), "acct1", "gate", "long_cfd_short_perp", 10, ""))
@@ -67,7 +67,7 @@ func TestD050_AllCleanOpen_NoCap(t *testing.T) {
 	}
 	// 第二轮：同 canonical 新账户行 + 新 canonical——无上限继续开。
 	rows2 := []UniverseRow{
-		d374Row("US30", "acct7", "gate", "long_cfd_short_perp", 10, ""),
+		d374Row("NCX", "acct7", "gate", "long_cfd_short_perp", 10, ""),
 		d374Row("NC7", "acct1", "gate", "long_cfd_short_perp", 10, ""),
 	}
 	for _, r := range rows2 {
@@ -81,14 +81,14 @@ func TestD050_AllCleanOpen_NoCap(t *testing.T) {
 		t.Fatalf("D-050 无槽：第二轮 2 行应全开, got opened=%v", opened2)
 	}
 	active, _ = s.ListActivePaperSpotCarry(ctx)
-	us30 := 0
+	ncx := 0
 	for _, p := range active {
-		if p.Symbol == "US30" {
-			us30++
+		if p.Symbol == "NCX" {
+			ncx++
 		}
 	}
-	if us30 != 7 || len(active) != 14 {
-		t.Fatalf("US30 应 7 行/active 应 14, got us30=%d active=%d", us30, len(active))
+	if ncx != 7 || len(active) != 14 {
+		t.Fatalf("NCX 应 7 行/active 应 14, got ncx=%d active=%d", ncx, len(active))
 	}
 }
 
@@ -98,16 +98,16 @@ func TestD548_A2_ZeroAccrualZombie(t *testing.T) {
 	s := d410Store(t)
 	ctx := context.Background()
 	// 僵尸行：30h/accrued=0。
-	d548SeedActive(t, s, "acctA", "gate", "US30", "long_cfd_short_perp", 30*time.Hour, 0)
+	d548SeedActive(t, s, "acctA", "gate", "NCX", "long_cfd_short_perp", 30*time.Hour, 0)
 	// 反向①：同条件但本轮 net 在带（20≥8）——不杀。
-	d548SeedActive(t, s, "acctB", "gate", "US30B", "long_cfd_short_perp", 30*time.Hour, 0)
+	d548SeedActive(t, s, "acctB", "gate", "NCXB", "long_cfd_short_perp", 30*time.Hour, 0)
 	// 反向②：accrued>0（已产出非零收益）——不杀。
 	d548SeedActive(t, s, "acctC", "gate", "US30C", "long_cfd_short_perp", 30*time.Hour, 0.5)
 	// 反向③：age<24h——不杀。
 	d548SeedActive(t, s, "acctD", "gate", "US30D", "long_cfd_short_perp", 5*time.Hour, 0)
 	rows := []UniverseRow{
-		d374Row("US30", "acctA", "gate", "long_cfd_short_perp", 7, ""),   // net<8
-		d374Row("US30B", "acctB", "gate", "long_cfd_short_perp", 20, ""), // net 在带
+		d374Row("NCX", "acctA", "gate", "long_cfd_short_perp", 7, ""),   // net<8
+		d374Row("NCXB", "acctB", "gate", "long_cfd_short_perp", 20, ""), // net 在带
 		d374Row("US30C", "acctC", "gate", "long_cfd_short_perp", 7, ""),
 		d374Row("US30D", "acctD", "gate", "long_cfd_short_perp", 7, ""),
 	}
@@ -119,7 +119,7 @@ func TestD548_A2_ZeroAccrualZombie(t *testing.T) {
 		t.Fatalf("A2: 三判据全中恰 1 行退, got exited=%d", exited)
 	}
 	var reason, note string
-	err = s.Pool().QueryRow(ctx, `SELECT exit_reason, note FROM paper_spot_carry WHERE symbol='US30' AND venue_a='acctA'`).Scan(&reason, &note)
+	err = s.Pool().QueryRow(ctx, `SELECT exit_reason, note FROM paper_spot_carry WHERE symbol='NCX' AND venue_a='acctA'`).Scan(&reason, &note)
 	if err != nil {
 		t.Fatalf("read exit: %v", err)
 	}

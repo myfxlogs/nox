@@ -97,12 +97,14 @@ func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, 
 			break
 		}
 	}
-	// 类键行解析闸：r.Canonical=asset_class（mtCanon 类键有注册腿）时双腿
-	// canonical→raw 预检与 accrue 探针同源（cexRawCanonIndex 歧义守卫+
-	// mtRaw 映射、mtCanon 类键回落）——不可唯一解（GOLD 类 venue 多 perp /
-	// 映射缺）→拒开+warn 如实记，不产落册即 fail-closed 的永不可计息行
-	// （SG #67216 实证）。普通 canonical 行不动（存量行为零回归）。
-	if view.mtCanon(r.Canonical, mtVenue) != "" {
+	// 类键行解析闸（退回补正）：触发=任一侧注册成类——mtCanon 有腿 ∨
+	// cexCanons 非空（无 MT 腿类行漏罩同款 fc 病灶修①）。双腿 canonical→raw
+	// 预检与 accrue 探针同源：cexRawCanonIndex 歧义守卫 + mtRaw 直查优先、
+	// 落空才 mtCanon 回落（探针同款两步序——broker_symbol_map 类名撞
+	// canonical 行时闸检腿=探针用腿，修②）。不可唯一解→拒开+warn 如实记，
+	// 不产落册即 fail-closed 的永不可计息行（SG #67216 实证）。普通
+	// canonical 行不动（存量行为零回归）。
+	if view.mtCanon(r.Canonical, mtVenue) != "" || len(view.cexCanons(r.Canonical, r.CexVenue)) > 0 {
 		uniRows, uerr := st.ListCexUniverse(ctx)
 		if uerr != nil {
 			return fmt.Errorf("cfd paper open: universe 读败（fail-closed）: %w", uerr)
@@ -112,7 +114,11 @@ func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, 
 		if merr != nil {
 			return fmt.Errorf("cfd paper open: symbol 映射读败（fail-closed）: %w", merr)
 		}
-		rawMt := mtRawIndex(maps)[NormalizeJoinKey(view.mtCanon(r.Canonical, mtVenue))]
+		mtIdx := mtRawIndex(maps)
+		rawMt := mtIdx[NormalizeJoinKey(r.Canonical)] // 探针步①：直查优先
+		if rawMt == "" {                              // 探针步②：mtCanon 类键回落
+			rawMt = mtIdx[NormalizeJoinKey(view.mtCanon(r.Canonical, mtVenue))]
+		}
 		if rawCex == "" || rawMt == "" {
 			_ = st.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
 				"[paper] 类键行拒开仓：%s %s %s×%s（腿解析不可唯一——cexRaw=%q mtRaw=%q，歧义禁猜绑如实记）",
