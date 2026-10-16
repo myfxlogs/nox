@@ -68,6 +68,28 @@ func (f *fakeGradStore) UpdateCarryGraduationDecision(_ context.Context, id int6
 	return nil
 }
 
+// RevalidateCarryGraduation D-576 重校验 fake：status 翻转同行落 grads +
+// decisions 记账+快照列刷新断言面（accrued/net/funding 现值随行）。
+func (f *fakeGradStore) RevalidateCarryGraduation(_ context.Context, id int64, status, note string,
+	accrued float64, fundingAnn *float64, netAllIn *float64, ageDays float64, fw *string) error {
+	if f.decisions == nil {
+		f.decisions = map[int64]string{}
+	}
+	f.decisions[id] = status
+	for i := range f.grads {
+		if f.grads[i].ID == id {
+			f.grads[i].Status = status
+			f.grads[i].DecidedNote = note
+			f.grads[i].AccruedUSD = accrued
+			f.grads[i].LastFundingAnn = fundingAnn
+			f.grads[i].NetAllInUSD = netAllIn
+			f.grads[i].AgeDays = ageDays
+			f.grads[i].FlagWarn = fw
+		}
+	}
+	return nil
+}
+
 func gradPaper(id int64, status string, entryOffsetDays, exitOffsetDays float64, accrued float64, lowStreak int, exitReason string) pgstore.PaperSpotCarry {
 	now := time.Now()
 	p := pgstore.PaperSpotCarry{
@@ -88,6 +110,10 @@ func gradPaper(id int64, status string, entryOffsetDays, exitOffsetDays float64,
 		// =+0.1，与原夹具 conv=0.1 同值——既有矩阵 net=accrued−0.4 语义逐行不变）。
 		qty, eb, lb := 1000.0, 101.0, 100.0
 		p.QtyUSD, p.EntryBasisBps, p.LastBasisBps = qty, &eb, &lb
+		// D-576 引擎存活检同域：夹具存活率=10（%口径，≥8 引擎健在）。要低息
+		// 拒/摘牌语义的用例自建行覆盖（dead 引擎锚见 engine_dead 用例）。
+		fa := 10.0
+		p.LastFundingAnn = &fa
 	}
 	// est_fee 开仓即记账（该有）——全行给；NULL 拒毕业由 d410 测试覆盖。
 	fee := 0.5
@@ -300,8 +326,8 @@ func TestD474b_PendingStale(t *testing.T) {
 	if _, err := StepCarryGraduation(context.Background(), fs, now, nil); err != nil {
 		t.Fatalf("step: %v", err)
 	}
-	if fs.decisions[11] != "stale" {
-		t.Fatalf("pending+衰减 → stale，got %q", fs.decisions[11])
+	if fs.decisions[11] != "unqualified" {
+		t.Fatalf("pending+衰减 → unqualified（D-576 摘牌可回牌语义），got %q", fs.decisions[11])
 	}
 	if _, ok := fs.decisions[12]; ok {
 		t.Fatal("approved 行不得被 stale 触碰")
@@ -328,5 +354,46 @@ func TestD474b_PendingStale(t *testing.T) {
 	}
 	if _, ok := fs.decisions[14]; ok {
 		t.Fatal("合格行不得 stale")
+	}
+}
+
+// TestD576_EngineAliveGate 引擎存活检：last_funding_ann<8 或 NULL 的 active 行
+// 不提案（幽灵利润病灶修）；达标行照常。摘牌可回牌两向断言。
+func TestD576_EngineAliveGate(t *testing.T) {
+	now := time.Now()
+	dead := gradPaper(50, "active", 6, 0, 10, 0, "")
+	deadFa := 0.5 // 引擎熄（<8%）→不提案
+	dead.LastFundingAnn = &deadFa
+	fs := &fakeGradStore{rows: []pgstore.PaperSpotCarry{dead}, existing: map[int64]bool{}}
+	if n, err := StepCarryGraduation(context.Background(), fs, now, nil); err != nil || n != 0 {
+		t.Fatalf("引擎熄行不应提案: n=%d err=%v", n, err)
+	}
+	// 复活径：unqualified 行引擎回 ≥8 → 同行翻回 pending+快照刷新。
+	live := gradPaper(51, "active", 6, 0, 10, 0, "")
+	fs2 := &fakeGradStore{
+		rows:     []pgstore.PaperSpotCarry{live},
+		existing: map[int64]bool{51: true},
+		grads:    []pgstore.CarryGraduation{{ID: 21, PaperID: 51, Status: "unqualified"}},
+	}
+	if _, err := StepCarryGraduation(context.Background(), fs2, now, nil); err != nil {
+		t.Fatal(err)
+	}
+	if fs2.decisions[21] != "pending" || fs2.grads[0].Status != "pending" {
+		t.Fatalf("复活应翻回 pending: %+v", fs2.grads[0])
+	}
+	// 摘牌径：pending 行引擎熄 → unqualified + 摘牌因落 flag_warn。
+	fs3 := &fakeGradStore{
+		rows:     []pgstore.PaperSpotCarry{dead},
+		existing: map[int64]bool{50: true},
+		grads:    []pgstore.CarryGraduation{{ID: 22, PaperID: 50, Status: "pending"}},
+	}
+	if _, err := StepCarryGraduation(context.Background(), fs3, now, nil); err != nil {
+		t.Fatal(err)
+	}
+	if fs3.decisions[22] != "unqualified" || fs3.grads[0].Status != "unqualified" {
+		t.Fatalf("衰减应摘牌 unqualified: %+v", fs3.grads[0])
+	}
+	if fs3.grads[0].FlagWarn == nil || !strings.Contains(*fs3.grads[0].FlagWarn, "摘牌") {
+		t.Fatalf("摘牌因应落 flag_warn: %+v", fs3.grads[0].FlagWarn)
 	}
 }

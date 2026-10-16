@@ -13,7 +13,7 @@ import (
 // 透传到 carry_graduations（approve 腿级 resolver 的数据源）。
 func TestD555S3_GraduationReuse(t *testing.T) {
 	now := time.Now()
-	fee := 0.5
+	fee, fa := 0.5, 10.0
 	eb, lb := 12.0, 10.0 // short_perp dir=−1：−1×(10−12)×1000/1e4=+0.2 收敛捕获
 	p := pgstore.PaperSpotCarry{
 		ID: 7, VenueA: "gate", VenueB: "binance",
@@ -22,6 +22,7 @@ func TestD555S3_GraduationReuse(t *testing.T) {
 		Status: "active", AccruedUSD: 5.0, EntryTs: now.Add(-6 * 24 * time.Hour),
 		QtyUSD:             1000,
 		EstRoundTripFeeUSD: &fee, EntryBasisBps: &eb, LastBasisBps: &lb,
+		LastFundingAnn: &fa, // D-576 引擎存活检：10%（%口径）≥8=引擎健在
 	}
 	fs := &fakeGradStore{rows: []pgstore.PaperSpotCarry{p}, existing: map[int64]bool{}}
 	n, err := StepCarryGraduation(context.Background(), fs, now, nil)

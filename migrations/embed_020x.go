@@ -106,3 +106,6 @@ var PaperQtyParamSQL string // D-546：纸面名义额参数化（app_config pap
 
 //go:embed replay/1033_s2_trial_notional.sql
 var S2TrialNotionalSQL string // D-548：S2 桥试单名义额参数化（app_config s2_trial_notional_usd）
+
+//go:embed 1034_graduation_unqualified.sql
+var GraduationUnqualifiedSQL string // 毕业准入闸漏洞修：status 域补 unqualified/stale
