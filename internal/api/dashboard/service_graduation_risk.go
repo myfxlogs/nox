@@ -104,7 +104,9 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 				hasPerpLeg = true
 				// D-565 S2：venue 实读杠杆（gate=get_leverage/binance=v2-account/
 				// okx=leverage-info）；读不到→标「实况不可得」不给数（恒 5x 硬编裁违宪）。
-				if lev, lerr := s.venueLeverage(ctx, vk, leg.symbol, leg.role == "sell"); lerr == nil && lev > 0 {
+				// D-574：展示径走读穿缓存+4s 限 ctx（venue 慢/停供时降级
+				// honest 缺不挂页）；approve/dry_run 精算径另径直拉不变。
+				if lev, lerr := s.venueLeverageCached(ctx, vk, leg.symbol, leg.role == "sell"); lerr == nil && lev > 0 {
 					m := notional / lev
 					out.MarginUsd = &m
 					out.Note = fmt.Sprintf("margin 按 venue 实况杠杆 %.0fx", lev)
