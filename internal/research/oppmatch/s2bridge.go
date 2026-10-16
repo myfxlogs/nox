@@ -58,6 +58,8 @@ func s2LegCombo(h pgstore.OppHypothesis, mtVenue, mtSym, side, cexVenue, cexSym 
 	c := &pgstore.XAssetComboInsert{
 		MaxLongQty: 5, MaxShortQty: 5, // 腿量上限（base 单位；gross 上限先绑）
 		MaxGrossUSD: notional, NotionalUSD: &notional,
+		// D-584 出处约束：S2 桥委员会试单——source=s2_trial+假设行 id 血缘。
+		Source: "s2_trial", ProvenanceID: &h.ID,
 		Note: fmt.Sprintf("%s 假设#%d（%s腿 %s side）", pgstore.XAssetTrialNotePrefix, h.ID, mtSym, side),
 	}
 	switch side {
