@@ -160,10 +160,20 @@ func graduationQualified(p pgstore.PaperSpotCarry, now time.Time) bool {
 // 单判据源禁第二判据）。qualified=true 时 reason 空；否则 reason=拒因短串。
 func GraduationQualifiedReason(p pgstore.PaperSpotCarry, now time.Time) (bool, string) {
 	conv := effectiveConvergenceUSD(p)
-	if p.EstRoundTripFeeUSD == nil || conv == nil {
+	// D-577 结构分型缺账域：perp_perp（CEX×CEX）无收敛收益引擎——funding 差
+	// 即全部引擎，basis/conv 字段=结构性 N/A 非缺账（豁免不伪造：跨所 perp
+	// 价差无采集簿，NULL 不充 0 收益也不充缺账拒因）。其余结构照判缺账。
+	convNA := p.Structure == "perp_perp"
+	if p.EstRoundTripFeeUSD == nil || (!convNA && conv == nil) {
 		return false, "缺账（est_fee/basis NULL）" // 缺账不可毕业
 	}
-	if netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, conv) <= 0 {
+	// convNA 时 conv 不计引擎分量（非「NULL 当 0 算收益」——该结构收敛引擎
+	// 不存在，净额=accrued−fee 是如实全账）。
+	var convArg *float64
+	if !convNA {
+		convArg = conv
+	}
+	if netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, convArg) <= 0 {
 		return false, "全账净额非正" // 全账未盈利=零证据
 	}
 	switch p.Status {
