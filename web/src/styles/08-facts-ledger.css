@@ -1,0 +1,78 @@
+/* —— 事实快照（M2-b §4/§5 RMB 视角） —— */
+.facts-reload {
+  margin-left: 8px;
+  font-size: 12px;
+}
+.facts-fx {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.facts-fx strong {
+  color: var(--ink);
+}
+.facts-hint {
+  color: var(--ink-3);
+  font-size: 12px;
+  margin-left: auto;
+}
+.facts-fx .chip {
+  gap: 4px;
+}
+.facts-ts {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+/* —— 台账（M2-b §6） —— */
+.ledger-in {
+  color: var(--good-ink);
+}
+.ledger-out {
+  color: var(--delta-down);
+}
+.ledger-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+.ledger-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.ledger-form input,
+.ledger-form select {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.ledger-form .ledger-note {
+  grid-column: span 2;
+}
+.ledger-form button {
+  height: 34px;
+}
+.ledger-form-err {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.ledger-note-cell {
+  color: var(--ink-2);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+

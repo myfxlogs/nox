@@ -1,0 +1,71 @@
+/* —— 折叠块（D-048 Collapse 组件：受控 <details>；低频数据面折叠，首屏只留标题行） —— */
+.collapse {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+}
+.collapse-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  cursor: pointer;
+  list-style: none; /* 去原生 marker，用自绘 chevron */
+  user-select: none;
+  touch-action: manipulation; /* 折叠块也是触屏目标（D-051） */
+  -webkit-tap-highlight-color: transparent;
+}
+.collapse-summary::-webkit-details-marker {
+  display: none;
+}
+.collapse-chevron {
+  flex: none;
+  color: var(--ink-3);
+  font-size: 12px;
+  transition: transform 0.15s ease;
+}
+.collapse[open] .collapse-chevron {
+  transform: rotate(90deg);
+}
+.collapse-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.collapse-hint {
+  margin-left: auto;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.collapse > :not(.collapse-summary) {
+  padding-bottom: 4px;
+}
+
+.empty {
+  color: var(--ink-3);
+}
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  background: rgba(208, 59, 59, 0.12);
+  border: 1px solid rgba(208, 59, 59, 0.4);
+  color: var(--critical);
+}
+/* banner-close：提示条手动关闭按钮（对话 #57 需求 1，可关闭入口） */
+.banner-close {
+  flex: none;
+  background: none;
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  color: inherit;
+  opacity: 0.7;
+}
+.banner-close:hover {
+  opacity: 1;
+}

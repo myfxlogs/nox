@@ -1,0 +1,76 @@
+/* —— 页头 —— */
+.app {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.app h1 {
+  font-size: 20px;
+  margin: 0;
+  flex: 1 1 auto;
+}
+.app .meta {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+/* —— 卡片与分区 —— */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+/* —— 网格（D-050 3×2 + D-053 右列堆叠 + 对话 #82 比例调宽）：左1 数据矩阵 / 右1
+   [经验库+平仓+确认下单] 堆叠（stretch 对齐矩阵高） / 左2 机会 / 右2 进化建议
+   （stretch 对齐机会高） / 左3 触发器；auto-flow 天然按行落位，窄屏回退单栏。
+   3fr:2fr → 5fr:4fr（#82）：右列（经验库/平仓/确认）相对更宽，左列矩阵仍同步加宽
+   无回归；间距 gap 不变。 —— */
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 4fr);
+  gap: 16px;
+  /* stretch（grid 默认）：每行两卡等高——右1 堆叠区撑到矩阵高、右2 建议撑到左2
+     机会高，消 D-052 右列留白；卡片内容各自顶部对齐 */
+}
+.grid > .card,
+.grid > .right-stack {
+  margin-bottom: 0; /* 行距由 gap 承担，卡片不额外留白 */
+}
+.right-stack {
+  display: flex;
+  flex-direction: column;
+  /* 对话 #82：右列三卡（经验库/确认下单/平仓）间距收紧到 12px——比网格行距 16px 更紧，
+     三卡作为「一组」视觉聚合；配合下方 margin-bottom:0 消双倍间距（原 16px margin +
+     16px gap = 32px，曾把右列撑高到超过矩阵、页面被拉长）。 */
+  gap: 12px;
+  min-height: 0;
+}
+/* 对话 #82：右列卡仍带基础 .card{margin-bottom:16px}——.grid > .right-stack 只消了
+   right-stack 自身的外边距，未覆盖其内部卡，导致 margin+gap 双倍间距（实测卡间 32px）。
+   显式清零内部卡 margin，间距只由 flex gap 承担。 */
+.right-stack > .card {
+  margin-bottom: 0;
+}
+@media (max-width: 860px) {
+  .grid {
+    /* minmax(0,1fr)：1fr 隐式最小=auto，宽矩阵表 min-content 会撑破轨道出横向溢出
+       （375px 实测 docScrollWidth 594）；min 0 让 .table-scroll 内部滚动（D-051） */
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.card h3 {
+  margin: 20px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.card h3:first-of-type {
+  margin-top: 4px;
+}

@@ -1,0 +1,232 @@
+/* —— M3-c C4：模拟执行面板（SimExec） —— */
+.sim-exec {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sim-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sim-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  border: 1px dashed var(--ring);
+  background: var(--surface);
+}
+.sim-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  vertical-align: middle;
+  color: var(--ink-2);
+  border: 1px solid var(--ring);
+  background: transparent;
+}
+/* 确认下单单行摘要（对话 #74）：对冲对合成一行，删 类型/方向/数量 独立列。
+   .pending-summary 可换行（小屏不横向溢出），li flex 两端 = 摘要左 + 按钮右。 */
+.pending-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pending-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.pending-summary {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pending-summary .num {
+  font-variant-numeric: tabular-nums;
+}
+.dir-tag {
+  padding: 1px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  border: 1px solid var(--ring);
+  background: var(--surface);
+}
+.pending-summary .spread {
+  font-weight: 600;
+}
+/* 平仓卡（对话 #81）：行结构复用 pending 行（flex 两端 + 顶部细分隔线）；
+   标的加粗、实时收益按正负着色（口径同 SimExec 持仓表「实时收益」列）。 */
+.close-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.close-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.close-symbols {
+  font-weight: 600;
+}
+.close-pnl.pos {
+  color: var(--pos, #15803d);
+}
+.close-pnl.neg {
+  color: var(--warn, #b45309);
+}
+.sim-group th {
+  background: var(--surface-2, var(--surface));
+  color: var(--ink-2);
+  font-weight: 600;
+  text-align: left;
+}
+.risk-flags {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.risk-badge {
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--warn, #b45309);
+  border: 1px solid currentColor;
+  background: transparent;
+}
+/* 判定门① 状态徽标（D-062 阶段 0 测量）：状态即决策表面，颜色可扫读。 */
+.gate-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.gate-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid currentColor;
+  background: transparent;
+}
+.gate-ok {
+  color: var(--pos, #15803d);
+}
+.gate-warn {
+  color: var(--warn, #b45309);
+}
+.gate-bad {
+  color: var(--bad, #b91c1c);
+}
+.gate-bg {
+  color: var(--ink-2, #555);
+}
+/* 回放证伪门禁卡内每策略分区（D-065 修订：三策略 kind 各自判据分块，上沿分隔）。 */
+.card-inner {
+  border-top: 1px solid var(--border, #ddd);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.note-cell {
+  color: var(--ink-2);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 订单历史表布局（对话 #84 后续：拒单理由完整显示 + 消除左空白）。
+   根因①：table.rows td 全右对齐 + 自动布局把剩余宽度按内容比例摊给每列 →
+   文字列内容贴列右、列内左侧空出大片空白（实测：时间列 217px 内容只占 ~150px、
+   状态列 120px 装 ~50px 徽标）。根因②：.note-cell 220px nowrap ellipsis →
+   SPREAD_DRIFT 新理由 519px 被截断。
+   修法：table-layout:fixed + 显式列宽（固定列取设定宽、备注列吸收剩余）
+   + 文字列左对齐 / 数字列右对齐 / 备注列去截断可换行完整显示。 */
+.card[aria-labelledby="sim-orders-title"] table.rows {
+  table-layout: fixed;
+  /* 列宽按 CDP 实测自然宽 + 余量（时间159/状态78/类型116/标的117/方向48/数量69/预期64），
+     避免 table-layout:fixed 把内容压出格重叠；固定列合计 ~710px + 备注保底 300px，
+     小屏视口横向滚动（.table-scroll overflow-x），备注不被压成 0 宽竖条（375 实测）。 */
+  min-width: 1010px;
+}
+.card[aria-labelledby="sim-orders-title"] table.rows th:nth-child(1) { width: 165px; }
+.card[aria-labelledby="sim-orders-title"] table.rows th:nth-child(2) { width: 90px; }
+.card[aria-labelledby="sim-orders-title"] table.rows th:nth-child(3) { width: 125px; }
+.card[aria-labelledby="sim-orders-title"] table.rows th:nth-child(4) { width: 135px; }
+.card[aria-labelledby="sim-orders-title"] table.rows th:nth-child(5) { width: 52px; }
+.card[aria-labelledby="sim-orders-title"] table.rows th:nth-child(6) { width: 75px; }
+.card[aria-labelledby="sim-orders-title"] table.rows th:nth-child(7) { width: 68px; }
+/* 类型/标的长内容（carry/repo 长资产名如 BUIDL@blackrock-buidl）可断行兜底，
+   常见值（现货+永续对冲 116px / BTC@binance 117px）一行放下，超长不重叠 */
+.card[aria-labelledby="sim-orders-title"] table.rows td:nth-child(3),
+.card[aria-labelledby="sim-orders-title"] table.rows td:nth-child(4) {
+  white-space: normal;
+  word-break: break-word;
+}
+/* 表头标题居中 + 单元格值左对齐（业主明确，对话 #84 后续④）：覆盖 table.rows
+   默认 th/td 右对齐——表头居中于值单元格上方，值统一左对齐（含数字列）。 */
+.card[aria-labelledby="sim-orders-title"] table.rows th {
+  text-align: center;
+}
+.card[aria-labelledby="sim-orders-title"] table.rows td {
+  text-align: left;
+}
+/* 备注列（拒单理由）桌面端右对齐（业主明确，对话 #84 后续⑤）：长理由文本贴
+   右缘，与数量/预期数字列右缘对齐线一致；移动端保持左对齐（300px 窄列多行
+   中文右对齐撕裂可读性）。:nth-child(8) 特异性 (0,4,2) > 基础 td (0,3,2) 覆盖。 */
+@media (min-width: 601px) {
+  .card[aria-labelledby="sim-orders-title"] table.rows td:nth-child(8) {
+    text-align: right;
+  }
+}
+.card[aria-labelledby="sim-orders-title"] .note-cell {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-word;
+}
+.muted {
+  color: var(--ink-2);
+}
+.sim-result {
+  margin: 0;
+}
+.sim-report {
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  padding: 12px;
+}
+

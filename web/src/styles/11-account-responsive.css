@@ -1,0 +1,105 @@
+/* D-056 模拟账户五数对账（AccountZone）：指标瓦片 + 现金流正负色。 */
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+.account-metric {
+  border: 1px solid var(--ring);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.account-metric span {
+  font-size: 12px;
+}
+.account-metric strong {
+  font-size: 16px;
+}
+.account-metric-total strong {
+  font-size: 18px;
+}
+.flow-pos {
+  color: var(--pos, #15803d);
+}
+.flow-neg {
+  color: var(--warn, #b45309);
+}
+
+/* —— D-051 移动/小屏自适应（对话 #69）——
+   既有兜底（保持不动）：viewport meta、.grid 860px 折叠单栏、铃铛 600px 全屏抽屉、
+   .table-scroll 横向滚动、瓦片 auto-fill、header/tabs flex-wrap。
+   本次补真移动适配：触摸目标放大（≥44px）、iOS 聚焦防自动缩放、可读性字号、
+   表格惯性滚动、小屏间距收紧、台账表单窄屏单栏、触屏按压反馈。
+   断点与既有铃铛 600px 对齐，仅小屏生效不影响桌面。 */
+@media (max-width: 600px) {
+  body {
+    font-size: 15px;
+  }
+  main {
+    padding: 16px 12px 40px;
+    padding-bottom: calc(40px + env(safe-area-inset-bottom)); /* 渐进增强，无效自动回退 40px */
+  }
+  .card {
+    padding: 12px;
+  }
+  /* 触摸目标：icon/ack/tab/折叠块/铃铛 ≥44px（header 刷新/主题/铃铛/tab 均触屏可点） */
+  button.icon,
+  button.tab,
+  button.ack,
+  .collapse-summary {
+    min-height: 44px;
+  }
+  button.icon,
+  button.tab,
+  button.ack {
+    padding: 8px 14px;
+  }
+  button.tab {
+    font-size: 14px;
+  }
+  .bell-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .collapse-summary {
+    padding: 12px 0;
+  }
+  /* 表格横向滚动带惯性（iOS 更跟手） */
+  .table-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+  /* iOS 聚焦防自动缩放：输入字号 <16px 聚焦时 Safari 强制放大页面 */
+  .ledger-form input,
+  .ledger-form select {
+    font-size: 16px;
+  }
+  /* 窄屏瓦片略缩，单行多放几张 */
+  .stats {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  /* 小屏表单单栏（输入全宽，免横向挤）。
+     注意特异性：基础 .ledger-form .ledger-note{grid-column:span 2} 是 (0,2,0)，
+     媒体里必须用同选择器（.ledger-form .ledger-note）才能压过——单写
+     .ledger-note (0,1,0) 不敌基础规则，note 保持 span 2 会在单栏网格
+     撑出隐式第二列导致横向溢出（375px 实测 docScrollWidth 511，D-051）。 */
+  .ledger-form {
+    grid-template-columns: 1fr;
+  }
+  .ledger-form .ledger-note {
+    grid-column: 1 / -1;
+  }
+}
+/* 触屏按压反馈（hover 不存在的设备）；桌面鼠标无感不受影响 */
+@media (hover: none) {
+  button:active,
+  .collapse-summary:active {
+    opacity: 0.7;
+  }
+}
