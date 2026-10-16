@@ -80,11 +80,22 @@ func (s *Store) LatestFacts(ctx context.Context, kind, venue, symbol string) ([]
 
 // FactsSince 返回某 (kind, venue, symbol) 自 since 起的 facts 历史行（ts 升序）。
 // 结算边界逐期实率取数面（funding_history / swap_long·short 窗内序列）。
+// factSymbolPred 参数化 symbol 谓词的 Go 侧分派（D-574 续段，EXPLAIN 实证）：
+// `symbol IS NOT DISTINCT FROM NULLIF($n,”)` 参数化形 planner 不可用索引
+// （66k 行 bitmap-or+heap 过滤 3.74s/次）——”→`symbol IS NULL`、非空→`symbol=$n`
+// 双字面查询，语义域=IS NOT DISTINCT FROM 的 NULL 精确匹配（” 非通配）。
+func factSymbolPred(ph, symbol string) string {
+	if symbol == "" {
+		return `symbol IS NULL`
+	}
+	return `symbol = ` + ph
+}
+
 func (s *Store) FactsSince(ctx context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT kind, venue, COALESCE(symbol,'') AS symbol, value, unit, ts, src
 		FROM facts
-		WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND symbol IS NOT DISTINCT FROM NULLIF($3,'') AND ts >= $4
+		WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND `+factSymbolPred("$3", symbol)+` AND ts >= $4
 		ORDER BY ts`, kind, venue, symbol, since)
 	if err != nil {
 		return nil, fmt.Errorf("facts since: %w", err)
@@ -208,7 +219,7 @@ type FactPoint struct {
 func (s *Store) FundingPredWindow(ctx context.Context, venue, symbol string, since time.Time) ([]FactPoint, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT ts, value FROM facts
-		 WHERE kind='funding' AND (venue_key=$1 OR venue=$1) AND symbol IS NOT DISTINCT FROM NULLIF($2,'') AND ts>=$3 ORDER BY ts`,
+		 WHERE kind='funding' AND (venue_key=$1 OR venue=$1) AND `+factSymbolPred("$2", symbol)+` AND ts>=$3 ORDER BY ts`,
 		venue, symbol, since)
 	if err != nil {
 		return nil, fmt.Errorf("funding pred window: %w", err)
@@ -250,7 +261,7 @@ func (s *Store) FactsWindowStats(ctx context.Context, kind, venue, symbol string
 	var n int
 	err := s.pool.QueryRow(ctx, `
 		SELECT AVG(value), COUNT(*) FROM facts
-		WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND symbol IS NOT DISTINCT FROM NULLIF($3,'')
+		WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND `+factSymbolPred("$3", symbol)+`
 		  AND ts >= now() - ($4::double precision * interval '1 second')`,
 		kind, venue, symbol, window.Seconds()).Scan(&mean, &n)
 	if err != nil {
