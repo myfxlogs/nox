@@ -1,11 +1,12 @@
 package autotrade
 
-// D-558 双断言（票验收锚）：等价键锚 canonical 产品类。
-// ① 同 canonical 异组放行——SG 病灶形态实拍复刻：XAUUSD 两 venue product_group
-//    异（15032313=fx / 3001157=cfd_spot，本地目录归法差异）但产品类同=metal
-//    → 配对产出（旧 sameProductGroup 语义下全灭）。
-// ② 真异品/未归类拒——canonical 无裁定行（fin_canonical_product_class 无行）
-//    → 零产出 fail-closed（类异拒由 TestSameProductClass 纯函数锚）。
+// D-558 + 续段（符号归一化）discover 级验收锚：
+// ① 异名同 canonical 配对——facts 存 broker 本地名（15032313=XAUUSDm/XAUUSD.pro、
+//    3001157=XAUUSD 三形态），product_group 异（fx×cfd_spot 本地目录归法差异），
+//    归一化后同=metal → 恰 1 个 combo（旧组名判定全灭 + 裸名配对配不上双病灶修复）；
+// ② 同 (venue,canonical) 多变体去重（XAUUSDm×XAUUSD.pro 两长腿行→1 combo）；
+// ③ 类表无行 fail-closed（WTI：bsm 有行、fin_canonical_product_class 无行→unclassified 拒）；
+// ④ 真未映射 fail-closed（NGUSD.a：无 broker_symbol_map 行→归一化丢弃）。
 
 import (
 	"context"
@@ -17,8 +18,6 @@ import (
 	"nox/internal/store/pgstore"
 )
 
-// d558Seed 复刻 SG 病灶数据形态：两 venue 同 canonical、product_group 异、
-// 类表只裁定 XAUUSD（WTI 留空=未归类对照）。
 func d558Seed(t *testing.T, s *pgstore.Store) {
 	t.Helper()
 	ctx := context.Background()
@@ -45,13 +44,14 @@ func d558Seed(t *testing.T, s *pgstore.Store) {
 			t.Fatalf("seed %s: %v", v, err)
 		}
 	}
-	// broker_symbol_map：同 canonical 跨 venue 异 product_group（SG 实拍归法差异入位，
-	// 证明新判定不再消费本地目录值）。
+	// broker_symbol_map：同 canonical 跨 venue 异 broker 本地名 + 异 product_group
+	// （SG 实拍形态：本地目录归法差异入位存档，配对判定不再消费组名）。
 	for _, m := range []struct{ venue, brokerSym, canonical, pg string }{
-		{"15032313", "XAUUSD.fx", "XAUUSD", "fx"},       // 15032313 目录归 fx 区（SG 实拍）
-		{"3001157", "XAUUSD.cfd", "XAUUSD", "cfd_spot"}, // 3001157 目录归 cfd_spot 区（SG 实拍）
-		{"15032313", "WTI.spot", "WTI", "cfd_spot"},
-		{"3001157", "WTI.lev", "WTI", "cfd_leverage"},
+		{"15032313", "XAUUSDm", "XAUUSD", "fx"},       // 'm' 变体，目录归 fx 区（SG 实拍）
+		{"15032313", "XAUUSD.pro", "XAUUSD", "fx"},    // 第二变体（去重对照）
+		{"3001157", "XAUUSD", "XAUUSD", "cfd_spot"},   // native==canonical，目录归 cfd_spot 区（SG 实拍）
+		{"15032313", "WTI.spot", "WTI", "cfd_spot"},   // WTI：bsm 有行
+		{"3001157", "WTI.lev", "WTI", "cfd_leverage"}, // 类表无行→unclassified
 	} {
 		if err := s.UpsertSymbolMapping(ctx, &pgstore.SymbolMapping{Venue: m.venue, BrokerSymbol: m.brokerSym, Canonical: m.canonical, Source: "manual"}); err != nil {
 			t.Fatalf("upsert map %s: %v", m.brokerSym, err)
@@ -67,31 +67,28 @@ func TestD558_DiscoverSwapCombos_ProductClassGate(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 	d558Seed(t, s)
-	// XAUUSD：同品异组（fx×cfd_spot）——断言①放行面。
-	// WTI：未归类（类表无行）——断言②拒面。
+	// NGUSD.a 无 bsm 行=真未映射对照（归一化丢弃，禁配对）。
+	// XAUUSD@15032313 canonical 标签行=生产 D-325 双发形态（swapRateFor spec 兜底按
+	// canonical 名查 facts——治理值行命中；dedup 优先级锚同函数级测试）。
 	if err := s.InsertFacts(ctx, []fact.Fact{
 		{Kind: fact.KindSwapLong, Venue: "15032313", Symbol: "XAUUSD", Value: 5.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
+		{Kind: fact.KindSwapLong, Venue: "15032313", Symbol: "XAUUSDm", Value: 5.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
+		{Kind: fact.KindSwapLong, Venue: "15032313", Symbol: "XAUUSD.pro", Value: 9.0, Unit: fact.UnitBpsDaily, Ts: now.Add(time.Second), Src: "mt5"},
 		{Kind: fact.KindSwapShort, Venue: "3001157", Symbol: "XAUUSD", Value: -3.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
-		{Kind: fact.KindSwapLong, Venue: "15032313", Symbol: "WTI", Value: 5.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
-		{Kind: fact.KindSwapShort, Venue: "3001157", Symbol: "WTI", Value: -3.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
+		{Kind: fact.KindSwapLong, Venue: "15032313", Symbol: "WTI.spot", Value: 5.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
+		{Kind: fact.KindSwapShort, Venue: "3001157", Symbol: "WTI.lev", Value: -3.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
+		{Kind: fact.KindSwapLong, Venue: "15032313", Symbol: "NGUSD.a", Value: 5.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
+		{Kind: fact.KindSwapShort, Venue: "3001157", Symbol: "NGUSD.a", Value: -3.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
 	}); err != nil {
 		t.Fatalf("insert facts: %v", err)
 	}
 	e := &Engine{store: s, cfg: gate.Config{MinNetSwapBps: 0, SwapFactMaxAge: 2 * time.Hour}}
 	combos := e.discoverSwapCombos(ctx)
-	var xauusd, wti int
-	for _, c := range combos {
-		switch c.canonical {
-		case "XAUUSD":
-			xauusd++
-		case "WTI":
-			wti++
-		}
+	if len(combos) != 1 {
+		t.Fatalf("want 恰 1 combo（XAUUSD 异名配对+多变体去重；WTI unclassified/NGUSD unmapped 拒）, got %d: %+v", len(combos), combos)
 	}
-	if xauusd != 1 {
-		t.Errorf("① 同 canonical 异组放行: XAUUSD combos=%d, want 1（product_group fx×cfd_spot 不得再拦截）", xauusd)
-	}
-	if wti != 0 {
-		t.Errorf("② 未归类 fail-closed: WTI combos=%d, want 0（类表无行禁配对）", wti)
+	c := combos[0]
+	if c.canonical != "XAUUSD" || c.vLong != "15032313:mt5" || c.vShort != "3001157:mt5" {
+		t.Errorf("combo 形态: got %+v, want XAUUSD 15032313×3001157", c)
 	}
 }

@@ -49,6 +49,15 @@ func insertIsRealTestFacts(t *testing.T, s *pgstore.Store, facts []fact.Fact, re
 	for _, v := range nilVenues {
 		insert(v, nil) // NULL=未知
 	}
+	// D-558 续段：符号归一化须有 DB 映射行——facts 去重后逐 (venue, symbol) 落恒等行。
+	seeded := map[string]bool{}
+	for _, f := range facts {
+		k := f.Venue + "|" + f.Symbol
+		if !seeded[k] {
+			seeded[k] = true
+			seedSwapIdentityMap(t, s, f.Venue, f.Symbol)
+		}
+	}
 }
 
 // 用例①：跨类型组合（实盘×demo）被滤——零跨类型候选。

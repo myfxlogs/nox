@@ -26,6 +26,19 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 	if err != nil || len(shortFacts) == 0 {
 		return nil
 	}
+	// 符号归一化（D-558 续段）：facts.symbol=broker 本地符号（D-325 双发），配对等式/
+	// 类查/报价/swap 查询统一走 canonical。批量 DB 映射解析（禁尾缀规则进配对）；
+	// 未映射 fail-closed 丢弃+留痕；查询失败 nil 表=全未映射=零配对（fail-closed）。
+	canonMap, err := e.store.LoadSymbolCanonMap(ctx)
+	if err != nil {
+		log.Printf("[autotrade] SWAPARB LoadSymbolCanonMap failed (fail-closed): %v", err)
+		canonMap = nil
+	}
+	longFacts = resolveSwapSymbols(longFacts, canonMap)
+	shortFacts = resolveSwapSymbols(shortFacts, canonMap)
+	if len(longFacts) == 0 || len(shortFacts) == 0 {
+		return nil
+	}
 	// 批量预取 canonical → 产品类映射（D-558 等价键锚 canonical 产品类；
 	// broker_symbol_map.product_group 本地目录分类退役出配对判定）。
 	// 查询失败 → 空 map，sameProductClass fail-closed 拒（未裁定面禁配对——
@@ -187,4 +200,43 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 		return combos[i].netSwapBps > combos[j].netSwapBps
 	})
 	return combos
+}
+
+// resolveSwapSymbols D-558 续段：facts 符号批量归一到 canonical + 同 (venue, canonical)
+// 多变体行去重（SG 实拍 WTI@15032313 四变体行；不去重=同对重复刷 combo）。
+// 去重优先级=canonical 标签行恒优先 native variant——swapFact Ts 每行 time.Now()，
+// native 后发恒新，纯 latest-ts 会系统性选中 native raw 值丢 D-300 S0 swap-free
+// override 治理值；同类内取最新 ts。未映射 fail-closed 丢弃+留痕促补映射。
+func resolveSwapSymbols(facts []fact.Fact, m *pgstore.SymbolCanonMap) []fact.Fact {
+	type dedupKey struct{ venue, canon string }
+	type picked struct {
+		idx         int
+		ts          time.Time
+		canonTagged bool
+	}
+	seen := make(map[dedupKey]picked, len(facts))
+	out := make([]fact.Fact, 0, len(facts))
+	for _, f := range facts {
+		canon, ok := m.Resolve(f.Venue, f.Symbol)
+		if !ok {
+			log.Printf("[autotrade] SWAPARB skip %s@%s: symbol unmapped (无 broker_symbol_map 行——促补映射)",
+				f.Symbol, f.Venue)
+			continue
+		}
+		canonTagged := canon == f.Symbol
+		f.Symbol = canon
+		k := dedupKey{f.Venue, canon}
+		if p, ok := seen[k]; ok {
+			better := (!p.canonTagged && canonTagged) ||
+				(p.canonTagged == canonTagged && f.Ts.After(p.ts))
+			if better {
+				out[p.idx] = f
+				seen[k] = picked{p.idx, f.Ts, canonTagged}
+			}
+			continue
+		}
+		seen[k] = picked{len(out), f.Ts, canonTagged}
+		out = append(out, f)
+	}
+	return out
 }

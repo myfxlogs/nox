@@ -38,6 +38,7 @@ func d388Seed(t *testing.T, s *pgstore.Store, longStatus, shortStatus string) {
 			 VALUES ($1, 'mt5', 'h', 443, 'p', 's', $2, false)`, v, st); err != nil {
 			t.Fatalf("seed %s: %v", v, err)
 		}
+		seedSwapIdentityMap(t, s, v, "AUDJPY") // D-558 续段：归一化解析面
 	}
 }
 

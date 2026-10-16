@@ -31,6 +31,17 @@ func testAccumStore(t *testing.T) *pgstore.Store {
 	return s
 }
 
+// seedSwapIdentityMap D-558 续段：(venue, canonical) 恒等映射行落 broker_symbol_map
+// （discover fixture 的 facts 符号走归一化解析须有 DB 映射行——未映射 fail-closed 拒）。
+// 前置：venue 已有 broker_accounts 行（FK 父行）。
+func seedSwapIdentityMap(t *testing.T, s *pgstore.Store, venue, canonical string) {
+	t.Helper()
+	if err := s.UpsertSymbolMapping(context.Background(),
+		&pgstore.SymbolMapping{Venue: venue, BrokerSymbol: canonical, Canonical: canonical, Source: "manual"}); err != nil {
+		t.Fatalf("seedSwapIdentityMap %s/%s: %v", venue, canonical, err)
+	}
+}
+
 // seedDemoAccounts D-144 ① 三态：清 broker_accounts 后为指定 venues 插入 demo 行（is_real=false）。
 // discoverSwapCombos 同类型配对要求两腿在 broker_accounts 有行且 is_real 非 nil；
 // 旧测试（freshness/scanSwapArb 等）未插行 → 三态保守不配对 → 需此 helper 补行。
@@ -41,7 +52,8 @@ func seedDemoAccounts(t *testing.T, s *pgstore.Store, venues ...string) {
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE broker_accounts CASCADE`); err != nil {
 		t.Fatalf("truncate broker_accounts: %v", err)
 	}
-	// D-558：本 helper=discover fixture 引导器，swap 配对 canonical（AUDJPY）顺带裁定。
+	// D-558：本 helper=discover fixture 引导器，swap 配对 canonical（AUDJPY）顺带裁定
+	// 产品类 + 逐 venue 落恒等符号映射行（归一化解析面）。
 	seedTestClass(t, s, "AUDJPY", "fx")
 	for _, v := range venues {
 		if _, err := s.Pool().Exec(ctx,
@@ -49,6 +61,7 @@ func seedDemoAccounts(t *testing.T, s *pgstore.Store, venues ...string) {
 			 VALUES ($1, 'mt5', 'h', 443, 'p', 's', 'connected', false)`, v); err != nil {
 			t.Fatalf("seedDemoAccounts %s: %v", v, err)
 		}
+		seedSwapIdentityMap(t, s, v, "AUDJPY")
 	}
 }
 

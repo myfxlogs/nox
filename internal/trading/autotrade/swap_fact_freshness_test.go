@@ -43,6 +43,7 @@ func TestDiscoverSwapCombos_FreshnessGate_StaleSkip(t *testing.T) {
 	}
 	now := time.Now().UTC()
 	staleTs := now.Add(-3 * time.Hour) // > 2h maxAge
+	seedDemoAccounts(t, s, "vA", "vB") // D-558 续段：类裁定+恒等映射行随 helper 落
 	if err := s.InsertFacts(ctx, []fact.Fact{
 		{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5.0, Unit: fact.UnitBpsDaily, Ts: staleTs, Src: "mt5"},
 		{Kind: fact.KindSwapShort, Venue: "vB", Symbol: "AUDJPY", Value: -3.0, Unit: fact.UnitBpsDaily, Ts: staleTs, Src: "mt5"},

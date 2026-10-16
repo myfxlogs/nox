@@ -36,14 +36,15 @@ func (s *Store) ListSwapHypotheses(ctx context.Context) ([]SwapHypothesisRow, er
 	return out, rows.Err()
 }
 
-// BrokerSymbolCanonical MT 符号→canonical（broker_symbol_map 实读；'m' 后缀变体
-// 一并查——facts 符号为裸名而映射表存 venue 原生名）。未命中→""零值。
+// BrokerSymbolCanonical MT 符号→canonical（broker_symbol_map 实读；'m'/'#' 后缀变体
+// 一并查——facts 符号为裸名而映射表存 venue 原生名，精确名优先）。未命中→""零值。
+// D-558 续段③：'#' 变体覆盖断言（110660304 实拍 AUDCAD#→AUDCAD 型目录行）。
 func (s *Store) BrokerSymbolCanonical(ctx context.Context, venue, symbol string) (string, error) {
 	var c string
 	err := s.pool.QueryRow(ctx, `
 		SELECT canonical FROM broker_symbol_map
-		 WHERE venue=$1 AND (broker_symbol=$2 OR broker_symbol=$2||'m')
-		 ORDER BY (broker_symbol=$2) DESC LIMIT 1`, venue, symbol).Scan(&c)
+		 WHERE venue=$1 AND (broker_symbol=$2 OR broker_symbol=$2||'m' OR broker_symbol=$2||'#')
+		 ORDER BY (broker_symbol=$2) DESC, (broker_symbol=$2||'m') DESC, broker_symbol LIMIT 1`, venue, symbol).Scan(&c)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return "", nil
