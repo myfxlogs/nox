@@ -12,23 +12,7 @@ import GraduationPanel from "../components/graduation";
 import { Collapse } from "../components/collapse";
 import type { DCIOrderRow } from "../gen/dashboardv1/dci_panel_pb";
 
-export default function InvestorPage() {
-  const [nav, setNav] = useState<number | null>(null);
-  const [navCcy, setNavCcy] = useState<Record<string, number>>({}); // D-522④：NAV 分币种
-  const [realized, setRealized] = useState<number | null>(null);
-  const [today, setToday] = useState<number | null>(null);
-  const [floatNet, setFloatNet] = useState<number | null>(null);
-  const [ann30, setAnn30] = useState<number | null>(null);
-  const [perf, setPerf] = useState<{
-    baseline: number; at: Date | null; principal: number;
-    netFlow: number; perf: number; ann: number; provisional: boolean;
-  } | null>(null);
-  const [income, setIncome] = useState<PositionDailyIncome[]>([]);
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [box, setBox] = useState<RequestBoxItem[]>([]);
-  const [busy, setBusy] = useState<number | null>(null);
-  const [err, setErr] = useState("");
-  const [showDust, setShowDust] = useState(false); // strategyCN D-577：fin_opp_template 键→中文名静态映射（票钉：错配显原 key
+// strategyCN D-577：fin_opp_template 键→中文名静态映射（票钉：错配显原 key
 // 不造名，禁运行时查 DB）。新模板落地=往此表补行。
 const STRATEGY_CN: Record<string, string> = {
   funding_carry: "资金费套息",
@@ -54,7 +38,23 @@ function strategyGroups(rows: Position[]): [string, Position[]][] {
   return [...m.entries()];
 }
 
-// NAV 尘币折叠
+export default function InvestorPage() {
+  const [nav, setNav] = useState<number | null>(null);
+  const [navCcy, setNavCcy] = useState<Record<string, number>>({}); // D-522④：NAV 分币种
+  const [realized, setRealized] = useState<number | null>(null);
+  const [today, setToday] = useState<number | null>(null);
+  const [floatNet, setFloatNet] = useState<number | null>(null);
+  const [ann30, setAnn30] = useState<number | null>(null);
+  const [perf, setPerf] = useState<{
+    baseline: number; at: Date | null; principal: number;
+    netFlow: number; perf: number; ann: number; provisional: boolean;
+  } | null>(null);
+  const [income, setIncome] = useState<PositionDailyIncome[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [box, setBox] = useState<RequestBoxItem[]>([]);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [err, setErr] = useState("");
+  const [showDust, setShowDust] = useState(false); // NAV 尘币折叠
   const [orders, setOrders] = useState<DCIOrderRow[]>([]); // DCI/earn 收益轨透出（D-577）
 
   useEffect(() => {
@@ -222,6 +222,9 @@ function strategyGroups(rows: Position[]): [string, Position[]][] {
 
       {/* D-577 一策略一格：按后端 strategy_key 分格（禁前端猜挂——
           unassigned=NULL 如实落未归组格；中文名走静态映射，错配显原 key 不造名） */}
+      {positions.length === 0 && (
+        <Collapse title="持仓" hint="0 仓"><div className="muted">零在跑仓</div></Collapse>
+      )}
       {strategyGroups(positions).map(([key, rows]) => (
         <Collapse key={key} title={"持仓·" + strategyCN(key)} hint={rows.length + " 仓"}>
           <table>
