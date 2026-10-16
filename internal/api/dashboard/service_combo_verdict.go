@@ -82,6 +82,34 @@ func (s *Service) legMarginNeedPerp(ctx context.Context, vk, sym string, sellLeg
 // SetPerpLeverageTarget D-079：注入 perp 腿目标杠杆（≤0=展示面不换算，原样透出实读值）。
 func (s *Service) SetPerpLeverageTarget(target float64) { s.perpLeverageTarget = target }
 
+// venueLeverageCached D-574：展示径杠杆读穿缝——levCache 5min 命中即返；
+// miss 时限 ctx 4s 实拉（venue REST 串行挂死病灶修：List 径每腿无界实拉
+// 曾致 ListCarryGraduations 100s ctx cancel）。approve/dry_run 精算径不走
+// 本缝（alloc_risk 直拉 venueLeverage 语义不动）。
+func (s *Service) venueLeverageCached(ctx context.Context, venueKey, symbol string, sellLeg bool) (float64, error) {
+	key := venueKey + "|" + symbol + "|" + map[bool]string{true: "sell", false: "buy"}[sellLeg]
+	s.levCacheMu.Lock()
+	if s.levCache == nil {
+		s.levCache = map[string]levCacheEntry{}
+	}
+	if e, ok := s.levCache[key]; ok && time.Since(e.at) <= 5*time.Minute {
+		lev := e.lev
+		s.levCacheMu.Unlock()
+		return lev, nil
+	}
+	s.levCacheMu.Unlock()
+	lctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	lev, err := s.venueLeverage(lctx, venueKey, symbol, sellLeg)
+	if err != nil || lev <= 0 {
+		return 0, err
+	}
+	s.levCacheMu.Lock()
+	s.levCache[key] = levCacheEntry{lev: lev, at: time.Now()}
+	s.levCacheMu.Unlock()
+	return lev, nil
+}
+
 // levCacheEntry D-572 S1：杠杆读穿缓存条目（frac 由 1/lev 当场算不冗余存）。
 type levCacheEntry struct {
 	lev float64
