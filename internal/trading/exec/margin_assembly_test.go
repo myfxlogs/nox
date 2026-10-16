@@ -95,12 +95,19 @@ func TestMarginAssembly_OKXSavingsReadFail(t *testing.T) {
 	}
 }
 
-// d550gateRT gate 装配链 fake：futures accounts low→high 翻转 + spot 余额 + transfer。
+// d550gateRT gate 装配链 fake：futures accounts low→high 翻转 + spot 余额 +
+// uni-lend 赎回段（spotPostRedeem=赎回提交后 spot 重读实值——venue 整点到账
+// 语义下未到账=如实部分装配）+ transfer。
 type d550gateRT struct {
-	accCalls int
-	seq      []string
-	spot     string
-	spotFail bool
+	accCalls       int
+	seq            []string
+	spot           string
+	spotPostRedeem string // 赎回后 spot 实值（空=不变）
+	lent           string // uni-lend 出借中可赎额
+	redeemAmt      string // 实拍赎回参
+	lendsFail      bool
+	spotFail       bool
+	redeemed       bool
 }
 
 func (rt *d550gateRT) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -121,11 +128,30 @@ func (rt *d550gateRT) RoundTrip(req *http.Request) (*http.Response, error) {
 		body = `{"leverage":"10"}`
 	case strings.Contains(p, "/futures/usdt/positions") || strings.Contains(p, "dual_comp"):
 		body = `{"leverage":"10"}`
+	case strings.Contains(p, "/futures/usdt/"):
+		body = `{"Lever":"10"}` // get_leverage 余面（文档钉死大写 Lever 字段）
+	case strings.Contains(p, "/earn/uni/lends"):
+		if rt.lendsFail {
+			return &http.Response{StatusCode: 500, Body: io.NopCloser(strings.NewReader("x")), Header: make(http.Header), Request: req}, nil
+		}
+		if req.Method == http.MethodPost {
+			rt.redeemed = true
+			if b, _ := io.ReadAll(req.Body); b != nil {
+				rt.redeemAmt = string(b)
+			}
+			body = `{"id":1}`
+		} else {
+			body = `[{"currency":"USDT","lent_amount":"` + rt.lent + `"}]`
+		}
 	case strings.Contains(p, "/spot/accounts"):
 		if rt.spotFail {
 			return &http.Response{StatusCode: 500, Body: io.NopCloser(strings.NewReader("x")), Header: make(http.Header), Request: req}, nil
 		}
-		body = `[{"currency":"USDT","available":"` + rt.spot + `"}]`
+		v := rt.spot
+		if rt.redeemed && rt.spotPostRedeem != "" {
+			v = rt.spotPostRedeem
+		}
+		body = `[{"currency":"USDT","available":"` + v + `"}]`
 	case strings.Contains(p, "/wallet/transfers"):
 		body = `{"txid":"1"}`
 	default:
@@ -160,6 +186,59 @@ func TestMarginAssembly_Gate(t *testing.T) {
 		return
 	}
 	if !strings.Contains(err.Error(), "gate margin insufficient") && !strings.Contains(err.Error(), "杠杆实况") && !strings.Contains(err.Error(), "margin precheck") {
+		t.Fatalf("拒因失真: %v", err)
+	}
+}
+
+// gate earn 赎回装配段（对齐 D-549 okx 同构）：缺口>spot → lends 读→赎回
+// min(缺口,lent)→spot 重读→划转。need≈92、spot=50 → 赎 42（lent=500 充足）。
+func TestMarginAssembly_GateEarnRedeem(t *testing.T) {
+	rt := &d550gateRT{spot: "50", spotPostRedeem: "500", lent: "500"}
+	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
+	e.client = &http.Client{Transport: rt}
+	_ = e.MarginPrecheck(context.Background(), Order{Symbol: "X_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
+	if !rt.redeemed {
+		t.Fatalf("spot 短应收 earn 赎回段: seq=%v", rt.seq)
+	}
+	if !strings.Contains(rt.redeemAmt, `"type":"redeem"`) || !strings.Contains(rt.redeemAmt, `"amount":"42`) {
+		t.Fatalf("赎回参失真（应 min(缺口42,lent)）: %s", rt.redeemAmt)
+	}
+	var iLendsGet, iRedeem, iSpotRe, iTrans int = -1, -1, -1, -1
+	for i, s := range rt.seq {
+		switch {
+		case strings.Contains(s, "GET /earn/uni/lends"):
+			iLendsGet = i
+		case strings.Contains(s, "POST /earn/uni/lends"):
+			iRedeem = i
+		case iRedeem >= 0 && strings.Contains(s, "spot/accounts"):
+			iSpotRe = i
+		case strings.Contains(s, "wallet/transfers"):
+			iTrans = i
+		}
+	}
+	if !(iLendsGet >= 0 && iRedeem > iLendsGet && iSpotRe > iRedeem && iTrans > iSpotRe) {
+		t.Fatalf("装配序列乱（lends读→赎回→spot重读→划转）: %v", rt.seq)
+	}
+	if rt.accCalls < 2 {
+		t.Fatalf("装配后未重读 futures accounts: %d", rt.accCalls)
+	}
+}
+
+// uni-lend 可赎额读败 → fail-closed（零赎零划转）。
+func TestMarginAssembly_GateEarnLendsReadFail(t *testing.T) {
+	rt := &d550gateRT{spot: "50", lent: "500", lendsFail: true}
+	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
+	e.client = &http.Client{Transport: rt}
+	err := e.MarginPrecheck(context.Background(), Order{Symbol: "X_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
+	if err == nil {
+		t.Fatalf("lends 读败不应放行")
+	}
+	for _, s := range rt.seq {
+		if strings.Contains(s, "POST /earn/uni/lends") || strings.Contains(s, "wallet/transfers") {
+			t.Fatalf("可赎读败后不应有写动面: %v", rt.seq)
+		}
+	}
+	if !strings.Contains(err.Error(), "uni-lend") && !strings.Contains(err.Error(), "杠杆实况") && !strings.Contains(err.Error(), "margin precheck") {
 		t.Fatalf("拒因失真: %v", err)
 	}
 }

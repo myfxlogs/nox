@@ -1,7 +1,7 @@
 // cex_executor_assembly.go —— D-549 装配模式通用化（xasset CEX 腿保证金装配段）：
 // 目标池净值不足时按所内可用腾挪序补位——okx: savings 赎回→funding→unified；
-// gate: spot→futures 划转。装配额=min(缺口, 可动源) 禁放大禁预腾攒池；
-// 读败/腾挪败 fail-closed 如实拒因。仅执行时按需调用，非常驻搬运。
+// gate: uni-lend 赎回→spot→futures 划转。装配额=min(缺口, 可动源) 禁放大禁预腾
+// 攒池；读败/腾挪败 fail-closed 如实拒因。仅执行时按需调用，非常驻搬运。
 package exec
 
 import (
@@ -122,7 +122,8 @@ func (e *CEXExecutor) okxAssembleMargin(ctx context.Context, needed float64) (fl
 }
 
 // gateAssembleMargin gate 所内装配：needed USD 缺口 → spot USDT 可用读 →
-// 划转 min(缺口, spot 可用) spot→futures。返回装配金额；0/败=维持拒。
+// 缺口先赎 min(缺口, uni-lend 出借中) 落 spot → 划转 min(缺口, spot 实值)
+// spot→futures。返回装配金额；0/败=维持拒。
 func (e *CEXExecutor) gateAssembleMargin(ctx context.Context, needed float64) (float64, error) {
 	if needed <= 0 {
 		return 0, nil
@@ -140,6 +141,17 @@ func (e *CEXExecutor) gateAssembleMargin(ctx context.Context, needed float64) (f
 		}
 		return json.Unmarshal(b, out)
 	}
+	post := func(path, body string) error {
+		ts := gateNow()
+		h := http.Header{
+			"KEY":          {e.apiKey},
+			"Timestamp":    {strconv.FormatInt(ts, 10)},
+			"SIGN":         {signutil.GateSign(e.apiSecret, "POST", "/api/v4"+path, "", body, ts)},
+			"Content-Type": {"application/json"},
+		}
+		_, err := e.post(ctx, e.baseURL+path, body, h)
+		return err
+	}
 	var spot []struct {
 		Currency  string `json:"currency"`
 		Available string `json:"available"`
@@ -151,6 +163,48 @@ func (e *CEXExecutor) gateAssembleMargin(ctx context.Context, needed float64) (f
 	for _, a := range spot {
 		if a.Currency == "USDT" {
 			spotAvail, _ = strconv.ParseFloat(a.Available, 64)
+		}
+	}
+	// earn 赎回段（D-549 同构第三源）：uni-lend lent_amount=出借中可赎本金
+	// （frozen=赎回处理中不计可赎面）。venue 语义（EarnUni 官方文档）：已出借
+	// 份额下一整点区间到账、整点 ±2min 结算窗禁申赎——赎回非瞬时，划转额只认
+	// 赎回提交后 spot 重读实值；未到账部分如实部分装配，下拍重入续装（整点
+	// 结算窗内 venue 拒单=fail-closed 如实败因，下拍自然重试）。
+	if spotAvail < needed {
+		var lends []struct {
+			Currency string `json:"currency"`
+			Lent     string `json:"lent_amount"`
+		}
+		if err := get("/earn/uni/lends", &lends); err != nil {
+			return 0, fmt.Errorf("uni-lend 可赎额读败（fail-closed 不赎不划）: %w", err)
+		}
+		lent := 0.0
+		for _, l := range lends {
+			if l.Currency == "USDT" {
+				v, _ := strconv.ParseFloat(l.Lent, 64)
+				lent += v
+			}
+		}
+		redeem := needed - spotAvail
+		if lent < redeem {
+			redeem = lent
+		}
+		if redeem > 1e-6 {
+			if err := post("/earn/uni/lends",
+				fmt.Sprintf(`{"currency":"USDT","amount":"%s","type":"redeem"}`,
+					strconv.FormatFloat(redeem, 'f', 8, 64))); err != nil {
+				return 0, fmt.Errorf("uni-lend 赎回败（fail-closed 不划）: %w", err)
+			}
+			spot = spot[:0]
+			if err := get("/spot/accounts?currency=USDT", &spot); err != nil {
+				return 0, fmt.Errorf("赎回后 spot 重读败（fail-closed 不划）: %w", err)
+			}
+			spotAvail = 0.0
+			for _, a := range spot {
+				if a.Currency == "USDT" {
+					spotAvail, _ = strconv.ParseFloat(a.Available, 64)
+				}
+			}
 		}
 	}
 	mv := needed
