@@ -1,6 +1,5 @@
 // investor.tsx —— 投资人页 v0（NOX 露面②）：只读 NAV/收益/持仓摘要，零写径零运维件。
-import { useCallback, useEffect, useState } from "react";
-import { onCase } from "../stream";
+import { useEffect, useState } from "react";
 import { client, errText } from "../api";
 import type { PositionDailyIncome } from "../gen/dashboardv1/account_pb";
 import type { Position } from "../gen/dashboardv1/position_pb";
@@ -12,7 +11,32 @@ import { fmtUsd, fmtAge } from "../components/fmt";
 import GraduationPanel from "../components/graduation";
 import { Collapse } from "../components/collapse";
 import type { DCIOrderRow } from "../gen/dashboardv1/dci_panel_pb";
-import type { XAssetPendingEntryRow } from "../gen/dashboardv1/graduation_pb";
+
+// strategyCN D-577：fin_opp_template 键→中文名静态映射（票钉：错配显原 key
+// 不造名，禁运行时查 DB）。新模板落地=往此表补行。
+const STRATEGY_CN: Record<string, string> = {
+  funding_carry: "资金费套息",
+  cfd_swap_carry: "CFD 换仓息",
+  term_basis: "期现基差",
+  spot_carry: "现货套息",
+  dci_put_sell: "DCI 卖沽",
+  earn_apr_lending: "活期理财",
+  cash_mgmt: "现金管理",
+};
+function strategyCN(key: string): string {
+  if (key === "__unassigned__") return "未归组";
+  return STRATEGY_CN[key] ?? key; // 错配显原 key 不造名
+}
+// strategyGroups 按 strategyKey 分格（unassigned/缺省键→__unassigned__ 格）。
+function strategyGroups(rows: Position[]): [string, Position[]][] {
+  const m = new Map<string, Position[]>();
+  for (const p of rows) {
+    const k = p.unassigned || !p.strategyKey ? "__unassigned__" : p.strategyKey;
+    const arr = m.get(k);
+    if (arr) arr.push(p); else m.set(k, [p]);
+  }
+  return [...m.entries()];
+}
 
 export default function InvestorPage() {
   const [nav, setNav] = useState<number | null>(null);
@@ -32,9 +56,9 @@ export default function InvestorPage() {
   const [err, setErr] = useState("");
   const [showDust, setShowDust] = useState(false); // NAV 尘币折叠
   const [orders, setOrders] = useState<DCIOrderRow[]>([]); // DCI/earn 收益轨透出（D-577）
-  const [watchRows, setWatchRows] = useState<XAssetPendingEntryRow[]>([]); // D-578 观察中·待入场区
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    (async () => {
       try {
         const [fin, pnl, inc, pos, bx] = await Promise.all([
           client.getFinanceOverview({}),
@@ -66,25 +90,12 @@ export default function InvestorPage() {
         setBox(bx.items);
         const od = await client.listDCIOrders({});
         setOrders(od.orders);
-        const pe = await client.listXAssetPendingEntries({});
-        setWatchRows(pe.rows);
         setErr("");
       } catch (e) {
         setErr(errText(e));
       }
+    })();
   }, []);
-
-  useEffect(() => {
-    void load();
-    // D-578：接 StreamUpdates 流件（D-004 禁轮询）——dataRefresh/position/
-    // opportunity 事件驱动重取既有 RPC（与 positions 页同件复用）。
-    const offs = [
-      onCase("dataRefresh", () => void load()),
-      onCase("position", () => void load()),
-      onCase("opportunity", () => void load()),
-    ];
-    return () => offs.forEach((f) => f());
-  }, [load]);
 
   // D-268 M4.6：请求箱回执——按钮只发 id+二态，态机判权全后端（前端零信任）。
   const resolve = async (id: number, state: ResolveRequestState) => {
@@ -193,26 +204,6 @@ export default function InvestorPage() {
         <GraduationPanel />
       </Collapse>
 
-      {/* D-578 观察中面板：armed 组合待入场区（ListXAssetPendingEntries
-          单源读面——wait_reason/ready/差值全后端算定，前端零重算）；
-          空态显式「引擎评估中·暂无候选」非段消失。 */}
-      <Collapse title="观察中（armed 待入场）" hint={watchRows.length + " 组合"}>
-        <table>
-          <thead><tr><th>组合</th><th>类别</th><th>拦路原因</th><th>差值 bps</th><th>状态</th></tr></thead>
-          <tbody>
-            {watchRows.map((r) => (
-              <tr key={Number(r.comboId)}>
-                <td>{r.comboLabel}</td><td>{r.entryKind}</td>
-                <td className="muted">{r.waitReason || "—"}</td>
-                <td>{r.waitGapBps != null ? r.waitGapBps.toFixed(1) : "—"}</td>
-                <td>{r.ready ? <span className="good">就绪·等机会</span> : <span className="warn">未过闸</span>}</td>
-              </tr>
-            ))}
-            {watchRows.length === 0 && <tr><td colSpan={5} className="muted">引擎评估中·暂无候选</td></tr>}
-          </tbody>
-        </table>
-      </Collapse>
-
       <Collapse title="收益轨（DCI/earn 成交订单）" hint={orders.length + " 单"}>
         <table>
           <thead><tr><th>#</th><th>场所</th><th>模板</th><th>产品</th><th>数量</th><th>币种</th><th>状态</th><th>时点</th></tr></thead>
@@ -229,22 +220,28 @@ export default function InvestorPage() {
         </table>
       </Collapse>
 
-      <Collapse title="持仓摘要" hint={positions.length + " 仓"}>
-
-      <table>
-        <thead><tr><th>ID</th><th>类型</th><th>净盈亏</th><th>浮动</th><th>持有天数</th></tr></thead>
-        <tbody>
-          {positions.map((p) => (
-            <tr key={Number(p.id)}>
-              <td>{Number(p.id)}</td><td>{p.type}</td>
-              <td className={(p.netPnlUsd ?? 0) >= 0 ? "good" : "crit"}>{fmtUsd(p.netPnlUsd)}</td>
-              <td>{fmtUsd(p.floatingPnlUsd)}</td>
-              <td>{p.holdDays?.toFixed(1) ?? "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      </Collapse>
+      {/* D-577 一策略一格：按后端 strategy_key 分格（禁前端猜挂——
+          unassigned=NULL 如实落未归组格；中文名走静态映射，错配显原 key 不造名） */}
+      {positions.length === 0 && (
+        <Collapse title="持仓" hint="0 仓"><div className="muted">零在跑仓</div></Collapse>
+      )}
+      {strategyGroups(positions).map(([key, rows]) => (
+        <Collapse key={key} title={"持仓·" + strategyCN(key)} hint={rows.length + " 仓"}>
+          <table>
+            <thead><tr><th>ID</th><th>类型</th><th>净盈亏</th><th>浮动</th><th>持有天数</th></tr></thead>
+            <tbody>
+              {rows.map((p) => (
+                <tr key={Number(p.id)}>
+                  <td>{Number(p.id)}</td><td>{p.type}</td>
+                  <td className={(p.netPnlUsd ?? 0) >= 0 ? "good" : "crit"}>{fmtUsd(p.netPnlUsd)}</td>
+                  <td>{fmtUsd(p.floatingPnlUsd)}</td>
+                  <td>{p.holdDays?.toFixed(1) ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Collapse>
+      ))}
 
       <Collapse title="日收益（近 30 条）" hint={income.length + " 条"}>
 
