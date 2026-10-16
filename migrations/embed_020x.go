@@ -121,3 +121,6 @@ var GradSizingModeSQL string // D-581：毕业批准拆层 sizing_mode 三态（
 
 //go:embed 1039_combo_source.sql
 var ComboSourceSQL string // D-584：armed 白名单出处约束（source CHECK+provenance_id+enable 闸）
+
+//go:embed 1040_paper_first_gate.sql
+var PaperFirstGateSQL string // D-593：全模板纸面先行不变量（payoff_class+paper_exempt_d 列）
