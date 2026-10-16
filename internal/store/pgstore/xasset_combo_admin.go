@@ -34,7 +34,8 @@ type XAssetComboAdminRow struct {
 func (s *Store) ListXAssetAllowCombosAll(ctx context.Context) ([]XAssetComboAdminRow, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, canonical_buy, canonical_sell, venue_key_buy AS venue_buy, venue_key_sell AS venue_sell,
-		       max_long_qty, max_short_qty, max_gross_usd, notional_usd, margin_usd, enabled, simulated, note
+		       COALESCE(max_long_qty,0), COALESCE(max_short_qty,0), COALESCE(max_gross_usd,0),
+		       notional_usd, margin_usd, enabled, simulated, note
 		FROM xasset_allow_combos WHERE simulated IS NULL OR simulated = false ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("list xasset combos all: %w", err)
@@ -60,19 +61,27 @@ func (s *Store) UpdateXAssetAllowCombo(ctx context.Context, r *XAssetComboAdminR
 		return false, fmt.Errorf("begin: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	var curID int64
-	err = tx.QueryRow(ctx, `SELECT id FROM xasset_allow_combos WHERE id=$1 FOR UPDATE`, r.ID).Scan(&curID)
+	var mode string
+	err = tx.QueryRow(ctx, `SELECT sizing_mode FROM xasset_allow_combos WHERE id=$1 FOR UPDATE`, r.ID).Scan(&mode)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil
 		}
 		return false, fmt.Errorf("lock combo row: %w", err)
 	}
+	// NULL 帽雷修：CHECK 钉死非 fixed 档四列必须 NULL（1038）——ListAll 走
+	// COALESCE 出 0，pct/system 行 toggle/改 note 若把 0 写回必撞 CHECK；
+	// 非 fixed 档帽列与 notional 强制 NULL 落写（fixed 档照常取 r 值）。
+	lq, sq, gr := any(r.MaxLongQty), any(r.MaxShortQty), any(r.MaxGrossUSD)
+	nt := any(r.NotionalUSD)
+	if mode != "fixed" {
+		lq, sq, gr, nt = nil, nil, nil, nil
+	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE xasset_allow_combos SET max_long_qty=$1, max_short_qty=$2, max_gross_usd=$3,
 		       notional_usd=$4, margin_usd=$5, enabled=$6, note=$7, updated_at=now()
 		WHERE id=$8`,
-		r.MaxLongQty, r.MaxShortQty, r.MaxGrossUSD, r.NotionalUSD, r.MarginUSD, r.Enabled, r.Note, r.ID); err != nil {
+		lq, sq, gr, nt, r.MarginUSD, r.Enabled, r.Note, r.ID); err != nil {
 		return false, fmt.Errorf("update combo: %w", err)
 	}
 	return true, tx.Commit(ctx)
