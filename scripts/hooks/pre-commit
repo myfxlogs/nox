@@ -140,5 +140,21 @@ if git diff --cached --name-only | grep -qE '\.go$'; then
   fi
 fi
 
-# 9. diff 通读提示（不自动拦截，提醒人工检查）
+# 9. 未推送 commit 检出（D-588 病灶修——推送失败静默滞留本地面）：
+# 本地领先远端 N 个 commit → 每次 commit 打 warn，推送成功后自消（事件驱动可见性）。
+UPSTREAM=""
+if git rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then
+  UPSTREAM="@{u}"
+elif git rev-parse --verify nox/master >/dev/null 2>&1; then
+  UPSTREAM="nox/master"
+fi
+if [ -n "$UPSTREAM" ]; then
+  AHEAD=$(git rev-list --count "$UPSTREAM..HEAD" 2>/dev/null || echo 0)
+  if [ "$AHEAD" -gt 0 ]; then
+    echo "WARN(D-588): 本地领先 $UPSTREAM $AHEAD 个 commit 未推送——" >&2
+    echo "  推送失败滞留本地是断链风险（部署/复审看远端）。用 scripts/git_push.sh 带重试推送。" >&2
+  fi
+fi
+
+# 10. diff 通读提示（不自动拦截，提醒人工检查）
 echo "OK: pre-commit gate passed. Remember: diff 通读无死代码/TODO/调试残留."

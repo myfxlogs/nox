@@ -1,0 +1,7 @@
+# check-lines 棘轮基线（D-588）：>300 行软警告改棘轮——基线内文件只许缩不许长，
+# 基线外新超标文件硬阻断。拆完后把行从基线删除（基线只减不增）。
+# 2026-10-16 立线实拍：4 个存量超标文件冻结当前行数。
+tools/universe-radar/sources_binance.go 341
+internal/api/dashboard/service_graduation_sizing.go 318
+internal/risk/gate/gate.go 301
+internal/trading/autotrade/engine_opp.go 301
