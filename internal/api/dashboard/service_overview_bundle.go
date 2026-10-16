@@ -68,6 +68,9 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 		resp.EarliestRelease = timestamppb.New(*earliest)
 	}
 	resp.PrincipalTotalUsd = resp.PrincipalIdleUsd + resp.PrincipalEarningUsd // 快照池即账本真值
+	// §5 十段工序健康读模（S3′-b：后端聚合 emit 时戳+wait_reason+错误面——
+	// 禁前端拿 dept 拼状态/禁前端判故障）。
+	resp.Stages = s.pipelineStages(ctx)
 	// §2 业绩（D-535 锚面——缺锚/读败 available=false 如实缺）。
 	if perf, err := s.store.PerfSinceBaseline(ctx, now); err == nil && perf != nil {
 		resp.PerfAvailable = true

@@ -12,6 +12,15 @@ import { fmtUsd } from "../components/fmt";
 import { StatTile } from "../components/StatTile";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
+import { FreshDot } from "../components/FreshDot";
+import type { FreshDot as FreshDotData } from "../components/freshness";
+
+// STAGE_CN 十段工序 key→中文名（显示映射非判据；新段 key 补表行）
+const STAGE_CN: Record<string, string> = {
+  collect: "采集", research: "研究", opp_publish: "机会发布", gate_eval: "闸评",
+  assembly: "装配", execution: "执行", holding: "持仓", exit: "平仓",
+  ledger: "账本", review: "复盘",
+};
 
 const utc = (t: Date | undefined) =>
   t ? t.toISOString().replace("T", " ").slice(0, 19) + "Z" : "—";
@@ -105,6 +114,37 @@ export default function OverviewPage() {
         <StatTile label="基线后业绩" value={b?.perfAvailable ? (b.perfUsd >= 0 ? "+" : "") + fmtUsd(b.perfUsd) : "—"}
           sub={b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"} />
       </div>
+
+      {/* S3′-b 十段工序实时状态卡（后端 PipelineStageHealth 读模——
+          状态点+一行实况叙事直渲；禁前端拼 dept/判故障） */}
+      <h2>工序状态</h2>
+      {b && b.stages.length > 0 ? (
+        <ul className="opp-cards">
+          {b.stages.map((st) => {
+            const tone: FreshDotData["status"] =
+              st.state === "working" ? "live" : st.state === "waiting" ? "stale" : st.state === "error" ? "down" : "down";
+            const chipTone = st.state === "working" ? "good" : st.state === "waiting" ? "warn" : st.state === "error" ? "critical" : "neutral";
+            return (
+              <li key={st.key} className="opp-card">
+                <div className="opp-card-head">
+                  <FreshDot dot={{ status: tone, title: st.state }} />
+                  <Chip tone={chipTone}>{STAGE_CN[st.key] ?? st.key}</Chip>
+                  {st.lastEventUnix > 0 && (
+                    <span className="opp-card-friction">
+                      {new Date(Number(st.lastEventUnix) * 1000).toISOString().slice(5, 16).replace("T", " ")}Z
+                    </span>
+                  )}
+                </div>
+                <p className="opp-card-narrative muted">
+                  {st.narrative || "—"}
+                  {st.waitReason ? `｜${st.waitReason}` : ""}
+                  {st.error ? <span className="crit">｜{st.error}</span> : null}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      ) : <EmptyState>工序健康读模未供</EmptyState>}
 
       {/* §2 在仓订单缩览卡阵（kind 徽标+对象+额+态——替旧表） */}
       <h2>在仓订单</h2>
