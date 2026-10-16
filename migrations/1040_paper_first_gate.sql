@@ -7,9 +7,17 @@ ALTER TABLE fin_opp_template DROP CONSTRAINT IF EXISTS fin_opp_template_payoff_c
 ALTER TABLE fin_opp_template ADD CONSTRAINT fin_opp_template_payoff_check
     CHECK (payoff_class IS NULL OR payoff_class IN
       ('directional_hedged','naked_short_vol','yield_on_holdings','cash_mgmt','other'));
--- 已知负偏结构如实标（dci_buy_low=卖 put 负偏，SG 4 结算单实证净亏）。
-UPDATE fin_opp_template SET payoff_class='naked_short_vol' WHERE id LIKE 'dci%';
-UPDATE fin_opp_template SET payoff_class='yield_on_holdings'
-    WHERE payoff_class IS NULL AND (id LIKE 'earn%' OR id LIKE 'cash%');
-UPDATE fin_opp_template SET payoff_class='directional_hedged'
-    WHERE payoff_class IS NULL AND id NOT LIKE 'dci%';
+-- 九行显式映射（复审⑦定值——禁 like 猜判据；NULL=未分类绕负偏闸故全钉）：
+UPDATE fin_opp_template SET payoff_class=v.cls, paper_exempt_d=v.exempt
+    FROM (VALUES
+      ('funding_carry','directional_hedged',NULL),
+      ('cfd_swap_carry','directional_hedged',NULL),
+      ('earn_apr_lending','yield_on_holdings','D-286'),   -- 承接位无方向敞口豁免
+      ('dci_buy_low','naked_short_vol',NULL),            -- 负偏卖 put——结构性禁真金
+      ('dci_sell_high_covered_call','yield_on_holdings','D-593'), -- 托管 carry 主线豁免
+      ('option_spread','directional_hedged',NULL),
+      ('cross_venue_spot','directional_hedged',NULL),
+      ('term_basis','directional_hedged',NULL),
+      ('cash_mgmt','cash_mgmt','D-286')                  -- 现金管理承接位豁免
+    ) AS v(id,cls,exempt)
+    WHERE fin_opp_template.id=v.id;
