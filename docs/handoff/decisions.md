@@ -398,3 +398,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 ## D-582 grad_system_alloc_pct 初值=0.30（复审席裁——system 档默认包络）
 - **裁定**：armed 组合 sizing_mode=system 时额度=30%×min(双腿池权益)，每拍活池折算。
 - **理由**：低于存量跨名义帽档（NOX_CROSS_NOTIONAL_EQUITY_CAP=0.5）不打架；显著保守于业主亲批先例（armed #16/#17 ~$700/$1000 池≈0.7）；首季观测期宁小勿大，证据攒量后决策席可调（配置判据非业主逐单域）。缺值 fail-closed skip 不误放。
+
+## D-583 armed 白名单清场（决策席审计裁——退役死行+代理腿，TRX 三连留 armed）
+- **实证**（SG 10-16 双通道实拍）：armed enabled 8 行中 #1-#4 挂 venue 277842155=broker_accounts 已拆户（永不成交死行）；#11 XAU 3001157→okx=Exness swap_free 户 swap 双 0+XAUUSDT funding≈0→**双引擎全熄只剩收敛赌注**；#16 PAXGUSDT×XAUUSD=代理腿基差赌注（KB verified 坑 `cfd-cross-venue-structural-spread` 同构——异定价源不收敛，PAXG 代币可脱锚）；#1 CLUSDT×WTI 死行+代理腿双叠加。TRX #17/#18/#19 同结构三 venue（同因子一注三票）但引擎真实（funding+10.95% 付息窗如实等待中）→留。
+- **裁定**：`UPDATE xasset_allow_combos SET enabled=false WHERE id IN (1,2,3,4,11,16)` 已落 SG 在产（行留授权痕迹不删）。armed 面净剩 TRX 三连等 funding 翻负。
+- **理由**：D-184 权责——策略级去留/组合构成=基金管理人域非业主域；白名单语义=「授权且可执行」——venue 已拆/引擎全熄/代理腿三类的占位行污染待入场判读且坑面行如放行=真金白银赌相关性（违 D-019 不赌第一性，代理腿≠同标的）。TRX 三连集中度风险自知但结构合法，funding 翻转后按 armed 径正常评估。
