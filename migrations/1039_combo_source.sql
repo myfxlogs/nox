@@ -14,13 +14,15 @@ ALTER TABLE xasset_allow_combos DROP CONSTRAINT IF EXISTS xasset_allow_combos_so
 ALTER TABLE xasset_allow_combos ADD CONSTRAINT xasset_allow_combos_source_check
     CHECK (source IS NULL OR source IN ('graduation','s2_trial','manual_seed'));
 
--- 存量回填如实（复审对位面）：SG 实拍 carry_graduations #17/#18/#19 approved
--- 三行 ↔ 白名单 combos #46/#47/#48 venue 对位——显式 id 映射钉死。
-UPDATE xasset_allow_combos SET source='graduation', provenance_id=v.gid
-    FROM (VALUES (46,17),(47,18),(48,19)) AS v(id,gid)
-    WHERE xasset_allow_combos.id=v.id AND source IS NULL;
--- 兜底：symbol+venue 双对位（id 漂移库面——graduation venue_a/b ↔ combos
--- venue_buy/sell 名段）；无毕业实据行不碰（manual_seed 如实）。
+-- 存量回填如实（复审二次返修选型裁定=因果链优先）：combos note
+-- 'D-403毕业 paper#N' → graduation.paper_id=N 且 status='approved' 回链
+-- provenance_id=g.id——因果实证非 id 硬对位（fresh 库面亦真，SG #46/47/48
+-- 预期落 (graduation,17/18/19)）。无 paper# 注行不碰（manual_seed 如实）。
+UPDATE xasset_allow_combos a SET source='graduation', provenance_id=g.id
+    FROM carry_graduations g
+    WHERE g.status='approved'
+      AND g.paper_id = substring(a.note from 'paper#(\d+)')::bigint
+      AND a.source IS NULL;
 -- 无毕业实据存量行=manual_seed 如实（不造假 graduation 出处）
 UPDATE xasset_allow_combos SET source='manual_seed' WHERE source IS NULL;
 
