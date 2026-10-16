@@ -109,3 +109,6 @@ var S2TrialNotionalSQL string // D-548：S2 桥试单名义额参数化（app_co
 
 //go:embed 1034_graduation_unqualified.sql
 var GraduationUnqualifiedSQL string // 毕业准入闸漏洞修：status 域补 unqualified/stale
+
+//go:embed 1036_position_strategy_key.sql
+var PositionStrategyKeySQL string // 仓位归组键：positions.strategy_key+判据表

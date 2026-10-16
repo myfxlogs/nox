@@ -54,12 +54,16 @@ func createPositionInTx(ctx context.Context, tx pgx.Tx, p *Position) (int64, err
 	if p.Environment != "" {
 		env = p.Environment
 	}
+	// D-577：归组键前向写——engine_type→strategy_key 判据表解析（DB 驱动禁
+	// 硬编码）；map 无行→NULL→读面 unassigned 如实落未归组格（判据缺不阻塞
+	// 开仓——NULL 即未归组语义）。
+	strategyKey := resolvePositionStrategyKey(ctx, tx, p.OpportunityID, p.Type)
 	q := `INSERT INTO positions (opportunity_id, type, status, expected_net_bps, opened_at, notional_usd,
-			request_id, dedup_key, environment)
-		VALUES ($1, $2, $3, $4, now(), $5, $6, $7, $8) RETURNING id`
+			request_id, dedup_key, environment, strategy_key)
+		VALUES ($1, $2, $3, $4, now(), $5, $6, $7, $8, $9) RETURNING id`
 	var id int64
 	err := tx.QueryRow(ctx, q, p.OpportunityID, p.Type, p.Status, p.ExpectedNetBps, p.NotionalUSD,
-		reqID, dedupKey, env).Scan(&id)
+		reqID, dedupKey, env, strategyKey).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create position: %w", err)
 	}

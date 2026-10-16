@@ -17,7 +17,7 @@ func (s *Store) ListPositions(ctx context.Context, status string, limit, offset 
 	}
 	if status == "ACTIVE" {
 		// ACTIVE 路径不绑定 $1（IN 子句无参数），limit/offset 用 $1/$2。
-		q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, closing_started_at, uncertainty_reason, entry_noise_bps, entry_harvest_floor_bps, notional_usd, decision_ref, auto_close_at
+		q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, closing_started_at, uncertainty_reason, entry_noise_bps, entry_harvest_floor_bps, notional_usd, decision_ref, auto_close_at, strategy_key
 			FROM positions
 			WHERE status IN ('OPEN','OPENING','LEGGED','CLOSING')
 			ORDER BY COALESCE(closed_at, opened_at) DESC NULLS LAST LIMIT $1 OFFSET $2`
@@ -28,7 +28,7 @@ func (s *Store) ListPositions(ctx context.Context, status string, limit, offset 
 		defer rows.Close()
 		return scanPositions(rows)
 	}
-	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, closing_started_at, uncertainty_reason, entry_noise_bps, entry_harvest_floor_bps, notional_usd, decision_ref, auto_close_at
+	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, closing_started_at, uncertainty_reason, entry_noise_bps, entry_harvest_floor_bps, notional_usd, decision_ref, auto_close_at, strategy_key
 		FROM positions
 		WHERE ($1 = '' OR status = $1)
 		ORDER BY COALESCE(closed_at, opened_at) DESC NULLS LAST LIMIT $2 OFFSET $3`
@@ -50,7 +50,7 @@ func scanPositions(rows pgx.Rows) ([]Position, error) {
 			&p.ExpectedEntrySpreadBps, &p.ExpectedSwapBpsDaily, &p.ExpectedAnnualPct,
 			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note, &p.ClosingStartedAt, &p.UncertaintyReason,
 			&p.EntryNoiseBps, &p.EntryHarvestFloorBps, &p.NotionalUSD,
-			&p.DecisionRef, &p.AutoCloseAt); err != nil {
+			&p.DecisionRef, &p.AutoCloseAt, &p.StrategyKey); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

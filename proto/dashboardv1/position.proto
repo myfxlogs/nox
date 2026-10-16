@@ -64,6 +64,11 @@ message Position {
   optional bool break_even_suppressed = 41; // D-508 S8：回本抑制终值（实测=0 但 close_now_net<0 → 亮「账面回本·净估<0」非标绿）
   optional string decision_ref = 42;       // D-047：决策席批准引用（PROBE 仓；其它型缺省）
   optional google.protobuf.Timestamp auto_close_at = 43; // D-047：PROBE 到期自动平仓时刻（其它型缺省）
+  // D-577 仓位→template 归组（一策略一格抽屉）：strategy_key=fin_position_
+  // strategy_map(engine_type→key) 写径落列；NULL=map 无行→unassigned=true 如实
+  // 落「未归组」格（前端禁猜挂）。note 前缀解析不作权威。
+  optional string strategy_key = 45;
+  bool unassigned = 46;
 }
 
 message ExecuteOpportunityRequest {

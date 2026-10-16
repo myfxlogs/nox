@@ -207,8 +207,13 @@ type Position struct {
 	BreakEvenSuppressed   *bool                  `protobuf:"varint,41,opt,name=break_even_suppressed,json=breakEvenSuppressed,proto3,oneof" json:"break_even_suppressed,omitempty"`            // D-508 S8：回本抑制终值（实测=0 但 close_now_net<0 → 亮「账面回本·净估<0」非标绿）
 	DecisionRef           *string                `protobuf:"bytes,42,opt,name=decision_ref,json=decisionRef,proto3,oneof" json:"decision_ref,omitempty"`                                       // D-047：决策席批准引用（PROBE 仓；其它型缺省）
 	AutoCloseAt           *timestamppb.Timestamp `protobuf:"bytes,43,opt,name=auto_close_at,json=autoCloseAt,proto3,oneof" json:"auto_close_at,omitempty"`                                     // D-047：PROBE 到期自动平仓时刻（其它型缺省）
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// D-577 仓位→template 归组（一策略一格抽屉）：strategy_key=fin_position_
+	// strategy_map(engine_type→key) 写径落列；NULL=map 无行→unassigned=true 如实
+	// 落「未归组」格（前端禁猜挂）。note 前缀解析不作权威。
+	StrategyKey   *string `protobuf:"bytes,45,opt,name=strategy_key,json=strategyKey,proto3,oneof" json:"strategy_key,omitempty"`
+	Unassigned    bool    `protobuf:"varint,46,opt,name=unassigned,proto3" json:"unassigned,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Position) Reset() {
@@ -484,6 +489,20 @@ func (x *Position) GetAutoCloseAt() *timestamppb.Timestamp {
 		return x.AutoCloseAt
 	}
 	return nil
+}
+
+func (x *Position) GetStrategyKey() string {
+	if x != nil && x.StrategyKey != nil {
+		return *x.StrategyKey
+	}
+	return ""
+}
+
+func (x *Position) GetUnassigned() bool {
+	if x != nil {
+		return x.Unassigned
+	}
+	return false
 }
 
 type ExecuteOpportunityRequest struct {
@@ -2409,7 +2428,7 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\border_id\x18\f \x01(\tR\aorderId\x12\x16\n" +
 	"\x06status\x18\r \x01(\tR\x06status\x12*\n" +
 	"\x02ts\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\x02tsB\x0f\n" +
-	"\r_price_actual\"\x97\x11\n" +
+	"\r_price_actual\"\xf0\x11\n" +
 	"\bPosition\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12%\n" +
 	"\x0eopportunity_id\x18\x02 \x01(\tR\ropportunityId\x12\x12\n" +
@@ -2447,7 +2466,11 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x0fbreak_even_tone\x18( \x01(\tH\x16R\rbreakEvenTone\x88\x01\x01\x127\n" +
 	"\x15break_even_suppressed\x18) \x01(\bH\x17R\x13breakEvenSuppressed\x88\x01\x01\x12&\n" +
 	"\fdecision_ref\x18* \x01(\tH\x18R\vdecisionRef\x88\x01\x01\x12C\n" +
-	"\rauto_close_at\x18+ \x01(\v2\x1a.google.protobuf.TimestampH\x19R\vautoCloseAt\x88\x01\x01B\x0f\n" +
+	"\rauto_close_at\x18+ \x01(\v2\x1a.google.protobuf.TimestampH\x19R\vautoCloseAt\x88\x01\x01\x12&\n" +
+	"\fstrategy_key\x18- \x01(\tH\x1aR\vstrategyKey\x88\x01\x01\x12\x1e\n" +
+	"\n" +
+	"unassigned\x18. \x01(\bR\n" +
+	"unassignedB\x0f\n" +
 	"\r_realized_pnlB\x16\n" +
 	"\x14_expected_annual_pctB\x1a\n" +
 	"\x18_expected_swap_bps_dailyB\x13\n" +
@@ -2474,7 +2497,8 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x10_break_even_toneB\x18\n" +
 	"\x16_break_even_suppressedB\x0f\n" +
 	"\r_decision_refB\x10\n" +
-	"\x0e_auto_close_at\"\xcd\x01\n" +
+	"\x0e_auto_close_atB\x0f\n" +
+	"\r_strategy_key\"\xcd\x01\n" +
 	"\x19ExecuteOpportunityRequest\x12%\n" +
 	"\x0eopportunity_id\x18\x01 \x01(\tR\ropportunityId\x12\x1d\n" +
 	"\n" +
