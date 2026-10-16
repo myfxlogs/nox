@@ -105,6 +105,9 @@ func delegateApprove(ctx context.Context, st *pgstore.Store, g *pgstore.CarryGra
 		VenueBuy: keydomain.Join(g.VenueA, "spot"), VenueSell: keydomain.Join(g.VenueA, "perp"),
 		MaxLongQty: qty, MaxShortQty: qty,
 		MaxGrossUSD: p.QtyUSD, NotionalUSD: &p.QtyUSD,
+		// D-584 出处约束：委任批=毕业批准委托径——source=graduation+血缘=毕业行 id
+		// （裁定：delegate 非试单非手工——批准链在案如实标）。
+		Source: "graduation", ProvenanceID: &g.ID,
 		Note: fmt.Sprintf("D-513委任批 paper#%d grad#%d", p.ID, g.ID),
 	}
 	comboID, err := st.InsertXAssetAllowCombo(ctx, combo)

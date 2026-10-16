@@ -23,7 +23,14 @@ UPDATE xasset_allow_combos a SET source='graduation', provenance_id=g.id
     WHERE g.status='approved'
       AND g.paper_id = substring(a.note from 'paper#(\d+)')::bigint
       AND a.source IS NULL;
--- 无毕业实据存量行=manual_seed 如实（不造假 graduation 出处）
+-- S2桥 试单行回填（复审③注记）：note 'S2桥 假设#N' → fin_opp_hypothesis.id
+-- 回链 provenance_id（委员会试单批准链在案如实）。
+UPDATE xasset_allow_combos a SET source='s2_trial',
+    provenance_id=substring(a.note from 'S2桥 假设#(\d+)')::bigint
+    WHERE a.note ~ 'S2桥 假设#\d+' AND a.source IS NULL
+      AND EXISTS (SELECT 1 FROM fin_opp_hypothesis h
+        WHERE h.id = substring(a.note from 'S2桥 假设#(\d+)')::bigint);
+-- 无毕业/试单实据存量行=manual_seed 如实（不造假出处）
 UPDATE xasset_allow_combos SET source='manual_seed' WHERE source IS NULL;
 
 -- enable 闸：NULL 出处行禁 enabled（DB 钉死——回填之后挂闸存量行先合规）。
