@@ -159,7 +159,7 @@ func (s *Store) FactExistsAt(ctx context.Context, kind, venue, symbol string, ts
 	var exists bool
 	err := s.pool.QueryRow(ctx,
 		// symbol NULL=非品种域；传 '' 匹配 NULL 行（NOT DISTINCT FROM）。
-		`SELECT EXISTS(SELECT 1 FROM facts WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND symbol IS NOT DISTINCT FROM NULLIF($3,'') AND ts = $4)`,
+		`SELECT EXISTS(SELECT 1 FROM facts WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND `+factSymbolPred("$3", symbol)+` AND ts = $4)`,
 		kind, venue, symbol, ts).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("fact exists at: %w", err)
