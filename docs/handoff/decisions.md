@@ -452,3 +452,9 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **实证**（SG 10-16 亲证）：`fin_opp_template` 9 模板中 proposal 轨 4 条（dci_buy_low/dci_sell_high_covered_call/option_spread/term_basis）零纸面管线——`paper_spot_carry.structure` 实拍仅 4 值（short_cfd_long_perp/long_cfd_short_perp/perp_perp/perp_delivery）全属 hedged/carry 族；dci_buy_low 14 提案 4 结算净亏坐实「proposal 轨直批真金零沙箱」。提案执行唯一收口=`dciexec.Executor.GoProposal`（飞书 go N→执行腿→SetProposalStatus；earn 腿在其内、resume 续执回环同径）。
 - **裁定**：①`fin_opp_template` 加 `payoff_class`（CHECK 枚举 directional_hedged|yield_on_holdings|defined_risk_vol|naked_short_vol，9 行按 id 显式回填禁默认臆分）+`paper_gate`(required|exempt)+`paper_gate_ref`（exempt 时非空 CHECK 钉死）+`paper_structures text[]`（paper_spot_carry.structure 证据键）；②`GoProposal` 前置模板闸——模板无档拒、naked_short_vol 结构性拒（dci_buy_low 落此类）、required 且 `paper_structures` 无对应 paper 行→「待纸面」拒；③豁免种子：`cash_mgmt`/`earn_apr_lending` 引 D-286 承接位（无方向敞口）、`dci_sell_high_covered_call` 引本 D#（持仓资产上卖 call=yield_on_holdings 非裸卖尾险，托管 carry 主线不可断）；`option_spread`/`term_basis` 留 required+空证据键=如实待纸面（纸面管线另票建）。
 - **理由**：真金闸不能靠「记得跳过坏模板」——判据落表+单收口前置检=结构性不可绕；豁免显式 D# 可审计。
+
+## D-594 治理权移交：真金动用+方向锚归投委会（业主令 2026-10-16）
+- **业主令原文**：「批真金动用、定方向锚这两项都交给公司负责人去，不应该是投资人的事务」。
+- **裁定**：投资人域收窄为**出资/撤资 + 条件请求回执（凭据/权限/约束喂入）**两事；真金动用授权与方向锚变更移交投委会（决策席）全权裁定并背账——投资人接口只剩「条件请求响应」，提案批准从「业主飞书 go N」改为**决策席授权制**（执行 UX 改造另票）。§1「方向锚修改须业主明示」同步修订为「投委会 D# 裁定+业主持有撤资/否决退出权」。
+- **理由**：业主已明示投资人职责=出钱+满足条件请求；真金判断与方向裁定属基金管理人本分——业主亲自裁决每笔真金动用恰是 D-184 分工的反例。
+- **对价约束（决策席自律，因移交而更重）**：真金授权裁定必带反证锚（什么证据=本裁定错）+到期自验行；裁定→盈亏归因表机器滚动（连败自动告警升级）——两配套件随 D-594 同批立项。
