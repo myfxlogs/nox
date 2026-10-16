@@ -427,3 +427,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **实证**：①check-lines 软警告（>300）exit 恒 0——341/318/301/301 四个超标文件长期挂警告零收敛（engine_opp 刚压线 301 还在长），3347 commit 无人因软警告拆分过文件；②git push 瞬时失败（github SSH 断连实证 10-16）无重试无告警——commit 滞留本地=部署/复审断链。
 - **裁定**：①`check-lines.sh` 软警告改**棘轮基线闸**——`scripts/check-lines.baseline` 冻结 4 存量文件当前行数：基线内只许缩不许长（+1 行即硬阻断实证 exit=1）、基线外新超标硬阻断、拆完删基线行=只减不增；②新增 `scripts/git_push.sh` 包装器（3 次指数退避+终败醒目报错非零退出）；③pre-commit 加**未推送 commit 检出**——本地领先上游即每次 commit warn 直至推送成功（事件驱动可见性，推完自消）。
 - **理由**：软警告=承诺永远不响的警报（D-075 echo 同型），棘轮把「建议拆分」变成「物理上不能更糟」；推送失败属瞬时错误，重试覆盖 90% 场景，残余失败由 pre-commit warn 在下次 commit 显性化——告警原则=该响时响、推完自消、不拦但能看见。
+
+## D-589 Stage-1 就绪取证裁定——条件属实但执行链封死，放行须先接状态机豁免
+- **实证**（SG 三通道交叉 10-16）：stage1_ready 判据全绿独立重验属实——armed #17/18/19（TRX×15032313 三所，note='D-403毕业 paper#67010/11/12'）enabled，纸面行 5.5d 存活 accrued +$1.82~2.61，TRX funding 10.95% 年化读数秒级新鲜，7d 零事故仓，venue cap 10+canonical cap 2 在册，kill 关，NOX_LIVE_TRADE=true，execution_controls=PAPER enabled。**但执行链实拍**：autotrade_state=STRATEGY_EXHAUSTED（10-14 委任退役 XASSET_CARRY 触发 all-disabled 停机，人工恢复制）——armed 豁免组合过得了策略禁用双层（D-550/552），过不了全局停机层；且 `checkAllStrategiesDisabled` 只数 7 个策略类型键（全 retired→true），人工翻 RUNNING 下拍即打回=**翻不动的假开关**。就绪告警本身有覆盖缺口——stage1Checks 零执行链可达行，绿灯跨停闸发出=半个假绿。
+- **裁定**：①Stage-1 授权在案（业主批 #46-48）——放行语义=armed 组合在经济面合格窗自动开首仓，非新增批准；②放行路径=票「Stage-1 放行接线」：全灭判据计入 enabled 豁免组合（armed 属员在=引擎有活干≠全灭，同 D-550/552 豁免同构），就绪表补「执行链可开」行；部署后决策席人工翻 RUNNING 留痕；③**禁复活 XASSET_CARRY**——stats PnL −63.48 在 −50 硬线下，复活即被委任闸再杀=拍振，退役台账保完整；④当前 TRX funding +10.95% 对 long-perp 属付息侧——regime 闸如实拒到条件合格，放行≠立即开仓，首笔真仓=真验收锚。
+- **理由**：就绪判据管「市场/账面条件」，停机闸管「还有没有活可干」——豁免组合存在时后者口径本身错了，修判据不翻开关是因果序正确；委任退役的 −63.48 是旧管道实亏台账，宿主策略不复活与毕业组合放行两件事不冲突（D-550 原则沿用）。
