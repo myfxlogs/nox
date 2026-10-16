@@ -186,6 +186,12 @@ func (s *Service) positionToProto(ctx context.Context, p *pgstore.Position) *v1.
 	if p.ClosedAt != nil {
 		pb.ClosedAt = timestamppb.New(*p.ClosedAt)
 	}
+	// D-577：归组键透出——NULL→unassigned（前端禁猜挂，如实落「未归组」格）。
+	if p.StrategyKey != nil {
+		pb.StrategyKey = p.StrategyKey
+	} else {
+		pb.Unassigned = true
+	}
 	// D-340 S3：年化对照填充（OPEN 息差型 live / CLOSED realized 折算；缺省诚实空态）。
 	s.fillCarryComparison(ctx, pb, p)
 	// D-080 S3：承诺年化%（可选，收敛型为 nil）

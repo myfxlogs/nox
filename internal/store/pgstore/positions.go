@@ -66,10 +66,7 @@ func (s *Store) CreatePosition(ctx context.Context, p *Position) (int64, error) 
 	// D-577：归组键前向写——engine_type→strategy_key 判据表解析（DB 驱动禁
 	// 硬编码）；map 无行→NULL→读面 unassigned 如实落未归组格（读败不吞，
 	// 归组键缺不阻塞开仓——NULL 即未归组语义）。
-	var strategyKey *string
-	_ = s.pool.QueryRow(ctx,
-		`SELECT strategy_key FROM fin_position_strategy_map WHERE engine_type=$1`,
-		p.Type).Scan(&strategyKey)
+	strategyKey := resolvePositionStrategyKey(ctx, s.pool, p.OpportunityID, p.Type)
 	q := `INSERT INTO positions (opportunity_id, type, status, expected_net_bps, opened_at, notional_usd,
 			request_id, dedup_key, environment, decision_ref, auto_close_at, strategy_key)
 		VALUES ($1, $2, $3, $4, now(), $5, $6, $7, $8, $9, $10, $11) RETURNING id`
