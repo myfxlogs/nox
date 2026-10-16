@@ -59,6 +59,9 @@ func (e *Engine) stateMachineTick(ctx context.Context) {
 }
 
 // checkAllStrategiesDisabled 检查全部策略是否被禁用。
+// Stage-1 放行接线：豁免组合（enabled∧note∈豁免集∧simulated=false）存在时
+// 「全灭」语义不成立（有活干≠全灭）——策略类型层全灭但 armed 授权行可执行。
+// 豁免键单源=XAssetExemptNoteLikePatterns（S2桥试单+D-403毕业授权），禁第二份字面量。
 func (e *Engine) checkAllStrategiesDisabled(ctx context.Context) bool {
 	strategies := []string{"CROSS_VENUE", "MEANREVERT", "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING", "XASSET_CARRY"} // D-332 补型
 	for _, s := range strategies {
@@ -67,7 +70,13 @@ func (e *Engine) checkAllStrategiesDisabled(ctx context.Context) bool {
 			return false
 		}
 	}
-	return true
+	// 豁免组合兜底：armed 授权行在册=系统仍有可执行面（XASSET_CARRY 退役
+	// 不复活——EXHAUSTED 停机不再误封 armed 豁免行）。
+	exempt, err := e.store.HasExemptXAssetCombo(ctx, e.cfg.Environment)
+	if err != nil {
+		return true // 读败 fail-closed：豁免证不可得=维持全灭判（保守面）
+	}
+	return !exempt
 }
 
 // runStartupElimination 启动首跑淘汰判定（D-072 §4.3，回填后立即生效）。

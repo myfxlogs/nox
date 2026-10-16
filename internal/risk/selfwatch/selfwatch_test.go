@@ -431,3 +431,9 @@ func TestD059_AnalystROProbe(t *testing.T) {
 		t.Fatal("未接线不应告警")
 	}
 }
+
+// GetAutotradeState stage1「执行链可开」行桩（测试面默认 RUNNING——
+// EXHAUSTED 路径由专项锚另测）。
+func (f *fakeStore) GetAutotradeState(context.Context) (*pgstore.AutotradeState, error) {
+	return &pgstore.AutotradeState{State: "RUNNING"}, nil
+}
