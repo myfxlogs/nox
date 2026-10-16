@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"log"
+	"nox/internal/infra/dephealth"
 	"strings"
 	"time"
 
@@ -46,6 +47,7 @@ func startCarryUniverseScanner(ctx context.Context, st *pgstore.Store, tradeMode
 	safego.GoLoop("main:carry-universe", func() {
 		runOnce := func() {
 			res, err := scanner.Run(ctx, time.Now().UTC().Add(-24*time.Hour))
+			dephealth.Mark("scan:carry", err == nil, err) // S3′-c 真心跳：每拍记账
 			if err != nil {
 				log.Printf("[scan] carry universe: %v", err)
 				return

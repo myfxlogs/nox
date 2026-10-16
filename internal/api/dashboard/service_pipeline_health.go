@@ -37,11 +37,21 @@ var stageEvidence = map[string]string{
 // pipelineStages 十段工序健康行（序=闭环序：采集→研究→机会发布→闸评→装配→
 // 执行→持仓→平仓→账本→复盘）。每段一处探针，无探针段=idle 如实「未建簿」。
 func (s *Service) pipelineStages(ctx context.Context) []*stageRow {
-	return []*stageRow{
+	rows := []*stageRow{
 		s.stageCollect(ctx), s.stageResearch(ctx), s.stageOppPublish(ctx),
 		s.stageGateEval(ctx), s.stageAssembly(ctx), s.stageExecution(ctx),
 		s.stageHolding(ctx), s.stageExit(ctx), s.stageLedger(ctx), s.stageReview(ctx),
 	}
+	// S3′-c 超龄降级缝：beat 型段 last_event 超 15min 且 working → waiting
+	// 「心跳断流」（降级非翻 error——读模不停摆只是断流嫌疑如实透出）。
+	for _, r := range rows {
+		if r.EvidenceKind == "beat" && r.State == "working" && r.LastEventUnix > 0 &&
+			time.Since(time.Unix(r.LastEventUnix, 0)) > 15*time.Minute {
+			r.State = "waiting"
+			r.WaitReason = "心跳超龄（beat 断流嫌疑）"
+		}
+	}
+	return rows
 }
 
 // ① 采集：dephealth 注册表聚合——err 键存在=故障（首键原文透出），ok 键=工作，
@@ -132,7 +142,14 @@ func (s *Service) stageGateEval(ctx context.Context) *stageRow {
 	if wait != "" {
 		st = "waiting"
 	}
-	return stageNow("gate_eval", st, fmt.Sprintf("%d 组合在评", len(rows)), wait, "", time.Now())
+	// S3′-c：beat 键真时戳（engine:opp 每帧记账——假 time.Now() 摘除）
+	var last time.Time
+	for _, d := range dephealth.Snapshot() {
+		if d.Key == "engine:opp" && d.LastEventUnix > 0 {
+			last = time.Unix(d.LastEventUnix, 0)
+		}
+	}
+	return stageNow("gate_eval", st, fmt.Sprintf("%d 组合在评", len(rows)), wait, "", last)
 }
 
 // ⑤ 装配：executor dephealth 键 + 缺资条件缺口——故障键/缺口原文透出。

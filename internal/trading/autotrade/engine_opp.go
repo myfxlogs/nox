@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"nox/internal/data/keydomain"
+	"nox/internal/infra/dephealth"
 	"strings"
 	"time"
 
@@ -30,8 +31,11 @@ func (e *Engine) oppLoop(ctx context.Context) {
 			}
 			log.Printf("[autotrade] recv opp=%s type=%s netBps=%.2f buy=%s sell=%s", opp.ID, opp.Type, opp.NetBps, opp.VenueBuy, opp.VenueSell)
 			e.handleOpportunity(ctx, opp, acc)
-			if err := acc.Flush(ctx, e.store); err != nil {
-				log.Printf("[autotrade] opp rollup flush: %v", err)
+			// S3′-c 真心跳：每机会帧记账（闸评段 beat 键=此源）
+			ferr := acc.Flush(ctx, e.store)
+			dephealth.Mark("engine:opp", ferr == nil, ferr)
+			if ferr != nil {
+				log.Printf("[autotrade] opp rollup flush: %v", ferr)
 			}
 		}
 	}
