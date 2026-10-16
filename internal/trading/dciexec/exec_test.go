@@ -1376,3 +1376,9 @@ func TestM41_EvalGate(t *testing.T) {
 		t.Fatalf("viable 不应卡闸拒: %v", err)
 	}
 }
+
+// D-593 桩：纸面闸默认放行（测试路径不判模板——闸生效验在 pgstore 锚）。
+func (f *fakeStore) PaperFirstGate(_ context.Context, _ string, _ func() (bool, error)) (bool, string, error) {
+	return true, "", nil
+}
+func (f *fakeStore) HasPaperEvidence(context.Context, string) (bool, error) { return true, nil }
