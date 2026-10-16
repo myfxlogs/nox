@@ -189,3 +189,5 @@
 > 处置注记（决策席 10-16 03:15Z）：业主点破 110660304 无钱——`fin_venue_account_snapshot` 实拍 equity/balance/free_margin 全 0（mt_frame 21min 鲜活，broker_accounts: connected+is_real，XMReal 实盘户零注资）。**纠正上轮「WTI #1/#2 可批」说法**：basis 健在但 MT 腿池=0，dry_run 会被 venue_gaps 闸拒——5 条 pending 现全数不可真金发（#1-3 卡注资、#47/48 卡 basis 断供）。已落 `fin_condition_gap#41`（capital/110660304，≥$500 建议+拒绝径）按 D-184 条件缺口强制提案。MT 资金面实拍：15032313=$1000、3001157=$3247、110660304=$0。
 
 > 处置注记（决策席 10-16 03:25Z）：业主问「利润多厚值不值得」——**WTI #1-3 拆账裁定=不值**。快照 net_all_in +42~45 实为收敛价差浮盈：accrued 仅 +3.4~7.5、est_fee -38~39（3.8% 往返）、last_funding_ann≈0/-0.55%（息差引擎已熄）、last_basis 回至 -196bps≈入场位（$76 浮盈已回吐，现算真净值≈-32 美元）。**性质=timing luck 非可持续息差**；注资 110660304 后批准亦会被 dry_run 现算闸拒（conv≈0→net<0）。fin_condition_gap#41 已改写为「注资备用」独立裁定与本批提案脱钩。**机制教训在册**：毕业提案行应透出「息差 accrued vs 收敛 conv 构成比」——快照净值里 windfall 与 annuity 不分，会诱业主误读厚度（待领：`[角色:实施] 毕业行净额构成拆分透出——accrued/conv/fee 三列进 List RPC`）。
+
+> 机制观察（决策席 10-16 03:35Z）：WTI #67006-08 实证「收敛浮盈无兑现腿」病灶——carry 仓持仓期内 basis 收窄浮盈 +$76 路过未捕（退出规则仅 adverse/age/data_lost，无 conv-达标止盈），浮盈回吐净值归零。**候选改进（未立项）**：conv 兑现闸=浮盈≥fee+目标价差时平仓锁盈；立项前提=该类 basis 摆动可重复性的样本证据（现 N=1 不足立项）。与「毕业行净额拆分透出」票配套——无拆分时这类浮盈/回吐看不见。
