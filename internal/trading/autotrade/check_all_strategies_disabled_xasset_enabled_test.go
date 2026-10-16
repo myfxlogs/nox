@@ -75,3 +75,49 @@ func TestD332_StartupElimination_XAssetCarry(t *testing.T) {
 		t.Error("XASSET_CARRY 7 笔双负应被启动淘汰扫描禁用（红=现码清单缺型恒 false）")
 	}
 }
+
+// TestStage1_ExemptComboUnblocks Stage-1 放行接线锚（D-587）：
+// 7 型全禁 + armed 豁免组合（enabled∧note 豁免集∧simulated=false）在册
+// → checkAllStrategiesDisabled=false（全灭语义不成立）；豁免清零→true。
+func TestStage1_ExemptComboUnblocks(t *testing.T) {
+	s := testAccumStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx,
+		`TRUNCATE positions, position_legs, strategy_stats, fin_strategy, position_settlements, autotrade_state, xasset_allow_combos CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	for _, typ := range []string{"CROSS_VENUE", "MEANREVERT", "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING", "XASSET_CARRY"} {
+		if _, err := s.Pool().Exec(ctx,
+			`INSERT INTO strategy_stats (strategy, disabled) VALUES ($1, true)`, typ); err != nil {
+			t.Fatalf("seed disabled %s: %v", typ, err)
+		}
+	}
+	e := &Engine{store: s}
+	// ①豁免组合在册（毕业授权行）→ 全灭判 false
+	if _, err := s.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
+		(canonical_buy,canonical_sell,venue_buy,venue_type_buy,venue_sell,venue_type_sell,
+		 max_long_qty,max_short_qty,max_gross_usd,enabled,simulated,note)
+		VALUES ('TRX','TRXUSD','binance','perp','15032313','mt5',1,1,100,true,false,'D-403毕业 paper#1')`); err != nil {
+		t.Fatalf("seed exempt combo: %v", err)
+	}
+	if e.checkAllStrategiesDisabled(ctx) {
+		t.Fatal("armed 豁免组合在册应判非全灭")
+	}
+	// ②豁免组合清零 → 全灭判 true
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM xasset_allow_combos`); err != nil {
+		t.Fatal(err)
+	}
+	if !e.checkAllStrategiesDisabled(ctx) {
+		t.Fatal("豁免清零后应判全灭")
+	}
+	// ③非豁免 note 行不豁免（未授权行维持掐死）
+	if _, err := s.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
+		(canonical_buy,canonical_sell,venue_buy,venue_type_buy,venue_sell,venue_type_sell,
+		 max_long_qty,max_short_qty,max_gross_usd,enabled,simulated,note)
+		VALUES ('BTC','BTCUSD','binance','perp','15032313','mt5',1,1,100,true,false,'裸行无授权')`); err != nil {
+		t.Fatal(err)
+	}
+	if !e.checkAllStrategiesDisabled(ctx) {
+		t.Fatal("非豁免行不得解锁全灭判")
+	}
+}

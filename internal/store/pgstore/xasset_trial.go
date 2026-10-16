@@ -46,3 +46,23 @@ func (s *Store) IsTrialXAssetCombo(ctx context.Context, canonicalBuy, canonicalS
 	}
 	return true, nil
 }
+
+// HasExemptXAssetCombo 豁免组合在册判（Stage-1 放行接线——checkAllStrategiesDisabled
+// 豁免缝）：enabled∧note 前缀命中豁免集∧simulated=false 行存在 → true。
+// 豁免集单源复用 XAssetExemptNoteLikePatterns（禁第二份字面量）。
+func (s *Store) HasExemptXAssetCombo(ctx context.Context, environment string) (bool, error) {
+	var id int64
+	err := s.pool.QueryRow(ctx, `
+		SELECT id FROM xasset_allow_combos
+		WHERE enabled AND note LIKE ANY($1)
+		  AND (simulated IS NULL OR simulated = ($2='demo'))
+		LIMIT 1`,
+		XAssetExemptNoteLikePatterns(), environment).Scan(&id)
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("exempt combo query: %w", err)
+	}
+	return true, nil
+}

@@ -57,6 +57,9 @@ type Store interface {
 	InsertFacts(ctx context.Context, facts []fact.Fact) error                                                     // D-104 egress canary 拍结果落 facts
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
+	// GetAutotradeState stage1「执行链可开」行读径（D-587 放行接线——就绪
+	// 告警不跨停闸报假绿：STRATEGY_EXHAUSTED 时如实不就绪）。
+	GetAutotradeState(ctx context.Context) (*pgstore.AutotradeState, error)
 }
 
 // Notifier 推送面（*notify.FeishuClient 原生满足；nil=不推送）。D-168：SendText 返 message_id。

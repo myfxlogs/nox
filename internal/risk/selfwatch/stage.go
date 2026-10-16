@@ -198,6 +198,16 @@ func stage1Checks(ctx context.Context, d Deps, since time.Time, windowOK bool, e
 	} else {
 		rows = append(rows, StageCheck{Label: "白名单已定", OK: len(pairs) > 0, Data: fmt.Sprintf("实盘启用 %d 组", len(pairs))})
 	}
+	// Stage-1 放行接线：就绪告警不再跨停闸报假绿——「执行链可开」=
+	// autotrade_state=RUNNING 直读（STRATEGY_EXHAUSTED 全灭停机时如实不就绪）。
+	as, aerr := d.Store.GetAutotradeState(ctx)
+	if aerr != nil || as == nil {
+		rows = append(rows, StageCheck{Label: "执行链可开", OK: false,
+			Data: "autotrade_state 读败（停闸面未知不就绪）"})
+	} else {
+		rows = append(rows, StageCheck{Label: "执行链可开", OK: as.State == "RUNNING",
+			Data: "autotrade_state=" + as.State})
+	}
 	return rows
 }
 
