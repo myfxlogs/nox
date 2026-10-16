@@ -98,3 +98,86 @@ func TestD471_ComboAdmin(t *testing.T) {
 		t.Error("腿序颠倒不得命中")
 	}
 }
+
+// TestNullCap_PctRow NULL 帽双修锚（D-582）：
+// ①pct 档腿帽 NULL 合法——ListAll 裸扫 float64 不崩（COALESCE→0）；
+// ②Update pct 行（toggle/note）帽列仍 NULL 不撞 CHECK（防 COALESCE 读值回写）；
+// ③fixed 行正常读写帽。
+func TestNullCap_PctRow(t *testing.T) {
+	st, err := New(context.Background(), testutil.TestDSN(t, "NOX_TEST_PG_DSN"))
+	if err != nil {
+		t.Fatalf("pgstore.New: %v", err)
+	}
+	t.Cleanup(st.Close)
+	if err := st.Migrate(context.Background()); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	pool := st.pool
+	ctx := context.Background()
+	defer func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM xasset_allow_combos WHERE canonical_buy LIKE 'NCAP%'`)
+	}()
+
+	// pct 行直种（sizing_mode=pct+funding_pct>0，帽列 NULL=1038 CHECK 合法态）
+	var pid int64
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell,
+			sizing_mode, funding_pct, enabled, note)
+		VALUES ('NCAPBUY','NCAPSELL','a','perp','b','perp','pct',0.1,false,'pct行') RETURNING id`).Scan(&pid); err != nil {
+		t.Fatalf("seed pct row: %v", err)
+	}
+	// fixed 行对照
+	fid, err := st.InsertXAssetAllowCombo(ctx, &XAssetComboInsert{
+		CanonicalBuy: "NCAPFB", CanonicalSell: "NCAPFS", VenueBuy: "a:perp", VenueSell: "b:perp",
+		MaxLongQty: 1, MaxShortQty: 1, MaxGrossUSD: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ① ListAll 裸扫不崩（COALESCE→0）
+	rows, err := st.ListXAssetAllowCombosAll(ctx)
+	if err != nil {
+		t.Fatalf("ListAll 崩: %v", err)
+	}
+	var prow *XAssetComboAdminRow
+	for i := range rows {
+		if rows[i].ID == pid {
+			prow = &rows[i]
+		}
+	}
+	if prow == nil {
+		t.Fatal("pct 行未读出")
+	}
+	// unset 语义=0 值行（消费端走未设上限分支——读径已 COALESCE 先例）
+
+	// ② Update pct 行（把读出的 0 值当入参回写 toggle+note）——帽列必须仍 NULL
+	prow.Enabled = true
+	prow.Note = "pct行改"
+	ok, err := st.UpdateXAssetAllowCombo(ctx, prow)
+	if err != nil || !ok {
+		t.Fatalf("Update pct 行: ok=%v err=%v", ok, err)
+	}
+	var lq, sq, gr, nt *float64
+	if err := pool.QueryRow(ctx, `
+		SELECT max_long_qty, max_short_qty, max_gross_usd, notional_usd
+		FROM xasset_allow_combos WHERE id=$1`, pid).Scan(&lq, &sq, &gr, &nt); err != nil {
+		t.Fatal(err)
+	}
+	if lq != nil || sq != nil || gr != nil || nt != nil {
+		t.Fatalf("pct 行帽列被污染写回: %v %v %v %v", lq, sq, gr, nt)
+	}
+
+	// ③ fixed 行帽照常读写
+	ok, err = st.UpdateXAssetAllowCombo(ctx, &XAssetComboAdminRow{
+		ID: fid, MaxLongQty: 2, MaxShortQty: 2, MaxGrossUSD: 200, Enabled: true, Note: "fx"})
+	if err != nil || !ok {
+		t.Fatalf("Update fixed 行: ok=%v err=%v", ok, err)
+	}
+	var flq float64
+	if err := pool.QueryRow(ctx, `SELECT max_long_qty FROM xasset_allow_combos WHERE id=$1`, fid).Scan(&flq); err != nil {
+		t.Fatal(err)
+	}
+	if flq != 2 {
+		t.Fatalf("fixed 行帽写败: %v", flq)
+	}
+}
