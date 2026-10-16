@@ -389,3 +389,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：等价键=`fin_canonical_product_class`（canonical→产品类直挂：fx/crypto/index/energy/metal 闭集 CHECK，迁移 1037 种子 111 行=SG `DISTINCT canonical` 全集实拍，diff 校验零差）。`sameProductClass`：两腿类同放行（同品异组放行——病灶修复面）；类异拒（真异品如 BTCUSDT×WTI= crypto×energy，470 防护语义保留）；未归类 fail-closed 拒+日志留痕（`product class unclassified`）促归类 INSERT。470 型同 canonical 现货/期货价基变体差异不再由组名预判（组名已证伪），由下游基差闸（D-169 basisAvailable fail-closed+payback 门）与 S2 试单承接。
 - **选型理由**：写径归一化（ingest 按 canonical 写类进 product_group 列）被否——覆写 venue 原生分类违 §5「腿级数据只认 venue 返回值」且需回填历史行；组等价集表（(canonical,group)→类）仍以组名为半键，新组值出现即需人工裁定才放行=病灶换形复发。canonical 直挂=等价键纯锚产品类（票面明令），新 canonical 走表 INSERT 追加非改码（D-554 fin_position_strategy_map 同范式：无行→拒+自披露）。
 - **降级声明**：product_group 列与采集写径（mt_symbol_product→UpdateProductGroupByCanonical）保留为 venue 分类存档面（零读口）；ListProductGroups/ProductGroupByVenueCanonical 死读口已删，后续确无消费可另票退役列。
+
+## D-581 毕业批准拆层+全权 sizing 授权（业主令 2026-10-16 终裁）
+- **背景**：`ApproveCarryGraduation` 把「策略授权」与「当下池面可行性」打包——#47 占小池 500.7%、#48 gate:perp $0 批不过，而装配径（earn 赎回）与进场活池闸在下游根本够不着，授权时序死结。
+- **裁定**：①批准=授权——结构域硬闸全留（证据复核/旗标/canonical/平台），池域判据降级 decided_note 警示不拦写白名单；②进场=可行性——armed 后 equityDisciplineGate 等按活池面每拍跑，池短fall持续→自动落 fin_condition_gap；③**批准无 sizing 字段必填**——业主令「本金我出、分配公司定」：白名单行增 sizing_mode=system 档，额度=app_config 相对包络判据（pct×活池净值每拍折算，随净值自缩放）；funding_pct/usd/显式四字段降级可选覆盖。真金授权边界=策略级 yes/no（业主域）+额度上限=配置判据（决策席域，落表可调）。
+- **理由**：D-184 总纲权责归位——业主=出资+回条件请求，配置权=基金管理人；固定 USD 批准额随池面陈化（批时贴线的数明天就错），相对包络不陈化；pct 零池腿批准不算基数不拒批，池回正自动生效。
