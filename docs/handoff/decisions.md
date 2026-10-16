@@ -403,3 +403,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **实证**（SG 10-16 双通道实拍）：armed enabled 8 行中 #1-#4 挂 venue 277842155=broker_accounts 已拆户（永不成交死行）；#11 XAU 3001157→okx=Exness swap_free 户 swap 双 0+XAUUSDT funding≈0→**双引擎全熄只剩收敛赌注**；#16 PAXGUSDT×XAUUSD=代理腿基差赌注（KB verified 坑 `cfd-cross-venue-structural-spread` 同构——异定价源不收敛，PAXG 代币可脱锚）；#1 CLUSDT×WTI 死行+代理腿双叠加。TRX #17/#18/#19 同结构三 venue（同因子一注三票）但引擎真实（funding+10.95% 付息窗如实等待中）→留。
 - **裁定**：`UPDATE xasset_allow_combos SET enabled=false WHERE id IN (1,2,3,4,11,16)` 已落 SG 在产（行留授权痕迹不删）。armed 面净剩 TRX 三连等 funding 翻负。
 - **理由**：D-184 权责——策略级去留/组合构成=基金管理人域非业主域；白名单语义=「授权且可执行」——venue 已拆/引擎全熄/代理腿三类的占位行污染待入场判读且坑面行如放行=真金白银赌相关性（违 D-019 不赌第一性，代理腿≠同标的）。TRX 三连集中度风险自知但结构合法，funding 翻转后按 armed 径正常评估。
+
+## D-584 真金门槛审计（决策席裁——pipeline 结构性洞 + dci_buy_low 停板）
+- **实证**（SG 10-16 双通道）：①DCI 已结算 4 单——#7/8/10 USDT 结算利息 +$1.41/+$1.40/+$1.14=**+$3.94**；#11 PUT 83,000 被行权收 0.00433438 BTC（结算时指数 $81,300）≈**−$5.6~−7.3**——**3 赚不够 1 亏坐实，净 −$1.7~−3.4**；且残 0.00433 BTC 裸敞口（binance earn ownership_share 0.3334）违 D-019。②fin_proposal 显 dci_buy_low 全程 `proposal→executed` 同日批——**零纸面沙箱**（paper_spot_carry 只接 carry 模板）。③`xasset_allow_combos` **零出处列**——无 graduation_id/source，armed 白名单可直插绕过整个管道（#1-#4 demo 种子行实证 venue 已拆仍 enabled 直到 D-583 清场）。
+- **裁定**：①`dci_buy_low` 停板（fin_opp_template.enabled=f 已落 SG）——卖 put=裸下行负偏结构，收权利金≠套利，违 D-019 第一性；`dci_sell_high_covered_call` 留 enabled 但**只许跑托管库存径**（BTC 托管线在能力账本）。②行权残余 0.00433 BTC 裸敞口处置挂条件面票（earn 赎回+USDT 化 or 归入托管仓待裁定执行径）。③真金门槛补两洞立票：armed 白名单出处约束（enable 须有 graduation/paper 出处）、全模板纸面先行不变量（任何模板上真金径前须有沙箱证据或 D# 豁免）。
+- **理由**：armed 表是进真金前最后一闸，不校验血缘=管道形同虚设；卖 put 的期望结构=小赚大亏负偏（premium 封顶/下行不封顶），数学上就不是套利是卖保险；4 单样本 N<30 不引统计判据，停板依据=结构性违 D-019 非胜率。
