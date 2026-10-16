@@ -9,6 +9,8 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { NOX_NAME, NOX_REPORT_FOOTER } from "../nox";
 import { fmtUsd, fmtAge } from "../components/fmt";
 import GraduationPanel from "../components/graduation";
+import { Collapse } from "../components/collapse";
+import type { DCIOrderRow } from "../gen/dashboardv1/dci_panel_pb";
 
 export default function InvestorPage() {
   const [nav, setNav] = useState<number | null>(null);
@@ -27,6 +29,7 @@ export default function InvestorPage() {
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [showDust, setShowDust] = useState(false); // NAV 尘币折叠
+  const [orders, setOrders] = useState<DCIOrderRow[]>([]); // DCI/earn 收益轨透出（D-577）
 
   useEffect(() => {
     (async () => {
@@ -38,6 +41,7 @@ export default function InvestorPage() {
           client.listPositions({ status: "ACTIVE", limit: 100 }),
           client.listRequestBox({}),
         ]);
+        void 0
         setNav(fin.totalEquityUsd);
         setNavCcy(fin.equityByCcy ?? {});
         // D-535：业绩基线面（本金口径 USDT+USD——后端算定，前端零算）。
@@ -59,6 +63,8 @@ export default function InvestorPage() {
         setIncome(inc.items);
         setPositions(pos.positions);
         setBox(bx.items);
+        const od = await client.listDCIOrders({});
+        setOrders(od.orders);
         setErr("");
       } catch (e) {
         setErr(errText(e));
@@ -166,9 +172,31 @@ export default function InvestorPage() {
         </table>
       )}
 
-      <GraduationPanel />
+      {/* D-577 抽屉式分区：请求箱置顶不折；其余段入抽屉格默认折叠，
+          标题+徽标行外显（一策略=一抽屉的分组键在归组 RPC 侧，本段先按
+          区块分型抽屉——持仓/收益轨/毕业授权/收益流水） */}
+      <Collapse title="毕业授权" hint={""} defaultOpen>
+        <GraduationPanel />
+      </Collapse>
 
-      <h2>持仓摘要</h2>
+      <Collapse title="收益轨（DCI/earn 成交订单）" hint={orders.length + " 单"}>
+        <table>
+          <thead><tr><th>#</th><th>场所</th><th>模板</th><th>产品</th><th>数量</th><th>币种</th><th>状态</th><th>时点</th></tr></thead>
+          <tbody>
+            {orders.map((o) => (
+              <tr key={String(o.id)}>
+                <td>{String(o.id)}</td><td>{o.venue}</td><td>{o.templateId}</td>
+                <td>{o.productRef}</td><td>{o.qty}</td><td>{o.investCcy}</td>
+                <td>{o.status}</td><td>{new Date(Number(o.createdAt) * 1000).toLocaleString("zh-CN", { hour12: false })}</td>
+              </tr>
+            ))}
+            {orders.length === 0 && <tr><td colSpan={8} className="muted">零订单</td></tr>}
+          </tbody>
+        </table>
+      </Collapse>
+
+      <Collapse title="持仓摘要" hint={positions.length + " 仓"}>
+
       <table>
         <thead><tr><th>ID</th><th>类型</th><th>净盈亏</th><th>浮动</th><th>持有天数</th></tr></thead>
         <tbody>
@@ -182,8 +210,10 @@ export default function InvestorPage() {
           ))}
         </tbody>
       </table>
+      </Collapse>
 
-      <h2>日收益（近 30 条）</h2>
+      <Collapse title="日收益（近 30 条）" hint={income.length + " 条"}>
+
       <table>
         <thead><tr><th>日</th><th>收益</th><th>pnl</th><th>note</th></tr></thead>
         <tbody>
@@ -197,6 +227,7 @@ export default function InvestorPage() {
           ))}
         </tbody>
       </table>
+      </Collapse>
       <div className="footer-note">{NOX_REPORT_FOOTER}</div>
     </div>
   );
