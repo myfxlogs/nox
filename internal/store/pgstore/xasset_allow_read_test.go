@@ -17,11 +17,11 @@ func TestD338_LoadXAssetAllowCombos(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx, `
-		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note) VALUES
-		('A','B','va','perp','vb','mt5',1,1,100,true,true,'demo only'),
-		('A','C','va','perp','vb','mt5',1,1,100,true,false,'real only'),
-		('A','D','va','perp','vb','mt5',1,1,100,true,NULL,'both'),
-		('A','E','va','perp','vb','mt5',1,1,100,false,true,'disabled')`); err != nil {
+		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note, source) VALUES
+		('A','B','va','perp','vb','mt5',1,1,100,true,true,'demo only','manual_seed'),
+		('A','C','va','perp','vb','mt5',1,1,100,true,false,'real only','manual_seed'),
+		('A','D','va','perp','vb','mt5',1,1,100,true,NULL,'both','manual_seed'),
+		('A','E','va','perp','vb','mt5',1,1,100,false,true,'disabled','manual_seed')`); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	demo, err := s.LoadXAssetAllowCombos(ctx, "demo")

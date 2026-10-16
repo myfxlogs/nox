@@ -20,8 +20,8 @@ func TestD550_TrialComboExemptsDisabled(t *testing.T) {
 	}
 	if _, err := s.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
 		(canonical_buy, canonical_sell, venue_buy, venue_sell, venue_type_buy, venue_type_sell,
-		 max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note)
-		VALUES ('PAXGUSDT','XAUUSD','binance','15032313','perp','mt5',5,5,200,true,false,'S2桥 假设#505 试单')`); err != nil {
+		 max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note, source)
+		VALUES ('PAXGUSDT','XAUUSD','binance','15032313','perp','mt5',5,5,200,true,false,'S2桥 假设#505 试单','s2_trial')`); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -47,8 +47,8 @@ func TestD550_TrialComboExemptsDisabled(t *testing.T) {
 	}
 	if _, err := s.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
 		(canonical_buy, canonical_sell, venue_buy, venue_sell, venue_type_buy, venue_type_sell,
-		 max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note)
-		VALUES ('PAXGUSDT','XAUUSD','binance','15032313','perp','mt5',5,5,200,true,false,'手工行非试单')`); err != nil {
+		 max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note, source)
+		VALUES ('PAXGUSDT','XAUUSD','binance','15032313','perp','mt5',5,5,200,true,false,'手工行非试单','manual_seed')`); err != nil {
 		t.Fatal(err)
 	}
 	r2 := g.Submit(ctx, &TradeIntent{
@@ -85,8 +85,8 @@ func TestD552_GradComboExemptsDisabled(t *testing.T) {
 		}
 		if _, err := s.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
 			(canonical_buy, canonical_sell, venue_buy, venue_sell, venue_type_buy, venue_type_sell,
-			 max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note)
-			VALUES ('TRXUSDT','TRXUSD','binance','15032313','perp','mt5',5,5,200,true,false,$1)`, note); err != nil {
+			 max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note, source)
+			VALUES ('TRXUSDT','TRXUSD','binance','15032313','perp','mt5',5,5,200,true,false,$1,'s2_trial')`, note); err != nil {
 			t.Fatal(err)
 		}
 		g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5}, nil)

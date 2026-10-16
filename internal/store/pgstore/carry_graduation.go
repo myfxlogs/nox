@@ -199,6 +199,9 @@ type XAssetComboInsert struct {
 	// 活池折算（腿帽留 NULL）；system=零 sizing 输入默认档（app_config 包络）。
 	SizingMode string
 	FundingPct *float64
+	// D-584 出处约束：approve 写 graduation 源+毕业行 id；admin 手写=manual_seed。
+	Source       string
+	ProvenanceID *int64
 }
 
 // InsertXAssetAllowCombo approve 写组合白名单（simulated=false=真仓白名单；venue env 门
@@ -211,6 +214,9 @@ func (s *Store) InsertXAssetAllowCombo(ctx context.Context, r *XAssetComboInsert
 	if mode == "" {
 		mode = "fixed"
 	}
+	if r.Source == "" {
+		r.Source = "manual_seed" // enable 闸非空出处——写入径默认如实 manual
+	}
 	var lq, sq, gr, nt any
 	if mode == "fixed" {
 		lq, sq, gr = r.MaxLongQty, r.MaxShortQty, r.MaxGrossUSD
@@ -218,11 +224,12 @@ func (s *Store) InsertXAssetAllowCombo(ctx context.Context, r *XAssetComboInsert
 	}
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell,
-			max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated, note, sizing_mode, funding_pct)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11,$12,$13,$14)
+			max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated, note, sizing_mode, funding_pct,
+			source, provenance_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11,$12,$13,$14,$15,$16)
 		RETURNING id`,
 		r.CanonicalBuy, r.CanonicalSell, vb.Venue, vb.Type, vs.Venue, vs.Type,
-		lq, sq, gr, nt, r.Simulated, r.Note, mode, r.FundingPct).Scan(&id)
+		lq, sq, gr, nt, r.Simulated, r.Note, mode, r.FundingPct, r.Source, r.ProvenanceID).Scan(&id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {

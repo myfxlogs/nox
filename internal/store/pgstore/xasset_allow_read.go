@@ -125,3 +125,22 @@ func (s *Store) ListCfdCarryNetNow(ctx context.Context) (map[string]float64, err
 	}
 	return out, rows.Err()
 }
+
+// RetireCombosMissingVenue D-584 venue 退役守卫（armed 评估环每拍调）：
+// venue 从 broker_accounts（MT 系）+ exchange_configs（CEX 系）双簿同时
+// 消失的组合自动 enabled=false + note 留痕——零凭据组合不得挂白名单。
+// 返退役行数（留痕叙事用）。
+func (s *Store) RetireCombosMissingVenue(ctx context.Context) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE xasset_allow_combos SET enabled=false,
+		       note = note || ' [venue退役：' || now()::date || ']'
+		WHERE enabled
+		  AND (venue_buy NOT IN (SELECT venue FROM broker_accounts)
+		       AND venue_buy NOT IN (SELECT venue FROM exchange_configs)
+		    OR venue_sell NOT IN (SELECT venue FROM broker_accounts)
+		       AND venue_sell NOT IN (SELECT venue FROM exchange_configs))`)
+	if err != nil {
+		return 0, fmt.Errorf("retire combos missing venue: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}

@@ -43,8 +43,8 @@ func d478ComboLegs(t *testing.T, st *pgstore.Store, id int64, enabled bool, noti
 		notionalExpr = ftoaD(*notional)
 	}
 	if _, err := st.Pool().Exec(context.Background(), `INSERT INTO xasset_allow_combos
-		(id, canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated)
-		VALUES ($1,'`+canonBuy+`','`+canonSell+`','3001157','mt5','gate','perp',1,1,$2,`+notionalExpr+`,$3,false)
+		(id, canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated, source)
+		VALUES ($1,'`+canonBuy+`','`+canonSell+`','3001157','mt5','gate','perp',1,1,$2,`+notionalExpr+`,$3,false,'manual_seed')
 		ON CONFLICT (id) DO UPDATE SET enabled=EXCLUDED.enabled, notional_usd=EXCLUDED.notional_usd, max_gross_usd=EXCLUDED.max_gross_usd`,
 		id, maxGross, enabled); err != nil {
 		t.Fatal(err)
@@ -61,8 +61,8 @@ func TestD478_MTSellLegKind(t *testing.T) {
 	svc, st := d478Svc(t)
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
-		(id, canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated)
-		VALUES (904,'CL','WTI','gate','perp','277842155','mt5',1,1,1000,true,false)`); err != nil {
+		(id, canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, source)
+		VALUES (904,'CL','WTI','gate','perp','277842155','mt5',1,1,1000,true,false,'manual_seed')`); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _, _ = st.Pool().Exec(ctx, `DELETE FROM xasset_allow_combos WHERE id=904`) })
