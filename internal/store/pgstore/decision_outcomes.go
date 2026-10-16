@@ -216,7 +216,7 @@ func (s *Store) RefreshDecisionOutcomeAttribution(ctx context.Context) (int, err
 // settled_at 倒序返回——负连败=自最新往回连续 net<0 计数。
 func (s *Store) decisionAttrib(ctx context.Context, o DecisionOutcome) (net float64, pos, wins, losses, streak int, err error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT COALESCE(st.net_realized_usd, 0)
+		SELECT COALESCE(st.net_realized_usd, st.realized_usd, 0)
 		FROM positions p
 		JOIN position_settlements st ON st.position_id = p.id AND st.settled_at >= $1
 		WHERE p.opened_at >= $1 AND p.opened_at < $2

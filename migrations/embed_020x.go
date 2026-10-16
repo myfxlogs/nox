@@ -116,7 +116,7 @@ var PositionStrategyKeySQL string // 仓位归组键：positions.strategy_key+�
 //go:embed 1037_canonical_product_class.sql
 var CanonicalProductClassSQL string // D-558：SWAPARB 配对等价键表（canonical→产品类，111 行种子）
 
-//go:embed 1040_decision_outcomes.sql
+//go:embed 1041_decision_outcomes.sql
 var DecisionOutcomesSQL string // D-561：裁定归因簿（真金裁定→30d 结算归因+连败告警）
 
 //go:embed 1038_grad_sizing_mode.sql

@@ -79,6 +79,7 @@ var employeeRoster = []pgstore.Employee{
 	// 账本域
 	{Name: "main:income", Role: "收益采集", Dept: "账本", Assembly: "wire_income.go"},
 	{Name: "main:okx_income", Role: "OKX 收益采集", Dept: "账本", Assembly: "wire_income.go"},
+	{Name: "main:decision-outcomes", Role: "裁定归因簿（D-561）", Dept: "账本", Assembly: "wire_decision_outcomes.go", CadenceSec: 1800},
 	{Name: "main:recon", Role: "对账", Dept: "账本", Assembly: "wire_posmon.go"},
 	{Name: "main:dci-pool-reconcile", Role: "DCI 池对账", Dept: "账本", Assembly: "dci_go.go"},
 	{Name: "setup:swapReconciler", Role: "swap 对账", Dept: "账本", Assembly: "setup.go"},
