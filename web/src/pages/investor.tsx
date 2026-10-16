@@ -26,6 +26,7 @@ export default function InvestorPage() {
   const [box, setBox] = useState<RequestBoxItem[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState("");
+  const [showDust, setShowDust] = useState(false); // NAV 尘币折叠
 
   useEffect(() => {
     (async () => {
@@ -89,10 +90,38 @@ export default function InvestorPage() {
       {err && <div className="err">{err}</div>}
       <div className="cards">
         <div className="card"><div className="k">NAV 总权益</div><div className="v">{fmtUsd(nav)}</div>
-          {/* D-522④：结算币种分账行（USD/USDT 各一行，永不加总） */}
-          {Object.entries(navCcy).sort().map(([c, v]) => (
-            <div key={c} className="muted" style={{fontSize: "12px"}}>NAV {c} = {fmtUsd(v)} {c}</div>
-          ))}
+          {/* D-522④：结算币种分账行——USD/USDT 稳币显 $ 面值；杂币=原生量
+              桶（D-528 零换算）禁冒 $ 前缀（NFT「$51.7M」幻影病灶修），尘币折叠。 */}
+          {(() => {
+            const STABLE = new Set(["USD", "USDT", "USDC"]);
+            const entries = Object.entries(navCcy).filter(([, v]) => v !== 0);
+            const stable = entries.filter(([c]) => STABLE.has(c)).sort();
+            const other = entries.filter(([c]) => !STABLE.has(c)).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+            const shown = other.slice(0, 3);
+            const dust = other.slice(3);
+            const fmtRaw = (v: number) =>
+              v.toLocaleString("en-US", { maximumFractionDigits: 2 });
+            return (
+              <>
+                {stable.map(([c, v]) => (
+                  <div key={c} className="muted" style={{fontSize: "12px"}}>NAV {c} = {fmtUsd(v)} {c}</div>
+                ))}
+                {shown.map(([c, v]) => (
+                  <div key={c} className="muted" style={{fontSize: "12px"}}>NAV {c} = {fmtRaw(v)} {c}（原生量）</div>
+                ))}
+                {dust.length > 0 && (
+                  <div className="muted" style={{fontSize: "12px"}}>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setShowDust(!showDust); }}>
+                      其他 {dust.length} 币 {showDust ? "▾" : "▸"}
+                    </a>
+                    {showDust && dust.map(([c, v]) => (
+                      <div key={c}>NAV {c} = {fmtRaw(v)} {c}</div>
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
         <div className="card"><div className="k">锚点以来已实现</div><div className="v">{fmtUsd(realized)}</div></div>
         <div className="card"><div className="k">今日已实现</div><div className="v">{fmtUsd(today)}</div></div>
