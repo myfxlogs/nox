@@ -97,12 +97,12 @@ type binanceTransferRow struct {
 // binanceEarnHistRow simple-earn flexible subscription/redemption history 行
 // （D-524 申购反推升级为真台账：申购=spot→earn、赎回=earn→spot 划转事件）。
 type binanceEarnHistRow struct {
-	PurchaseID string `json:"purchaseId"`
-	RedeemID   string `json:"redeemId"`
-	Asset      string `json:"asset"`
-	Amount     string `json:"amount"`
-	Status     string `json:"status"`
-	Time       int64  `json:"time"`
+	PurchaseID json.Number `json:"purchaseId"` // Record 端点为数值（*History 旧名时为串）——Number 双兼容
+	RedeemID   json.Number `json:"redeemId"`
+	Asset      string      `json:"asset"`
+	Amount     string      `json:"amount"`
+	Status     string      `json:"status"`
+	Time       int64       `json:"time"`
 }
 
 // fetchTransfer 拉单配置内部划转（binance=asset/transfer 逐 type + earn 申购赎回史；
@@ -179,8 +179,8 @@ func (c *CexIOCollector) fetchBinanceTransfer(ctx context.Context, acc CexIOAcco
 		path, idKey string
 		from, to    string
 	}{
-		{"/sapi/v1/simple-earn/flexible/history/subscriptionHistory", "purchaseId", "spot", "earn"},
-		{"/sapi/v1/simple-earn/flexible/history/redemptionHistory", "redeemId", "earn", "spot"},
+		{"/sapi/v1/simple-earn/flexible/history/subscriptionRecord", "purchaseId", "spot", "earn"},
+		{"/sapi/v1/simple-earn/flexible/history/redemptionRecord", "redeemId", "earn", "spot"},
 	} {
 		extra := url.Values{}
 		extra.Set("size", "100")
@@ -201,11 +201,11 @@ func (c *CexIOCollector) fetchBinanceTransfer(ctx context.Context, acc CexIOAcco
 			if r.Status != "SUCCESS" {
 				continue
 			}
-			id := r.PurchaseID
+			id := r.PurchaseID.String()
 			if leg.idKey == "redeemId" {
-				id = r.RedeemID
+				id = r.RedeemID.String()
 			}
-			if id == "" {
+			if id == "" || id == "0" {
 				continue // 无幂等键不猜
 			}
 			amt, perr := f64z(r.Amount)
