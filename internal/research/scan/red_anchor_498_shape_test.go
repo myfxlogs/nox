@@ -70,11 +70,18 @@ func TestD410_RedAnchor_498Shape(t *testing.T) {
 	if graduationQualified(p, time.Now()) {
 		t.Fatal("红锚：netAllIn=-0.5 应拒毕业（旧判据 accrued>0 会放行）")
 	}
-	// 对照：同一行收敛补足 → netAllIn=+1.0 → 合格
+	// 对照①（D-582 新闸语义）：accrued<fee 时 conv 顶包净正仍拒——
+	// 息差引擎费下亏不得毕业（#147 XPD 病灶判据即本闸）。
 	conv2 := 2.0
-	p.ConvergenceUSD = &conv2
-	if !graduationQualified(p, time.Now()) {
-		t.Fatal("对照组：netAllIn=+1.0 应毕业")
+	p.ConvergenceUSD = &conv2 // netAllIn=+1.0 但 accrued=5<fee=6 → 拒
+	if graduationQualified(p, time.Now()) {
+		t.Fatal("顶包净正：accrued<fee 应拒（息差未盖费）")
+	}
+	// 对照②：accrued≥fee（息差独立盖费）+ conv 补足 → 合格。
+	p2 := gradPaper(2, "exited", 7, 1, 7.0, 0, "normalized") // accrued=+7≥fee=6
+	p2.EstRoundTripFeeUSD, p2.ConvergenceUSD = &fee, &conv2
+	if !graduationQualified(p2, time.Now()) {
+		t.Fatal("对照组：息差盖费+netAllIn=+3.0 应毕业")
 	}
 }
 
