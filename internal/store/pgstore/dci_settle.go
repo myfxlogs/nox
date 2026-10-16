@@ -110,3 +110,47 @@ func (s *Store) SumDCISettleWindow(ctx context.Context, venue, ccy string, from,
 	}
 	return outflow, inflow, nil
 }
+
+// SumDCIFilledWindow 申购腿（10-16 实证：fin_dci_order#32 EARN 申购 351.64
+// spot→earn 池间搬移炸双侧 critical——filled 申购在 io/划转/收益任一面都无行）。
+// 本拍窗内翻 filled 的订单（含其后 settled——resolved_at=成交时刻不随交割改写；
+// 个别径 resolved_at NULL 降回 created_at 不猜）：earnQty=opt_type='EARN' 申购额、
+// dciQty=双币申购额（本金由源池搬进 earn 桶，双侧对称解释坍缩池间搬移残差）。
+// 不回溯——只认窗内 COALESCE(resolved_at,created_at)。
+func (s *Store) SumDCIFilledWindow(ctx context.Context, venue, ccy string, from, to time.Time) (earnQty, dciQty float64, err error) {
+	err = s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(qty) FILTER (WHERE opt_type='EARN'), 0),
+		       COALESCE(SUM(qty) FILTER (WHERE opt_type<>'EARN'), 0)
+		FROM fin_dci_order
+		WHERE venue=$1 AND invest_ccy=$2 AND status IN ('filled','settled')
+		  AND COALESCE(resolved_at, created_at) > $3
+		  AND COALESCE(resolved_at, created_at) <= $4`,
+		venue, ccy, from, to).Scan(&earnQty, &dciQty)
+	if err != nil {
+		return 0, 0, fmt.Errorf("dci filled window: %w", err)
+	}
+	return earnQty, dciQty, nil
+}
+
+// SumDisposalProceedsWindow 处置回款腿（10-15 实证：接货 BTC 市价卖回 +351.59
+// USDT 落现货池，台账只有损益行——得额≠损益）。income_events
+// dci_exercise_disposal 行（amount_usd=净损益，tran_id=orderID*10+3 同帧 /+7
+// 清扫——后缀位=处置型标记）join 原单 qty=申购付额 → 得额=qty+pnl 台账真值
+// 合成。损益行 symbol=标的币不入 SumIncomeForPool 池币种域，无重复计。
+// 未锚定清扫行（anchor 缺不记 income）无本项——残差照响=自披露正确。
+func (s *Store) SumDisposalProceedsWindow(ctx context.Context, venue, venueType string, from, to time.Time) (float64, error) {
+	var v float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(o.qty + ie.amount_usd), 0)
+		FROM income_events ie
+		JOIN fin_dci_order o ON o.id = (ie.tran_id - MOD(ie.tran_id, 10)) / 10
+		WHERE ie.venue=$1 AND ie.venue_type=$2
+		  AND ie.income_type='dci_exercise_disposal'
+		  AND MOD(ie.tran_id, 10) IN (3, 7)
+		  AND ie.ts > $3 AND ie.ts <= $4`,
+		venue, venueType, from, to).Scan(&v)
+	if err != nil {
+		return 0, fmt.Errorf("disposal proceeds window: %w", err)
+	}
+	return v, nil
+}
