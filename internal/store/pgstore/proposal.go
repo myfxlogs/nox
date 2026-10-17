@@ -197,6 +197,9 @@ func (s *Store) ExpireProposalsOverAge(ctx context.Context, age time.Duration) (
 	rows, err := s.pool.Query(ctx, `
 		UPDATE fin_proposal SET status='expired', decided_at=now()
 		WHERE status='proposed' AND created_at < now() - $1::interval
+		  -- D-598③：autoexec 族不适用 SLA（自动径无 24h 窗——提案落库即派执行）
+		  AND NOT EXISTS (SELECT 1 FROM fin_opp_template t
+		                  WHERE t.id = fin_proposal.template_id AND t.autoexec)
 		RETURNING id`, fmt.Sprintf("%fh", age.Hours()))
 	if err != nil {
 		return nil, fmt.Errorf("expire proposals over age: %w", err)
