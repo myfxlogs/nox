@@ -32,7 +32,10 @@ const listPath = "docs/能力账/binance_endpoints.gen.txt"
 
 var outPB = "docs/能力账/bn-api-probe-" + time.Now().UTC().Format("2006-01-02") + ".pb"
 
-const paceMs = 100 // 节流间隔（USED-WEIGHT 跟踪另行降速——418 封禁防）
+// pace 权重预算核算（注记㊴+事故注记：venue 探测=与生产共享出口 IP 的限速面——
+// 100ms 定 pace 打穿 568 端点实证封 IP；改=USED-WEIGHT 实时跟踪+418 即停
+// 一封即 abort 禁续扫；pace 基准升 500ms 起步，weight>600 降速 2x）。
+const paceMs = 500 // 节流基准（USED-WEIGHT 实时跟踪动态降速——418 封禁即停）
 
 // host 按路径族分派（退回㉜②——fapi/dapi 错域修）。
 func hostFor(path string) string {
@@ -208,9 +211,21 @@ func main() {
 		}
 		tier, path := parts[1], parts[2]
 		r := probe(ctx, c, apiKey, apiSecret, tier, path)
+		// 418 即停——一封即 abort（生产 IP 速率预算=与系统共享非独占，禁续扫）
+		if r.Status == 418 {
+			fmt.Fprintf(os.Stderr, "418 封禁——abort（生产 IP 限速共享预算）\n")
+			break
+		}
 		r.Endpoint = path
 		results = append(results, r)
-		time.Sleep(paceMs * time.Millisecond) // 节流
+		// pace 权重预算（USED-WEIGHT 跟踪——>600 降速 2x/2 倍 pace）
+		w := 0
+		fmt.Sscanf(r.Weight, "%d", &w)
+		if w > 600 {
+			time.Sleep(2 * paceMs * time.Millisecond)
+		} else {
+			time.Sleep(paceMs * time.Millisecond)
+		}
 	}
 	// ③.pb 直出（D-615——ProbeRun 组装+Marshal 写入；raw 原文嵌 raw_bodies map）
 	run := &capabilitypb.ProbeRun{
