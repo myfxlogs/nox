@@ -12,6 +12,7 @@ description: mtapi MT5 行情/历史/会话面——Symbols/SymbolParams/GetQuot
 | GetQuote/GetQuoteMany | 点价 | err（XAUUSD not exist） | err（同） | ok | 订阅后才有活价（mt5 无 poll 报价语义——Subscribe+Events 正道） |
 | PriceHistory(Many/Today/Ex/HighLow/Month) | K 线史 | ok | ok | ok | TimeFrame 枚举 16408=M1 等（mtapi 数值枚举非 MT5 原生 ENUM）；Ex 族用 NumBars 非 To |
 | IsTradeSession/IsQuoteSession(Many) | 会话内外判定 | ok | err（XAUUSD key miss） | ok | Many 版字段=Symbols 复数；session 表落库换算见 mt_sessions.go（server→UTC） |
+| SymbolSessionsEx(Many) | 符号级会话表（报价/交易时段细目） | ok | err（方言同） | err | 同符号方言坑——Many 版入参=symbol 字符串数组 |
 | GetTickValueMany/TickValueWithSize | 点值 | ok | err（Symbol not found） | ok | tick value 计提公式输入（InPoints 语义） |
 | TickHistoryRequest/OnTickHistory/TickHistoryStop | tick 级历史（请求→帧流→停） | ok | ok | ok | 请求后 OnTickHistory 流回帧（短窗零帧=窗内无 tick 非故障）；历史补齐面合法拉取 |
 

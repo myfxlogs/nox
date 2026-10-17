@@ -8,6 +8,10 @@ description: mtapi MT5 订单/流面——OpenedOrders/OrderHistory 族/Subscrib
 | RPC | 功能 | ICR | EXR | XMR | 关键坑 |
 |---|---|---|---|---|---|
 | OpenedOrders(Tickets) | 在仓单实读 | ok | ok | ok | Order.Ticket/Profit/Swap——bpMon 持仓卡源 |
+| OpenedOrder | 单仓按 ticket 查 | err | err | err | 「OK null response」三户一致——空仓户/未知票=空体非故障，先 OpenedOrdersTickets 取票再查 |
+| MarketWatchMany | 行情观察列表批量 | Unimplemented | Unimplemented | Unimplemented | 网关未实现（MarketWatch 面走 SubscribeMarketWatch 同 Unimplemented——观察单功能缺面在案） |
+| SubscribeOrderProfit/TickValue/OrderUpdate | 分型订阅 | ok | ok | ok | 对应 On* 流帧开关——先订后流 |
+| SubscribeMarketWatch/OpenedOrdersTickets | 观察单/仓票订阅 | Unimplemented | Unimplemented | Unimplemented | 网关未实现（仓票面走 OpenedOrdersTickets 拉取替代） |
 | OrderHistory | 已平仓史（充提 Balance 行+平仓盈亏） | ok | ok | ok | **OrderType_Balance(=100)=充提行**——mtIORound 只收此型；CloseTimestampUTC 毫秒；XMR 实证入金可滞后 balance 帧 ~48h 才现此面（退回㉖） |
 | OrderHistoryPagination | 分页史 | Unimplemented | Unimplemented | Unimplemented | 网关未实现（三户一致；XMR 取证同理） |
 | PendingOrderHistory | 挂单史 | Unimplemented | Unimplemented | Unimplemented | 同上 |
