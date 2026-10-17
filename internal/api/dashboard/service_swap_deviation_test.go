@@ -182,3 +182,30 @@ func TestCheckSwapDeviationGate_EffectiveQtyNewRow(t *testing.T) {
 		t.Errorf("new-row CEX leg: notional 应按 EffectiveQty 计（偏差≈16%%），want pass got %q", msg)
 	}
 }
+
+// TestCheckSwapDeviationGate_StaleFacts_Rejected D-604 N1 锚：陈规格行→闸拒
+// （「隔夜息偏差检查：多头规格陈旧」拒串——退回㉔③锚补齐：陈行拒+新鲜行过双态）。
+func TestCheckSwapDeviationGate_StaleFacts_Rejected(t *testing.T) {
+	s := setupSwapDeviationServiceStore(t, "vA:mt5", "vB:mt5", 0.5, 0.0, 0.000001, 0.01, 100.0)
+	ctx := context.Background()
+	// 覆盖为陈旧事实（2h 超阈）
+	if _, err := s.Pool().Exec(ctx,
+		`UPDATE facts SET ts=now()-interval '2 hours' WHERE symbol='AUDJPY'`); err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{store: s, qbus: newSwapDeviationQuotes(), swapDeviationGatePct: 50.0}
+	svc.SetSwapFactMaxAge(30 * time.Minute) // 阈=30min——2h 陈行必拒
+	msg := svc.checkSwapDeviationGate(ctx, "AUDJPY", "vA:mt5", "vB:mt5")
+	if msg == "" || !strings.Contains(msg, "陈旧") {
+		t.Fatalf("陈规格行应拒判（含「陈旧」串）：got %q", msg)
+	}
+	// 新鲜行过（Ts 重置 now——闸不拒）
+	if _, err := s.Pool().Exec(ctx,
+		`UPDATE facts SET ts=now() WHERE symbol='AUDJPY'`); err != nil {
+		t.Fatal(err)
+	}
+	msg = svc.checkSwapDeviationGate(ctx, "AUDJPY", "vA:mt5", "vB:mt5")
+	if msg != "" && strings.Contains(msg, "陈旧") {
+		t.Fatalf("新鲜行被误拒：%q", msg)
+	}
+}

@@ -5,6 +5,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"nox/internal/data/fact"
 	"sort"
 	"time"
 
@@ -149,10 +150,15 @@ func (s *Service) appendOverviewWaiting(ctx context.Context, resp *v1.GetOvervie
 	const perKind = 5
 	if grads, err := filterGraduations(ctx, s, "pending", perKind); err == nil {
 		for _, g := range grads {
+			// D-604 顺手件：funding_ann 改读 facts 现值（快照列脱钩——展示面同型如实缺）。
+			var liveAnn *float64
+			if frows, ferr := s.store.LatestFacts(ctx, fact.KindFunding, g.Venue, g.Symbol); ferr == nil && len(frows) > 0 {
+				liveAnn = &frows[0].Value
+			}
 			resp.Waiting = append(resp.Waiting, &v1.OverviewWaitingRow{
 				Kind:      "graduation_pending",
 				Label:     fmt.Sprintf("毕业#%d %s %s", g.ID, g.Symbol, g.Venue),
-				Detail:    fmt.Sprintf("待批·资金费年化 %s", floatOrDash(g.LastFundingAnn, "%.2f%%")),
+				Detail:    fmt.Sprintf("待批·资金费年化 %s", floatOrDash(liveAnn, "%.2f%%")),
 				SinceUnix: g.CreatedAt.Unix(),
 			})
 		}
