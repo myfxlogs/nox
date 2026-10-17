@@ -1,6 +1,8 @@
-// collapse.tsx —— 折叠抽屉件（Zone 制，参照 /opt/arbcn Collapse 制式）：
-// 原生 <details> 零 JS 依赖；title=标题、hint=行尾徽标、defaultOpen 定初始态。
-import type { ReactNode } from "react";
+// collapse.tsx —— 折叠区件（业主令 10-17 弹窗化：点击标题=Modal 浮层非内联
+// 展开——overlay 零 reflow 不顶页面高度）。defaultOpen=true=常驻展开段
+// （语义「默认展开」保留旧形态——非点击展开面，不入弹窗域）。
+import { useState, type ReactNode } from "react";
+import { Modal } from "./Modal";
 
 export function Collapse({
   title,
@@ -13,13 +15,32 @@ export function Collapse({
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
+  if (defaultOpen) {
+    return (
+      <section className="drawer" style={{ margin: "6px 0" }}>
+        <div style={{ padding: "6px 8px" }}>
+          <b>{title}</b>
+          {hint && <span className="muted" style={{ float: "right" }}>{hint}</span>}
+        </div>
+        <div style={{ padding: "4px 8px 10px" }}>{children}</div>
+      </section>
+    );
+  }
   return (
-    <details open={defaultOpen} className="drawer" style={{ margin: "6px 0" }}>
-      <summary style={{ cursor: "pointer", padding: "6px 8px", listStyle: "none" }}>
+    <section className="drawer" style={{ margin: "6px 0" }}>
+      <div
+        onClick={() => setOpen(true)}
+        style={{ cursor: "pointer", padding: "6px 8px" }}
+      >
         <b>{title}</b>
-        {hint && <span className="muted" style={{ float: "right" }}>{hint}</span>}
-      </summary>
-      <div style={{ padding: "4px 8px 10px" }}>{children}</div>
-    </details>
+        <span className="muted" style={{ float: "right" }}>
+          {hint ? hint + " " : ""}▸
+        </span>
+      </div>
+      <Modal open={open} onClose={() => setOpen(false)} title={title}>
+        {children}
+      </Modal>
+    </section>
   );
 }

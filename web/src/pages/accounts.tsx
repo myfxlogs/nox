@@ -6,6 +6,7 @@ import type { BrokerAccount, ExchangeConfig } from "../gen/dashboardv1/broker_ad
 import type { AccountInfo } from "../gen/dashboardv1/account_pb";
 import type { AccountEvent } from "../gen/dashboardv1/stream_pb";
 import { fmtUsd, ts } from "../components/fmt";
+import { ConfirmDialog } from "../components/Modal";
 
 const PLATFORMS = ["MT4", "MT5"];
 
@@ -15,6 +16,7 @@ export default function AccountsPage() {
   const [accts, setAccts] = useState<Map<string, AccountInfo>>(new Map());
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
+  const [cfm, setCfm] = useState<{ text: string; run: () => void } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -95,7 +97,7 @@ export default function AccountsPage() {
                 </td>
                 <td>
                   <button onClick={() => act(() => client.setBrokerDisabled({ venue: b.venue, disabled: b.status !== "disabled" }), "已切换")}>{b.status === "disabled" ? "启用" : "停用"}</button>{" "}
-                  <button className="danger" onClick={() => { if (confirm(`删户 ${b.venue}？`)) act(() => client.removeBroker({ venue: b.venue, reason: "ui" }), "已删户"); }}>删</button>
+                  <button className="danger" onClick={() => setCfm({ text: `删户 ${b.venue}？`, run: () => act(() => client.removeBroker({ venue: b.venue, reason: "ui" }), "已删户") })}>删</button>
                 </td>
               </tr>
             );
@@ -122,11 +124,14 @@ export default function AccountsPage() {
               </td>
               <td>{String(x.simulated)}</td>
               <td>{ts(x.createdAt)}</td>
-              <td><button className="danger" onClick={() => { if (confirm(`删交易所 ${x.id}？`)) act(() => client.removeExchange({ id: x.id }), "已删"); }}>删</button></td>
+              <td><button className="danger" onClick={() => setCfm({ text: `删交易所 ${x.id}？`, run: () => act(() => client.removeExchange({ id: x.id }), "已删") })}>删</button></td>
             </tr>
           ))}
         </tbody>
       </table>
+      <ConfirmDialog open={cfm != null} text={cfm?.text}
+        onCancel={() => setCfm(null)}
+        onConfirm={() => { const r = cfm?.run; setCfm(null); r?.(); }} />
     </div>
   );
 }

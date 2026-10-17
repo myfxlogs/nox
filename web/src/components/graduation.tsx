@@ -9,6 +9,7 @@ import type {
 import { fmtUsd } from "./fmt";
 import { Chip, type ChipTone } from "./Chip";
 import { StatTile } from "./StatTile";
+import { Modal } from "./Modal";
 
 type Mode = "pct" | "usd" | "explicit";
 
@@ -53,6 +54,8 @@ export default function GraduationPanel() {
   const [rows, setRows] = useState<CarryGraduationRow[]>([]);
   const [err, setErr] = useState("");
   const [openId, setOpenId] = useState<number | null>(null);
+  const [rejId, setRejId] = useState<number | null>(null);
+  const [rejNote, setRejNote] = useState("");
   const [mode, setMode] = useState<Mode>("pct");
   const [pct, setPct] = useState("");
   const [usd, setUsd] = useState("");
@@ -116,9 +119,7 @@ export default function GraduationPanel() {
     }
   };
 
-  const reject = async (id: number) => {
-    const why = window.prompt("拒绝理由（将记入旗标 warn）:");
-    if (why == null) return;
+  const reject = async (id: number, why: string) => {
     setBusy(true);
     try {
       const r = await client.rejectCarryGraduation({
@@ -177,9 +178,9 @@ export default function GraduationPanel() {
                 </p>
                 <div>
                   <button onClick={() => { setOpenId(openId === Number(r.id) ? null : Number(r.id)); setPreview(null); }}>
-                    {openId === Number(r.id) ? "收起" : "批准"}
+                    批准
                   </button>{" "}
-                  <button disabled={busy} onClick={() => reject(Number(r.id))}>拒绝</button>
+                  <button disabled={busy} onClick={() => { setRejId(Number(r.id)); setRejNote(""); }}>拒绝</button>
                 </div>
               </li>
             );
@@ -188,8 +189,7 @@ export default function GraduationPanel() {
       )}
 
       {openId != null && (
-        <div className="card" style={{ marginTop: "8px" }}>
-          <div className="k">批准 #{openId} —— 三种额度方式任选其一，先试算再批准</div>
+        <Modal open={openId != null} onClose={() => setOpenId(null)} title={<>批准 #{openId} —— 三种额度方式任选其一，先试算再批准</>} width={760}>
           <div style={{ margin: "8px 0" }}>
             {([["pct", "按可用资金占比 %"], ["usd", "按固定金额 USD"], ["explicit", "显式四字段（数量/额度上限）"]] as [Mode, string][]).map(([m, label]) => (
               <label key={m} style={{ marginRight: "12px" }}>
@@ -242,8 +242,20 @@ export default function GraduationPanel() {
               )}
             </div>
           )}
-        </div>
+        </Modal>
       )}
+
+      <Modal open={rejId != null} onClose={() => setRejId(null)} title={<>拒绝 #{rejId}</>} width={440}>
+        <input placeholder="拒绝理由（将记入旗标 warn，可留空）" value={rejNote}
+          onChange={(e) => setRejNote(e.target.value)} style={{ width: "100%" }} />
+        <div style={{ marginTop: "10px", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={() => setRejId(null)}>取消</button>
+          <button className="danger" disabled={busy}
+            onClick={() => { const id = rejId; const w = rejNote; setRejId(null); if (id != null) reject(id, w); }}>
+            确认拒绝
+          </button>
+        </div>
+      </Modal>
 
       {watching.length > 0 && (
         <>
