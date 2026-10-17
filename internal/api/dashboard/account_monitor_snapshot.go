@@ -91,7 +91,10 @@ func (m *AccountMonitor) writeRestSnapshot(ctx context.Context, vk string, prev,
 	}
 	streamCovered := venue.HasPrivateStream(acct.Venue, acct.VenueType, acct.Simulated)
 	if streamCovered {
-		if !changed {
+		// D-604 P2③ 伤①：流覆盖键通用 poll 路径停写——WS 事件行（*_event）
+		// 已是权威落地，通用 poll 写 rest_poll/rest_calib=旧 timer 期冗余摄取
+		// （§3-4：rest 行降审计档案=只事件锚定 src——resync/消费点 calib 保留）。
+		if snapSrc == "" || !changed {
 			return false
 		}
 	} else if snapSame(prev, acct) {

@@ -46,6 +46,21 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	if err != nil {
 		return 0, 0, err
 	}
+	// D-604 P2③：无流池桶权益消费点实拉（扫描拍首单次拉→map 引用——
+	// 退回㉗伤③修法：禁逐桶 Refresh；拉败该桶跳过+warn 留痕，禁显示陈值）。
+	if liveEquityMapFn != nil {
+		lm := fetchLiveEquityMap(ctx)
+		for i, b := range led.Buckets {
+			if b.VenueType == "mt4" || b.VenueType == "mt5" {
+				continue
+			}
+			if eq, ok := lm.poolEquity(b.Venue, b.VenueType, b.EquityRaw, "[oppmatch]"); ok {
+				led.Buckets[i].EquityRaw = eq
+			} else {
+				led.Buckets[i].EquityRaw = 0 // 拉败=0 如实缺非陈值
+			}
+		}
+	}
 	view := ledgerView(led)
 	var in []Template
 	for _, t := range ts {

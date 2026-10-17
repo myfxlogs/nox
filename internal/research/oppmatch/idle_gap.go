@@ -28,12 +28,19 @@ func idleGapScan(ctx context.Context, st *pgstore.Store) {
 		log.Printf("[oppmatch] idle gap pools: %v", err)
 		return
 	}
+	lm := fetchLiveEquityMap(ctx) // D-604 P2③：拍首单次实拉（判定径禁快照现值）
 	cashLive := map[string]bool{} // D-523⑥：本轮仍持款的 cash_mgmt venue 集
 	for _, p := range pools {
-		if p.Ghost || p.VenueType == "mt4" || p.VenueType == "mt5" ||
-			!p.Idle || p.Equity < idleGapDustUSD {
+		if p.Ghost || p.VenueType == "mt4" || p.VenueType == "mt5" || !p.Idle {
 			continue
 		}
+		// D-604 P2③：无流池判定输入=消费点实拉值（拉败/映射缺=如实跳过非陈值）。
+		eq, ok := lm.poolEquity(p.Venue, p.VenueType, p.Equity, "[oppmatch]")
+		if !ok || eq < idleGapDustUSD {
+			continue
+		}
+		p.Equity = eq
+		p.Balance = eq
 		// 有执行径的闲池（earnExecVenues 面）→直接产 cash_mgmt 提案（pending 唯一锚
 		// 1024 含 venue——同模板异所各行其位幂等）。USDT 先行域（earn 提案定值域）。
 		if gate.EarnExecVenues[p.Venue] {
@@ -90,4 +97,48 @@ func idleGapScan(ctx context.Context, st *pgstore.Store) {
 	} else if n > 0 {
 		log.Printf("[oppmatch] cash_mgmt target gone → expired %d proposals", n)
 	}
+}
+
+// liveEquityMapFn D-604 P2③：无流池消费点批量实拉钩（cmd/core 装配——
+// 扫描拍首单次 Refresh→venue:type→equity 映射；nil=快照行旧径保旧行为）。
+// 拉取败=该池跳过+warn 留痕（§6#4 禁显示陈值禁静默）；禁 TTL 变相快照。
+var liveEquityMapFn func(ctx context.Context) (map[string]float64, error)
+
+func SetLiveEquityMapFn(fn func(ctx context.Context) (map[string]float64, error)) {
+	liveEquityMapFn = fn
+}
+
+// liveEquityMap 拍首单次实拉结果（退回㉗伤③修法：Refresh 在消费拍首提升一次
+// 得 map 传引用——禁逐池逐调全量 Refresh 风暴；map 拍作用域，禁跨拍缓存）。
+type liveEquityMap struct {
+	m   map[string]float64
+	err error
+}
+
+// fetchLiveEquityMap 拍首调用一次（未接线=零值 liveEquityMap，消费点照旧快照行）。
+func fetchLiveEquityMap(ctx context.Context) liveEquityMap {
+	if liveEquityMapFn == nil {
+		return liveEquityMap{}
+	}
+	m, err := liveEquityMapFn(ctx)
+	return liveEquityMap{m: m, err: err}
+}
+
+// poolEquity 无流池实拉值取用（venueType 空/mt4/mt5=非无流池——快照行合法直返）。
+// 拉败/映射缺=跳过该池（fail-closed 如实缺——§6#4 warn 留痕，tag=消费点日志前缀）。
+func (lm liveEquityMap) poolEquity(venue, venueType string, snap float64, tag string) (float64, bool) {
+	if venueType == "" || venueType == "mt4" || venueType == "mt5" || (lm.m == nil && lm.err == nil) {
+		return snap, true
+	}
+	if lm.err != nil {
+		log.Printf("%s live equity map: %v（如实跳过·warn 留痕）", tag, lm.err)
+		return 0, false
+	}
+	key := venue + ":" + venueType
+	eq, ok := lm.m[key]
+	if !ok {
+		log.Printf("%s live equity %s 映射缺（跳过·warn 留痕）", tag, key)
+		return 0, false
+	}
+	return eq, true
 }

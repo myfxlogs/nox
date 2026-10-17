@@ -78,10 +78,40 @@ func derive(navByCcy map[string]pgstore.NavBucket, reservePct, maxNotional float
 // ① fin_nav_daily 幂等落行；② live 策略预算重算落 fin_strategy_budget。
 // nav 计算失败=整班失败返回 err（日切 fail-closed，半落不留态——upsert 幂等可重跑）。
 // maxNotional=cfg.AutoTradeMaxNotional（与 gate 单笔上限同源）。
+// liveEquityFn D-604 P2③：无流池日切拍逐池实拉钩（cmd/core 装配——
+// mt 池走 MTAccountSummary 流外实拉，CEX 池消费点 RPC；nil=快照行旧径）。
+// 拉败=该池如实跳过+warn 留痕（§6#4 禁显示陈值禁静默）；禁 TTL 变相快照。
+var liveEquityMapFn func(ctx context.Context) (map[string]float64, error)
+
+func SetLiveEquityMapFn(fn func(ctx context.Context) (map[string]float64, error)) {
+	liveEquityMapFn = fn
+}
+
 func DailyCut(ctx context.Context, s Store, now, dayStart time.Time, maxNotional float64) error {
 	nav, err := s.ComputeNav(ctx, now)
 	if err != nil {
 		return fmt.Errorf("nav 计算败（日切拒落）: %w", err)
+	}
+	// D-604 P2③：无流池（CEX 非流）逐池实拉——权益残差覆写后 SumNav 重聚
+	// （日切拍=事件锚定批处理豁免；拉败=池剔除非陈值入账）。
+	if liveEquityMapFn != nil {
+		lm, lmerr := liveEquityMapFn(ctx) // 日切拍首单次实拉（退回㉗伤③：禁逐池 Refresh 风暴）
+		var adj []pgstore.ExplorerIdlePool
+		for _, p := range nav.Pools {
+			if p.Ghost || p.VenueType == "mt4" || p.VenueType == "mt5" || p.Currency == "" {
+				adj = append(adj, p)
+				continue
+			}
+			key := p.Venue + ":" + p.VenueType
+			if eq, ok := lm[key]; lmerr == nil && ok {
+				p.Equity = eq
+			} else {
+				log.Printf("[budget] live equity %s 缺/败：%v（池剔除·warn 留痕）", key, lmerr)
+				continue
+			}
+			adj = append(adj, p)
+		}
+		nav = pgstore.SumNav(adj, now) // 聚合规则唯一实现复用
 	}
 	// D-522①：fin_nav_daily 按结算币种分行（PK=day_start×ccy；venues 按币种分组）。
 	ccys := make([]string, 0, len(nav.ByCcy))

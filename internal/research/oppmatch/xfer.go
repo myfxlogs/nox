@@ -48,6 +48,7 @@ func xferScan(ctx context.Context, st *pgstore.Store) {
 		log.Printf("[xfer] idle 读败不比: %v", err)
 		return
 	}
+	lm := fetchLiveEquityMap(ctx) // D-604 P2③：拍首单次实拉（禁逐池 Refresh 风暴）
 	// venue→apr（每 ccy）；>24h 陈旧行剔——比价源不新鲜不比。
 	// 促销档剔除：APR 列=基础档真值，tier_apr 促销件只存不入判据（D-514 窗口径）。
 	best := map[string]map[string]float64{}
@@ -70,13 +71,17 @@ func xferScan(ctx context.Context, st *pgstore.Store) {
 	venueEq := map[string]float64{}
 	nonEarnEq := map[string]float64{}
 	for _, p := range pools {
-		if p.Ghost || p.Equity <= 0 {
+		if p.Ghost {
 			continue
 		}
-		totEq += p.Equity
-		venueEq[p.Venue] += p.Equity
+		eq, ok := lm.poolEquity(p.Venue, p.VenueType, p.Equity, "[xfer]") // 无流池实拉
+		if !ok || eq <= 0 {
+			continue // 拉败/映射缺=如实跳过（禁显示陈值）
+		}
+		totEq += eq
+		venueEq[p.Venue] += eq
 		if p.VenueType != "earn" {
-			nonEarnEq[p.Venue] += p.Equity
+			nonEarnEq[p.Venue] += eq
 		}
 		if !xferCCYs[p.Currency] {
 			continue
@@ -88,7 +93,7 @@ func xferScan(ctx context.Context, st *pgstore.Store) {
 			if movableEq[p.Currency] == nil {
 				movableEq[p.Currency] = map[string]float64{}
 			}
-			movableEq[p.Currency][p.Venue] += p.Equity
+			movableEq[p.Currency][p.Venue] += eq
 		}
 	}
 	for ccy, vs := range best {

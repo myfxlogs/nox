@@ -436,6 +436,8 @@ func TestXferScan_EarnPoolSource(t *testing.T) {
 	if !strings.Contains(txt, "xfrgate→xfrdst") || !strings.Contains(txt, "集中度") {
 		t.Fatalf("提案文案缺集中度透出: %q", txt)
 	}
+	// 尾部自清：dst 残行会抢后续测试 argmax（共享库）。
+	st.Pool().Exec(ctx, `DELETE FROM fin_cex_earn_apr WHERE venue IN ('xfrgate','xfrdst')`)
 }
 
 // TestRotateScan_Proposal D-612 所内面锚：earn 池权益≥阈+鲜 APR 行→

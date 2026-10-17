@@ -286,29 +286,26 @@ func TestD132_RestSnapshotWrites(t *testing.T) {
 	if count() != 2 {
 		t.Fatalf("展示态污染不得写快照, got %d", count())
 	}
-	// D-523①：WS 覆盖键不再豁免——REST 读值变（vs 展示态）落 src=rest_calib；
-	// 同值重 poll（changed=false）零写。
+	// D-523①→D-604 P2③：WS 覆盖键通用 poll 停写（WS 事件行已权威——rest 行
+	// 降审计档案只事件锚定 src；resync/显式 calib 事件径保留 D-523 行）。
 	q2 := &fakeAccountQuerier{key: "binance:perp", acct: &reconcile.AccountInfo{
 		VenueKey: "binance:perp", Venue: "binance", VenueType: "perp", AssetType: "cex",
 		Balance: 1, Equity: 2, FreeMargin: 1, Currency: "USDT",
 	}}
 	m.AddStatic(q2)
 	m.Refresh(ctx)
-	if count() != 3 {
-		t.Fatalf("WS 覆盖键值变应落 rest_calib 行, got %d", count())
+	// D-604 P2③ 伤①：WS 覆盖键通用 poll 停写（WS 事件行已权威——rest 行
+	// 降审计档案，只事件锚定 src；通用 poll 写 rest_calib=旧 timer 期冗余摄取）。
+	if count() != 2 {
+		t.Fatalf("WS 覆盖键通用 poll 不得写, got %d", count())
 	}
-	mu.Lock()
-	if got := rows[2].Src; got != "rest_calib" {
-		t.Fatalf("src=%s", got)
-	}
-	mu.Unlock()
 	m.Refresh(ctx) // 同值（vs 展示态/写行基准皆同）→零写
-	if count() != 3 {
+	if count() != 2 {
 		t.Fatalf("同值重读不得写, got %d", count())
 	}
 	// D-523②：resync kick→读值变→src=reconnect_resync；同值 resync 零写。
 	m.pollVenueKeys(ctx, "binance:perp", true)
-	if count() != 3 {
+	if count() != 2 {
 		t.Fatalf("同值 resync 不得写, got %d", count())
 	}
 	q2.acct = &reconcile.AccountInfo{
@@ -316,11 +313,11 @@ func TestD132_RestSnapshotWrites(t *testing.T) {
 		Balance: 1344, Equity: 1344, FreeMargin: 1344, Currency: "USDT",
 	}
 	m.pollVenueKeys(ctx, "binance:perp", true)
-	if count() != 4 {
+	if count() != 3 {
 		t.Fatalf("resync 值变应落行, got %d", count())
 	}
 	mu.Lock()
-	if got := rows[3].Src; got != "reconnect_resync" {
+	if got := rows[2].Src; got != "reconnect_resync" {
 		t.Fatalf("src=%s", got)
 	}
 	mu.Unlock()
