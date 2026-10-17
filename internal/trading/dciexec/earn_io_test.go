@@ -1,4 +1,4 @@
-// earn_io_test.go —— D-596 锚：申购/赎回写侧 io 记账（spot↔earn 双向断言+幂等重试不双记）。
+// earn_io_test.go —— earn-io-ledger 票锚：申购/赎回写侧 io 记账（spot↔earn 双向断言+幂等重试不双记）。
 package dciexec
 
 import (
