@@ -19,7 +19,10 @@ export function WatchPanel({ rows }: { rows: XAssetPendingEntryRow[] }) {
               <tr key={Number(r.comboId)}>
                 <td>{r.comboLabel}</td>
                 <td>{r.entryKind}</td>
-                <td className="muted">{r.waitReason || "—"}</td>
+                <td className="muted">
+                  {r.waitReason || "—"}
+                  {(r.pitHits ?? []).map((h) => <Chip key={h} tone="warn">{h}</Chip>)}
+                </td>
                 <td>{r.waitGapBps != null ? r.waitGapBps.toFixed(1) : "—"}</td>
                 <td>{r.ready
                   ? <Chip tone="good">就绪·等机会</Chip>

@@ -132,6 +132,7 @@ message XAssetPendingEntryRow {
   optional double min_margin_usd = 22;      // 最少需保证金=max(腿minStep名义)×(fracB+fracS)
   // D-014：econ 同源入场回本估（EntryCost+ExitEst)/CarryPerDay；缺账→NULL 诚实缺。
   optional double est_breakeven_days = 23;
+  repeated string pit_hits = 24;            // D-587④：armed 行坑签名命中透出（观察面同源——闸在 enable 写径）
 }
 message UpsertXAssetAllowComboRequest {
   int64 id = 1;                            // 0=insert；>0=update caps/enabled/note（行锁）
