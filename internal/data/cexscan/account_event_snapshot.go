@@ -140,9 +140,16 @@ func mtFrameRows(ctx context.Context, store orderEventStore, am AccountSnapshott
 		}
 	}
 	rows := buildVenueSnapshotRows(mine, realKeys)
+	out := rows[:0]
 	for i := range rows {
+		// D-609：零/负余额帧=断连 nil-acct 伪影（真实 MT 账户余额>0）——拒落防
+		// 零↔真交替污染差分与 latest 行读面（belt；差分读径 balance_raw>0 同拦=suspenders）。
+		if rows[i].BalanceRaw <= 0 {
+			continue
+		}
 		rows[i].Src = "mt_frame"
 		rows[i].FetchedAt = ts
+		out = append(out, rows[i])
 	}
-	return rows, nil
+	return out, nil
 }

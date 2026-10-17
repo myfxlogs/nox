@@ -137,6 +137,7 @@ func (s *Store) BalanceDeltaWindows(ctx context.Context, venue string, since tim
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, balance_raw, fetched_at FROM fin_venue_account_snapshot
 		WHERE venue=$1 AND fetched_at>=$2 AND balance_raw IS NOT NULL
+		  AND balance_raw > 0 -- D-609：断连/nil-acct 零余额帧=连接伪影非状态变（43 行实拍）——零↔真交替产 ±全额垃圾残差
 		  AND src IN ('mt_frame','mt_event')
 		ORDER BY fetched_at, id`, venue, since)
 	if err != nil {

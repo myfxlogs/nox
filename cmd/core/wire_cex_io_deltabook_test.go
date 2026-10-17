@@ -152,9 +152,14 @@ func TestDeltaBookRows_IDEMPOTENTViaDB(t *testing.T) {
 		       ('110660304','mt5',2000,'USD',now()-interval '2 hours','mt_event')`); err != nil {
 		t.Fatalf("seed snaps: %v", err)
 	}
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO fin_venue_account_snapshot (venue, venue_type, balance_raw, currency, fetched_at, src)
+		VALUES ('110660304','mt5',0,'USD',now()-interval '90 minutes','mt_frame')`); err != nil {
+		t.Fatal(err)
+	}
 	snaps, err := st.BalanceDeltaWindows(ctx, "110660304", time.Now().Add(-24*time.Hour))
 	if err != nil || len(snaps) != 2 {
-		t.Fatalf("snaps=%d err=%v（src 门内事件行须入）", len(snaps), err)
+		t.Fatalf("snaps=%d err=%v（src 门内事件行须入+D-609 零余额帧须滤）", len(snaps), err)
 	}
 	rows, _, err := deltaBookRows(snaps, snaps[len(snaps)-1].Ts.Add(240*time.Hour), 72*time.Hour,
 		func(from, to time.Time) (float64, error) { return 0, nil },
