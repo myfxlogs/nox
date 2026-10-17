@@ -556,3 +556,10 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：①主径=适配层 Deal 事件消费（提取→非交易 DealType 族过滤→`mt5:deal:{TicketNumber}` 幂等落 io）；②与既有 ticket 扫描查重联动（`Deal.OrderTicket`↔`mt5:ticket:{n}` 双向，先到留）；③差分器降对账兜底（三返规格不变，事件行入 ioSum 扣窗自洽）；④部署后首笔入金实证帧内容=验证锚（若 XM 实不推 Deal 帧=回落差分主径如实报）。
 - **反证锚**：若实证 OnOrderUpdate 对该券商 balance 操作不携 Deal/不推帧——主径回落差分（D-607①推翻，另 D#）。
 - **复盘点**：首笔真实入金 Deal 事件落 io 行+ticket/事件/差分三账本零双计对拍。
+
+## D-608（2026-10-17 决策席，业主令）skills 归属项目——正典路径顶层 skills/，应用目录降 symlink 桥
+
+- **业主令**：skills 是项目资产非某应用资产（devin cli 落 `.devin/skills/` 病灶）；每个席位/应用都须能读取使用。
+- **裁定**：①正典=仓库顶层 `skills/`（git 跟踪，deploy_sync 随推）；②`.devin/skills`/`.claude/skills`=指向 `../skills` 的 symlink 桥（应用原生发现不断，单一真相零副本）；③AGENTS boot④与工作流引用改指正典路径，并钉「禁再往应用私有目录落项目 skill」；④新增 skill 一律落 `skills/<名>/SKILL.md`。
+- **反证锚**：若某应用 symlink 机制不可用（Windows 克隆等）——该席位走 AGENTS.md 正典路径直读（文档引用已是主道，symlink 只是发现桥）。
+- **复盘点**：下一席位（含 devin cli 旧会话）按 AGENTS 引用路径调 skill 成功。
