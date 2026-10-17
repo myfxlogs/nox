@@ -61,6 +61,45 @@ func TestD565_GateLeverageRead(t *testing.T) {
 	}
 }
 
+// TestGateLeverage_SingleDualSide venue 语义锚（10-17 复审席亲测三通道）：
+// dual_side 与 position_mode 无关恒必填——single 模式裸发=400
+// INVALID_PARAM_VALUE（枚举只收 dual_long|dual_short，dual_both 永不发）；
+// 修后 query 断言 dual_side=dual_long、路径 200 读中。
+func TestGateLeverage_SingleDualSide(t *testing.T) {
+	var dualSides []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/futures/usdt/accounts":
+			_, _ = w.Write([]byte(`{"position_mode":"single","in_dual_mode":false}`))
+		case "/futures/usdt/get_leverage/TRX_USDT":
+			ds := r.URL.Query().Get("dual_side")
+			dualSides = append(dualSides, ds)
+			if ds == "dual_both" {
+				t.Error("dual_both 禁发（枚举白名单只收 dual_long|dual_short）")
+			}
+			if ds != "dual_long" && ds != "dual_short" {
+				w.WriteHeader(400)
+				_, _ = w.Write([]byte(`{"label":"INVALID_PARAM_VALUE"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"lever":"10"}`))
+		case "/futures/usdt/contracts/TRX_USDT": // warnLeverageMax 附属读
+			_, _ = w.Write([]byte(`{"leverage_max":"50"}`))
+		default:
+			t.Errorf("unexpected gate path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, false)
+	lev, err := e.ReadVenueLeverage(context.Background(), "TRX_USDT", false)
+	if err != nil || lev != 10 {
+		t.Fatalf("single 模式: lev=%v err=%v, want 10", lev, err)
+	}
+	if len(dualSides) == 0 || dualSides[0] != "dual_long" {
+		t.Fatalf("single 模式 dual_side=%v want [dual_long]（恒必填）", dualSides)
+	}
+}
+
 // TestD565_BinanceLeverageRead hedge 模式腿侧匹配 + 无匹配行 error。
 func TestD565_BinanceLeverageRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
