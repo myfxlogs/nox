@@ -3,4 +3,4 @@
 | 账 | 件 | 覆盖 |
 |---|---|---|
 | binance 端点清单 | `binance_endpoints.gen.txt` | 三源并集 773 端点（postman=597/md=341/conn=552/union=773/mutating=205） |
-| binance probe 证据 | `bn-api-probe-2026-10-17.pb` | 六返跑数=59 端点局部（418 即停在岗——封禁未解窗内 abort 不续扫；ok=19/400=23/404=17；全谱覆盖待 IP 解禁窗重跑——事故现场件非完成件如实钉） |
+| binance probe 证据 | `bn-api-probe-<date>-o<N>.pb` | 批化登记——每批≤150 端点+5min 冷却+ping 预检+418 即停；文件携 offset 不互盖（注记㊷：同日文件名覆盖伤销账）；批 0 局部件 `bn-api-probe-2026-10-17-o0.pb`（40 端点 abort 封禁记忆钉） |
