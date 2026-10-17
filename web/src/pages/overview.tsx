@@ -172,18 +172,23 @@ export default function OverviewPage() {
             const tone: FreshDotData["status"] =
               st.state === "working" ? "live" : st.state === "waiting" ? "stale" : "down";
             return (
-              <div key={st.key} className={`pipe-card ${tone}`} title={st.narrative + (st.waitReason ? "｜" + st.waitReason : "") + (st.error ? "｜" + st.error : "")}>
+              /* 实时卡防抖：钳 2 行后全文兜底=卡 title（hover）+点卡 Modal（与 opp-card 同径） */
+              <div key={st.key} className={`pipe-card ${tone}`} title={st.narrative + (st.waitReason ? "｜" + st.waitReason : "") + (st.error ? "｜" + st.error : "")}
+                onClick={() => setCardModal({
+                  title: "工序 · " + (STAGE_CN[st.key] ?? st.key),
+                  body: st.narrative + (st.waitReason ? "｜" + st.waitReason : "") + (st.error ? "｜" + st.error : ""),
+                })}>
                 <div className="pipe-head">
                   <FreshDot dot={{ status: tone, title: st.state }} />
                   <span className="nm">{STAGE_CN[st.key] ?? st.key}</span>
                   <span className={`pipe-ts pipe-ts-${tone}`} title={"liveness 证据分型：" + st.evidenceKind}>{st.evidenceKind === "beat" ? "⏱" : st.evidenceKind === "event" ? "⚡" : "—"}</span>
                   {st.lastEventUnix > 0 && (
-                    <span className="pipe-ts">
+                    <span className="pipe-ts pipe-clock">
                       {new Date(Number(st.lastEventUnix) * 1000).toISOString().slice(5, 16).replace("T", " ")}
                     </span>
                   )}
                 </div>
-                <div className="pipe-line">
+                <div className="pipe-line clamp-2">
                   {st.error ? <span className="crit">{st.error}</span> : (st.waitReason || st.narrative || "—")}
                 </div>
               </div>
@@ -206,7 +211,7 @@ export default function OverviewPage() {
                 <span className="opp-card-friction">{fmtUsd(o.amountUsd)}</span>
               </div>
               <span className="opp-card-who">{ORDER_KIND_CN[o.kind] ?? o.kind} · {o.label}</span>
-              <p className="opp-card-narrative muted">⏱ {untilCN(o)}</p>
+              <p className="opp-card-narrative muted clamp-2" title={untilCN(o)}>⏱ {untilCN(o)}</p>
             </li>
           ))}
         </ul>
@@ -260,7 +265,7 @@ export default function OverviewPage() {
                 </span>
               </div>
               <span className="opp-card-who">{w.label}</span>
-              <p className="opp-card-narrative muted">{w.detail}</p>
+              <p className="opp-card-narrative muted clamp-2" title={w.detail}>{w.detail}</p>
             </li>
           ))}
         </ul>

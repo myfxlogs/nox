@@ -23,7 +23,8 @@ export function StatTile({
   return (
     <div
       className={`stat${onClick ? " stat-click" : ""}${active ? " stat-active" : ""}`}
-      title={title}
+      /* 实时卡防抖：sub 单行钳制后全文兜底——调用方未传 title 时缺省=值｜sub */
+      title={title ?? (sub ? `${value}｜${sub}` : value)}
       onClick={onClick}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}

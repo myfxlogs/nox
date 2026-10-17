@@ -73,6 +73,8 @@
   border: 1px solid var(--ring);
   border-radius: 8px;
   padding: 10px 12px;
+  /* 实时卡防抖（业主批 10-17）④：卡内重排不外溢传播 */
+  contain: layout;
 }
 .stat-label {
   font-size: 12px;
@@ -86,6 +88,14 @@
 .stat-sub {
   font-size: 12px;
   color: var(--ink-3);
+  /* 实时卡防抖 ②③：sub 单行钳制+数字等宽——KPI 行行高钉死，位数/文案跳动不顶页
+     （全文 hover title 兜底，StatTile 缺省 title=值｜sub） */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+/* 实时卡防抖 ② 共享钳制类：等待面/在仓叙事 2 行截断（全文 hover title+点卡 Modal 兜底） */
+.clamp-2 {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 /* —— 盘面卡下钻（业主令：卡点击见组成）—— */
 .stat-click { cursor: pointer; transition: border-color .12s; }
