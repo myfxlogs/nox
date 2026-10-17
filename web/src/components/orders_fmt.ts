@@ -5,9 +5,10 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 
 // ORDER_STATUS_CN 订单状态中文映射（显示层非判据——数据域零动）。
 export const ORDER_STATUS_CN: Record<string, string> = {
-  filled: "已成交", settled: "已结清", failed: "失败", pending: "待成交",
-  live: "持有中", LIVE: "持有中", open: "持有中", active: "持有中",
-  OPEN: "持有中", CLOSED: "已平", proposed: "待定",
+  // 业主定名 10-17：这面的第一语义=持仓态非成交事件——filled=持仓中（至到期/结清）。
+  filled: "持仓中", settled: "已结清", failed: "未成交", pending: "下单中",
+  live: "持仓中", LIVE: "持仓中", open: "持仓中", active: "持仓中",
+  OPEN: "持仓中", CLOSED: "已平", proposed: "自动候执行",
 };
 
 // ORDER_KIND_CN 订单类别中文映射（kind 由后端 product_ref 派生）。
