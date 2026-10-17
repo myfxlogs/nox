@@ -1,0 +1,2471 @@
+{
+  "evidence": [
+    {
+      "service": "Connection",
+      "rpc": "Connect",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 336,
+      "keyfields": [
+        "token"
+      ]
+    },
+    {
+      "service": "MT5",
+      "rpc": "Account",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 172,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":{\"Login\":\"3001157\",\"Type\":\"real\",\"UserName\":\"***\",\"TradeFlags\":530915,\"Country\":\"***\",\"Email\":\"***\",\"Balance\":3247.41,\"Leverage\":2000}}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "AccountSummary",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 174,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":{\"Balance\":3247.41,\"Equity\":3247.41,\"FreeMargin\":3247.41,\"Leverage\":2000,\"Currency\":\"USD\",\"Method\":\"AccMethod_Hedging\",\"Type\":\"real\"}}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OpenedOrders",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 172,
+      "sample": "{}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OpenedOrdersTickets",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 168,
+      "sample": "{}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OrderHistory",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 283,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"ExpirationTime\":\"0001-01-01T00:00:00Z\",\"OpenTimestampUTC\":\"1791943286325\",\"CloseTimestampUTC\":\"1791943286325\",\"Ticket\":\"1293278891\",\"Profit\":-1000,"
+    },
+    {
+      "service": "MT5",
+      "rpc": "PendingOrderHistory",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "OrderHistoryPagination",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "Symbols",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 336,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"UpdateTime\":\"134366999789846115\",\"Currency\":\"EURGBPm\",\"Description\":\"Euro vs Great Britain Pound\",\"ProfitCurrency\":\"GBP\",\"MarginCurrency\":\"EUR\",\"Pr"
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolList",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 170,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[\"EURGBPm\",\"WFCm\",\"USOILm\",\"NZDDKKm\",\"BTCUSDTm\",\"EURCADm\",\"USDPYG\",\"USDCZKm\",\"PFEm\",\"MANAUSDm\",\"JP225m\",\"USDBYR\",\"ISRGm\",\"CHFJPYm\",\"USDUYU\",\"USDMXNm\","
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetQuote",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "Symbol XAUUSD not exist (:3001157)",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetQuoteMany",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
+      "ms": 172
+    },
+    {
+      "service": "MT5",
+      "rpc": "MarketWatchMany",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolParams",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "Symbol not found: XAUUSD (:3001157)",
+      "ms": 170
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolParamsMany",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "Symbol not found: XAUUSD (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "ServerTimezone",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 169,
+      "sample": "{}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsTradeSession",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsQuoteSession",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetTickValueMany",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "Symbol not found: XAUUSD (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "Mails",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "RequiredMargin",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "Symbol XAUUSD not exist (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistory",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "XAUUSD not exist (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryToday",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "Service",
+      "rpc": "Ping",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"OK\"}"
+    },
+    {
+      "service": "Service",
+      "rpc": "Health",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 167
+    },
+    {
+      "service": "Service",
+      "rpc": "Version",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"2026.10.14-10.44\"}"
+    },
+    {
+      "service": "Service",
+      "rpc": "Search",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 206,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"CompanyName\":\"Assexmarkets Global Limited\",\"Results\":[{\"Name\":\"AssexmarketsGlobal-Trade\",\"Access\":[\"144.76.41.119:443\",\"141.95.66.113:443\",\"141.95."
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "Subscribe",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 0,
+      "keyfields": [
+        "symbol"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "Events",
+      "venue": "3001157",
+      "status": "ok",
+      "errcode": "frames=0 first=",
+      "ms": 168,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsTradeSessionMany",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsQuoteSessionMany",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:3001157)",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolSessionsEx",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "XAUUSD not exist (:3001157)",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolSessionsExMany",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "System.String[] not exist (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "TickValueWithSize",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "OpenedOrder",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "OK null response",
+      "ms": 168
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeMany",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "UnSubscribeMany",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"OK\"}"
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnTickValue",
+      "venue": "3001157",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 12013,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnOrderProfit",
+      "venue": "3001157",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 12007,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnMarketWatch",
+      "venue": "3001157",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 169,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnOpenedOrdersTickets",
+      "venue": "3001157",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 168,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Connection",
+      "rpc": "Disconnect",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 0,
+      "keyfields": [
+        "session-closed"
+      ]
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryMonth",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryMonthMany",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
+      "ms": 170
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryTodayMany",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryMany",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 169,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Symbol\":\"XAUUSD\",\"Exception\":\"XAUUSD not exist\"}]}"
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryHighLow",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "XAUUSD not exist (:3001157)",
+      "ms": 169
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryEx",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "XAUUSD not exist (:3001157)",
+      "ms": 175
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryExMany",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 169,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Symbol\":\"XAUUSD\",\"Exception\":\"XAUUSD not exist\"}]}"
+    },
+    {
+      "service": "Service",
+      "rpc": "PingHost",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 174,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":5}"
+    },
+    {
+      "service": "Service",
+      "rpc": "PingHostMany",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "host.Length != port.Length (:0)",
+      "ms": 173
+    },
+    {
+      "service": "Service",
+      "rpc": "MemorySnapshot",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "Unknown result type: { }",
+      "ms": 10317
+    },
+    {
+      "service": "Service",
+      "rpc": "GetClients",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "Unable to cast object of type 'System.Collections.Generic.LinkedList`1[mt5rest.ClientStatus]' to type 'mt5rest.ClientStatus[]'.",
+      "ms": 169
+    },
+    {
+      "service": "Service",
+      "rpc": "GetDemo",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "side-effect（开 demo 户）——skipped 如实缺",
+      "ms": 0
+    },
+    {
+      "service": "Connection",
+      "rpc": "CheckConnect",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "CheckConnect 需独立连接 id（Connect token 径不可复用）——skipped 如实缺",
+      "ms": 0
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeOrderProfit",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "subscribed"
+      ]
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeTickValue",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 169,
+      "keyfields": [
+        "subscribed"
+      ]
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeOrderUpdate",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 171,
+      "keyfields": [
+        "subscribed"
+      ]
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeMarketWatch",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 169
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeOpenedOrdersTickets",
+      "venue": "3001157",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnOrderUpdate",
+      "venue": "3001157",
+      "status": "stream",
+      "errcode": "frames=0 (window 12s)",
+      "ms": 12010,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnQuote",
+      "venue": "3001157",
+      "status": "stream",
+      "errcode": "frames=0 (window 12s)",
+      "ms": 12010,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnMail",
+      "venue": "3001157",
+      "status": "stream",
+      "errcode": "frames=0 (window 12s)",
+      "ms": 169,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "TickHistory",
+      "rpc": "TickHistoryRequest",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 169,
+      "keyfields": [
+        "ticket"
+      ],
+      "sample": "true"
+    },
+    {
+      "service": "TickHistory",
+      "rpc": "OnTickHistory",
+      "venue": "3001157",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 12011,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "TickHistory",
+      "rpc": "TickHistoryStop",
+      "venue": "3001157",
+      "status": "ok",
+      "ms": 0,
+      "keyfields": [
+        "stopped"
+      ]
+    },
+    {
+      "service": "Connection",
+      "rpc": "ConnectEx",
+      "venue": "3001157",
+      "status": "skipped",
+      "errcode": "连接变体（probe 走 Connect 主径）——未单独实测",
+      "ms": 0
+    },
+    {
+      "service": "Connection",
+      "rpc": "ConnectProxy",
+      "venue": "3001157",
+      "status": "skipped",
+      "errcode": "代理连接变体——未单独实测",
+      "ms": 0
+    },
+    {
+      "service": "Connection",
+      "rpc": "Connect",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 470,
+      "keyfields": [
+        "token"
+      ]
+    },
+    {
+      "service": "MT5",
+      "rpc": "Account",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 170,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":{\"Login\":\"15032313\",\"Type\":\"real\",\"UserName\":\"***\",\"TradeFlags\":524643,\"Country\":\"***\",\"City\":\"***\",\"Phone\":\"***\",\"Email\":\"***\",\"Balance\":1000.22,\"Lev"
+    },
+    {
+      "service": "MT5",
+      "rpc": "AccountSummary",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 171,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":{\"Balance\":1000.22,\"Equity\":1000.22,\"FreeMargin\":1000.22,\"Leverage\":1000,\"Currency\":\"USD\",\"Method\":\"AccMethod_Hedging\",\"Type\":\"real\"}}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OpenedOrders",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 170,
+      "sample": "{}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OpenedOrdersTickets",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 168,
+      "sample": "{}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OrderHistory",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 270,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"CloseVolume\":\"1000000\",\"Volume\":\"1000000\",\"ExpirationTime\":\"0001-01-01T00:00:00Z\",\"OpenTimestampUTC\":\"1791248692238\",\"CloseTimestampUTC\":\"179124877"
+    },
+    {
+      "service": "MT5",
+      "rpc": "PendingOrderHistory",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 176
+    },
+    {
+      "service": "MT5",
+      "rpc": "OrderHistoryPagination",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 173
+    },
+    {
+      "service": "MT5",
+      "rpc": "Symbols",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 4575,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"UpdateTime\":\"134360078908494358\",\"Currency\":\"UNB.NAS-24\",\"ISIN\":\"US9054001071\",\"Description\":\"UNION BANKSHARES INC /VT 24/5 CFD\",\"ProfitCurrency\":\""
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolList",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 708,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[\"UNB.NAS-24\",\"SNA.NYSE\",\"BAK.NYSE-24\",\"MTSI.NAS-24\",\"IXG.US-24\",\"MLM.NYSE\",\"CLDX.NAS-24\",\"IWB.US\",\"SPYM.US-24\",\"ARVN.NAS-24\",\"NXPI.NAS\",\"YARW.NAS-24\""
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetQuote",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 169,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":{\"Symbol\":\"XAUUSD\",\"Bid\":4165.71,\"Ask\":4166.21,\"Time\":\"2026-10-16T23:56:59Z\"}}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetQuoteMany",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Symbol\":\"XAUUSD\",\"Bid\":4165.71,\"Ask\":4166.21,\"Time\":\"2026-10-16T23:56:59Z\"}]}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "MarketWatchMany",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolParams",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 177,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":{\"Symbol\":\"XAUUSD\",\"SymbolInfo\":{\"UpdateTime\":\"134366378423427384\",\"Currency\":\"XAUUSD\",\"Description\":\"Gold vs US Dollar\",\"ProfitCurrency\":\"USD\",\"Margi"
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolParamsMany",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 171,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Symbol\":\"XAUUSD\",\"SymbolInfo\":{\"UpdateTime\":\"134366378423427384\",\"Currency\":\"XAUUSD\",\"Description\":\"Gold vs US Dollar\",\"ProfitCurrency\":\"USD\",\"Marg"
+    },
+    {
+      "service": "MT5",
+      "rpc": "ServerTimezone",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 172,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":3}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsTradeSession",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 172,
+      "sample": "{}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsQuoteSession",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 168,
+      "sample": "{}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetTickValueMany",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "Unable to cast object of type 'System.Collections.Generic.Dictionary`2[System.String,System.Double]' to type 'System.Double[]'.",
+      "ms": 1169
+    },
+    {
+      "service": "MT5",
+      "rpc": "Mails",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "RequiredMargin",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":416.62100000000004}"
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistory",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 186,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Time\":\"2026-10-11T00:00:00Z\",\"OpenPrice\":4171.41,\"HighPrice\":4199.11,\"LowPrice\":4147.19,\"ClosePrice\":4165.76,\"TickVolume\":\"671645\",\"Volume\":\"671645"
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryToday",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "Unable to cast object of type 'System.Collections.Generic.List`1[mtapi.mt5.Bar]' to type 'mtapi.mt5.Bar[]'.",
+      "ms": 177
+    },
+    {
+      "service": "Service",
+      "rpc": "Ping",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"OK\"}"
+    },
+    {
+      "service": "Service",
+      "rpc": "Health",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "Service",
+      "rpc": "Version",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 176,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"2026.10.14-10.44\"}"
+    },
+    {
+      "service": "Service",
+      "rpc": "Search",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 213,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"CompanyName\":\"Assexmarkets Global Limited\",\"Results\":[{\"Name\":\"AssexmarketsGlobal-Trade\",\"Access\":[\"144.76.41.119:443\",\"141.95.66.113:443\",\"141.95."
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "Subscribe",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 0,
+      "keyfields": [
+        "symbol"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "Events",
+      "venue": "15032313",
+      "status": "ok",
+      "errcode": "frames=0 first=",
+      "ms": 168,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsTradeSessionMany",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 171,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Symbol\":\"XAUUSD\"}]}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsQuoteSessionMany",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 169,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Symbol\":\"XAUUSD\"}]}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolSessionsEx",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 170,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":{\"Quotes\":[{},{\"Sessions\":[{\"StartTime\":62,\"EndTime\":1439}]},{\"Sessions\":[{\"StartTime\":62,\"EndTime\":1439}]},{\"Sessions\":[{\"StartTime\":62,\"EndTime\":143"
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolSessionsExMany",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 170,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Symbol\":\"XAUUSD\",\"Quotes\":[{},{\"Sessions\":[{\"StartTime\":62,\"EndTime\":1439}]},{\"Sessions\":[{\"StartTime\":62,\"EndTime\":1439}]},{\"Sessions\":[{\"StartTim"
+    },
+    {
+      "service": "MT5",
+      "rpc": "TickValueWithSize",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"TickValue\":100,\"TickSize\":0.01,\"Symbol\":\"XAUUSD\"}]}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OpenedOrder",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "OK null response",
+      "ms": 169
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeMany",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 171,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"OK\"}"
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "UnSubscribeMany",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"OK\"}"
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnTickValue",
+      "venue": "15032313",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 12011,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnOrderProfit",
+      "venue": "15032313",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 12000,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnMarketWatch",
+      "venue": "15032313",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 171,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnOpenedOrdersTickets",
+      "venue": "15032313",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 169,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Connection",
+      "rpc": "Disconnect",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 0,
+      "keyfields": [
+        "session-closed"
+      ]
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryMonth",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "Unable to cast object of type 'System.Collections.Generic.List`1[mtapi.mt5.Bar]' to type 'mtapi.mt5.Bar[]'.",
+      "ms": 187
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryMonthMany",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "Parameter count mismatch.",
+      "ms": 187
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryTodayMany",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "Parameter count mismatch.",
+      "ms": 179
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryMany",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 186,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Symbol\":\"XAUUSD\"}]}"
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryHighLow",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "Attempted to divide by zero. (:15032313)",
+      "ms": 184
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryEx",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 1724,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Time\":\"2024-12-15T00:00:00Z\",\"OpenPrice\":2652.63,\"HighPrice\":2664.42,\"LowPrice\":2582.92,\"ClosePrice\":2623.03,\"TickVolume\":\"1574895\",\"Volume\":\"15748"
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryExMany",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 1814,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Symbol\":\"XAUUSD\",\"Bars\":[{\"Time\":\"2024-12-15T00:00:00Z\",\"OpenPrice\":2652.63,\"HighPrice\":2664.42,\"LowPrice\":2582.92,\"ClosePrice\":2623.03,\"TickVolume"
+    },
+    {
+      "service": "Service",
+      "rpc": "PingHost",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 174,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":5}"
+    },
+    {
+      "service": "Service",
+      "rpc": "PingHostMany",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "host.Length != port.Length (:0)",
+      "ms": 168
+    },
+    {
+      "service": "Service",
+      "rpc": "MemorySnapshot",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "Unknown result type: { }",
+      "ms": 11777
+    },
+    {
+      "service": "Service",
+      "rpc": "GetClients",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "Unable to cast object of type 'System.Collections.Generic.LinkedList`1[mt5rest.ClientStatus]' to type 'mt5rest.ClientStatus[]'.",
+      "ms": 169
+    },
+    {
+      "service": "Service",
+      "rpc": "GetDemo",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "side-effect（开 demo 户）——skipped 如实缺",
+      "ms": 0
+    },
+    {
+      "service": "Connection",
+      "rpc": "CheckConnect",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "CheckConnect 需独立连接 id（Connect token 径不可复用）——skipped 如实缺",
+      "ms": 0
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeOrderProfit",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 170,
+      "keyfields": [
+        "subscribed"
+      ]
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeTickValue",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "subscribed"
+      ]
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeOrderUpdate",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "subscribed"
+      ]
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeMarketWatch",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeOpenedOrdersTickets",
+      "venue": "15032313",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnOrderUpdate",
+      "venue": "15032313",
+      "status": "stream",
+      "errcode": "frames=0 (window 12s)",
+      "ms": 12010,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnQuote",
+      "venue": "15032313",
+      "status": "stream",
+      "errcode": "frames=0 (window 12s)",
+      "ms": 12001,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnMail",
+      "venue": "15032313",
+      "status": "stream",
+      "errcode": "frames=0 (window 12s)",
+      "ms": 172,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "TickHistory",
+      "rpc": "TickHistoryRequest",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 172,
+      "keyfields": [
+        "ticket"
+      ],
+      "sample": "true"
+    },
+    {
+      "service": "TickHistory",
+      "rpc": "OnTickHistory",
+      "venue": "15032313",
+      "status": "stream",
+      "errcode": "frames=1",
+      "ms": 4478,
+      "keyfields": [
+        "frames=1"
+      ]
+    },
+    {
+      "service": "TickHistory",
+      "rpc": "TickHistoryStop",
+      "venue": "15032313",
+      "status": "ok",
+      "ms": 0,
+      "keyfields": [
+        "stopped"
+      ]
+    },
+    {
+      "service": "Connection",
+      "rpc": "ConnectEx",
+      "venue": "15032313",
+      "status": "skipped",
+      "errcode": "连接变体（probe 走 Connect 主径）——未单独实测",
+      "ms": 0
+    },
+    {
+      "service": "Connection",
+      "rpc": "ConnectProxy",
+      "venue": "15032313",
+      "status": "skipped",
+      "errcode": "代理连接变体——未单独实测",
+      "ms": 0
+    },
+    {
+      "service": "Connection",
+      "rpc": "Connect",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 258,
+      "keyfields": [
+        "token"
+      ]
+    },
+    {
+      "service": "MT5",
+      "rpc": "Account",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":{\"Login\":\"110660304\",\"Type\":\"real\",\"UserName\":\"***\",\"TradeFlags\":526691,\"Country\":\"***\",\"City\":\"***\",\"Email\":\"***\",\"Balance\":1000,\"Leverage\":1000}}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "AccountSummary",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 170,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":{\"Balance\":1000,\"Equity\":1000,\"FreeMargin\":1000,\"Leverage\":1000,\"Currency\":\"USD\",\"Method\":\"AccMethod_Hedging\",\"Type\":\"real\"}}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OpenedOrders",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 171,
+      "sample": "{}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OpenedOrdersTickets",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 168,
+      "sample": "{}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OrderHistory",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 269,
+      "sample": "{}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "PendingOrderHistory",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "OrderHistoryPagination",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 177
+    },
+    {
+      "service": "MT5",
+      "rpc": "Symbols",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 268,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"UpdateTime\":\"134336876696710747\",\"Currency\":\"LRCUSD#\",\"Description\":\"Loopring vs US Dollar\",\"ProfitCurrency\":\"USD\",\"MarginCurrency\":\"USD\",\"Precisio"
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolList",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 169,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[\"LRCUSD#\",\"BCHUSD#\",\"GBPUSD\",\"GBPUSD#\",\"ETHGBP#\",\"US400Cash#\",\"EURCHF#\",\"EURUSD\",\"USDSGD\",\"TaiwanCash#\",\"JPY_FX_Index#\",\"CHZUSD#\",\"AUDCAD#\",\"Crypto_1"
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetQuote",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "Symbol XAUUSD not exist (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetQuoteMany",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "MarketWatchMany",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolParams",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "Symbol not found: XAUUSD (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolParamsMany",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "Symbol not found: XAUUSD (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "ServerTimezone",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":3}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsTradeSession",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:110660304)",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsQuoteSession",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetTickValueMany",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "Symbol not found: XAUUSD (:110660304)",
+      "ms": 182
+    },
+    {
+      "service": "MT5",
+      "rpc": "Mails",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "RequiredMargin",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "Symbol XAUUSD not exist (:110660304)",
+      "ms": 172
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistory",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "XAUUSD not exist (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryToday",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "Service",
+      "rpc": "Ping",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"OK\"}"
+    },
+    {
+      "service": "Service",
+      "rpc": "Health",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "Service",
+      "rpc": "Version",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 173,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"2026.10.14-10.44\"}"
+    },
+    {
+      "service": "Service",
+      "rpc": "Search",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 224,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"CompanyName\":\"Assexmarkets Global Limited\",\"Results\":[{\"Name\":\"AssexmarketsGlobal-Trade\",\"Access\":[\"144.76.41.119:443\",\"141.95.66.113:443\",\"141.95."
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "Subscribe",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 0,
+      "keyfields": [
+        "symbol"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "Events",
+      "venue": "110660304",
+      "status": "ok",
+      "errcode": "frames=0 first=",
+      "ms": 171,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsTradeSessionMany",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsQuoteSessionMany",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolSessionsEx",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "XAUUSD not exist (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolSessionsExMany",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "System.String[] not exist (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "TickValueWithSize",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
+      "ms": 172
+    },
+    {
+      "service": "MT5",
+      "rpc": "OpenedOrder",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "OK null response",
+      "ms": 168
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeMany",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "UnSubscribeMany",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 169,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"OK\"}"
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnTickValue",
+      "venue": "110660304",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 12013,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnOrderProfit",
+      "venue": "110660304",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 12011,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnMarketWatch",
+      "venue": "110660304",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 169,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnOpenedOrdersTickets",
+      "venue": "110660304",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 169,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Connection",
+      "rpc": "Disconnect",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 0,
+      "keyfields": [
+        "session-closed"
+      ]
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryMonth",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
+      "ms": 173
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryMonthMany",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryTodayMany",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
+      "ms": 170
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryMany",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 172,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Symbol\":\"XAUUSD\",\"Exception\":\"XAUUSD not exist\"}]}"
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryHighLow",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "XAUUSD not exist (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryEx",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "XAUUSD not exist (:110660304)",
+      "ms": 169
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryExMany",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Symbol\":\"XAUUSD\",\"Exception\":\"XAUUSD not exist\"}]}"
+    },
+    {
+      "service": "Service",
+      "rpc": "PingHost",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 174,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":5}"
+    },
+    {
+      "service": "Service",
+      "rpc": "PingHostMany",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "host.Length != port.Length (:0)",
+      "ms": 168
+    },
+    {
+      "service": "Service",
+      "rpc": "MemorySnapshot",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "Unknown result type: { }",
+      "ms": 21316
+    },
+    {
+      "service": "Service",
+      "rpc": "GetClients",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "Unable to cast object of type 'System.Collections.Generic.LinkedList`1[mt5rest.ClientStatus]' to type 'mt5rest.ClientStatus[]'.",
+      "ms": 169
+    },
+    {
+      "service": "Service",
+      "rpc": "GetDemo",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "side-effect（开 demo 户）——skipped 如实缺",
+      "ms": 0
+    },
+    {
+      "service": "Connection",
+      "rpc": "CheckConnect",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "CheckConnect 需独立连接 id（Connect token 径不可复用）——skipped 如实缺",
+      "ms": 0
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeOrderProfit",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "subscribed"
+      ]
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeTickValue",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 169,
+      "keyfields": [
+        "subscribed"
+      ]
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeOrderUpdate",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 173,
+      "keyfields": [
+        "subscribed"
+      ]
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeMarketWatch",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 171
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "SubscribeOpenedOrdersTickets",
+      "venue": "110660304",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnOrderUpdate",
+      "venue": "110660304",
+      "status": "stream",
+      "errcode": "frames=0 (window 12s)",
+      "ms": 12011,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnQuote",
+      "venue": "110660304",
+      "status": "stream",
+      "errcode": "frames=0 (window 12s)",
+      "ms": 12010,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "OnMail",
+      "venue": "110660304",
+      "status": "stream",
+      "errcode": "frames=0 (window 12s)",
+      "ms": 168,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "TickHistory",
+      "rpc": "TickHistoryRequest",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "ticket"
+      ],
+      "sample": "true"
+    },
+    {
+      "service": "TickHistory",
+      "rpc": "OnTickHistory",
+      "venue": "110660304",
+      "status": "stream",
+      "errcode": "frames=0",
+      "ms": 12011,
+      "keyfields": [
+        "frames=0"
+      ]
+    },
+    {
+      "service": "TickHistory",
+      "rpc": "TickHistoryStop",
+      "venue": "110660304",
+      "status": "ok",
+      "ms": 0,
+      "keyfields": [
+        "stopped"
+      ]
+    },
+    {
+      "service": "Connection",
+      "rpc": "ConnectEx",
+      "venue": "110660304",
+      "status": "skipped",
+      "errcode": "连接变体（probe 走 Connect 主径）——未单独实测",
+      "ms": 0
+    },
+    {
+      "service": "Connection",
+      "rpc": "ConnectProxy",
+      "venue": "110660304",
+      "status": "skipped",
+      "errcode": "代理连接变体——未单独实测",
+      "ms": 0
+    },
+    {
+      "service": "",
+      "rpc": "MT5.ChangePassword",
+      "venue": "",
+      "status": "mutating-skipped",
+      "errcode": "真户禁跑（禁线）——未实测如实缺",
+      "ms": 0
+    },
+    {
+      "service": "",
+      "rpc": "Trading.OrderSend",
+      "venue": "",
+      "status": "mutating-skipped",
+      "errcode": "真户禁跑（禁线）——未实测如实缺",
+      "ms": 0
+    },
+    {
+      "service": "",
+      "rpc": "Trading.OrderModify",
+      "venue": "",
+      "status": "mutating-skipped",
+      "errcode": "真户禁跑（禁线）——未实测如实缺",
+      "ms": 0
+    },
+    {
+      "service": "",
+      "rpc": "Trading.OrderClose",
+      "venue": "",
+      "status": "mutating-skipped",
+      "errcode": "真户禁跑（禁线）——未实测如实缺",
+      "ms": 0
+    },
+    {
+      "service": "Connection",
+      "rpc": "Connect(demo)",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 2045,
+      "keyfields": [
+        "endpoint=18.163.85.196:443"
+      ]
+    },
+    {
+      "service": "Trading",
+      "rpc": "OrderSend",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 754,
+      "keyfields": [
+        "ticket=2701577885",
+        "volume=0.01",
+        "BTCUSDm"
+      ],
+      "sample": "OrderSend 0.01 BUY BTCUSDm"
+    },
+    {
+      "service": "Trading",
+      "rpc": "OrderModify",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 807,
+      "keyfields": [
+        "ticket=2701577885"
+      ]
+    },
+    {
+      "service": "Trading",
+      "rpc": "OrderClose",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 696,
+      "keyfields": [
+        "ticket=2701577885"
+      ]
+    },
+    {
+      "service": "Trading",
+      "rpc": "OrderSend(pending)",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 802,
+      "keyfields": [
+        "ticket=2701577888",
+        "BuyLimit@1.0"
+      ]
+    },
+    {
+      "service": "Trading",
+      "rpc": "OrderModify(pending)",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 751
+    },
+    {
+      "service": "Trading",
+      "rpc": "OrderClose(pending delete)",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 465
+    },
+    {
+      "service": "MT5",
+      "rpc": "Account",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":{\"Login\":\"277842155\",\"Type\":\"demo\",\"UserName\":\"***\",\"TradeFlags\":99,\"Country\":\"***\",\"Email\":\"***\",\"Balance\":8891.95,\"Blocked\":-2294.39,\"Leverage\":2000"
+    },
+    {
+      "service": "MT5",
+      "rpc": "AccountSummary",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":{\"Balance\":8891.95,\"Equity\":8891.95,\"FreeMargin\":8891.95,\"Leverage\":2000,\"Currency\":\"USD\",\"Method\":\"AccMethod_Hedging\",\"Type\":\"demo\"}}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OpenedOrders",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 176,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Volume\":\"1000000\",\"ExpirationTime\":\"1970-01-01T00:00:00Z\",\"FillPolicy\":\"FillPolicy_FlashFill\",\"OpenTimestampUTC\":\"1791850208596\",\"Ticket\":\"26717948"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OpenedOrdersTickets",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 170,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[\"2671794858\",\"2671820000\",\"2671822281\",\"2671826556\",\"2671833628\",\"2671857447\",\"2671861537\",\"2671878864\",\"2671882298\",\"2671904067\",\"2671906426\",\"26719"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OrderHistory",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 670,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"CloseVolume\":\"1000000\",\"Volume\":\"1000000\",\"ExpirationTime\":\"0001-01-01T00:00:00Z\",\"OpenTimestampUTC\":\"1791855714361\",\"CloseTimestampUTC\":\"179185571"
+    },
+    {
+      "service": "MT5",
+      "rpc": "PendingOrderHistory",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "OrderHistoryPagination",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "Symbols",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 260,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"UpdateTime\":\"134365621045300233\",\"Currency\":\"BIIBm\",\"Description\":\"Biogen Inc.\",\"ProfitCurrency\":\"USD\",\"MarginCurrency\":\"USD\",\"Precision\":2,\"BkgndC"
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolList",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 182,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[\"BIIBm\",\"AMGNm\",\"USDGTQm\",\"USDJPYm\",\"GBPMXNm\",\"BABAm\",\"USDPKRm\",\"NZDCHFm\",\"XAGAUDm\",\"CVSm\",\"AMTm\",\"GBPNZDm\",\"USDJODm\",\"INTCm\",\"CADPLNm\",\"BNBUSDm\",\"EU"
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetQuote",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "Symbol XAUUSD not exist (:277842155)",
+      "ms": 171
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetQuoteMany",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:277842155)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "MarketWatchMany",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolParams",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "Symbol not found: XAUUSD (:277842155)",
+      "ms": 173
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolParamsMany",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "Symbol not found: XAUUSD (:277842155)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "ServerTimezone",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 168,
+      "sample": "{}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsTradeSession",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:277842155)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsQuoteSession",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:277842155)",
+      "ms": 170
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetTickValueMany",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "Symbol not found: XAUUSD (:277842155)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "Mails",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 174
+    },
+    {
+      "service": "MT5",
+      "rpc": "RequiredMargin",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "Symbol XAUUSD not exist (:277842155)",
+      "ms": 169
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistory",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "XAUUSD not exist (:277842155)",
+      "ms": 171
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryToday",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:277842155)",
+      "ms": 169
+    },
+    {
+      "service": "Service",
+      "rpc": "Ping",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"OK\"}"
+    },
+    {
+      "service": "Service",
+      "rpc": "Health",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 172
+    },
+    {
+      "service": "Service",
+      "rpc": "Version",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 188,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"2026.10.14-10.44\"}"
+    },
+    {
+      "service": "Service",
+      "rpc": "Search",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 223,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"CompanyName\":\"Assexmarkets Global Limited\",\"Results\":[{\"Name\":\"AssexmarketsGlobal-Trade\",\"Access\":[\"144.76.41.119:443\",\"141.95.66.113:443\",\"141.95."
+    },
+    {
+      "service": "Subscriptions",
+      "rpc": "Subscribe",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 0,
+      "keyfields": [
+        "symbol"
+      ]
+    },
+    {
+      "service": "Streams",
+      "rpc": "Events",
+      "venue": "277842155",
+      "status": "ok",
+      "errcode": "frames=0 first=",
+      "ms": 169,
+      "keyfields": [
+        "frames=0"
+      ]
+    }
+  ],
+  "gateway": "mt5grpc.mtapi.io:443",
+  "generated_at": "2026-10-17T09:31:31Z",
+  "reflection": {
+    "services": {
+      "grpc.reflection.v1alpha.ServerReflection": {
+        "methods": [
+          "ServerReflectionInfo"
+        ]
+      },
+      "mt5grpc.Connection": {
+        "methods": [
+          "Connect",
+          "ConnectEx",
+          "ConnectProxy",
+          "CheckConnect",
+          "Disconnect"
+        ]
+      },
+      "mt5grpc.MT5": {
+        "methods": [
+          "Account",
+          "AccountSummary",
+          "OpenedOrders",
+          "OpenedOrder",
+          "OpenedOrdersTickets",
+          "OrderHistory",
+          "PendingOrderHistory",
+          "OrderHistoryPagination",
+          "Symbols",
+          "SymbolList",
+          "GetQuote",
+          "GetQuoteMany",
+          "MarketWatchMany",
+          "SymbolParams",
+          "SymbolParamsMany",
+          "SymbolSessionsEx",
+          "SymbolSessionsExMany",
+          "ServerTimezone",
+          "IsTradeSession",
+          "IsTradeSessionMany",
+          "IsQuoteSession",
+          "IsQuoteSessionMany",
+          "GetTickValueMany",
+          "TickValueWithSize",
+          "ChangePassword",
+          "Mails",
+          "RequiredMargin"
+        ]
+      },
+      "mt5grpc.QuoteHistory": {
+        "methods": [
+          "PriceHistoryMonth",
+          "PriceHistoryMonthMany",
+          "PriceHistoryToday",
+          "PriceHistoryTodayMany",
+          "PriceHistory",
+          "PriceHistoryMany",
+          "PriceHistoryHighLow",
+          "PriceHistoryEx",
+          "PriceHistoryExMany"
+        ]
+      },
+      "mt5grpc.Service": {
+        "methods": [
+          "Ping",
+          "Health",
+          "PingHost",
+          "PingHostMany",
+          "MemorySnapshot",
+          "Search",
+          "GetClients",
+          "GetDemo",
+          "Version"
+        ]
+      },
+      "mt5grpc.Streams": {
+        "methods": [
+          "Events",
+          "OnOrderUpdate",
+          "OnQuote",
+          "OnTickValue",
+          "OnOrderProfit",
+          "OnMarketWatch",
+          "OnTickHistory",
+          "OnMail",
+          "OnOpenedOrdersTickets"
+        ]
+      },
+      "mt5grpc.Subscriptions": {
+        "methods": [
+          "Subscribe",
+          "SubscribeMany",
+          "UnSubscribe",
+          "UnSubscribeMany",
+          "SubscribeOrderProfit",
+          "SubscribeTickValue",
+          "SubscribeOrderUpdate",
+          "SubscribeMarketWatch",
+          "SubscribeOpenedOrdersTickets"
+        ]
+      },
+      "mt5grpc.TickHistory": {
+        "methods": [
+          "TickHistoryRequest",
+          "TickHistoryStop",
+          "OnTickHistory"
+        ]
+      },
+      "mt5grpc.Trading": {
+        "methods": [
+          "OrderSend",
+          "OrderModify",
+          "OrderClose"
+        ]
+      }
+    },
+    "enums": {},
+    "messages": {
+      "AccountRequest": null,
+      "AccountSummaryRequest": null,
+      "ChangePasswordRequest": null,
+      "CheckConnectRequest": null,
+      "ConnectExRequest": null,
+      "ConnectProxyRequest": null,
+      "ConnectRequest": null,
+      "DisconnectRequest": null,
+      "EventsRequest": null,
+      "GetClientsRequest": null,
+      "GetDemoRequest": null,
+      "GetQuoteManyRequest": null,
+      "GetQuoteRequest": null,
+      "GetTickValueManyRequest": null,
+      "HealthRequest": null,
+      "IsQuoteSessionManyRequest": null,
+      "IsQuoteSessionRequest": null,
+      "IsTradeSessionManyRequest": null,
+      "IsTradeSessionRequest": null,
+      "MailsRequest": null,
+      "MarketWatchManyRequest": null,
+      "MemorySnapshotRequest": null,
+      "OnMailRequest": null,
+      "OnMarketWatchRequest": null,
+      "OnOpenedOrdersTicketsRequest": null,
+      "OnOrderProfitRequest": null,
+      "OnOrderUpdateRequest": null,
+      "OnQuoteRequest": null,
+      "OnTickHistoryRequest": null,
+      "OnTickValueRequest": null,
+      "OpenedOrderRequest": null,
+      "OpenedOrdersRequest": null,
+      "OpenedOrdersTicketsRequest": null,
+      "OrderCloseRequest": null,
+      "OrderHistoryPaginationRequest": null,
+      "OrderHistoryRequest": null,
+      "OrderModifyRequest": null,
+      "OrderSendRequest": null,
+      "PendingOrderHistoryRequest": null,
+      "PingHostManyRequest": null,
+      "PingHostRequest": null,
+      "PingRequest": null,
+      "PriceHistoryExManyRequest": null,
+      "PriceHistoryExRequest": null,
+      "PriceHistoryHighLowRequest": null,
+      "PriceHistoryManyRequest": null,
+      "PriceHistoryMonthManyRequest": null,
+      "PriceHistoryMonthRequest": null,
+      "PriceHistoryRequest": null,
+      "PriceHistoryTodayManyRequest": null,
+      "PriceHistoryTodayRequest": null,
+      "RequiredMarginRequest": null,
+      "SearchRequest": null,
+      "ServerReflectionInfoRequest": null,
+      "ServerTimezoneRequest": null,
+      "SubscribeManyRequest": null,
+      "SubscribeMarketWatchRequest": null,
+      "SubscribeOpenedOrdersTicketsRequest": null,
+      "SubscribeOrderProfitRequest": null,
+      "SubscribeOrderUpdateRequest": null,
+      "SubscribeRequest": null,
+      "SubscribeTickValueRequest": null,
+      "SymbolListRequest": null,
+      "SymbolParamsManyRequest": null,
+      "SymbolParamsRequest": null,
+      "SymbolSessionsExManyRequest": null,
+      "SymbolSessionsExRequest": null,
+      "SymbolsRequest": null,
+      "TickHistoryRequestRequest": null,
+      "TickHistoryStopRequest": null,
+      "TickValueWithSizeRequest": null,
+      "UnSubscribeManyRequest": null,
+      "UnSubscribeRequest": null,
+      "VersionRequest": null
+    }
+  }
+}
