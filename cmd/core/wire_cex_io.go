@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"nox/internal/data/adapter"
 	"strings"
 	"time"
 
@@ -196,4 +197,70 @@ func mtIODeltaRound(ctx context.Context, st *pgstore.Store, bm *dashboard.Broker
 		}
 	}
 	return total
+}
+
+// mtDealIOSink D-607：OnOrderUpdate Deal 事件→fin_venue_io 落账（主径——
+// 原 tap 弃件复得；非交易族 2/3/4/5/6/12 才落，Buy/Sell=仓位流归 settlement）。
+// 查重联动：先查 mt5:ticket:{OrderTicket} 在库→跳过（扫描先到留）；
+// 反之 mt5:deal:{Ticket} 落行后 ticket 扫描扫到同 deal 的 order ticket 不重复
+// （external_id 幂等键天然防同 deal 双记）。
+var mtDealNonTradeTypes = map[int32]bool{2: true, 3: true, 4: true, 5: true, 6: true, 12: true}
+
+// dealRow D-607：DealEvent→fin_venue_io 行（纯函数——幂等键/方向/查重键
+// 组装逻辑钉测试锚；查重键=mt5:ticket:{OrderTicket}）。
+func dealRow(venue string, configID int64, ccy string, d adapter.DealEvent) (row pgstore.VenueIO, dedupKey string, ok bool) {
+	if !mtDealNonTradeTypes[d.Type] || d.Profit <= 0 && d.Profit >= 0 {
+		return pgstore.VenueIO{}, "", false
+	}
+	dir, amt := "deposit", d.Profit
+	if amt < 0 {
+		dir, amt = "withdraw", -amt
+	}
+	return pgstore.VenueIO{
+			Venue: venue, ConfigID: configID, Direction: dir, Ccy: ccy,
+			Amount: amt, ExternalID: fmt.Sprintf("mt5:deal:%d", d.Ticket), Ts: d.Ts,
+		},
+		fmt.Sprintf("mt5:ticket:%d", d.OrderTicket), true
+}
+
+func mtDealIOSink(st *pgstore.Store, bm *dashboard.BrokerManager) adapter.DealSink {
+	return func(venueKey string, d adapter.DealEvent) {
+		if !mtDealNonTradeTypes[d.Type] {
+			return // 交易族 Buy/Sell=仓位流归 settlement 径不落 io
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		accs, err := st.MTIOAccountIDs(ctx)
+		if err != nil {
+			log.Printf("[mt-io-deal] %s accts: %v（跳过留痕）", venueKey, err)
+			return
+		}
+		var accID int64
+		var accVenue string
+		for _, a := range accs {
+			if a.Venue+":mt5" == venueKey || a.Venue == venueKey {
+				accID, accVenue = a.ID, a.Venue
+				break
+			}
+		}
+		if accID == 0 {
+			return // 未接线户如实跳
+		}
+		ccy, ok := bm.MTAccountCurrency(ctx, venueKey)
+		if !ok {
+			log.Printf("[mt-io-deal] %s 币种不可得（fail-closed 跳）", venueKey)
+			return
+		}
+		row, dedupKey, ok := dealRow(accVenue, accID, ccy, d)
+		if !ok {
+			return
+		}
+		// 查重联动：mt5:ticket:{OrderTicket} 已在=扫描先到留（双向查重）
+		if ok, err := st.VenueIOExternalExists(ctx, accID, dedupKey); err == nil && ok {
+			return
+		}
+		if _, err := st.InsertVenueIO(ctx, []pgstore.VenueIO{row}); err != nil {
+			log.Printf("[mt-io-deal] %s insert: %v", venueKey, err)
+		}
+	}
 }

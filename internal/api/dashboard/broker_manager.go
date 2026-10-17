@@ -151,6 +151,7 @@ type BrokerManager struct {
 	// nil 即永久丢帧（浮盈冻结/流态/余额帧同丢）。
 	sinkMu          sync.RWMutex
 	accountSink     adapter.AcctFrameSink       // D-445 S0：OnOrderUpdate 余额帧（sink=acctMon.ObserveStreamAccount）
+	dealSink        adapter.DealSink            // D-607：OnOrderUpdate Update.Deal 事件下沉（非交易族→io 落账）
 	positionsSink   func(string, []venue.Order) // D-571 包A：OnOrderProfit 逐仓载荷（sink=bpMon.OnMT5Frame）
 	streamStateSink func(string, bool)          // D-571 包A：venue 流状态透出（sink=bpMon/acctMon/posMon 链）
 	orderProfitKick func(venueKey string)       // D-107 P2：margin 事件→acctMon.Kick（D-071：携 venue 走定向无防抖）

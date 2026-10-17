@@ -61,6 +61,9 @@ type MT5Adapter struct {
 	// AccountSink D-445 S0：OnOrderUpdate 帧余额六字段下沉（含 Update==nil 纯余额帧）；
 	// 注入链同 OrderEventSink（main→brokerMgr→ad）。nil = 未注入（no-op）。
 	AccountSink AcctFrameSink
+	// DealSink D-607：OnOrderUpdate Update.Deal 事件下沉（原 tap 弃件复得——
+	// DealInternal 在场被纯标量 tap 丢弃；nil=不接）。
+	DealSink DealSink
 
 	// PositionsSink D-571 包A：OnOrderProfit 帧 Orders 逐仓载荷下沉
 	// （main→brokerMgr→ad 同模式；venueKey=keydomain.Join(venue,"mt5")）。nil = 不消费。

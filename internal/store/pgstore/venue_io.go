@@ -165,3 +165,13 @@ func (s *Store) ClosedPositionPnLBetween(ctx context.Context, venue string, from
 		venue, from, to).Scan(&sum)
 	return sum, err
 }
+
+// VenueIOExternalExists D-607：external_id 存在性查（Deal 事件↔ticket 扫描
+// 双向查重联动——先到的留，防双记）。
+func (s *Store) VenueIOExternalExists(ctx context.Context, configID int64, externalID string) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM fin_venue_io WHERE config_id=$1 AND external_id=$2)`,
+		configID, externalID).Scan(&ok)
+	return ok, err
+}

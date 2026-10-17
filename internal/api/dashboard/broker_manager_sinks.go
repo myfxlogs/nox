@@ -4,6 +4,7 @@
 package dashboard
 
 import (
+	"log"
 	"time"
 
 	"nox/internal/data/adapter"
@@ -11,6 +12,12 @@ import (
 )
 
 // Set* 晚接目标（D-581）：接线方调用，Lock 写目标；adapter 持有 dispatch* 免时序。
+// SetDealSink D-607：Deal 事件下沉（OnOrderUpdate Update.Deal——非交易族→io 落账）。
+func (m *BrokerManager) SetDealSink(f adapter.DealSink) {
+	m.sinkMu.Lock()
+	m.dealSink = f
+	m.sinkMu.Unlock()
+}
 func (m *BrokerManager) SetAccountSink(f adapter.AcctFrameSink) {
 	m.sinkMu.Lock()
 	m.accountSink = f
@@ -67,6 +74,22 @@ func (m *BrokerManager) kickAccountReady(venueKey string) {
 
 // dispatch* bound-method（D-581）：startMT5 拷贝到 adapter；调用时取最新目标，
 // 目标未接=no-op=原 nil 语义。锁内只取引用不放行调用。
+// dispatchDeal D-607：Deal 事件透传（sink panic 不拉崩流循环——同 dispatchAccount 先例）。
+func (m *BrokerManager) dispatchDeal(vk string, d adapter.DealEvent) {
+	m.sinkMu.Lock()
+	f := m.dealSink
+	m.sinkMu.Unlock()
+	if f == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[broker-mgr] deal sink panic: %v", r)
+		}
+	}()
+	f(vk, d)
+}
+
 func (m *BrokerManager) dispatchAccount(vk string, bal, eq, mg, fm, prof, ml float64, ccy string, ts time.Time) {
 	m.sinkMu.RLock()
 	f := m.accountSink
