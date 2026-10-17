@@ -694,7 +694,8 @@ type XAssetAllowComboRow struct {
 	BreakerResumeAt *timestamppb.Timestamp `protobuf:"bytes,23,opt,name=breaker_resume_at,json=breakerResumeAt,proto3" json:"breaker_resume_at,omitempty"`
 	BreakerCount    int32                  `protobuf:"varint,24,opt,name=breaker_count,json=breakerCount,proto3" json:"breaker_count,omitempty"` // 本窗已抑制尝试数（徽标 ×N）
 	PoolVerdict     string                 `protobuf:"bytes,25,opt,name=pool_verdict,json=poolVerdict,proto3" json:"pool_verdict,omitempty"`     // D-563 S3 池判定：ok/conflict/unknown（待定黄标）
-	MarginUsd       *float64               `protobuf:"fixed64,26,opt,name=margin_usd,json=marginUsd,proto3,oneof" json:"margin_usd,omitempty"`   // D-010：组合保证金总预算（双腿占用和上限；与 notional_usd 互斥）
+	MarginUsd       *float64               `protobuf:"fixed64,26,opt,name=margin_usd,json=marginUsd,proto3,oneof" json:"margin_usd,omitempty"`
+	PitHits         []string               `protobuf:"bytes,27,rep,name=pit_hits,json=pitHits,proto3" json:"pit_hits,omitempty"` // D-587④：armed 行坑签名命中透出（观察面同源标注——闸在 enable 写径）         // D-010：组合保证金总预算（双腿占用和上限；与 notional_usd 互斥）
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -909,6 +910,13 @@ func (x *XAssetAllowComboRow) GetMarginUsd() float64 {
 		return *x.MarginUsd
 	}
 	return 0
+}
+
+func (x *XAssetAllowComboRow) GetPitHits() []string {
+	if x != nil {
+		return x.PitHits
+	}
+	return nil
 }
 
 type ListXAssetAllowCombosResponse struct {
@@ -2796,7 +2804,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\rFieldEvidence\x12\x14\n" +
 	"\x05field\x18\x01 \x01(\tR\x05field\x125\n" +
 	"\x05grade\x18\x02 \x01(\x0e2\x1f.nox.dashboard.v1.EvidenceGradeR\x05grade\"\x1e\n" +
-	"\x1cListXAssetAllowCombosRequest\"\xa2\b\n" +
+	"\x1cListXAssetAllowCombosRequest\"\xbd\b\n" +
 	"\x13XAssetAllowComboRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12#\n" +
 	"\rcanonical_buy\x18\x02 \x01(\tR\fcanonicalBuy\x12\x1b\n" +
@@ -2829,7 +2837,8 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\rbreaker_count\x18\x18 \x01(\x05R\fbreakerCount\x12!\n" +
 	"\fpool_verdict\x18\x19 \x01(\tR\vpoolVerdict\x12\"\n" +
 	"\n" +
-	"margin_usd\x18\x1a \x01(\x01H\x02R\tmarginUsd\x88\x01\x01B\x0f\n" +
+	"margin_usd\x18\x1a \x01(\x01H\x02R\tmarginUsd\x88\x01\x01\x12\x19\n" +
+	"\bpit_hits\x18\x1b \x03(\tR\apitHitsB\x0f\n" +
 	"\r_notional_usdB\f\n" +
 	"\n" +
 	"_simulatedB\r\n" +

@@ -41,6 +41,8 @@ internal/api/dashboard -> internal/risk/gate
 internal/api/dashboard -> internal/store/pgstore
 internal/api/dashboard -> internal/trading/exec
 internal/api/dashboard -> internal/econkb
+internal/store/pgstore -> internal/econkb
+internal/trading/autotrade -> internal/econkb
 internal/data/adapter -> internal/data/adapter/gen/mtapi/mt5
 internal/data/adapter -> internal/data/bus
 internal/data/adapter -> internal/data/collect

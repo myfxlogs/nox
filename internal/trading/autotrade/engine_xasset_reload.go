@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 
+	"nox/internal/econkb"
 	"nox/internal/trading/exec"
 )
 
@@ -25,6 +26,10 @@ func (e *Engine) xassetSpecs() []exec.XAssetComboAllowSpec {
 func (e *Engine) ReloadXAssetAllowCombos(ctx context.Context) error {
 	// D-584 venue 退役守卫：armed 评估环每拍——venue 双簿消失组合自动
 	// enabled=false+note 留痕（best-effort 不阻塞重载）。
+	// D-587④ 坑签名闸评估环：armed enabled 组合命中坑签名且无 D# 豁免→自动摘。
+	if n, perr := e.store.DisablePitHitCombos(ctx, econkb.Dir()); perr == nil && n > 0 {
+		log.Printf("[xasset] 坑签名闸：%d armed 组合命中坑→自动摘（豁免须 pit_exempt_d 落 D#）", n)
+	}
 	if n, err := e.store.RetireCombosMissingVenue(ctx); err == nil && n > 0 {
 		log.Printf("[whitelist] venue 退役: %d 组合自动摘牌（broker_accounts+exchange_configs 双簿消失）", n)
 	}

@@ -235,4 +235,5 @@ var migrationFiles = []struct {
 	{1039, migrations.ComboSourceSQL, false},                  // D-584：armed 白名单出处约束
 	{1040, migrations.PaperFirstGateSQL, false},               // D-593：全模板纸面先行不变量
 	{1042, migrations.TemplateAutoexecSQL, false},             // D-598：承接位提案自动执行判据列（autoexec+豁免族种子）
+	{1043, migrations.ComboPitGateSQL, false},                 // D-587④：armed 坑签名闸（pit_exempt_d 列）
 }
