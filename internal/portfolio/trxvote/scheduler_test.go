@@ -454,10 +454,13 @@ func TestFormatRebalanceAlert(t *testing.T) {
 	}
 }
 
-// TestFormatClaimAlert 告警格式。
+// TestFormatClaimAlert 告警格式——amount 入参为 sun，渲染须换算 TRX（1e6）。
 func TestFormatClaimAlert(t *testing.T) {
 	alert := formatClaimAlert("deadbeef1234567890abcdef", 1000000)
 	if alert == "" {
 		t.Error("alert should not be empty")
+	}
+	if !strings.Contains(alert, "amount=1.0000 TRX") {
+		t.Errorf("sun→TRX 换算缺失: %q", alert)
 	}
 }

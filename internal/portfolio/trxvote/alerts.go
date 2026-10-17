@@ -48,7 +48,7 @@ func formatClaimAlert(txHash string, amount int64) string {
 	if len(short) > 16 {
 		short = short[:16]
 	}
-	return "[投票领奖] tx=" + short + " amount=" + formatFloat(float64(amount)) + " TRX"
+	return "[投票领奖] tx=" + short + " amount=" + formatFloat(float64(amount)/1e6) + " TRX"
 }
 
 // formatFloat 格式化浮点数（4 位小数）。
