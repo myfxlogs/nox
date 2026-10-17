@@ -54,7 +54,6 @@ type fakeStore struct {
 	incomeEvs      []pgstore.IncomeEvent
 	pits           []pgstore.VenueReject    // D-255：坑表种子/学习捕获
 	poolRows       []pgstore.CapitalPoolRow // D-286：earn 敞口闸池快照种子
-	snapFree       map[string]float64       // D-523续①：快照 free 种子（化石对拍面）
 	paperGateBlock string                   // D-593 接线锚种子：非空=纸面闸拒因
 }
 
@@ -1342,10 +1341,6 @@ func (f *fakeStore) InsertIncomeEvents(_ context.Context, evs []pgstore.IncomeEv
 }
 func (f *fakeStore) AppConfigInt64(context.Context, string) (int64, bool, error) {
 	return 0, false, nil
-}
-func (f *fakeStore) LatestSnapshotFree(_ context.Context, _, _, ccy string) (float64, bool, error) {
-	v, ok := f.snapFree[ccy]
-	return v, ok, nil
 }
 
 // TestM41_EvalGate 评估卡闸（D-258 M4.1③）：无卡/非 viable 拒单，viable 过闸。
