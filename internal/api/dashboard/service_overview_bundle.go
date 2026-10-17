@@ -54,7 +54,7 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 		first time.Time
 		venue string
 	}{} // 活期聚合桶（label→持仓位）
-	if orders, err := s.store.ListDCIOrders(ctx, 100); err != nil {
+	if orders, err := s.store.ListDCIOrders(ctx, 100); err == nil {
 		for _, o := range orders {
 			if o.Status != "filled" {
 				continue
