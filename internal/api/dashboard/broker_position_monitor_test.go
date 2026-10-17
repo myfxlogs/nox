@@ -296,10 +296,11 @@ type fakeSwapInsert struct {
 	PosID   int64
 	Venue   string
 	SwapUSD float64
+	Ts      time.Time
 }
 
-func (f *fakeSwapSnapStore) InsertSwapSnapshot(_ context.Context, posID int64, venue string, swapUSD float64, _ time.Time) error {
-	f.inserts = append(f.inserts, fakeSwapInsert{posID, venue, swapUSD})
+func (f *fakeSwapSnapStore) InsertSwapSnapshot(_ context.Context, posID int64, venue string, swapUSD float64, ts time.Time) error {
+	f.inserts = append(f.inserts, fakeSwapInsert{posID, venue, swapUSD, ts})
 	return nil
 }
 func (f *fakeSwapSnapStore) ListPositions(_ context.Context, status string, _, _ int) ([]pgstore.Position, error) {
@@ -394,6 +395,53 @@ func TestCollectSwapSnapshots_PositionIDZeroSkips(t *testing.T) {
 	m.Refresh(ctx)
 	if len(fake.inserts) != 0 {
 		t.Fatalf("orphan order: want 0 inserts, got %d", len(fake.inserts))
+	}
+}
+
+// TestSwapFrameAnchored 票⑤′：OnMT5Frame 帧携 swap 跳变 → pending 队列 → collectSwapFrames
+// 落库且行 ts=帧到达时刻（帧锚定）；帧携 swap 不变 → 不入队不落库。
+func TestSwapFrameAnchored(t *testing.T) {
+	ctx := context.Background()
+	q := &fakeVenueQuerier{key: "venue:mt5", orders: []venue.Order{
+		{Venue: "venue", VenueKey: "venue:mt5", Ticket: "T1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Swap: 5.0},
+	}}
+	m, _, _ := newMonTest(t, q)
+	fake := &fakeSwapSnapStore{
+		positions: []pgstore.Position{{ID: 100, Status: "OPEN"}},
+		legsByPos: map[int64][]pgstore.PositionLeg{
+			100: {{Phase: "OPEN", Status: "FILLED", Venue: "venue:mt5", OrderID: "T1"}},
+		},
+	}
+	m.SetSwapSnapshotStore(fake)
+	m.Refresh(ctx) // boot 基线：swap=5.0 首行
+	if len(fake.inserts) != 1 {
+		t.Fatalf("baseline: want 1 insert, got %d", len(fake.inserts))
+	}
+
+	// 帧携 swap 不变 → 零新增
+	m.OnMT5Frame("venue:mt5", []venue.Order{
+		{Venue: "venue", VenueKey: "venue:mt5", Ticket: "T1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, Swap: 5.0},
+	})
+	m.collectSwapFrames(ctx)
+	if len(fake.inserts) != 1 {
+		t.Fatalf("same-swap frame: want 1 insert, got %d", len(fake.inserts))
+	}
+
+	// 帧携 swap 计提跳变 → 帧锚定落库
+	before := time.Now().UTC()
+	m.OnMT5Frame("venue:mt5", []venue.Order{
+		{Venue: "venue", VenueKey: "venue:mt5", Ticket: "T1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, Swap: 5.42},
+	})
+	m.collectSwapFrames(ctx)
+	if len(fake.inserts) != 2 {
+		t.Fatalf("swap-jump frame: want 2 inserts, got %d", len(fake.inserts))
+	}
+	got := fake.inserts[1]
+	if got.PosID != 100 || got.SwapUSD != 5.42 {
+		t.Fatalf("frame row: got posID=%d swap=%.4f", got.PosID, got.SwapUSD)
+	}
+	if got.Ts.Before(before) || got.Ts.After(time.Now().UTC()) {
+		t.Fatalf("frame row ts %v not anchored to frame arrival [%v, now]", got.Ts, before)
 	}
 }
 

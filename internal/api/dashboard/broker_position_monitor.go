@@ -73,6 +73,10 @@ type BrokerPositionMonitor struct {
 	// D-110 P2：swap 快照采集（REST 重读后锁外执行）。
 	swapSnapStore    SwapSnapshotStore
 	lastSwapByTicket map[string]float64 // ticket→上次 swap 值（去重，单协程访问无需锁）
+	// 票⑤′ 帧锚定：OnMT5Frame 帧携 swap 变更 → pending 合并队列 → Run 循环 drain 落库
+	// （DB 写不堵流 goroutine；行 ts=帧到达时刻）。key=venueKey+"\x00"+ticket。
+	pendingSwap map[string]swapFrameItem
+	swapSig     chan struct{}
 
 	// D-124→D-008：账户保证金分摊已撤（venue 无仓位级 margin 字段=诚实空态）。
 	// acctMon 保留字段已删——无其他消费面。
@@ -140,6 +144,8 @@ func NewBrokerPositionMonitor(bm *BrokerManager, qbus *bus.QuoteBus, freshTTL ti
 		streamOnline:  make(map[string]bool),
 		pendingKick:   make(map[string]struct{}),
 		kickSig:       make(chan struct{}, 1),
+		pendingSwap:   make(map[string]swapFrameItem),
+		swapSig:       make(chan struct{}, 1),
 	}
 }
 
@@ -153,29 +159,6 @@ func (m *BrokerPositionMonitor) Kick(venueKey string) {
 	select {
 	case m.kickSig <- struct{}{}:
 	default: // 已有待处理信号，合并丢弃
-	}
-}
-
-// OnMT5Frame D-571 包A：MT5 OnOrderProfit 帧逐仓 patch（PositionsSink 入口）。
-// 语义：帧内已知票号更新字段；未知票号不建仓、触发该 venue 权威回读；
-// 帧外仓（帧未载）不动不删——缺仓只 REST 权威裁决。
-func (m *BrokerPositionMonitor) OnMT5Frame(venueKey string, orders []venue.Order) {
-	unknown := false
-	m.mu.Lock()
-	vs := m.venues[venueKey]
-	vs.asOf = time.Now() // D-094：帧到达时刻=本 venue 行 asOf（事件时戳透传 proto）
-	for _, o := range orders {
-		if _, ok := vs.orders[o.Ticket]; !ok {
-			unknown = true // 未知票号 → 帧外权威裁决（REST 回读），不就地建仓
-			continue
-		}
-		vs.orders[o.Ticket] = o
-		m.dirtyLocked(posKeyOf(venueKey, o.Ticket))
-	}
-	m.venues[venueKey] = vs
-	m.mu.Unlock()
-	if unknown {
-		m.Kick(venueKey)
 	}
 }
 
@@ -251,6 +234,8 @@ func (m *BrokerPositionMonitor) Run(ctx context.Context) {
 					m.reconcileVenueKeys(ctx, vk)
 				}
 			}
+		case <-m.swapSig:
+			m.collectSwapFrames(ctx)
 		case q, ok := <-quoteCh:
 			if !ok {
 				return
