@@ -80,6 +80,9 @@ type Store interface {
 	CapitalPoolSnapshots(ctx context.Context) ([]pgstore.CapitalPoolRow, error)
 	// D-526：σ 窗口期配置读面（dci_sigma_window_days）。
 	AppConfigInt64(ctx context.Context, key string) (int64, bool, error)
+	// D-612：轮动判据读面（rotation_* 键族）+持有窗读口（earn 账本最近活动）。
+	AppConfigFloat(ctx context.Context, key string) (float64, bool, error)
+	LatestEarnActivityAt(ctx context.Context, venue string) (time.Time, bool, error)
 }
 
 // Executor binance DCI 申购执行器（凭据由装配侧从 exchange_configs 注入）。
@@ -195,8 +198,12 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	} else if oid > 0 {
 		return "", fmt.Errorf("提案#%d 刚执行过（订单#%d）拒单", id, oid)
 	}
-	// D-286：earn 族提案→申购执行径（venue 产品非腿集，闸序已过 CheckDCI+租约）。
+	// D-286/D-612：earn 族提案执行径分派（闸序已过 CheckDCI+租约）——
+	// earn_rotation=所内赎转径；其余 earn 族=申购径（venue 产品非腿集）。
 	if gate.EarnTemplates[p.TemplateID] {
+		if p.TemplateID == "earn_rotation" {
+			return e.goEarnRotation(ctx, p)
+		}
 		return e.goEarn(ctx, p)
 	}
 	legs := gate.ExecTemplates[p.TemplateID]

@@ -24,12 +24,14 @@ type EarnCred struct {
 	BaseURL string
 }
 
-// EarnRail earn 执行适配面（三动词+余额读；测试注 EarnRails 替真发）。
+// EarnRail earn 执行适配面（四动词+余额读+持仓读；测试注 EarnRails 替真发）。
+// Positions=活期在册持仓（D-612 轮动源仓读面）——locked/定期行不出现在返回集。
 type EarnRail interface {
 	Products(ctx context.Context, ccy string) ([]EarnProduct, error)
 	Subscribe(ctx context.Context, productID string, amount float64) (string, error)
 	Redeem(ctx context.Context, productID string, amount float64) error
 	FreeBalance(ctx context.Context, ccy string) (float64, error)
+	Positions(ctx context.Context, ccy string) ([]EarnPosition, error)
 }
 
 // earnRail venue→rail 分派：测试注 EarnRails 优先，否则按 EarnCreds 建真件。
@@ -57,23 +59,6 @@ func (e *Executor) earnRail(venue string) (EarnRail, bool) {
 		return &gateEarnRail{e: e, c: c}, true
 	}
 	return nil, false
-}
-
-// binanceEarnRail 原径包壳（行为零变——真 HTTP 走既有 earnProducts/earnSubscribe/
-// freeBalance/redeemFlexible 方法体）。
-type binanceEarnRail struct{ e *Executor }
-
-func (r *binanceEarnRail) Products(ctx context.Context, ccy string) ([]EarnProduct, error) {
-	return r.e.earnProducts(ctx, ccy)
-}
-func (r *binanceEarnRail) Subscribe(ctx context.Context, productID string, amount float64) (string, error) {
-	return r.e.earnSubscribe(ctx, productID, amount)
-}
-func (r *binanceEarnRail) Redeem(ctx context.Context, productID string, amount float64) error {
-	return r.e.redeemFlexible(ctx, productID, amount)
-}
-func (r *binanceEarnRail) FreeBalance(ctx context.Context, ccy string) (float64, error) {
-	return r.e.freeBalance(ctx, ccy)
 }
 
 // ---- okx rail：savings purchase-redemption 双端点 ----
@@ -239,6 +224,18 @@ func (r *okxEarnRail) savingsAvail(ctx context.Context, ccy string) (float64, er
 		}
 	}
 	return 0, nil
+}
+
+// Positions okx 余币宝在册（savingsAvail 实读——单产品面合成 productID 行）。
+func (r *okxEarnRail) Positions(ctx context.Context, ccy string) ([]EarnPosition, error) {
+	amt, err := r.savingsAvail(ctx, ccy)
+	if err != nil {
+		return nil, err
+	}
+	if amt <= 0 {
+		return nil, nil
+	}
+	return []EarnPosition{{ProductID: "okx-saving-" + ccy, Amount: amt}}, nil
 }
 
 // unifiedAvail `GET /account/balance?ccy=` → data[].details[].availBal（交易户）。
