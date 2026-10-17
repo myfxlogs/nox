@@ -1,8 +1,11 @@
 // earn_yield.go —— D-524：earn 池收益增量归属入账（快照写径同拍，零新定时器）。
 // 语义：earn 池快照行新写时 Δ(equity)−已归属流=收益增量 → income_events
 // (income_type='earn_yield')。已归属流=本系统 fin_dci_order opt_type='EARN'
-// filled 申购量（申购是池内流入须扣，赎出无台账行故负 Δ 如实负收益票面③）。
-// 首拍无前值=基线化不立账（票面⑤）；D-516 归属系数同乘（BTC 池 1/3 份票面④）。
+// filled 申购量，按 (venue,ccy) 行级扣——池级 venue 变动只落申购币种自身行，
+// 逐币行扣 venue 级汇总=每行各扣一遍的扇出假账（binance −$30k 实证，已冲正）。
+// 首拍无前值=基线化不立账（票面⑤）；D-516 归属系数同乘（BTC 池 1/3 份票面④）；
+// 零额不落：写值 |Δ|<0.005（展示 0.00 界）不入账——earn 池币种面=稳定币+尘币，
+// 币本位 0.005 界即展示零界（币本位 amount_usd 记面值是 D-524 既有口径债）。
 // venue 逐笔回执面（gate lend_records reinvest 等）现无读径接点——池增量兜底
 // 为当前唯一口径，回执径接入后须按「回执>池增量」优先级防双记（如实留续）。
 package dashboard
@@ -18,10 +21,13 @@ import (
 	"nox/internal/store/pgstore"
 )
 
+// zeroDisplayEps 零额不落界：income_events 前端展示两位小数，|值|<0.005=0.00 行。
+const zeroDisplayEps = 0.005
+
 // EarnYieldStore 归属入账读写面（装配注入 pgstore.Store；nil=归属关闭）。
 type EarnYieldStore interface {
 	PrevSnapshotEquity(ctx context.Context, venue, venueType, ccy string, before time.Time) (float64, time.Time, bool, error)
-	EarnSubscribeSum(ctx context.Context, venue string, from, to time.Time) (float64, error)
+	EarnSubscribeSum(ctx context.Context, venue, ccy string, from, to time.Time) (float64, error)
 	InsertIncomeEvents(ctx context.Context, evs []pgstore.IncomeEvent) (int64, error)
 	ExchangeConfigID(ctx context.Context, venue, venueType string) (int64, error)
 	OwnershipShares(ctx context.Context) (map[string]float64, error)
@@ -65,20 +71,20 @@ func (m *AccountMonitor) attributeEarnYield(ctx context.Context, rows []pgstore.
 		if !has {
 			continue // 首拍基线化——本金存量不归收益
 		}
-		flow, ferr := m.yieldStore.EarnSubscribeSum(ctx, r.Venue, prevTS, r.FetchedAt)
+		flow, ferr := m.yieldStore.EarnSubscribeSum(ctx, r.Venue, r.Currency, prevTS, r.FetchedAt)
 		if ferr != nil {
 			log.Printf("[earn-yield] %s:earn %s flow read: %v", r.Venue, r.Currency, ferr)
 			continue
 		}
 		delta := r.EquityRaw - prev - flow
-		if delta > -1e-6 && delta < 1e-6 {
-			continue // 浮点残差档零——防 ±ε 收益噪声行
-		}
 		share, hasShare := pgstore.OwnershipShare(shares, r.Venue, "earn", r.Currency)
 		if !hasShare {
 			share = 1 // 未配置池全归属（D-516 缺省语义）
 		}
 		delta *= share
+		if delta > -zeroDisplayEps && delta < zeroDisplayEps {
+			continue // 零额不落：写值 |Δ|<0.005=展示 0.00 尘行禁入账（binance 3316 行实证）
+		}
 		cfgID, cerr := m.yieldStore.ExchangeConfigID(ctx, r.Venue, "earn")
 		if cerr != nil {
 			log.Printf("[earn-yield] %s:earn config id: %v", r.Venue, cerr)
