@@ -50,6 +50,10 @@
   position: relative; flex: 0 0 148px; border: 1px solid var(--line);
   border-radius: 8px; background: var(--surface); padding: 8px 10px;
   margin-right: 20px; box-sizing: border-box;
+  /* 实时卡防抖（业主批 10-17）：①卡高钉死——流推帧文字变长不顶页面
+     （叙事钳 2 行定高；票面 grid-auto-rows 意译到现 flex 形态=卡高定值）；
+     ④contain:layout——卡内重排不外溢传播。全文兜底=hover title+点卡 Modal。 */
+  height: 70px; contain: layout; cursor: pointer;
 }
 .pipe-flow .pipe-card::after {
   content: "→"; position: absolute; right: -16px; top: 50%; transform: translateY(-50%);
@@ -66,5 +70,7 @@
 .pipe-flow .pipe-card.down .fresh-dot { box-shadow: 0 0 6px var(--critical); }
 .pipe-flow .pipe-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .pipe-flow .pipe-head .nm { font-size: 13px; font-weight: 600; color: var(--ink); }
-.pipe-flow .pipe-ts { font-size: 18px; color: var(--ink-3); margin-left: auto; } /* ⏱ 10→18px：16px 会被本行旧值覆盖路径复发的教训在 04 注记 */
-.pipe-flow .pipe-line { font-size: 11px; color: var(--ink-3); line-height: 1.35; }
+.pipe-flow .pipe-ts { font-size: 18px; color: var(--ink-3); margin-left: auto; line-height: 1; } /* ⏱ 10→18px：16px 会被本行旧值覆盖路径复发的教训在 04 注记；line-height:1=防 18px 字形撑高 head 行破①定高 */
+.pipe-flow .pipe-line { font-size: 11px; color: var(--ink-3); line-height: 1.35; } /* ②钳 2 行=共享 .clamp-2（04，TSX 挂） */
+/* ③数字固位：时戳预留位——位数跳动不挤 head 邻元（tabular-nums 等宽进位） */
+.pipe-flow .pipe-clock { min-width: 11ch; text-align: right; font-variant-numeric: tabular-nums; }
