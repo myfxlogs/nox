@@ -92,14 +92,28 @@ func main() {
 							method, _ := m["method"].(string)
 							key := method + " " + pp
 							src["postman"][key] = true
-							// 退回㊳①：auth 元数据→签名档（apikey 型=signed——
-							// 无差别签打死公共端点病灶销账）
-							if auth, _ := m["request"].(map[string]any); auth != nil {
-								if a, _ := auth["auth"].(map[string]any); a != nil {
-									if t, _ := a["type"].(string); t == "apikey" || t == "bearer" {
-										authTier[key] = "signed"
+							// 退回㊴①修正：auth 判据在 request 层本身（url 命中层=
+							// request 层——header.X-MBX-APIKEY/url.query.signature 直查；
+							// 前版错查 m["request"] 层=嵌套过深零命中实证销账）
+							signed := false
+							if hs, _ := m["header"].([]any); hs != nil {
+								for _, h := range hs {
+									if hm, _ := h.(map[string]any); hm != nil && hm["key"] == "X-MBX-APIKEY" {
+										signed = true
 									}
 								}
+							}
+							if u2, _ := m["url"].(map[string]any); u2 != nil {
+								if qs, _ := u2["query"].([]any); qs != nil {
+									for _, q := range qs {
+										if qm, _ := q.(map[string]any); qm != nil && qm["key"] == "signature" {
+											signed = true
+										}
+									}
+								}
+							}
+							if signed {
+								authTier[key] = "signed"
 							}
 						}
 					}

@@ -3,776 +3,776 @@
 # postman 单源独有=73
 # md 单源独有=33
 # conn 单源独有=142
-MUTATING	/api/v1/userDataStream
-MUTATING	/api/v3/openOrders
-MUTATING	/api/v3/order
-MUTATING	/api/v3/orderList
-MUTATING	/api/v3/userDataStream
-MUTATING	/dapi/v1/allOpenOrders
-MUTATING	/dapi/v1/batchOrders
-MUTATING	/dapi/v1/listenKey
-MUTATING	/dapi/v1/order
-MUTATING	/fapi/v1/algoOpenOrders
-MUTATING	/fapi/v1/algoOrder
-MUTATING	/fapi/v1/allOpenOrders
-MUTATING	/fapi/v1/batchOrders
-MUTATING	/fapi/v1/listenKey
-MUTATING	/fapi/v1/order
-MUTATING	/sapi/v1/algo/futures/order
-MUTATING	/sapi/v1/algo/spot/order
-MUTATING	/sapi/v1/margin/apiKey
-MUTATING	/sapi/v1/margin/isolated/account
-MUTATING	/sapi/v1/margin/listen-key
-MUTATING	/sapi/v1/margin/openOrders
-MUTATING	/sapi/v1/margin/order
-MUTATING	/sapi/v1/margin/orderList
-MUTATING	/sapi/v1/portfolio/margin-call-level
-MUTATING	/sapi/v1/sub-account/subAccountApi
-MUTATING	/sapi/v1/sub-account/subAccountApi/ipRestriction/ipList
-MUTATING	/sapi/v1/userDataStream
-MUTATING	/sapi/v1/userDataStream/isolated
-GET	/api/v1/aggTrades
-GET	/api/v1/depth
-GET	/api/v1/historicalTrades
-GET	/api/v1/klines
-GET	/api/v1/ping
-GET	/api/v1/ticker/24hr
-GET	/api/v1/ticker/bookTicker
-GET	/api/v1/ticker/price
-GET	/api/v1/time
-GET	/api/v1/trades
-GET	/api/v1/userDataStream
-GET	/api/v3/acccount
-GET	/api/v3/account
-GET	/api/v3/account/commission
-GET	/api/v3/aggTrade
-GET	/api/v3/aggTrades
-GET	/api/v3/allOrderList
-GET	/api/v3/allOrders
-GET	/api/v3/avgPrice
-GET	/api/v3/depth
-GET	/api/v3/exchangeInfo
-GET	/api/v3/executionRules
-GET	/api/v3/historicalBlockTrades
-GET	/api/v3/historicalTrades
-GET	/api/v3/klines
-GET	/api/v3/myAllocations
-GET	/api/v3/myFilters
-GET	/api/v3/myPreventedMatches
-GET	/api/v3/myTrades
-GET	/api/v3/openOrderList
-GET	/api/v3/openOrderLists
-GET	/api/v3/openOrders
-GET	/api/v3/order
-GET	/api/v3/order/amend/keepPriority
-GET	/api/v3/order/amendments
-GET	/api/v3/order/cancelReplace
-GET	/api/v3/order/oco
-GET	/api/v3/order/test
-GET	/api/v3/orderList
-GET	/api/v3/orderList/oco
-GET	/api/v3/orderList/opo
-GET	/api/v3/orderList/opoco
-GET	/api/v3/orderList/oto
-GET	/api/v3/orderList/otoco
-GET	/api/v3/ping
-GET	/api/v3/preventedMatches
-GET	/api/v3/rateLimit/order
-GET	/api/v3/referencePrice
-GET	/api/v3/referencePrice/calculation
-GET	/api/v3/sor/order
-GET	/api/v3/sor/order/test
-GET	/api/v3/ticker
-GET	/api/v3/ticker/24hr
-GET	/api/v3/ticker/bookTicker
-GET	/api/v3/ticker/price
-GET	/api/v3/ticker/tradingDay
-GET	/api/v3/time
-GET	/api/v3/trades
-GET	/api/v3/uiKlines
-GET	/dapi/v1/account
-GET	/dapi/v1/adlQuantile
-GET	/dapi/v1/aggTrades
-GET	/dapi/v1/algoOrder
-GET	/dapi/v1/allOpenOrders
-GET	/dapi/v1/allOrders
-GET	/dapi/v1/balance
-GET	/dapi/v1/batchOrders
-GET	/dapi/v1/commissionRate
-GET	/dapi/v1/constituents
-GET	/dapi/v1/continuousKlines
-GET	/dapi/v1/countdownCancelAll
-GET	/dapi/v1/depth
-GET	/dapi/v1/exchangeInfo
-GET	/dapi/v1/forceOrders
-GET	/dapi/v1/fundingInfo
-GET	/dapi/v1/fundingRate
-GET	/dapi/v1/historicalTrades
-GET	/dapi/v1/income
-GET	/dapi/v1/income/asyn
-GET	/dapi/v1/income/asyn/id
-GET	/dapi/v1/indexPriceKlines
-GET	/dapi/v1/klines
-GET	/dapi/v1/leverage
-GET	/dapi/v1/leverageBracket
-GET	/dapi/v1/listenKey
-GET	/dapi/v1/marginType
-GET	/dapi/v1/markPriceKlines
-GET	/dapi/v1/openInterest
-GET	/dapi/v1/openOrder
-GET	/dapi/v1/openOrders
-GET	/dapi/v1/order
-GET	/dapi/v1/order/asyn
-GET	/dapi/v1/order/asyn/id
-GET	/dapi/v1/orderAmendment
-GET	/dapi/v1/ping
-GET	/dapi/v1/positionMargin
-GET	/dapi/v1/positionMargin/history
-GET	/dapi/v1/positionRisk
-GET	/dapi/v1/positionSide/dual
-GET	/dapi/v1/premiumIndex
-GET	/dapi/v1/premiumIndexKlines
-GET	/dapi/v1/ticker/24hr
-GET	/dapi/v1/ticker/bookTicker
-GET	/dapi/v1/ticker/price
-GET	/dapi/v1/time
-GET	/dapi/v1/trade/asyn
-GET	/dapi/v1/trade/asyn/id
-GET	/dapi/v1/trades
-GET	/dapi/v1/userTrades
-GET	/dapi/v2/leverageBracket
-GET	/fapi/v1/accountConfig
-GET	/fapi/v1/adlQuantile
-GET	/fapi/v1/aggTrades
-GET	/fapi/v1/algoOpenOrders
-GET	/fapi/v1/algoOrder
-GET	/fapi/v1/allAlgoOrders
-GET	/fapi/v1/allOpenOrders
-GET	/fapi/v1/allOrders
-GET	/fapi/v1/apiTradingStatus
-GET	/fapi/v1/assetIndex
-GET	/fapi/v1/batchOrders
-GET	/fapi/v1/commissionRate
-GET	/fapi/v1/constituents
-GET	/fapi/v1/continuousKlines
-GET	/fapi/v1/convert/acceptQuote
-GET	/fapi/v1/convert/exchangeInfo
-GET	/fapi/v1/convert/getQuote
-GET	/fapi/v1/convert/orderStatus
-GET	/fapi/v1/countdownCancelAll
-GET	/fapi/v1/depth
-GET	/fapi/v1/exchangeInfo
-GET	/fapi/v1/feeBurn
-GET	/fapi/v1/forceOrders
-GET	/fapi/v1/fundingInfo
-GET	/fapi/v1/fundingRate
-GET	/fapi/v1/historicalTrades
-GET	/fapi/v1/income
-GET	/fapi/v1/income/asyn
-GET	/fapi/v1/income/asyn/id
-GET	/fapi/v1/indexInfo
-GET	/fapi/v1/indexPriceKlines
-GET	/fapi/v1/insuranceBalance
-GET	/fapi/v1/klines
-GET	/fapi/v1/leverage
-GET	/fapi/v1/leverageBracket
-GET	/fapi/v1/listenKey
-GET	/fapi/v1/marginType
-GET	/fapi/v1/markPriceKlines
-GET	/fapi/v1/multiAssetsMargin
-GET	/fapi/v1/openAlgoOrders
-GET	/fapi/v1/openInterest
-GET	/fapi/v1/openOrder
-GET	/fapi/v1/openOrders
-GET	/fapi/v1/order
-GET	/fapi/v1/order/asyn
-GET	/fapi/v1/order/asyn/id
-GET	/fapi/v1/order/test
-GET	/fapi/v1/orderAmendment
-GET	/fapi/v1/ping
-GET	/fapi/v1/pmAccountInfo
-GET	/fapi/v1/positionMargin
-GET	/fapi/v1/positionMargin/history
-GET	/fapi/v1/positionSide/dual
-GET	/fapi/v1/premiumIndex
-GET	/fapi/v1/premiumIndexKlines
-GET	/fapi/v1/rateLimit/order
-GET	/fapi/v1/rpiDepth
-GET	/fapi/v1/stock/contract
-GET	/fapi/v1/symbolAdlRisk
-GET	/fapi/v1/symbolConfig
-GET	/fapi/v1/ticker/24hr
-GET	/fapi/v1/ticker/bookTicker
-GET	/fapi/v1/ticker/price
-GET	/fapi/v1/time
-GET	/fapi/v1/trade/asyn
-GET	/fapi/v1/trade/asyn/id
-GET	/fapi/v1/trades
-GET	/fapi/v1/tradingSchedule
-GET	/fapi/v1/userTrades
-GET	/fapi/v2/account
-GET	/fapi/v2/balance
-GET	/fapi/v2/positionRisk
-GET	/fapi/v2/ticker/price
-GET	/fapi/v3/account
-GET	/fapi/v3/balance
-GET	/fapi/v3/positionRisk
-GET	/sapi/v1/account/apiRestrictions
-GET	/sapi/v1/account/apiTradingStatus
-GET	/sapi/v1/account/disableFastWithdrawSwitch
-GET	/sapi/v1/account/enableFastWithdrawSwitch
-GET	/sapi/v1/account/info
-GET	/sapi/v1/account/status
-GET	/sapi/v1/accountSnapshot
-GET	/sapi/v1/addressVerify/list
-GET	/sapi/v1/algo/futures/historicalOrders
-GET	/sapi/v1/algo/futures/newOrderTwap
-GET	/sapi/v1/algo/futures/newOrderVp
-GET	/sapi/v1/algo/futures/openOrders
-GET	/sapi/v1/algo/futures/order
-GET	/sapi/v1/algo/futures/subOrders
-GET	/sapi/v1/algo/spot/historicalOrders
-GET	/sapi/v1/algo/spot/newOrderTwap
-GET	/sapi/v1/algo/spot/newOrderVp
-GET	/sapi/v1/algo/spot/openOrders
-GET	/sapi/v1/algo/spot/order
-GET	/sapi/v1/algo/spot/subOrders
-GET	/sapi/v1/asset/assetDetail
-GET	/sapi/v1/asset/assetDividend
-GET	/sapi/v1/asset/custody/transfer-history
-GET	/sapi/v1/asset/dribblet
-GET	/sapi/v1/asset/dust
-GET	/sapi/v1/asset/dust-btc
-GET	/sapi/v1/asset/dust-convert/convert
-GET	/sapi/v1/asset/dust-convert/query-convertible-assets
-GET	/sapi/v1/asset/get-funding-asset
-GET	/sapi/v1/asset/ledger-transfer/cloud-mining/queryByPage
-GET	/sapi/v1/asset/tradeFee
-GET	/sapi/v1/asset/transfer
-GET	/sapi/v1/asset/wallet/balance
-GET	/sapi/v1/bfusd/account
-GET	/sapi/v1/bfusd/history/rateHistory
-GET	/sapi/v1/bfusd/history/redemptionHistory
-GET	/sapi/v1/bfusd/history/rewardsHistory
-GET	/sapi/v1/bfusd/history/subscriptionHistory
-GET	/sapi/v1/bfusd/quota
-GET	/sapi/v1/bfusd/redeem
-GET	/sapi/v1/bfusd/subscribe
-GET	/sapi/v1/bnbBurn
-GET	/sapi/v1/c2c/orderMatch/listUserOrderHistory
-GET	/sapi/v1/capital/config/getall
-GET	/sapi/v1/capital/deposit/address
-GET	/sapi/v1/capital/deposit/address/list
-GET	/sapi/v1/capital/deposit/credit-apply
-GET	/sapi/v1/capital/deposit/hisrec
-GET	/sapi/v1/capital/deposit/subAddress
-GET	/sapi/v1/capital/deposit/subHisrec
-GET	/sapi/v1/capital/withdraw/address/list
-GET	/sapi/v1/capital/withdraw/apply
-GET	/sapi/v1/capital/withdraw/history
-GET	/sapi/v1/capital/withdraw/quota
-GET	/sapi/v1/convert/acceptQuote
-GET	/sapi/v1/convert/assetInfo
-GET	/sapi/v1/convert/exchangeInfo
-GET	/sapi/v1/convert/getQuote
-GET	/sapi/v1/convert/limit/cancelOrder
-GET	/sapi/v1/convert/limit/placeOrder
-GET	/sapi/v1/convert/limit/queryOpenOrders
-GET	/sapi/v1/convert/orderStatus
-GET	/sapi/v1/convert/tradeFlow
-GET	/sapi/v1/copyTrading/futures/leadSymbol
-GET	/sapi/v1/copyTrading/futures/userStatus
-GET	/sapi/v1/dci/product/accounts
-GET	/sapi/v1/dci/product/list
-GET	/sapi/v1/dci/product/positions
-GET	/sapi/v1/dci/product/subscribe
-GET	/sapi/v1/earn/arena/activities
-GET	/sapi/v1/equity/account/disclaimer
-GET	/sapi/v1/equity/listenKey
-GET	/sapi/v1/equity/market/exchangeInfo
-GET	/sapi/v1/equity/market/quote
-GET	/sapi/v1/equity/market/tokenized-assets
-GET	/sapi/v1/equity/order/cancel
-GET	/sapi/v1/equity/order/cancel-all
-GET	/sapi/v1/equity/order/detail
-GET	/sapi/v1/equity/order/history
-GET	/sapi/v1/equity/order/open-orders
-GET	/sapi/v1/equity/order/place
-GET	/sapi/v1/equity/tokenized/convert-status
-GET	/sapi/v1/equity/tokenized/history
-GET	/sapi/v1/equity/tokenized/mint
-GET	/sapi/v1/equity/tokenized/redeem
-GET	/sapi/v1/equity/trade/history
-GET	/sapi/v1/eth-staking/eth/history/rateHistory
-GET	/sapi/v1/eth-staking/eth/history/redemptionHistory
-GET	/sapi/v1/eth-staking/eth/history/stakingHistory
-GET	/sapi/v1/eth-staking/eth/history/wbethRewardsHistory
-GET	/sapi/v1/eth-staking/eth/quota
-GET	/sapi/v1/eth-staking/eth/redeem
-GET	/sapi/v1/eth-staking/wbeth/history/unwrapHistory
-GET	/sapi/v1/eth-staking/wbeth/history/wrapHistory
-GET	/sapi/v1/eth-staking/wbeth/wrap
-GET	/sapi/v1/fiat/deposit
-GET	/sapi/v1/fiat/get-order-detail
-GET	/sapi/v1/fiat/orders
-GET	/sapi/v1/fiat/payments
-GET	/sapi/v1/giftcard/buyCode
-GET	/sapi/v1/giftcard/buyCode/token-limit
-GET	/sapi/v1/giftcard/createCode
-GET	/sapi/v1/giftcard/cryptography/rsa-public-key
-GET	/sapi/v1/giftcard/redeemCode
-GET	/sapi/v1/giftcard/verify
-GET	/sapi/v1/loan/borrow/history
-GET	/sapi/v1/loan/income
-GET	/sapi/v1/loan/ltv/adjustment/history
-GET	/sapi/v1/loan/repay/collateral/rate
-GET	/sapi/v1/loan/repay/history
-GET	/sapi/v1/loan/vip/accruedInterest
-GET	/sapi/v1/loan/vip/borrow
-GET	/sapi/v1/loan/vip/collateral/account
-GET	/sapi/v1/loan/vip/collateral/data
-GET	/sapi/v1/loan/vip/fixed/borrow
-GET	/sapi/v1/loan/vip/fixed/market
-GET	/sapi/v1/loan/vip/interestRateHistory
-GET	/sapi/v1/loan/vip/loanable/data
-GET	/sapi/v1/loan/vip/ongoing/orders
-GET	/sapi/v1/loan/vip/renew
-GET	/sapi/v1/loan/vip/repay
-GET	/sapi/v1/loan/vip/repay/history
-GET	/sapi/v1/loan/vip/request/data
-GET	/sapi/v1/loan/vip/request/interestRate
-GET	/sapi/v1/localentity/broker/deposit/provide-info
-GET	/sapi/v1/localentity/broker/withdraw/apply
-GET	/sapi/v1/localentity/country/list
-GET	/sapi/v1/localentity/deposit/history
-GET	/sapi/v1/localentity/deposit/provide-info
-GET	/sapi/v1/localentity/questionnaire-requirements
-GET	/sapi/v1/localentity/region/list
-GET	/sapi/v1/localentity/vasp
-GET	/sapi/v1/localentity/withdraw/apply
-GET	/sapi/v1/localentity/withdraw/history
-GET	/sapi/v1/managed-subaccount/accountSnapshot
-GET	/sapi/v1/managed-subaccount/asset
-GET	/sapi/v1/managed-subaccount/deposit
-GET	/sapi/v1/managed-subaccount/deposit/address
-GET	/sapi/v1/managed-subaccount/fetch-future-asset
-GET	/sapi/v1/managed-subaccount/info
-GET	/sapi/v1/managed-subaccount/marginAsset
-GET	/sapi/v1/managed-subaccount/query-trans-log
-GET	/sapi/v1/managed-subaccount/queryTransLogForInvestor
-GET	/sapi/v1/managed-subaccount/queryTransLogForTradeParent
-GET	/sapi/v1/managed-subaccount/withdraw
-GET	/sapi/v1/margin/account
-GET	/sapi/v1/margin/allAssets
-GET	/sapi/v1/margin/allOrderList
-GET	/sapi/v1/margin/allOrders
-GET	/sapi/v1/margin/allPairs
-GET	/sapi/v1/margin/api-key-list
-GET	/sapi/v1/margin/apiKey
-GET	/sapi/v1/margin/apiKey/ip
-GET	/sapi/v1/margin/available-inventory
-GET	/sapi/v1/margin/borrow-repay
-GET	/sapi/v1/margin/capital-flow
-GET	/sapi/v1/margin/crossMarginCollateralRatio
-GET	/sapi/v1/margin/crossMarginData
-GET	/sapi/v1/margin/delist-schedule
-GET	/sapi/v1/margin/exchange-small-liability
-GET	/sapi/v1/margin/exchange-small-liability-history
-GET	/sapi/v1/margin/exit-special-key-mode
-GET	/sapi/v1/margin/forceLiquidationRec
-GET	/sapi/v1/margin/interestHistory
-GET	/sapi/v1/margin/interestRateHistory
-GET	/sapi/v1/margin/isolated/account
-GET	/sapi/v1/margin/isolated/accountLimit
-GET	/sapi/v1/margin/isolated/allPairs
-GET	/sapi/v1/margin/isolatedMarginData
-GET	/sapi/v1/margin/isolatedMarginTier
-GET	/sapi/v1/margin/leverageBracket
-GET	/sapi/v1/margin/limit-price-pairs
-GET	/sapi/v1/margin/liquidation-loan
-GET	/sapi/v1/margin/liquidation-loan/repay
-GET	/sapi/v1/margin/liquidation-loan/repay-history
-GET	/sapi/v1/margin/list-schedule
-GET	/sapi/v1/margin/listen-key
-GET	/sapi/v1/margin/manual-liquidation
-GET	/sapi/v1/margin/max-leverage
-GET	/sapi/v1/margin/maxBorrowable
-GET	/sapi/v1/margin/maxTransferable
-GET	/sapi/v1/margin/myPreventedMatches
-GET	/sapi/v1/margin/myTrades
-GET	/sapi/v1/margin/next-hourly-interest-rate
-GET	/sapi/v1/margin/openOrderList
-GET	/sapi/v1/margin/openOrders
-GET	/sapi/v1/margin/order
-GET	/sapi/v1/margin/order/oco
-GET	/sapi/v1/margin/order/oto
-GET	/sapi/v1/margin/order/otoco
-GET	/sapi/v1/margin/orderList
-GET	/sapi/v1/margin/oto/openOrderList
-GET	/sapi/v1/margin/priceIndex
-GET	/sapi/v1/margin/rateLimit/order
-GET	/sapi/v1/margin/restricted-asset
-GET	/sapi/v1/margin/risk-based-liquidation-ratio
-GET	/sapi/v1/margin/tradeCoeff
-GET	/sapi/v1/margin/transfer
-GET	/sapi/v1/mining/hash-transfer/config
-GET	/sapi/v1/mining/hash-transfer/config/cancel
-GET	/sapi/v1/mining/hash-transfer/config/details/list
-GET	/sapi/v1/mining/hash-transfer/profit/details
-GET	/sapi/v1/mining/payment/list
-GET	/sapi/v1/mining/payment/other
-GET	/sapi/v1/mining/payment/uid
-GET	/sapi/v1/mining/pub/algoList
-GET	/sapi/v1/mining/pub/coinList
-GET	/sapi/v1/mining/statistics/user/list
-GET	/sapi/v1/mining/statistics/user/status
-GET	/sapi/v1/mining/worker/detail
-GET	/sapi/v1/mining/worker/list
-GET	/sapi/v1/onchain-yields/account
-GET	/sapi/v1/onchain-yields/locked/history/redemptionRecord
-GET	/sapi/v1/onchain-yields/locked/history/rewardsRecord
-GET	/sapi/v1/onchain-yields/locked/history/subscriptionRecord
-GET	/sapi/v1/onchain-yields/locked/list
-GET	/sapi/v1/onchain-yields/locked/personalLeftQuota
-GET	/sapi/v1/onchain-yields/locked/position
-GET	/sapi/v1/onchain-yields/locked/redeem
-GET	/sapi/v1/onchain-yields/locked/setAutoSubscribe
-GET	/sapi/v1/onchain-yields/locked/setRedeemOption
-GET	/sapi/v1/onchain-yields/locked/subscribe
-GET	/sapi/v1/onchain-yields/locked/subscriptionPreview
-GET	/sapi/v1/pay/transactions
-GET	/sapi/v1/portfolio/account
-GET	/sapi/v1/portfolio/asset-collection
-GET	/sapi/v1/portfolio/asset-index-price
-GET	/sapi/v1/portfolio/auto-collection
-GET	/sapi/v1/portfolio/balance
-GET	/sapi/v1/portfolio/bnb-transfer
-GET	/sapi/v1/portfolio/collateralRate
-GET	/sapi/v1/portfolio/delta-mode
-GET	/sapi/v1/portfolio/earn-asset-balance
-GET	/sapi/v1/portfolio/earn-asset-transfer
-GET	/sapi/v1/portfolio/interest-history
-GET	/sapi/v1/portfolio/margin-asset-leverage
-GET	/sapi/v1/portfolio/margin-call-level
-GET	/sapi/v1/portfolio/pmLoan
-GET	/sapi/v1/portfolio/pmloan-history
-GET	/sapi/v1/portfolio/repay
-GET	/sapi/v1/portfolio/repay-futures-negative-balance
-GET	/sapi/v1/portfolio/repay-futures-switch
-GET	/sapi/v1/rebate/taxQuery
-GET	/sapi/v1/rwusd/account
-GET	/sapi/v1/rwusd/history/rateHistory
-GET	/sapi/v1/rwusd/history/redemptionHistory
-GET	/sapi/v1/rwusd/history/rewardsHistory
-GET	/sapi/v1/rwusd/history/subscriptionHistory
-GET	/sapi/v1/rwusd/quota
-GET	/sapi/v1/rwusd/redeem
-GET	/sapi/v1/rwusd/subscribe
-GET	/sapi/v1/simple-earn/account
-GET	/sapi/v1/simple-earn/flexible/history/collateralRecord
-GET	/sapi/v1/simple-earn/flexible/history/rateHistory
-GET	/sapi/v1/simple-earn/flexible/history/redemptionRecord
-GET	/sapi/v1/simple-earn/flexible/history/rewardsRecord
-GET	/sapi/v1/simple-earn/flexible/history/subscriptionRecord
-GET	/sapi/v1/simple-earn/flexible/list
-GET	/sapi/v1/simple-earn/flexible/personalLeftQuota
-GET	/sapi/v1/simple-earn/flexible/position
-GET	/sapi/v1/simple-earn/flexible/redeem
-GET	/sapi/v1/simple-earn/flexible/setAutoSubscribe
-GET	/sapi/v1/simple-earn/flexible/subscribe
-GET	/sapi/v1/simple-earn/flexible/subscriptionPreview
-GET	/sapi/v1/simple-earn/locked/history/redemptionRecord
-GET	/sapi/v1/simple-earn/locked/history/rewardsRecord
-GET	/sapi/v1/simple-earn/locked/history/subscriptionRecord
-GET	/sapi/v1/simple-earn/locked/list
-GET	/sapi/v1/simple-earn/locked/personalLeftQuota
-GET	/sapi/v1/simple-earn/locked/position
-GET	/sapi/v1/simple-earn/locked/redeem
-GET	/sapi/v1/simple-earn/locked/setAutoSubscribe
-GET	/sapi/v1/simple-earn/locked/setRedeemOption
-GET	/sapi/v1/simple-earn/locked/subscribe
-GET	/sapi/v1/simple-earn/locked/subscriptionPreview
-GET	/sapi/v1/soft-staking/history/rewardsRecord
-GET	/sapi/v1/soft-staking/list
-GET	/sapi/v1/soft-staking/set
-GET	/sapi/v1/sol-staking/account
-GET	/sapi/v1/sol-staking/sol/claim
-GET	/sapi/v1/sol-staking/sol/history/bnsolRewardsHistory
-GET	/sapi/v1/sol-staking/sol/history/boostRewardsHistory
-GET	/sapi/v1/sol-staking/sol/history/rateHistory
-GET	/sapi/v1/sol-staking/sol/history/redemptionHistory
-GET	/sapi/v1/sol-staking/sol/history/stakingHistory
-GET	/sapi/v1/sol-staking/sol/history/unclaimedRewards
-GET	/sapi/v1/sol-staking/sol/quota
-GET	/sapi/v1/sol-staking/sol/redeem
-GET	/sapi/v1/sol-staking/sol/stake
-GET	/sapi/v1/spot/asset/tags
-GET	/sapi/v1/spot/delist-schedule
-GET	/sapi/v1/spot/open-symbol-list
-GET	/sapi/v1/sub-account/eoptions/enable
-GET	/sapi/v1/sub-account/futures/account
-GET	/sapi/v1/sub-account/futures/accountSummary
-GET	/sapi/v1/sub-account/futures/enable
-GET	/sapi/v1/sub-account/futures/internalTransfer
-GET	/sapi/v1/sub-account/futures/move-position
-GET	/sapi/v1/sub-account/futures/positionRisk
-GET	/sapi/v1/sub-account/futures/transfer
-GET	/sapi/v1/sub-account/list
-GET	/sapi/v1/sub-account/margin/account
-GET	/sapi/v1/sub-account/margin/accountSummary
-GET	/sapi/v1/sub-account/margin/transfer
-GET	/sapi/v1/sub-account/spotSummary
-GET	/sapi/v1/sub-account/status
-GET	/sapi/v1/sub-account/sub/transfer/history
-GET	/sapi/v1/sub-account/subAccountApi
-GET	/sapi/v1/sub-account/subAccountApi/ipRestriction
-GET	/sapi/v1/sub-account/subAccountApi/ipRestriction/ipList
-GET	/sapi/v1/sub-account/subAccountApiPermission
-GET	/sapi/v1/sub-account/transaction-statistics
-GET	/sapi/v1/sub-account/transfer/subToMaster
-GET	/sapi/v1/sub-account/transfer/subToSub
-GET	/sapi/v1/sub-account/transfer/subUserHistory
-GET	/sapi/v1/sub-account/universalTransfer
-GET	/sapi/v1/sub-account/virtualSubAccount
-GET	/sapi/v1/system/status
-GET	/sapi/v1/w3w/wallet/prediction/balance/payment-options
-GET	/sapi/v1/w3w/wallet/prediction/batch-redeem
-GET	/sapi/v1/w3w/wallet/prediction/category/list
-GET	/sapi/v1/w3w/wallet/prediction/deposit/apply
-GET	/sapi/v1/w3w/wallet/prediction/market/detail
-GET	/sapi/v1/w3w/wallet/prediction/market/list
-GET	/sapi/v1/w3w/wallet/prediction/market/search
-GET	/sapi/v1/w3w/wallet/prediction/order-book
-GET	/sapi/v1/w3w/wallet/prediction/order-book/last-trade-price
-GET	/sapi/v1/w3w/wallet/prediction/order/history
-GET	/sapi/v1/w3w/wallet/prediction/order/list
-GET	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/create
-GET	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/detail
-GET	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/events
-GET	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/fulfil
-GET	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/list
-GET	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/preview
-GET	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/remove
-GET	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/reserved-balances
-GET	/sapi/v1/w3w/wallet/prediction/pnl/portfolio
-GET	/sapi/v1/w3w/wallet/prediction/pnl/query
-GET	/sapi/v1/w3w/wallet/prediction/position/filter
-GET	/sapi/v1/w3w/wallet/prediction/position/list
-GET	/sapi/v1/w3w/wallet/prediction/position/settled-history
-GET	/sapi/v1/w3w/wallet/prediction/position/token
-GET	/sapi/v1/w3w/wallet/prediction/quota/limit/status
-GET	/sapi/v1/w3w/wallet/prediction/redeem/status
-GET	/sapi/v1/w3w/wallet/prediction/trade/batch-cancel
-GET	/sapi/v1/w3w/wallet/prediction/trade/get-quote
-GET	/sapi/v1/w3w/wallet/prediction/trade/place-order-bundle
-GET	/sapi/v1/w3w/wallet/prediction/transfer/inbound
-GET	/sapi/v1/w3w/wallet/prediction/transfer/list
-GET	/sapi/v1/w3w/wallet/prediction/transfer/outbound
-GET	/sapi/v1/w3w/wallet/prediction/transfer/status
-GET	/sapi/v1/w3w/wallet/prediction/wallet/list
-GET	/sapi/v1/w3w/wallet/prediction/withdraw/apply
-GET	/sapi/v2/eth-staking/account
-GET	/sapi/v2/eth-staking/eth/stake
-GET	/sapi/v2/fiat/withdraw
-GET	/sapi/v2/loan/flexible/adjust/ltv
-GET	/sapi/v2/loan/flexible/borrow
-GET	/sapi/v2/loan/flexible/borrow/history
-GET	/sapi/v2/loan/flexible/collateral/data
-GET	/sapi/v2/loan/flexible/liquidation/history
-GET	/sapi/v2/loan/flexible/loanable/data
-GET	/sapi/v2/loan/flexible/ltv/adjustment/history
-GET	/sapi/v2/loan/flexible/ongoing/orders
-GET	/sapi/v2/loan/flexible/repay
-GET	/sapi/v2/loan/flexible/repay/history
-GET	/sapi/v2/loan/flexible/repay/rate
-GET	/sapi/v2/loan/interestRateHistory
-GET	/sapi/v2/localentity/deposit/history
-GET	/sapi/v2/localentity/deposit/provide-info
-GET	/sapi/v2/localentity/withdraw/history
-GET	/sapi/v2/portfolio/account
-GET	/sapi/v2/portfolio/collateralRate
-GET	/sapi/v2/sub-account/futures/account
-GET	/sapi/v2/sub-account/futures/accountSummary
-GET	/sapi/v2/sub-account/futures/positionRisk
-GET	/sapi/v2/sub-account/subAccountApi/ipRestriction
-GET	/sapi/v3/asset/getUserAsset
-GET	/sapi/v3/sub-account/assets
-GET	/sapi/v4/sub-account/assets
-GET	/sapi/wss
-MUTATING	/api/v1/userDataStream
-MUTATING	/api/v3/cancelReplace
-MUTATING	/api/v3/order
-MUTATING	/api/v3/order/cancelReplace
-MUTATING	/api/v3/order/oco
-MUTATING	/api/v3/order/test
-MUTATING	/api/v3/orderList/
-MUTATING	/api/v3/orderList/oco
-MUTATING	/api/v3/orderList/opo
-MUTATING	/api/v3/orderList/opoco
-MUTATING	/api/v3/orderList/oto
-MUTATING	/api/v3/orderList/otoco
-MUTATING	/api/v3/sor/order
-MUTATING	/api/v3/sor/order/test
-MUTATING	/api/v3/userDataStream
-MUTATING	/dapi/v1/batchOrders
-MUTATING	/dapi/v1/countdownCancelAll
-MUTATING	/dapi/v1/leverage
-MUTATING	/dapi/v1/listenKey
-MUTATING	/dapi/v1/marginType
-MUTATING	/dapi/v1/order
-MUTATING	/dapi/v1/positionMargin
-MUTATING	/dapi/v1/positionSide/dual
-MUTATING	/fapi/v1/algoOrder
-MUTATING	/fapi/v1/batchOrders
-MUTATING	/fapi/v1/convert/acceptQuote
-MUTATING	/fapi/v1/convert/getQuote
-MUTATING	/fapi/v1/countdownCancelAll
-MUTATING	/fapi/v1/feeBurn
-MUTATING	/fapi/v1/leverage
-MUTATING	/fapi/v1/listenKey
-MUTATING	/fapi/v1/marginType
-MUTATING	/fapi/v1/multiAssetsMargin
-MUTATING	/fapi/v1/order
-MUTATING	/fapi/v1/order/test
-MUTATING	/fapi/v1/positionMargin
-MUTATING	/fapi/v1/positionSide/dual
-MUTATING	/fapi/v1/stock/contract
-MUTATING	/sapi/v1/account/disableFastWithdrawSwitch
-MUTATING	/sapi/v1/account/enableFastWithdrawSwitch
-MUTATING	/sapi/v1/algo/futures/newOrderTwap
-MUTATING	/sapi/v1/algo/futures/newOrderVp
-MUTATING	/sapi/v1/algo/spot/newOrderTwap
-MUTATING	/sapi/v1/algo/spot/newOrderVp
-MUTATING	/sapi/v1/asset/dust
-MUTATING	/sapi/v1/asset/dust-btc
-MUTATING	/sapi/v1/asset/dust-convert/convert
-MUTATING	/sapi/v1/asset/dust-convert/query-convertible-assets
-MUTATING	/sapi/v1/asset/get-funding-asset
-MUTATING	/sapi/v1/asset/transfer
-MUTATING	/sapi/v1/bfusd/redeem
-MUTATING	/sapi/v1/bfusd/subscribe
-MUTATING	/sapi/v1/bnbBurn
-MUTATING	/sapi/v1/capital/deposit/credit-apply
-MUTATING	/sapi/v1/capital/withdraw/apply
-MUTATING	/sapi/v1/convert/acceptQuote
-MUTATING	/sapi/v1/convert/getQuote
-MUTATING	/sapi/v1/convert/limit/cancelOrder
-MUTATING	/sapi/v1/convert/limit/placeOrder
-MUTATING	/sapi/v1/dci/product/auto_compound/edit-status
-MUTATING	/sapi/v1/dci/product/subscribe
-MUTATING	/sapi/v1/equity/account/disclaimer
-MUTATING	/sapi/v1/equity/listenKey
-MUTATING	/sapi/v1/equity/order/cancel
-MUTATING	/sapi/v1/equity/order/cancel-all
-MUTATING	/sapi/v1/equity/order/place
-MUTATING	/sapi/v1/equity/tokenized/mint
-MUTATING	/sapi/v1/equity/tokenized/redeem
-MUTATING	/sapi/v1/eth-staking/eth/redeem
-MUTATING	/sapi/v1/eth-staking/wbeth/wrap
-MUTATING	/sapi/v1/fiat/deposit
-MUTATING	/sapi/v1/giftcard/buyCode
-MUTATING	/sapi/v1/giftcard/createCode
-MUTATING	/sapi/v1/giftcard/redeemCode
-MUTATING	/sapi/v1/loan/vip/borrow
-MUTATING	/sapi/v1/loan/vip/fixed/borrow
-MUTATING	/sapi/v1/loan/vip/renew
-MUTATING	/sapi/v1/loan/vip/repay
-MUTATING	/sapi/v1/localentity/broker/withdraw/apply
-MUTATING	/sapi/v1/localentity/withdraw/apply
-MUTATING	/sapi/v1/managed-subaccount/deposit
-MUTATING	/sapi/v1/managed-subaccount/withdraw
-MUTATING	/sapi/v1/margin/apiKey
-MUTATING	/sapi/v1/margin/borrow-repay
-MUTATING	/sapi/v1/margin/exchange-small-liability
-MUTATING	/sapi/v1/margin/exit-special-key-mode
-MUTATING	/sapi/v1/margin/isolated/account
-MUTATING	/sapi/v1/margin/liquidation-loan/repay
-MUTATING	/sapi/v1/margin/listen-key
-MUTATING	/sapi/v1/margin/manual-liquidation
-MUTATING	/sapi/v1/margin/max-leverage
-MUTATING	/sapi/v1/margin/order
-MUTATING	/sapi/v1/margin/order/oco
-MUTATING	/sapi/v1/margin/order/oto
-MUTATING	/sapi/v1/margin/order/otoco
-MUTATING	/sapi/v1/mining/hash-transfer/config
-MUTATING	/sapi/v1/mining/hash-transfer/config/cancel
-MUTATING	/sapi/v1/onchain-yields/locked/redeem
-MUTATING	/sapi/v1/onchain-yields/locked/setAutoSubscribe
-MUTATING	/sapi/v1/onchain-yields/locked/setRedeemOption
-MUTATING	/sapi/v1/onchain-yields/locked/subscribe
-MUTATING	/sapi/v1/portfolio/asset-collection
-MUTATING	/sapi/v1/portfolio/auto-collection
-MUTATING	/sapi/v1/portfolio/bnb-transfer
-MUTATING	/sapi/v1/portfolio/delta-mode
-MUTATING	/sapi/v1/portfolio/earn-asset-transfer
-MUTATING	/sapi/v1/portfolio/margin-call-level
-MUTATING	/sapi/v1/portfolio/mint
-MUTATING	/sapi/v1/portfolio/redeem
-MUTATING	/sapi/v1/portfolio/repay
-MUTATING	/sapi/v1/portfolio/repay-futures-negative-balance
-MUTATING	/sapi/v1/portfolio/repay-futures-switch
-MUTATING	/sapi/v1/rwusd/redeem
-MUTATING	/sapi/v1/rwusd/subscribe
-MUTATING	/sapi/v1/simple-earn/flexible/redeem
-MUTATING	/sapi/v1/simple-earn/flexible/setAutoSubscribe
-MUTATING	/sapi/v1/simple-earn/flexible/subscribe
-MUTATING	/sapi/v1/simple-earn/locked/redeem
-MUTATING	/sapi/v1/simple-earn/locked/setAutoSubscribe
-MUTATING	/sapi/v1/simple-earn/locked/setRedeemOption
-MUTATING	/sapi/v1/simple-earn/locked/subscribe
-MUTATING	/sapi/v1/sol-staking/sol/claim
-MUTATING	/sapi/v1/sol-staking/sol/redeem
-MUTATING	/sapi/v1/sol-staking/sol/stake
-MUTATING	/sapi/v1/sub-account/eoptions/enable
-MUTATING	/sapi/v1/sub-account/futures/enable
-MUTATING	/sapi/v1/sub-account/futures/internalTransfer
-MUTATING	/sapi/v1/sub-account/futures/move-position
-MUTATING	/sapi/v1/sub-account/futures/transfer
-MUTATING	/sapi/v1/sub-account/margin/transfer
-MUTATING	/sapi/v1/sub-account/subAccountApi
-MUTATING	/sapi/v1/sub-account/subAccountApiPermission
-MUTATING	/sapi/v1/sub-account/transfer/subToMaster
-MUTATING	/sapi/v1/sub-account/transfer/subToSub
-MUTATING	/sapi/v1/sub-account/universalTransfer
-MUTATING	/sapi/v1/sub-account/virtualSubAccount
-MUTATING	/sapi/v1/userDataStream
-MUTATING	/sapi/v1/userDataStream/isolated
-MUTATING	/sapi/v1/w3w/wallet/prediction/batch-redeem
-MUTATING	/sapi/v1/w3w/wallet/prediction/deposit/apply
-MUTATING	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/create
-MUTATING	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/detail
-MUTATING	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/events
-MUTATING	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/fulfil
-MUTATING	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/list
-MUTATING	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/preview
-MUTATING	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/remove
-MUTATING	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/reserved-balances
-MUTATING	/sapi/v1/w3w/wallet/prediction/trade/batch-cancel
-MUTATING	/sapi/v1/w3w/wallet/prediction/trade/get-quote
-MUTATING	/sapi/v1/w3w/wallet/prediction/trade/place-order-bundle
-MUTATING	/sapi/v1/w3w/wallet/prediction/transfer/inbound
-MUTATING	/sapi/v1/w3w/wallet/prediction/transfer/outbound
-MUTATING	/sapi/v1/w3w/wallet/prediction/withdraw/apply
-MUTATING	/sapi/v2/eth-staking/eth/stake
-MUTATING	/sapi/v2/fiat/withdraw
-MUTATING	/sapi/v2/loan/flexible/adjust/ltv
-MUTATING	/sapi/v2/loan/flexible/borrow
-MUTATING	/sapi/v2/loan/flexible/repay
-MUTATING	/sapi/v2/sub-account/subAccountApi/ipRestriction
-MUTATING	/sapi/v3/asset/getUserAsset
-MUTATING	/api/v1/userDataStream
-MUTATING	/api/v3/order/amend/keepPriority
-MUTATING	/api/v3/userDataStream
-MUTATING	/dapi/v1/batchOrders
-MUTATING	/dapi/v1/listenKey
-MUTATING	/dapi/v1/order
-MUTATING	/fapi/v1/batchOrders
-MUTATING	/fapi/v1/listenKey
-MUTATING	/fapi/v1/order
-MUTATING	/sapi/v1/localentity/broker/deposit/provide-info
-MUTATING	/sapi/v1/localentity/deposit/provide-info
-MUTATING	/sapi/v1/margin/apiKey/ip
-MUTATING	/sapi/v1/margin/listen-key
-MUTATING	/sapi/v1/userDataStream
-MUTATING	/sapi/v1/userDataStream/isolated
-MUTATING	/sapi/v2/localentity/deposit/provide-info
+MUTATING	retry	/api/v1/userDataStream
+MUTATING	signed	/api/v3/openOrders
+MUTATING	signed	/api/v3/order
+MUTATING	signed	/api/v3/orderList
+MUTATING	retry	/api/v3/userDataStream
+MUTATING	signed	/dapi/v1/allOpenOrders
+MUTATING	signed	/dapi/v1/batchOrders
+MUTATING	signed	/dapi/v1/listenKey
+MUTATING	signed	/dapi/v1/order
+MUTATING	signed	/fapi/v1/algoOpenOrders
+MUTATING	signed	/fapi/v1/algoOrder
+MUTATING	signed	/fapi/v1/allOpenOrders
+MUTATING	signed	/fapi/v1/batchOrders
+MUTATING	signed	/fapi/v1/listenKey
+MUTATING	signed	/fapi/v1/order
+MUTATING	signed	/sapi/v1/algo/futures/order
+MUTATING	signed	/sapi/v1/algo/spot/order
+MUTATING	signed	/sapi/v1/margin/apiKey
+MUTATING	signed	/sapi/v1/margin/isolated/account
+MUTATING	signed	/sapi/v1/margin/listen-key
+MUTATING	signed	/sapi/v1/margin/openOrders
+MUTATING	signed	/sapi/v1/margin/order
+MUTATING	signed	/sapi/v1/margin/orderList
+MUTATING	signed	/sapi/v1/portfolio/margin-call-level
+MUTATING	signed	/sapi/v1/sub-account/subAccountApi
+MUTATING	signed	/sapi/v1/sub-account/subAccountApi/ipRestriction/ipList
+MUTATING	retry	/sapi/v1/userDataStream
+MUTATING	retry	/sapi/v1/userDataStream/isolated
+GET	retry	/api/v1/aggTrades
+GET	retry	/api/v1/depth
+GET	retry	/api/v1/historicalTrades
+GET	retry	/api/v1/klines
+GET	retry	/api/v1/ping
+GET	retry	/api/v1/ticker/24hr
+GET	retry	/api/v1/ticker/bookTicker
+GET	retry	/api/v1/ticker/price
+GET	retry	/api/v1/time
+GET	retry	/api/v1/trades
+GET	retry	/api/v1/userDataStream
+GET	retry	/api/v3/acccount
+GET	signed	/api/v3/account
+GET	signed	/api/v3/account/commission
+GET	retry	/api/v3/aggTrade
+GET	signed	/api/v3/aggTrades
+GET	signed	/api/v3/allOrderList
+GET	signed	/api/v3/allOrders
+GET	signed	/api/v3/avgPrice
+GET	signed	/api/v3/depth
+GET	signed	/api/v3/exchangeInfo
+GET	signed	/api/v3/executionRules
+GET	signed	/api/v3/historicalBlockTrades
+GET	signed	/api/v3/historicalTrades
+GET	signed	/api/v3/klines
+GET	signed	/api/v3/myAllocations
+GET	signed	/api/v3/myFilters
+GET	signed	/api/v3/myPreventedMatches
+GET	signed	/api/v3/myTrades
+GET	signed	/api/v3/openOrderList
+GET	retry	/api/v3/openOrderLists
+GET	signed	/api/v3/openOrders
+GET	signed	/api/v3/order
+GET	retry	/api/v3/order/amend/keepPriority
+GET	signed	/api/v3/order/amendments
+GET	retry	/api/v3/order/cancelReplace
+GET	retry	/api/v3/order/oco
+GET	retry	/api/v3/order/test
+GET	signed	/api/v3/orderList
+GET	retry	/api/v3/orderList/oco
+GET	retry	/api/v3/orderList/opo
+GET	retry	/api/v3/orderList/opoco
+GET	retry	/api/v3/orderList/oto
+GET	retry	/api/v3/orderList/otoco
+GET	signed	/api/v3/ping
+GET	retry	/api/v3/preventedMatches
+GET	signed	/api/v3/rateLimit/order
+GET	signed	/api/v3/referencePrice
+GET	signed	/api/v3/referencePrice/calculation
+GET	retry	/api/v3/sor/order
+GET	retry	/api/v3/sor/order/test
+GET	signed	/api/v3/ticker
+GET	signed	/api/v3/ticker/24hr
+GET	signed	/api/v3/ticker/bookTicker
+GET	signed	/api/v3/ticker/price
+GET	signed	/api/v3/ticker/tradingDay
+GET	signed	/api/v3/time
+GET	signed	/api/v3/trades
+GET	signed	/api/v3/uiKlines
+GET	signed	/dapi/v1/account
+GET	signed	/dapi/v1/adlQuantile
+GET	signed	/dapi/v1/aggTrades
+GET	retry	/dapi/v1/algoOrder
+GET	retry	/dapi/v1/allOpenOrders
+GET	signed	/dapi/v1/allOrders
+GET	signed	/dapi/v1/balance
+GET	retry	/dapi/v1/batchOrders
+GET	signed	/dapi/v1/commissionRate
+GET	signed	/dapi/v1/constituents
+GET	signed	/dapi/v1/continuousKlines
+GET	retry	/dapi/v1/countdownCancelAll
+GET	signed	/dapi/v1/depth
+GET	signed	/dapi/v1/exchangeInfo
+GET	signed	/dapi/v1/forceOrders
+GET	signed	/dapi/v1/fundingInfo
+GET	signed	/dapi/v1/fundingRate
+GET	signed	/dapi/v1/historicalTrades
+GET	signed	/dapi/v1/income
+GET	signed	/dapi/v1/income/asyn
+GET	signed	/dapi/v1/income/asyn/id
+GET	signed	/dapi/v1/indexPriceKlines
+GET	signed	/dapi/v1/klines
+GET	retry	/dapi/v1/leverage
+GET	signed	/dapi/v1/leverageBracket
+GET	retry	/dapi/v1/listenKey
+GET	retry	/dapi/v1/marginType
+GET	signed	/dapi/v1/markPriceKlines
+GET	signed	/dapi/v1/openInterest
+GET	signed	/dapi/v1/openOrder
+GET	signed	/dapi/v1/openOrders
+GET	signed	/dapi/v1/order
+GET	signed	/dapi/v1/order/asyn
+GET	signed	/dapi/v1/order/asyn/id
+GET	signed	/dapi/v1/orderAmendment
+GET	signed	/dapi/v1/ping
+GET	retry	/dapi/v1/positionMargin
+GET	signed	/dapi/v1/positionMargin/history
+GET	signed	/dapi/v1/positionRisk
+GET	signed	/dapi/v1/positionSide/dual
+GET	signed	/dapi/v1/premiumIndex
+GET	signed	/dapi/v1/premiumIndexKlines
+GET	signed	/dapi/v1/ticker/24hr
+GET	signed	/dapi/v1/ticker/bookTicker
+GET	signed	/dapi/v1/ticker/price
+GET	signed	/dapi/v1/time
+GET	signed	/dapi/v1/trade/asyn
+GET	signed	/dapi/v1/trade/asyn/id
+GET	signed	/dapi/v1/trades
+GET	signed	/dapi/v1/userTrades
+GET	signed	/dapi/v2/leverageBracket
+GET	signed	/fapi/v1/accountConfig
+GET	signed	/fapi/v1/adlQuantile
+GET	signed	/fapi/v1/aggTrades
+GET	retry	/fapi/v1/algoOpenOrders
+GET	signed	/fapi/v1/algoOrder
+GET	signed	/fapi/v1/allAlgoOrders
+GET	retry	/fapi/v1/allOpenOrders
+GET	signed	/fapi/v1/allOrders
+GET	signed	/fapi/v1/apiTradingStatus
+GET	signed	/fapi/v1/assetIndex
+GET	retry	/fapi/v1/batchOrders
+GET	signed	/fapi/v1/commissionRate
+GET	signed	/fapi/v1/constituents
+GET	signed	/fapi/v1/continuousKlines
+GET	retry	/fapi/v1/convert/acceptQuote
+GET	signed	/fapi/v1/convert/exchangeInfo
+GET	retry	/fapi/v1/convert/getQuote
+GET	signed	/fapi/v1/convert/orderStatus
+GET	retry	/fapi/v1/countdownCancelAll
+GET	signed	/fapi/v1/depth
+GET	signed	/fapi/v1/exchangeInfo
+GET	signed	/fapi/v1/feeBurn
+GET	signed	/fapi/v1/forceOrders
+GET	signed	/fapi/v1/fundingInfo
+GET	signed	/fapi/v1/fundingRate
+GET	signed	/fapi/v1/historicalTrades
+GET	signed	/fapi/v1/income
+GET	signed	/fapi/v1/income/asyn
+GET	signed	/fapi/v1/income/asyn/id
+GET	signed	/fapi/v1/indexInfo
+GET	signed	/fapi/v1/indexPriceKlines
+GET	signed	/fapi/v1/insuranceBalance
+GET	signed	/fapi/v1/klines
+GET	retry	/fapi/v1/leverage
+GET	signed	/fapi/v1/leverageBracket
+GET	retry	/fapi/v1/listenKey
+GET	retry	/fapi/v1/marginType
+GET	signed	/fapi/v1/markPriceKlines
+GET	signed	/fapi/v1/multiAssetsMargin
+GET	signed	/fapi/v1/openAlgoOrders
+GET	signed	/fapi/v1/openInterest
+GET	signed	/fapi/v1/openOrder
+GET	signed	/fapi/v1/openOrders
+GET	signed	/fapi/v1/order
+GET	signed	/fapi/v1/order/asyn
+GET	signed	/fapi/v1/order/asyn/id
+GET	retry	/fapi/v1/order/test
+GET	signed	/fapi/v1/orderAmendment
+GET	signed	/fapi/v1/ping
+GET	signed	/fapi/v1/pmAccountInfo
+GET	retry	/fapi/v1/positionMargin
+GET	signed	/fapi/v1/positionMargin/history
+GET	signed	/fapi/v1/positionSide/dual
+GET	signed	/fapi/v1/premiumIndex
+GET	signed	/fapi/v1/premiumIndexKlines
+GET	signed	/fapi/v1/rateLimit/order
+GET	signed	/fapi/v1/rpiDepth
+GET	retry	/fapi/v1/stock/contract
+GET	signed	/fapi/v1/symbolAdlRisk
+GET	signed	/fapi/v1/symbolConfig
+GET	signed	/fapi/v1/ticker/24hr
+GET	signed	/fapi/v1/ticker/bookTicker
+GET	signed	/fapi/v1/ticker/price
+GET	signed	/fapi/v1/time
+GET	signed	/fapi/v1/trade/asyn
+GET	signed	/fapi/v1/trade/asyn/id
+GET	signed	/fapi/v1/trades
+GET	signed	/fapi/v1/tradingSchedule
+GET	signed	/fapi/v1/userTrades
+GET	signed	/fapi/v2/account
+GET	signed	/fapi/v2/balance
+GET	signed	/fapi/v2/positionRisk
+GET	signed	/fapi/v2/ticker/price
+GET	signed	/fapi/v3/account
+GET	signed	/fapi/v3/balance
+GET	signed	/fapi/v3/positionRisk
+GET	signed	/sapi/v1/account/apiRestrictions
+GET	signed	/sapi/v1/account/apiTradingStatus
+GET	retry	/sapi/v1/account/disableFastWithdrawSwitch
+GET	retry	/sapi/v1/account/enableFastWithdrawSwitch
+GET	signed	/sapi/v1/account/info
+GET	signed	/sapi/v1/account/status
+GET	signed	/sapi/v1/accountSnapshot
+GET	signed	/sapi/v1/addressVerify/list
+GET	signed	/sapi/v1/algo/futures/historicalOrders
+GET	retry	/sapi/v1/algo/futures/newOrderTwap
+GET	retry	/sapi/v1/algo/futures/newOrderVp
+GET	signed	/sapi/v1/algo/futures/openOrders
+GET	retry	/sapi/v1/algo/futures/order
+GET	signed	/sapi/v1/algo/futures/subOrders
+GET	signed	/sapi/v1/algo/spot/historicalOrders
+GET	retry	/sapi/v1/algo/spot/newOrderTwap
+GET	retry	/sapi/v1/algo/spot/newOrderVp
+GET	signed	/sapi/v1/algo/spot/openOrders
+GET	retry	/sapi/v1/algo/spot/order
+GET	signed	/sapi/v1/algo/spot/subOrders
+GET	signed	/sapi/v1/asset/assetDetail
+GET	signed	/sapi/v1/asset/assetDividend
+GET	signed	/sapi/v1/asset/custody/transfer-history
+GET	signed	/sapi/v1/asset/dribblet
+GET	retry	/sapi/v1/asset/dust
+GET	retry	/sapi/v1/asset/dust-btc
+GET	retry	/sapi/v1/asset/dust-convert/convert
+GET	retry	/sapi/v1/asset/dust-convert/query-convertible-assets
+GET	retry	/sapi/v1/asset/get-funding-asset
+GET	signed	/sapi/v1/asset/ledger-transfer/cloud-mining/queryByPage
+GET	signed	/sapi/v1/asset/tradeFee
+GET	signed	/sapi/v1/asset/transfer
+GET	signed	/sapi/v1/asset/wallet/balance
+GET	signed	/sapi/v1/bfusd/account
+GET	signed	/sapi/v1/bfusd/history/rateHistory
+GET	signed	/sapi/v1/bfusd/history/redemptionHistory
+GET	signed	/sapi/v1/bfusd/history/rewardsHistory
+GET	signed	/sapi/v1/bfusd/history/subscriptionHistory
+GET	signed	/sapi/v1/bfusd/quota
+GET	retry	/sapi/v1/bfusd/redeem
+GET	retry	/sapi/v1/bfusd/subscribe
+GET	signed	/sapi/v1/bnbBurn
+GET	signed	/sapi/v1/c2c/orderMatch/listUserOrderHistory
+GET	signed	/sapi/v1/capital/config/getall
+GET	signed	/sapi/v1/capital/deposit/address
+GET	signed	/sapi/v1/capital/deposit/address/list
+GET	retry	/sapi/v1/capital/deposit/credit-apply
+GET	signed	/sapi/v1/capital/deposit/hisrec
+GET	signed	/sapi/v1/capital/deposit/subAddress
+GET	signed	/sapi/v1/capital/deposit/subHisrec
+GET	signed	/sapi/v1/capital/withdraw/address/list
+GET	retry	/sapi/v1/capital/withdraw/apply
+GET	signed	/sapi/v1/capital/withdraw/history
+GET	signed	/sapi/v1/capital/withdraw/quota
+GET	retry	/sapi/v1/convert/acceptQuote
+GET	signed	/sapi/v1/convert/assetInfo
+GET	signed	/sapi/v1/convert/exchangeInfo
+GET	retry	/sapi/v1/convert/getQuote
+GET	retry	/sapi/v1/convert/limit/cancelOrder
+GET	retry	/sapi/v1/convert/limit/placeOrder
+GET	signed	/sapi/v1/convert/limit/queryOpenOrders
+GET	signed	/sapi/v1/convert/orderStatus
+GET	signed	/sapi/v1/convert/tradeFlow
+GET	signed	/sapi/v1/copyTrading/futures/leadSymbol
+GET	signed	/sapi/v1/copyTrading/futures/userStatus
+GET	signed	/sapi/v1/dci/product/accounts
+GET	signed	/sapi/v1/dci/product/list
+GET	signed	/sapi/v1/dci/product/positions
+GET	retry	/sapi/v1/dci/product/subscribe
+GET	signed	/sapi/v1/earn/arena/activities
+GET	retry	/sapi/v1/equity/account/disclaimer
+GET	retry	/sapi/v1/equity/listenKey
+GET	signed	/sapi/v1/equity/market/exchangeInfo
+GET	signed	/sapi/v1/equity/market/quote
+GET	signed	/sapi/v1/equity/market/tokenized-assets
+GET	retry	/sapi/v1/equity/order/cancel
+GET	retry	/sapi/v1/equity/order/cancel-all
+GET	signed	/sapi/v1/equity/order/detail
+GET	signed	/sapi/v1/equity/order/history
+GET	signed	/sapi/v1/equity/order/open-orders
+GET	retry	/sapi/v1/equity/order/place
+GET	signed	/sapi/v1/equity/tokenized/convert-status
+GET	signed	/sapi/v1/equity/tokenized/history
+GET	retry	/sapi/v1/equity/tokenized/mint
+GET	retry	/sapi/v1/equity/tokenized/redeem
+GET	signed	/sapi/v1/equity/trade/history
+GET	signed	/sapi/v1/eth-staking/eth/history/rateHistory
+GET	signed	/sapi/v1/eth-staking/eth/history/redemptionHistory
+GET	signed	/sapi/v1/eth-staking/eth/history/stakingHistory
+GET	signed	/sapi/v1/eth-staking/eth/history/wbethRewardsHistory
+GET	signed	/sapi/v1/eth-staking/eth/quota
+GET	retry	/sapi/v1/eth-staking/eth/redeem
+GET	signed	/sapi/v1/eth-staking/wbeth/history/unwrapHistory
+GET	signed	/sapi/v1/eth-staking/wbeth/history/wrapHistory
+GET	retry	/sapi/v1/eth-staking/wbeth/wrap
+GET	retry	/sapi/v1/fiat/deposit
+GET	signed	/sapi/v1/fiat/get-order-detail
+GET	signed	/sapi/v1/fiat/orders
+GET	signed	/sapi/v1/fiat/payments
+GET	retry	/sapi/v1/giftcard/buyCode
+GET	signed	/sapi/v1/giftcard/buyCode/token-limit
+GET	retry	/sapi/v1/giftcard/createCode
+GET	signed	/sapi/v1/giftcard/cryptography/rsa-public-key
+GET	retry	/sapi/v1/giftcard/redeemCode
+GET	signed	/sapi/v1/giftcard/verify
+GET	signed	/sapi/v1/loan/borrow/history
+GET	signed	/sapi/v1/loan/income
+GET	signed	/sapi/v1/loan/ltv/adjustment/history
+GET	retry	/sapi/v1/loan/repay/collateral/rate
+GET	signed	/sapi/v1/loan/repay/history
+GET	signed	/sapi/v1/loan/vip/accruedInterest
+GET	retry	/sapi/v1/loan/vip/borrow
+GET	signed	/sapi/v1/loan/vip/collateral/account
+GET	signed	/sapi/v1/loan/vip/collateral/data
+GET	retry	/sapi/v1/loan/vip/fixed/borrow
+GET	signed	/sapi/v1/loan/vip/fixed/market
+GET	signed	/sapi/v1/loan/vip/interestRateHistory
+GET	signed	/sapi/v1/loan/vip/loanable/data
+GET	signed	/sapi/v1/loan/vip/ongoing/orders
+GET	retry	/sapi/v1/loan/vip/renew
+GET	retry	/sapi/v1/loan/vip/repay
+GET	signed	/sapi/v1/loan/vip/repay/history
+GET	signed	/sapi/v1/loan/vip/request/data
+GET	signed	/sapi/v1/loan/vip/request/interestRate
+GET	retry	/sapi/v1/localentity/broker/deposit/provide-info
+GET	retry	/sapi/v1/localentity/broker/withdraw/apply
+GET	signed	/sapi/v1/localentity/country/list
+GET	signed	/sapi/v1/localentity/deposit/history
+GET	retry	/sapi/v1/localentity/deposit/provide-info
+GET	signed	/sapi/v1/localentity/questionnaire-requirements
+GET	signed	/sapi/v1/localentity/region/list
+GET	signed	/sapi/v1/localentity/vasp
+GET	retry	/sapi/v1/localentity/withdraw/apply
+GET	signed	/sapi/v1/localentity/withdraw/history
+GET	signed	/sapi/v1/managed-subaccount/accountSnapshot
+GET	signed	/sapi/v1/managed-subaccount/asset
+GET	retry	/sapi/v1/managed-subaccount/deposit
+GET	signed	/sapi/v1/managed-subaccount/deposit/address
+GET	signed	/sapi/v1/managed-subaccount/fetch-future-asset
+GET	signed	/sapi/v1/managed-subaccount/info
+GET	signed	/sapi/v1/managed-subaccount/marginAsset
+GET	signed	/sapi/v1/managed-subaccount/query-trans-log
+GET	signed	/sapi/v1/managed-subaccount/queryTransLogForInvestor
+GET	signed	/sapi/v1/managed-subaccount/queryTransLogForTradeParent
+GET	retry	/sapi/v1/managed-subaccount/withdraw
+GET	signed	/sapi/v1/margin/account
+GET	signed	/sapi/v1/margin/allAssets
+GET	signed	/sapi/v1/margin/allOrderList
+GET	signed	/sapi/v1/margin/allOrders
+GET	signed	/sapi/v1/margin/allPairs
+GET	signed	/sapi/v1/margin/api-key-list
+GET	signed	/sapi/v1/margin/apiKey
+GET	retry	/sapi/v1/margin/apiKey/ip
+GET	signed	/sapi/v1/margin/available-inventory
+GET	signed	/sapi/v1/margin/borrow-repay
+GET	signed	/sapi/v1/margin/capital-flow
+GET	signed	/sapi/v1/margin/crossMarginCollateralRatio
+GET	signed	/sapi/v1/margin/crossMarginData
+GET	signed	/sapi/v1/margin/delist-schedule
+GET	signed	/sapi/v1/margin/exchange-small-liability
+GET	signed	/sapi/v1/margin/exchange-small-liability-history
+GET	retry	/sapi/v1/margin/exit-special-key-mode
+GET	signed	/sapi/v1/margin/forceLiquidationRec
+GET	signed	/sapi/v1/margin/interestHistory
+GET	signed	/sapi/v1/margin/interestRateHistory
+GET	signed	/sapi/v1/margin/isolated/account
+GET	signed	/sapi/v1/margin/isolated/accountLimit
+GET	signed	/sapi/v1/margin/isolated/allPairs
+GET	signed	/sapi/v1/margin/isolatedMarginData
+GET	signed	/sapi/v1/margin/isolatedMarginTier
+GET	signed	/sapi/v1/margin/leverageBracket
+GET	signed	/sapi/v1/margin/limit-price-pairs
+GET	signed	/sapi/v1/margin/liquidation-loan
+GET	retry	/sapi/v1/margin/liquidation-loan/repay
+GET	signed	/sapi/v1/margin/liquidation-loan/repay-history
+GET	signed	/sapi/v1/margin/list-schedule
+GET	retry	/sapi/v1/margin/listen-key
+GET	retry	/sapi/v1/margin/manual-liquidation
+GET	retry	/sapi/v1/margin/max-leverage
+GET	signed	/sapi/v1/margin/maxBorrowable
+GET	signed	/sapi/v1/margin/maxTransferable
+GET	signed	/sapi/v1/margin/myPreventedMatches
+GET	signed	/sapi/v1/margin/myTrades
+GET	signed	/sapi/v1/margin/next-hourly-interest-rate
+GET	signed	/sapi/v1/margin/openOrderList
+GET	signed	/sapi/v1/margin/openOrders
+GET	signed	/sapi/v1/margin/order
+GET	retry	/sapi/v1/margin/order/oco
+GET	retry	/sapi/v1/margin/order/oto
+GET	retry	/sapi/v1/margin/order/otoco
+GET	signed	/sapi/v1/margin/orderList
+GET	signed	/sapi/v1/margin/oto/openOrderList
+GET	signed	/sapi/v1/margin/priceIndex
+GET	signed	/sapi/v1/margin/rateLimit/order
+GET	signed	/sapi/v1/margin/restricted-asset
+GET	signed	/sapi/v1/margin/risk-based-liquidation-ratio
+GET	signed	/sapi/v1/margin/tradeCoeff
+GET	signed	/sapi/v1/margin/transfer
+GET	retry	/sapi/v1/mining/hash-transfer/config
+GET	retry	/sapi/v1/mining/hash-transfer/config/cancel
+GET	signed	/sapi/v1/mining/hash-transfer/config/details/list
+GET	signed	/sapi/v1/mining/hash-transfer/profit/details
+GET	signed	/sapi/v1/mining/payment/list
+GET	signed	/sapi/v1/mining/payment/other
+GET	signed	/sapi/v1/mining/payment/uid
+GET	signed	/sapi/v1/mining/pub/algoList
+GET	signed	/sapi/v1/mining/pub/coinList
+GET	signed	/sapi/v1/mining/statistics/user/list
+GET	signed	/sapi/v1/mining/statistics/user/status
+GET	signed	/sapi/v1/mining/worker/detail
+GET	signed	/sapi/v1/mining/worker/list
+GET	signed	/sapi/v1/onchain-yields/account
+GET	signed	/sapi/v1/onchain-yields/locked/history/redemptionRecord
+GET	signed	/sapi/v1/onchain-yields/locked/history/rewardsRecord
+GET	signed	/sapi/v1/onchain-yields/locked/history/subscriptionRecord
+GET	signed	/sapi/v1/onchain-yields/locked/list
+GET	signed	/sapi/v1/onchain-yields/locked/personalLeftQuota
+GET	signed	/sapi/v1/onchain-yields/locked/position
+GET	retry	/sapi/v1/onchain-yields/locked/redeem
+GET	retry	/sapi/v1/onchain-yields/locked/setAutoSubscribe
+GET	retry	/sapi/v1/onchain-yields/locked/setRedeemOption
+GET	retry	/sapi/v1/onchain-yields/locked/subscribe
+GET	signed	/sapi/v1/onchain-yields/locked/subscriptionPreview
+GET	signed	/sapi/v1/pay/transactions
+GET	signed	/sapi/v1/portfolio/account
+GET	retry	/sapi/v1/portfolio/asset-collection
+GET	signed	/sapi/v1/portfolio/asset-index-price
+GET	retry	/sapi/v1/portfolio/auto-collection
+GET	signed	/sapi/v1/portfolio/balance
+GET	retry	/sapi/v1/portfolio/bnb-transfer
+GET	signed	/sapi/v1/portfolio/collateralRate
+GET	signed	/sapi/v1/portfolio/delta-mode
+GET	signed	/sapi/v1/portfolio/earn-asset-balance
+GET	retry	/sapi/v1/portfolio/earn-asset-transfer
+GET	signed	/sapi/v1/portfolio/interest-history
+GET	signed	/sapi/v1/portfolio/margin-asset-leverage
+GET	signed	/sapi/v1/portfolio/margin-call-level
+GET	signed	/sapi/v1/portfolio/pmLoan
+GET	signed	/sapi/v1/portfolio/pmloan-history
+GET	retry	/sapi/v1/portfolio/repay
+GET	retry	/sapi/v1/portfolio/repay-futures-negative-balance
+GET	signed	/sapi/v1/portfolio/repay-futures-switch
+GET	signed	/sapi/v1/rebate/taxQuery
+GET	signed	/sapi/v1/rwusd/account
+GET	signed	/sapi/v1/rwusd/history/rateHistory
+GET	signed	/sapi/v1/rwusd/history/redemptionHistory
+GET	signed	/sapi/v1/rwusd/history/rewardsHistory
+GET	signed	/sapi/v1/rwusd/history/subscriptionHistory
+GET	signed	/sapi/v1/rwusd/quota
+GET	retry	/sapi/v1/rwusd/redeem
+GET	retry	/sapi/v1/rwusd/subscribe
+GET	signed	/sapi/v1/simple-earn/account
+GET	signed	/sapi/v1/simple-earn/flexible/history/collateralRecord
+GET	signed	/sapi/v1/simple-earn/flexible/history/rateHistory
+GET	signed	/sapi/v1/simple-earn/flexible/history/redemptionRecord
+GET	signed	/sapi/v1/simple-earn/flexible/history/rewardsRecord
+GET	signed	/sapi/v1/simple-earn/flexible/history/subscriptionRecord
+GET	signed	/sapi/v1/simple-earn/flexible/list
+GET	signed	/sapi/v1/simple-earn/flexible/personalLeftQuota
+GET	signed	/sapi/v1/simple-earn/flexible/position
+GET	retry	/sapi/v1/simple-earn/flexible/redeem
+GET	retry	/sapi/v1/simple-earn/flexible/setAutoSubscribe
+GET	retry	/sapi/v1/simple-earn/flexible/subscribe
+GET	signed	/sapi/v1/simple-earn/flexible/subscriptionPreview
+GET	signed	/sapi/v1/simple-earn/locked/history/redemptionRecord
+GET	signed	/sapi/v1/simple-earn/locked/history/rewardsRecord
+GET	signed	/sapi/v1/simple-earn/locked/history/subscriptionRecord
+GET	signed	/sapi/v1/simple-earn/locked/list
+GET	signed	/sapi/v1/simple-earn/locked/personalLeftQuota
+GET	signed	/sapi/v1/simple-earn/locked/position
+GET	retry	/sapi/v1/simple-earn/locked/redeem
+GET	retry	/sapi/v1/simple-earn/locked/setAutoSubscribe
+GET	retry	/sapi/v1/simple-earn/locked/setRedeemOption
+GET	retry	/sapi/v1/simple-earn/locked/subscribe
+GET	signed	/sapi/v1/simple-earn/locked/subscriptionPreview
+GET	signed	/sapi/v1/soft-staking/history/rewardsRecord
+GET	signed	/sapi/v1/soft-staking/list
+GET	signed	/sapi/v1/soft-staking/set
+GET	signed	/sapi/v1/sol-staking/account
+GET	retry	/sapi/v1/sol-staking/sol/claim
+GET	signed	/sapi/v1/sol-staking/sol/history/bnsolRewardsHistory
+GET	signed	/sapi/v1/sol-staking/sol/history/boostRewardsHistory
+GET	signed	/sapi/v1/sol-staking/sol/history/rateHistory
+GET	signed	/sapi/v1/sol-staking/sol/history/redemptionHistory
+GET	signed	/sapi/v1/sol-staking/sol/history/stakingHistory
+GET	signed	/sapi/v1/sol-staking/sol/history/unclaimedRewards
+GET	signed	/sapi/v1/sol-staking/sol/quota
+GET	retry	/sapi/v1/sol-staking/sol/redeem
+GET	retry	/sapi/v1/sol-staking/sol/stake
+GET	signed	/sapi/v1/spot/asset/tags
+GET	signed	/sapi/v1/spot/delist-schedule
+GET	signed	/sapi/v1/spot/open-symbol-list
+GET	retry	/sapi/v1/sub-account/eoptions/enable
+GET	signed	/sapi/v1/sub-account/futures/account
+GET	signed	/sapi/v1/sub-account/futures/accountSummary
+GET	retry	/sapi/v1/sub-account/futures/enable
+GET	signed	/sapi/v1/sub-account/futures/internalTransfer
+GET	signed	/sapi/v1/sub-account/futures/move-position
+GET	signed	/sapi/v1/sub-account/futures/positionRisk
+GET	retry	/sapi/v1/sub-account/futures/transfer
+GET	signed	/sapi/v1/sub-account/list
+GET	signed	/sapi/v1/sub-account/margin/account
+GET	signed	/sapi/v1/sub-account/margin/accountSummary
+GET	retry	/sapi/v1/sub-account/margin/transfer
+GET	signed	/sapi/v1/sub-account/spotSummary
+GET	signed	/sapi/v1/sub-account/status
+GET	signed	/sapi/v1/sub-account/sub/transfer/history
+GET	signed	/sapi/v1/sub-account/subAccountApi
+GET	signed	/sapi/v1/sub-account/subAccountApi/ipRestriction
+GET	retry	/sapi/v1/sub-account/subAccountApi/ipRestriction/ipList
+GET	retry	/sapi/v1/sub-account/subAccountApiPermission
+GET	signed	/sapi/v1/sub-account/transaction-statistics
+GET	retry	/sapi/v1/sub-account/transfer/subToMaster
+GET	retry	/sapi/v1/sub-account/transfer/subToSub
+GET	signed	/sapi/v1/sub-account/transfer/subUserHistory
+GET	signed	/sapi/v1/sub-account/universalTransfer
+GET	retry	/sapi/v1/sub-account/virtualSubAccount
+GET	signed	/sapi/v1/system/status
+GET	signed	/sapi/v1/w3w/wallet/prediction/balance/payment-options
+GET	retry	/sapi/v1/w3w/wallet/prediction/batch-redeem
+GET	signed	/sapi/v1/w3w/wallet/prediction/category/list
+GET	retry	/sapi/v1/w3w/wallet/prediction/deposit/apply
+GET	signed	/sapi/v1/w3w/wallet/prediction/market/detail
+GET	signed	/sapi/v1/w3w/wallet/prediction/market/list
+GET	signed	/sapi/v1/w3w/wallet/prediction/market/search
+GET	signed	/sapi/v1/w3w/wallet/prediction/order-book
+GET	signed	/sapi/v1/w3w/wallet/prediction/order-book/last-trade-price
+GET	signed	/sapi/v1/w3w/wallet/prediction/order/history
+GET	signed	/sapi/v1/w3w/wallet/prediction/order/list
+GET	retry	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/create
+GET	retry	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/detail
+GET	retry	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/events
+GET	retry	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/fulfil
+GET	retry	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/list
+GET	retry	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/preview
+GET	retry	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/remove
+GET	retry	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/reserved-balances
+GET	signed	/sapi/v1/w3w/wallet/prediction/pnl/portfolio
+GET	signed	/sapi/v1/w3w/wallet/prediction/pnl/query
+GET	signed	/sapi/v1/w3w/wallet/prediction/position/filter
+GET	signed	/sapi/v1/w3w/wallet/prediction/position/list
+GET	signed	/sapi/v1/w3w/wallet/prediction/position/settled-history
+GET	signed	/sapi/v1/w3w/wallet/prediction/position/token
+GET	signed	/sapi/v1/w3w/wallet/prediction/quota/limit/status
+GET	signed	/sapi/v1/w3w/wallet/prediction/redeem/status
+GET	retry	/sapi/v1/w3w/wallet/prediction/trade/batch-cancel
+GET	retry	/sapi/v1/w3w/wallet/prediction/trade/get-quote
+GET	retry	/sapi/v1/w3w/wallet/prediction/trade/place-order-bundle
+GET	retry	/sapi/v1/w3w/wallet/prediction/transfer/inbound
+GET	signed	/sapi/v1/w3w/wallet/prediction/transfer/list
+GET	retry	/sapi/v1/w3w/wallet/prediction/transfer/outbound
+GET	signed	/sapi/v1/w3w/wallet/prediction/transfer/status
+GET	signed	/sapi/v1/w3w/wallet/prediction/wallet/list
+GET	retry	/sapi/v1/w3w/wallet/prediction/withdraw/apply
+GET	signed	/sapi/v2/eth-staking/account
+GET	retry	/sapi/v2/eth-staking/eth/stake
+GET	retry	/sapi/v2/fiat/withdraw
+GET	retry	/sapi/v2/loan/flexible/adjust/ltv
+GET	retry	/sapi/v2/loan/flexible/borrow
+GET	signed	/sapi/v2/loan/flexible/borrow/history
+GET	signed	/sapi/v2/loan/flexible/collateral/data
+GET	signed	/sapi/v2/loan/flexible/liquidation/history
+GET	signed	/sapi/v2/loan/flexible/loanable/data
+GET	signed	/sapi/v2/loan/flexible/ltv/adjustment/history
+GET	signed	/sapi/v2/loan/flexible/ongoing/orders
+GET	retry	/sapi/v2/loan/flexible/repay
+GET	signed	/sapi/v2/loan/flexible/repay/history
+GET	signed	/sapi/v2/loan/flexible/repay/rate
+GET	signed	/sapi/v2/loan/interestRateHistory
+GET	signed	/sapi/v2/localentity/deposit/history
+GET	retry	/sapi/v2/localentity/deposit/provide-info
+GET	signed	/sapi/v2/localentity/withdraw/history
+GET	signed	/sapi/v2/portfolio/account
+GET	signed	/sapi/v2/portfolio/collateralRate
+GET	signed	/sapi/v2/sub-account/futures/account
+GET	signed	/sapi/v2/sub-account/futures/accountSummary
+GET	signed	/sapi/v2/sub-account/futures/positionRisk
+GET	retry	/sapi/v2/sub-account/subAccountApi/ipRestriction
+GET	retry	/sapi/v3/asset/getUserAsset
+GET	signed	/sapi/v3/sub-account/assets
+GET	signed	/sapi/v4/sub-account/assets
+GET	retry	/sapi/wss
+MUTATING	retry	/api/v1/userDataStream
+MUTATING	retry	/api/v3/cancelReplace
+MUTATING	signed	/api/v3/order
+MUTATING	signed	/api/v3/order/cancelReplace
+MUTATING	signed	/api/v3/order/oco
+MUTATING	signed	/api/v3/order/test
+MUTATING	retry	/api/v3/orderList/
+MUTATING	signed	/api/v3/orderList/oco
+MUTATING	signed	/api/v3/orderList/opo
+MUTATING	signed	/api/v3/orderList/opoco
+MUTATING	signed	/api/v3/orderList/oto
+MUTATING	signed	/api/v3/orderList/otoco
+MUTATING	signed	/api/v3/sor/order
+MUTATING	signed	/api/v3/sor/order/test
+MUTATING	retry	/api/v3/userDataStream
+MUTATING	signed	/dapi/v1/batchOrders
+MUTATING	signed	/dapi/v1/countdownCancelAll
+MUTATING	signed	/dapi/v1/leverage
+MUTATING	signed	/dapi/v1/listenKey
+MUTATING	signed	/dapi/v1/marginType
+MUTATING	signed	/dapi/v1/order
+MUTATING	signed	/dapi/v1/positionMargin
+MUTATING	signed	/dapi/v1/positionSide/dual
+MUTATING	signed	/fapi/v1/algoOrder
+MUTATING	signed	/fapi/v1/batchOrders
+MUTATING	signed	/fapi/v1/convert/acceptQuote
+MUTATING	signed	/fapi/v1/convert/getQuote
+MUTATING	signed	/fapi/v1/countdownCancelAll
+MUTATING	signed	/fapi/v1/feeBurn
+MUTATING	signed	/fapi/v1/leverage
+MUTATING	signed	/fapi/v1/listenKey
+MUTATING	signed	/fapi/v1/marginType
+MUTATING	signed	/fapi/v1/multiAssetsMargin
+MUTATING	signed	/fapi/v1/order
+MUTATING	signed	/fapi/v1/order/test
+MUTATING	signed	/fapi/v1/positionMargin
+MUTATING	signed	/fapi/v1/positionSide/dual
+MUTATING	signed	/fapi/v1/stock/contract
+MUTATING	signed	/sapi/v1/account/disableFastWithdrawSwitch
+MUTATING	signed	/sapi/v1/account/enableFastWithdrawSwitch
+MUTATING	signed	/sapi/v1/algo/futures/newOrderTwap
+MUTATING	signed	/sapi/v1/algo/futures/newOrderVp
+MUTATING	signed	/sapi/v1/algo/spot/newOrderTwap
+MUTATING	signed	/sapi/v1/algo/spot/newOrderVp
+MUTATING	signed	/sapi/v1/asset/dust
+MUTATING	signed	/sapi/v1/asset/dust-btc
+MUTATING	signed	/sapi/v1/asset/dust-convert/convert
+MUTATING	signed	/sapi/v1/asset/dust-convert/query-convertible-assets
+MUTATING	signed	/sapi/v1/asset/get-funding-asset
+MUTATING	signed	/sapi/v1/asset/transfer
+MUTATING	signed	/sapi/v1/bfusd/redeem
+MUTATING	signed	/sapi/v1/bfusd/subscribe
+MUTATING	signed	/sapi/v1/bnbBurn
+MUTATING	signed	/sapi/v1/capital/deposit/credit-apply
+MUTATING	signed	/sapi/v1/capital/withdraw/apply
+MUTATING	signed	/sapi/v1/convert/acceptQuote
+MUTATING	signed	/sapi/v1/convert/getQuote
+MUTATING	signed	/sapi/v1/convert/limit/cancelOrder
+MUTATING	signed	/sapi/v1/convert/limit/placeOrder
+MUTATING	retry	/sapi/v1/dci/product/auto_compound/edit-status
+MUTATING	signed	/sapi/v1/dci/product/subscribe
+MUTATING	signed	/sapi/v1/equity/account/disclaimer
+MUTATING	signed	/sapi/v1/equity/listenKey
+MUTATING	signed	/sapi/v1/equity/order/cancel
+MUTATING	signed	/sapi/v1/equity/order/cancel-all
+MUTATING	signed	/sapi/v1/equity/order/place
+MUTATING	signed	/sapi/v1/equity/tokenized/mint
+MUTATING	signed	/sapi/v1/equity/tokenized/redeem
+MUTATING	signed	/sapi/v1/eth-staking/eth/redeem
+MUTATING	signed	/sapi/v1/eth-staking/wbeth/wrap
+MUTATING	signed	/sapi/v1/fiat/deposit
+MUTATING	signed	/sapi/v1/giftcard/buyCode
+MUTATING	signed	/sapi/v1/giftcard/createCode
+MUTATING	signed	/sapi/v1/giftcard/redeemCode
+MUTATING	signed	/sapi/v1/loan/vip/borrow
+MUTATING	signed	/sapi/v1/loan/vip/fixed/borrow
+MUTATING	signed	/sapi/v1/loan/vip/renew
+MUTATING	signed	/sapi/v1/loan/vip/repay
+MUTATING	signed	/sapi/v1/localentity/broker/withdraw/apply
+MUTATING	signed	/sapi/v1/localentity/withdraw/apply
+MUTATING	signed	/sapi/v1/managed-subaccount/deposit
+MUTATING	signed	/sapi/v1/managed-subaccount/withdraw
+MUTATING	signed	/sapi/v1/margin/apiKey
+MUTATING	signed	/sapi/v1/margin/borrow-repay
+MUTATING	signed	/sapi/v1/margin/exchange-small-liability
+MUTATING	signed	/sapi/v1/margin/exit-special-key-mode
+MUTATING	signed	/sapi/v1/margin/isolated/account
+MUTATING	signed	/sapi/v1/margin/liquidation-loan/repay
+MUTATING	signed	/sapi/v1/margin/listen-key
+MUTATING	signed	/sapi/v1/margin/manual-liquidation
+MUTATING	signed	/sapi/v1/margin/max-leverage
+MUTATING	signed	/sapi/v1/margin/order
+MUTATING	signed	/sapi/v1/margin/order/oco
+MUTATING	signed	/sapi/v1/margin/order/oto
+MUTATING	signed	/sapi/v1/margin/order/otoco
+MUTATING	signed	/sapi/v1/mining/hash-transfer/config
+MUTATING	signed	/sapi/v1/mining/hash-transfer/config/cancel
+MUTATING	signed	/sapi/v1/onchain-yields/locked/redeem
+MUTATING	signed	/sapi/v1/onchain-yields/locked/setAutoSubscribe
+MUTATING	signed	/sapi/v1/onchain-yields/locked/setRedeemOption
+MUTATING	signed	/sapi/v1/onchain-yields/locked/subscribe
+MUTATING	signed	/sapi/v1/portfolio/asset-collection
+MUTATING	signed	/sapi/v1/portfolio/auto-collection
+MUTATING	signed	/sapi/v1/portfolio/bnb-transfer
+MUTATING	signed	/sapi/v1/portfolio/delta-mode
+MUTATING	signed	/sapi/v1/portfolio/earn-asset-transfer
+MUTATING	signed	/sapi/v1/portfolio/margin-call-level
+MUTATING	retry	/sapi/v1/portfolio/mint
+MUTATING	retry	/sapi/v1/portfolio/redeem
+MUTATING	signed	/sapi/v1/portfolio/repay
+MUTATING	signed	/sapi/v1/portfolio/repay-futures-negative-balance
+MUTATING	signed	/sapi/v1/portfolio/repay-futures-switch
+MUTATING	signed	/sapi/v1/rwusd/redeem
+MUTATING	signed	/sapi/v1/rwusd/subscribe
+MUTATING	signed	/sapi/v1/simple-earn/flexible/redeem
+MUTATING	signed	/sapi/v1/simple-earn/flexible/setAutoSubscribe
+MUTATING	signed	/sapi/v1/simple-earn/flexible/subscribe
+MUTATING	signed	/sapi/v1/simple-earn/locked/redeem
+MUTATING	signed	/sapi/v1/simple-earn/locked/setAutoSubscribe
+MUTATING	signed	/sapi/v1/simple-earn/locked/setRedeemOption
+MUTATING	signed	/sapi/v1/simple-earn/locked/subscribe
+MUTATING	signed	/sapi/v1/sol-staking/sol/claim
+MUTATING	signed	/sapi/v1/sol-staking/sol/redeem
+MUTATING	signed	/sapi/v1/sol-staking/sol/stake
+MUTATING	signed	/sapi/v1/sub-account/eoptions/enable
+MUTATING	signed	/sapi/v1/sub-account/futures/enable
+MUTATING	signed	/sapi/v1/sub-account/futures/internalTransfer
+MUTATING	signed	/sapi/v1/sub-account/futures/move-position
+MUTATING	signed	/sapi/v1/sub-account/futures/transfer
+MUTATING	signed	/sapi/v1/sub-account/margin/transfer
+MUTATING	signed	/sapi/v1/sub-account/subAccountApi
+MUTATING	signed	/sapi/v1/sub-account/subAccountApiPermission
+MUTATING	signed	/sapi/v1/sub-account/transfer/subToMaster
+MUTATING	signed	/sapi/v1/sub-account/transfer/subToSub
+MUTATING	signed	/sapi/v1/sub-account/universalTransfer
+MUTATING	signed	/sapi/v1/sub-account/virtualSubAccount
+MUTATING	retry	/sapi/v1/userDataStream
+MUTATING	retry	/sapi/v1/userDataStream/isolated
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/batch-redeem
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/deposit/apply
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/create
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/detail
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/events
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/fulfil
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/list
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/preview
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/remove
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/otc/blocktrade/reserved-balances
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/trade/batch-cancel
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/trade/get-quote
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/trade/place-order-bundle
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/transfer/inbound
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/transfer/outbound
+MUTATING	signed	/sapi/v1/w3w/wallet/prediction/withdraw/apply
+MUTATING	signed	/sapi/v2/eth-staking/eth/stake
+MUTATING	signed	/sapi/v2/fiat/withdraw
+MUTATING	signed	/sapi/v2/loan/flexible/adjust/ltv
+MUTATING	signed	/sapi/v2/loan/flexible/borrow
+MUTATING	signed	/sapi/v2/loan/flexible/repay
+MUTATING	signed	/sapi/v2/sub-account/subAccountApi/ipRestriction
+MUTATING	signed	/sapi/v3/asset/getUserAsset
+MUTATING	retry	/api/v1/userDataStream
+MUTATING	signed	/api/v3/order/amend/keepPriority
+MUTATING	retry	/api/v3/userDataStream
+MUTATING	signed	/dapi/v1/batchOrders
+MUTATING	signed	/dapi/v1/listenKey
+MUTATING	signed	/dapi/v1/order
+MUTATING	signed	/fapi/v1/batchOrders
+MUTATING	signed	/fapi/v1/listenKey
+MUTATING	signed	/fapi/v1/order
+MUTATING	signed	/sapi/v1/localentity/broker/deposit/provide-info
+MUTATING	signed	/sapi/v1/localentity/deposit/provide-info
+MUTATING	signed	/sapi/v1/margin/apiKey/ip
+MUTATING	signed	/sapi/v1/margin/listen-key
+MUTATING	retry	/sapi/v1/userDataStream
+MUTATING	retry	/sapi/v1/userDataStream/isolated
+MUTATING	signed	/sapi/v2/localentity/deposit/provide-info

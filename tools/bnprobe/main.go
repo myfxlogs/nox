@@ -189,6 +189,7 @@ func main() {
 	defer f.Close()
 	var results []result
 	sc := bufio.NewScanner(f)
+	gateChecked := false
 	for sc.Scan() {
 		l := sc.Text()
 		if strings.TrimSpace(l) == "" || strings.HasPrefix(l, "#") {
@@ -198,12 +199,16 @@ func main() {
 		if len(parts) < 2 || strings.HasPrefix(parts[0], "MUTATING") {
 			continue
 		}
-		tier, path := "public", parts[len(parts)-1]
-		if len(parts) == 3 {
-			tier = parts[1]
+		if !gateChecked {
+			gateChecked = true
+			if len(parts) != 3 || parts[1] == "" {
+				fmt.Fprintf(os.Stderr, "清单缺 tier 列（生成器与产物脱节——gen_list 重跑后再跑）\n")
+				os.Exit(1)
+			}
 		}
+		tier, path := parts[1], parts[2]
 		r := probe(ctx, c, apiKey, apiSecret, tier, path)
-		r.Endpoint = parts[1]
+		r.Endpoint = path
 		results = append(results, r)
 		time.Sleep(paceMs * time.Millisecond) // 节流
 	}
