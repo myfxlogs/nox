@@ -117,40 +117,51 @@ func TestDisabledCombosOpenPositions(t *testing.T) {
 		('CLOSEC','CLOSED','gate','binance',true,false,'活',100,'manual_seed','fixed')`); err != nil {
 		t.Fatal(err)
 	}
-	// 持仓行（positions+position_legs）
-	var pid1, pid2 int64
-	for _, canon := range []string{"CLOSEA", "CLOSEC"} {
+	// 持仓行：pid1=双腿命中摘牌组合（gate:CLOSEA × binance:CLOSEB）→在集；
+	// pid2=活组合双腿（gate:CLOSEC × binance:CLOSED）→不在集；
+	// pid3=共腿仓位（仅一腿 gate:CLOSEA 命中，另一腿 okx:OTHER 不属该组合）→共腿不误杀
+	newPos := func(oppID string) int64 {
 		var pid int64
 		if err := st.Pool().QueryRow(ctx,
 			`INSERT INTO positions (opportunity_id, type, status, opened_at) VALUES ($1,'XASSET_CARRY','OPEN',now()) RETURNING id`,
-			"test-"+canon).Scan(&pid); err != nil {
+			oppID).Scan(&pid); err != nil {
 			t.Fatal(err)
 		}
-		if canon == "CLOSEA" {
-			pid1 = pid
-		} else {
-			pid2 = pid
-		}
+		return pid
+	}
+	newLeg := func(pid int64, no int, venue, sym string) {
 		if _, err := st.Pool().Exec(ctx,
 			`INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, status)
-			VALUES ($1,1,'OPEN','gate','perp',$2,'BUY',1,100,'FILLED')`, pid, canon); err != nil {
+			VALUES ($1,$2,'OPEN',$3,'perp',$4,'BUY',1,100,'FILLED')`, pid, no, venue, sym); err != nil {
 			t.Fatal(err)
 		}
 	}
+	pid1 := newPos("t-pair")
+	newLeg(pid1, 1, "gate", "CLOSEA")
+	newLeg(pid1, 2, "binance", "CLOSEB")
+	pid2 := newPos("t-live")
+	newLeg(pid2, 1, "gate", "CLOSEC")
+	newLeg(pid2, 2, "binance", "CLOSED")
+	pid3 := newPos("t-shared")
+	newLeg(pid3, 1, "gate", "CLOSEA") // 共腿但另一腿不属于该组合
+	newLeg(pid3, 2, "okx", "OTHERX")
+
 	ids, err := st.DisabledCombosOpenPositions(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var has1, has2 bool
+	var has1, has2, has3 bool
 	for _, id := range ids {
-		if id == pid1 {
+		switch id {
+		case pid1:
 			has1 = true
-		}
-		if id == pid2 {
+		case pid2:
 			has2 = true
+		case pid3:
+			has3 = true
 		}
 	}
-	if !has1 || has2 {
-		t.Fatalf("摘牌组合持仓在集/活组合持仓不在集：got=%v pid1=%v pid2=%v", ids, has1, has2)
+	if !has1 || has2 || has3 {
+		t.Fatalf("双腿配对谓词：pid1(双中)=%v pid2(活)=%v pid3(共腿)=%v ids=%v", has1, has2, has3, ids)
 	}
 }

@@ -203,11 +203,13 @@ func (s *Store) DisablePitHitCombos(ctx context.Context, dir string) (int, error
 func (s *Store) DisabledCombosOpenPositions(ctx context.Context) ([]int64, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT p.id FROM positions p
-		JOIN position_legs l ON l.position_id=p.id
 		JOIN xasset_allow_combos c ON c.enabled=false
 		WHERE p.status IN ('OPEN','LEGGED')
-		  AND (l.venue IN (c.venue_buy, c.venue_sell)
-		       AND l.symbol IN (c.canonical_buy, c.canonical_sell))`)
+		  -- D-599 返修：双腿配对谓词（非腿级 OR——共腿不误杀：须买腿∧卖腿双腿同中）
+		  AND EXISTS (SELECT 1 FROM position_legs lb WHERE lb.position_id=p.id
+		              AND lb.venue=c.venue_buy AND lb.symbol=c.canonical_buy)
+		  AND EXISTS (SELECT 1 FROM position_legs ls WHERE ls.position_id=p.id
+		              AND ls.venue=c.venue_sell AND ls.symbol=c.canonical_sell)`)
 	if err != nil {
 		return nil, fmt.Errorf("disabled combos open positions: %w", err)
 	}
