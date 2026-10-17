@@ -9,6 +9,7 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/store/pgstore"
 )
 
 // GetOverviewBundle 五段：§0 待办 → §1 本金分档 → §2 业绩 → §3 订单 → §4 风险心跳。
@@ -100,6 +101,36 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 	if papers, err := s.store.ListActivePaperSpotCarry(ctx); err == nil {
 		resp.PaperCount = int32(len(papers))
 	}
+	// §6 收益归因分解（产出面补建——策略键×30d 结算净额，后端聚合）。
+	if attrib, err := s.store.OverviewAttribution(ctx, now.Add(-30*24*time.Hour)); err == nil {
+		for _, a := range attrib {
+			resp.Attribution = append(resp.Attribution, &v1.OverviewAttribRow{
+				Strategy: a.Strategy, Positions: int32(a.Positions),
+				Net30Usd: a.Net30USD, Wins: int32(a.Wins), Losses: int32(a.Losses),
+			})
+		}
+	}
+	// §7 闭环漏斗计数（八环 48h——发现→评估→沙箱→执行→持仓→平仓→账本→复盘→淘汰）。
+	if funnel, err := s.store.OverviewFunnel(ctx, now.Add(-48*time.Hour)); err == nil {
+		for _, f := range funnel {
+			resp.Funnel = append(resp.Funnel, &v1.OverviewFunnelRow{
+				Stage: f.Stage, Label: f.Label, Count_48H: int32(f.Count48h), Cumulative: f.Cumulative,
+			})
+		}
+	}
+	// §8 等待面缩览（pending/unqualified 毕业+proposed 提案——等待因+龄）。
+	s.appendOverviewWaiting(ctx, resp, now)
+	// §9 眠钱时长（idle_floor_streak 最长连破天数——D-286 眠钱不眠计量呈现面）。
+	if streaks, err := s.store.GetStreaks(ctx); err == nil {
+		bestDays, bestPool := 0, ""
+		for k, st := range streaks {
+			if st.Days > bestDays {
+				bestDays, bestPool = st.Days, k
+			}
+		}
+		resp.IdleStreakDays = int32(bestDays)
+		resp.IdleStreakPool = bestPool
+	}
 	// §4 风险心跳（kill 态+30d 净额对硬线+24h critical 数）。
 	if gc := s.gateChecker; gc != nil {
 		_, allowed, _, err := gc.CheckGate(ctx)
@@ -117,6 +148,80 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 		}
 	}
 	return connect.NewResponse(resp), nil
+}
+
+// appendOverviewWaiting §8 等待面缩览：pending/unqualified 毕业行+proposed 提案行
+// （等待因=现状关键值，龄=since 起点；各面上限 5 行防淹没）。
+func (s *Service) appendOverviewWaiting(ctx context.Context, resp *v1.GetOverviewBundleResponse, now time.Time) {
+	const perKind = 5
+	if grads, err := filterGraduations(ctx, s, "pending", perKind); err == nil {
+		for _, g := range grads {
+			resp.Waiting = append(resp.Waiting, &v1.OverviewWaitingRow{
+				Kind:      "graduation_pending",
+				Label:     fmt.Sprintf("毕业#%d %s %s", g.ID, g.Symbol, g.Venue),
+				Detail:    fmt.Sprintf("待批·资金费年化 %s", floatOrDash(g.LastFundingAnn, "%.2f%%")),
+				SinceUnix: g.CreatedAt.Unix(),
+			})
+		}
+	}
+	if grads, err := filterGraduations(ctx, s, "unqualified", perKind); err == nil {
+		for _, g := range grads {
+			resp.Waiting = append(resp.Waiting, &v1.OverviewWaitingRow{
+				Kind:      "graduation_watch",
+				Label:     fmt.Sprintf("观察#%d %s %s", g.ID, g.Symbol, g.Venue),
+				Detail:    fmt.Sprintf("摘牌待复活·%s", truncateRunes(g.DecidedNote, 40)),
+				SinceUnix: g.CreatedAt.Unix(),
+			})
+		}
+	}
+	if props, err := s.store.ListProposals(ctx, "proposed", perKind); err == nil {
+		for _, pr := range props {
+			apr := "—"
+			if pr.ExpectedAPR != nil {
+				apr = fmt.Sprintf("%.2f%%", *pr.ExpectedAPR*100)
+			}
+			resp.Waiting = append(resp.Waiting, &v1.OverviewWaitingRow{
+				Kind:      "proposal",
+				Label:     fmt.Sprintf("提案#%d %s@%s", pr.ID, pr.TemplateID, pr.Venue),
+				Detail:    fmt.Sprintf("待执行·APR %s", apr),
+				SinceUnix: pr.CreatedAt.Unix(),
+			})
+		}
+	}
+}
+
+// filterGraduations 按态取前 N（ListCarryGraduations 全量读+内存过滤——表行数百级，
+// 专用读口不值得；per-kind 限流在缩览面折断）。
+func filterGraduations(ctx context.Context, s *Service, status string, limit int) ([]pgstore.CarryGraduation, error) {
+	all, err := s.store.ListCarryGraduations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []pgstore.CarryGraduation
+	for _, g := range all {
+		if g.Status == status {
+			out = append(out, g)
+			if len(out) >= limit {
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
+func floatOrDash(v *float64, format string) string {
+	if v == nil {
+		return "—"
+	}
+	return fmt.Sprintf(format, *v)
+}
+
+func truncateRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
 }
 
 func derefInt(p *int) int {

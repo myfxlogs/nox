@@ -111,6 +111,8 @@ export default function OverviewPage() {
         <StatTile label="可动用" value={b ? fmtUsd(b.principalIdleUsd) : "—"} />
         <StatTile label="在息" value={b ? fmtUsd(b.principalEarningUsd) : "—"}
           sub={b && b.principalLockedUsd > 0 ? `含锁定 ${fmtUsd(b.principalLockedUsd)}${b.earliestRelease ? "·最早回笼 " + utc(timestampDate(b.earliestRelease)) : ""}` : undefined} />
+        <StatTile label="眠钱时长" value={b && b.idleStreakDays > 0 ? `${b.idleStreakDays} 天` : "—"}
+          sub={b && b.idleStreakPool ? `最长池 ${b.idleStreakPool}` : "无在册破地板池"} />
         <StatTile label="基线后业绩" value={b?.perfAvailable ? (b.perfUsd >= 0 ? "+" : "") + fmtUsd(b.perfUsd) : "—"}
           sub={b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"} />
       </div>
@@ -163,6 +165,56 @@ export default function OverviewPage() {
         </ul>
       ) : <EmptyState>无在仓订单</EmptyState>}
       {b && b.paperCount > 0 && <div className="muted">纸面沙箱 {b.paperCount} 条（不入本金）</div>}
+
+      {/* §6 收益归因分解（后端聚合——策略×30d 结算净额；零命中不造行） */}
+      <h2>收益归因（30d）</h2>
+      {b && b.attribution.length > 0 ? (
+        <table>
+          <thead><tr><th>策略</th><th>结算仓</th><th>净额</th><th>胜负</th></tr></thead>
+          <tbody>
+            {b.attribution.map((a, i) => (
+              <tr key={i}>
+                <td>{a.strategy}</td>
+                <td>{a.positions}</td>
+                <td className={a.net30Usd >= 0 ? "good" : "crit"}>{(a.net30Usd >= 0 ? "+" : "") + fmtUsd(a.net30Usd)}</td>
+                <td className="muted">{a.wins}胜/{a.losses}负</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : <EmptyState>30d 窗内无结算归因行</EmptyState>}
+
+      {/* §7 闭环漏斗计数（八环 48h——后端 COUNT 直出；淘汰环 cumulative 如实标注） */}
+      <h2>闭环漏斗（48h）</h2>
+      {b && b.funnel.length > 0 ? (
+        <div className="stats">
+          {b.funnel.map((f) => (
+            <StatTile key={f.stage} label={f.label + (f.cumulative ? "（累计）" : "")}
+              value={String(f.count48h)} />
+          ))}
+        </div>
+      ) : <EmptyState>漏斗计数未供</EmptyState>}
+
+      {/* §8 等待面缩览（pending/观察中毕业+待执行提案——等待因+龄，后端拼行） */}
+      <h2>等待面</h2>
+      {b && b.waiting.length > 0 ? (
+        <ul className="opp-cards scroll-cap">
+          {b.waiting.map((w, i) => (
+            <li key={i} className="opp-card">
+              <div className="opp-card-head">
+                <Chip tone={w.kind === "proposal" ? "warn" : "neutral"}>
+                  {w.kind === "graduation_pending" ? "待批" : w.kind === "graduation_watch" ? "观察中" : "提案"}
+                </Chip>
+                <span className="opp-card-kind">{w.label}</span>
+                <span className="opp-card-friction">
+                  {w.sinceUnix > 0 ? "自 " + new Date(Number(w.sinceUnix) * 1000).toISOString().slice(5, 16).replace("T", " ") + "Z" : "—"}
+                </span>
+              </div>
+              <p className="opp-card-narrative muted">{w.detail}</p>
+            </li>
+          ))}
+        </ul>
+      ) : <EmptyState>无等待项</EmptyState>}
 
       {/* §3 风险心跳 */}
       <h2>风险心跳</h2>

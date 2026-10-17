@@ -264,6 +264,40 @@ message GetOverviewBundleResponse {
   // §5 十段工序实时状态（S3′-b：后端阶段健康读模——每段聚合 emit 时戳+
   // wait_reason+错误面；禁前端拿 dept 拼状态/禁前端判故障）。
   repeated PipelineStageHealth stages = 18;
+  // §6 收益归因分解（产出面补建——净额按策略键归因，30d 滚动，后端聚合）。
+  repeated OverviewAttribRow attribution = 19;
+  // §7 闭环漏斗计数（八环各 48h 计数——发现→评估→沙箱→执行→持仓→平仓→账本→复盘→淘汰）。
+  repeated OverviewFunnelRow funnel = 20;
+  // §8 等待面缩览（pending/unqualified 毕业+proposed 提案——等待因+龄，后端聚合）。
+  repeated OverviewWaitingRow waiting = 21;
+  // §9 眠钱时长（idle_floor_streak 连续破地板天数 max——D-286 眠钱不眠计量）。
+  int32 idle_streak_days = 22;
+  string idle_streak_pool = 23; // 最长眠钱池（venue:venue_type；空=无在册破地板池）
+}
+
+// OverviewAttribRow 收益归因行（strategy_key 同域模板键；type 回落=未归组行）。
+message OverviewAttribRow {
+  string strategy = 1;     // positions.strategy_key（空=未归组落 type 名）
+  int32 positions = 2;     // 结算仓数
+  double net30_usd = 3;    // 30d 结算净额合计
+  int32 wins = 4;
+  int32 losses = 5;
+}
+
+// OverviewFunnelRow 闭环漏斗环计数行。
+message OverviewFunnelRow {
+  string stage = 1;   // discovery/eval/sandbox/execution/holding/exit/ledger/review/elimination
+  string label = 2;   // 中文环名
+  int32 count_48h = 3;
+  bool cumulative = 4; // true=环缺时戳列按累计计数如实标注
+}
+
+// OverviewWaitingRow 等待面缩览行。
+message OverviewWaitingRow {
+  string kind = 1;    // graduation_pending/graduation_watch/proposal
+  string label = 2;   // 对象摘要（后端拼）
+  string detail = 3;  // 等待因/关键值（后端拼）
+  int64 since_unix = 4; // 等待起点（0=未知）
 }
 
 // PipelineStageHealth 工序段健康行（十段固定枚举 key 后文注释面）。
