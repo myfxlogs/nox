@@ -1,7 +1,5 @@
-// gen_list D-608 退回㉛②：binance 端点清单机械生成——
-// 权威源=官方 docs GitHub 仓库 markdown（docs 站为客户端渲染不可静态遍历——
-// 官方同内容在 GitHub 仓库机械可读）；swagger spec 仅交叉校验非主源；禁手写。
-// 真钱端点黑名单分离（mutating 不探如实缺）。
+// gen_list D-608：binance 端点清单机械生成——官方 docs GitHub 仓库 markdown
+// 遍历；swagger 仅交叉校验；禁手写。退回㉜①：正则字符类排反引号+空格右括。
 package main
 
 import (
@@ -15,41 +13,35 @@ import (
 	"time"
 )
 
-// 官方 docs GitHub 仓库 API 列出各域 markdown（机械遍历非手挑）。
-var repos = map[string]string{
-	"spot":    "binance/binance-spot-api-docs",
-	"usds":    "binance/binance-futures-connector-go", // usds futures docs
-	"coin":    "binance/binance-connector-python",
-	"wallet":  "binance/binance-api-postman",
-	"earn":    "binance/binance-api-postman",
-	"margin":  "binance/binance-api-postman",
-	"subacct": "binance/binance-api-postman",
+var repos = []string{
+	"binance/binance-spot-api-docs",
+	"binance/binance-futures-connector-go",
+	"binance/binance-connector-python",
+	"binance/binance-api-postman",
 }
 
-// GitHub API 拉仓库文件树（docs/*.md 枚举——机械源非手挑端点）。
-func treeURL(repo string) string {
-	return fmt.Sprintf("https://api.github.com/repos/%s/git/trees/HEAD?recursive=1", repo)
-}
-
-var pathRe = regexp.MustCompile(`(?m)(GET|POST|PUT|DELETE)\s+(/(api|fapi|dapi|sapi|wapi)/[^ "',\)]+)`)
+var pathRe = regexp.MustCompile(`(?m)(GET|POST|PUT|DELETE)\s+(/(api|fapi|dapi|sapi|wapi)/[a-zA-Z0-9_\-/.{}]+)`)
 
 const listOut = "docs/能力账/binance_endpoints.gen.txt"
 
-var mutating = []string{
-	"/api/v3/order", "/fapi/v1/order", "/dapi/v1/order",
-	"/sapi/v1/capital/withdraw", "/sapi/v1/capital/transfer",
-	"/sapi/v1/asset/transfer", "/sapi/v1/sub-account/transfer",
-	"/sapi/v1/simple-earn/flexible/subscribe",
-	"/sapi/v1/simple-earn/flexible/redeem", "/sapi/v1/convert",
+// method+path 二元键黑名单——POST 同径株连修（退回㉜缺 c）。
+var mutating = map[string]bool{
+	"POST /api/v3/order": true, "POST /fapi/v1/order": true, "POST /dapi/v1/order": true,
+	"POST /sapi/v1/capital/withdraw": true, "POST /sapi/v1/asset/transfer": true,
+	"POST /sapi/v1/sub-account/transfer": true, "POST /sapi/v1/sub-account/universalTransfer": true,
+	"POST /sapi/v1/simple-earn/flexible/subscribe": true,
+	"POST /sapi/v1/simple-earn/flexible/redeem":    true,
+	"POST /sapi/v1/margin/transfer":                true, "POST /sapi/v1/convert/getQuote": true,
+	"POST /fapi/v1/positionSide/dual": true, "POST /fapi/v1/leverage": true,
+	"POST /fapi/v1/marginType": true, "DELETE /api/v3/order": true,
+	"DELETE /fapi/v1/order": true, "DELETE /dapi/v1/order": true,
 }
 
-func isMutating(p string) bool {
-	for _, b := range mutating {
-		if strings.Contains(p, b) {
-			return true
-		}
+func isMutating(method, path string) bool {
+	if mutating[method+" "+path] {
+		return true
 	}
-	return false
+	return method == "POST" || method == "PUT" || method == "DELETE" // 读全谱=GET 放行，写族标缺
 }
 
 func get(c *http.Client, url string) string {
@@ -58,42 +50,40 @@ func get(c *http.Client, url string) string {
 		return ""
 	}
 	defer resp.Body.Close()
-	b, _ := io.ReadAll(resp.Body)
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	return string(b)
 }
 
 func main() {
 	c := &http.Client{Timeout: 30 * time.Second}
-	found := map[string]string{}
+	found := map[string]string{} // method+path → method
 	for _, repo := range repos {
-		body := get(c, treeURL(repo))
-		// 机械解析 GitHub tree JSON→.md 路径集
-		for _, m := range regexp.MustCompile(`"path"\s*:\s*"([^"]+\.md)"`).FindAllStringSubmatch(body, -1) {
-			if len(m) < 2 {
-				continue
-			}
+		for _, m := range regexp.MustCompile(`"path"\s*:\s*"([^"]+\.md)"`).FindAllStringSubmatch(
+			get(c, fmt.Sprintf("https://api.github.com/repos/%s/git/trees/HEAD?recursive=1", repo)), -1) {
 			md := get(c, fmt.Sprintf("https://raw.githubusercontent.com/%s/HEAD/%s", repo, m[1]))
 			for _, e := range pathRe.FindAllStringSubmatch(md, -1) {
-				found[strings.TrimSpace(e[2])] = e[1]
+				p := strings.TrimRight(e[2], "`'\" ")
+				found[e[1]+" "+p] = e[1]
 			}
 		}
 	}
-	paths := make([]string, 0, len(found))
-	for p := range found {
-		paths = append(paths, p)
+	keys := make([]string, 0, len(found))
+	for k := range found {
+		keys = append(keys, k)
 	}
-	sort.Strings(paths)
+	sort.Strings(keys)
 	var out []string
 	var mutatingN int
-	for _, p := range paths {
-		if isMutating(p) {
+	for _, k := range keys {
+		parts := strings.SplitN(k, " ", 2)
+		if isMutating(parts[0], parts[1]) {
 			mutatingN++
-			out = append(out, "MUTATING\t"+p)
+			out = append(out, "MUTATING\t"+parts[1])
 		} else {
-			out = append(out, "GET\t"+p)
+			out = append(out, "GET\t"+parts[1])
 		}
 	}
 	os.WriteFile(listOut,
 		[]byte("# D-608 生成物——官方 docs GitHub 仓库 markdown 机械枚举（swagger 仅交叉校验）\n"+strings.Join(out, "\n")+"\n"), 0644)
-	fmt.Printf("bnprobe gen_list: %d 端点（mutating=%d 标缺）→%s\n", len(paths), mutatingN, listOut)
+	fmt.Printf("bnprobe gen_list: %d 端点（mutating=%d 标缺）→%s\n", len(keys), mutatingN, listOut)
 }
