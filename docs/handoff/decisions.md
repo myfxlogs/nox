@@ -615,3 +615,9 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：能力账证据件=binary .pb（prototext/json 均不用）。schema 唯一真相=`proto/capability/probe_evidence.proto` 先入仓再产证据；字段号不复用、只加不改（pb 演进纪律）。人审兜底=`protoc --decode`/`prototext` 一行转。
 - **适用范围**：tools/*probe 全部新产出+将来匹配引擎消费面；已交 JSON 件（mt5-rpc-probe-2026-10-17.*）留档不动不重跑。
 - **红利**：pb schema 强类型把「raw_body 字段名漂移」类病在编译期焊死；防做假四层照旧（raw 响应以 bytes/string 字段嵌 Evidence schema）。
+
+## D-616（2026-10-17 业主令）数据真实性硬约束——严禁猜测编造
+
+- **业主令**：所有数据必须来自服务器端真实数据，严禁猜测和编造（ARB 已有同款，NOX 补立主契约明线）。
+- **裁定**：AGENTS.md §5 增「数据单源真实」禁线条目——判定/执行/账本/证据/报审一切数据面只认 venue 真实返回或系统实测记录；查不到=如实标缺，禁默认值顶替/禁 mock 充真/禁凭字段名函数名推断补值；实测声明必附出处。
+- **反证锚**：出现「应该有/大概是」句式或无出处实测声明=违本条——复审可凭此单条退回。
