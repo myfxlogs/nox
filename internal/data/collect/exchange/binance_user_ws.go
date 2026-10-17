@@ -57,12 +57,13 @@ type BinanceUserWS struct {
 
 	// balLedger D-542：可用资金活账本（ACCOUNT_UPDATE/outboundAccountPosition 喂入；
 	// 每轮重连标脏，dashboard 弹窗脏/空走 REST 校准）。nil 安全。
-	balLedger  *bus.BalanceLedger
-	rest       *http.Client // cex-proxy 域 client（token+自签 CA）
-	restNative *http.Client // D-106：binance 原生域 client（裸——token/代理 CA 勿出域）
-	dial       func(ctx context.Context, wsURL string) (*websocket.Conn, error)
-	renewEvery time.Duration // 续租周期（默认 30min；测试注入缩短）
-	now        func() time.Time
+	balLedger      *bus.BalanceLedger
+	rest           *http.Client // cex-proxy 域 client（token+自签 CA）
+	restNative     *http.Client // D-106：binance 原生域 client（裸——token/代理 CA 勿出域）
+	dial           func(ctx context.Context, wsURL string) (*websocket.Conn, error)
+	renewEvery     time.Duration // 续租周期（默认 30min；测试注入缩短）
+	reconnectEvery time.Duration // 重连节拍（默认 5s；测试注入 ~100ms 消竞态——退回㊹订正）
+	now            func() time.Time
 	// onReconnect D-004 P1#6：连接就绪回调（断流后事件漏发补救→对账 kick；首连也触发）。nil 安全。
 	onReconnect func()
 }
@@ -100,7 +101,7 @@ func NewBinanceUserWS(apiKey, apiSecret, baseURL, venueType, venueKey string, si
 		simulated: simulated, sink: sink, events: events, hooks: hooks,
 		orderCache: oc, posCache: pc,
 		rest: httpx.Client(), restNative: &http.Client{Timeout: 15 * time.Second},
-		renewEvery: 30 * time.Minute, now: time.Now,
+		renewEvery: 30 * time.Minute, reconnectEvery: 5 * time.Second, now: time.Now,
 	}
 	dialer, header := httpx.WSDialer()
 	b.dial = func(ctx context.Context, wsURL string) (*websocket.Conn, error) {

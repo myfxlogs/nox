@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -306,9 +305,8 @@ func TestBinanceListenKeyEndpoint(t *testing.T) {
 // CI 历史红清账①：E2E env 门——外网依赖显式化（NOX_E2E_WS=1 才跑；CI 默认无此
 // 键即跳非遮错，门键留文档；本地/SG 手动跑保真）。
 func TestBinanceUserWSE2E(t *testing.T) {
-	if os.Getenv("NOX_E2E_WS") != "1" {
-		t.Skip("E2E env 门未开（NOX_E2E_WS=1 才跑——外网 WS 在 CI 历史 flake 族）")
-	}
+	// 退回㊹订正：env 门撤（fake server 零外网——真型=测试自竞态非外网 flake；
+	// reconnectEvery 注入 ~100ms 消竞态确定性修）
 	var posts, puts atomic.Int32
 	keyN := atomic.Int32{}
 	rest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -332,7 +330,8 @@ func TestBinanceUserWSE2E(t *testing.T) {
 	snaps := newFakeSnapSink()
 	b.events, b.sink = evts, snaps
 	b.rest = rest.Client()
-	b.renewEvery = 150 * time.Millisecond // 注入缩短续租周期
+	b.renewEvery = 150 * time.Millisecond     // 注入缩短续租周期
+	b.reconnectEvery = 100 * time.Millisecond // 退回㊹：重连节拍缩短消竞态（确定性修非遮错）
 	b.dial = func(ctx context.Context, wsURL string) (*websocket.Conn, error) {
 		dialed <- wsURL
 		d := websocket.Dialer{}
