@@ -579,3 +579,9 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：belt+suspenders 双拦——`BalanceDeltaWindows` 加 `balance_raw>0`（读径）+`mtFrameRows` 拒非正余额帧（写径）；85 假行 DELETE 清除（系统性错误产物，非手工补账）；热修部署后差分新拍**零新增**实证。
 - **反证锚**：若某 MT 户真实清零再注资（balance 0 为真态）——该户差分漏捕该段，如实报另 D#（当前三户均非此形态）。
 - **复盘点**：下一断连周期后 mt_frame 零行不再新增+差分零垃圾行。
+
+## D-611（2026-10-17 决策席）venue 能力账专项目录=`docs/能力账/`——程序级资产定位
+
+- **业主问**：能力账工程要不要立专项目录。
+- **裁定**：立。①证据件目录=`docs/能力账/`（probe JSON+.md 表入此，不入 docs/ 根杂散）；②`INDEX.md`=全图入口——venue×域×探测日×证据件×skills 指针×已证盲区 五行头登记，新 venue 探完追加行（mt5/bn 票产物同步补 INDEX 行）；③harness 按 venue 落 `tools/<venue>probe`（第三 venue 到场再抽公共框架，现在不过度设计）；④skills 正典 `skills/` 不动（D-608）——能力账=证据层，skills=消费层，两层分开指向。
+- **复盘点**：INDEX.md 首两行（mt5/bn）随各自票交付在案。
