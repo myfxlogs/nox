@@ -1,6 +1,7 @@
 // capital.tsx —— 资金地图（业主令 10-13 + D-285）：后端聚合池级 权益/闲置/在跑，
 // 按币种分组各报各的零换算。纯渲染零运算；幽灵池独立段，陈旧行置灰标时点。
 import { useEffect, useState } from "react";
+import { Modal } from "../components/Modal";
 import { client, errText } from "../api";
 import type { CapitalPoolsGroup, CapitalPool } from "../gen/dashboardv1/capital_pools_pb";
 import type { ManualPosition } from "../gen/dashboardv1/manual_position_pb";
@@ -53,6 +54,7 @@ export default function CapitalPage() {
   // D-512 录入面（qty/价/注；id 空=新行）
   const [form, setForm] = useState({ symbol: "", qty: "", price: "", venueLabel: "", note: "" });
   const [busy, setBusy] = useState(false);
+  const [modal, setModal] = useState<"" | "ghosts" | "others">("");
 
   async function load() {
     try {
@@ -112,10 +114,14 @@ export default function CapitalPage() {
             </div>
             <PoolTable pools={live} />
             {ghosts.length > 0 && (
-              <details>
-                <summary>幽灵池（账户已移除残行，不计合计）×{ghosts.length}</summary>
-                <PoolTable pools={ghosts} />
-              </details>
+              <>
+                <div onClick={() => setModal("ghosts")} style={{ cursor: "pointer" }}>
+                  幽灵池（账户已移除残行，不计合计）×{ghosts.length} <span className="muted">▸</span>
+                </div>
+                <Modal open={modal === "ghosts"} onClose={() => setModal("")} title="幽灵池（不计合计）">
+                  <PoolTable pools={ghosts} />
+                </Modal>
+              </>
             )}
           </section>
         );
@@ -129,8 +135,12 @@ export default function CapitalPage() {
           );
         if (others.length === 0) return null;
         return (
-          <details>
-            <summary>其他小币种 ×{others.length}（计件不计值——零换算口径不可求和）</summary>
+          <>
+            <div onClick={() => setModal("others")} style={{ cursor: "pointer" }}>
+              其他小币种 ×{others.length}（计件不计值——零换算口径不可求和） <span className="muted">▸</span>
+            </div>
+            <Modal open={modal === "others"} onClose={() => setModal("")}
+              title="其他小币种（计件不计值）">
             <table>
               <thead><tr><th>池</th><th>类型</th><th>权益（原币）</th><th>状态</th><th>快照时点</th></tr></thead>
               <tbody>
@@ -146,7 +156,8 @@ export default function CapitalPage() {
                 ))}
               </tbody>
             </table>
-          </details>
+            </Modal>
+          </>
         );
       })()}
       {groups.length === 0 && !err && <div>无资金池快照</div>}
