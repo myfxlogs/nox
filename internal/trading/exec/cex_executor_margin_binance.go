@@ -35,8 +35,24 @@ func (e *CEXExecutor) binanceMarginPrecheck(ctx context.Context, o Order) error 
 	}
 	required := o.Qty * mark / lev
 	if required > avail*(1-e.marginReservePct) {
-		return fmt.Errorf("binance margin insufficient: need %.2f > avail %.2f × %.2f (lev %.0f mark %.4g)",
-			required, avail, 1-e.marginReservePct, lev, mark)
+		// D-549 通用化（binance 补齐）：UM futures 池缺口 → earn→spot→futures
+		// 装配后重读 /v2/account 复判；装配败=fail-closed 如实拒因（禁放大）。
+		need := required - avail*(1-e.marginReservePct)
+		if _, aerr := e.binanceAssembleMargin(ctx, need); aerr != nil {
+			return fmt.Errorf("binance margin insufficient（装配败: %v）: need %.2f > avail %.2f × %.2f (lev %.0f mark %.4g)",
+				aerr, required, avail, 1-e.marginReservePct, lev, mark)
+		}
+		acc, err = e.signedBinanceRequest(ctx, "GET", "/v2/account", url.Values{})
+		if err != nil {
+			return fmt.Errorf("binance margin 装配后重读 %s: %w", o.Symbol, err)
+		}
+		if avail, aerr = jsonNum(acc["availableBalance"]); aerr != nil {
+			return fmt.Errorf("binance margin 装配后 availableBalance: %w", aerr)
+		}
+		if required > avail*(1-e.marginReservePct) {
+			return fmt.Errorf("binance margin insufficient（装配后仍不足）: need %.2f > avail %.2f × %.2f (lev %.0f mark %.4g)",
+				required, avail, 1-e.marginReservePct, lev, mark)
+		}
 	}
 	eq, eqerr := jsonNum(acc["totalMarginBalance"])
 	if eqerr != nil {
