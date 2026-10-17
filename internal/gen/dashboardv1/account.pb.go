@@ -2193,8 +2193,11 @@ type GetOverviewBundleResponse struct {
 	// §10 眠钱时长（idle_floor_streak 连续破地板天数 max——D-286 眠钱不眠计量）。
 	IdleStreakDays int32  `protobuf:"varint,27,opt,name=idle_streak_days,json=idleStreakDays,proto3" json:"idle_streak_days,omitempty"`
 	IdleStreakPool string `protobuf:"bytes,28,opt,name=idle_streak_pool,json=idleStreakPool,proto3" json:"idle_streak_pool,omitempty"` // 最长眠钱池（venue:venue_type；空=无在册破地板池）
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// §11 风险心跳 critical 明细（业主令 10-17：可见「是什么红」非只「有几个红」；
+	// 24h 窗内 critical 告警后端拼行，前端零拼零新 RPC——bundle 既有 ListAlerts 读搭车）。
+	CritAlerts    []*OverviewCritAlert `protobuf:"bytes,29,rep,name=crit_alerts,json=critAlerts,proto3" json:"crit_alerts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetOverviewBundleResponse) Reset() {
@@ -2409,6 +2412,66 @@ func (x *GetOverviewBundleResponse) GetIdleStreakPool() string {
 	return ""
 }
 
+func (x *GetOverviewBundleResponse) GetCritAlerts() []*OverviewCritAlert {
+	if x != nil {
+		return x.CritAlerts
+	}
+	return nil
+}
+
+// OverviewCritAlert 24h critical 告警明细行（全行 level 恒=critical 不复列）。
+type OverviewCritAlert struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"` // 告警文案原文（后端直透不裁剪）
+	Ts            *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=ts,proto3" json:"ts,omitempty"`           // 告警时
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OverviewCritAlert) Reset() {
+	*x = OverviewCritAlert{}
+	mi := &file_dashboardv1_account_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OverviewCritAlert) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OverviewCritAlert) ProtoMessage() {}
+
+func (x *OverviewCritAlert) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_account_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OverviewCritAlert.ProtoReflect.Descriptor instead.
+func (*OverviewCritAlert) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *OverviewCritAlert) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *OverviewCritAlert) GetTs() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Ts
+	}
+	return nil
+}
+
 // OverviewBreakdownRow 盘面卡组成行（group=对应 StatTile 键；label 行名+amount 原生量
 // +ccy 计价币+sub 补充——前端按 group 过滤渲染，零运算零拼装）。
 type OverviewBreakdownRow struct {
@@ -2424,7 +2487,7 @@ type OverviewBreakdownRow struct {
 
 func (x *OverviewBreakdownRow) Reset() {
 	*x = OverviewBreakdownRow{}
-	mi := &file_dashboardv1_account_proto_msgTypes[33]
+	mi := &file_dashboardv1_account_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2436,7 +2499,7 @@ func (x *OverviewBreakdownRow) String() string {
 func (*OverviewBreakdownRow) ProtoMessage() {}
 
 func (x *OverviewBreakdownRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[33]
+	mi := &file_dashboardv1_account_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2449,7 +2512,7 @@ func (x *OverviewBreakdownRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OverviewBreakdownRow.ProtoReflect.Descriptor instead.
 func (*OverviewBreakdownRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{33}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *OverviewBreakdownRow) GetGroup() string {
@@ -2501,7 +2564,7 @@ type OverviewAttribRow struct {
 
 func (x *OverviewAttribRow) Reset() {
 	*x = OverviewAttribRow{}
-	mi := &file_dashboardv1_account_proto_msgTypes[34]
+	mi := &file_dashboardv1_account_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2513,7 +2576,7 @@ func (x *OverviewAttribRow) String() string {
 func (*OverviewAttribRow) ProtoMessage() {}
 
 func (x *OverviewAttribRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[34]
+	mi := &file_dashboardv1_account_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2526,7 +2589,7 @@ func (x *OverviewAttribRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OverviewAttribRow.ProtoReflect.Descriptor instead.
 func (*OverviewAttribRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{34}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *OverviewAttribRow) GetStrategy() string {
@@ -2577,7 +2640,7 @@ type OverviewFunnelRow struct {
 
 func (x *OverviewFunnelRow) Reset() {
 	*x = OverviewFunnelRow{}
-	mi := &file_dashboardv1_account_proto_msgTypes[35]
+	mi := &file_dashboardv1_account_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2589,7 +2652,7 @@ func (x *OverviewFunnelRow) String() string {
 func (*OverviewFunnelRow) ProtoMessage() {}
 
 func (x *OverviewFunnelRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[35]
+	mi := &file_dashboardv1_account_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2602,7 +2665,7 @@ func (x *OverviewFunnelRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OverviewFunnelRow.ProtoReflect.Descriptor instead.
 func (*OverviewFunnelRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{35}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *OverviewFunnelRow) GetStage() string {
@@ -2646,7 +2709,7 @@ type OverviewWaitingRow struct {
 
 func (x *OverviewWaitingRow) Reset() {
 	*x = OverviewWaitingRow{}
-	mi := &file_dashboardv1_account_proto_msgTypes[36]
+	mi := &file_dashboardv1_account_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2658,7 +2721,7 @@ func (x *OverviewWaitingRow) String() string {
 func (*OverviewWaitingRow) ProtoMessage() {}
 
 func (x *OverviewWaitingRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[36]
+	mi := &file_dashboardv1_account_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2671,7 +2734,7 @@ func (x *OverviewWaitingRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OverviewWaitingRow.ProtoReflect.Descriptor instead.
 func (*OverviewWaitingRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{36}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *OverviewWaitingRow) GetKind() string {
@@ -2722,7 +2785,7 @@ type PipelineStageHealth struct {
 
 func (x *PipelineStageHealth) Reset() {
 	*x = PipelineStageHealth{}
-	mi := &file_dashboardv1_account_proto_msgTypes[37]
+	mi := &file_dashboardv1_account_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2734,7 +2797,7 @@ func (x *PipelineStageHealth) String() string {
 func (*PipelineStageHealth) ProtoMessage() {}
 
 func (x *PipelineStageHealth) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[37]
+	mi := &file_dashboardv1_account_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2747,7 +2810,7 @@ func (x *PipelineStageHealth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PipelineStageHealth.ProtoReflect.Descriptor instead.
 func (*PipelineStageHealth) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{37}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *PipelineStageHealth) GetKey() string {
@@ -2984,7 +3047,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"amount_usd\x18\x03 \x01(\x01R\tamountUsd\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x120\n" +
 	"\x05until\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x05until\"\x1a\n" +
-	"\x18GetOverviewBundleRequest\"\x84\n" +
+	"\x18GetOverviewBundleRequest\"\xca\n" +
 	"\n" +
 	"\x19GetOverviewBundleResponse\x12)\n" +
 	"\x10pending_requests\x18\x01 \x01(\x05R\x0fpendingRequests\x12.\n" +
@@ -3019,7 +3082,12 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\x06funnel\x18\x19 \x03(\v2#.nox.dashboard.v1.OverviewFunnelRowR\x06funnel\x12>\n" +
 	"\awaiting\x18\x1a \x03(\v2$.nox.dashboard.v1.OverviewWaitingRowR\awaiting\x12(\n" +
 	"\x10idle_streak_days\x18\x1b \x01(\x05R\x0eidleStreakDays\x12(\n" +
-	"\x10idle_streak_pool\x18\x1c \x01(\tR\x0eidleStreakPool\"~\n" +
+	"\x10idle_streak_pool\x18\x1c \x01(\tR\x0eidleStreakPool\x12D\n" +
+	"\vcrit_alerts\x18\x1d \x03(\v2#.nox.dashboard.v1.OverviewCritAlertR\n" +
+	"critAlerts\"Y\n" +
+	"\x11OverviewCritAlert\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\x12*\n" +
+	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\"~\n" +
 	"\x14OverviewBreakdownRow\x12\x14\n" +
 	"\x05group\x18\x01 \x01(\tR\x05group\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x10\n" +
@@ -3067,7 +3135,7 @@ func file_dashboardv1_account_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_account_proto_rawDescData
 }
 
-var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
+var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
 var file_dashboardv1_account_proto_goTypes = []any{
 	(*KnowledgeEntry)(nil),                  // 0: nox.dashboard.v1.KnowledgeEntry
 	(*ListKnowledgeEntriesRequest)(nil),     // 1: nox.dashboard.v1.ListKnowledgeEntriesRequest
@@ -3102,48 +3170,51 @@ var file_dashboardv1_account_proto_goTypes = []any{
 	(*OverviewOrderRow)(nil),                // 30: nox.dashboard.v1.OverviewOrderRow
 	(*GetOverviewBundleRequest)(nil),        // 31: nox.dashboard.v1.GetOverviewBundleRequest
 	(*GetOverviewBundleResponse)(nil),       // 32: nox.dashboard.v1.GetOverviewBundleResponse
-	(*OverviewBreakdownRow)(nil),            // 33: nox.dashboard.v1.OverviewBreakdownRow
-	(*OverviewAttribRow)(nil),               // 34: nox.dashboard.v1.OverviewAttribRow
-	(*OverviewFunnelRow)(nil),               // 35: nox.dashboard.v1.OverviewFunnelRow
-	(*OverviewWaitingRow)(nil),              // 36: nox.dashboard.v1.OverviewWaitingRow
-	(*PipelineStageHealth)(nil),             // 37: nox.dashboard.v1.PipelineStageHealth
-	nil,                                     // 38: nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
-	(*timestamppb.Timestamp)(nil),           // 39: google.protobuf.Timestamp
+	(*OverviewCritAlert)(nil),               // 33: nox.dashboard.v1.OverviewCritAlert
+	(*OverviewBreakdownRow)(nil),            // 34: nox.dashboard.v1.OverviewBreakdownRow
+	(*OverviewAttribRow)(nil),               // 35: nox.dashboard.v1.OverviewAttribRow
+	(*OverviewFunnelRow)(nil),               // 36: nox.dashboard.v1.OverviewFunnelRow
+	(*OverviewWaitingRow)(nil),              // 37: nox.dashboard.v1.OverviewWaitingRow
+	(*PipelineStageHealth)(nil),             // 38: nox.dashboard.v1.PipelineStageHealth
+	nil,                                     // 39: nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
+	(*timestamppb.Timestamp)(nil),           // 40: google.protobuf.Timestamp
 }
 var file_dashboardv1_account_proto_depIdxs = []int32{
-	39, // 0: nox.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
-	39, // 1: nox.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
+	40, // 0: nox.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
+	40, // 1: nox.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: nox.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> nox.dashboard.v1.KnowledgeEntry
-	39, // 3: nox.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	39, // 4: nox.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	40, // 3: nox.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	40, // 4: nox.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
 	10, // 5: nox.dashboard.v1.ListKBEntriesResponse.entries:type_name -> nox.dashboard.v1.KBEntry
 	3,  // 6: nox.dashboard.v1.ListDailyIncomeResponse.items:type_name -> nox.dashboard.v1.PositionDailyIncome
-	39, // 7: nox.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
+	40, // 7: nox.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
 	21, // 8: nox.dashboard.v1.AccountInfo.holdings:type_name -> nox.dashboard.v1.Holding
-	39, // 9: nox.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
+	40, // 9: nox.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
 	19, // 10: nox.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> nox.dashboard.v1.AccountMarginStatus
 	17, // 11: nox.dashboard.v1.ListAccountsResponse.accounts:type_name -> nox.dashboard.v1.AccountInfo
-	39, // 12: nox.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
-	39, // 13: nox.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
+	40, // 12: nox.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
+	40, // 13: nox.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
 	26, // 14: nox.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> nox.dashboard.v1.FinancePnlByEnv
 	27, // 15: nox.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> nox.dashboard.v1.FinanceIncomeRow
 	28, // 16: nox.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> nox.dashboard.v1.FinanceFlowRow
-	38, // 17: nox.dashboard.v1.GetFinanceOverviewResponse.equity_by_ccy:type_name -> nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
-	39, // 18: nox.dashboard.v1.GetFinanceOverviewResponse.baseline_at:type_name -> google.protobuf.Timestamp
-	39, // 19: nox.dashboard.v1.OverviewOrderRow.until:type_name -> google.protobuf.Timestamp
-	39, // 20: nox.dashboard.v1.GetOverviewBundleResponse.earliest_release:type_name -> google.protobuf.Timestamp
-	39, // 21: nox.dashboard.v1.GetOverviewBundleResponse.baseline_at:type_name -> google.protobuf.Timestamp
+	39, // 17: nox.dashboard.v1.GetFinanceOverviewResponse.equity_by_ccy:type_name -> nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
+	40, // 18: nox.dashboard.v1.GetFinanceOverviewResponse.baseline_at:type_name -> google.protobuf.Timestamp
+	40, // 19: nox.dashboard.v1.OverviewOrderRow.until:type_name -> google.protobuf.Timestamp
+	40, // 20: nox.dashboard.v1.GetOverviewBundleResponse.earliest_release:type_name -> google.protobuf.Timestamp
+	40, // 21: nox.dashboard.v1.GetOverviewBundleResponse.baseline_at:type_name -> google.protobuf.Timestamp
 	30, // 22: nox.dashboard.v1.GetOverviewBundleResponse.orders:type_name -> nox.dashboard.v1.OverviewOrderRow
-	37, // 23: nox.dashboard.v1.GetOverviewBundleResponse.stages:type_name -> nox.dashboard.v1.PipelineStageHealth
-	33, // 24: nox.dashboard.v1.GetOverviewBundleResponse.breakdowns:type_name -> nox.dashboard.v1.OverviewBreakdownRow
-	34, // 25: nox.dashboard.v1.GetOverviewBundleResponse.attribution:type_name -> nox.dashboard.v1.OverviewAttribRow
-	35, // 26: nox.dashboard.v1.GetOverviewBundleResponse.funnel:type_name -> nox.dashboard.v1.OverviewFunnelRow
-	36, // 27: nox.dashboard.v1.GetOverviewBundleResponse.waiting:type_name -> nox.dashboard.v1.OverviewWaitingRow
-	28, // [28:28] is the sub-list for method output_type
-	28, // [28:28] is the sub-list for method input_type
-	28, // [28:28] is the sub-list for extension type_name
-	28, // [28:28] is the sub-list for extension extendee
-	0,  // [0:28] is the sub-list for field type_name
+	38, // 23: nox.dashboard.v1.GetOverviewBundleResponse.stages:type_name -> nox.dashboard.v1.PipelineStageHealth
+	34, // 24: nox.dashboard.v1.GetOverviewBundleResponse.breakdowns:type_name -> nox.dashboard.v1.OverviewBreakdownRow
+	35, // 25: nox.dashboard.v1.GetOverviewBundleResponse.attribution:type_name -> nox.dashboard.v1.OverviewAttribRow
+	36, // 26: nox.dashboard.v1.GetOverviewBundleResponse.funnel:type_name -> nox.dashboard.v1.OverviewFunnelRow
+	37, // 27: nox.dashboard.v1.GetOverviewBundleResponse.waiting:type_name -> nox.dashboard.v1.OverviewWaitingRow
+	33, // 28: nox.dashboard.v1.GetOverviewBundleResponse.crit_alerts:type_name -> nox.dashboard.v1.OverviewCritAlert
+	40, // 29: nox.dashboard.v1.OverviewCritAlert.ts:type_name -> google.protobuf.Timestamp
+	30, // [30:30] is the sub-list for method output_type
+	30, // [30:30] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_account_proto_init() }
@@ -3157,7 +3228,7 @@ func file_dashboardv1_account_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_account_proto_rawDesc), len(file_dashboardv1_account_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   39,
+			NumMessages:   40,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

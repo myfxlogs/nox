@@ -1,5 +1,5 @@
 // overview.tsx —— S3′-a 默认首页重建（arb 骨架范式：StatTile 横排+
-// 行动卡置顶+缩览卡阵；§0 待办→§1 KPI→§2 缩览→§3 风险心跳）。
+// 行动卡置顶+缩览卡阵；风险心跳段拆 overview_heartbeat.tsx（300 行闸））。
 // 前端零运算只渲染；缺数据显缺不显 0；时戳 UTC 口径（业主令 10-15）。
 import { useEffect, useState } from "react";
 import { client, errText } from "../api";
@@ -9,6 +9,7 @@ import type { GetOverviewBundleResponse, OverviewOrderRow } from "../gen/dashboa
 import type { RequestBoxItem } from "../gen/dashboardv1/request_box_pb";
 import { ResolveRequestState } from "../gen/dashboardv1/request_box_pb";
 import { fmtUsd } from "../components/fmt";
+import { RiskHeartbeat } from "./overview_heartbeat";
 import { StatTile } from "../components/StatTile";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
@@ -120,6 +121,8 @@ export default function OverviewPage() {
         </section>
       )}
 
+      <RiskHeartbeat b={b} onCard={setCardModal} />
+
       {/* §1 KPI 横排（StatTile 阵——NAV/总投入/本金/可动用/在息/业绩；
           卡可点击下钻组成明细——后端 breakdowns 按 group 过滤直渲） */}
       <h2>盘面</h2>
@@ -139,7 +142,7 @@ export default function OverviewPage() {
         <StatTile label="眠钱时长" value={b && b.idleStreakDays > 0 ? `${b.idleStreakDays} 天` : "—"}
           sub={b && b.idleStreakPool ? `最长池 ${b.idleStreakPool}` : "无在册破地板池"} />
         <StatTile label="基线后业绩" value={b?.perfAvailable ? (b.perfUsd >= 0 ? "+" : "") + fmtUsd(b.perfUsd) : "—"}
-          sub={b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"}
+          sub={b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%｜目标≥8%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"}
           active={tile === "perf"} onClick={() => setTile(tile === "perf" ? null : "perf")} />
       </div>
       {tile && (
@@ -160,6 +163,27 @@ export default function OverviewPage() {
           )}
         </Modal>
       )}
+
+      {/* §2 在仓订单缩览卡阵（D-低密度网格化：三行=状态/对象截断/⏱ 叙事；点击 Modal 全文） */}
+      <h2>在仓订单</h2>
+      {b && b.orders.length > 0 ? (
+        <ul className="opp-cards opp-grid scroll-cap">
+          {b.orders.map((o: OverviewOrderRow, i: number) => (
+            <li key={i} className="opp-card" onClick={() => setCardModal({
+              title: `${ORDER_KIND_CN[o.kind] ?? o.kind} · ${o.label}`,
+              body: `状态 ${ORDER_STATUS_CN[o.status] ?? o.status}｜金额 ${fmtUsd(o.amountUsd)}｜` + untilCN(o),
+            })}>
+              <div className="opp-card-head">
+                <Chip tone={orderTone(o.status)}>{ORDER_STATUS_CN[o.status] ?? o.status}</Chip>
+                <span className="opp-card-friction">{fmtUsd(o.amountUsd)}</span>
+              </div>
+              <span className="opp-card-who">{ORDER_KIND_CN[o.kind] ?? o.kind} · {o.label}</span>
+              <p className="opp-card-narrative muted clamp-2" title={untilCN(o)}>⏱ {untilCN(o)}</p>
+            </li>
+          ))}
+        </ul>
+      ) : <EmptyState>无在仓订单</EmptyState>}
+      {b && b.paperCount > 0 && <div className="muted">纸面沙箱 {b.paperCount} 条（不入本金）</div>}
 
       {/* S3′-b 十段工序实时状态卡（后端 PipelineStageHealth 读模——
           状态点+一行实况叙事直渲；禁前端拼 dept/判故障） */}
@@ -200,26 +224,29 @@ export default function OverviewPage() {
         </div>
       ) : <EmptyState>工序健康读模未供</EmptyState>}
 
-      {/* §2 在仓订单缩览卡阵（D-低密度网格化：三行=状态/对象截断/⏱ 叙事；点击 Modal 全文） */}
-      <h2>在仓订单</h2>
-      {b && b.orders.length > 0 ? (
+      {/* §8 等待面缩览（pending/观察中毕业+待执行提案——等待因+龄，后端拼行） */}
+      <h2>等待面</h2>
+      {b && b.waiting.length > 0 ? (
         <ul className="opp-cards opp-grid scroll-cap">
-          {b.orders.map((o: OverviewOrderRow, i: number) => (
+          {b.waiting.map((w, i) => (
             <li key={i} className="opp-card" onClick={() => setCardModal({
-              title: `${ORDER_KIND_CN[o.kind] ?? o.kind} · ${o.label}`,
-              body: `状态 ${ORDER_STATUS_CN[o.status] ?? o.status}｜金额 ${fmtUsd(o.amountUsd)}｜` + untilCN(o),
+              title: `${w.kind === "graduation_pending" ? "待批" : w.kind === "graduation_watch" ? "观察中" : "提案"} · ${w.label}`,
+              body: w.detail + (w.sinceUnix > 0 ? "｜自 " + new Date(Number(w.sinceUnix) * 1000).toISOString().replace("T", " ").slice(0, 19) + "Z" : ""),
             })}>
               <div className="opp-card-head">
-                <Chip tone={orderTone(o.status)}>{ORDER_STATUS_CN[o.status] ?? o.status}</Chip>
-                <span className="opp-card-friction">{fmtUsd(o.amountUsd)}</span>
+                <Chip tone={w.kind === "proposal" ? "warn" : "neutral"}>
+                  {w.kind === "graduation_pending" ? "待批" : w.kind === "graduation_watch" ? "观察中" : "提案"}
+                </Chip>
+                <span className="opp-card-friction">
+                  {w.sinceUnix > 0 ? "自 " + new Date(Number(w.sinceUnix) * 1000).toISOString().slice(5, 16).replace("T", " ") + "Z" : "—"}
+                </span>
               </div>
-              <span className="opp-card-who">{ORDER_KIND_CN[o.kind] ?? o.kind} · {o.label}</span>
-              <p className="opp-card-narrative muted clamp-2" title={untilCN(o)}>⏱ {untilCN(o)}</p>
+              <span className="opp-card-who">{w.label}</span>
+              <p className="opp-card-narrative muted clamp-2" title={w.detail}>{w.detail}</p>
             </li>
           ))}
         </ul>
-      ) : <EmptyState>无在仓订单</EmptyState>}
-      {b && b.paperCount > 0 && <div className="muted">纸面沙箱 {b.paperCount} 条（不入本金）</div>}
+      ) : <EmptyState>无等待项</EmptyState>}
 
       {/* §6 收益归因分解（后端聚合——策略×30d 结算净额；零命中不造行） */}
       <h2>收益归因（30d）</h2>
@@ -250,43 +277,11 @@ export default function OverviewPage() {
         </div>
       ) : <EmptyState>漏斗计数未供</EmptyState>}
 
-      {/* §8 等待面缩览（pending/观察中毕业+待执行提案——等待因+龄，后端拼行） */}
-      <h2>等待面</h2>
-      {b && b.waiting.length > 0 ? (
-        <ul className="opp-cards opp-grid scroll-cap">
-          {b.waiting.map((w, i) => (
-            <li key={i} className="opp-card" onClick={() => setCardModal({
-              title: `${w.kind === "graduation_pending" ? "待批" : w.kind === "graduation_watch" ? "观察中" : "提案"} · ${w.label}`,
-              body: w.detail + (w.sinceUnix > 0 ? "｜自 " + new Date(Number(w.sinceUnix) * 1000).toISOString().replace("T", " ").slice(0, 19) + "Z" : ""),
-            })}>
-              <div className="opp-card-head">
-                <Chip tone={w.kind === "proposal" ? "warn" : "neutral"}>
-                  {w.kind === "graduation_pending" ? "待批" : w.kind === "graduation_watch" ? "观察中" : "提案"}
-                </Chip>
-                <span className="opp-card-friction">
-                  {w.sinceUnix > 0 ? "自 " + new Date(Number(w.sinceUnix) * 1000).toISOString().slice(5, 16).replace("T", " ") + "Z" : "—"}
-                </span>
-              </div>
-              <span className="opp-card-who">{w.label}</span>
-              <p className="opp-card-narrative muted clamp-2" title={w.detail}>{w.detail}</p>
-            </li>
-          ))}
-        </ul>
-      ) : <EmptyState>无等待项</EmptyState>}
-
       {cardModal && (
         <Modal open onClose={() => setCardModal(null)} title={cardModal.title} width={520}>
           <div style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{cardModal.body}</div>
         </Modal>
       )}
-
-      {/* §3 风险心跳 */}
-      <h2>风险心跳</h2>
-      <div className="stats">
-        <StatTile label="KillSwitch" value={b ? (b.killSwitch ? "ON" : "off") : "—"} />
-        <StatTile label="30d 净额（对 −3% 硬线）" value={b ? fmtUsd(b.net30Usd) : "—"} />
-        <StatTile label="24h critical" value={b ? String(b.critAlerts24h) : "—"} />
-      </div>
     </div>
   );
 }
