@@ -279,8 +279,8 @@ func TestD564_GatePrecheckPureRead(t *testing.T) {
 		t.Fatalf("single 单读放行, got %v", err)
 	}
 	for _, q := range rt2.leverQueries {
-		if strings.Contains(q, "dual_side") {
-			t.Fatalf("single 模式不得带 dual_side, got %q", q)
+		if !strings.Contains(q, "dual_side=dual_long") {
+			t.Fatalf("single 模式 dual_side 恒必填（venue 400 语义）, got %q", q)
 		}
 	}
 	// ③ 实况不可读 → fail-closed（禁兜底——配置链退役后无第二来源）。
