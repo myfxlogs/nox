@@ -608,3 +608,10 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：`StrategyRetireVerdict` 加新生宽限——`fin_opp_template.updated_at > now()-idle 窗` → 零活动不退（尚未开工非已死）；PnL 硬线优先于宽限（灾难即杀）；updated_at 前移=编辑延宽限（保守向可受）。锚=`TestStrategyRetireVerdict_NewbornGrace`（新生不退/过窗照退双态）。earn_rotation 策略行复活（decision-seat-revive）。
 - **反证锚**：若宽限被用于保僵尸（模板周期性 touch updated_at 但零活动）——加 touch 检测另 D#。
 - **复盘点**：earn_rotation 存活过 14d 宽限窗后由真实活动/零活动自然裁决。
+
+## D-615（2026-10-17 决策席+业主令）能力账证据件格式=二进制 protobuf（机器读，禁 JSON）
+
+- **业主令**：将来项目统一 protobuf 不用 JSON；证据件只用机器读。
+- **裁定**：能力账证据件=binary .pb（prototext/json 均不用）。schema 唯一真相=`proto/capability/probe_evidence.proto` 先入仓再产证据；字段号不复用、只加不改（pb 演进纪律）。人审兜底=`protoc --decode`/`prototext` 一行转。
+- **适用范围**：tools/*probe 全部新产出+将来匹配引擎消费面；已交 JSON 件（mt5-rpc-probe-2026-10-17.*）留档不动不重跑。
+- **红利**：pb schema 强类型把「raw_body 字段名漂移」类病在编译期焊死；防做假四层照旧（raw 响应以 bytes/string 字段嵌 Evidence schema）。
