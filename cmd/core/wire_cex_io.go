@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"nox/internal/api/dashboard"
@@ -119,45 +120,67 @@ func mtIORound(ctx context.Context, st *pgstore.Store, bm *dashboard.BrokerManag
 }
 
 // mtIODeltaRound D-602：MT5 balance 差分落账器——双流皆空（OrderHistory 无
-// Balance 行+OnOrderUpdate 不推 Balance 事件）时主径：相邻快照 balance_raw
-// 残差（Δbalance−窗口内已实现持仓盈亏）≈0 外=外部充提行（只补账不喂判定；
-// 幂等键 mt5:delta:{acct}:{snap_id}）。XMR 0→$1000 型注资漏账堵口。
+// Balance 行+OnOrderUpdate 不推 Balance 事件+mtapi 网关无 deal 历史 RPC，
+// 2026-10-17 取证三通道）时主径：相邻事件帧快照 balance_raw 的未解释残差
+// （Δbalance−窗内已关仓 PnL−窗内已落 io 行）=外部资金流（D-539 解释账范式：
+// 差分是第二解释源，必须扣全部已落解释项防双计——退回㉓伤①）。
+// 行 status='inferred'（推断行与实录行可区分，伤②）+warn 随批落（伤④）；
+// 币种=MTAccountCurrency 实拉 fail-closed 跳户（伤⑤，禁硬编域值）；
+// PnL 查败/落账败逐窗 fail-closed log（伤③，同文件范式）。
+// 输入行限 src IN (mt_frame,mt_event)（D-604：rest 系周期摄取快照禁入判定/
+// 落账输入——事件落地行才是流的持久化形态）。小项⑴注记：不引水位状态——
+// 幂等键 mt5:delta:{snap_id} 兜底重跑零重复，窗计算成本=帧数量级可忍；
+// 小项⑷注记：open-position 逐日 swap 扣 balance 而 settlements 关仓才落
+// →armed 出仓后每窗小 inferred 行=D-602 ③杂项径如实落+warn 可容（perf 自消：
+// NAV 与 flow 同额对消），口径禁静默在此注记。
 func mtIODeltaRound(ctx context.Context, st *pgstore.Store, bm *dashboard.BrokerManager) int {
 	accs, err := st.MTIOAccountIDs(ctx)
 	if err != nil {
+		log.Printf("[wiring] mt-io delta accounts: %v", err)
 		return 0
 	}
 	total := 0
 	for _, a := range accs {
-		snaps, err := st.BalanceDeltaWindows(ctx, a.Venue, time.Now().UTC().Add(-90*24*time.Hour))
-		if err != nil || len(snaps) < 2 {
+		ccy, ok := bm.MTAccountCurrency(ctx, a.Venue)
+		if !ok {
+			log.Printf("[wiring] mt-io delta %s 账户币种不可得（fail-closed 跳户）", a.Venue)
 			continue
 		}
-		var rows []pgstore.VenueIO
-		for i := 1; i < len(snaps); i++ {
-			prev, cur := snaps[i-1], snaps[i]
-			delta := cur.Balance - prev.Balance
-			if delta == 0 {
-				continue
-			}
-			// 窗口内已关闭持仓的 realized_pnl 残差抵扣（PnL 入账≠外部充提）
-			pnl, _ := st.ClosedPositionPnLBetween(ctx, a.Venue, prev.Ts, cur.Ts)
-			res := delta - pnl
-			if res > -0.01 && res < 0.01 {
-				continue // 残差~0=纯 PnL 入账非外部流
-			}
-			dir := "deposit"
-			amt := res
-			if amt < 0 {
-				dir, amt = "withdraw", -amt
-			}
-			rows = append(rows, pgstore.VenueIO{
-				Venue: a.Venue, ConfigID: a.ID, Direction: dir, Ccy: "USD",
-				Amount: amt, ExternalID: fmt.Sprintf("mt5:delta:%d", cur.ID), Ts: cur.Ts,
-			})
+		snaps, err := st.BalanceDeltaWindows(ctx, a.Venue, time.Now().UTC().Add(-90*24*time.Hour))
+		if err != nil {
+			log.Printf("[wiring] mt-io delta %s windows: %v", a.Venue, err)
+			continue
 		}
-		if n, err := st.InsertVenueIO(ctx, rows); err == nil {
-			total += int(n)
+		if len(snaps) < 2 {
+			continue
+		}
+		ioSum := func(from, to time.Time) (float64, error) {
+			return st.SumVenueIOExternal(ctx, a.Venue, ccy, from, to)
+		}
+		pnl := func(from, to time.Time) (float64, error) {
+			return st.ClosedPositionPnLBetween(ctx, a.Venue, from, to)
+		}
+		rows, alerts, err := deltaBookRows(snaps, pnl, ioSum, ccy, a.ID, a.Venue)
+		if err != nil {
+			log.Printf("[wiring] mt-io delta %s: %v（fail-closed 该户跳）", a.Venue, err)
+			continue
+		}
+		if len(rows) == 0 {
+			continue
+		}
+		n, err := st.InsertVenueIO(ctx, rows)
+		if err != nil {
+			log.Printf("[wiring] mt-io delta %s insert: %v（fail-closed 本批不落）", a.Venue, err)
+			continue
+		}
+		total += int(n)
+		if n > 0 {
+			// 伤④：D-602② warn 随批落（InsertAlertDedup 24h 防刷屏——聚合窗叙事一条列户）。
+			if aerr := st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
+				"MT %s 差分落账 %d 行 status=inferred（balance 残差口径——推断账行已落请对账单复核：%s）",
+				a.Venue, n, strings.Join(alerts, "；")), 24*time.Hour); aerr != nil {
+				log.Printf("[wiring] mt-io delta %s alert: %v", a.Venue, aerr)
+			}
 		}
 	}
 	return total

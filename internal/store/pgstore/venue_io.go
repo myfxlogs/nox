@@ -131,10 +131,14 @@ type BalanceSnap struct {
 // BalanceDeltaWindows MT5 账户快照时序窗（balance_raw 相邻差分落账器输入——
 // 升序返回；venue=account id 键）。
 func (s *Store) BalanceDeltaWindows(ctx context.Context, venue string, since time.Time) ([]BalanceSnap, error) {
+	// D-604：差分输入行限事件落地帧（mt_frame=流帧/mt_event=事件锚定写径）——
+	// rest 系周期摄取快照（rest_poll/rest_calib/scheduler）禁入差分输入。
+	// 小项⑶：id tiebreaker 防 fetched_at 同秒序不稳。
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, balance_raw, fetched_at FROM fin_venue_account_snapshot
 		WHERE venue=$1 AND fetched_at>=$2 AND balance_raw IS NOT NULL
-		ORDER BY fetched_at`, venue, since)
+		  AND src IN ('mt_frame','mt_event')
+		ORDER BY fetched_at, id`, venue, since)
 	if err != nil {
 		return nil, fmt.Errorf("balance snaps %s: %w", venue, err)
 	}
@@ -156,7 +160,7 @@ func (s *Store) ClosedPositionPnLBetween(ctx context.Context, venue string, from
 	var sum float64
 	err := s.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(p.realized_pnl),0) FROM positions p
-		WHERE p.status='CLOSED' AND p.closed_at>=$2 AND p.closed_at<=$3
+		WHERE p.status='CLOSED' AND p.closed_at>$2 AND p.closed_at<=$3
 		  AND EXISTS (SELECT 1 FROM position_legs l WHERE l.position_id=p.id AND l.venue=$1)`,
 		venue, from, to).Scan(&sum)
 	return sum, err
