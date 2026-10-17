@@ -104,7 +104,7 @@
 - **事件落地表≠快照（命名澄清）**：流事件持久化的状态表合法且是唯一权威源（D-544 读序：鲜度窗内事件行优先）；但其读径必须带鲜度闸——判定径 stale=fail-closed，展示径 stale=显式标注，禁冒充现值。**无流键的行**（rest 系写）不得喂判定径。
 - **无流面白名单（D-604 取证钉死，出白名单须新 D#）**：okx funding/earn、binance:earn、gate:spot 余额、MT5 空仓账户态、MMR/buffer_multiple 列、DCI/earn 产品报价面——venue 无对应推送频道（D-006/D-604 举证在案）；这些面判定消费=消费点实拉，禁后台 poll 喂表再读。
 - **统计面隔离**：D-004 豁免的 REST 统计/复盘拉取只许写统计专属域表（facts 类），禁写账户/余额/权益状态表——状态表只许流写（+事件锚定愈合）。
-- **CFD 域=MT5 单 venue**（MT4 已退役）；mtapi 客户端 API 无空仓账户流/无 deal 端点（/opt/grpc-proto 权威 proto 对拍+10-05 实拍）——MT5 账户判定数据=判定时刻 `AccountSummary` 实拉（D-563 S4b 范式）+OnOrderUpdate/OnOrderProfit 流帧；入金事件捕获=请求箱 #79+D-602 差分径（输入限事件 src 行）。
+- **CFD 域=MT5 单 venue**（MT4 已退役）；mtapi 客户端 API 无空仓账户流/无 deal 端点（/opt/grpc-proto 权威 proto 对拍+10-05 实拍；**供应商定谳不扩函数=D-606，能力面终局**）——MT5 账户判定数据=判定时刻 `AccountSummary` 实拉（D-563 S4b 范式）+OnOrderUpdate/OnOrderProfit 流帧；入金捕获终局=order 面 ticket 扫描（主，滞后容许）+D-602 差分兜底（成熟度+前向宽限防双计，输入限事件 src 行）。
 - 功能消失/退化 → 先 `git log` + `blame`，禁不查历史直接重写。
 - 文件 ≤300 行（pre-commit 拦）；proto 改动走 `buf generate`。
 - 业务配置唯一真相=PG（`app_config`/`app_secrets`，seed-once 后 env 改名失效），env 仅引导件（`scripts/env-allowlist.txt` 只减不增）；新增 env 消费点须业主令。

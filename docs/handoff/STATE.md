@@ -355,3 +355,6 @@
 > **顺件两小项**：①main.go `BindMTEquityFn` 闭包 `context.Background()` 无界——网关挂起卡死扫描环；加 `WithTimeout(5s)`（venueLeverage 4s 限 ctx 先例）；②`TestDeltaBookRows_IDEMPOTENTViaDB` 内 seed 块重复两次（pre-clean+insert 双份）——清理。
 > **达标记名**：五伤（残差三扣/inferred/吞错/warn/币种实拉）+src 事件门+窗界 (from,to]+tiebreaker+swapscan DI 实拉同拍去重 fail-closed+五断言锚+d514 夹具迁注入式——全部亲证达标，三退仅因新事实。**坑处置**：「账本解释项的 ts 必须与被解释余额窗对齐——venue 记录滞后使窗扣失效」坑候选挂待归纳（D-539 残差对账同假设面，后续票注意）。
 > **开工指令**：`[角色:实施] xmr-io 三返（读 STATE 尾注退回㉖——成熟度闸+前向宽限扣+晚落回归锚+两小项）`。
+
+> 处置注记（决策席 10-17）：**D-606 落账**——业主回执 mt5grp.io 不扩函数（mt5.proto=能力面终局）：①#79 请求径死（resolve_note 生产注记被权限闸拦，挂下轮部署批带批执行）；②差分器升永久主径之一，xmr-io 三返规格不变（退回㉖成熟度+宽限正是防双计的必要件——SG 实拍 ticket 滞后余额帧 48h 在案）；③Manager API 出局；④AGENTS §5/设计稿 §7 已同步。
+> **实施选型注记（xmr-io 三返加项，回应业主复杂度关切）**：差分触发可选**帧驱动**（W2 余额帧写径挂差分钩，帧到即算候选行+成熟期后确认——去 90d 全量重扫）替代 30min 批扫重算；两型不变量相同（三扣+成熟度+宽限+幂等键），实施席裁定选型并在报审体注理由。
