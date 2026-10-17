@@ -9,6 +9,7 @@ message ProbeRun {
   string gateway = 2;      // 凭据域（binance）
   map<string, string> raw_bodies = 3; // endpoint→原始 body 原文（PII 面 mask 后落）
   CoverageReconcile coverage = 4;     // 三源并集对账段
+  repeated EndpointEvidence evidence = 5; // 逐端点断言行
 }
 
 message EndpointEvidence {

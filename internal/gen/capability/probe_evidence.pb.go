@@ -30,6 +30,7 @@ type ProbeRun struct {
 	Gateway       string                 `protobuf:"bytes,2,opt,name=gateway,proto3" json:"gateway,omitempty"`                                                                                                // 凭据域（binance）
 	RawBodies     map[string]string      `protobuf:"bytes,3,rep,name=raw_bodies,json=rawBodies,proto3" json:"raw_bodies,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // endpoint→原始 body 原文（PII 面 mask 后落）
 	Coverage      *CoverageReconcile     `protobuf:"bytes,4,opt,name=coverage,proto3" json:"coverage,omitempty"`                                                                                              // 三源并集对账段
+	Evidence      []*EndpointEvidence    `protobuf:"bytes,5,rep,name=evidence,proto3" json:"evidence,omitempty"`                                                                                              // 逐端点断言行
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -88,6 +89,13 @@ func (x *ProbeRun) GetRawBodies() map[string]string {
 func (x *ProbeRun) GetCoverage() *CoverageReconcile {
 	if x != nil {
 		return x.Coverage
+	}
+	return nil
+}
+
+func (x *ProbeRun) GetEvidence() []*EndpointEvidence {
+	if x != nil {
+		return x.Evidence
 	}
 	return nil
 }
@@ -264,13 +272,14 @@ var File_capability_probe_evidence_proto protoreflect.FileDescriptor
 
 const file_capability_probe_evidence_proto_rawDesc = "" +
 	"\n" +
-	"\x1fcapability/probe_evidence.proto\x12\x11nox.capability.v1\"\x92\x02\n" +
+	"\x1fcapability/probe_evidence.proto\x12\x11nox.capability.v1\"\xd3\x02\n" +
 	"\bProbeRun\x12!\n" +
 	"\fgenerated_at\x18\x01 \x01(\tR\vgeneratedAt\x12\x18\n" +
 	"\agateway\x18\x02 \x01(\tR\agateway\x12I\n" +
 	"\n" +
 	"raw_bodies\x18\x03 \x03(\v2*.nox.capability.v1.ProbeRun.RawBodiesEntryR\trawBodies\x12@\n" +
-	"\bcoverage\x18\x04 \x01(\v2$.nox.capability.v1.CoverageReconcileR\bcoverage\x1a<\n" +
+	"\bcoverage\x18\x04 \x01(\v2$.nox.capability.v1.CoverageReconcileR\bcoverage\x12?\n" +
+	"\bevidence\x18\x05 \x03(\v2#.nox.capability.v1.EndpointEvidenceR\bevidence\x1a<\n" +
 	"\x0eRawBodiesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe2\x01\n" +
@@ -314,11 +323,12 @@ var file_capability_probe_evidence_proto_goTypes = []any{
 var file_capability_probe_evidence_proto_depIdxs = []int32{
 	3, // 0: nox.capability.v1.ProbeRun.raw_bodies:type_name -> nox.capability.v1.ProbeRun.RawBodiesEntry
 	2, // 1: nox.capability.v1.ProbeRun.coverage:type_name -> nox.capability.v1.CoverageReconcile
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	1, // 2: nox.capability.v1.ProbeRun.evidence:type_name -> nox.capability.v1.EndpointEvidence
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_capability_probe_evidence_proto_init() }

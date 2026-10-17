@@ -20,14 +20,17 @@ import (
 
 	"io"
 
+	capabilitypb "nox/internal/gen/capability"
 	"nox/internal/store/pgstore"
+
+	"google.golang.org/protobuf/proto"
 	"strings"
 	"time"
 )
 
 const listPath = "docs/能力账/binance_endpoints.gen.txt"
-const outRaw = "docs/能力账/bnprobe_raw.jsonl"
-const outSum = "docs/能力账/bnprobe_summary.json"
+const outPB = "docs/能力账/bn-api-probe.pb"
+
 const paceMs = 100 // 节流间隔（USED-WEIGHT 跟踪另行降速——418 封禁防）
 
 // host 按路径族分派（退回㉜②——fapi/dapi 错域修）。
@@ -137,8 +140,6 @@ func main() {
 		os.Exit(1)
 	}
 	defer f.Close()
-	rw, _ := os.Create(outRaw)
-	defer rw.Close()
 	var results []result
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
@@ -153,21 +154,23 @@ func main() {
 		r := probe(ctx, c, apiKey, apiSecret, strings.TrimSpace(parts[1]))
 		r.Endpoint = parts[1]
 		results = append(results, r)
-		// raw=原始 body 原文直存（退回㉝②——防做假层①；截断界=无——
-		// 原文非字段计数）
-		var rawBody string
-		if rawR, ok2 := rawMap[r.Endpoint]; ok2 {
-			rawBody = rawR
-		}
-		rb, _ := json.Marshal(map[string]any{
-			"endpoint": r.Endpoint, "ts": time.Now().UTC().Format(time.RFC3339),
-			"status": r.Status, "ok": r.OK, "weight": r.Weight,
-			"latency_ms": r.LatencyMs, "key_fields": r.KeyFields,
-			"raw_body": rawBody,
-		})
-		fmt.Fprintln(rw, string(rb))
 		time.Sleep(paceMs * time.Millisecond) // 节流
 	}
+	// ③.pb 直出（D-615——ProbeRun 组装+Marshal 写入；raw 原文嵌 raw_bodies map）
+	run := &capabilitypb.ProbeRun{
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		Gateway:     "binance",
+		RawBodies:   rawMap,
+	}
+	for _, r := range results {
+		run.Evidence = append(run.Evidence, &capabilitypb.EndpointEvidence{
+			Endpoint: r.Endpoint, Ok: r.OK, Status: int32(r.Status),
+			Err: r.Err, XMbxUsedWeight: r.Weight, LatencyMs: r.LatencyMs,
+			KeyFieldsNonempty: r.KeyFields,
+		})
+	}
+	pbData, _ := proto.Marshal(run)
+	os.WriteFile(outPB, pbData, 0644)
 	var ok, fail int
 	for _, r := range results {
 		if r.OK {
@@ -176,11 +179,5 @@ func main() {
 			fail++
 		}
 	}
-	sum, _ := json.MarshalIndent(map[string]any{
-		"total": len(results), "ok": ok, "fail": fail,
-		"mutating_skipped": "真钱黑名单分离", "ws_surface": "未测（如实缺——listenKey+60s 窗后续件）",
-		"generated_at": time.Now().UTC().Format(time.RFC3339),
-	}, "", "  ")
-	os.WriteFile(outSum, sum, 0644)
-	fmt.Printf("bnprobe: %d ok/%d fail→%s+%s\n", ok, fail, outRaw, outSum)
+	fmt.Printf("bnprobe: %d ok/%d fail→%s\n", ok, fail, outPB)
 }
