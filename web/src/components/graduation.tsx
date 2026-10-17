@@ -156,6 +156,8 @@ export default function GraduationPanel() {
                   <span className="opp-card-kind">#{Number(r.id)} {r.symbol}</span>
                   <span className="opp-card-who">{structCN(r.structure)} · {r.venue}</span>
                   {r.flagWarn ? <Chip tone="warn">⚠{r.flagWarn}</Chip> : null}
+                  {/* 坑签名命中（D-587④ 续段②）：后端匹配回显中文标签，零命中不造标 */}
+                  {(r.pitHits ?? []).map((h) => <Chip key={h} tone="warn">{h}</Chip>)}
                   <span className="opp-card-friction">{r.ageDays.toFixed(1)}天</span>
                 </div>
                 <div className="stats opp-card-stats">

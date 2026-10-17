@@ -56,3 +56,28 @@ func (s *Store) HasPaperEvidence(ctx context.Context, templateID string) (bool, 
 	}
 	return n > 0, nil
 }
+
+// PayoffClassByTemplates 批量模板→payoff_class（坑签名透出提案面馈入——
+// 模板未注册/列 NULL=缺 map 项，调用方按空 payoff_class 走（canonical/venue
+// 键仍可命中）。模板集小（活跃 9 行），ANY 批查零压。
+func (s *Store) PayoffClassByTemplates(ctx context.Context, templateIDs []string) (map[string]string, error) {
+	out := map[string]string{}
+	if len(templateIDs) == 0 {
+		return out, nil
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, payoff_class FROM fin_opp_template
+		 WHERE id = ANY($1) AND payoff_class IS NOT NULL`, templateIDs)
+	if err != nil {
+		return nil, fmt.Errorf("payoff class by templates: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, cls string
+		if err := rows.Scan(&id, &cls); err != nil {
+			return nil, err
+		}
+		out[id] = cls
+	}
+	return out, rows.Err()
+}

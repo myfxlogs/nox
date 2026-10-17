@@ -19,6 +19,15 @@ const (
 	econRequiredFm = "**判据挂接**"
 )
 
+// econMatchKeys match: 段合法键域（坑签名，D-587④ 续段③）——与
+// econkb.matchEntry 消费键一一对应；段内未知键=签名键名漂移（匹配端读不到
+// 即静默失效）→ gen-econ 门禁报错禁入索引。
+var econMatchKeys = map[string]bool{
+	"payoff_class": true,
+	"canonicals":   true,
+	"venues":       true,
+}
+
 func econDirPath() string {
 	if d := os.Getenv("NOX_ECONKB_DIR"); d != "" {
 		return d
@@ -46,11 +55,46 @@ func econScan(dir string) ([]string, error) {
 		if !strings.Contains(c, econRequiredFm) {
 			return nil, fmt.Errorf("econ schema: %s 缺 %s 字段", n, econRequiredFm)
 		}
+		if err := econValidateMatchSeg(n, c); err != nil {
+			return nil, err
+		}
 		line, _, _ := strings.Cut(c, "\n")
 		titles = append(titles, fmt.Sprintf("- %s —— `%s`", strings.TrimPrefix(strings.TrimSpace(line), "# "), n))
 	}
 	sort.Strings(titles)
 	return titles, nil
+}
+
+// econValidateMatchSeg 正文 match: 段键域校验（段=顶格 `match:` 行至首个非缩进行）。
+// 段内键 ∉ econMatchKeys → 报错（坑签名键名漂移防护——匹配端 econkb 只认三键，
+// 写错键名=该签名永不命中且无告警，门禁单点拦）。
+func econValidateMatchSeg(name, content string) error {
+	inSeg := false
+	for _, ln := range strings.Split(content, "\n") {
+		t := strings.TrimRight(ln, " \t")
+		if !inSeg {
+			if strings.HasPrefix(t, "match:") {
+				inSeg = true
+			}
+			continue
+		}
+		if !strings.HasPrefix(ln, " ") && !strings.HasPrefix(ln, "\t") {
+			break // 段终
+		}
+		tt := strings.TrimSpace(t)
+		if tt == "" {
+			break
+		}
+		i := strings.Index(tt, ":")
+		if i <= 0 {
+			continue // 无键值形行（注释等）不属键域
+		}
+		key := strings.TrimSpace(tt[:i])
+		if !econMatchKeys[key] {
+			return fmt.Errorf("econ schema: %s match 段未知键 %q（合法域=payoff_class/canonicals/venues——与 econkb.matchEntry 消费键对齐）", name, key)
+		}
+	}
+	return nil
 }
 
 // econGen 生成/校验 索引.md（check 模式只比对不落盘）。

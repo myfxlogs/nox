@@ -14,6 +14,7 @@ message Proposal {
   string status = 7;         // proposed|executed|expired|declined
   int64 created_at = 8;
   int64 decided_at = 9;      // 0=未定
+  repeated string pit_hits = 10; // 坑签名命中标注（「⚠命中坑 <id>（EA-xx）」；只读透出非判据）
 }
 
 message ListProposalsRequest {

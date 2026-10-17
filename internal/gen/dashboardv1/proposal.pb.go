@@ -33,6 +33,7 @@ type Proposal struct {
 	Status        string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"` // proposed|executed|expired|declined
 	CreatedAt     int64                  `protobuf:"varint,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	DecidedAt     int64                  `protobuf:"varint,9,opt,name=decided_at,json=decidedAt,proto3" json:"decided_at,omitempty"` // 0=未定
+	PitHits       []string               `protobuf:"bytes,10,rep,name=pit_hits,json=pitHits,proto3" json:"pit_hits,omitempty"`       // 坑签名命中标注（「⚠命中坑 <id>（EA-xx）」；只读透出非判据）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -128,6 +129,13 @@ func (x *Proposal) GetDecidedAt() int64 {
 		return x.DecidedAt
 	}
 	return 0
+}
+
+func (x *Proposal) GetPitHits() []string {
+	if x != nil {
+		return x.PitHits
+	}
+	return nil
 }
 
 type ListProposalsRequest struct {
@@ -326,7 +334,7 @@ var File_dashboardv1_proposal_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_proposal_proto_rawDesc = "" +
 	"\n" +
-	"\x1adashboardv1/proposal.proto\x12\x10nox.dashboard.v1\"\x8a\x02\n" +
+	"\x1adashboardv1/proposal.proto\x12\x10nox.dashboard.v1\"\xa5\x02\n" +
 	"\bProposal\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1f\n" +
 	"\vtemplate_id\x18\x02 \x01(\tR\n" +
@@ -341,7 +349,9 @@ const file_dashboardv1_proposal_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"decided_at\x18\t \x01(\x03R\tdecidedAt\".\n" +
+	"decided_at\x18\t \x01(\x03R\tdecidedAt\x12\x19\n" +
+	"\bpit_hits\x18\n" +
+	" \x03(\tR\apitHits\".\n" +
 	"\x14ListProposalsRequest\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\"Q\n" +
 	"\x15ListProposalsResponse\x128\n" +

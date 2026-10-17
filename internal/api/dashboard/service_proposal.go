@@ -8,11 +8,22 @@ import (
 
 	"connectrpc.com/connect"
 
+	"nox/internal/econkb"
 	dashv1 "nox/internal/gen/dashboardv1"
 )
 
 func (s *Service) ListProposals(ctx context.Context, req *connect.Request[dashv1.ListProposalsRequest]) (*connect.Response[dashv1.ListProposalsResponse], error) {
 	rows, err := s.store.ListProposals(ctx, req.Msg.Status, 200)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	// 坑签名透出（续段①）：template_id→payoff_class join 后馈 MatchHits——
+	// dci_buy_low(naked_short_vol) 类提案带⚠标注；匹配仍是呈现非闸（禁线）。
+	tmplIDs := make([]string, 0, len(rows))
+	for _, p := range rows {
+		tmplIDs = append(tmplIDs, p.TemplateID)
+	}
+	payoffByTmpl, err := s.store.PayoffClassByTemplates(ctx, tmplIDs)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -31,6 +42,9 @@ func (s *Service) ListProposals(ctx context.Context, req *connect.Request[dashv1
 			Id: p.ID, TemplateId: p.TemplateID, ExecTrack: p.ExecTrack,
 			Venue: p.Venue, ParamsJson: string(pj), ExpectedApr: apr,
 			Status: p.Status, CreatedAt: p.CreatedAt.Unix(), DecidedAt: dec,
+			PitHits: pitHitLabels(econkb.Input{
+				PayoffClass: payoffByTmpl[p.TemplateID], VenueA: p.Venue,
+			}),
 		})
 	}
 	return connect.NewResponse(resp), nil
