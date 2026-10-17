@@ -475,3 +475,5 @@
 机检：go build+TestOverviewBundle 2 锚过+npm build 绿（worktree 须先 buf generate 供 web/src/gen——gitignore 生成件不随 checkout，记档：评审 worktree 前端 build 前置=buf generate）。
 残余：票行曾现两条重影（双写病灶——STATE 加行幂等性教训），已去重。部署件：标准链待执行（SG 实拍验=页序+critical 明细文案+8% 对照三锚）。
 -->
+
+> **收工注记（决策席 2026-10-18 00:0xZ）**：本会话（10-17 全天）收口 20+ 票、D-604~D-616 十三裁、9 批生产部署（全部合并即部署）。**失守计数：本席 2**（①显示面热修无锚→条件反转→生产空面——业主实拍抓出；②防抖假部署声明——引分支本地产物 hash 当生产凭证，复审席双证纠偏）——均 D-591-H 类，赎件=订单面非空锚+防抖产物级真收口；**教训入律：收口声明必附 master 内容物 grep+公网服务产物 hash 对拍，分支构建 hash 一律不算数**。**在途移交**：ci-red ②③④（race/EOF/tmpdir——①已收）、bn-capability（并行席）、眠钱瓦片换面（可选小票）、idle-scan 产生触发疑点（观察项）。**自然到期锚**：10-21 USD_UM 毕业首窗+轮动首周期 · 周日 22:10Z MT5 开盘三锚（swap 行对拍/swap 榜/Deal 事件）· 30 天验收线 ~11-12。
