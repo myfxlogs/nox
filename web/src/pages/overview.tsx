@@ -10,6 +10,7 @@ import type { RequestBoxItem } from "../gen/dashboardv1/request_box_pb";
 import { ResolveRequestState } from "../gen/dashboardv1/request_box_pb";
 import { fmtUsd } from "../components/fmt";
 import { StatTile } from "../components/StatTile";
+import { Modal } from "../components/Modal";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
 import { FreshDot } from "../components/FreshDot";
@@ -141,8 +142,8 @@ export default function OverviewPage() {
           active={tile === "perf"} onClick={() => setTile(tile === "perf" ? null : "perf")} />
       </div>
       {tile && (
-        <div className="stat-detail" role="region" aria-label={`${TILE_GROUP[tile]}组成明细`}>
-          <div className="stat-detail-title">{TILE_GROUP[tile]}·组成明细</div>
+        <Modal open={tile != null} onClose={() => setTile(null)}
+          title={`${TILE_GROUP[tile]}·组成明细`} width={520}>
           {b && b.breakdowns.some((r) => r.group === tile) ? (
             <ul>
               {b.breakdowns.filter((r) => r.group === tile).map((r, i) => (
@@ -156,7 +157,7 @@ export default function OverviewPage() {
           ) : (
             <div className="muted">组成明细后端未供（读败或零池——如实缺）</div>
           )}
-        </div>
+        </Modal>
       )}
 
       {/* S3′-b 十段工序实时状态卡（后端 PipelineStageHealth 读模——
