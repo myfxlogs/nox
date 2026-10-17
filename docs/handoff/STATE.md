@@ -20,6 +20,8 @@
 
 | **息差轮动引擎（D-612 业主令——低效仓零容忍：活期仓间轮动追最优净收益，≥8% 基础层动力件）** | ✅照准并入 @302d76d42+D-614 热修 @6781a6d1e（部署 healthy；D-613 三补正全落；出生即死病灶热修+引擎活性亲证——首轮动期=持有窗出窗 ~10-21/23；收口注记㉝） | 复审席裁 10-17 | **实证**：xfer.go:55 idle 门+autoexec 只申闲钱=全系统零轮动径；活期 USDT 现状 binance~2.5%/okx~3.65% 静态停靠，8% 目标不可能从静态活期来。**范围（设计内嵌，核验面）**：①比价面=LatestCexEarnAPRs 新鲜行（≤24h+促销档剔除——D-514 窗口径）×同资产活期族逐 venue×product；②轮动判据=目标 APR−现仓 APR≥阈值（净值差：扣申赎双程费+赎回时滞机会成本；阈值+水位+持有窗全落 app_config）；③所内轮动=redeemFlexible→Subscribe 现成 rail 入 autoexec 族（D-598 语义：落库即执行+APR 复验+坑表抑单）；④跨 venue=xferScan 扩面（idle 门→低效仓门）产 fin_condition_gap 调拨提案（链上划转业主域）；⑤流动性守卫=venue 弹药水位（D-549 装配依赖面）+最小持有窗+DCI/armed 保证金池不轮；⑥账本=io 划转腿（D-607 径）+earn_yield 归属+归因簿行。**禁线**：定期/locked 面禁碰（只活期轮动）；禁抽干策略弹药；促销档禁当基准；轮动执行零 LLM；判据全落表。**验收**：机检——净值差判据三态（过/不过/成本吃尽拒）+守卫断言；SG——首个轮动周期 earn 基线上移实拍+io 双腿落账。**开工指令（核验席）**：`[角色:复审] 息差轮动引擎方案核验（读 STATE 本行+D-612——裁定 照准/退回/补正 后拆施工票）`。 |
 
+| **前端卡片弹窗化（业主令 10-17——卡片点击出弹窗非内联展开：弹窗不破坏页面展示高度；**自定义弹窗禁浏览器默认 window.alert/confirm/prompt**）** | 🔨待领 | 实施席 | **业主诉求**：现盘面卡片点击=内联展开，展开把页面高度顶乱；改=点击出**自定义 Modal 弹窗**（overlay 定位零 reflow），且**禁用浏览器默认弹窗**（window.alert/confirm/prompt 全仓零容忍——亲扫 web/src 现零使用，防未来引入）。**范围**：①**先清册**——grep 全部「点击展开」卡片交互面（overview 行动卡/opp-cards/毕业卡/观察面板等 Collapse·details·state-toggle 形态）落票注；②`web/src/components/Modal.tsx` 新件——借形 /opt/arbcn/web/src/components/ConfirmPanel.tsx 范式（设计体系 S1′ 域内，纯 CSS 无 Tailwind）：overlay 遮罩+居中卡+关闭钮+ESC/点遮罩关，**零页面高度扰动**；③清册面逐面替换（展开内容整体移入 Modal body）；④空态/加载态在弹窗内如实。**禁线**：前端零计算零信任（内容后端供）；禁 window.alert/confirm/prompt；禁改 RPC 契约；纯呈现层改动零判定语义变；npm build 必绿。**验收**：机检——npm build 绿+清册面逐面替换核对；SG——盘面实拍：卡片点击=弹窗浮层、页面高度不变、ESC/遮罩可关。**开工指令**：`[角色:实施] 前端卡片弹窗化（读 STATE 本行——先清册展开面再逐面换 Modal，自定义弹窗禁默认）`。 |
+
 ## 票
 
 | 票 | 状态 | owner | 备注 |
