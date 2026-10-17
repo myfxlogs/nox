@@ -510,3 +510,10 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：①A 径=请业主向 mtapi 供应商提 deal 史端点需求（先例：RequiredMargin 10-05 供应商实装）——已落请求箱 #79（kind=permission）；②过渡=`perf_flow_provisional` 维持 true 至端点落地+注资行补齐；③B 径（equity 差分反推入金）不建——推断账伪风险不配收益；④盲区期间业主注资须回执申报金额（请求文本已注明）。
 - **反证锚**：若 mtapi 侧证实存在 deal 面读径而我们 grep 漏检，或 XMR 入金实际可走 order 面（供应商配置项）——本裁定前提塌，改走采集径票。
 - **复盘点**：端点落地+fin_venue_io 首行 mt5:ticket 落库时摘 provisional。
+
+## D-602（2026-10-17 决策席）XMR 盲区修径修正——balance 差分落账为主，供应商件降为可选补强
+
+- **修正因**：D-601 把修复押在供应商 deal 端点=外部依赖弱位；且判「差分=推断账」有误——balance 是 venue 真值快照，相邻差分是算术分解非推断。
+- **裁定**：①A 径请求箱 #79 保留（零成本、落地后是凭证级事件源可作差分校验），**但修复不再门控于它**；②主径=balance 差分落账器：相邻池快照 Δbalance−Σ(窗内 position_settlements 净额)=外部资金流→写 fin_venue_io（direction 按符号、external_id=mt5:deltabook:{venue}:{from}:{to}、status='inferred'）+warn 告警「推断账行已落请对账单复核」；③fail-closed=窗内有仓变但结算簿不齐→只告警不落账；信用金/红冲等杂项同样如实落 inferred 行（它本属外部流）；④broker 不可知——ICR/EXR/XMR 同径盖，供应商端点若落地则升级双源对账非替换。
+- **反证锚**：差分落账若误记（XM credit/内部调整非入金被落 deposit）——标 inferred 告警层仍守诚实边界；误记率高→降级为纯告警器。
+- **复盘点**：首笔差分落账行实测 + XMR $1000 应被下拍差分捕到（若未捕=差分器自身病灶）。
