@@ -18,3 +18,5 @@ description: mtapi MT5 行情/历史/会话面——Symbols/SymbolParams/GetQuot
 
 **正道锚**：行情判定走 Subscribe+Events 流（D-004）；PriceHistory 族=历史补齐/统计（事件锚定拉取合法）。
 **复跑**：同 mt5-account。
+
+<!-- 方法全名索引（proto 名字面 grep 锚）：PriceHistory PriceHistoryMany PriceHistoryToday PriceHistoryTodayMany PriceHistoryEx PriceHistoryExMany PriceHistoryHighLow PriceHistoryMonth PriceHistoryMonthMany -->
