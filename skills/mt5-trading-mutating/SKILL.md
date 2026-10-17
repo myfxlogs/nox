@@ -1,9 +1,9 @@
 ---
 name: mt5-trading-mutating
-description: mtapi MT5 mutating 面（OrderSend/Modify/Close）——demo 户全谱状态：端点缺口挂请求箱，真户永久禁跑
+description: mtapi MT5 mutating 面（OrderSend/Modify/Close）——demo 户全谱实测 ok（BTCUSDm 全周期在案），真户永久禁跑
 ---
 
-# mt5 mutating 面（2026-10-17：demo 端点缺口——全谱未实测如实缺）
+# mt5 mutating 面（实测 2026-10-17，证据=docs/能力账/mt5-rpc-probe-2026-10-17.json）
 
 | RPC | 功能 | demo 实测（2026-10-17，BTCUSDm） | 关键字段 |
 |---|---|---|---|
