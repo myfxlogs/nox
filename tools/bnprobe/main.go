@@ -30,7 +30,7 @@ import (
 
 const listPath = "docs/能力账/binance_endpoints.gen.txt"
 
-var outPB = "docs/能力账/bn-api-probe-" + time.Now().UTC().Format("2006-01-02") + ".pb"
+var outPB string // 注记㊷①：批文件携 offset（bn-api-probe-<date>-o<N>.pb——批间不覆盖）
 
 // pace 权重预算核算（注记㊴+事故注记：venue 探测=与生产共享出口 IP 的限速面——
 // 100ms 定 pace 打穿 568 端点实证封 IP；改=USED-WEIGHT 实时跟踪+418 即停
@@ -155,6 +155,16 @@ func probe(ctx context.Context, c *http.Client, apiKey, apiSecret, tier, path st
 }
 
 func main() {
+	offset := 0
+	limit := 0 // 0=全谱
+	for i, a := range os.Args {
+		if a == "-offset" && i+1 < len(os.Args) {
+			fmt.Sscanf(os.Args[i+1], "%d", &offset)
+		}
+		if a == "-limit" && i+1 < len(os.Args) {
+			fmt.Sscanf(os.Args[i+1], "%d", &limit)
+		}
+	}
 	c := &http.Client{Timeout: 15 * time.Second}
 	ctx := context.Background()
 	// 凭据=pgstore.Open+Store.ListExchangeConfigs 一调（_enc 列+MasterKey+Open
@@ -184,6 +194,15 @@ func main() {
 	} else {
 		fmt.Fprintln(os.Stderr, "NOX_PG_DSN 未设——凭据空跑拒（签名面标凭据缺）")
 	}
+	// ping 预检——封禁窗内禁白跑（决策注记：跑前 ping/api/v3/ping 验 IP 权面）
+	if resp, err := c.Get("https://api.binance.com/api/v3/ping"); err == nil {
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			fmt.Fprintf(os.Stderr, "ping 预检非 200（%d）——封禁窗内拒跑\n", resp.StatusCode)
+			os.Exit(1)
+		}
+	}
+	outPB = fmt.Sprintf("docs/能力账/bn-api-probe-%s-o%d.pb", time.Now().UTC().Format("2006-01-02"), offset)
 	f, err := os.Open(listPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "list open: %v\n", err)
@@ -192,6 +211,7 @@ func main() {
 	defer f.Close()
 	var results []result
 	sc := bufio.NewScanner(f)
+	idx, done := 0, 0
 	gateChecked := false
 	for sc.Scan() {
 		l := sc.Text()
@@ -209,6 +229,10 @@ func main() {
 				os.Exit(1)
 			}
 		}
+		idx++
+		if idx <= offset {
+			continue // 批前跳
+		}
 		tier, path := parts[1], parts[2]
 		r := probe(ctx, c, apiKey, apiSecret, tier, path)
 		// 418 即停——一封即 abort（生产 IP 速率预算=与系统共享非独占，禁续扫）
@@ -218,6 +242,10 @@ func main() {
 		}
 		r.Endpoint = path
 		results = append(results, r)
+		done++
+		if limit > 0 && done >= limit {
+			break // 批界
+		}
 		// pace 权重预算（USED-WEIGHT 跟踪——>600 降速 2x/2 倍 pace）
 		w := 0
 		fmt.Sscanf(r.Weight, "%d", &w)
