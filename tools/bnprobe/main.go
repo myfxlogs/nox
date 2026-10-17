@@ -65,17 +65,28 @@ type result struct {
 // rawMap 端点→原始 body 原文（probe 内填充——raw 存证源）
 var rawMap = map[string]string{}
 
-func probe(ctx context.Context, c *http.Client, apiKey, apiSecret, path string) result {
+// probe tier 分档：signed=timestamp+signature 直签；public/retry=无签首试——
+// signed 档凭据空=fail-closed 标「凭据缺未跑」非产假 401（退回㊳②）。
+func probe(ctx context.Context, c *http.Client, apiKey, apiSecret, tier, path string) result {
 	t0 := time.Now()
 	r := result{}
-	// 签名读全谱——USER_DATA 类走 HMAC（timestamp+signature query）
-	q := fmt.Sprintf("timestamp=%d", time.Now().UnixMilli())
-	sep := "?"
-	if strings.Contains(path, "?") {
-		sep = "&"
+	var req *http.Request
+	var err error
+	if tier == "signed" {
+		if apiKey == "" || apiSecret == "" {
+			r.Err = "凭据缺未跑（signed 档 fail-closed）"
+			return r
+		}
+		q := fmt.Sprintf("timestamp=%d", time.Now().UnixMilli())
+		sep := "?"
+		if strings.Contains(path, "?") {
+			sep = "&"
+		}
+		full := path + sep + q + "&signature=" + sign(apiSecret, q)
+		req, err = http.NewRequestWithContext(ctx, "GET", hostFor(path)+full, nil)
+	} else {
+		req, err = http.NewRequestWithContext(ctx, "GET", hostFor(path)+path, nil)
 	}
-	full := path + sep + q + "&signature=" + sign(apiSecret, q)
-	req, err := http.NewRequestWithContext(ctx, "GET", hostFor(path)+full, nil)
 	if err != nil {
 		r.Err = err.Error()
 		return r
@@ -98,6 +109,22 @@ func probe(ctx context.Context, c *http.Client, apiKey, apiSecret, path string) 
 		return r
 	}
 	rawMap[path] = string(bodyBytes) // raw 原文存证（退回㉝②）
+	// 退回㊳③：400=缺参自伤族——param-catalogue 喂 symbol=BTCUSDT 重试
+	// （真须参≠死端点；400+raw 含 symbol/param 字样=缺参族实证喂参重试）
+	if resp.StatusCode == 400 && strings.Contains(string(bodyBytes), "symbol") {
+		req2, _ := http.NewRequestWithContext(ctx, "GET", hostFor(path)+path+"?symbol=BTCUSDT", nil)
+		if apiKey != "" {
+			req2.Header.Set("X-MBX-APIKEY", apiKey)
+		}
+		if resp2, err2 := c.Do(req2); err2 == nil {
+			defer resp2.Body.Close()
+			bodyBytes, _ = io.ReadAll(resp2.Body)
+			rawMap[path] = string(bodyBytes)
+			r.Status = resp2.StatusCode
+			r.Weight = resp2.Header.Get("X-MBX-USED-WEIGHT")
+			resp = resp2
+		}
+	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		r.OK = true
 		var body any
@@ -131,17 +158,28 @@ func main() {
 	// 已封装——禁手搓 SQL；NOX_PG_DSN+NOX_MASTER_KEY 两引导件；binance+simulated=f）
 	var apiKey, apiSecret string
 	if dsn := os.Getenv("NOX_PG_DSN"); dsn != "" {
-		if st, err := pgstore.New(ctx, dsn); err == nil {
+		st, err := pgstore.New(ctx, dsn)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "pgstore open: %v（凭据空跑拒——签名面端点标凭据缺）\n", err)
+		} else {
 			defer st.Close()
-			if cfgs, err := st.ListExchangeConfigs(ctx); err == nil {
+			cfgs, err := st.ListExchangeConfigs(ctx)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "exchange_configs read: %v\n", err)
+			} else {
 				for _, c := range cfgs {
 					if c.Venue == "binance" && !c.Simulated && c.APIKey != "" {
 						apiKey, apiSecret = c.APIKey, c.APISecret
 						break
 					}
 				}
+				if apiKey == "" {
+					fmt.Fprintln(os.Stderr, "binance 凭据未命中（simulated=f 过滤后空——签名面标凭据缺未跑）")
+				}
 			}
 		}
+	} else {
+		fmt.Fprintln(os.Stderr, "NOX_PG_DSN 未设——凭据空跑拒（签名面标凭据缺）")
 	}
 	f, err := os.Open(listPath)
 	if err != nil {
@@ -156,11 +194,15 @@ func main() {
 		if strings.TrimSpace(l) == "" || strings.HasPrefix(l, "#") {
 			continue
 		}
-		parts := strings.SplitN(l, "\t", 2)
+		parts := strings.SplitN(l, "\t", 3)
 		if len(parts) < 2 || strings.HasPrefix(parts[0], "MUTATING") {
 			continue
 		}
-		r := probe(ctx, c, apiKey, apiSecret, strings.TrimSpace(parts[1]))
+		tier, path := "public", parts[len(parts)-1]
+		if len(parts) == 3 {
+			tier = parts[1]
+		}
+		r := probe(ctx, c, apiKey, apiSecret, tier, path)
 		r.Endpoint = parts[1]
 		results = append(results, r)
 		time.Sleep(paceMs * time.Millisecond) // 节流

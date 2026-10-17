@@ -25,6 +25,7 @@ var mdRepos = []string{
 	"binance/binance-connector-python",
 }
 var postmanRepo = "binance/binance-api-postman"
+var authTier = map[string]string{} // method+path→signed|public|retry
 var connRepos = []string{"binance/binance-connector-python", "binance/binance-connector-go"}
 
 var pathRe = regexp.MustCompile(`(GET|POST|PUT|DELETE)\s+(/(api|fapi|dapi|sapi|wapi)/[a-zA-Z0-9_\-/.{}]+)`)
@@ -89,7 +90,17 @@ func main() {
 						if strings.HasPrefix(pp, "/api/") || strings.HasPrefix(pp, "/sapi/") ||
 							strings.HasPrefix(pp, "/fapi/") || strings.HasPrefix(pp, "/dapi/") || strings.HasPrefix(pp, "/wapi/") {
 							method, _ := m["method"].(string)
-							src["postman"][method+" "+pp] = true
+							key := method + " " + pp
+							src["postman"][key] = true
+							// 退回㊳①：auth 元数据→签名档（apikey 型=signed——
+							// 无差别签打死公共端点病灶销账）
+							if auth, _ := m["request"].(map[string]any); auth != nil {
+								if a, _ := auth["auth"].(map[string]any); a != nil {
+									if t, _ := a["type"].(string); t == "apikey" || t == "bearer" {
+										authTier[key] = "signed"
+									}
+								}
+							}
 						}
 					}
 				}
@@ -164,7 +175,11 @@ func main() {
 			mutatingN++
 			tag = "MUTATING"
 		}
-		out = append(out, tag+"\t"+parts[1])
+		tier := authTier[k]
+		if tier == "" {
+			tier = "retry" // md/conn 源无 auth 元——unsigned-first 签败 retry 档
+		}
+		out = append(out, tag+"\t"+tier+"\t"+parts[1])
 	}
 	// 对账段：三源各产数+单源独有行+并集总数
 	recon := []string{
