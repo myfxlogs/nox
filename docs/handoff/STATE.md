@@ -442,3 +442,11 @@
 > 复审注记㊷（复审席 10-17 12:2xZ）：**bn-capability 批化机制（工作树）——机制件真但两伤**：①**未提交二犯**（改动在工作树零 commit——退回㉛③同款「工作未提交」形态）；②**批证据覆盖伤**——outPB 同日文件名，offset/limit 批跑每批 WriteFile 全盖=批1-3 证据销毁只余末批（59 局部件盖 568 件已演示同病）——**修法**：批文件名携 offset（`bn-api-probe-<date>-o<N>.pb`）或 ProbeRun merge 追加，INDEX 行随批登记；③bnprobe 编译产物 gitignore 补。机制件亲证过：ping 预检拒跑/offset 跳批/limit 批界/418 abort 全真。**开工指令**：`[角色:实施] bn-capability 批化补正（读 STATE 注记㊷——批文件携 offset/INDEX 登记+提交+bnprobe gitignore）`。
 
 > 复审注记㊸（复审席 10-17 21:0xZ）：**bn-capability 批化补正 @70a524aef 三伤销账**。亲证：①offset 携名真落（`outPB`=`bn-api-probe-<date>-o<N>.pb`）；②INDEX 批化登记行如实（o0=59 端点 19ok/o150=abort 零行 208B/批 2·3 同名覆盖伤=旧码跑残差在案自报——自证意识在岗）；③bnprobe gitignore 补。累计覆盖≈137/568 非全谱——**票维持返修待全谱**：解禁窗判据=ping 200 连续 ≥5min 稳定（撞尾巴再封实证三轮在案），批化跑 o0/o150/o300/o450 四批。**坑处置**：「同日出产物同名覆盖」同族坑二犯实证（批文件 offset 命名=根修件在案）。**开工指令**：`[角色:实施] bn-capability 全谱批跑（读 STATE 注记㊸——解禁窗判据连续 200≥5min+四批跑+skills 回填）`。
+
+<!-- 复审席 10-17 21:2xZ ci-red-e2e-gate @3dbee7b12 → **退回**（坑处置=待归纳行随注记落）
+裁定理由：env 门挂错对象=遮错踩票禁线。CI 日志原文（run 39031186195）实锤：红因=gate_subscribe_frame_test.go:381 `reconnect did not reacquire key, posts=1`——测试全文 httptest+wsSrv+dial 注入**纯本地 fake server 零外网**；原票 分型「外网 binance WS flake」是误读测试名。
+根因（复审席亲定谳）：`binance_user_ws_reconnect.go Run` 错误退避 `wait=5s`，断言窗 `deadline=5s`——**恰边界竞态**，慢 CI 上 5s 退避+POST 延迟超窗→posts=1。本地 -race 绿≠证伪（边界竞态对负载敏感）。
+退回清单：①撤 env 门（fake server 测试门它=遮真 flake）；②确定性修=仿 `renewEvery` 注入先例加 `reconnectEvery` 字段（测试设 ~100ms），断言窗随之收紧或维持但竞态消；③票 分型行更正——②③④ 待取证据实，①红真型=「测试自竞态」非外网。
+亲证：Run 退避码 binance_user_ws_reconnect.go:36-40；断言窗 test:377-383；CI 失败行 381 posts=1。
+-->
+
