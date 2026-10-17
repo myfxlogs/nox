@@ -24,12 +24,23 @@ type DemoCreds struct {
 func probeMutating(ctx context.Context, venue string, trading mt5pb.TradingClient, mt5 mt5pb.MT5Client) []Evidence {
 	var out []Evidence
 	// 前置：demo 户可交易符号实读（券商方言——XAUUSD 可能带后缀）。
-	tradeSym := "XAUUSD"
+	// 退回㉜②：周六仅加密面开——BTCUSDm（Exness m 尾方言）优先，XAUUSD 兜底。
+	tradeSym := "BTCUSDm"
 	if lst, err := mt5.SymbolList(ctx, &mt5pb.SymbolListRequest{Id: demoTok}); err == nil {
+		found := map[string]bool{}
 		for _, s := range lst.GetResult() {
-			if strings.HasPrefix(strings.ToUpper(s), "XAUUSD") {
+			found[strings.ToUpper(s)] = true
+			if strings.EqualFold(s, "BTCUSDm") {
 				tradeSym = s
 				break
+			}
+		}
+		if tradeSym == "BTCUSDm" && !found["BTCUSDM"] {
+			for _, s := range lst.GetResult() {
+				if strings.HasPrefix(strings.ToUpper(s), "BTCUSD") {
+					tradeSym = s
+					break
+				}
 			}
 		}
 	}
@@ -99,7 +110,7 @@ func probeMutating(ctx context.Context, venue string, trading mt5pb.TradingClien
 func probePending(ctx context.Context, venue string, trading mt5pb.TradingClient, tradeSym string) []Evidence {
 	var out []Evidence
 	op := mt5pb.OrderType_OrderType_BuyLimit
-	lowPrice := 1.0 // 深价挂单（不成交）
+	lowPrice := 1000.0 // 深价挂单（BTC 价下方不成交）
 	t0 := time.Now()
 	send, err := trading.OrderSend(ctx, &mt5pb.OrderSendRequest{
 		Id: demoTok, Symbol: tradeSym, Operation: op, Volume: 0.01, Price: &lowPrice,
@@ -148,9 +159,15 @@ func demoConnect(ctx context.Context, connSvc mt5pb.ConnectionClient, svc mt5pb.
 	if err == nil && sr.GetError().GetMessage() == "" {
 		for _, c := range sr.GetResult() {
 			for _, r := range c.GetResults() {
-				// Result.Name=server 名；Access=host:port 列表。
+				// Result.Name=server 名；Access=host:port（或 host）列表——拆分落 port。
 				if strings.EqualFold(r.GetName(), creds.Server) && len(r.GetAccess()) > 0 {
-					host = r.GetAccess()[0]
+					acc := r.GetAccess()[0]
+					if i := strings.LastIndex(acc, ":"); i > 0 {
+						host = acc[:i]
+						fmt.Sscanf(acc[i+1:], "%d", &port)
+					} else {
+						host = acc
+					}
 				}
 			}
 		}

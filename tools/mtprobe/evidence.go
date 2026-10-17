@@ -40,7 +40,7 @@ func recordRaw(key string, m proto.Message) {
 	}
 	b, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(m)
 	if err == nil {
-		rawStore[key] = string(b)
+		rawStore[key] = sanitizePII(string(b))
 	}
 }
 
@@ -62,7 +62,32 @@ func keyFields(m proto.Message) []string {
 	return out
 }
 
-// protojsonish protojson 摘录（前 220 字节）。
+// piiFields PII 字段集（Account 面户主信息——脱敏后入证据，复审㉚伤①）。
+var piiFields = map[string]bool{
+	"UserName": true, "Email": true, "Phone": true, "City": true,
+	"Country": true, "State": true, "ZipCode": true, "UserAddress": true,
+}
+
+// sanitizePII protojson 串内 PII 字段值置换 ***（值形态 "field":"value"）。
+func sanitizePII(s string) string {
+	for f := range piiFields {
+		i := strings.Index(s, `"`+f+`":`)
+		if i < 0 {
+			continue
+		}
+		vs := strings.Index(s[i:], ":") + i + 1
+		ve := strings.IndexByte(s[vs:], ',')
+		if ve < 0 {
+			ve = len(s)
+		} else {
+			ve += vs
+		}
+		s = s[:vs] + `"***"` + s[ve:]
+	}
+	return s
+}
+
+// protojsonish protojson 摘录（前 220 字节，PII 脱敏）。
 func protojsonish(m proto.Message) string {
 	if m == nil {
 		return ""
@@ -71,7 +96,7 @@ func protojsonish(m proto.Message) string {
 	if err != nil {
 		return ""
 	}
-	return truncStr(string(b))
+	return truncStr(sanitizePII(string(b)))
 }
 
 // ReflectionDump reflection 全量 dump（service→methods→输入消息字段+枚举）。

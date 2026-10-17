@@ -16,4 +16,5 @@ description: mtapi MT5 订单/流面——OpenedOrders/OrderHistory 族/Subscrib
 | OnQuote/OnOrderUpdate/OnOrderProfit/OnTickValue/OnMail/OnMarketWatch/OnOpenedOrdersTickets | 独立 server-stream | 短窗采样在案（零帧/err 如实） | 同 | 同 | **Deal 载荷教训锚（D-607）**：OnOrderUpdateReply.Deal 携 DealType 枚举——DealType_Balance=2=入金载荷（一直躺在 proto 里没人看）；充提事件监控正道=订阅此流非轮询 OrderHistory |
 
 **坑**：流 RPC 无 token 时静默零帧——先 Subscribe 成功再 Events；断线自愈=wsrunner 重连+重订阅（adapter 范式）。
+**符号方言硬坑**：每 broker 后缀不同（EXR/XMR 户 XAUUSD not exist 实拍、Exness=m 尾 BTCUSDm）——symbol 名一律 venue `SymbolList` 实读禁猜；GETQuote 族传裸名=「Symbol not exist」假故障。
 **复跑**：同 mt5-account（--window 控窗）。

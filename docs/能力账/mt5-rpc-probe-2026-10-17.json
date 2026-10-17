@@ -5,7 +5,7 @@
       "rpc": "Connect",
       "venue": "3001157",
       "status": "ok",
-      "ms": 466,
+      "ms": 336,
       "keyfields": [
         "token"
       ]
@@ -15,18 +15,18 @@
       "rpc": "Account",
       "venue": "3001157",
       "status": "ok",
-      "ms": 164,
+      "ms": 172,
       "keyfields": [
         "result"
       ],
-      "sample": "{\"result\":{\"Login\":\"3001157\",\"Type\":\"real\",\"UserName\":\"Client\",\"TradeFlags\":530915,\"Country\":\"CN\",\"Email\":\"1d05665ad6704024804c770af005e872@exness.io\",\"Balance\""
+      "sample": "{\"result\":{\"Login\":\"3001157\",\"Type\":\"real\",\"UserName\":\"***\",\"TradeFlags\":530915,\"Country\":\"***\",\"Email\":\"***\",\"Balance\":3247.41,\"Leverage\":2000}}"
     },
     {
       "service": "MT5",
       "rpc": "AccountSummary",
       "venue": "3001157",
       "status": "ok",
-      "ms": 167,
+      "ms": 174,
       "keyfields": [
         "result"
       ],
@@ -37,7 +37,7 @@
       "rpc": "OpenedOrders",
       "venue": "3001157",
       "status": "ok",
-      "ms": 164,
+      "ms": 172,
       "sample": "{}"
     },
     {
@@ -45,7 +45,7 @@
       "rpc": "OpenedOrdersTickets",
       "venue": "3001157",
       "status": "ok",
-      "ms": 164,
+      "ms": 168,
       "sample": "{}"
     },
     {
@@ -53,7 +53,7 @@
       "rpc": "OrderHistory",
       "venue": "3001157",
       "status": "ok",
-      "ms": 287,
+      "ms": 283,
       "keyfields": [
         "result"
       ],
@@ -65,7 +65,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 167
+      "ms": 168
     },
     {
       "service": "MT5",
@@ -73,18 +73,18 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 164
+      "ms": 168
     },
     {
       "service": "MT5",
       "rpc": "Symbols",
       "venue": "3001157",
       "status": "ok",
-      "ms": 301,
+      "ms": 336,
       "keyfields": [
         "result"
       ],
-      "sample": "{\"result\":[{\"UpdateTime\":\"134363916238670909\",\"Currency\":\"EURGBPm\",\"Description\":\"Euro vs Great Britain Pound\",\"ProfitCurrency\":\"GBP\",\"MarginCurrency\":\"EUR\",\"Pr"
+      "sample": "{\"result\":[{\"UpdateTime\":\"134366999789846115\",\"Currency\":\"EURGBPm\",\"Description\":\"Euro vs Great Britain Pound\",\"ProfitCurrency\":\"GBP\",\"MarginCurrency\":\"EUR\",\"Pr"
     },
     {
       "service": "MT5",
@@ -103,7 +103,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "Symbol XAUUSD not exist (:3001157)",
-      "ms": 165
+      "ms": 168
     },
     {
       "service": "MT5",
@@ -111,7 +111,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
-      "ms": 166
+      "ms": 172
     },
     {
       "service": "MT5",
@@ -119,7 +119,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 163
+      "ms": 168
     },
     {
       "service": "MT5",
@@ -127,7 +127,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "Symbol not found: XAUUSD (:3001157)",
-      "ms": 166
+      "ms": 170
     },
     {
       "service": "MT5",
@@ -135,14 +135,14 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "Symbol not found: XAUUSD (:3001157)",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "MT5",
       "rpc": "ServerTimezone",
       "venue": "3001157",
       "status": "ok",
-      "ms": 170,
+      "ms": 169,
       "sample": "{}"
     },
     {
@@ -151,7 +151,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:3001157)",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "MT5",
@@ -159,7 +159,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:3001157)",
-      "ms": 164
+      "ms": 169
     },
     {
       "service": "MT5",
@@ -167,7 +167,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "Symbol not found: XAUUSD (:3001157)",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "MT5",
@@ -175,7 +175,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 163
+      "ms": 168
     },
     {
       "service": "MT5",
@@ -183,7 +183,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "Symbol XAUUSD not exist (:3001157)",
-      "ms": 166
+      "ms": 169
     },
     {
       "service": "QuoteHistory",
@@ -191,7 +191,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "XAUUSD not exist (:3001157)",
-      "ms": 168
+      "ms": 169
     },
     {
       "service": "QuoteHistory",
@@ -199,14 +199,14 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "Service",
       "rpc": "Ping",
       "venue": "3001157",
       "status": "ok",
-      "ms": 164,
+      "ms": 168,
       "keyfields": [
         "result"
       ],
@@ -218,14 +218,14 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 164
+      "ms": 167
     },
     {
       "service": "Service",
       "rpc": "Version",
       "venue": "3001157",
       "status": "ok",
-      "ms": 164,
+      "ms": 168,
       "keyfields": [
         "result"
       ],
@@ -236,7 +236,7 @@
       "rpc": "Search",
       "venue": "3001157",
       "status": "ok",
-      "ms": 185,
+      "ms": 206,
       "keyfields": [
         "result"
       ],
@@ -258,7 +258,7 @@
       "venue": "3001157",
       "status": "ok",
       "errcode": "frames=0 first=",
-      "ms": 164,
+      "ms": 168,
       "keyfields": [
         "frames=0"
       ]
@@ -269,7 +269,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:3001157)",
-      "ms": 168
+      "ms": 169
     },
     {
       "service": "MT5",
@@ -277,7 +277,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:3001157)",
-      "ms": 165
+      "ms": 168
     },
     {
       "service": "MT5",
@@ -285,7 +285,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "XAUUSD not exist (:3001157)",
-      "ms": 165
+      "ms": 168
     },
     {
       "service": "MT5",
@@ -293,7 +293,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "System.String[] not exist (:3001157)",
-      "ms": 166
+      "ms": 169
     },
     {
       "service": "MT5",
@@ -301,7 +301,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "MT5",
@@ -309,7 +309,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "OK null response",
-      "ms": 166
+      "ms": 168
     },
     {
       "service": "Subscriptions",
@@ -317,14 +317,14 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "Subscriptions",
       "rpc": "UnSubscribeMany",
       "venue": "3001157",
       "status": "ok",
-      "ms": 165,
+      "ms": 168,
       "keyfields": [
         "result"
       ],
@@ -336,7 +336,7 @@
       "venue": "3001157",
       "status": "stream",
       "errcode": "frames=0",
-      "ms": 12005,
+      "ms": 12013,
       "keyfields": [
         "frames=0"
       ]
@@ -347,7 +347,7 @@
       "venue": "3001157",
       "status": "stream",
       "errcode": "frames=0",
-      "ms": 12012,
+      "ms": 12007,
       "keyfields": [
         "frames=0"
       ]
@@ -369,7 +369,7 @@
       "venue": "3001157",
       "status": "stream",
       "errcode": "frames=0",
-      "ms": 164,
+      "ms": 168,
       "keyfields": [
         "frames=0"
       ]
@@ -390,7 +390,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
-      "ms": 166
+      "ms": 169
     },
     {
       "service": "QuoteHistory",
@@ -398,7 +398,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
-      "ms": 165
+      "ms": 170
     },
     {
       "service": "QuoteHistory",
@@ -406,14 +406,14 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:3001157)",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "QuoteHistory",
       "rpc": "PriceHistoryMany",
       "venue": "3001157",
       "status": "ok",
-      "ms": 166,
+      "ms": 169,
       "keyfields": [
         "result"
       ],
@@ -425,7 +425,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "XAUUSD not exist (:3001157)",
-      "ms": 168
+      "ms": 169
     },
     {
       "service": "QuoteHistory",
@@ -433,14 +433,14 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "XAUUSD not exist (:3001157)",
-      "ms": 164
+      "ms": 175
     },
     {
       "service": "QuoteHistory",
       "rpc": "PriceHistoryExMany",
       "venue": "3001157",
       "status": "ok",
-      "ms": 164,
+      "ms": 169,
       "keyfields": [
         "result"
       ],
@@ -451,11 +451,11 @@
       "rpc": "PingHost",
       "venue": "3001157",
       "status": "ok",
-      "ms": 171,
+      "ms": 174,
       "keyfields": [
         "result"
       ],
-      "sample": "{\"result\":6}"
+      "sample": "{\"result\":5}"
     },
     {
       "service": "Service",
@@ -463,7 +463,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "host.Length != port.Length (:0)",
-      "ms": 164
+      "ms": 173
     },
     {
       "service": "Service",
@@ -471,7 +471,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "Unknown result type: { }",
-      "ms": 9624
+      "ms": 10317
     },
     {
       "service": "Service",
@@ -479,7 +479,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "Unable to cast object of type 'System.Collections.Generic.LinkedList`1[mt5rest.ClientStatus]' to type 'mt5rest.ClientStatus[]'.",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "Service",
@@ -502,7 +502,7 @@
       "rpc": "SubscribeOrderProfit",
       "venue": "3001157",
       "status": "ok",
-      "ms": 164,
+      "ms": 168,
       "keyfields": [
         "subscribed"
       ]
@@ -512,7 +512,7 @@
       "rpc": "SubscribeTickValue",
       "venue": "3001157",
       "status": "ok",
-      "ms": 167,
+      "ms": 169,
       "keyfields": [
         "subscribed"
       ]
@@ -522,7 +522,7 @@
       "rpc": "SubscribeOrderUpdate",
       "venue": "3001157",
       "status": "ok",
-      "ms": 164,
+      "ms": 171,
       "keyfields": [
         "subscribed"
       ]
@@ -533,7 +533,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "Subscriptions",
@@ -541,7 +541,7 @@
       "venue": "3001157",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 165
+      "ms": 168
     },
     {
       "service": "Streams",
@@ -549,7 +549,7 @@
       "venue": "3001157",
       "status": "stream",
       "errcode": "frames=0 (window 12s)",
-      "ms": 12007,
+      "ms": 12010,
       "keyfields": [
         "frames=0"
       ]
@@ -560,7 +560,7 @@
       "venue": "3001157",
       "status": "stream",
       "errcode": "frames=0 (window 12s)",
-      "ms": 12011,
+      "ms": 12010,
       "keyfields": [
         "frames=0"
       ]
@@ -571,7 +571,7 @@
       "venue": "3001157",
       "status": "stream",
       "errcode": "frames=0 (window 12s)",
-      "ms": 165,
+      "ms": 169,
       "keyfields": [
         "frames=0"
       ]
@@ -581,7 +581,7 @@
       "rpc": "TickHistoryRequest",
       "venue": "3001157",
       "status": "ok",
-      "ms": 164,
+      "ms": 169,
       "keyfields": [
         "ticket"
       ],
@@ -629,7 +629,7 @@
       "rpc": "Connect",
       "venue": "15032313",
       "status": "ok",
-      "ms": 465,
+      "ms": 470,
       "keyfields": [
         "token"
       ]
@@ -639,18 +639,18 @@
       "rpc": "Account",
       "venue": "15032313",
       "status": "ok",
-      "ms": 164,
+      "ms": 170,
       "keyfields": [
         "result"
       ],
-      "sample": "{\"result\":{\"Login\":\"15032313\",\"Type\":\"real\",\"UserName\":\"Haowei He\",\"TradeFlags\":524643,\"Country\":\"China\",\"City\":\"CHONGQING\",\"Phone\":\"(+86) 18580780295\",\"Email\":"
+      "sample": "{\"result\":{\"Login\":\"15032313\",\"Type\":\"real\",\"UserName\":\"***\",\"TradeFlags\":524643,\"Country\":\"***\",\"City\":\"***\",\"Phone\":\"***\",\"Email\":\"***\",\"Balance\":1000.22,\"Lev"
     },
     {
       "service": "MT5",
       "rpc": "AccountSummary",
       "venue": "15032313",
       "status": "ok",
-      "ms": 166,
+      "ms": 171,
       "keyfields": [
         "result"
       ],
@@ -661,7 +661,7 @@
       "rpc": "OpenedOrders",
       "venue": "15032313",
       "status": "ok",
-      "ms": 164,
+      "ms": 170,
       "sample": "{}"
     },
     {
@@ -669,7 +669,7 @@
       "rpc": "OpenedOrdersTickets",
       "venue": "15032313",
       "status": "ok",
-      "ms": 169,
+      "ms": 168,
       "sample": "{}"
     },
     {
@@ -677,7 +677,7 @@
       "rpc": "OrderHistory",
       "venue": "15032313",
       "status": "ok",
-      "ms": 268,
+      "ms": 270,
       "keyfields": [
         "result"
       ],
@@ -689,7 +689,7 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 164
+      "ms": 176
     },
     {
       "service": "MT5",
@@ -697,14 +697,14 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 169
+      "ms": 173
     },
     {
       "service": "MT5",
       "rpc": "Symbols",
       "venue": "15032313",
       "status": "ok",
-      "ms": 5038,
+      "ms": 4575,
       "keyfields": [
         "result"
       ],
@@ -715,7 +715,7 @@
       "rpc": "SymbolList",
       "venue": "15032313",
       "status": "ok",
-      "ms": 415,
+      "ms": 708,
       "keyfields": [
         "result"
       ],
@@ -726,7 +726,7 @@
       "rpc": "GetQuote",
       "venue": "15032313",
       "status": "ok",
-      "ms": 166,
+      "ms": 169,
       "keyfields": [
         "result"
       ],
@@ -737,7 +737,7 @@
       "rpc": "GetQuoteMany",
       "venue": "15032313",
       "status": "ok",
-      "ms": 164,
+      "ms": 168,
       "keyfields": [
         "result"
       ],
@@ -749,14 +749,14 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 164
+      "ms": 168
     },
     {
       "service": "MT5",
       "rpc": "SymbolParams",
       "venue": "15032313",
       "status": "ok",
-      "ms": 165,
+      "ms": 177,
       "keyfields": [
         "result"
       ],
@@ -767,7 +767,7 @@
       "rpc": "SymbolParamsMany",
       "venue": "15032313",
       "status": "ok",
-      "ms": 164,
+      "ms": 171,
       "keyfields": [
         "result"
       ],
@@ -778,7 +778,7 @@
       "rpc": "ServerTimezone",
       "venue": "15032313",
       "status": "ok",
-      "ms": 164,
+      "ms": 172,
       "keyfields": [
         "result"
       ],
@@ -789,7 +789,7 @@
       "rpc": "IsTradeSession",
       "venue": "15032313",
       "status": "ok",
-      "ms": 165,
+      "ms": 172,
       "sample": "{}"
     },
     {
@@ -797,7 +797,7 @@
       "rpc": "IsQuoteSession",
       "venue": "15032313",
       "status": "ok",
-      "ms": 164,
+      "ms": 168,
       "sample": "{}"
     },
     {
@@ -806,7 +806,7 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "Unable to cast object of type 'System.Collections.Generic.Dictionary`2[System.String,System.Double]' to type 'System.Double[]'.",
-      "ms": 1166
+      "ms": 1169
     },
     {
       "service": "MT5",
@@ -814,14 +814,14 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 164
+      "ms": 168
     },
     {
       "service": "MT5",
       "rpc": "RequiredMargin",
       "venue": "15032313",
       "status": "ok",
-      "ms": 169,
+      "ms": 168,
       "keyfields": [
         "result"
       ],
@@ -832,7 +832,7 @@
       "rpc": "PriceHistory",
       "venue": "15032313",
       "status": "ok",
-      "ms": 185,
+      "ms": 186,
       "keyfields": [
         "result"
       ],
@@ -844,7 +844,7 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "Unable to cast object of type 'System.Collections.Generic.List`1[mtapi.mt5.Bar]' to type 'mtapi.mt5.Bar[]'.",
-      "ms": 172
+      "ms": 177
     },
     {
       "service": "Service",
@@ -863,14 +863,14 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 164
+      "ms": 168
     },
     {
       "service": "Service",
       "rpc": "Version",
       "venue": "15032313",
       "status": "ok",
-      "ms": 170,
+      "ms": 176,
       "keyfields": [
         "result"
       ],
@@ -881,7 +881,7 @@
       "rpc": "Search",
       "venue": "15032313",
       "status": "ok",
-      "ms": 220,
+      "ms": 213,
       "keyfields": [
         "result"
       ],
@@ -903,7 +903,7 @@
       "venue": "15032313",
       "status": "ok",
       "errcode": "frames=0 first=",
-      "ms": 163,
+      "ms": 168,
       "keyfields": [
         "frames=0"
       ]
@@ -913,7 +913,7 @@
       "rpc": "IsTradeSessionMany",
       "venue": "15032313",
       "status": "ok",
-      "ms": 164,
+      "ms": 171,
       "keyfields": [
         "result"
       ],
@@ -924,7 +924,7 @@
       "rpc": "IsQuoteSessionMany",
       "venue": "15032313",
       "status": "ok",
-      "ms": 165,
+      "ms": 169,
       "keyfields": [
         "result"
       ],
@@ -935,7 +935,7 @@
       "rpc": "SymbolSessionsEx",
       "venue": "15032313",
       "status": "ok",
-      "ms": 164,
+      "ms": 170,
       "keyfields": [
         "result"
       ],
@@ -946,7 +946,7 @@
       "rpc": "SymbolSessionsExMany",
       "venue": "15032313",
       "status": "ok",
-      "ms": 165,
+      "ms": 170,
       "keyfields": [
         "result"
       ],
@@ -957,7 +957,7 @@
       "rpc": "TickValueWithSize",
       "venue": "15032313",
       "status": "ok",
-      "ms": 164,
+      "ms": 168,
       "keyfields": [
         "result"
       ],
@@ -969,14 +969,14 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "OK null response",
-      "ms": 164
+      "ms": 169
     },
     {
       "service": "Subscriptions",
       "rpc": "SubscribeMany",
       "venue": "15032313",
       "status": "ok",
-      "ms": 165,
+      "ms": 171,
       "keyfields": [
         "result"
       ],
@@ -987,7 +987,7 @@
       "rpc": "UnSubscribeMany",
       "venue": "15032313",
       "status": "ok",
-      "ms": 167,
+      "ms": 168,
       "keyfields": [
         "result"
       ],
@@ -999,7 +999,7 @@
       "venue": "15032313",
       "status": "stream",
       "errcode": "frames=0",
-      "ms": 12008,
+      "ms": 12011,
       "keyfields": [
         "frames=0"
       ]
@@ -1010,7 +1010,7 @@
       "venue": "15032313",
       "status": "stream",
       "errcode": "frames=0",
-      "ms": 12010,
+      "ms": 12000,
       "keyfields": [
         "frames=0"
       ]
@@ -1021,7 +1021,7 @@
       "venue": "15032313",
       "status": "stream",
       "errcode": "frames=0",
-      "ms": 164,
+      "ms": 171,
       "keyfields": [
         "frames=0"
       ]
@@ -1032,7 +1032,7 @@
       "venue": "15032313",
       "status": "stream",
       "errcode": "frames=0",
-      "ms": 164,
+      "ms": 169,
       "keyfields": [
         "frames=0"
       ]
@@ -1053,7 +1053,7 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "Unable to cast object of type 'System.Collections.Generic.List`1[mtapi.mt5.Bar]' to type 'mtapi.mt5.Bar[]'.",
-      "ms": 182
+      "ms": 187
     },
     {
       "service": "QuoteHistory",
@@ -1069,14 +1069,14 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "Parameter count mismatch.",
-      "ms": 175
+      "ms": 179
     },
     {
       "service": "QuoteHistory",
       "rpc": "PriceHistoryMany",
       "venue": "15032313",
       "status": "ok",
-      "ms": 183,
+      "ms": 186,
       "keyfields": [
         "result"
       ],
@@ -1088,14 +1088,14 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "Attempted to divide by zero. (:15032313)",
-      "ms": 182
+      "ms": 184
     },
     {
       "service": "QuoteHistory",
       "rpc": "PriceHistoryEx",
       "venue": "15032313",
       "status": "ok",
-      "ms": 1779,
+      "ms": 1724,
       "keyfields": [
         "result"
       ],
@@ -1106,7 +1106,7 @@
       "rpc": "PriceHistoryExMany",
       "venue": "15032313",
       "status": "ok",
-      "ms": 1823,
+      "ms": 1814,
       "keyfields": [
         "result"
       ],
@@ -1117,11 +1117,11 @@
       "rpc": "PingHost",
       "venue": "15032313",
       "status": "ok",
-      "ms": 171,
+      "ms": 174,
       "keyfields": [
         "result"
       ],
-      "sample": "{\"result\":6}"
+      "sample": "{\"result\":5}"
     },
     {
       "service": "Service",
@@ -1129,7 +1129,7 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "host.Length != port.Length (:0)",
-      "ms": 164
+      "ms": 168
     },
     {
       "service": "Service",
@@ -1137,7 +1137,7 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "Unknown result type: { }",
-      "ms": 10713
+      "ms": 11777
     },
     {
       "service": "Service",
@@ -1145,7 +1145,7 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "Unable to cast object of type 'System.Collections.Generic.LinkedList`1[mt5rest.ClientStatus]' to type 'mt5rest.ClientStatus[]'.",
-      "ms": 164
+      "ms": 169
     },
     {
       "service": "Service",
@@ -1168,7 +1168,7 @@
       "rpc": "SubscribeOrderProfit",
       "venue": "15032313",
       "status": "ok",
-      "ms": 166,
+      "ms": 170,
       "keyfields": [
         "subscribed"
       ]
@@ -1178,7 +1178,7 @@
       "rpc": "SubscribeTickValue",
       "venue": "15032313",
       "status": "ok",
-      "ms": 164,
+      "ms": 168,
       "keyfields": [
         "subscribed"
       ]
@@ -1188,7 +1188,7 @@
       "rpc": "SubscribeOrderUpdate",
       "venue": "15032313",
       "status": "ok",
-      "ms": 174,
+      "ms": 168,
       "keyfields": [
         "subscribed"
       ]
@@ -1199,7 +1199,7 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 165
+      "ms": 168
     },
     {
       "service": "Subscriptions",
@@ -1207,7 +1207,7 @@
       "venue": "15032313",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 165
+      "ms": 168
     },
     {
       "service": "Streams",
@@ -1215,7 +1215,7 @@
       "venue": "15032313",
       "status": "stream",
       "errcode": "frames=0 (window 12s)",
-      "ms": 12000,
+      "ms": 12010,
       "keyfields": [
         "frames=0"
       ]
@@ -1226,7 +1226,7 @@
       "venue": "15032313",
       "status": "stream",
       "errcode": "frames=0 (window 12s)",
-      "ms": 12011,
+      "ms": 12001,
       "keyfields": [
         "frames=0"
       ]
@@ -1237,7 +1237,7 @@
       "venue": "15032313",
       "status": "stream",
       "errcode": "frames=0 (window 12s)",
-      "ms": 165,
+      "ms": 172,
       "keyfields": [
         "frames=0"
       ]
@@ -1247,7 +1247,7 @@
       "rpc": "TickHistoryRequest",
       "venue": "15032313",
       "status": "ok",
-      "ms": 167,
+      "ms": 172,
       "keyfields": [
         "ticket"
       ],
@@ -1259,7 +1259,7 @@
       "venue": "15032313",
       "status": "stream",
       "errcode": "frames=1",
-      "ms": 4467,
+      "ms": 4478,
       "keyfields": [
         "frames=1"
       ]
@@ -1295,7 +1295,7 @@
       "rpc": "Connect",
       "venue": "110660304",
       "status": "ok",
-      "ms": 247,
+      "ms": 258,
       "keyfields": [
         "token"
       ]
@@ -1305,18 +1305,18 @@
       "rpc": "Account",
       "venue": "110660304",
       "status": "ok",
-      "ms": 165,
+      "ms": 168,
       "keyfields": [
         "result"
       ],
-      "sample": "{\"result\":{\"Login\":\"110660304\",\"Type\":\"real\",\"UserName\":\"HAOWEI HE\",\"TradeFlags\":526691,\"Country\":\"China\",\"City\":\"Changsha\",\"Email\":\"786277194@qq.com\",\"Balance\""
+      "sample": "{\"result\":{\"Login\":\"110660304\",\"Type\":\"real\",\"UserName\":\"***\",\"TradeFlags\":526691,\"Country\":\"***\",\"City\":\"***\",\"Email\":\"***\",\"Balance\":1000,\"Leverage\":1000}}"
     },
     {
       "service": "MT5",
       "rpc": "AccountSummary",
       "venue": "110660304",
       "status": "ok",
-      "ms": 165,
+      "ms": 170,
       "keyfields": [
         "result"
       ],
@@ -1327,7 +1327,7 @@
       "rpc": "OpenedOrders",
       "venue": "110660304",
       "status": "ok",
-      "ms": 166,
+      "ms": 171,
       "sample": "{}"
     },
     {
@@ -1335,7 +1335,7 @@
       "rpc": "OpenedOrdersTickets",
       "venue": "110660304",
       "status": "ok",
-      "ms": 167,
+      "ms": 168,
       "sample": "{}"
     },
     {
@@ -1343,7 +1343,7 @@
       "rpc": "OrderHistory",
       "venue": "110660304",
       "status": "ok",
-      "ms": 267,
+      "ms": 269,
       "sample": "{}"
     },
     {
@@ -1352,7 +1352,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 166
+      "ms": 168
     },
     {
       "service": "MT5",
@@ -1360,14 +1360,14 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 164
+      "ms": 177
     },
     {
       "service": "MT5",
       "rpc": "Symbols",
       "venue": "110660304",
       "status": "ok",
-      "ms": 269,
+      "ms": 268,
       "keyfields": [
         "result"
       ],
@@ -1378,7 +1378,7 @@
       "rpc": "SymbolList",
       "venue": "110660304",
       "status": "ok",
-      "ms": 176,
+      "ms": 169,
       "keyfields": [
         "result"
       ],
@@ -1390,7 +1390,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "Symbol XAUUSD not exist (:110660304)",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "MT5",
@@ -1398,7 +1398,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
-      "ms": 165
+      "ms": 168
     },
     {
       "service": "MT5",
@@ -1406,7 +1406,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 164
+      "ms": 168
     },
     {
       "service": "MT5",
@@ -1414,7 +1414,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "Symbol not found: XAUUSD (:110660304)",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "MT5",
@@ -1422,14 +1422,14 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "Symbol not found: XAUUSD (:110660304)",
-      "ms": 164
+      "ms": 169
     },
     {
       "service": "MT5",
       "rpc": "ServerTimezone",
       "venue": "110660304",
       "status": "ok",
-      "ms": 165,
+      "ms": 168,
       "keyfields": [
         "result"
       ],
@@ -1441,7 +1441,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:110660304)",
-      "ms": 164
+      "ms": 168
     },
     {
       "service": "MT5",
@@ -1449,7 +1449,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:110660304)",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "MT5",
@@ -1457,7 +1457,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "Symbol not found: XAUUSD (:110660304)",
-      "ms": 165
+      "ms": 182
     },
     {
       "service": "MT5",
@@ -1465,7 +1465,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 164
+      "ms": 168
     },
     {
       "service": "MT5",
@@ -1473,7 +1473,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "Symbol XAUUSD not exist (:110660304)",
-      "ms": 168
+      "ms": 172
     },
     {
       "service": "QuoteHistory",
@@ -1481,7 +1481,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "XAUUSD not exist (:110660304)",
-      "ms": 168
+      "ms": 169
     },
     {
       "service": "QuoteHistory",
@@ -1489,14 +1489,14 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
-      "ms": 164
+      "ms": 169
     },
     {
       "service": "Service",
       "rpc": "Ping",
       "venue": "110660304",
       "status": "ok",
-      "ms": 164,
+      "ms": 168,
       "keyfields": [
         "result"
       ],
@@ -1508,14 +1508,14 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 166
+      "ms": 168
     },
     {
       "service": "Service",
       "rpc": "Version",
       "venue": "110660304",
       "status": "ok",
-      "ms": 181,
+      "ms": 173,
       "keyfields": [
         "result"
       ],
@@ -1526,7 +1526,7 @@
       "rpc": "Search",
       "venue": "110660304",
       "status": "ok",
-      "ms": 187,
+      "ms": 224,
       "keyfields": [
         "result"
       ],
@@ -1548,7 +1548,7 @@
       "venue": "110660304",
       "status": "ok",
       "errcode": "frames=0 first=",
-      "ms": 165,
+      "ms": 171,
       "keyfields": [
         "frames=0"
       ]
@@ -1559,7 +1559,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:110660304)",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "MT5",
@@ -1567,7 +1567,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:110660304)",
-      "ms": 170
+      "ms": 169
     },
     {
       "service": "MT5",
@@ -1575,7 +1575,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "XAUUSD not exist (:110660304)",
-      "ms": 164
+      "ms": 169
     },
     {
       "service": "MT5",
@@ -1591,7 +1591,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
-      "ms": 165
+      "ms": 172
     },
     {
       "service": "MT5",
@@ -1599,7 +1599,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "OK null response",
-      "ms": 164
+      "ms": 168
     },
     {
       "service": "Subscriptions",
@@ -1607,14 +1607,14 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "Subscriptions",
       "rpc": "UnSubscribeMany",
       "venue": "110660304",
       "status": "ok",
-      "ms": 166,
+      "ms": 169,
       "keyfields": [
         "result"
       ],
@@ -1626,7 +1626,7 @@
       "venue": "110660304",
       "status": "stream",
       "errcode": "frames=0",
-      "ms": 12010,
+      "ms": 12013,
       "keyfields": [
         "frames=0"
       ]
@@ -1637,7 +1637,7 @@
       "venue": "110660304",
       "status": "stream",
       "errcode": "frames=0",
-      "ms": 12010,
+      "ms": 12011,
       "keyfields": [
         "frames=0"
       ]
@@ -1648,7 +1648,7 @@
       "venue": "110660304",
       "status": "stream",
       "errcode": "frames=0",
-      "ms": 164,
+      "ms": 169,
       "keyfields": [
         "frames=0"
       ]
@@ -1659,7 +1659,7 @@
       "venue": "110660304",
       "status": "stream",
       "errcode": "frames=0",
-      "ms": 167,
+      "ms": 169,
       "keyfields": [
         "frames=0"
       ]
@@ -1680,7 +1680,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
-      "ms": 165
+      "ms": 173
     },
     {
       "service": "QuoteHistory",
@@ -1688,7 +1688,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
-      "ms": 166
+      "ms": 169
     },
     {
       "service": "QuoteHistory",
@@ -1696,14 +1696,14 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "One or more errors occurred. (XAUUSD not exist) (:110660304)",
-      "ms": 165
+      "ms": 170
     },
     {
       "service": "QuoteHistory",
       "rpc": "PriceHistoryMany",
       "venue": "110660304",
       "status": "ok",
-      "ms": 166,
+      "ms": 172,
       "keyfields": [
         "result"
       ],
@@ -1715,7 +1715,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "XAUUSD not exist (:110660304)",
-      "ms": 165
+      "ms": 169
     },
     {
       "service": "QuoteHistory",
@@ -1723,14 +1723,14 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "XAUUSD not exist (:110660304)",
-      "ms": 164
+      "ms": 169
     },
     {
       "service": "QuoteHistory",
       "rpc": "PriceHistoryExMany",
       "venue": "110660304",
       "status": "ok",
-      "ms": 164,
+      "ms": 168,
       "keyfields": [
         "result"
       ],
@@ -1741,11 +1741,11 @@
       "rpc": "PingHost",
       "venue": "110660304",
       "status": "ok",
-      "ms": 171,
+      "ms": 174,
       "keyfields": [
         "result"
       ],
-      "sample": "{\"result\":6}"
+      "sample": "{\"result\":5}"
     },
     {
       "service": "Service",
@@ -1761,7 +1761,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "Unknown result type: { }",
-      "ms": 24703
+      "ms": 21316
     },
     {
       "service": "Service",
@@ -1769,7 +1769,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "Unable to cast object of type 'System.Collections.Generic.LinkedList`1[mt5rest.ClientStatus]' to type 'mt5rest.ClientStatus[]'.",
-      "ms": 164
+      "ms": 169
     },
     {
       "service": "Service",
@@ -1792,7 +1792,7 @@
       "rpc": "SubscribeOrderProfit",
       "venue": "110660304",
       "status": "ok",
-      "ms": 175,
+      "ms": 168,
       "keyfields": [
         "subscribed"
       ]
@@ -1802,7 +1802,7 @@
       "rpc": "SubscribeTickValue",
       "venue": "110660304",
       "status": "ok",
-      "ms": 164,
+      "ms": 169,
       "keyfields": [
         "subscribed"
       ]
@@ -1812,7 +1812,7 @@
       "rpc": "SubscribeOrderUpdate",
       "venue": "110660304",
       "status": "ok",
-      "ms": 164,
+      "ms": 173,
       "keyfields": [
         "subscribed"
       ]
@@ -1823,7 +1823,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 166
+      "ms": 171
     },
     {
       "service": "Subscriptions",
@@ -1831,7 +1831,7 @@
       "venue": "110660304",
       "status": "err",
       "errcode": "rpc error: code = Unimplemented desc = ",
-      "ms": 167
+      "ms": 168
     },
     {
       "service": "Streams",
@@ -1839,7 +1839,7 @@
       "venue": "110660304",
       "status": "stream",
       "errcode": "frames=0 (window 12s)",
-      "ms": 12010,
+      "ms": 12011,
       "keyfields": [
         "frames=0"
       ]
@@ -1850,7 +1850,7 @@
       "venue": "110660304",
       "status": "stream",
       "errcode": "frames=0 (window 12s)",
-      "ms": 12000,
+      "ms": 12010,
       "keyfields": [
         "frames=0"
       ]
@@ -1861,7 +1861,7 @@
       "venue": "110660304",
       "status": "stream",
       "errcode": "frames=0 (window 12s)",
-      "ms": 164,
+      "ms": 168,
       "keyfields": [
         "frames=0"
       ]
@@ -1871,7 +1871,7 @@
       "rpc": "TickHistoryRequest",
       "venue": "110660304",
       "status": "ok",
-      "ms": 170,
+      "ms": 168,
       "keyfields": [
         "ticket"
       ],
@@ -1916,6 +1916,14 @@
     },
     {
       "service": "",
+      "rpc": "MT5.ChangePassword",
+      "venue": "",
+      "status": "mutating-skipped",
+      "errcode": "真户禁跑（禁线）——未实测如实缺",
+      "ms": 0
+    },
+    {
+      "service": "",
       "rpc": "Trading.OrderSend",
       "venue": "",
       "status": "mutating-skipped",
@@ -1939,56 +1947,335 @@
       "ms": 0
     },
     {
-      "service": "",
-      "rpc": "MT5.ChangePassword",
-      "venue": "",
-      "status": "mutating-skipped",
-      "errcode": "真户禁跑（禁线）——未实测如实缺",
-      "ms": 0
-    },
-    {
       "service": "Connection",
       "rpc": "Connect(demo)",
       "venue": "277842155",
+      "status": "ok",
+      "ms": 2045,
+      "keyfields": [
+        "endpoint=18.163.85.196:443"
+      ]
+    },
+    {
+      "service": "Trading",
+      "rpc": "OrderSend",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 754,
+      "keyfields": [
+        "ticket=2701577885",
+        "volume=0.01",
+        "BTCUSDm"
+      ],
+      "sample": "OrderSend 0.01 BUY BTCUSDm"
+    },
+    {
+      "service": "Trading",
+      "rpc": "OrderModify",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 807,
+      "keyfields": [
+        "ticket=2701577885"
+      ]
+    },
+    {
+      "service": "Trading",
+      "rpc": "OrderClose",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 696,
+      "keyfields": [
+        "ticket=2701577885"
+      ]
+    },
+    {
+      "service": "Trading",
+      "rpc": "OrderSend(pending)",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 802,
+      "keyfields": [
+        "ticket=2701577888",
+        "BuyLimit@1.0"
+      ]
+    },
+    {
+      "service": "Trading",
+      "rpc": "OrderModify(pending)",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 751
+    },
+    {
+      "service": "Trading",
+      "rpc": "OrderClose(pending delete)",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 465
+    },
+    {
+      "service": "MT5",
+      "rpc": "Account",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":{\"Login\":\"277842155\",\"Type\":\"demo\",\"UserName\":\"***\",\"TradeFlags\":99,\"Country\":\"***\",\"Email\":\"***\",\"Balance\":8891.95,\"Blocked\":-2294.39,\"Leverage\":2000"
+    },
+    {
+      "service": "MT5",
+      "rpc": "AccountSummary",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":{\"Balance\":8891.95,\"Equity\":8891.95,\"FreeMargin\":8891.95,\"Leverage\":2000,\"Currency\":\"USD\",\"Method\":\"AccMethod_Hedging\",\"Type\":\"demo\"}}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OpenedOrders",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 176,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"Volume\":\"1000000\",\"ExpirationTime\":\"1970-01-01T00:00:00Z\",\"FillPolicy\":\"FillPolicy_FlashFill\",\"OpenTimestampUTC\":\"1791850208596\",\"Ticket\":\"26717948"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OpenedOrdersTickets",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 170,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[\"2671794858\",\"2671820000\",\"2671822281\",\"2671826556\",\"2671833628\",\"2671857447\",\"2671861537\",\"2671878864\",\"2671882298\",\"2671904067\",\"2671906426\",\"26719"
+    },
+    {
+      "service": "MT5",
+      "rpc": "OrderHistory",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 670,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"CloseVolume\":\"1000000\",\"Volume\":\"1000000\",\"ExpirationTime\":\"0001-01-01T00:00:00Z\",\"OpenTimestampUTC\":\"1791855714361\",\"CloseTimestampUTC\":\"179185571"
+    },
+    {
+      "service": "MT5",
+      "rpc": "PendingOrderHistory",
+      "venue": "277842155",
       "status": "err",
-      "errcode": "Disconnected: Cannot access a disposed object.\nObject name: 'System.Net.Sockets.Socket'.. Process: ConnectThread started, connecting to server 18.163.85.196:443 (endpoint 18.163.85.196:443:443)",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "OrderHistoryPagination",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "Symbols",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 260,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"UpdateTime\":\"134365621045300233\",\"Currency\":\"BIIBm\",\"Description\":\"Biogen Inc.\",\"ProfitCurrency\":\"USD\",\"MarginCurrency\":\"USD\",\"Precision\":2,\"BkgndC"
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolList",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 182,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[\"BIIBm\",\"AMGNm\",\"USDGTQm\",\"USDJPYm\",\"GBPMXNm\",\"BABAm\",\"USDPKRm\",\"NZDCHFm\",\"XAGAUDm\",\"CVSm\",\"AMTm\",\"GBPNZDm\",\"USDJODm\",\"INTCm\",\"CADPLNm\",\"BNBUSDm\",\"EU"
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetQuote",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "Symbol XAUUSD not exist (:277842155)",
+      "ms": 171
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetQuoteMany",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:277842155)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "MarketWatchMany",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 168
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolParams",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "Symbol not found: XAUUSD (:277842155)",
+      "ms": 173
+    },
+    {
+      "service": "MT5",
+      "rpc": "SymbolParamsMany",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "Symbol not found: XAUUSD (:277842155)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "ServerTimezone",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 168,
+      "sample": "{}"
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsTradeSession",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:277842155)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "IsQuoteSession",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "The given key 'XAUUSD' was not present in the dictionary. (:277842155)",
+      "ms": 170
+    },
+    {
+      "service": "MT5",
+      "rpc": "GetTickValueMany",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "Symbol not found: XAUUSD (:277842155)",
+      "ms": 169
+    },
+    {
+      "service": "MT5",
+      "rpc": "Mails",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
+      "ms": 174
+    },
+    {
+      "service": "MT5",
+      "rpc": "RequiredMargin",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "Symbol XAUUSD not exist (:277842155)",
+      "ms": 169
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistory",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "XAUUSD not exist (:277842155)",
+      "ms": 171
+    },
+    {
+      "service": "QuoteHistory",
+      "rpc": "PriceHistoryToday",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "One or more errors occurred. (XAUUSD not exist) (:277842155)",
+      "ms": 169
+    },
+    {
+      "service": "Service",
+      "rpc": "Ping",
+      "venue": "277842155",
+      "status": "ok",
+      "ms": 168,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"OK\"}"
+    },
+    {
+      "service": "Service",
+      "rpc": "Health",
+      "venue": "277842155",
+      "status": "err",
+      "errcode": "rpc error: code = Unimplemented desc = ",
       "ms": 172
     },
     {
-      "service": "Connection",
-      "rpc": "Connect(demo)",
+      "service": "Service",
+      "rpc": "Version",
       "venue": "277842155",
-      "status": "err",
-      "errcode": "Not connected because of timeout. Process: ConnectThread started, connecting to server 94.130.2.58:443, timeout (:277842155) (endpoint 94.130.2.58:443)",
-      "ms": 30170
+      "status": "ok",
+      "ms": 188,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":\"2026.10.14-10.44\"}"
     },
     {
-      "service": "Connection",
-      "rpc": "Connect(demo)",
+      "service": "Service",
+      "rpc": "Search",
       "venue": "277842155",
-      "status": "err",
-      "errcode": "INVALID_ACCOUNT (:277842155) (endpoint 48.222.251.98:443)",
-      "ms": 203
+      "status": "ok",
+      "ms": 223,
+      "keyfields": [
+        "result"
+      ],
+      "sample": "{\"result\":[{\"CompanyName\":\"Assexmarkets Global Limited\",\"Results\":[{\"Name\":\"AssexmarketsGlobal-Trade\",\"Access\":[\"144.76.41.119:443\",\"141.95.66.113:443\",\"141.95."
     },
     {
-      "service": "Connection",
-      "rpc": "Connect(demo)",
+      "service": "Subscriptions",
+      "rpc": "Subscribe",
       "venue": "277842155",
-      "status": "err",
-      "errcode": "INVALID_ACCOUNT (:277842155) (endpoint 35.157.110.232:443)",
-      "ms": 189
+      "status": "ok",
+      "ms": 0,
+      "keyfields": [
+        "symbol"
+      ]
     },
     {
-      "service": "",
-      "rpc": "mutating-全谱",
-      "venue": "",
-      "status": "skipped",
-      "errcode": "demo 连接不可达（host:port 缺口径缺口）——如实挂缺口",
-      "ms": 0
+      "service": "Streams",
+      "rpc": "Events",
+      "venue": "277842155",
+      "status": "ok",
+      "errcode": "frames=0 first=",
+      "ms": 169,
+      "keyfields": [
+        "frames=0"
+      ]
     }
   ],
   "gateway": "mt5grpc.mtapi.io:443",
-  "generated_at": "2026-10-17T08:43:21Z",
+  "generated_at": "2026-10-17T09:31:31Z",
   "reflection": {
     "services": {
       "grpc.reflection.v1alpha.ServerReflection": {
