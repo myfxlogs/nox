@@ -17,10 +17,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+
+	"io"
+
+	"nox/internal/store/pgstore"
 	"strings"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 const listPath = "docs/能力账/binance_endpoints.gen.txt"
@@ -56,6 +58,9 @@ type result struct {
 	KeyFields []string `json:"key_fields_nonempty,omitempty"`
 }
 
+// rawMap 端点→原始 body 原文（probe 内填充——raw 存证源）
+var rawMap = map[string]string{}
+
 func probe(ctx context.Context, c *http.Client, apiKey, apiSecret, path string) result {
 	t0 := time.Now()
 	r := result{}
@@ -79,10 +84,12 @@ func probe(ctx context.Context, c *http.Client, apiKey, apiSecret, path string) 
 	defer resp.Body.Close()
 	r.Status = resp.StatusCode
 	r.Weight = resp.Header.Get("X-MBX-USED-WEIGHT")
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	rawMap[path] = string(bodyBytes) // raw 原文存证（退回㉝②）
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		r.OK = true
 		var body any
-		if err := json.NewDecoder(resp.Body).Decode(&body); err == nil {
+		if err := json.Unmarshal(bodyBytes, &body); err == nil {
 			// 数组解码（退回㉜缺 b——map 解不了 []any 病灶销）
 			switch v := body.(type) {
 			case map[string]any:
@@ -108,13 +115,20 @@ func probe(ctx context.Context, c *http.Client, apiKey, apiSecret, path string) 
 func main() {
 	c := &http.Client{Timeout: 15 * time.Second}
 	ctx := context.Background()
-	// 凭据=exchange_configs 库解出（key+secret 同径——凭据归 pg 不归 env）
+	// 凭据=pgstore.Open+Store.ListExchangeConfigs 一调（_enc 列+MasterKey+Open
+	// 已封装——禁手搓 SQL；NOX_PG_DSN+NOX_MASTER_KEY 两引导件；binance+simulated=f）
 	var apiKey, apiSecret string
 	if dsn := os.Getenv("NOX_PG_DSN"); dsn != "" {
-		if conn, err := pgx.Connect(ctx, dsn); err == nil {
-			conn.QueryRow(ctx,
-				`SELECT api_key, api_secret FROM exchange_configs WHERE venue='binance' AND api_key<>'' LIMIT 1`).Scan(&apiKey, &apiSecret)
-			conn.Close(ctx)
+		if st, err := pgstore.New(ctx, dsn); err == nil {
+			defer st.Close()
+			if cfgs, err := st.ListExchangeConfigs(ctx); err == nil {
+				for _, c := range cfgs {
+					if c.Venue == "binance" && !c.Simulated && c.APIKey != "" {
+						apiKey, apiSecret = c.APIKey, c.APISecret
+						break
+					}
+				}
+			}
 		}
 	}
 	f, err := os.Open(listPath)
@@ -139,12 +153,17 @@ func main() {
 		r := probe(ctx, c, apiKey, apiSecret, strings.TrimSpace(parts[1]))
 		r.Endpoint = parts[1]
 		results = append(results, r)
-		// raw=原始 body 直存（退回㉜④——防做假层①）
+		// raw=原始 body 原文直存（退回㉝②——防做假层①；截断界=无——
+		// 原文非字段计数）
+		var rawBody string
+		if rawR, ok2 := rawMap[r.Endpoint]; ok2 {
+			rawBody = rawR
+		}
 		rb, _ := json.Marshal(map[string]any{
 			"endpoint": r.Endpoint, "ts": time.Now().UTC().Format(time.RFC3339),
 			"status": r.Status, "ok": r.OK, "weight": r.Weight,
 			"latency_ms": r.LatencyMs, "key_fields": r.KeyFields,
-			"raw_body_fields": len(r.KeyFields),
+			"raw_body": rawBody,
 		})
 		fmt.Fprintln(rw, string(rb))
 		time.Sleep(paceMs * time.Millisecond) // 节流
