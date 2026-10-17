@@ -158,6 +158,44 @@ func (m *BrokerPositionMonitor) Events() []*v1.BrokerPositionEvent {
 	return out
 }
 
+// OnMT5Frame D-571 包A：MT5 OnOrderProfit 帧逐仓 patch（PositionsSink 入口）。
+// 语义：帧内已知票号更新字段；未知票号不建仓、触发该 venue 权威回读；
+// 帧外仓（帧未载）不动不删——缺仓只 REST 权威裁决。
+// 票⑤′：帧携 swap 计提跳变 → pendingSwap 合并队列 → Run 循环帧锚定落库。
+func (m *BrokerPositionMonitor) OnMT5Frame(venueKey string, orders []venue.Order) {
+	unknown := false
+	swapQueued := false
+	at := time.Now().UTC() // 票⑤′：帧到达时刻=swap 行锚定时戳
+	m.mu.Lock()
+	vs := m.venues[venueKey]
+	vs.asOf = time.Now() // D-094：帧到达时刻=本 venue 行 asOf（事件时戳透传 proto）
+	for _, o := range orders {
+		prev, ok := vs.orders[o.Ticket]
+		if !ok {
+			unknown = true // 未知票号 → 帧外权威裁决（REST 回读），不就地建仓
+			continue
+		}
+		// 票⑤′：帧携 swap 计提跳变 → 入队帧锚定落库（map 覆盖=同票合并最新帧）。
+		if m.swapSnapStore != nil && prev.Swap != o.Swap {
+			m.pendingSwap[venueKey+"\x00"+o.Ticket] = swapFrameItem{order: o, at: at}
+			swapQueued = true
+		}
+		vs.orders[o.Ticket] = o
+		m.dirtyLocked(posKeyOf(venueKey, o.Ticket))
+	}
+	m.venues[venueKey] = vs
+	m.mu.Unlock()
+	if swapQueued {
+		select {
+		case m.swapSig <- struct{}{}:
+		default: // 已有待处理信号，合并丢弃
+		}
+	}
+	if unknown {
+		m.Kick(venueKey)
+	}
+}
+
 // equalIgnoringAsOf D-094：行数据 diff 忽略 as_of。asOf 语义=「本行显示值最近一次
 // 变更的事件时戳」——值不变不重发（指纹去重语义保持，广播零噪音），asOf 随值变更
 // 一起更新；断流后值冻结 → asOf 冻结 + venue_online=false = 陈旧可观测。
