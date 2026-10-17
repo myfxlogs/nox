@@ -15,6 +15,10 @@ import (
 	"nox/internal/store/pgstore"
 )
 
+// MTIODeltaGraceHoursKey 退回㉖伤①：差分成熟度宽限（小时）——app_config 运维键
+// （缺省 72h=实测 ~48h venue 记录滞后+裕量；禁裸字面量故落键）。
+const MTIODeltaGraceHoursKey = "mt_io_delta_grace_hours"
+
 // startCexIOCollector 装配并启动进出账采集（初始跑一轮+15min ticker——进出账低频，
 // 不与高频采集抢）。配置逐轮重读（增删自动跟随，同 income 惯例）。
 // MT5 io 同拍挂车（零新定时器）：connected mt5 账号 OrderHistory Balance 行→fin_venue_io。
@@ -160,7 +164,15 @@ func mtIODeltaRound(ctx context.Context, st *pgstore.Store, bm *dashboard.Broker
 		pnl := func(from, to time.Time) (float64, error) {
 			return st.ClosedPositionPnLBetween(ctx, a.Venue, from, to)
 		}
-		rows, alerts, err := deltaBookRows(snaps, pnl, ioSum, ccy, a.ID, a.Venue)
+		// 退回㉖伤①：grace 落 app_config 键（禁裸字面量——运维可调），缺省 72h
+		// 覆盖实测 ~48h venue 记录滞后+裕量。
+		grace := 72 * time.Hour
+		if gh, ok, gerr := st.AppConfigInt64(ctx, MTIODeltaGraceHoursKey); gerr == nil && ok && gh > 0 {
+			grace = time.Duration(gh) * time.Hour
+		} else if gerr != nil {
+			log.Printf("[wiring] mt-io delta %s grace read: %v（缺省 72h）", a.Venue, gerr)
+		}
+		rows, alerts, err := deltaBookRows(snaps, time.Now().UTC(), grace, pnl, ioSum, ccy, a.ID, a.Venue)
 		if err != nil {
 			log.Printf("[wiring] mt-io delta %s: %v（fail-closed 该户跳）", a.Venue, err)
 			continue

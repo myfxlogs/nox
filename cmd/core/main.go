@@ -120,7 +120,10 @@ func main() {
 	// D-604 P1②：swapscan 入榜闸 MT equity 判定拍实拉（依赖注入——research 域禁
 	// import dashboard API 面；读败=nil ok=fail-closed 拒入榜非降级陈值）。
 	oppmatch.BindMTEquityFn(func(venue string) (float64, bool) {
-		eq, _, _, err := brokerMgr.MTAccountSummary(context.Background(), venue)
+		// 退回㉖顺件①：5s 界（网关挂起卡死扫描环防护；venueLeverage 4s 限 ctx 先例）。
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		eq, _, _, err := brokerMgr.MTAccountSummary(ctx, venue)
 		if err != nil {
 			return 0, false
 		}
