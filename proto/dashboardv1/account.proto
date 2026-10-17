@@ -277,6 +277,15 @@ message GetOverviewBundleResponse {
   // §10 眠钱时长（idle_floor_streak 连续破地板天数 max——D-286 眠钱不眠计量）。
   int32 idle_streak_days = 27;
   string idle_streak_pool = 28; // 最长眠钱池（venue:venue_type；空=无在册破地板池）
+  // §11 风险心跳 critical 明细（业主令 10-17：可见「是什么红」非只「有几个红」；
+  // 24h 窗内 critical 告警后端拼行，前端零拼零新 RPC——bundle 既有 ListAlerts 读搭车）。
+  repeated OverviewCritAlert crit_alerts = 29;
+}
+
+// OverviewCritAlert 24h critical 告警明细行（全行 level 恒=critical 不复列）。
+message OverviewCritAlert {
+  string message = 1;                 // 告警文案原文（后端直透不裁剪）
+  google.protobuf.Timestamp ts = 2;   // 告警时
 }
 
 // OverviewBreakdownRow 盘面卡组成行（group=对应 StatTile 键；label 行名+amount 原生量

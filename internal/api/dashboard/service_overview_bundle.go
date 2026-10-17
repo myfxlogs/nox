@@ -161,6 +161,11 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 		for _, a := range alerts {
 			if a.Level == "critical" && a.Ts.After(cut) {
 				resp.CritAlerts_24H++
+				// 业主令 10-17：明细随段（可见「是什么红」非只计数）——文案原文直透不裁剪。
+				resp.CritAlerts = append(resp.CritAlerts, &v1.OverviewCritAlert{
+					Message: a.Message,
+					Ts:      timestamppb.New(a.Ts),
+				})
 			}
 		}
 	}

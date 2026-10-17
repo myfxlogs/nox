@@ -62,3 +62,48 @@ func TestOverviewBundleOrdersNonEmptyAndAggregated(t *testing.T) {
 	}
 	// ③失败单独立卡或不在 earn 聚合（300 不进聚合已由金额断言覆盖）
 }
+
+// TestOverviewBundleCritAlertDetails 总览三件修②锚（业主令 10-17——可见「是什么红」
+// 非只计数）：24h 窗内 critical 告警→bundle 明细行=计数与明细同源同窗；
+// 非 critical/窗外行不入明细。
+func TestOverviewBundleCritAlertDetails(t *testing.T) {
+	st := serviceTestStoreSingleInit(t)
+	svc := &Service{store: st}
+	s := svc
+	ctx := context.Background()
+	must := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := st.Pool().Exec(ctx, sql, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(`INSERT INTO alerts (level, message, ts) VALUES
+	      ('critical', '测试红一：kill 闸触发', now()),
+	      ('critical', '测试红二：30d 硬线破', now()),
+	      ('warn', '黄行不入明细', now()),
+	      ('critical', '窗外 critical 不入', now() - interval '25 hours')`)
+	cresp, err := s.GetOverviewBundle(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := cresp.Msg
+	if len(resp.CritAlerts) != int(resp.CritAlerts_24H) {
+		t.Fatalf("明细 %d 行 ≠ 计数 %d（同源同窗破）", len(resp.CritAlerts), resp.CritAlerts_24H)
+	}
+	if len(resp.CritAlerts) < 2 {
+		t.Fatalf("明细行=%d want ≥2（两测试红）", len(resp.CritAlerts))
+	}
+	msgs := map[string]bool{}
+	for _, a := range resp.CritAlerts {
+		msgs[a.Message] = true
+		if a.Message == "" || a.Ts == nil {
+			t.Fatalf("明细行缺文案/时戳: %+v", a)
+		}
+	}
+	if !msgs["测试红一：kill 闸触发"] || !msgs["测试红二：30d 硬线破"] {
+		t.Fatalf("文案原文未透传: %v", msgs)
+	}
+	if msgs["黄行不入明细"] || msgs["窗外 critical 不入"] {
+		t.Fatalf("非 critical/窗外行漏入明细: %v", msgs)
+	}
+}
