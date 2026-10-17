@@ -302,7 +302,11 @@ func TestBinanceListenKeyEndpoint(t *testing.T) {
 }
 
 // T-bnc-3：端到端——REST 发 key→WS dial URL 正确→ORDER_TRADE_UPDATE→缓存+审计→断线重取新 key。
+// CI 历史红清账①：E2E env 门——外网依赖显式化（NOX_E2E_WS=1 才跑；CI 默认无此
+// 键即跳非遮错，门键留文档；本地/SG 手动跑保真）。
 func TestBinanceUserWSE2E(t *testing.T) {
+	// 退回㊹订正：env 门撤（fake server 零外网——真型=测试自竞态非外网 flake；
+	// reconnectEvery 注入 ~100ms 消竞态确定性修）
 	var posts, puts atomic.Int32
 	keyN := atomic.Int32{}
 	rest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -326,7 +330,8 @@ func TestBinanceUserWSE2E(t *testing.T) {
 	snaps := newFakeSnapSink()
 	b.events, b.sink = evts, snaps
 	b.rest = rest.Client()
-	b.renewEvery = 150 * time.Millisecond // 注入缩短续租周期
+	b.renewEvery = 150 * time.Millisecond     // 注入缩短续租周期
+	b.reconnectEvery = 100 * time.Millisecond // 退回㊹：重连节拍缩短消竞态（确定性修非遮错）
 	b.dial = func(ctx context.Context, wsURL string) (*websocket.Conn, error) {
 		dialed <- wsURL
 		d := websocket.Dialer{}

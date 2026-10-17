@@ -30,7 +30,7 @@ func (b *BinanceUserWS) Run(ctx context.Context) {
 		} else {
 			backoffUntil = time.Time{} // 连接成功清退避
 		}
-		wait := 5 * time.Second
+		wait := b.reconnectEvery
 		if !backoffUntil.IsZero() && backoffUntil.After(b.now()) {
 			wait = backoffUntil.Sub(b.now()) // 封禁窗睡到到期（短封禁也按到期节拍）
 		} else {
