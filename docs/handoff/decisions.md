@@ -548,3 +548,11 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：①#79（deal 史端点请求）生命周期能关——请求径死，resolve_note 注记挂下轮部署批带批（生产写权限闸）；②MT5 入金捕获终局架构=**order 面 ticket 扫描（主，实测滞后 ~48h 容许）+balance 差分兜底（成熟度+前向宽限防双计，ticket 滞后>宽限或永不落时补位）**——差分器从「过渡件」升**永久主径之一**，xmr-io 三返规格不变；③Manager API（mng5grpc）出局=非本 gateway 面；④D-604 反证锚「新 gateway 版本证实空户账户流」分支封死——MT5 判定面=判定时刻实拉终态。
 - **反证锚**：无（供应商能力定谳=外部事实，非本席推断可翻）。
 - **复盘点**：xmr-io 三返部署后差分器首行落账+双计回归锚绿=终局架构在产验证。
+
+## D-607（2026-10-17 决策席，业主纠偏）MT5 入金捕获主径翻案——OnOrderUpdate Deal 事件消费
+
+- **业主纠偏**：流事件是序列化好的——查 `OrderUpdate` 消息体实锤：自带 `Deal`（`DealInternal`：TicketNumber/DealType/Direction/**Profit 金额**/Commission/Swap/时间戳），`DealType_Balance=2` 即入金，Credit/Charge/Correction/Bonus/InterestRate 全族有标签。
+- **错误定性**：①D-601 只证了拉取面无 deal 端点、未查流面消息体；②「OnOrderUpdate 不推 Balance 事件」系未验证断言被采信（10-15 02:42Z mt_frame 余额帧到达=反证）；③现行 tap 纯标量（account_stream.go:40）把 Deal 丢弃——三轮差分机在重建被自弃的信息。
+- **裁定**：①主径=适配层 Deal 事件消费（提取→非交易 DealType 族过滤→`mt5:deal:{TicketNumber}` 幂等落 io）；②与既有 ticket 扫描查重联动（`Deal.OrderTicket`↔`mt5:ticket:{n}` 双向，先到留）；③差分器降对账兜底（三返规格不变，事件行入 ioSum 扣窗自洽）；④部署后首笔入金实证帧内容=验证锚（若 XM 实不推 Deal 帧=回落差分主径如实报）。
+- **反证锚**：若实证 OnOrderUpdate 对该券商 balance 操作不携 Deal/不推帧——主径回落差分（D-607①推翻，另 D#）。
+- **复盘点**：首笔真实入金 Deal 事件落 io 行+ticket/事件/差分三账本零双计对拍。
