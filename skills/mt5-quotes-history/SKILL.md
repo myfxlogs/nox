@@ -20,3 +20,4 @@ description: mtapi MT5 行情/历史/会话面——Symbols/SymbolParams/GetQuot
 **复跑**：同 mt5-account。
 
 <!-- 方法全名索引（proto 名字面 grep 锚）：PriceHistory PriceHistoryMany PriceHistoryToday PriceHistoryTodayMany PriceHistoryEx PriceHistoryExMany PriceHistoryHighLow PriceHistoryMonth PriceHistoryMonthMany -->
+<!-- 全名索引2：SymbolParams SymbolParamsMany SymbolSessionsEx SymbolSessionsExMany IsTradeSession IsTradeSessionMany IsQuoteSession IsQuoteSessionMany GetTickValueMany GetQuoteMany -->

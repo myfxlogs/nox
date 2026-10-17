@@ -22,3 +22,5 @@ description: mtapi MT5 订单/流面——OpenedOrders/OrderHistory 族/Subscrib
 **坑**：流 RPC 无 token 时静默零帧——先 Subscribe 成功再 Events；断线自愈=wsrunner 重连+重订阅（adapter 范式）。
 **符号方言硬坑**：每 broker 后缀不同（EXR/XMR 户 XAUUSD not exist 实拍、Exness=m 尾 BTCUSDm）——symbol 名一律 venue `SymbolList` 实读禁猜；GETQuote 族传裸名=「Symbol not exist」假故障。
 **复跑**：同 mt5-account（--window 控窗）。
+
+<!-- 方法全名索引：OpenedOrders OpenedOrder OpenedOrdersTickets OrderHistory PendingOrderHistory OrderHistoryPagination Subscribe SubscribeMany UnSubscribe UnSubscribeMany SubscribeOrderProfit SubscribeTickValue SubscribeOrderUpdate SubscribeMarketWatch SubscribeOpenedOrdersTickets Events OnOrderUpdate OnQuote OnTickValue OnOrderProfit OnMarketWatch OnMail OnOpenedOrdersTickets MarketWatchMany -->

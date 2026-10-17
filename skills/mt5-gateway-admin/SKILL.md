@@ -20,3 +20,5 @@ description: mtapi 网关连接/服务面——Connect token 语义/Service 族/
 | 权威源 | /opt/grpc-proto/mt5/protos/mt5.proto | 2026-10-17 对拍：仓内副本 30 行 diff 全注释级（go_package 定制+ClusterDetails 注释块）——枚举/语义零漂移 | 仓内副本随权威源修（D-604 对拍纪律） |
 
 **能力定谳三足**：官方清单数（reflection+权威源 proto）×实测证据（能力账 JSON）×skills 正典（本目录）——三者同源对拍。
+
+<!-- 方法全名索引：Connect ConnectEx ConnectProxy CheckConnect Disconnect Ping PingHost PingHostMany Health MemorySnapshot Search GetClients GetDemo Version -->
