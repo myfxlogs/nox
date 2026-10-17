@@ -115,7 +115,8 @@
 
 ```
 go build ./... && go vet ./... && gofmt -l $(git diff --name-only master -- '*.go')
-go test ./... -count=1                     # 测试库=独立实例 postgres://nox:nox@127.0.0.1:5434/nox_test（D-021；env 未设自动缺省，生产 5433 零测试库）
+go test ./... -count=1                     # 测试库=独立实例
+gh run list -R myfxlogs/nox               # 推送者自检（业主令 10-15）：push 后必查——CI 红=推送者主动返修不等复审发现（机检绿≠push 闭环，CI 绿才算）；gh 基础设施级故障（auth/网络）归决策席运维 postgres://nox:nox@127.0.0.1:5434/nox_test（D-021；env 未设自动缺省，生产 5433 零测试库）
 go test -race ./internal/<触碰包>/... -count=1
 cd web && npm run build                    # 触碰前端时
 ```
