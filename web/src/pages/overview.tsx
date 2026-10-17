@@ -125,7 +125,7 @@ export default function OverviewPage() {
             const tone: FreshDotData["status"] =
               st.state === "working" ? "live" : st.state === "waiting" ? "stale" : "down";
             return (
-              <div key={st.key} className="pipe-card" title={st.narrative + (st.waitReason ? "｜" + st.waitReason : "") + (st.error ? "｜" + st.error : "")}>
+              <div key={st.key} className={`pipe-card ${tone}`} title={st.narrative + (st.waitReason ? "｜" + st.waitReason : "") + (st.error ? "｜" + st.error : "")}>
                 <div className="pipe-head">
                   <FreshDot dot={{ status: tone, title: st.state }} />
                   <span className="nm">{STAGE_CN[st.key] ?? st.key}</span>
