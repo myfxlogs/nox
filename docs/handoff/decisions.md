@@ -465,3 +465,9 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：物化径=扫描幂等（UNIQUE(category,object_key) ON CONFLICT DO NOTHING）——裁定源行（carry_graduations approved / fin_proposal executed@dciexec 两写点）本身携带全部决策事实（decided_by/decided_at/structure/combo_id），单漏斗零漏路径，部署首拍回填存量已批行（首批裁定行落库实拍=免等新裁定）；30d 归因=positions（开仓∈[decided_at,+30d] ∧ strategy_key 匹配 ∧ canonical 段窄化）JOIN 其后 settlements 净额；告警=累计净亏 ∨ 连败≥3（票面定阈值）→ warn **边沿推送**（alert_state 态机防刷屏，D-389 先例）。归因是呈现非裁决——零自动改判据/零自动禁用（禁线遵行）。
 - **类别域**：graduation_approved（人工 RPC+delegate:D-513 双径）/ proposal_go / gate_exempt（枚举预留——现码无豁免写径，落地即入册不改码）。
 - **实施事故留痕**：迁移初版撞 1038（D-581 sizing_mode 已占）→ 测试库 schema_migrations 记 1038 跳过 GradSizingMode → 23 席位库 sizing_mode 列缺失连坐假绿；修=改 1040+批删席位库 1038 版本记录重放。教训：**新迁移开工先查 migrate_table.go 尾部已占号**（master 高频并线，开工时空闲≠合并时空闲）。
+
+## D-595（2026-10-17 决策席）开工/收工协议入契约——arb §6 移植（业主令「arb 的值得整合过来」）
+
+- **裁定**：AGENTS.md 加 §4.0——boot 四件（契约→STATE 票行→相关 D#/模块页→取证/评估 skill）、私有记忆清扫强制项（arb P1 通道不变量同义落地：会话蒸发=事实对项目不存在）、check-out 六步（自审→STATE 翻态→记忆清扫→dialogue→机检→commit+push）+「不写=失职/未提交=中断信号」牙口。
+- **NOX 适配**：派单模型=每票新开会话——私有记忆清扫对 NOX 比 arb 更刚需（实施会话结束即蒸发）；check-out 尾部收敛到 `git_push.sh`（D-588 本地领先未推断链实证）；dialogue 口径沿用 D-592（实质对话才记）不双写。
+- **实证钉**：迁移撞号四连（1040 双占）+btc 残余陈账误读——两案病灶同源=教训/实数散在死会话未落共享层。
