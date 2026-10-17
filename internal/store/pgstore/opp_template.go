@@ -65,3 +65,15 @@ func (s *Store) ListOppTemplates(ctx context.Context) ([]OppTemplate, error) {
 	}
 	return out, rows.Err()
 }
+
+// TemplateAutoexec D-598：模板自动执行判据读（提案落库后 autoexec=true →
+// 直进 GoProposal；判据落表非代码 if——CHECK 钉死非豁免族禁 true）。
+func (s *Store) TemplateAutoexec(ctx context.Context, templateID string) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT autoexec FROM fin_opp_template WHERE id=$1`, templateID).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("autoexec %s: %w", templateID, err)
+	}
+	return ok, nil
+}
