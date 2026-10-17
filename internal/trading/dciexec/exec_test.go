@@ -1403,11 +1403,3 @@ func TestD593_GateWired(t *testing.T) {
 		t.Fatal("闸拒后提案不得进 executed")
 	}
 }
-
-// D-596 桩：io 划转记账捕参（InsertVenueIO 调用断言面）。
-var fakeIOCaptures []pgstore.VenueIO
-
-func (f *fakeStore) InsertVenueIO(_ context.Context, rows []pgstore.VenueIO) (int64, error) {
-	fakeIOCaptures = append(fakeIOCaptures, rows...)
-	return int64(len(rows)), nil
-}
