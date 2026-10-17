@@ -1,0 +1,29 @@
+// probe_evidence D-615：bnprobe 证据件 schema——raw 原文+三源并集对账+覆盖汇总
+// （产出 .pb 非 .json；PII 面预钉=sample 级 mask 同 mtprobe 补正范式）。
+syntax = "proto3";
+package nox.capability.v1;
+
+message ProbeRun {
+  string generated_at = 1; // RFC3339 UTC
+  string gateway = 2;      // 凭据域（binance）
+  map<string, string> raw_bodies = 3; // endpoint→原始 body 原文（PII 面 mask 后落）
+  CoverageReconcile coverage = 4;     // 三源并集对账段
+}
+
+message EndpointEvidence {
+  string endpoint = 1;
+  bool ok = 2;
+  int32 status = 3;
+  string err = 4;
+  string x_mbx_used_weight = 5;
+  int64 latency_ms = 6;
+  repeated string key_fields_nonempty = 7;
+}
+
+message CoverageReconcile {
+  int32 postman_count = 1; // postman collections 产数
+  int32 md_count = 2;      // docs .md 产数
+  int32 conn_count = 3;    // connector .go/.py 常量产数
+  int32 union_total = 4;   // 并集总数
+  int32 mutating_marked = 5;
+}
