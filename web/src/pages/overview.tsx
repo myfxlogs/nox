@@ -13,6 +13,7 @@ import { StatTile } from "../components/StatTile";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
 import { Modal } from "../components/Modal";
+import { ORDER_KIND_CN, ORDER_STATUS_CN, untilCN } from "../components/orders_fmt";
 import { FreshDot } from "../components/FreshDot";
 import type { FreshDot as FreshDotData } from "../components/freshness";
 
@@ -197,15 +198,15 @@ export default function OverviewPage() {
         <ul className="opp-cards opp-grid scroll-cap">
           {b.orders.map((o: OverviewOrderRow, i: number) => (
             <li key={i} className="opp-card" onClick={() => setCardModal({
-              title: `#${i} ${o.kind} ${o.label}`,
-              body: `状态 ${o.status}｜金额 ${fmtUsd(o.amountUsd)}｜` + (o.until ? "到期 " + utc(timestampDate(o.until)) : "持续中"),
+              title: `${ORDER_KIND_CN[o.kind] ?? o.kind} · ${o.label}`,
+              body: `状态 ${ORDER_STATUS_CN[o.status] ?? o.status}｜金额 ${fmtUsd(o.amountUsd)}｜` + untilCN(o),
             })}>
               <div className="opp-card-head">
-                <Chip tone={orderTone(o.status)}>{o.status}</Chip>
+                <Chip tone={orderTone(o.status)}>{ORDER_STATUS_CN[o.status] ?? o.status}</Chip>
                 <span className="opp-card-friction">{fmtUsd(o.amountUsd)}</span>
               </div>
-              <span className="opp-card-who">{o.kind} · {o.label}</span>
-              <p className="opp-card-narrative muted">{o.until ? "⏱ 到期 " + utc(timestampDate(o.until)) : "持续中"}</p>
+              <span className="opp-card-who">{ORDER_KIND_CN[o.kind] ?? o.kind} · {o.label}</span>
+              <p className="opp-card-narrative muted">⏱ {untilCN(o)}</p>
             </li>
           ))}
         </ul>

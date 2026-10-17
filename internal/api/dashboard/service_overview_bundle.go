@@ -4,6 +4,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -58,9 +59,22 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 					earliest = &t
 				}
 			}
+			// 订单卡中文化派生（显示层——存储零动）：product_ref 分型
+			// （saving/uni=活期理财；编号/期权名=双币 DCI）+label 友好化。
+			kind := "dci"
+			label := o.ProductRef
+			ref := o.ProductRef
+			switch {
+			case strings.Contains(ref, "saving"):
+				kind = "earn"
+				label = o.Venue + " 活期 " + strings.TrimPrefix(ref, o.Venue+"-saving-")
+			case strings.Contains(ref, "uni"):
+				kind = "earn"
+				label = o.Venue + " 活期 " + strings.TrimPrefix(ref, o.Venue+"-uni-")
+			}
 			resp.Orders = append(resp.Orders, &v1.OverviewOrderRow{
-				Kind:      "dci",
-				Label:     fmt.Sprintf("%s %s #%d", o.Venue, o.ProductRef, o.ID),
+				Kind:      kind,
+				Label:     fmt.Sprintf("%s #%d", label, o.ID),
 				AmountUsd: o.Qty,
 				Status:    o.Status,
 				Until:     timestamppb.New(o.CreatedAt.Add(time.Duration(derefInt(o.TenorDays)) * 24 * time.Hour)),
