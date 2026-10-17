@@ -29,7 +29,8 @@ import (
 )
 
 const listPath = "docs/能力账/binance_endpoints.gen.txt"
-const outPB = "docs/能力账/bn-api-probe.pb"
+
+var outPB = "docs/能力账/bn-api-probe-" + time.Now().UTC().Format("2006-01-02") + ".pb"
 
 const paceMs = 100 // 节流间隔（USED-WEIGHT 跟踪另行降速——418 封禁防）
 
@@ -74,7 +75,11 @@ func probe(ctx context.Context, c *http.Client, apiKey, apiSecret, path string) 
 		sep = "&"
 	}
 	full := path + sep + q + "&signature=" + sign(apiSecret, q)
-	req, _ := http.NewRequestWithContext(ctx, "GET", hostFor(path)+full, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", hostFor(path)+full, nil)
+	if err != nil {
+		r.Err = err.Error()
+		return r
+	}
 	if apiKey != "" {
 		req.Header.Set("X-MBX-APIKEY", apiKey)
 	}
@@ -87,7 +92,11 @@ func probe(ctx context.Context, c *http.Client, apiKey, apiSecret, path string) 
 	defer resp.Body.Close()
 	r.Status = resp.StatusCode
 	r.Weight = resp.Header.Get("X-MBX-USED-WEIGHT")
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		r.Err = err.Error()
+		return r
+	}
 	rawMap[path] = string(bodyBytes) // raw 原文存证（退回㉝②）
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		r.OK = true
@@ -169,8 +178,15 @@ func main() {
 			KeyFieldsNonempty: r.KeyFields,
 		})
 	}
-	pbData, _ := proto.Marshal(run)
-	os.WriteFile(outPB, pbData, 0644)
+	pbData, err := proto.Marshal(run)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pb marshal: %v\n", err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(outPB, pbData, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "pb write: %v\n", err)
+		os.Exit(1)
+	}
 	var ok, fail int
 	for _, r := range results {
 		if r.OK {
