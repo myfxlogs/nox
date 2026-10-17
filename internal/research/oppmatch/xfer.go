@@ -52,7 +52,11 @@ func xferScan(ctx context.Context, st *pgstore.Store) {
 	// venue→闲池权益（每 ccy；Idle=睡钱标——deployed 不动只提闲量）。
 	idleEq := map[string]map[string]float64{}
 	for _, p := range pools {
-		if p.Ghost || !p.Idle || !xferCCYs[p.Currency] || p.Equity <= 0 {
+		if p.Ghost || !p.Idle || !xferCCYs[p.Currency] {
+			continue
+		}
+		eq, ok := livePoolEquity(ctx, p.Venue, p.VenueType, p.Equity) // D-604 P2③ 无流池实拉
+		if !ok || eq <= 0 {
 			continue
 		}
 		if idleEq[p.Currency] == nil {

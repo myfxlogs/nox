@@ -91,3 +91,32 @@ func idleGapScan(ctx context.Context, st *pgstore.Store) {
 		log.Printf("[oppmatch] cash_mgmt target gone → expired %d proposals", n)
 	}
 }
+
+// liveEquityMapFn D-604 P2③：无流池消费点批量实拉钩（cmd/core 装配——
+// 扫描拍内单次 Refresh→venue:type→equity 映射；nil=快照行旧径保旧行为）。
+// 拉取败=该池跳过+warn 留痕（§6#4 禁显示陈值禁静默）；禁 TTL 变相快照。
+var liveEquityMapFn func(ctx context.Context) (map[string]float64, error)
+
+func SetLiveEquityMapFn(fn func(ctx context.Context) (map[string]float64, error)) {
+	liveEquityMapFn = fn
+}
+
+// livePoolEquity 无流池实拉（HasPrivateStream=false 才走——有流池快照行合法不拉）。
+// 拉败/映射缺=跳过该池（fail-closed 如实缺——§6#4 warn 留痕）。
+func livePoolEquity(ctx context.Context, venue, venueType string, snap float64) (float64, bool) {
+	if liveEquityMapFn == nil || venueType == "" || venueType == "mt4" || venueType == "mt5" {
+		return snap, true // 非无流池——快照行合法
+	}
+	m, err := liveEquityMapFn(ctx)
+	if err != nil {
+		log.Printf("[oppmatch] live equity map: %v（如实跳过·warn 留痕）", err)
+		return 0, false
+	}
+	key := venue + ":" + venueType
+	eq, ok := m[key]
+	if !ok {
+		log.Printf("[oppmatch] live equity %s 映射缺（跳过·warn 留痕）", key)
+		return 0, false
+	}
+	return eq, true
+}

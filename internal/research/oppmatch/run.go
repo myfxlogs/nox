@@ -46,6 +46,20 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	if err != nil {
 		return 0, 0, err
 	}
+	// D-604 P2③：无流池桶权益消费点实拉（扫描拍单次 RPC——拉败该桶跳过
+	// +warn 留痕，禁显示陈值禁静默）。
+	if liveEquityMapFn != nil {
+		for i, b := range led.Buckets {
+			if b.VenueType == "mt4" || b.VenueType == "mt5" {
+				continue
+			}
+			if eq, ok := livePoolEquity(ctx, b.Venue, b.VenueType, b.EquityRaw); ok {
+				led.Buckets[i].EquityRaw = eq
+			} else {
+				led.Buckets[i].EquityRaw = 0 // 拉败=0 如实缺非陈值
+			}
+		}
+	}
 	view := ledgerView(led)
 	var in []Template
 	for _, t := range ts {
