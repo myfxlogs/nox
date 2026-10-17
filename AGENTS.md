@@ -62,7 +62,7 @@
 **收工不写 STATE/不落痕=失职。未提交=施工中断信号。**
 
 ```
-领票（STATE 加一行，owner=会话）→ 分支 wip/<票名>（可用 worktree /opt/nox-wt/<票名>）
+领票（STATE 查重后加一行——行已存在翻态勿重立（双写病灶实证），owner=会话）→ 分支 wip/<票名>（可用 worktree /opt/nox-wt/<票名>）
 → 改动 + 测试 → 机检（§6）→ commit + push（产出即提交，不攒）→ 报审
 → 复审：机检独立重跑 → merge master → 删分支 + worktree → 部署 → STATE 行翻 ✅
 ```
@@ -118,7 +118,7 @@ go build ./... && go vet ./... && gofmt -l $(git diff --name-only master -- '*.g
 go test ./... -count=1                     # 测试库=独立实例
 gh run list -R myfxlogs/nox               # 推送者自检（业主令 10-15）：push 后必查——CI 红=推送者主动返修不等复审发现（机检绿≠push 闭环，CI 绿才算）；gh 基础设施级故障（auth/网络）归决策席运维 postgres://nox:nox@127.0.0.1:5434/nox_test（D-021；env 未设自动缺省，生产 5433 零测试库）
 go test -race ./internal/<触碰包>/... -count=1
-cd web && npm run build                    # 触碰前端时
+cd web && npm run build                    # 触碰前端时（worktree 评审前置：buf generate——web/src/gen=gitignore 生成件不随 checkout）
 ```
 
 ## 7. 门禁（`git config core.hooksPath scripts/hooks`，禁 `--no-verify`）
