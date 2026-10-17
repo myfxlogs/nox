@@ -197,3 +197,28 @@ func (s *Store) DisablePitHitCombos(ctx context.Context, dir string) (int, error
 	}
 	return disabled, nil
 }
+
+// DisabledCombosOpenPositions D-599：armed 被摘/被坑组合四元组命中的 OPEN
+// 持仓 id 集（enabled=false 组合仍有在仓的仓=裸跑病灶，退出触发源）。
+func (s *Store) DisabledCombosOpenPositions(ctx context.Context) ([]int64, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT p.id FROM positions p
+		JOIN position_legs l ON l.position_id=p.id
+		JOIN xasset_allow_combos c ON c.enabled=false
+		WHERE p.status IN ('OPEN','LEGGED')
+		  AND (l.venue IN (c.venue_buy, c.venue_sell)
+		       AND l.symbol IN (c.canonical_buy, c.canonical_sell))`)
+	if err != nil {
+		return nil, fmt.Errorf("disabled combos open positions: %w", err)
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan pos id: %w", err)
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}

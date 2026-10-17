@@ -32,6 +32,10 @@ type Engine struct {
 	// approve RPC 后经 ReloadXAssetAllowCombos 免重启生效）。读侧 handleOpportunity
 	// 高频 vs 写侧 approve 低频——atomic Load/Store 无锁竞态安全（S6 race ×3 强制）。
 	xassetAllow atomic.Pointer[[]exec.XAssetComboAllowSpec]
+	// ClosePositionFn D-599：armed 退役/坑摘触发平仓执行钩（装配注入
+	// exec.Pipeline.ClosePosition；nil=不触发——退出动作不落=disabled 组合
+	// 持仓留在持仓位裸跑是禁线坑）。
+	ClosePositionFn func(ctx context.Context, posID int64) error
 	// sessionNowFn D-029：休市判定时刻 hook（nil=真钟 UTC；测试控时相注入）。
 	sessionNowFn func() time.Time
 	// sessionTbl/At/sessionTblMu D-029 R1 ④：周表缓存（1min TTL；store 拉取+组表高频摊薄）。
