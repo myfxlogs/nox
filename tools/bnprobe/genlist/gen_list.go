@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -40,6 +41,11 @@ var mutating = map[string]bool{
 func isMutating(method, path string) bool {
 	return mutating[method+" "+path] || method == "POST" || method == "PUT" || method == "DELETE"
 }
+
+type fetchReq struct{ repo, path string }
+
+var fetchMu sync.Mutex
+var found = map[string]string{}
 
 func get(c *http.Client, url string) string {
 	resp, err := c.Get(url)
@@ -100,25 +106,44 @@ func main() {
 		walk(col["item"])
 	}
 	// 源②docs .md 遍历
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 32)
 	for _, repo := range mdRepos {
 		for _, p := range ghTree(c, repo, `\.md`) {
-			for _, e := range pathRe.FindAllStringSubmatch(get(c,
-				fmt.Sprintf("https://raw.githubusercontent.com/%s/HEAD/%s", repo, p)), -1) {
-				src["md"][e[1]+" "+strings.TrimRight(e[2], "`'\" ")] = true
-			}
+			wg.Add(1)
+			go func(repo, p string) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				for _, e := range pathRe.FindAllStringSubmatch(get(c,
+					fmt.Sprintf("https://raw.githubusercontent.com/%s/HEAD/%s", repo, p)), -1) {
+					fetchMu.Lock()
+					src["md"][e[1]+" "+strings.TrimRight(e[2], "`'\" ")] = true
+					fetchMu.Unlock()
+				}
+			}(repo, p)
 		}
 	}
 	// 源③connector .go/.py 端点常量扫（字面量路径——method 推 GET）
 	for _, repo := range connRepos {
 		for _, suf := range []string{`\.go`, `\.py`} {
 			for _, p := range ghTree(c, repo, suf) {
-				for _, e := range strRe.FindAllStringSubmatch(get(c,
-					fmt.Sprintf("https://raw.githubusercontent.com/%s/HEAD/%s", repo, p)), -1) {
-					src["conn"]["GET "+e[1]] = true
-				}
+				wg.Add(1)
+				go func(repo, p string) {
+					defer wg.Done()
+					sem <- struct{}{}
+					defer func() { <-sem }()
+					for _, e := range strRe.FindAllStringSubmatch(get(c,
+						fmt.Sprintf("https://raw.githubusercontent.com/%s/HEAD/%s", repo, p)), -1) {
+						fetchMu.Lock()
+						src["conn"]["GET "+e[1]] = true
+						fetchMu.Unlock()
+					}
+				}(repo, p)
 			}
 		}
 	}
+	wg.Wait() // 三源拉取齐再并集
 	union := map[string]bool{}
 	for _, s := range src {
 		for k := range s {
