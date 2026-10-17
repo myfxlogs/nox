@@ -627,3 +627,4 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **业主令**：确保每席知道有 skills 并优先查询调用。
 - **裁定三闸**：①§2 事实优先级补位次——`skills/<venue>-<域>/` 列模块文档同级（能力正典=实测消化层，证据指针回 docs/能力账/）；②**开工指令模板**强制——venue/API 相关票提示词必带 `读 skills/<venue>-<域>` 指针（无域注明「无 skills 域如实」）；③**复审闸**——venue 能力声明（「没有某能力/端点死/凭据落点」类）出处只认 skills 行或新鲜 probe 实拍，相关 skills 存在而未查=退回单条。
 - **登记面**：docs/能力账/INDEX.md=全图入口（venue×域×skills 指针——新域落地必补行）；skills 由 probe 证据机械消化生成，禁脱离证据空写。
+- **D-618**（2026-10-17）：坑处置分档固化——critical/high 级坑（生产事故/系统性病坑）直落 `docs/经验库/条目/` 正典+noxkb gen 同 commit，禁走待归纳 staging（staging 行不进索引=检索面半隐身，418 封禁事故坑实证）；medium/low 可 staging。修法根因：原私有记忆清扫条明文「坑→待归纳」把下限写成标准动作。复审注记坑处置字段引用条目 id 时即知档位（条目=正典、待归纳=staging）。
