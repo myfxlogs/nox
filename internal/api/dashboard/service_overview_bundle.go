@@ -4,6 +4,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"connectrpc.com/connect"
@@ -21,17 +22,54 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 		resp.PendingRequests = int32(len(rows))
 	}
 	// §1 本金分档（USDT+USD 两桶——D-534；非 U 币池不进本金面）。
+	// 同拍喂 §6 组成明细：nav 组=全池（含非 USD 原生币如实分币列）；
+	// principal/idle/earning 组=U 币池按 venue 拆（前端 group 过滤直渲）。
 	if nav, err := s.store.ComputeNav(ctx, now); err == nil {
 		var idle, earning float64
 		for _, p := range nav.Pools {
-			if p.Ghost || (p.Currency != "USDT" && p.Currency != "USD") {
+			if p.Ghost {
+				continue
+			}
+			resp.Breakdowns = append(resp.Breakdowns, &v1.OverviewBreakdownRow{
+				Group: "nav", Label: p.Venue, Ccy: p.Currency, Amount: p.Equity, Sub: p.VenueType,
+			})
+			if p.Currency != "USDT" && p.Currency != "USD" {
 				continue
 			}
 			if p.VenueType == "earn" {
 				earning += p.Equity
+				resp.Breakdowns = append(resp.Breakdowns, &v1.OverviewBreakdownRow{
+					Group: "earning", Label: p.Venue, Ccy: p.Currency, Amount: p.Equity, Sub: p.VenueType,
+				})
 			} else {
 				idle += p.Balance
+				resp.Breakdowns = append(resp.Breakdowns, &v1.OverviewBreakdownRow{
+					Group: "idle", Label: p.Venue, Ccy: p.Currency, Amount: p.Balance, Sub: p.VenueType,
+				})
 			}
+		}
+		// principal 组=每 venue 对本金的贡献（earn 池记 equity、余记 balance——
+		// 与 PrincipalTotalUsd 同口径的逐项分解，和卡值对得上）。
+		acc := map[string]*v1.OverviewBreakdownRow{}
+		var order []string
+		for _, p := range nav.Pools {
+			if p.Ghost || (p.Currency != "USDT" && p.Currency != "USD") {
+				continue
+			}
+			r, ok := acc[p.Venue]
+			if !ok {
+				r = &v1.OverviewBreakdownRow{Group: "principal", Label: p.Venue, Ccy: "USD", Sub: p.VenueType}
+				acc[p.Venue] = r
+				order = append(order, p.Venue)
+			}
+			if p.VenueType == "earn" {
+				r.Amount += p.Equity
+			} else {
+				r.Amount += p.Balance
+			}
+		}
+		for _, v := range order {
+			resp.Breakdowns = append(resp.Breakdowns, acc[v])
 		}
 		resp.PrincipalIdleUsd = idle
 		resp.PrincipalEarningUsd = earning
@@ -72,6 +110,8 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 	// 禁前端拿 dept 拼状态/禁前端判故障）。
 	resp.Stages = s.pipelineStages(ctx)
 	// §2 业绩（D-535 锚面——缺锚/读败 available=false 如实缺）。
+	// 同拍喂 §6：perf 组=基线→现值→外部净流→真业绩分解行；invested 组=基线锚+按
+	// venue 拆的基线后净充提（投资人累计投入=基线+净充提，构成项与卡值对得上）。
 	if perf, err := s.store.PerfSinceBaseline(ctx, now); err == nil && perf != nil {
 		resp.PerfAvailable = true
 		resp.BaselineUsd = perf.BaselineUSD
@@ -79,6 +119,28 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 		resp.PerfUsd = perf.PerfUSD
 		resp.PerfAnnPct = perf.PerfAnnPct
 		resp.PerfFlowProvisional = perf.FlowProvisional
+		resp.InvestedAvailable = true
+		resp.NetInvestedUsd = perf.BaselineUSD + perf.NetExternalUSD
+		row := func(g, label, sub string, amt float64) {
+			resp.Breakdowns = append(resp.Breakdowns, &v1.OverviewBreakdownRow{
+				Group: g, Label: label, Ccy: "USD", Amount: amt, Sub: sub,
+			})
+		}
+		row("perf", "基线锚", perf.BaselineAt.Format("2006-01-02"), perf.BaselineUSD)
+		row("perf", "本金池现值", "USDT+USD 桶", perf.PrincipalNowUSD)
+		row("perf", "外部净流（基线后）", "充正提负", perf.NetExternalUSD)
+		row("perf", "真业绩", "现值−基线−净流", perf.PerfUSD)
+		row("invested", "期初本金（基线锚）", perf.BaselineAt.Format("2006-01-02"), perf.BaselineUSD)
+		if byV, err := s.store.NetExternalFlowByVenueSince(ctx, perf.BaselineAt); err == nil {
+			vs := make([]string, 0, len(byV))
+			for v := range byV {
+				vs = append(vs, v)
+			}
+			sort.Strings(vs)
+			for _, v := range vs {
+				row("invested", v, "基线后净充提", byV[v])
+			}
+		}
 	}
 	// §3 autotrade 在仓行+纸面计数（标沙箱）。
 	if poss, err := s.store.ListPositions(ctx, "ACTIVE", 100, 0); err == nil {

@@ -2,21 +2,33 @@ import type { FreshDot } from "./freshness";
 import { FreshDot as FreshDotDot } from "./FreshDot";
 
 // StatTile KPI 瓦片：单一当前值（无图表的正确形态）。
+// onClick 提供时瓦片可点（组成明细下钻——active 标当前展开态）。
 export function StatTile({
   label,
   value,
   sub,
   title,
   dot,
+  onClick,
+  active,
 }: {
   label: string;
   value: string;
   sub?: string;
   title?: string;
   dot?: FreshDot;
+  onClick?: () => void;
+  active?: boolean;
 }) {
   return (
-    <div className="stat" title={title}>
+    <div
+      className={`stat${onClick ? " stat-click" : ""}${active ? " stat-active" : ""}`}
+      title={title}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+    >
       <div className="stat-label">
         {dot ? <FreshDotDot dot={dot} /> : null}
         {label}

@@ -264,6 +264,20 @@ message GetOverviewBundleResponse {
   // §5 十段工序实时状态（S3′-b：后端阶段健康读模——每段聚合 emit 时戳+
   // wait_reason+错误面；禁前端拿 dept 拼状态/禁前端判故障）。
   repeated PipelineStageHealth stages = 18;
+  // §6 总投入+盘面组成明细（业主令：卡点击见组成——后端拆好前端直渲）。
+  double net_invested_usd = 19;        // 总投入=基线锚+基线后净充提（USDT+USD；投资人累计出资口径）
+  repeated OverviewBreakdownRow breakdowns = 20;
+  bool invested_available = 21;        // 总投入可用标（无基线锚=如实缺不显 0）
+}
+
+// OverviewBreakdownRow 盘面卡组成行（group=对应 StatTile 键；label 行名+amount 原生量
+// +ccy 计价币+sub 补充——前端按 group 过滤渲染，零运算零拼装）。
+message OverviewBreakdownRow {
+  string group = 1;   // nav/principal/idle/earning/invested/perf
+  string label = 2;   // venue 名或科目名
+  string ccy = 3;     // 计价币（USD/USDT 族可 fmtUsd；其余原生量如实显）
+  double amount = 4;
+  string sub = 5;     // venue_type/份额/科目注记
 }
 
 // PipelineStageHealth 工序段健康行（十段固定枚举 key 后文注释面）。

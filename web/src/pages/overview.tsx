@@ -33,12 +33,27 @@ function orderTone(s: string): "good" | "warn" | "critical" | "neutral" {
   return "neutral";
 }
 
+// amtText 组成行金额渲染——USD 族 fmtUsd；空 ccy=指标数（年化等）带 sub；
+// 其余原生币如实显原生量（跨币不换算——D-285 族律的展示面兑现）。
+function amtText(ccy: string, amount: number, sub: string): string {
+  if (ccy === "USD" || ccy === "USDT") return fmtUsd(amount);
+  if (ccy === "") return `${amount.toFixed(2)}${sub ? " " + sub : ""}`;
+  return `${amount.toLocaleString("en-US", { maximumFractionDigits: 6 })} ${ccy}`;
+}
+
+// TILE_GROUP 盘面卡→明细组键（显示映射非判据）
+const TILE_GROUP: Record<string, string> = {
+  nav: "NAV 总权益", invested: "总投入", principal: "本金合计", idle: "可动用",
+  earning: "在息", perf: "基线后业绩",
+};
+
 export default function OverviewPage() {
   const [b, setB] = useState<GetOverviewBundleResponse | null>(null);
   const [nav, setNav] = useState<number | null>(null);
   const [box, setBox] = useState<RequestBoxItem[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState("");
+  const [tile, setTile] = useState<string | null>(null); // 盘面卡下钻组键
 
   const load = async () => {
     try {
@@ -103,17 +118,44 @@ export default function OverviewPage() {
         </section>
       )}
 
-      {/* §1 KPI 横排（StatTile 阵——NAV/可动用/在息/年化/敞口粗列） */}
+      {/* §1 KPI 横排（StatTile 阵——NAV/总投入/本金/可动用/在息/业绩；
+          卡可点击下钻组成明细——后端 breakdowns 按 group 过滤直渲） */}
       <h2>盘面</h2>
       <div className="stats">
-        <StatTile label="NAV 总权益" value={nav != null ? fmtUsd(nav) : "—"} />
-        <StatTile label="本金合计（USDT+USD）" value={b ? fmtUsd(b.principalTotalUsd) : "—"} />
-        <StatTile label="可动用" value={b ? fmtUsd(b.principalIdleUsd) : "—"} />
+        <StatTile label="NAV 总权益" value={nav != null ? fmtUsd(nav) : "—"}
+          active={tile === "nav"} onClick={() => setTile(tile === "nav" ? null : "nav")} />
+        <StatTile label="总投入（基线+注资）" value={b?.investedAvailable ? fmtUsd(b.netInvestedUsd) : "—"}
+          sub={b?.perfFlowProvisional ? "净流 provisional" : undefined}
+          active={tile === "invested"} onClick={() => setTile(tile === "invested" ? null : "invested")} />
+        <StatTile label="本金合计（USDT+USD）" value={b ? fmtUsd(b.principalTotalUsd) : "—"}
+          active={tile === "principal"} onClick={() => setTile(tile === "principal" ? null : "principal")} />
+        <StatTile label="可动用" value={b ? fmtUsd(b.principalIdleUsd) : "—"}
+          active={tile === "idle"} onClick={() => setTile(tile === "idle" ? null : "idle")} />
         <StatTile label="在息" value={b ? fmtUsd(b.principalEarningUsd) : "—"}
-          sub={b && b.principalLockedUsd > 0 ? `含锁定 ${fmtUsd(b.principalLockedUsd)}${b.earliestRelease ? "·最早回笼 " + utc(timestampDate(b.earliestRelease)) : ""}` : undefined} />
+          sub={b && b.principalLockedUsd > 0 ? `含锁定 ${fmtUsd(b.principalLockedUsd)}${b.earliestRelease ? "·最早回笼 " + utc(timestampDate(b.earliestRelease)) : ""}` : undefined}
+          active={tile === "earning"} onClick={() => setTile(tile === "earning" ? null : "earning")} />
         <StatTile label="基线后业绩" value={b?.perfAvailable ? (b.perfUsd >= 0 ? "+" : "") + fmtUsd(b.perfUsd) : "—"}
-          sub={b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"} />
+          sub={b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"}
+          active={tile === "perf"} onClick={() => setTile(tile === "perf" ? null : "perf")} />
       </div>
+      {tile && (
+        <div className="stat-detail" role="region" aria-label={`${TILE_GROUP[tile]}组成明细`}>
+          <div className="stat-detail-title">{TILE_GROUP[tile]}·组成明细</div>
+          {b && b.breakdowns.some((r) => r.group === tile) ? (
+            <ul>
+              {b.breakdowns.filter((r) => r.group === tile).map((r, i) => (
+                <li key={i}>
+                  <span className="sd-label">{r.label}</span>
+                  <span className="sd-amt">{amtText(r.ccy, r.amount, "")}</span>
+                  {r.sub && <span className="sd-sub muted">{r.sub}</span>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="muted">组成明细后端未供（读败或零池——如实缺）</div>
+          )}
+        </div>
+      )}
 
       {/* S3′-b 十段工序实时状态卡（后端 PipelineStageHealth 读模——
           状态点+一行实况叙事直渲；禁前端拼 dept/判故障） */}

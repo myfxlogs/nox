@@ -73,6 +73,30 @@ func (s *Store) NetExternalFlowSince(ctx context.Context, since time.Time) (net 
 	return net, skipped, nil
 }
 
+// NetExternalFlowByVenueSince 外部充提净额按 venue 拆（同 NetExternalFlowSince 口径——
+// deposit 正 / withdraw 负 / transfer 不计 / 只认 USDT+USD；总览「总投入」卡组成明细）。
+func (s *Store) NetExternalFlowByVenueSince(ctx context.Context, since time.Time) (map[string]float64, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT venue, COALESCE(SUM(CASE WHEN direction='deposit' THEN amount ELSE -amount END), 0)
+		FROM fin_venue_io
+		WHERE ts >= $1 AND direction <> 'transfer' AND ccy IN ('USDT','USD')
+		GROUP BY venue`, since)
+	if err != nil {
+		return nil, fmt.Errorf("net external flow by venue: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]float64{}
+	for rows.Next() {
+		var v string
+		var amt float64
+		if err := rows.Scan(&v, &amt); err != nil {
+			return nil, fmt.Errorf("net external flow by venue scan: %w", err)
+		}
+		out[v] = amt
+	}
+	return out, rows.Err()
+}
+
 // PerfReport 基线后业绩（本金口径单源结果——财务页/日报/总览共读）。
 type PerfReport struct {
 	BaselineUSD     float64
