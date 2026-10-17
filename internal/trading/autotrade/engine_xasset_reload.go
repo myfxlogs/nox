@@ -30,6 +30,10 @@ func (e *Engine) ReloadXAssetAllowCombos(ctx context.Context) error {
 	if n, perr := e.store.DisablePitHitCombos(ctx, econkb.Dir()); perr == nil && n > 0 {
 		log.Printf("[xasset] 坑签名闸：%d armed 组合命中坑→自动摘（豁免须 pit_exempt_d 落 D#）", n)
 	}
+	// kill 扳机：判据落表组合净 PnL/连败超限→自动摘+平仓（淘汰数学化）。
+	if n, kerr := e.store.DisableKillTriggeredCombos(ctx); kerr == nil && n > 0 {
+		log.Printf("[xasset] kill 扳机：%d armed 组合超限→自动摘+平仓联动（判据落表非硬编码）", n)
+	}
 	if n, err := e.store.RetireCombosMissingVenue(ctx); err == nil && n > 0 {
 		log.Printf("[whitelist] venue 退役: %d 组合自动摘牌（broker_accounts+exchange_configs 双簿消失）", n)
 	}
