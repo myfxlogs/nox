@@ -110,9 +110,10 @@
    叙事长卡（毕业/机会多行 narrative）保持单列不进网格 —— */
 .opp-grid {
   display: grid;
-  /* 业主定案 10-17②：卡宽自锁 ~200px（原四列全宽卡 ≈422px 太肥——两卡宽装四卡）
-     auto-fill+minmax=任意屏宽自适应密度，卡永不窄于 200px。 */
+  /* 业主定案 10-17③：每行 4 卡，整块总宽=旧两卡宽（容器 50%——旧四列均分时两卡=50%
+     的精确相对值，右半留白）；内部 auto-fill 200px 地板=宽屏整 4 列、窄屏自动降列。 */
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  max-width: 50%;
   gap: 8px;
 }
 .opp-grid .opp-card {
