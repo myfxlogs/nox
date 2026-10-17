@@ -64,13 +64,12 @@
 .pipe-flow .pipe-card.live { border-color: var(--good); border-left-width: 4px; }
 .pipe-flow .pipe-card.stale { border-color: var(--warn); border-left-width: 4px; }
 .pipe-flow .pipe-card.down { border-color: var(--critical); border-left-width: 4px; }
-.pipe-flow .pipe-card .fresh-dot { width: 12px; height: 12px; }
-.pipe-flow .pipe-card.live .fresh-dot { box-shadow: 0 0 6px var(--good); }
-.pipe-flow .pipe-card.stale .fresh-dot { box-shadow: 0 0 6px var(--warn); }
-.pipe-flow .pipe-card.down .fresh-dot { box-shadow: 0 0 6px var(--critical); }
 .pipe-flow .pipe-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-.pipe-flow .pipe-head .nm { font-size: 13px; font-weight: 600; color: var(--ink); }
-.pipe-flow .pipe-ts { font-size: 18px; color: var(--ink-3); margin-left: auto; line-height: 1; } /* ⏱ 10→18px：16px 会被本行旧值覆盖路径复发的教训在 04 注记；line-height:1=防 18px 字形撑高 head 行破①定高 */
-.pipe-flow .pipe-line { font-size: 11px; color: var(--ink-3); line-height: 1.35; } /* ②钳 2 行=共享 .clamp-2（04，TSX 挂） */
-/* ③数字固位：时戳预留位——位数跳动不挤 head 邻元（tabular-nums 等宽进位） */
-.pipe-flow .pipe-clock { min-width: 11ch; text-align: right; font-variant-numeric: tabular-nums; }
+.pipe-flow .pipe-head .nm { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+/* 工序卡标题件重构（业主令 10-17）×防抖并集解：fresh-dot 删（边框色单载状态），
+   证据 icon=.pipe-ev 左端 20px×line-height:1（兼容 70px 定高：20+4+2×14.85+16≈69.7≤70）；
+   旧 .pipe-ts 18px 规则随重构退役（icon 已左置，右侧无 18px 消费者——04 注记教训归档）。 */
+.pipe-flow .pipe-ev { font-size: 20px; line-height: 1; color: var(--ink-3); }
+/* 时戳 HH:MM 缩写右置小字（防抖③固位：tabular-nums+nowrap 防跳宽；全时戳 title 兜底）。 */
+.pipe-flow .pipe-clock { font-size: 11px; color: var(--ink-3); margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pipe-flow .pipe-line { font-size: 11px; color: var(--ink-3); line-height: 1.35; } /* 防抖②钳 2 行=共享 .clamp-2（04，TSX 挂） */
