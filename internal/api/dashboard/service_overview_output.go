@@ -191,7 +191,7 @@ func (s *Service) appendOverviewWaiting(ctx context.Context, resp *v1.GetOvervie
 			resp.Waiting = append(resp.Waiting, &v1.OverviewWaitingRow{
 				Kind:      "proposal",
 				Label:     fmt.Sprintf("提案#%d %s@%s", pr.ID, pr.TemplateID, pr.Venue),
-				Detail:    fmt.Sprintf("待执行·APR %s", apr),
+				Detail:    fmt.Sprintf("自动候执行（等条件：闲钱/档位）·APR %s", apr), // 复审修件⑤：autoexec 常设授权语义如实透出，防误读为等人工审批
 				SinceUnix: pr.CreatedAt.Unix(),
 			})
 		}
