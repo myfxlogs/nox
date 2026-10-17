@@ -4,6 +4,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -47,7 +48,13 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 	// 该修快照写径而非订单加总。最早回笼=最小到期（信息面）。
 	locked := 0.0
 	var earliest *time.Time
-	if orders, err := s.store.ListDCIOrders(ctx, 100); err == nil {
+	earnAgg := map[string]struct {
+		amt   float64
+		n     int
+		first time.Time
+		venue string
+	}{} // 活期聚合桶（label→持仓位）
+	if orders, err := s.store.ListDCIOrders(ctx, 100); err != nil {
 		for _, o := range orders {
 			if o.Status != "filled" {
 				continue
@@ -59,18 +66,27 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 					earliest = &t
 				}
 			}
-			// 订单卡中文化派生（显示层——存储零动）：product_ref 分型
-			// （saving/uni=活期理财；编号/期权名=双币 DCI）+label 友好化。
+			// 订单卡中文化派生（显示层——存储零动）：**语义字段分型**（opt_type/template_id
+			// ——USDT001 实为 binance 活期申购被错标双币的业主实拍修正：禁 product_ref
+			// 字符串嗅探，类型判定认语义字段=协议面取证 skill ④镜像教训）+label 友好化。
 			kind := "dci"
 			label := o.ProductRef
-			ref := o.ProductRef
 			switch {
-			case strings.Contains(ref, "saving"):
+			case o.OptType == "EARN" || o.TemplateID == "cash_mgmt" || o.TemplateID == "earn_apr_lending" || o.TemplateID == "earn_rotation":
 				kind = "earn"
-				label = o.Venue + " 活期 " + strings.TrimPrefix(ref, o.Venue+"-saving-")
-			case strings.Contains(ref, "uni"):
-				kind = "earn"
-				label = o.Venue + " 活期 " + strings.TrimPrefix(ref, o.Venue+"-uni-")
+				label = earnLabel(o.Venue, o.ProductRef)
+			}
+			// 业主第一性令 10-17：活期类同（所×产品）合并一卡=持仓位非流水——
+			// 金额合计+笔数+首笔日；失败/已结单不构成在仓持仓不入聚（记录级流水归 DCI 面板）。
+			if kind == "earn" && (o.Status == "filled" || o.Status == "LIVE" || o.Status == "live") {
+				g := earnAgg[label]
+				g.amt += o.Qty
+				g.n++
+				if g.first.IsZero() || o.CreatedAt.Before(g.first) {
+					g.first = o.CreatedAt
+				}
+				earnAgg[label] = g
+				continue
 			}
 			resp.Orders = append(resp.Orders, &v1.OverviewOrderRow{
 				Kind:      kind,
@@ -80,6 +96,16 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 				Until:     timestamppb.New(o.CreatedAt.Add(time.Duration(derefInt(o.TenorDays)) * 24 * time.Hour)),
 			})
 		}
+	}
+	// 活期聚合卡发射（金额降序）：status=LIVE（持有中）、until=首笔申购日。
+	for _, g := range sortedEarnAgg(earnAgg) {
+		resp.Orders = append(resp.Orders, &v1.OverviewOrderRow{
+			Kind:      "earn",
+			Label:     fmt.Sprintf("%s（%d 笔）", g.label, g.n),
+			AmountUsd: g.amt,
+			Status:    "LIVE",
+			Until:     timestamppb.New(g.first),
+		})
 	}
 	resp.PrincipalLockedUsd = locked // 披露值：在息面中锁定子档，非第三桶钱
 	if earliest != nil {
@@ -146,4 +172,46 @@ func derefInt(p *int) int {
 		return 0
 	}
 	return *p
+}
+
+// sortedEarnAgg 聚合桶→金额降序列（稳定发射序）。
+func sortedEarnAgg(m map[string]struct {
+	amt   float64
+	n     int
+	first time.Time
+	venue string
+}) []struct {
+	label string
+	amt   float64
+	n     int
+	first time.Time
+} {
+	out := make([]struct {
+		label string
+		amt   float64
+		n     int
+		first time.Time
+	}, 0, len(m))
+	for k, v := range m {
+		out = append(out, struct {
+			label string
+			amt   float64
+			n     int
+			first time.Time
+		}{k, v.amt, v.n, v.first})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].amt > out[j].amt })
+	return out
+}
+
+// earnLabel 理财单 label 友好化（显示层）：剥 venue 前缀的产品名（okx-saving-USDT→
+// USDT、gate-uni-USDT→USDT、USDT001→USDT001 原样——binance 产品编号无前缀）。
+func earnLabel(venue, ref string) string {
+	if c := strings.TrimPrefix(ref, venue+"-saving-"); c != ref {
+		return venue + " 活期 " + c
+	}
+	if c := strings.TrimPrefix(ref, venue+"-uni-"); c != ref {
+		return venue + " 活期 " + c
+	}
+	return venue + " 活期 " + ref
 }
