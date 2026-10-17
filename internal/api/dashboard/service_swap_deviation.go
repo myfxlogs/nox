@@ -59,6 +59,21 @@ func (s *Service) checkSwapDeviationGate(ctx context.Context, canonical, venueBu
 	if err != nil {
 		return fmt.Sprintf("隔夜息偏差检查：空头规格查询失败\n原始明细：%v", err)
 	}
+	// D-604 N1：facts 龄期闸（对照 engine_swaparb_discover 同款 maxAge——
+	// 陈规格直进执行判定病灶；fail-closed=陈值拒判非放行）。
+	if s.swapFactMaxAge > 0 {
+		now := time.Now()
+		for _, f := range longFacts {
+			if now.Sub(f.Ts) > s.swapFactMaxAge {
+				return fmt.Sprintf("隔夜息偏差检查：多头规格陈旧（age=%s > 阈 %s）——执行拒判", now.Sub(f.Ts).Round(time.Second), s.swapFactMaxAge)
+			}
+		}
+		for _, f := range shortFacts {
+			if now.Sub(f.Ts) > s.swapFactMaxAge {
+				return fmt.Sprintf("隔夜息偏差检查：空头规格陈旧（age=%s > 阈 %s）——执行拒判", now.Sub(f.Ts).Round(time.Second), s.swapFactMaxAge)
+			}
+		}
+	}
 
 	// 列 OPEN 持仓
 	positions, err := s.store.ListPositions(ctx, "OPEN", 50, 0)
@@ -132,8 +147,11 @@ func (s *Service) checkSwapDeviationGate(ctx context.Context, canonical, venueBu
 }
 
 // SetSwapDeviationGatePct D-182 S4：注入 swap 偏差拦截阈值（手动入口同源）。
+// SetSwapFactMaxAge D-604 N1：facts 龄期窗（engine discover 侧同源键
+// NOX_SWAP_FACT_MAX_AGE——装配位同注，零值=禁用保旧行为）。
 // ≤0 = 禁用（默认，回退旧行为）。main 从 cfg.SwapDeviationGatePct 注入。
 func (s *Service) SetSwapDeviationGatePct(pct float64) { s.swapDeviationGatePct = pct }
+func (s *Service) SetSwapFactMaxAge(d time.Duration)   { s.swapFactMaxAge = d }
 
 // 占位：确保 pgstore import 被引用（leg.PriceActual 类型来自 pgstore.PositionLeg）。
 var _ = pgstore.PositionLeg{}

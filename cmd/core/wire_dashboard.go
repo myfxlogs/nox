@@ -20,6 +20,7 @@ import (
 	"nox/internal/platform/safego"
 	"nox/internal/portfolio/budget"
 	"nox/internal/research/explorer"
+	"nox/internal/research/oppmatch"
 	"nox/internal/review/deptreport"
 	"nox/internal/review/kbreport"
 	"nox/internal/store/pgstore"
@@ -60,6 +61,8 @@ func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *
 	dashSvc.SetEnvironment(cfg.Environment)                                     // D-159 W1a I6：手动入口同源
 	dashSvc.SetLiveTrade(cfg.LiveTrade)                                         // D-159 W6a S2：LIVE 人工开关手动入口同源
 	dashSvc.SetSwapDeviationGatePct(cfg.SwapDeviationGatePct)                   // D-182 S4：swap 偏差拦截手动入口同源
+	dashSvc.SetSwapFactMaxAge(cfg.MTData.SwapFactMaxAge)                        // D-604 N1：deviation 闸 facts 龄期（discover 同源键）
+	oppmatch.SetDelegateTickMaxAge(cfg.LegTickWindow)                           // D-604 N2：delegate 真金 sizing 判价窗（残腿窗同源）
 	dashSvc.SetLegMinLots(func(venueKey, venueSymbol string) (float64, bool) {  // D-061 量规格预检
 		venue := keydomain.BareOf(venueKey)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

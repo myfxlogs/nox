@@ -3,6 +3,7 @@ package engine
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"nox/internal/data/fact"
 )
@@ -23,10 +24,26 @@ type FactCache struct {
 	tradeMode map[string]map[string]int64
 	isReal    map[string]*bool // D-178：venue:type → *bool（nil=未知）
 
-	snapFunding atomic.Pointer[map[string]map[string]float64]
-	snapSwap    atomic.Pointer[map[string]map[string][2]float64]
-	snapTrade   atomic.Pointer[map[string]map[string]int64]
-	snapReal    atomic.Pointer[map[string]*bool]
+	// D-604 N3：funding/swap 惰性判龄——at 映射随值快照原子化（同 snap* 族
+	// 读径 Load 指针零锁，禁裸读 map=与 UpdateFacts 并发 map 读写 fatal 病灶；
+	// 退回㉔①修）。minAt 存原子值（unix nano；0=未初始化）。
+	fundingAt, swapAt map[string]map[string]time.Time
+	minFAt, minSAt    atomic.Int64 // unix nano；0=未初始化
+	fundingMaxAge     atomic.Int64 // time.Duration 纳秒，0=禁用
+	swapMaxAge        atomic.Int64
+
+	snapFunding   atomic.Pointer[map[string]map[string]float64]
+	snapSwap      atomic.Pointer[map[string]map[string][2]float64]
+	snapTrade     atomic.Pointer[map[string]map[string]int64]
+	snapReal      atomic.Pointer[map[string]*bool]
+	snapFundingAt atomic.Pointer[map[string]map[string]time.Time]
+	snapSwapAt    atomic.Pointer[map[string]map[string]time.Time]
+}
+
+// SetAgeGates 惰性判龄窗（cmd/core 装配——窗值与 discover/scan 侧同源注入）。
+func (fc *FactCache) SetAgeGates(fundingMaxAge, swapMaxAge time.Duration) {
+	fc.fundingMaxAge.Store(int64(fundingMaxAge))
+	fc.swapMaxAge.Store(int64(swapMaxAge))
 }
 
 func NewFactCache() *FactCache {
@@ -35,6 +52,8 @@ func NewFactCache() *FactCache {
 		swap:      make(map[string]map[string][2]float64),
 		tradeMode: make(map[string]map[string]int64),
 		isReal:    make(map[string]*bool),
+		fundingAt: make(map[string]map[string]time.Time),
+		swapAt:    make(map[string]map[string]time.Time),
 	}
 	fc.rebuildAll()
 	return fc
@@ -49,8 +68,13 @@ func (fc *FactCache) UpdateFacts(facts []fact.Fact) {
 		case fact.KindFunding:
 			if fc.funding[f.Symbol] == nil {
 				fc.funding[f.Symbol] = make(map[string]float64)
+				fc.fundingAt[f.Symbol] = make(map[string]time.Time)
 			}
 			fc.funding[f.Symbol][f.Venue] = f.Value
+			fc.fundingAt[f.Symbol][f.Venue] = f.Ts
+			if m := fc.minFAt.Load(); m == 0 || f.Ts.UnixNano() < m {
+				fc.minFAt.Store(f.Ts.UnixNano())
+			}
 			dirtyF = true
 		case fact.KindSwapLong, fact.KindSwapShort:
 			if fc.swap[f.Symbol] == nil {
@@ -63,6 +87,13 @@ func (fc *FactCache) UpdateFacts(facts []fact.Fact) {
 				entry[1] = f.Value
 			}
 			fc.swap[f.Symbol][f.Venue] = entry
+			if fc.swapAt[f.Symbol] == nil {
+				fc.swapAt[f.Symbol] = make(map[string]time.Time)
+			}
+			fc.swapAt[f.Symbol][f.Venue] = f.Ts
+			if m := fc.minSAt.Load(); m == 0 || f.Ts.UnixNano() < m {
+				fc.minSAt.Store(f.Ts.UnixNano())
+			}
 			dirtyS = true
 		case fact.KindTradeMode:
 			if fc.tradeMode[f.Symbol] == nil {
@@ -75,9 +106,11 @@ func (fc *FactCache) UpdateFacts(facts []fact.Fact) {
 	// 写时重建只读快照（写频率=WS 批/h 级，远低于帧率读）。
 	if dirtyF {
 		fc.snapFunding.Store(ptrOf(clone2(fc.funding)))
+		fc.snapFundingAt.Store(ptrOf(clone2(fc.fundingAt)))
 	}
 	if dirtyS {
 		fc.snapSwap.Store(ptrOf(clone2(fc.swap)))
+		fc.snapSwapAt.Store(ptrOf(clone2(fc.swapAt)))
 	}
 	if dirtyT {
 		fc.snapTrade.Store(ptrOf(clone2(fc.tradeMode)))
@@ -115,16 +148,56 @@ func (fc *FactCache) rebuildAll() {
 	fc.snapSwap.Store(ptrOf(clone2(fc.swap)))
 	fc.snapTrade.Store(ptrOf(clone2(fc.tradeMode)))
 	fc.snapReal.Store(ptrOf(clone1(fc.isReal)))
+	fc.snapFundingAt.Store(ptrOf(clone2(fc.fundingAt)))
+	fc.snapSwapAt.Store(ptrOf(clone2(fc.swapAt)))
 }
 
 // FundingFacts 只读快照：canonical → venue → 年化（禁修改返回值）。
+// D-604 N3 惰性判龄：minAt 未超龄=直返快照零扫描；超龄=逐键滤（写侧 at 伴随）。
 func (fc *FactCache) FundingFacts() map[string]map[string]float64 {
-	return *fc.snapFunding.Load()
+	snap := *fc.snapFunding.Load()
+	maxAge := time.Duration(fc.fundingMaxAge.Load())
+	minAt := fc.minFAt.Load()
+	if maxAge <= 0 || minAt == 0 || time.Since(time.Unix(0, minAt)) <= maxAge {
+		return snap
+	}
+	at := *fc.snapFundingAt.Load() // 只读快照——零锁零竞争（同 snap 族）
+	out := map[string]map[string]float64{}
+	for sym, inner := range snap {
+		for v, val := range inner {
+			if time.Since(at[sym][v]) <= maxAge {
+				if out[sym] == nil {
+					out[sym] = map[string]float64{}
+				}
+				out[sym][v] = val
+			}
+		}
+	}
+	return out
 }
 
 // SwapFacts 只读快照：canonical → venue → [long, short]（禁修改返回值）。
+// D-604 N3 惰性判龄同 FundingFacts（swap 窗独立）。
 func (fc *FactCache) SwapFacts() map[string]map[string][2]float64 {
-	return *fc.snapSwap.Load()
+	snap := *fc.snapSwap.Load()
+	maxAge := time.Duration(fc.swapMaxAge.Load())
+	minAt := fc.minSAt.Load()
+	if maxAge <= 0 || minAt == 0 || time.Since(time.Unix(0, minAt)) <= maxAge {
+		return snap
+	}
+	at := *fc.snapSwapAt.Load() // 只读快照——零锁零竞争
+	out := map[string]map[string][2]float64{}
+	for sym, inner := range snap {
+		for v, val := range inner {
+			if time.Since(at[sym][v]) <= maxAge {
+				if out[sym] == nil {
+					out[sym] = map[string][2]float64{}
+				}
+				out[sym][v] = val
+			}
+		}
+	}
+	return out
 }
 
 // TradeModes 只读快照：canonical → venueKey → mode（禁修改返回值）。

@@ -91,6 +91,13 @@ func main() {
 	alertCooler := newAlertCooler()                                                // D-301c S2：告警同指纹冷却单实例，四处注入点共享透传
 	// 5a. CEX 报价 → QuoteBus（WS+轮询装配已拆 wire_quotes.go，D-366 S2 同 wire_* 先例）
 	factCache := engine.NewFactCache()
+	// D-604 N3：funding/swap 惰性判龄窗——同源既有 cfg 键；funding 键 env 缺省 0
+	// （退回㉔②：缺省 24h 在消费侧装配 fallback——同款复刻禁生产哑火）。
+	fundingMaxAge := cfg.UniverseFundingMaxAge
+	if fundingMaxAge <= 0 {
+		fundingMaxAge = 24 * time.Hour // scan.UniverseFundingMaxAge 同款缺省
+	}
+	factCache.SetAgeGates(fundingMaxAge, cfg.MTData.SwapFactMaxAge)
 	if isRealMap, err := st.ListVenueIsReal(ctx); err != nil { // D-178：统一 is_real 映射（CFD+CEX），检测层 fail-open
 		log.Printf("[main] ListVenueIsReal failed (fail-open): %v", err)
 	} else {
