@@ -104,3 +104,53 @@ func TestPitGate_InsertRejectExemptDisable(t *testing.T) {
 		}
 	}
 }
+
+// TestDisabledCombosOpenPositions D-599 锚：摘牌组合的 OPEN 持仓在平仓触发集。
+func TestDisabledCombosOpenPositions(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	// enabled=false 组合+OPEN 持仓→在集；enabled=true 组合持仓→不在集
+	if _, err := st.Pool().Exec(ctx, `
+		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_sell,
+			enabled, simulated, note, max_gross_usd, source, sizing_mode) VALUES
+		('CLOSEA','CLOSEB','gate','binance',false,false,'摘牌',100,'manual_seed','fixed'),
+		('CLOSEC','CLOSED','gate','binance',true,false,'活',100,'manual_seed','fixed')`); err != nil {
+		t.Fatal(err)
+	}
+	// 持仓行（positions+position_legs）
+	var pid1, pid2 int64
+	for _, canon := range []string{"CLOSEA", "CLOSEC"} {
+		var pid int64
+		if err := st.Pool().QueryRow(ctx,
+			`INSERT INTO positions (opportunity_id, type, status, opened_at) VALUES ($1,'XASSET_CARRY','OPEN',now()) RETURNING id`,
+			"test-"+canon).Scan(&pid); err != nil {
+			t.Fatal(err)
+		}
+		if canon == "CLOSEA" {
+			pid1 = pid
+		} else {
+			pid2 = pid
+		}
+		if _, err := st.Pool().Exec(ctx,
+			`INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, status)
+			VALUES ($1,1,'OPEN','gate','perp',$2,'BUY',1,100,'FILLED')`, pid, canon); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids, err := st.DisabledCombosOpenPositions(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var has1, has2 bool
+	for _, id := range ids {
+		if id == pid1 {
+			has1 = true
+		}
+		if id == pid2 {
+			has2 = true
+		}
+	}
+	if !has1 || has2 {
+		t.Fatalf("摘牌组合持仓在集/活组合持仓不在集：got=%v pid1=%v pid2=%v", ids, has1, has2)
+	}
+}

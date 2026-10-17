@@ -187,8 +187,8 @@ func runServices(ctx context.Context, cancel context.CancelFunc, cfg *config.Con
 		SwapArbComboLossWindowDays: cfg.SwapArbComboLossWindowDays, // D-256-A S4：止损计数回看窗口
 		SwapArbRevivalBps:          cfg.SwapArbRevivalBps,          // D-256-A S5：复活扳机告警阈值
 	}, st, dashSvc, oppTopic, qbus)
-	// D-087 §3.2：注入 settlement.Settle 依赖 + 淘汰判定函数 + 风险族解析器（D-256-A S2）
 	atEngine.SetSettleDeps(settleDeps, newDBEliminator(st), lifecycle.FamilyResolverAdapter, newElimHearing(st, cfg))
+	atEngine.ClosePositionFn = pipeline.ClosePosition // D-599：armed 摘牌平仓钩（pipeline 同函数在位）
 	// D-004 P1#2：平仓可平性闸 MT5 trade_mode 即时探针——经 execReg 取 TradeModeProber executor（SymbolParams 直查非缓存）。
 	atEngine.SetTradeModeProberResolver(func(vk string) exec.TradeModeProber {
 		if exe, ok := execReg.Get(vk); ok {

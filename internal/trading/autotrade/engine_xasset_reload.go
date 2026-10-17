@@ -33,6 +33,17 @@ func (e *Engine) ReloadXAssetAllowCombos(ctx context.Context) error {
 	if n, err := e.store.RetireCombosMissingVenue(ctx); err == nil && n > 0 {
 		log.Printf("[whitelist] venue 退役: %d 组合自动摘牌（broker_accounts+exchange_configs 双簿消失）", n)
 	}
+	// D-599 armed 平仓腿：被摘/被坑组合若在持仓 → 双腿同步平仓触发
+	// （退出动作不落=disabled 组合持仓留在持仓位裸跑是禁线坑）。
+	if e.ClosePositionFn != nil {
+		if pids, err := e.store.DisabledCombosOpenPositions(ctx); err == nil {
+			for _, pid := range pids {
+				if cerr := e.ClosePositionFn(ctx, pid); cerr != nil {
+					log.Printf("[xasset-close] 平仓 pos#%d 败: %v（处置轨兜底）", pid, cerr)
+				}
+			}
+		}
+	}
 	rows, err := e.store.LoadXAssetAllowCombos(ctx, e.cfg.Environment)
 	if err != nil {
 		return fmt.Errorf("reload xasset allow combos: %w", err)
