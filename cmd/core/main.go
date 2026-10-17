@@ -91,6 +91,9 @@ func main() {
 	alertCooler := newAlertCooler()                                                // D-301c S2：告警同指纹冷却单实例，四处注入点共享透传
 	// 5a. CEX 报价 → QuoteBus（WS+轮询装配已拆 wire_quotes.go，D-366 S2 同 wire_* 先例）
 	factCache := engine.NewFactCache()
+	// D-604 N3：funding/swap 惰性判龄窗——同源既有 cfg 键（NOX_UNIVERSE_FUNDING_MAX_AGE/
+	// NOX_SWAP_FACT_MAX_AGE 单源禁新字面量）；0=禁用保旧行为。
+	factCache.SetAgeGates(cfg.UniverseFundingMaxAge, cfg.MTData.SwapFactMaxAge)
 	if isRealMap, err := st.ListVenueIsReal(ctx); err != nil { // D-178：统一 is_real 映射（CFD+CEX），检测层 fail-open
 		log.Printf("[main] ListVenueIsReal failed (fail-open): %v", err)
 	} else {

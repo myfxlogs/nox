@@ -28,6 +28,13 @@ const (
 	delegatePerDayMax = 1                   // 日批上限
 )
 
+// delegateTickMaxAge D-604 N2：真金 sizing 判价窗（cmd/core 装配注
+// cfg.LegTickWindow 同源——禁新字面量；0=禁用保旧行为）。
+var delegateTickMaxAge time.Duration
+
+// SetDelegateTickMaxAge cmd/core 装配注入（同 exec.SetLegTickWindow 先例）。
+func SetDelegateTickMaxAge(d time.Duration) { delegateTickMaxAge = d }
+
 // delegateGraduations 委任放行主件（runLifecycle 尾挂）。
 func delegateGraduations(ctx context.Context, st *pgstore.Store) {
 	if GradDelegateReload == nil {
@@ -94,9 +101,9 @@ func delegatePaperEligible(p *pgstore.PaperSpotCarry, now time.Time) bool {
 
 // delegateApprove 写白名单组合（qty=QtyUSD/现价——现价缺→fail-closed 不批）+委任落账+warn 留痕。
 func delegateApprove(ctx context.Context, st *pgstore.Store, g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry) bool {
-	px, ok := st.LatestTickMid(ctx, g.VenueA, g.Symbol)
+	px, ok := st.LatestTickMidWithin(ctx, g.VenueA, g.Symbol, delegateTickMaxAge)
 	if !ok || px <= 0 {
-		log.Printf("[delegate] grad#%d %s@%s 现价缺→不批（fail-closed）", g.ID, g.Symbol, g.VenueA)
+		log.Printf("[delegate] grad#%d %s@%s 现价缺/陈旧→不批（fail-closed·D-604 N2 判价窗）", g.ID, g.Symbol, g.VenueA)
 		return false
 	}
 	qty := p.QtyUSD / px

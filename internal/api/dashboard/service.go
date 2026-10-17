@@ -231,6 +231,7 @@ type Service struct {
 	// D-182 S4：swap 偏差拦截阈值（手动入口同源，与 autotrade.Gate.SwapDeviationGatePct 对齐）。
 	// ≤0 = 禁用（默认）。main 从 cfg.SwapDeviationGatePct 注入。
 	swapDeviationGatePct float64
+	swapFactMaxAge       time.Duration // D-604 N1：deviation 执行闸 facts 龄期窗（discover 侧同源注入）
 
 	// D-175：venue→alias 缓存（main 启动时加载 ListAccountAliases 注入）。
 	// oppToProto 热路径读此 map 填 alias_buy/alias_sell，避免每条机会查 DB。

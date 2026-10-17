@@ -236,21 +236,6 @@ func (s *Store) FundingPredWindow(ctx context.Context, venue, symbol string, sin
 	return out, rows.Err()
 }
 
-// LatestTickMid 指定 venue+symbol 最近 bid/ask 中间价（D-359 TRX USD 价三级 fallback 末级）。
-// 补 venue 过滤——同 canonical 多 venue 并行采样时取错 venue 价即脏锚。
-// 无行/非正价 → false（诚实缺，不猜）。
-func (s *Store) LatestTickMid(ctx context.Context, venue, symbol string) (float64, bool) {
-	var v float64
-	err := s.pool.QueryRow(ctx, `
-		SELECT (bid + ask) / 2 FROM ticks
-		WHERE venue = $1 AND symbol = $2 AND bid > 0 AND ask > 0
-		ORDER BY ts DESC LIMIT 1`, venue, symbol).Scan(&v)
-	if err != nil || v <= 0 {
-		return 0, false
-	}
-	return v, true
-}
-
 // ErrNoFactsInWindow D-412 F3：窗口内零样本（调用方 fail-closed 不产行——既有语义）。
 var ErrNoFactsInWindow = errors.New("facts: no samples in window")
 
