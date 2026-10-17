@@ -72,6 +72,10 @@ func redeemPitBlocks(pits []pgstore.VenueReject, now time.Time) (string, map[str
 }
 
 func (e *Executor) redeemShortfall(ctx context.Context, asset string, need float64) (float64, []string, error) {
+	// D-596 三修：赎回幂等键补事件唯一段——runNonce 每轮 redeemShortfall 一次；
+	// 同轮内 e.redeem 重试撞同 external_id（幂等不双记），新轮赎同产品不丢腿
+	// （前版 earn-red:{productID}:{asset} 同产品二赎腿被幂等吃掉=病灶实锤）。
+	runNonce := e.nowOr().UnixNano()
 	// D-255 op=earn_redeem 坑表；粒度修——|p=<pid> 签名只抑该产品同败因重放，
 	// 尘额坑不再挡全径；无后缀坑仍 op 级抑。读败 fail-open——不堵补缺径。
 	var prodBlocked map[string]bool
@@ -128,7 +132,7 @@ func (e *Executor) redeemShortfall(ctx context.Context, asset string, need float
 		}
 		// D-596 写侧划转记账：赎回成功→transfer（earn→spot）。
 		e.ioTransfer(ctx, "binance", "USDT", amt, "earn", "spot",
-			fmt.Sprintf("earn-red:%s:%s", p.ProductID, asset), "")
+			fmt.Sprintf("earn-red:%s:%s:%d", p.ProductID, asset, runNonce), "")
 		done += amt
 	}
 	return done, notes, nil
