@@ -7,7 +7,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -186,25 +185,6 @@ func mutatingRows() []Evidence {
 		out = append(out, Evidence{RPC: rpc, Status: "mutating-skipped", ErrCode: "真户禁跑（禁线）——未实测如实缺"})
 	}
 	return out
-}
-
-// protoKeyFields 顶层非空字段集（protoreflect 泛化——免逐 RPC 手写 keyfields）。
-func protoKeyFields(m interface {
-	ProtoReflect() interface{ IsValid() bool }
-}) []string {
-	return nil // 占位——实现见 evidence.go reflectFields
-}
-
-func marshalSample(v any) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return ""
-	}
-	s := string(b)
-	if len(s) > 200 {
-		s = s[:200]
-	}
-	return s
 }
 
 func truncErr(e *mt5pb.Error) string {
