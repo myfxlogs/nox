@@ -263,3 +263,73 @@ func TestWSRunner_DataIdleWatchdog(t *testing.T) {
 		t.Fatalf("数据缺席未被看门狗断开重连: upgrades=%d want ≥2", got)
 	}
 }
+
+// TestWSRunner_ResubscribeOnReconnect D-599：连接被杀→重拨→InitialSubs
+// 帧重发断言（断流死因根治锚——重订阅路径零回归）。
+func TestWSRunner_ResubscribeOnReconnect(t *testing.T) {
+	frames := make(chan []byte, 64)
+	n := &atomic.Int64{}
+	up := websocket.Upgrader{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := up.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		n.Add(1)
+		defer conn.Close()
+		// 收 2 帧订阅后即 Close 杀本连接——模拟对端强制断连，客户端应重拨
+		// 并重发 InitialSubs（D-599 重订阅回归锚）。
+		got := 0
+		for {
+			_, data, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			select {
+			case frames <- data:
+			default:
+			}
+			got++
+			if got >= 2 {
+				return // 订阅收齐即杀——defer conn.Close() 断连
+			}
+		}
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	spec := wsRunnerSpec("ws"+strings.TrimPrefix(srv.URL, "http"), frames)
+	go RunWS(ctx, spec)
+
+	// 首轮订阅帧到达 → 服务端 conn 因 client 读循环 errir 杀（ReadMessage 阻塞
+	// 里 close(done) 由远端死连接触发）——断言至少两连接重拨（n>=2）且帧序列
+	// 含两轮订阅帧。
+	deadline := time.Now().Add(3500 * time.Millisecond)
+	for time.Now().Before(deadline) && n.Load() < 2 {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if n.Load() < 2 {
+		t.Fatalf("reconnect not observed: conns=%d", n.Load())
+	}
+	// 断言两轮 SUB 帧至少各到一次（重订阅帧重发实证）。
+	var got1, got2 int
+	for f := range frames {
+		s := string(f)
+		if strings.Contains(s, `"id":1`) {
+			got1++
+		}
+		if strings.Contains(s, `"id":2`) {
+			got2++
+		}
+		if n.Load() >= 2 && got1 >= 2 && got2 >= 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+	}
+	if got1 < 2 || got2 < 2 {
+		t.Fatalf("resubscribe frames insufficient: id1=%d id2=%d", got1, got2)
+	}
+}
