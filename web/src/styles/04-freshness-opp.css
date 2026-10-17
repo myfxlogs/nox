@@ -110,14 +110,10 @@
    叙事长卡（毕业/机会多行 narrative）保持单列不进网格 —— */
 .opp-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* 业主定案 10-17②：卡宽自锁 ~200px（原四列全宽卡 ≈422px 太肥——两卡宽装四卡）
+     auto-fill+minmax=任意屏宽自适应密度，卡永不窄于 200px。 */
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 8px;
-}
-@media (max-width: 1200px) {
-  .opp-grid { grid-template-columns: repeat(3, 1fr); }
-}
-@media (max-width: 900px) {
-  .opp-grid { grid-template-columns: repeat(2, 1fr); }
 }
 .opp-grid .opp-card {
   margin-bottom: 0;
@@ -143,8 +139,9 @@
 .opp-grid .pos-good { color: var(--good); }
 .opp-grid .pos-crit { color: var(--critical); }
 
-/* ⏱ 分型着色（12→16px 可辨；活=绿/静=灰/陈=红——state 显示映射非判据） */
+/* ⏱ 分型着色（活=绿/静=灰/陈=红——state 显示映射非判据）；
+   字号单源=12-nox-shell.css .pipe-flow .pipe-ts（此处曾 16px 被 12 号文件
+   后加载 10px 覆盖=修了个寂寞的实拍，勿再在此重复声明）。 */
 .pipe-ts-live { color: var(--good); }
 .pipe-ts-stale { color: var(--ink-3); }
 .pipe-ts-down { color: var(--critical); }
-.pipe-flow .pipe-ts { font-size: 16px; }

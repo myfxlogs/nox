@@ -66,5 +66,5 @@
 .pipe-flow .pipe-card.down .fresh-dot { box-shadow: 0 0 6px var(--critical); }
 .pipe-flow .pipe-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .pipe-flow .pipe-head .nm { font-size: 13px; font-weight: 600; color: var(--ink); }
-.pipe-flow .pipe-ts { font-size: 10px; color: var(--ink-3); margin-left: auto; }
+.pipe-flow .pipe-ts { font-size: 18px; color: var(--ink-3); margin-left: auto; } /* ⏱ 10→18px：16px 会被本行旧值覆盖路径复发的教训在 04 注记 */
 .pipe-flow .pipe-line { font-size: 11px; color: var(--ink-3); line-height: 1.35; }
