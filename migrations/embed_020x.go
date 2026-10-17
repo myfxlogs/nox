@@ -127,3 +127,6 @@ var ComboSourceSQL string // D-584：armed 白名单出处约束（source CHECK+
 
 //go:embed 1040_paper_first_gate.sql
 var PaperFirstGateSQL string // D-593：全模板纸面先行不变量（payoff_class+paper_exempt_d 列）
+
+//go:embed 1042_template_autoexec.sql
+var TemplateAutoexecSQL string // D-598：承接位提案自动执行判据列（autoexec+豁免族种子）

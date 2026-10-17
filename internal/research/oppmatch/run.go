@@ -14,6 +14,10 @@ import (
 	"nox/internal/store/pgstore"
 )
 
+// AutoexecHook D-598：autoexec=true 模板提案落库即执行回派（cmd/core 装配注入
+// dciexec.Executor.GoProposal；nil=跳过——含配置库未挂面的安全回落）。
+var AutoexecHook func(ctx context.Context, proposalID int64) (string, error)
+
 // dciProposalVenues dci 族提案 venue 枚举——执行轨覆盖集各出独立提案
 // （fin_cex_dci_quote venue 维度；gate.DCIExecVenues 单源衍生排序定序）。
 var dciProposalVenues = sortedVenues(gate.DCIExecVenues)
@@ -167,6 +171,17 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 				if err != nil {
 					log.Printf("[oppmatch] proposal row %s@%s: %v", r.TemplateID, venue, err)
 					continue
+				}
+				// D-598：autoexec 模板提案落库即执行（豁免族=委员会级常设授权——
+				// 提案只是记账/透出载体；执行结果照常 executed/告警透出）。
+				if created && AutoexecHook != nil {
+					if ae, aerr := st.TemplateAutoexec(ctx, r.TemplateID); aerr == nil && ae {
+						if msg, gerr := AutoexecHook(ctx, pid); gerr != nil {
+							log.Printf("[oppmatch] autoexec proposal#%d: %v", pid, gerr)
+						} else {
+							log.Printf("[oppmatch] autoexec proposal#%d: %s", pid, msg)
+						}
+					}
 				}
 				card := evalProposal(ctx, st, rv, pid) // D-258 M4.1：一提案一卡（每扫一拍复算）
 				streak, uerr := st.UpsertOppEval(ctx, card)

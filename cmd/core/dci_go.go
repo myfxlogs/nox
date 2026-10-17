@@ -12,6 +12,7 @@ import (
 	"nox/internal/platform/httpx"
 	"nox/internal/platform/safego"
 	"nox/internal/portfolio/lifecycle"
+	"nox/internal/research/oppmatch"
 	"nox/internal/review/sysretro"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/dciexec"
@@ -22,6 +23,7 @@ import (
 func buildDCIExecutor(ctx context.Context, st *pgstore.Store) *dciexec.Executor {
 	ex := &dciexec.Executor{Store: st, Client: httpx.Client()}
 	ex.Now = time.Now
+	oppmatch.AutoexecHook = ex.GoProposal      // D-598：autoexec 模板提案落库即执行
 	ex.KBDir = analyst.KnRoot + "/docs/经验库/条目" // 拒单消费闸：坑签名→条目教训附告警尾
 	exchs, err := st.ListExchangeConfigs(ctx)
 	if err == nil {
