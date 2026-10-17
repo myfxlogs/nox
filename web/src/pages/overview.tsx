@@ -14,7 +14,6 @@ import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
 import { Modal } from "../components/Modal";
 import { ORDER_KIND_CN, ORDER_STATUS_CN, untilCN } from "../components/orders_fmt";
-import { FreshDot } from "../components/FreshDot";
 import type { FreshDot as FreshDotData } from "../components/freshness";
 
 // STAGE_CN 十段工序 key→中文名（显示映射非判据；新段 key 补表行）
@@ -174,12 +173,16 @@ export default function OverviewPage() {
             return (
               <div key={st.key} className={`pipe-card ${tone}`} title={st.narrative + (st.waitReason ? "｜" + st.waitReason : "") + (st.error ? "｜" + st.error : "")}>
                 <div className="pipe-head">
-                  <FreshDot dot={{ status: tone, title: st.state }} />
+                  {/* 业主定案 10-17：边框色单载状态——FreshDot 删（组件留他面），
+                      证据 icon 移左端放大；state 语义落 icon title（点删后悬停可查） */}
+                  <span className={`pipe-ev pipe-ts-${tone}`} title={st.state + "｜liveness 证据分型：" + st.evidenceKind}>
+                    {st.evidenceKind === "beat" ? "⏱" : st.evidenceKind === "event" ? "⚡" : "—"}
+                  </span>
                   <span className="nm">{STAGE_CN[st.key] ?? st.key}</span>
-                  <span className={`pipe-ts pipe-ts-${tone}`} title={"liveness 证据分型：" + st.evidenceKind}>{st.evidenceKind === "beat" ? "⏱" : st.evidenceKind === "event" ? "⚡" : "—"}</span>
                   {st.lastEventUnix > 0 && (
-                    <span className="pipe-ts">
-                      {new Date(Number(st.lastEventUnix) * 1000).toISOString().slice(5, 16).replace("T", " ")}
+                    /* HH:MM 缩写（MM-DD HH:MM@18px 占幅是竖排挤爆原罪）——全时戳 title 兜底 */
+                    <span className="pipe-clock" title={new Date(Number(st.lastEventUnix) * 1000).toISOString().slice(5, 16).replace("T", " ") + "Z"}>
+                      {new Date(Number(st.lastEventUnix) * 1000).toISOString().slice(11, 16)}
                     </span>
                   )}
                 </div>

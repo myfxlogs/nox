@@ -140,9 +140,9 @@
 .opp-grid .pos-good { color: var(--good); }
 .opp-grid .pos-crit { color: var(--critical); }
 
-/* ⏱ 分型着色（活=绿/静=灰/陈=红——state 显示映射非判据）；
-   字号单源=12-nox-shell.css .pipe-flow .pipe-ts（此处曾 16px 被 12 号文件
-   后加载 10px 覆盖=修了个寂寞的实拍，勿再在此重复声明）。 */
+/* ⏱ 分型着色（活=绿/静=灰/陈=红——state 显示映射非判据；类挂 .pipe-ev icon）；
+   字号单源=12-nox-shell.css .pipe-flow .pipe-ev/.pipe-clock（此处曾 16px 被 12 号
+   文件后加载覆盖=修了个寂寞的实拍，勿再在此重复声明）。 */
 .pipe-ts-live { color: var(--good); }
 .pipe-ts-stale { color: var(--ink-3); }
 .pipe-ts-down { color: var(--critical); }

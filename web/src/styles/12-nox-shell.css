@@ -60,11 +60,13 @@
 .pipe-flow .pipe-card.live { border-color: var(--good); border-left-width: 4px; }
 .pipe-flow .pipe-card.stale { border-color: var(--warn); border-left-width: 4px; }
 .pipe-flow .pipe-card.down { border-color: var(--critical); border-left-width: 4px; }
-.pipe-flow .pipe-card .fresh-dot { width: 12px; height: 12px; }
-.pipe-flow .pipe-card.live .fresh-dot { box-shadow: 0 0 6px var(--good); }
-.pipe-flow .pipe-card.stale .fresh-dot { box-shadow: 0 0 6px var(--warn); }
-.pipe-flow .pipe-card.down .fresh-dot { box-shadow: 0 0 6px var(--critical); }
 .pipe-flow .pipe-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-.pipe-flow .pipe-head .nm { font-size: 13px; font-weight: 600; color: var(--ink); }
-.pipe-flow .pipe-ts { font-size: 18px; color: var(--ink-3); margin-left: auto; } /* ⏱ 10→18px：16px 会被本行旧值覆盖路径复发的教训在 04 注记 */
+.pipe-flow .pipe-head .nm { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+/* 工序卡标题件重构（业主令 10-17）：fresh-dot 删（边框色单载状态，死 CSS 四条随清），
+   证据 icon 移左端放大——20px×line-height:1=头行高 20px，兼容防抖 70px 定高
+   （20+4+2×14.85+16≈69.7≤70；22px 会破）。字号单源仍在 12（04 勿重复声明）。 */
+.pipe-flow .pipe-ev { font-size: 20px; line-height: 1; color: var(--ink-3); }
+/* 时戳 HH:MM 缩写右置小字（MM-DD HH:MM@18px≈100px 占幅=标题竖排挤爆原罪）；
+   nowrap 防空格折行、tabular-nums 防跳宽。 */
+.pipe-flow .pipe-clock { font-size: 11px; color: var(--ink-3); margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .pipe-flow .pipe-line { font-size: 11px; color: var(--ink-3); line-height: 1.35; }
