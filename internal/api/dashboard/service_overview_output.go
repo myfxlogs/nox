@@ -146,14 +146,23 @@ func (s *Service) appendOverviewInvested(ctx context.Context, resp *v1.GetOvervi
 
 // appendOverviewWaiting 等待面缩览：pending/unqualified 毕业行+proposed 提案行
 // （等待因=现状关键值，龄=since 起点；各面上限 5 行防淹没）。
+// overviewFundingFresh 待批卡 funding facts 龄期阈（nogate-3 残余注记 P2 票④）：
+// funding 8h 周期×3 窗——超龄行视作陈值不采用（展示面如实缺）。
+const overviewFundingFresh = 24 * time.Hour
+
 func (s *Service) appendOverviewWaiting(ctx context.Context, resp *v1.GetOverviewBundleResponse) {
+	now := time.Now()
 	const perKind = 5
 	if grads, err := filterGraduations(ctx, s, "pending", perKind); err == nil {
 		for _, g := range grads {
 			// D-604 顺手件：funding_ann 改读 facts 现值（快照列脱钩——展示面同型如实缺）。
+			// P2 票④龄期标（nogate-3 残余注记）：行龄>24h（funding 8h×3 窗）视作
+			// 陈值不采用——展示面如实缺（禁陈值当现值渲染）。
 			var liveAnn *float64
 			if frows, ferr := s.store.LatestFacts(ctx, fact.KindFunding, g.Venue, g.Symbol); ferr == nil && len(frows) > 0 {
-				liveAnn = &frows[0].Value
+				if now.Sub(frows[0].Ts) <= overviewFundingFresh {
+					liveAnn = &frows[0].Value
+				}
 			}
 			resp.Waiting = append(resp.Waiting, &v1.OverviewWaitingRow{
 				Kind:      "graduation_pending",

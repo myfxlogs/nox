@@ -78,8 +78,6 @@ type Store interface {
 	GetStrategyState(ctx context.Context, strategy string) (string, bool, error)
 	// D-286：earn 敞口闸读面——池快照（CEX 侧权益占比算）。
 	CapitalPoolSnapshots(ctx context.Context) ([]pgstore.CapitalPoolRow, error)
-	// D-523续①：单键最新快照 free_margin——流缓存零值遮蔽对拍读面。
-	LatestSnapshotFree(ctx context.Context, venue, venueType, ccy string) (float64, bool, error)
 	// D-526：σ 窗口期配置读面（dci_sigma_window_days）。
 	AppConfigInt64(ctx context.Context, key string) (int64, bool, error)
 }

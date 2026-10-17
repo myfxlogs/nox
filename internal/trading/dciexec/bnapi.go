@@ -166,20 +166,15 @@ func (e *Executor) streamAlive() bool {
 const spotStreamStaleTTL = 65 * time.Minute
 
 // streamBal 流缓存读（bus.SpotAssets；无行/化石行→false→REST 兜底）。
-// 化石判据：a) 行龄超阈；b) 值为零且快照最新行有钱（零值遮蔽对拍——快照零/缺行
-// 则零如实回传不误 REST；快照读败 fail-open 回缓存值，REST 层仍兜底精度）。
+// 化石判据=行龄超阈单判据（D-604 R2：LatestSnapshotFree 零值遮蔽对拍删——
+// 快照禁令判定径除快照；行龄阈已挡断窗旧值，行龄内零值=venue 真值如实上抛，
+// 零额申购径天然 fail-closed）。
 func (e *Executor) streamBal(ctx context.Context, asset string) (float64, bool) {
 	b, ok := bus.SpotAssets.Get("binance:spot", asset)
 	if !ok || e.Now().Sub(b.At) > spotStreamStaleTTL {
 		return 0, false
 	}
-	v := b.Free + b.Locked
-	if v == 0 && e.Store != nil {
-		if sf, has, err := e.Store.LatestSnapshotFree(ctx, "binance", "spot", asset); err == nil && has && sf > 0 {
-			return 0, false
-		}
-	}
-	return v, true
+	return b.Free + b.Locked, true
 }
 
 // refreshOrderRef D-191-R14：申购前对选中 product_ref 实时重取 product/list——
