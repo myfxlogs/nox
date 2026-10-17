@@ -12,6 +12,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"nox/internal/store/pgstore"
@@ -19,6 +20,28 @@ import (
 
 // swapFactFresh swap facts 鲜度窗（采集小时级——24h 无新行不递陈旧值）。
 const swapFactFresh = 24 * time.Hour
+
+// MTAccountSummaryFn MT 户 equity 判定拍实拉读口（D-604 P1②：快照陈值禁入
+// 判定径——依赖注入禁 import dashboard API 面（import 方向闸），cmd/core 装配
+// Bind（venueWeekday holder 同范式）；nil/读败=fail-closed 拒入榜非降级陈值）。
+// 节流边界：同扫描拍同户去重合法（局部 map）；跨拍 TTL 缓存=变相快照禁。
+var mtEquityFnHolder struct {
+	mu sync.Mutex
+	fn func(venue string) (equity float64, ok bool)
+}
+
+// BindMTEquityFn cmd/core 装配注入。
+func BindMTEquityFn(fn func(venue string) (equity float64, ok bool)) {
+	mtEquityFnHolder.mu.Lock()
+	defer mtEquityFnHolder.mu.Unlock()
+	mtEquityFnHolder.fn = fn
+}
+
+func mtEquityFn() func(venue string) (equity float64, ok bool) {
+	mtEquityFnHolder.mu.Lock()
+	defer mtEquityFnHolder.mu.Unlock()
+	return mtEquityFnHolder.fn
+}
 
 // swapScan CFD swap 正息面扫描（RunOnce 扫描拍尾挂，零新定时器）。
 func swapScan(ctx context.Context, st *pgstore.Store) {
@@ -28,16 +51,35 @@ func swapScan(ctx context.Context, st *pgstore.Store) {
 		return
 	}
 	// venue 权益对拍（面在钱不在=equity≤0 的 MT 户如实标不递榜）。
-	pools, perr := st.CapitalPoolSnapshots(ctx)
+	// D-604 P1②：判定拍 MTAccountSummary 实拉（快照陈值禁入判定径）；同拍同户
+	// 去重（局部 map 一户一拉）；读败/未装配=fail-closed 该户拒入榜+warn 留痕。
 	eqByVenue := map[string]float64{}
-	if perr == nil {
-		for _, p := range pools {
-			if p.VenueType == "mt4" || p.VenueType == "mt5" {
-				eqByVenue[p.Venue] += p.Equity
-			}
+	inaccessible := map[string]bool{}
+	eqMu := map[string]bool{} // 同拍去重锚
+	fn := mtEquityFn()
+	for _, r := range rows {
+		if _, seen := eqMu[r.Venue]; seen {
+			continue
 		}
-	} else {
-		log.Printf("[oppmatch] swap equity pools: %v（权益缺按面在钱不在处理——不递榜）", perr)
+		eqMu[r.Venue] = true
+		if fn == nil {
+			inaccessible[r.Venue] = true
+			continue
+		}
+		if eq, ok := fn(r.Venue); ok && eq > 0 {
+			eqByVenue[r.Venue] = eq
+		} else {
+			inaccessible[r.Venue] = true
+			log.Printf("[oppmatch] swap equity %s 实拉不可得（fail-closed 拒入榜——面在钱不在/读败不降级陈值）", r.Venue)
+		}
+	}
+	if len(inaccessible) > 0 {
+		var vs []string
+		for v := range inaccessible {
+			vs = append(vs, v)
+		}
+		sort.Strings(vs)
+		log.Printf("[oppmatch] swap 榜权益实拉不可达户: %s（不递榜）", strings.Join(vs, ","))
 	}
 	side := map[string]string{"swap_long": "long", "swap_short": "short"}
 	var newKeys []string
@@ -51,7 +93,7 @@ func swapScan(ctx context.Context, st *pgstore.Store) {
 			continue
 		}
 		if eq, known := eqByVenue[r.Venue]; !known || eq <= 0 {
-			nofund[r.Venue]++ // 面在钱不在——不入榜
+			nofund[r.Venue]++ // 面在钱不在/实拉不可达——不入榜
 			continue
 		}
 		ann := r.BpsDaily * 365 / 100 // bps_daily→%/yr 粗估（口径假设注明）

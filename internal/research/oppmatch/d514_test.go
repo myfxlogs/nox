@@ -148,12 +148,16 @@ func TestD514_IdleGapScan(t *testing.T) {
 
 func TestD514_SwapScan(t *testing.T) {
 	st, ctx := d514Store(t)
-	// d514m1 户有权益；d514m0 户权益=0（面在钱不入榜）。
+	// D-604 P1②：权益=判定拍实拉（BindMTEquityFn 注入；快照面退役）——
+	// d514m1 户有权益；d514m0 户 equity=0（面在钱不入榜，fail-closed 语义同）。
+	BindMTEquityFn(func(venue string) (float64, bool) {
+		if venue == "d514m1" {
+			return 3200, true
+		}
+		return 0, false
+	})
+	t.Cleanup(func() { BindMTEquityFn(nil) })
 	for _, q := range []string{
-		`INSERT INTO fin_venue_account_snapshot (venue, venue_type, currency, balance_raw, equity_raw, fetched_at, src)
-		 VALUES ('d514m1','mt5','USD',3200,3200,now(),'ws')`,
-		`INSERT INTO fin_venue_account_snapshot (venue, venue_type, currency, balance_raw, equity_raw, fetched_at, src)
-		 VALUES ('d514m0','mt5','USD',0,0,now(),'ws')`,
 		`INSERT INTO facts (kind, venue, symbol, value, unit, ts, src) VALUES
 		 ('swap_long','d514m1','BRENT',1.46,'bps_daily',now(),'mt5'),
 		 ('swap_long','d514m0','NAS',0.25,'bps_daily',now(),'mt5'),

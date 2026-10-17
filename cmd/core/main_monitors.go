@@ -55,6 +55,7 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 	brokerMgr.SetOrderProfitKick(func(vk string) { acctMon.Kick(vk) })
 	// D-445 S0：OnOrderUpdate 余额帧 → acctMon 流缓存（白名单卡资金列兜底+加温）。
 	brokerMgr.SetAccountSink(accountSinkWithFreeMargin(ctx, st, acctMon.ObserveStreamAccount)) // D-006 S2：sink 挂 FreeMargin 双因子告警（判据在 freemargin_risk.go）
+	brokerMgr.SetDealSink(mtDealIOSink(st, brokerMgr))                                         // D-607：OnOrderUpdate Deal 事件→fin_venue_io 主径
 	safego.GoLoop("main:acctMon", func() { acctMon.Run(ctx) })
 	// 3d-P1#1b：MT 余额帧事件 → fin_venue_account_snapshot 即写（src=mt_frame，1s/venue
 	// 合流+同值不写）——cfd 键周期补写与 mt_event 双写退役；margin_guard 经 snapHook 随帧评估。

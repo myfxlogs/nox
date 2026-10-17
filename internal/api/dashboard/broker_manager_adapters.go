@@ -48,6 +48,7 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	// D-581：三 sink 拷 dispatch* bound-method 免时序——目标晚接自生效（原按值拷贝
 	// 晚于 StartAll 的 Set* 永远错过，adapter 拷到 nil 即永久丢帧）。
 	ad.AccountSink = m.dispatchAccount
+	ad.DealSink = m.dispatchDeal // D-607：OnOrderUpdate Deal 事件下沉（原 tap 弃件复得）
 	ad.PositionsSink = m.dispatchPositions
 	ad.StreamStateSink = m.dispatchStreamState
 	// D-104 P2 U2：AlertSink 须在 Connect 前注入（quoteReconnectBackoff 封顶档读此字段）。
