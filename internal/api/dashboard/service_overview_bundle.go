@@ -26,13 +26,39 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 	// principal/idle/earning 组=U 币池按 venue 拆（前端 group 过滤直渲）。
 	if nav, err := s.store.ComputeNav(ctx, now); err == nil {
 		var idle, earning float64
+		// nav 组收成 venue 级（池=venue×symbol 粒度，114 行灰尘币不可读）：
+		// USD 族 equity 同 venue 内加总（D-534 同记帐单位族）；非 USD 族池不折算——
+		// 每 venue 汇一行「其他币种 N 种」计数，跨币永不加总。
+		usdEq := map[string]float64{}
+		altN := map[string]int{}
+		var vOrder []string
 		for _, p := range nav.Pools {
 			if p.Ghost {
 				continue
 			}
+			if _, seen := usdEq[p.Venue]; !seen {
+				usdEq[p.Venue] = 0
+				vOrder = append(vOrder, p.Venue)
+			}
+			if p.Currency != "USDT" && p.Currency != "USD" {
+				altN[p.Venue]++
+				continue
+			}
+			usdEq[p.Venue] += p.Equity
+		}
+		for _, v := range vOrder {
+			sub := ""
+			if n := altN[v]; n > 0 {
+				sub = fmt.Sprintf("另含 %d 种非USD资产（原量分列见财务页）", n)
+			}
 			resp.Breakdowns = append(resp.Breakdowns, &v1.OverviewBreakdownRow{
-				Group: "nav", Label: p.Venue, Ccy: p.Currency, Amount: p.Equity, Sub: p.VenueType,
+				Group: "nav", Label: v, Ccy: "USD", Amount: usdEq[v], Sub: sub,
 			})
+		}
+		for _, p := range nav.Pools {
+			if p.Ghost {
+				continue
+			}
 			if p.Currency != "USDT" && p.Currency != "USD" {
 				continue
 			}
