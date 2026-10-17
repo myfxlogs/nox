@@ -103,7 +103,9 @@ func (e *CEXExecutor) gateGetLeverage(ctx context.Context, contract, posMarginMo
 
 // gateEffectiveLeverage 杠杆实况（U1 纯读）：dual 族按腿方向 dual_side 双 margin
 // （isolated+cross）各读一次取 min（保证金需求上界=保守，永不虚放行）；single 读
-// isolated 单次（无 dual_side 参数）。任一读败 → error（调用方 fail-closed）。
+// isolated 单次带 dual_side=dual_long——venue 语义 dual_side 与 position_mode
+// 无关恒必填（裸发=400 INVALID_PARAM_VALUE 亲证；single 户两侧同值取一侧即实况，
+// 枚举白名单只收 dual_long|dual_short——dual_both 禁发）。任一读败 → error（fail-closed）。
 func (e *CEXExecutor) gateEffectiveLeverage(ctx context.Context, contract string, mode gatePositionMode, sellLeg bool) (float64, error) {
 	dualSide := ""
 	if mode.isDual() {
@@ -126,7 +128,7 @@ func (e *CEXExecutor) gateEffectiveLeverage(ctx context.Context, contract string
 		e.warnLeverageMax(ctx, contract, eff)
 		return eff, nil
 	}
-	v, err := e.gateGetLeverage(ctx, contract, "isolated", "")
+	v, err := e.gateGetLeverage(ctx, contract, "isolated", "dual_long")
 	if err != nil {
 		return 0, err
 	}
