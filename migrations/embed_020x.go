@@ -133,3 +133,6 @@ var TemplateAutoexecSQL string // D-598：承接位提案自动执行判据列�
 
 //go:embed 1043_combo_pitgate.sql
 var ComboPitGateSQL string // D-587④：armed 坑签名闸（pit_exempt_d 豁免引用列）
+
+//go:embed 1044_combo_kill_trigger.sql
+var ComboKillTriggerSQL string // kill 扳机判据列（net_pnl+连败双闸 NULL 默认） // D-587④：armed 坑签名闸（pit_exempt_d 豁免引用列）

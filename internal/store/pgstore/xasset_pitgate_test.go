@@ -165,3 +165,94 @@ func TestDisabledCombosOpenPositions(t *testing.T) {
 		t.Fatalf("双腿配对谓词：pid1(双中)=%v pid2(活)=%v pid3(共腿)=%v ids=%v", has1, has2, has3, ids)
 	}
 }
+
+// TestKillTrigger D-599 续锚：判据落表——净 PnL 超阈摘/连败摘/活组合不摘。
+func TestKillTrigger(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	// 三种组合：净 PnL 闸行（阈 -50）/连败闸行（阈 2）/无判据行
+	if _, err := st.Pool().Exec(ctx, `
+		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_sell,
+			enabled, simulated, note, max_gross_usd, source, sizing_mode, kill_net_pnl_usd, kill_loss_streak)
+		VALUES
+		('KILLA','KILLB','gate','binance',true,false,'pnl闸',100,'manual_seed','fixed',-50,NULL),
+		('KILLC','KILLD','gate','binance',true,false,'连败闸',100,'manual_seed','fixed',NULL,2),
+		('KILLE','KILLF','gate','binance',true,false,'无判据',100,'manual_seed','fixed',NULL,NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	// 持仓+结算链：KILLA 组合仓 3 笔净亏结算（累计 -80 < -50 阈+连败 3）；
+	// KILLC 组合仓 2 笔连续净亏（连败 2 达阈）
+	// 一仓一结算（pkey=position_id）——连败=同组合多仓位连续净亏
+	newPosKill := func(oppID, cb, cs string, net float64, ageDays int) {
+		var pid int64
+		if err := st.Pool().QueryRow(ctx,
+			`INSERT INTO positions (opportunity_id, type, status, opened_at) VALUES ($1,'XASSET_CARRY','CLOSED',now()) RETURNING id`,
+			oppID).Scan(&pid); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.Pool().Exec(ctx, `
+			INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, status)
+			VALUES ($1,1,'OPEN','gate','perp',$2,'BUY',1,100,'FILLED'),
+			       ($1,2,'OPEN','binance','perp',$3,'SELL',1,100,'FILLED')`, pid, cb, cs); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.Pool().Exec(ctx, `
+			INSERT INTO position_settlements (position_id, settled_at, net_realized_usd, incident_attributed)
+			VALUES ($1, now() - interval '1 day' * $2, $3, false)`, pid, ageDays, net); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// KILLA：3 仓净亏累计 -80<-50 阈（连败 3）；KILLC：2 仓连续净亏（连败 2 达阈）
+	newPosKill("kill-pnl-1", "KILLA", "KILLB", -30, 3)
+	newPosKill("kill-pnl-2", "KILLA", "KILLB", -25, 2)
+	newPosKill("kill-pnl-3", "KILLA", "KILLB", -25, 1)
+	newPosKill("kill-streak-1", "KILLC", "KILLD", -10, 2)
+	newPosKill("kill-streak-2", "KILLC", "KILLD", -5, 1)
+
+	n, err := st.DisableKillTriggeredCombos(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 打点：KILLA 判据读数
+	var dbgNet float64
+	if err := st.Pool().QueryRow(ctx, `
+		SELECT COALESCE(SUM(COALESCE(s.net_realized_usd, s.realized_usd)),0)
+		FROM position_settlements s JOIN positions p ON p.id = s.position_id
+		WHERE EXISTS (SELECT 1 FROM position_legs lb WHERE lb.position_id=p.id
+		              AND lb.phase='OPEN' AND lb.venue='gate' AND lb.symbol='KILLA')
+		  AND EXISTS (SELECT 1 FROM position_legs ls WHERE ls.position_id=p.id
+		              AND ls.phase='OPEN' AND ls.venue='binance' AND ls.symbol='KILLB')`).Scan(&dbgNet); err == nil {
+		t.Logf("KILLA dbgNet=%.2f", dbgNet)
+	} else {
+		t.Logf("dbgNet err=%v", err)
+	}
+	rows2, _ := st.Pool().Query(ctx, `SELECT canonical_buy, enabled, note FROM xasset_allow_combos WHERE canonical_buy LIKE 'KILL%'`)
+	for rows2.Next() {
+		var cb, note string
+		var en bool
+		rows2.Scan(&cb, &en, &note)
+		t.Logf("combo %s enabled=%v note=%s", cb, en, note)
+	}
+	rows2.Close()
+	if n != 2 {
+		t.Fatalf("kill 扳机摘=%d want 2（pnl 闸+连败闸）", n)
+	}
+	for _, tc := range []struct {
+		cb   string
+		want bool
+		name string
+	}{
+		{"KILLA", false, "净 PnL 超阈摘"},
+		{"KILLC", false, "连败达阈摘"},
+		{"KILLE", true, "无判据不摘"},
+	} {
+		var en bool
+		if err := st.Pool().QueryRow(ctx,
+			`SELECT enabled FROM xasset_allow_combos WHERE canonical_buy=$1`, tc.cb).Scan(&en); err != nil {
+			t.Fatal(err)
+		}
+		if en != tc.want {
+			t.Fatalf("%s: enabled=%v want %v", tc.name, en, tc.want)
+		}
+	}
+}
