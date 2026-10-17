@@ -563,3 +563,10 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：①正典=仓库顶层 `skills/`（git 跟踪，deploy_sync 随推）；②`.devin/skills`/`.claude/skills`=指向 `../skills` 的 symlink 桥（应用原生发现不断，单一真相零副本）；③AGENTS boot④与工作流引用改指正典路径，并钉「禁再往应用私有目录落项目 skill」；④新增 skill 一律落 `skills/<名>/SKILL.md`。
 - **反证锚**：若某应用 symlink 机制不可用（Windows 克隆等）——该席位走 AGENTS.md 正典路径直读（文档引用已是主道，symlink 只是发现桥）。
 - **复盘点**：下一席位（含 devin cli 旧会话）按 AGENTS 引用路径调 skill 成功。
+
+## D-606（2026-10-17 实施席）快照治理 P3 票⑤ rate limit 核算件——频度过但消费拍化不经济，范围①如实报不施工+范围③缩面待派
+
+- **核算（票面前置件，先算后动）**：现频度=cexscan 5min 扫描拍×（earn okx/binance ~2 + DCI product ~2 + spread 三所 ticker ~3-6）≈7-10 REST/拍≈2000-2900 req/day——对 venue 限额（binance sapi weight 12000/min、okx 公有 20/2s）占比 <0.01%，**rate limit 非约束**。
+- **消费拍化收益重估**：判定消费面（CexEarnAPR/DCI quotes）消费=opmatch 日频拍+执行侧实时复验（refreshOrderRef/APR 复验已在——设计稿自认「评估拍复核零变」）；spread 统计面 D-004 豁免保留主导频度。拆分后判定面拉取降 ~500×（日频化），但判定拉取占总频度占比小——**总频度降幅 <30%**；改造成本=scanOnce 判定/统计拉取分离+gate:earn 评估实拉接线，且判定陈值风险已被执行侧实时复验兜住（候选面陈值降级=排序用非闸用）。
+- **裁定**：**成本>收益，范围①消费拍化不施工（如实报——票面「核算未过=不施工」条款适用，核算结论=频度过但收益不经济）**；范围③ swap_snapshots 帧锚定独立于频度（MT swap 逐日计提正确性面）缩面保留待派；范围② 统计面豁免维持。P3 缩面后重整：票⑤′=swap_snapshots 帧锚定单件。
+- **反证锚**：若 cexscan 5min 拍被证实触发 venue 限频告警（418/429/权重告警在案）或判定消费面陈表致候选错序实锤——本裁定塌，消费拍化重启。
