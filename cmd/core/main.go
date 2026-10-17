@@ -113,6 +113,9 @@ func main() {
 	// income/IO 采集器与扫描器批量装配提取（D-474a 保 main() ≤300 行门禁）
 	execReg := exec.NewRegistry()
 	brokerMgr := dashboard.NewBrokerManager(st, qbus, execReg, cfg.SymbolsTTL)
+	// D-597 时序审计病灶①：swapledger 三倍日 venue weekday 延迟绑定（独立 cache 实例
+	// ——bpmon 自持一枚，fetcher 无状态每实例 24h TTL×3 户重拉量可忽略）。
+	swapVenueWeekday.Bind(dashboard.NewServerTZCache(24*time.Hour, serverTZFetcherFor(brokerMgr)))
 	startCollectorsAndScanners(ctx, st, cfg, cexCfg, cexSymbols, incomeKickCh, okxIncomeKickCh, ioKickCh, refreshTopic, probeTopic, brokerMgr)
 	// 5c. TickSampler（§4.3）采样+落库装配已拆 wire_quotes.go（D-366 S2）。
 	startTickSampler(ctx, qbus, st, cexCfg)

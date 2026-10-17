@@ -283,7 +283,7 @@ func runServices(ctx context.Context, cancel context.CancelFunc, cfg *config.Con
 	wireWatchEngine(ctx, configKick, st, qbus, cfg.DetectorFreshnessTTL) // 业主视窗 B：盯盘引擎
 	// 8c. swap 逐日记账（D-077 修复⑨ V1）：日频 ticker，公式记账 → position_cashflows。
 	// ticker 独立日频（per-call 超时+就绪降级——loop-initial-block 铁律）；TripleDayResolver 读 facts 表（V2 顺带产出）。
-	swapLedger := swapledger.New(st, dashSvc, swapledger.NewFactTripleDayResolver(st), cfg.SwapNonSettleVenues, cfg.MTData.SwapFactMaxAge)
+	swapLedger := swapledger.New(st, dashSvc, swapledger.NewFactTripleDayResolver(st), cfg.SwapNonSettleVenues, cfg.MTData.SwapFactMaxAge, swapVenueWeekday.Func()) // D-597：三倍日判定按 venue server 日期
 	safego.Go("setup:swapLedger", func() { swapLedger.StartLoop(ctx) })
 	wireSwapReconciler(ctx, st, cfg, dashSvc)
 

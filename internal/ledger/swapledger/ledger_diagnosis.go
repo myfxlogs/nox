@@ -112,7 +112,7 @@ func (l *Ledger) DiagnoseLegSwapAmount(ctx context.Context, pos pgstore.Position
 		d.MultiplierOK = true
 		d.Amount = decimalAmount(f.Value, 100, DaysPerYear, notional, 1)
 	} else {
-		multiplier := settleMultiplier(leg.Venue, canonical, day, l.tripleDay)
+		multiplier := settleMultiplier(leg.Venue, canonical, day, l.tripleDay, l.venueWeekday)
 		d.Multiplier = multiplier
 		d.MultiplierOK = multiplier != 0
 		if multiplier == 0 {

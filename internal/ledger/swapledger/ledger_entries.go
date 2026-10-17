@@ -227,7 +227,7 @@ func (l *Ledger) legSwapAmount(canonical string, leg pgstore.PositionLeg, day ti
 		}
 	} else {
 		// swap：日 bps → 日金额 = rate/10000 × notional × settleMultiplier
-		multiplier := settleMultiplier(leg.Venue, canonical, day, l.tripleDay)
+		multiplier := settleMultiplier(leg.Venue, canonical, day, l.tripleDay, l.venueWeekday)
 		if multiplier == 0 {
 			// 修复⑪A M4：fail-closed（三倍日未知）→ 跳过该腿记账，不记 0 cashflow
 			return 0, false, "settle_multiplier_zero"

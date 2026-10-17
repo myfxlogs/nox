@@ -26,7 +26,7 @@ func TestServerTZCache_ConcurrentGet(t *testing.T) {
 				key = "v2:mt5" // 同键+异键混合并发
 			}
 			for j := 0; j < 5; j++ {
-				_ = c.get(ctx, key)
+				_ = c.Get(ctx, key)
 			}
 		}(i)
 	}

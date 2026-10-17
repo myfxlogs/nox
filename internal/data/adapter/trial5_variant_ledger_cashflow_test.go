@@ -107,7 +107,7 @@ func TestD342R1_Trial5VariantLedgerCashflow(t *testing.T) {
 		},
 		facts: fs,
 	}
-	l := swapledger.New(store, d342Notional{440000}, d342Triple{}, nil, 2*time.Hour)
+	l := swapledger.New(store, d342Notional{440000}, d342Triple{}, nil, 2*time.Hour, nil)
 	n, err := l.Run(context.Background())
 	if err != nil {
 		t.Fatalf("ledger Run: %v", err)

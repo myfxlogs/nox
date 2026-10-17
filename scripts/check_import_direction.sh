@@ -15,6 +15,7 @@ internal/api/dashboard -> internal/data/collect/exchange
 internal/api/dashboard -> internal/data/fact
 internal/api/dashboard -> internal/data/keydomain
 internal/api/dashboard -> internal/data/marketstate
+internal/api/dashboard -> internal/brokertz
 internal/api/dashboard -> internal/data/venue
 internal/api/dashboard -> internal/gen/dashboardv1
 internal/api/dashboard -> internal/infra/dephealth

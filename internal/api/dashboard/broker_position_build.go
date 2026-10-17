@@ -124,8 +124,8 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 				periodicPct = annual / (365 * float64(periods))
 			}
 		}
-	} else if m.tzCache.fetch != nil && !isCEXVenueKey(o.VenueKey) { // D-337R2：零值缓存=诚实空态（构造必选注入）
-		if tzLoc := m.tzCache.get(ctx, o.VenueKey); tzLoc != nil {
+	} else if m.tzCache.HasFetcher() && !isCEXVenueKey(o.VenueKey) { // D-337R2：零值缓存=诚实空态（构造必选注入）
+		if tzLoc := m.tzCache.Get(ctx, o.VenueKey); tzLoc != nil {
 			swapChargeAt = timestamppb.New(nextSwapChargeAtInLoc(now, tzLoc))
 		}
 	}

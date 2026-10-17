@@ -47,7 +47,7 @@ func TestSettleMultiplier_NormalDay(t *testing.T) {
 	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday}}
 	// Monday = 非三倍日
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC) // 2026-08-24 is Monday
-	got := settleMultiplier("vA:mt5", "AUDJPY", monday, r)
+	got := settleMultiplier("vA:mt5", "AUDJPY", monday, r, nil)
 	if got != 1 {
 		t.Errorf("normal day multiplier want 1, got %v", got)
 	}
@@ -58,7 +58,7 @@ func TestSettleMultiplier_TripleDay(t *testing.T) {
 	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday}}
 	// Wednesday = 三倍日
 	wed := time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC) // 2026-08-26 is Wednesday
-	got := settleMultiplier("vA:mt5", "AUDJPY", wed, r)
+	got := settleMultiplier("vA:mt5", "AUDJPY", wed, r, nil)
 	if got != 3 {
 		t.Errorf("triple day multiplier want 3, got %v", got)
 	}
@@ -68,12 +68,12 @@ func TestSettleMultiplier_TripleDay(t *testing.T) {
 func TestSettleMultiplier_UnknownVenueFailClosed(t *testing.T) {
 	r := stubTripleDay{venueDays: map[string]time.Weekday{}} // 空 = 全未知
 	wed := time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC)      // Wednesday
-	got := settleMultiplier("vX:mt5", "AUDJPY", wed, r)
+	got := settleMultiplier("vX:mt5", "AUDJPY", wed, r, nil)
 	if got != 0 {
 		t.Errorf("unknown venue fail-closed want 0 (no Wednesday fallback), got %v", got)
 	}
 	mon := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC) // Monday
-	got = settleMultiplier("vX:mt5", "AUDJPY", mon, r)
+	got = settleMultiplier("vX:mt5", "AUDJPY", mon, r, nil)
 	if got != 0 {
 		t.Errorf("unknown venue fail-closed non-Wednesday want 0, got %v", got)
 	}
@@ -87,11 +87,11 @@ func TestSettleMultiplier_PerVenueDiff(t *testing.T) {
 	}}
 	tue := time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC) // Tuesday
 	// vA 三倍日=周三 → 周二=1
-	if got := settleMultiplier("vA:mt5", "AUDJPY", tue, r); got != 1 {
+	if got := settleMultiplier("vA:mt5", "AUDJPY", tue, r, nil); got != 1 {
 		t.Errorf("vA Tuesday multiplier want 1, got %v", got)
 	}
 	// vB 三倍日=周二 → 周二=3
-	if got := settleMultiplier("vB:mt5", "AUDJPY", tue, r); got != 3 {
+	if got := settleMultiplier("vB:mt5", "AUDJPY", tue, r, nil); got != 3 {
 		t.Errorf("vB Tuesday multiplier want 3, got %v", got)
 	}
 }
@@ -321,7 +321,7 @@ func TestSettleMultiplier_WeekendNoTriple(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": tt.tripleDay}}
-			got := settleMultiplier("vA:mt5", "AUDJPY", tt.day, r)
+			got := settleMultiplier("vA:mt5", "AUDJPY", tt.day, r, nil)
 			if got != tt.want {
 				t.Errorf("settleMultiplier want %.0f, got %.0f", tt.want, got)
 			}
@@ -332,7 +332,7 @@ func TestSettleMultiplier_WeekendNoTriple(t *testing.T) {
 // TestSettleMultiplier_UnknownFailClosed D-110：未知三倍日仍 fail-closed（返回 0）。
 func TestSettleMultiplier_UnknownFailClosed(t *testing.T) {
 	r := stubTripleDay{} // 无 venueDays → ok=false
-	got := settleMultiplier("vX:mt5", "AUDJPY", time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC), r)
+	got := settleMultiplier("vX:mt5", "AUDJPY", time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC), r, nil)
 	if got != 0 {
 		t.Errorf("unknown triple day want 0 (fail-closed), got %.0f", got)
 	}
@@ -593,5 +593,29 @@ func TestDiagnoseLegSwapAmount_D193A_Normal(t *testing.T) {
 	}
 	if !d.FactHit {
 		t.Errorf("FactHit=false, want true")
+	}
+}
+
+// TestSettleMultiplier_ServerWeekdayBoundary 2026-10-17 时序审计病灶①锚：
+// tripleDay 值域=venue 语义（server 日历）；day 以 UTC 传入。UTC 周二 23:00 在
+// server=UTC+2 下已是周三——venueWeekday 注入后判定按 server 日期 → 3；
+// 未注入（nil）回落 UTC 判定 → 1（基线语义不变）。
+func TestSettleMultiplier_ServerWeekdayBoundary(t *testing.T) {
+	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday}}
+	utcTue23 := time.Date(2026, 8, 25, 23, 0, 0, 0, time.UTC) // UTC Tuesday 23:00
+	serverWD := func(venueKey string, t time.Time) (time.Weekday, bool) {
+		_ = venueKey
+		return t.In(time.FixedZone("server+02", 2*3600)).Weekday(), true // server=UTC+2 → 周三
+	}
+	if got := settleMultiplier("vA:mt5", "AUDJPY", utcTue23, r, serverWD); got != 3 {
+		t.Errorf("server-date Wednesday (UTC Tue 23:00 @UTC+2) want 3, got %v", got)
+	}
+	if got := settleMultiplier("vA:mt5", "AUDJPY", utcTue23, r, nil); got != 1 {
+		t.Errorf("nil injection falls back to UTC (Tuesday) want 1, got %v", got)
+	}
+	// 解败（ok=false）同样回落 UTC。
+	failWD := func(venueKey string, t time.Time) (time.Weekday, bool) { return 0, false }
+	if got := settleMultiplier("vA:mt5", "AUDJPY", utcTue23, r, failWD); got != 1 {
+		t.Errorf("resolver failure falls back to UTC want 1, got %v", got)
 	}
 }

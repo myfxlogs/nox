@@ -80,11 +80,15 @@ type Ledger struct {
 	initialRetryBackoff time.Duration
 	initialRetryMax     int
 	factTTL             time.Duration // D-159 W4a R7：swap/funding Fact TTL（env 单源 cfg.SwapFactMaxAge，与 discoverSwapCombos/recalcNetSwap 同源）
+	// venueWeekday venue server 日期 weekday 解析（2026-10-17 时序审计病灶①注入；
+	// nil=UTC 回落+留痕——cmd/core 装配持 brokertz.Cache）。
+	venueWeekday func(venueKey string, t time.Time) (time.Weekday, bool)
 }
 
 // New 创建 swap 记账器。nonSettleVenues 为已知不结算 swap 的 venue 列表（D-112）。
 // factTTL 为 swap/funding Fact 过期阈值（D-159 W4a R7，cfg.SwapFactMaxAge env 单源）。
-func New(store Store, notional NotionalResolver, tripleDay TripleDayResolver, nonSettleVenues []string, factTTL time.Duration) *Ledger {
+func New(store Store, notional NotionalResolver, tripleDay TripleDayResolver, nonSettleVenues []string, factTTL time.Duration,
+	venueWeekday func(venueKey string, t time.Time) (time.Weekday, bool)) *Ledger {
 	nsv := make(map[string]bool, len(nonSettleVenues))
 	for _, v := range nonSettleVenues {
 		nsv[v] = true
@@ -97,13 +101,14 @@ func New(store Store, notional NotionalResolver, tripleDay TripleDayResolver, no
 		runTimeout:      30 * time.Second,
 		initialDelay:    90 * time.Second,
 		factTTL:         factTTL,
+		venueWeekday:    venueWeekday,
 	}
 }
 
 // NewForDiagnosis D-193-A 扩包 S3：创建探针用 Ledger（无 loop 超时/延迟，factTTL=0 不检查过期）。
 // 供 cmd/swapledgerprobe 诊断 legSwapAmount 中间状态用，非生产路径。
 func NewForDiagnosis(store Store, notional NotionalResolver, tripleDay TripleDayResolver, nonSettleVenues []string, factTTL time.Duration) *Ledger {
-	return New(store, notional, tripleDay, nonSettleVenues, factTTL)
+	return New(store, notional, tripleDay, nonSettleVenues, factTTL, nil) // 诊断探针非生产记账路径——UTC 回落可忍
 }
 
 // D-108① 首轮同日有界重试缺省：10min 间隔 ×6 次（≈1h 覆盖——生产实拍两次重启首轮

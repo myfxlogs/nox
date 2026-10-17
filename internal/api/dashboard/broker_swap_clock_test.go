@@ -55,11 +55,11 @@ func TestD337_ServerTZCache(t *testing.T) {
 		fetches++
 		return 3, nil
 	})
-	loc1 := c.get(ctx, "v:mt5")
+	loc1 := c.Get(ctx, "v:mt5")
 	if loc1 == nil {
 		t.Fatal("first get want loc, got nil")
 	}
-	loc2 := c.get(ctx, "v:mt5")
+	loc2 := c.Get(ctx, "v:mt5")
 	if loc2 == nil || fetches != 1 {
 		t.Errorf("TTL 内第二次 get 应走缓存（fetches=%d）, loc2=%v", fetches, loc2)
 	}
@@ -68,10 +68,10 @@ func TestD337_ServerTZCache(t *testing.T) {
 	c2 := NewServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
 		return 0, boom
 	})
-	if got := c2.get(ctx, "v:mt5"); got != nil {
+	if got := c2.Get(ctx, "v:mt5"); got != nil {
 		t.Errorf("fetch fail want nil, got %v", got)
 	}
-	if got := c2.get(ctx, "v:mt5"); got != nil {
+	if got := c2.Get(ctx, "v:mt5"); got != nil {
 		t.Errorf("fail 不缓存正结果：second get want nil, got %v", got)
 	}
 }

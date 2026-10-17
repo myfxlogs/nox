@@ -106,7 +106,12 @@ func isFundingType(posType string) bool {
 // 优先级：symbol 级 Fact > venue 级 Fact > fail-closed（跳过+warn，禁止回退已知错误值）。
 // 三倍日→3 否则 1。TripleDayResolver 未知（ok=false）→ 返回 0（调用方跳过该腿记账）。
 // tripleDay=Sunday/Saturday 时返回 1（外汇市场周末不开盘，三倍日不生效）。
-func settleMultiplier(venueKey, canonical string, day time.Time, r TripleDayResolver) float64 {
+// 2026-10-17 时序审计病灶①：weekday 判定须按 venue server 日期——tripleDay 值域=
+// venue 语义（MT5 服务端日历），而 day 由 Run 以 UTC 传入；server=UTC+2/+3 时 UTC
+// 21:00 后 server 已次日，纯 UTC 判定在三倍日归属上错 ±1 日（24h ticker 锚 boot
+// 时刻可漂入该窗）。venueWeekday 注入解 server 日期 weekday；nil/解败回落 UTC+留痕。
+func settleMultiplier(venueKey, canonical string, day time.Time, r TripleDayResolver,
+	venueWeekday func(venueKey string, t time.Time) (time.Weekday, bool)) float64 {
 	venueName := venueFromKey(venueKey)
 	tripleDay, ok := r.TripleSwapDay(venueName, canonical)
 	if !ok {
@@ -118,7 +123,15 @@ func settleMultiplier(venueKey, canonical string, day time.Time, r TripleDayReso
 	if tripleDay == time.Sunday || tripleDay == time.Saturday {
 		return 1
 	}
-	if day.Weekday() == tripleDay {
+	dayWD := day.Weekday() // UTC 域基线
+	if venueWeekday != nil {
+		if wd, wok := venueWeekday(venueKey, day); wok {
+			dayWD = wd // venue server 日期 weekday（真域）
+		} else {
+			log.Printf("[swapledger] server weekday %s unavailable (fallback UTC) — triple-day boundary window may misattribute ±server-offset hours", venueKey)
+		}
+	}
+	if dayWD == tripleDay {
 		return 3
 	}
 	return 1
