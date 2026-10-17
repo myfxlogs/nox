@@ -105,3 +105,46 @@
 .stat-detail .sd-label { flex: 1; font-size: 13px; color: var(--ink); }
 .stat-detail .sd-amt { font-variant-numeric: tabular-nums; font-weight: 600; }
 .stat-detail .sd-sub { font-size: 11px; }
+
+/* —— opp-card 四列网格（低密度卡族：订单/等待面缩览；业主定案 10-17——
+   叙事长卡（毕业/机会多行 narrative）保持单列不进网格 —— */
+.opp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+@media (max-width: 1200px) {
+  .opp-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 900px) {
+  .opp-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.opp-grid .opp-card {
+  margin-bottom: 0;
+  min-width: 0;
+  cursor: pointer;
+}
+.opp-grid .opp-card:hover {
+  border-color: var(--ink-3);
+}
+/* 三行结构：状态行（head）→对象行（who 截断）→叙事行（⏱ 到期/损益/拒因截断） */
+.opp-grid .opp-card-who {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.opp-grid .opp-card-narrative {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 盈亏色（呈现映射）：绿盈/红亏/灰拒因 */
+.opp-grid .pos-good { color: var(--good); }
+.opp-grid .pos-crit { color: var(--critical); }
+
+/* ⏱ 分型着色（12→16px 可辨；活=绿/静=灰/陈=红——state 显示映射非判据） */
+.pipe-ts-live { color: var(--good); }
+.pipe-ts-stale { color: var(--ink-3); }
+.pipe-ts-down { color: var(--critical); }
+.pipe-flow .pipe-ts { font-size: 16px; }

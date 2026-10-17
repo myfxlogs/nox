@@ -10,9 +10,9 @@ import type { RequestBoxItem } from "../gen/dashboardv1/request_box_pb";
 import { ResolveRequestState } from "../gen/dashboardv1/request_box_pb";
 import { fmtUsd } from "../components/fmt";
 import { StatTile } from "../components/StatTile";
-import { Modal } from "../components/Modal";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
+import { Modal } from "../components/Modal";
 import { FreshDot } from "../components/FreshDot";
 import type { FreshDot as FreshDotData } from "../components/freshness";
 
@@ -54,6 +54,7 @@ export default function OverviewPage() {
   const [box, setBox] = useState<RequestBoxItem[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState("");
+  const [cardModal, setCardModal] = useState<{ title: string; body: string } | null>(null);
   const [tile, setTile] = useState<string | null>(null); // 盘面卡下钻组键
 
   const load = async () => {
@@ -174,7 +175,7 @@ export default function OverviewPage() {
                 <div className="pipe-head">
                   <FreshDot dot={{ status: tone, title: st.state }} />
                   <span className="nm">{STAGE_CN[st.key] ?? st.key}</span>
-                  <span className="pipe-ts" title="liveness 证据分型">{st.evidenceKind === "beat" ? "⏱" : st.evidenceKind === "event" ? "⚡" : "—"}</span>
+                  <span className={`pipe-ts pipe-ts-${tone}`} title={"liveness 证据分型：" + st.evidenceKind}>{st.evidenceKind === "beat" ? "⏱" : st.evidenceKind === "event" ? "⚡" : "—"}</span>
                   {st.lastEventUnix > 0 && (
                     <span className="pipe-ts">
                       {new Date(Number(st.lastEventUnix) * 1000).toISOString().slice(5, 16).replace("T", " ")}
@@ -190,19 +191,21 @@ export default function OverviewPage() {
         </div>
       ) : <EmptyState>工序健康读模未供</EmptyState>}
 
-      {/* §2 在仓订单缩览卡阵（kind 徽标+对象+额+态——替旧表） */}
+      {/* §2 在仓订单缩览卡阵（D-低密度网格化：三行=状态/对象截断/⏱ 叙事；点击 Modal 全文） */}
       <h2>在仓订单</h2>
       {b && b.orders.length > 0 ? (
-        <ul className="opp-cards scroll-cap">
+        <ul className="opp-cards opp-grid scroll-cap">
           {b.orders.map((o: OverviewOrderRow, i: number) => (
-            <li key={i} className="opp-card">
+            <li key={i} className="opp-card" onClick={() => setCardModal({
+              title: `#${i} ${o.kind} ${o.label}`,
+              body: `状态 ${o.status}｜金额 ${fmtUsd(o.amountUsd)}｜` + (o.until ? "到期 " + utc(timestampDate(o.until)) : "持续中"),
+            })}>
               <div className="opp-card-head">
                 <Chip tone={orderTone(o.status)}>{o.status}</Chip>
-                <span className="opp-card-kind">{o.kind}</span>
-                <span className="opp-card-who">{o.label}</span>
                 <span className="opp-card-friction">{fmtUsd(o.amountUsd)}</span>
               </div>
-              <p className="opp-card-narrative muted">{o.until ? "到期 " + utc(timestampDate(o.until)) : "持续中"}</p>
+              <span className="opp-card-who">{o.kind} · {o.label}</span>
+              <p className="opp-card-narrative muted">{o.until ? "⏱ 到期 " + utc(timestampDate(o.until)) : "持续中"}</p>
             </li>
           ))}
         </ul>
@@ -241,23 +244,32 @@ export default function OverviewPage() {
       {/* §8 等待面缩览（pending/观察中毕业+待执行提案——等待因+龄，后端拼行） */}
       <h2>等待面</h2>
       {b && b.waiting.length > 0 ? (
-        <ul className="opp-cards scroll-cap">
+        <ul className="opp-cards opp-grid scroll-cap">
           {b.waiting.map((w, i) => (
-            <li key={i} className="opp-card">
+            <li key={i} className="opp-card" onClick={() => setCardModal({
+              title: `${w.kind === "graduation_pending" ? "待批" : w.kind === "graduation_watch" ? "观察中" : "提案"} · ${w.label}`,
+              body: w.detail + (w.sinceUnix > 0 ? "｜自 " + new Date(Number(w.sinceUnix) * 1000).toISOString().replace("T", " ").slice(0, 19) + "Z" : ""),
+            })}>
               <div className="opp-card-head">
                 <Chip tone={w.kind === "proposal" ? "warn" : "neutral"}>
                   {w.kind === "graduation_pending" ? "待批" : w.kind === "graduation_watch" ? "观察中" : "提案"}
                 </Chip>
-                <span className="opp-card-kind">{w.label}</span>
                 <span className="opp-card-friction">
                   {w.sinceUnix > 0 ? "自 " + new Date(Number(w.sinceUnix) * 1000).toISOString().slice(5, 16).replace("T", " ") + "Z" : "—"}
                 </span>
               </div>
+              <span className="opp-card-who">{w.label}</span>
               <p className="opp-card-narrative muted">{w.detail}</p>
             </li>
           ))}
         </ul>
       ) : <EmptyState>无等待项</EmptyState>}
+
+      {cardModal && (
+        <Modal open onClose={() => setCardModal(null)} title={cardModal.title} width={520}>
+          <div style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{cardModal.body}</div>
+        </Modal>
+      )}
 
       {/* §3 风险心跳 */}
       <h2>风险心跳</h2>
