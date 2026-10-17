@@ -1074,6 +1074,7 @@ type XAssetPendingEntryRow struct {
 	MinMarginUsd     *float64 `protobuf:"fixed64,22,opt,name=min_margin_usd,json=minMarginUsd,proto3,oneof" json:"min_margin_usd,omitempty"`               // 最少需保证金=max(腿minStep名义)×(fracB+fracS)
 	// D-014：econ 同源入场回本估（EntryCost+ExitEst)/CarryPerDay；缺账→NULL 诚实缺。
 	EstBreakevenDays *float64 `protobuf:"fixed64,23,opt,name=est_breakeven_days,json=estBreakevenDays,proto3,oneof" json:"est_breakeven_days,omitempty"`
+	PitHits          []string `protobuf:"bytes,24,rep,name=pit_hits,json=pitHits,proto3" json:"pit_hits,omitempty"` // D-587④：armed 行坑签名命中透出（观察面同源——闸在 enable 写径）
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1267,6 +1268,13 @@ func (x *XAssetPendingEntryRow) GetEstBreakevenDays() float64 {
 		return *x.EstBreakevenDays
 	}
 	return 0
+}
+
+func (x *XAssetPendingEntryRow) GetPitHits() []string {
+	if x != nil {
+		return x.PitHits
+	}
+	return nil
 }
 
 type UpsertXAssetAllowComboRequest struct {
@@ -2847,7 +2855,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x04rows\x18\x01 \x03(\v2%.nox.dashboard.v1.XAssetAllowComboRowR\x04rows\"!\n" +
 	"\x1fListXAssetPendingEntriesRequest\"_\n" +
 	" ListXAssetPendingEntriesResponse\x12;\n" +
-	"\x04rows\x18\x01 \x03(\v2'.nox.dashboard.v1.XAssetPendingEntryRowR\x04rows\"\x88\t\n" +
+	"\x04rows\x18\x01 \x03(\v2'.nox.dashboard.v1.XAssetPendingEntryRowR\x04rows\"\xa3\t\n" +
 	"\x15XAssetPendingEntryRow\x12\x19\n" +
 	"\bcombo_id\x18\x01 \x01(\x03R\acomboId\x12\x1f\n" +
 	"\vcombo_label\x18\x02 \x01(\tR\n" +
@@ -2877,7 +2885,8 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x12buy_leg_margin_usd\x18\x14 \x01(\x01H\x05R\x0fbuyLegMarginUsd\x88\x01\x01\x122\n" +
 	"\x13sell_leg_margin_usd\x18\x15 \x01(\x01H\x06R\x10sellLegMarginUsd\x88\x01\x01\x12)\n" +
 	"\x0emin_margin_usd\x18\x16 \x01(\x01H\aR\fminMarginUsd\x88\x01\x01\x121\n" +
-	"\x12est_breakeven_days\x18\x17 \x01(\x01H\bR\x10estBreakevenDays\x88\x01\x01B\x13\n" +
+	"\x12est_breakeven_days\x18\x17 \x01(\x01H\bR\x10estBreakevenDays\x88\x01\x01\x12\x19\n" +
+	"\bpit_hits\x18\x18 \x03(\tR\apitHitsB\x13\n" +
 	"\x11_wait_current_bpsB\x15\n" +
 	"\x13_wait_threshold_bpsB\x0f\n" +
 	"\r_wait_gap_bpsB\x14\n" +
