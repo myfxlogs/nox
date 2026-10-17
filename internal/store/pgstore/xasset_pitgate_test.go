@@ -208,33 +208,22 @@ func TestKillTrigger(t *testing.T) {
 	newPosKill("kill-pnl-3", "KILLA", "KILLB", -25, 1)
 	newPosKill("kill-streak-1", "KILLC", "KILLD", -10, 2)
 	newPosKill("kill-streak-2", "KILLC", "KILLD", -5, 1)
+	// KILLG：连败闸阈 2——最新=正结算夹断（rn1=+5 断计数→leading=0 不摘）
+	if _, err := st.Pool().Exec(ctx, `
+		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_sell,
+			enabled, simulated, note, max_gross_usd, source, sizing_mode, kill_loss_streak)
+		VALUES ('KILLG','KILLH','gate','binance',true,false,'夹断',100,'manual_seed','fixed',2)`); err != nil {
+		t.Fatal(err)
+	}
+	newPosKill("kill-break-old", "KILLG", "KILLH", -20, 3)
+	newPosKill("kill-break-mid", "KILLG", "KILLH", -15, 2)
+	newPosKill("kill-break-new", "KILLG", "KILLH", +5, 1) // rn1 非亏→leading=0
 
 	n, err := st.DisableKillTriggeredCombos(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 打点：KILLA 判据读数
-	var dbgNet float64
-	if err := st.Pool().QueryRow(ctx, `
-		SELECT COALESCE(SUM(COALESCE(s.net_realized_usd, s.realized_usd)),0)
-		FROM position_settlements s JOIN positions p ON p.id = s.position_id
-		WHERE EXISTS (SELECT 1 FROM position_legs lb WHERE lb.position_id=p.id
-		              AND lb.phase='OPEN' AND lb.venue='gate' AND lb.symbol='KILLA')
-		  AND EXISTS (SELECT 1 FROM position_legs ls WHERE ls.position_id=p.id
-		              AND ls.phase='OPEN' AND ls.venue='binance' AND ls.symbol='KILLB')`).Scan(&dbgNet); err == nil {
-		t.Logf("KILLA dbgNet=%.2f", dbgNet)
-	} else {
-		t.Logf("dbgNet err=%v", err)
-	}
-	rows2, _ := st.Pool().Query(ctx, `SELECT canonical_buy, enabled, note FROM xasset_allow_combos WHERE canonical_buy LIKE 'KILL%'`)
-	for rows2.Next() {
-		var cb, note string
-		var en bool
-		rows2.Scan(&cb, &en, &note)
-		t.Logf("combo %s enabled=%v note=%s", cb, en, note)
-	}
-	rows2.Close()
-	if n != 2 {
+	if n != 2 { // KILLA(pnl)+KILLC(连败)；KILLG 夹断不摘
 		t.Fatalf("kill 扳机摘=%d want 2（pnl 闸+连败闸）", n)
 	}
 	for _, tc := range []struct {
@@ -245,6 +234,7 @@ func TestKillTrigger(t *testing.T) {
 		{"KILLA", false, "净 PnL 超阈摘"},
 		{"KILLC", false, "连败达阈摘"},
 		{"KILLE", true, "无判据不摘"},
+		{"KILLG", true, "夹断连败不摘（leading negatives）"},
 	} {
 		var en bool
 		if err := st.Pool().QueryRow(ctx,

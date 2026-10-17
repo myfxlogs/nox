@@ -75,7 +75,11 @@ func (s *Store) DisableKillTriggeredCombos(ctx context.Context) (int, error) {
 				    AND EXISTS (SELECT 1 FROM position_legs ls WHERE ls.position_id=p.id
 				                AND ls.phase='OPEN' AND ls.venue=$3 AND ls.symbol=$4)
 				)
-				SELECT COALESCE(MAX(rn),0) FROM seq WHERE net < 0`,
+				-- 连败=最近起连续净亏（leading negatives——首笔非亏即断计数，
+				-- 非「集内任一亏的 rn 最大值」旧误计）
+				SELECT COUNT(*) FROM seq
+				WHERE net < 0 AND rn <= COALESCE(
+					(SELECT MIN(rn) FROM seq WHERE net >= 0), 2147483647)`,
 				c.vb, c.cb, c.vs, c.cs).Scan(&streak); err != nil {
 				return disabled, fmt.Errorf("combo %d streak: %w", c.id, err)
 			}
