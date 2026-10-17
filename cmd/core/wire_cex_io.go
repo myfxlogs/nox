@@ -101,6 +101,11 @@ func mtIORound(ctx context.Context, st *pgstore.Store, bm *dashboard.BrokerManag
 			}
 			var rows []pgstore.VenueIO
 			for _, e := range evs {
+				// D-607 双向查重：deal 事件行先落（txid=order:{ticket}）→跳过（异键双记病灶——
+				// external_id 幂等键只防同键，防不了 mt5:deal:* vs mt5:ticket:* 异键双写）
+				if ok, err := st.VenueIOTxIDExists(ctx, a.ID, fmt.Sprintf("order:%d", e.Ticket)); err == nil && ok {
+					continue
+				}
 				d := "deposit"
 				amt := e.Amount
 				if amt < 0 {
@@ -209,7 +214,7 @@ var mtDealNonTradeTypes = map[int32]bool{2: true, 3: true, 4: true, 5: true, 6: 
 // dealRow D-607：DealEvent→fin_venue_io 行（纯函数——幂等键/方向/查重键
 // 组装逻辑钉测试锚；查重键=mt5:ticket:{OrderTicket}）。
 func dealRow(venue string, configID int64, ccy string, d adapter.DealEvent) (row pgstore.VenueIO, dedupKey string, ok bool) {
-	if !mtDealNonTradeTypes[d.Type] || d.Profit <= 0 && d.Profit >= 0 {
+	if !mtDealNonTradeTypes[d.Type] || d.Profit == 0 {
 		return pgstore.VenueIO{}, "", false
 	}
 	dir, amt := "deposit", d.Profit
@@ -218,7 +223,9 @@ func dealRow(venue string, configID int64, ccy string, d adapter.DealEvent) (row
 	}
 	return pgstore.VenueIO{
 			Venue: venue, ConfigID: configID, Direction: dir, Ccy: ccy,
-			Amount: amt, ExternalID: fmt.Sprintf("mt5:deal:%d", d.Ticket), Ts: d.Ts,
+			Amount: amt, ExternalID: fmt.Sprintf("mt5:deal:%d", d.Ticket),
+			TxID: fmt.Sprintf("order:%d", d.OrderTicket), // 双向查重键：扫描面按 txid 认（先到留）
+			Ts:   d.Ts,
 		},
 		fmt.Sprintf("mt5:ticket:%d", d.OrderTicket), true
 }

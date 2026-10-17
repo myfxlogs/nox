@@ -1,8 +1,7 @@
-// wire_cex_io_deal_test.go —— D-607 Deal 事件落账锚（非交易族落行/查重跳/交易族不落）。
+// wire_cex_io_deal_test.go —— D-607 Deal 事件落账锚（退回㉘锚伤：真五态断言）。
 package main
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -10,24 +9,33 @@ import (
 )
 
 func TestMtDealIOSink(t *testing.T) {
-	// fake store/bm 太薄——直接锚纯判定族分类+行组装（真库 IO 链路经 VenueIOExternalExists+
-	// InsertVenueIO 幂等键在案，本锚钉过滤+查重逻辑）。
-	type captured struct {
-		venue, dir string
-		amt        float64
-		ext        string
+	ts := time.Now()
+	// ① Balance 落行——形态含 external_id/dedupKey/txid/方向/金额
+	row, dk, ok := dealRow("110660304", 7, "USD", adapter.DealEvent{
+		Ticket: 999, OrderTicket: 888, Type: 2, Profit: 1000, Ts: ts})
+	if !ok || row.ExternalID != "mt5:deal:999" || dk != "mt5:ticket:888" ||
+		row.TxID != "order:888" || row.Direction != "deposit" || row.Amount != 1000 || row.Ccy != "USD" {
+		t.Fatalf("Balance 行形态错：%+v dk=%s ok=%v", row, dk, ok)
 	}
-	var got []captured
-	// 三态：Balance 落/交易族不落/查重跳过（OrderTicket 在库）
-	types := map[int32]string{2: "deposit", 0: "", 1: "", 12: "deposit", 5: "deposit"}
-	for typ, want := range types {
-		hit := mtDealNonTradeTypes[typ]
-		if (want != "") != hit {
-			t.Fatalf("type %d hit=%v want=%v", typ, hit, want)
+	// ② Buy/Sell 交易族不落
+	for _, typ := range []int32{0, 1, 13, 14} {
+		if _, _, ok := dealRow("v", 1, "USD", adapter.DealEvent{Ticket: 1, Type: typ, Profit: 100}); ok {
+			t.Fatalf("type %d 交易族应不落", typ)
 		}
 	}
-	// OrderTicket 查重联动——已落 ticket 行→跳过（VenueIOExternalExists 调用面断言在库径）
-	_ = got
-	_ = adapter.DealEvent{Ticket: 1, OrderTicket: 99, Type: 2, Profit: 1000, Ts: time.Now()}
-	_ = context.Background()
+	// ③ Credit/Correction 非交易族落（charge/correction/bonus/interest 同族）
+	for _, typ := range []int32{3, 5} {
+		if _, _, ok := dealRow("v", 1, "USD", adapter.DealEvent{Ticket: 1, Type: typ, Profit: 50}); !ok {
+			t.Fatalf("type %d 非交易族应落", typ)
+		}
+	}
+	// ④ 零额不落
+	if _, _, ok := dealRow("v", 1, "USD", adapter.DealEvent{Ticket: 1, Type: 2, Profit: 0}); ok {
+		t.Fatal("零额应不落")
+	}
+	// ⑤ 负额=withdraw 方向反
+	row, _, ok = dealRow("v", 1, "USD", adapter.DealEvent{Ticket: 5, OrderTicket: 6, Type: 2, Profit: -50})
+	if !ok || row.Direction != "withdraw" || row.Amount != 50 {
+		t.Fatalf("withdraw 方向错：%+v", row)
+	}
 }

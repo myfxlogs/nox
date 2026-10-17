@@ -175,3 +175,13 @@ func (s *Store) VenueIOExternalExists(ctx context.Context, configID int64, exter
 		configID, externalID).Scan(&ok)
 	return ok, err
 }
+
+// VenueIOTxIDExists D-607：txid 存在性查（ticket 扫描面反向查重——deal 先落
+// 则 order 面 txid='order:{ticket}' 在库→跳过）。
+func (s *Store) VenueIOTxIDExists(ctx context.Context, configID int64, txid string) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM fin_venue_io WHERE config_id=$1 AND txid=$2)`,
+		configID, txid).Scan(&ok)
+	return ok, err
+}
