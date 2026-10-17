@@ -2,6 +2,7 @@
 // （产出 .pb 非 .json；PII 面预钉=sample 级 mask 同 mtprobe 补正范式）。
 syntax = "proto3";
 package nox.capability.v1;
+option go_package = "nox/internal/gen/nox/capability/v1;capabilitypb";
 
 message ProbeRun {
   string generated_at = 1; // RFC3339 UTC
