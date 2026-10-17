@@ -126,6 +126,9 @@ func (e *Executor) redeemShortfall(ctx context.Context, asset string, need float
 			return done, notes, fmt.Errorf("redeem(productId=%q amount=%.8f need=%.8f): %w",
 				p.ProductID, amt, need-done, err)
 		}
+		// D-596 写侧划转记账：赎回成功→transfer（earn→spot）。
+		e.ioTransfer(ctx, "binance", "USDT", amt, "earn", "spot",
+			fmt.Sprintf("earn-red:%s:%s", p.ProductID, asset), "")
 		done += amt
 	}
 	return done, notes, nil
