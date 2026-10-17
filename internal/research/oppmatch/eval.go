@@ -28,7 +28,7 @@ func evalProposal(ctx context.Context, st *pgstore.Store, r Result, pid int64) *
 		in.Gross = econ.Term{Value: *r.APR, Evidence: ev}
 	}
 	dci := strings.HasPrefix(r.TemplateID, "dci_") || r.TemplateID == "option_spread"
-	earn := r.TemplateID == "earn_apr_lending" || r.TemplateID == "cash_mgmt"
+	earn := r.TemplateID == "earn_apr_lending" || r.TemplateID == "cash_mgmt" || r.TemplateID == "earn_rotation"
 	switch {
 	case dci:
 		// DCI 申购：venue 报价 APY 申购即锁——费/滑点/市窗机理不适用；

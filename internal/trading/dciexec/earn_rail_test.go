@@ -16,10 +16,13 @@ import (
 
 // fakeRail 测试 rail（动词调用计数+返回值注入）。
 type fakeRail struct {
-	prodSub  int
-	freeBal  float64
-	products []EarnProduct
-	subErr   error
+	prodSub   int
+	redeemN   int
+	redeemErr error
+	freeBal   float64
+	products  []EarnProduct
+	positions []EarnPosition
+	subErr    error
 }
 
 func (r *fakeRail) Products(_ context.Context, _ string) ([]EarnProduct, error) {
@@ -29,9 +32,15 @@ func (r *fakeRail) Subscribe(_ context.Context, _ string, _ float64) (string, er
 	r.prodSub++
 	return `{"ok":true}`, r.subErr
 }
-func (r *fakeRail) Redeem(context.Context, string, float64) error { return nil }
+func (r *fakeRail) Redeem(context.Context, string, float64) error {
+	r.redeemN++
+	return r.redeemErr
+}
 func (r *fakeRail) FreeBalance(_ context.Context, _ string) (float64, error) {
 	return r.freeBal, nil
+}
+func (r *fakeRail) Positions(context.Context, string) ([]EarnPosition, error) {
+	return r.positions, nil
 }
 
 func railFixture(venue string, rail EarnRail) (*Executor, *fakeStore) {

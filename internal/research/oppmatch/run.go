@@ -260,6 +260,9 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	xferScan(ctx, st)
 	// 闲置 CEX 池缺口扫描（okx unified 类——无 earn 执行径如实记缺口行）。
 	idleGapScan(ctx, st)
+	// D-612 息差轮动所内面：earn 池低效候选→earn_rotation 提案（autoexec 族，
+	// 净值差终判在执行拍实拉——D-613 补正①）。
+	rotateScan(ctx, st)
 	// CFD swap 正息面→假设行（采集在跑消费断档接上；只产假设不碰钱）。
 	swapScan(ctx, st)
 	// 裸腿假设→对冲腿可行面（asset_equiv 类桥实读 universe；无腿如实注记）。

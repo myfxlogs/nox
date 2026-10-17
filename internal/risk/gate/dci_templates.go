@@ -16,6 +16,7 @@ var ExecTemplates = map[string][]DCILeg{
 var EarnTemplates = map[string]bool{
 	"cash_mgmt":        true,
 	"earn_apr_lending": true,
+	"earn_rotation":    true, // D-612：息差轮动所内赎转（redeem→subscribe 同 venue）
 }
 
 // IsExecTemplate 提案可执行族判定（DCI 腿族 ∪ earn 族）——CheckDCI/autoexec/Go
