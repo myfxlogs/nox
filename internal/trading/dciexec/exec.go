@@ -40,6 +40,9 @@ type Store interface {
 	DCIOrderIntentCount(ctx context.Context, reqPrefix string) (int, error)
 	DCIOrderOpenIntent(ctx context.Context, reqPrefix string) (bool, error)
 	FinishDCIOrder(ctx context.Context, id int64, status, response string) error
+	// InsertVenueIO earn 写侧划转记账（D-596：申购/赎回 venue 返回端点采集
+	// 盲区——写侧成功径自记 fin_venue_io transfer 行）。
+	InsertVenueIO(ctx context.Context, rows []pgstore.VenueIO) (int64, error)
 	// 交割观察面。
 	ListFilledDCIOrders(ctx context.Context) ([]pgstore.FilledDCIOrder, error)
 	SettleDCIOrder(ctx context.Context, id int64, ccy string, qty, income float64) (bool, error)
