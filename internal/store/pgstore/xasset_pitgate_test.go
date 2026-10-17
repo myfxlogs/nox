@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func seedPitDir(t *testing.T) string {
@@ -244,5 +245,53 @@ func TestKillTrigger(t *testing.T) {
 		if en != tc.want {
 			t.Fatalf("%s: enabled=%v want %v", tc.name, en, tc.want)
 		}
+	}
+}
+
+// TestMtIODeltaRound D-602 锚：差分落账——注资残差>0.01 记 deposit 行/
+// PnL 抵扣残差~0 不记/幂等键 mt5:delta 不重。
+func TestMtIODeltaWindowsAndClosedPnL(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	// 快照链：1000→2000（Δ=+1000 注资）→2100（Δ=+100 PnL 抵扣~0 不记）
+	if _, err := st.Pool().Exec(ctx, `
+		INSERT INTO fin_venue_account_snapshot (venue, venue_type, balance_raw, fetched_at, src)
+		VALUES ('110660304','mt5',1000,now()-interval '3 hours','test'),
+		       ('110660304','mt5',2000,now()-interval '2 hours','test'),
+		       ('110660304','mt5',2100,now()-interval '1 hour','test')`); err != nil {
+		t.Fatal(err)
+	}
+	snaps, err := st.BalanceDeltaWindows(ctx, "110660304", time.Now().Add(-24*time.Hour))
+	if err != nil || len(snaps) != 3 {
+		t.Fatalf("snaps=%d err=%v", len(snaps), err)
+	}
+	// 关仓 PnL +100 在窗 2（抵扣后残差~0）
+	var pid int64
+	if err := st.Pool().QueryRow(ctx,
+		`INSERT INTO positions (opportunity_id, type, status, opened_at, closed_at, realized_pnl)
+		VALUES ('pnl-test','XASSET_CARRY','CLOSED',now()-interval '4 hours',now()-interval '90 minutes',100) RETURNING id`).Scan(&pid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx, `
+		INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, status)
+		VALUES ($1,1,'OPEN','110660304','mt5','XMRUSD','BUY',1,100,'FILLED')`, pid); err != nil {
+		t.Fatal(err)
+	}
+	pnl, err := st.ClosedPositionPnLBetween(ctx, "110660304", snaps[1].Ts.Add(-time.Minute), snaps[2].Ts.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pnl != 100 {
+		t.Fatalf("closed pnl=%v want 100", pnl)
+	}
+	// 残差判据重演：窗1 Δ=+1000→残差 +1000-0=+1000>0.01 deposit；
+	// 窗2 Δ=+100→残差 100-100=0<0.01 不记
+	d1 := snaps[1].Balance - snaps[0].Balance // +1000
+	d2 := snaps[2].Balance - snaps[1].Balance // +100
+	if d1-0 <= 0.01 {
+		t.Fatalf("窗1残差=%v 应>0.01", d1)
+	}
+	if d2-pnl >= 0.01 {
+		t.Fatalf("窗2残差=%v 应<0.01", d2-pnl)
 	}
 }

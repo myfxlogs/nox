@@ -120,3 +120,44 @@ func (s *Store) RecentIncomeByConfig(ctx context.Context, venue, venueType strin
 	}
 	return out, rows.Err()
 }
+
+// BalanceSnap D-602：fin_venue_account_snapshot 相邻差分窗（id/balance/ts 三元组）。
+type BalanceSnap struct {
+	ID      int64
+	Balance float64
+	Ts      time.Time
+}
+
+// BalanceDeltaWindows MT5 账户快照时序窗（balance_raw 相邻差分落账器输入——
+// 升序返回；venue=account id 键）。
+func (s *Store) BalanceDeltaWindows(ctx context.Context, venue string, since time.Time) ([]BalanceSnap, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, balance_raw, fetched_at FROM fin_venue_account_snapshot
+		WHERE venue=$1 AND fetched_at>=$2 AND balance_raw IS NOT NULL
+		ORDER BY fetched_at`, venue, since)
+	if err != nil {
+		return nil, fmt.Errorf("balance snaps %s: %w", venue, err)
+	}
+	defer rows.Close()
+	var out []BalanceSnap
+	for rows.Next() {
+		var b BalanceSnap
+		if err := rows.Scan(&b.ID, &b.Balance, &b.Ts); err != nil {
+			return nil, fmt.Errorf("scan snap: %w", err)
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+// ClosedPositionPnLBetween 窗口内关闭持仓的 realized_pnl 合计（差分残差抵扣——
+// venue 腿命中的 positions.realized_pnl；PnL 入账≠外部充提）。
+func (s *Store) ClosedPositionPnLBetween(ctx context.Context, venue string, from, to time.Time) (float64, error) {
+	var sum float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(p.realized_pnl),0) FROM positions p
+		WHERE p.status='CLOSED' AND p.closed_at>=$2 AND p.closed_at<=$3
+		  AND EXISTS (SELECT 1 FROM position_legs l WHERE l.position_id=p.id AND l.venue=$1)`,
+		venue, from, to).Scan(&sum)
+	return sum, err
+}

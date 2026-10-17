@@ -38,7 +38,12 @@ func startCexIOCollector(ctx context.Context, st *pgstore.Store, kickCh chan str
 			}
 			if bm != nil {
 				if n := mtIORound(ctx, st, bm); n > 0 {
-					log.Printf("[wiring] mt-io round: %d rows inserted", n)
+					log.Printf("[wiring] mt-io order scan: %d rows", n)
+				}
+				// D-602：双流皆空（OrderHistory 无 Balance 行+OnOrderUpdate 不推
+				// Balance 事件）主径=balance 差分落账（只补账不喂判定）
+				if n := mtIODeltaRound(ctx, st, bm); n > 0 {
+					log.Printf("[wiring] mt-io delta: %d rows", n)
 				}
 			}
 			select {
@@ -108,6 +113,51 @@ func mtIORound(ctx context.Context, st *pgstore.Store, bm *dashboard.BrokerManag
 			} else {
 				total += int(n)
 			}
+		}
+	}
+	return total
+}
+
+// mtIODeltaRound D-602：MT5 balance 差分落账器——双流皆空（OrderHistory 无
+// Balance 行+OnOrderUpdate 不推 Balance 事件）时主径：相邻快照 balance_raw
+// 残差（Δbalance−窗口内已实现持仓盈亏）≈0 外=外部充提行（只补账不喂判定；
+// 幂等键 mt5:delta:{acct}:{snap_id}）。XMR 0→$1000 型注资漏账堵口。
+func mtIODeltaRound(ctx context.Context, st *pgstore.Store, bm *dashboard.BrokerManager) int {
+	accs, err := st.MTIOAccountIDs(ctx)
+	if err != nil {
+		return 0
+	}
+	total := 0
+	for _, a := range accs {
+		snaps, err := st.BalanceDeltaWindows(ctx, a.Venue, time.Now().UTC().Add(-90*24*time.Hour))
+		if err != nil || len(snaps) < 2 {
+			continue
+		}
+		var rows []pgstore.VenueIO
+		for i := 1; i < len(snaps); i++ {
+			prev, cur := snaps[i-1], snaps[i]
+			delta := cur.Balance - prev.Balance
+			if delta == 0 {
+				continue
+			}
+			// 窗口内已关闭持仓的 realized_pnl 残差抵扣（PnL 入账≠外部充提）
+			pnl, _ := st.ClosedPositionPnLBetween(ctx, a.Venue, prev.Ts, cur.Ts)
+			res := delta - pnl
+			if res > -0.01 && res < 0.01 {
+				continue // 残差~0=纯 PnL 入账非外部流
+			}
+			dir := "deposit"
+			amt := res
+			if amt < 0 {
+				dir, amt = "withdraw", -amt
+			}
+			rows = append(rows, pgstore.VenueIO{
+				Venue: a.Venue, ConfigID: a.ID, Direction: dir, Ccy: "USD",
+				Amount: amt, ExternalID: fmt.Sprintf("mt5:delta:%d", cur.ID), Ts: cur.Ts,
+			})
+		}
+		if n, err := st.InsertVenueIO(ctx, rows); err == nil {
+			total += int(n)
 		}
 	}
 	return total
