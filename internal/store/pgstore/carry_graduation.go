@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"nox/internal/data/keydomain"
+	"nox/internal/econkb"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -202,6 +203,8 @@ type XAssetComboInsert struct {
 	// D-584 出处约束：approve 写 graduation 源+毕业行 id；admin 手写=manual_seed。
 	Source       string
 	ProvenanceID *int64
+	// PitExemptD D-587④ armed 坑闸豁免引用（空=禁豁免；非空=留痕通过）。
+	PitExemptD string
 }
 
 // InsertXAssetAllowCombo approve 写组合白名单（simulated=false=真仓白名单；venue env 门
@@ -222,14 +225,30 @@ func (s *Store) InsertXAssetAllowCombo(ctx context.Context, r *XAssetComboInsert
 		lq, sq, gr = r.MaxLongQty, r.MaxShortQty, r.MaxGrossUSD
 		nt = r.NotionalUSD
 	}
+	var pex any
+	if r.PitExemptD != "" {
+		pex = r.PitExemptD
+	}
+	// D-587④ armed 坑签名闸：enable 写径物理拒——组合 canonical/venue
+	// 命中坑签名且 pit_exempt_d 未落 D# 豁免引用 → 拒（豁免=显式留痕非默认）。
+	if blocked, hits := econkb.PitBlocked(econkb.Dir(), econkb.Input{
+		Canonical: r.CanonicalBuy, Canonicals: []string{r.CanonicalBuy, r.CanonicalSell},
+		VenueA: r.VenueBuy, VenueB: r.VenueSell,
+	}, r.PitExemptD); blocked {
+		ids := make([]string, 0, len(hits))
+		for _, h := range hits {
+			ids = append(ids, h.ID)
+		}
+		return 0, fmt.Errorf("坑签名命中 %v（enable 物理拒——豁免须 pit_exempt_d 落 D# 引用）", ids)
+	}
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell,
 			max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated, note, sizing_mode, funding_pct,
-			source, provenance_id)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11,$12,$13,$14,$15,$16)
+			source, provenance_id, pit_exempt_d)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11,$12,$13,$14,$15,$16,$17)
 		RETURNING id`,
 		r.CanonicalBuy, r.CanonicalSell, vb.Venue, vb.Type, vs.Venue, vs.Type,
-		lq, sq, gr, nt, r.Simulated, r.Note, mode, r.FundingPct, r.Source, r.ProvenanceID).Scan(&id)
+		lq, sq, gr, nt, r.Simulated, r.Note, mode, r.FundingPct, r.Source, r.ProvenanceID, pex).Scan(&id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {

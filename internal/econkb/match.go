@@ -19,6 +19,7 @@ import (
 type Input struct {
 	PayoffClass string
 	Canonical   string
+	Canonicals  []string // 双腿 canonical 集（任一命中即中——armed 组合闸用）
 	VenueA      string
 	VenueB      string
 }
@@ -90,12 +91,18 @@ func matchEntry(content string, in Input) bool {
 	if v := m["payoff_class"]; v != "" && v != in.PayoffClass {
 		return false
 	}
-	if v := m["canonicals"]; v != "" && in.Canonical != "" {
-		if !listHit(v, in.Canonical) {
+	if v := m["canonicals"]; v != "" {
+		keys := append([]string{in.Canonical}, in.Canonicals...)
+		ok := false
+		for _, k := range keys {
+			if k != "" && listHit(v, k) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
 			return false
 		}
-	} else if v != "" && in.Canonical == "" {
-		return false // canonicals 键在非空但输入无 canonical——不可证中=不中
 	}
 	if v := m["venues"]; v != "" {
 		ok := (in.VenueA != "" && listHit(v, in.VenueA)) || (in.VenueB != "" && listHit(v, in.VenueB))
@@ -141,4 +148,28 @@ func Dir() string {
 		return "/kn/docs/经济经验库"
 	}
 	return "docs/经济经验库"
+}
+
+// PitLabels 命中标签集（毕业卡/armed 面板共用——「⚠命中坑 <id>（EA-xx）」）。
+func PitLabels(dir string, in Input) []string {
+	hits := MatchHits(dir, in)
+	out := make([]string, 0, len(hits))
+	for _, h := range hits {
+		label := "⚠命中坑 " + h.ID
+		if h.EALink != "" {
+			label += "（" + h.EALink + "）"
+		}
+		out = append(out, label)
+	}
+	return out
+}
+
+// PitBlocked D-587④ armed 闸判据：命中坑签名且 pit_exempt_d 未落豁免引用 → true。
+// 豁免=D# 显式引用留痕（误判可开豁，禁默认）——签名保守语义不动（宁漏不误中）。
+func PitBlocked(dir string, in Input, exemptD string) (blocked bool, hits []Hit) {
+	hits = MatchHits(dir, in)
+	if len(hits) == 0 || exemptD != "" {
+		return false, hits
+	}
+	return true, hits
 }

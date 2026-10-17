@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"time"
 
+	"nox/internal/econkb"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -143,4 +145,55 @@ func (s *Store) RetireCombosMissingVenue(ctx context.Context) (int64, error) {
 		return 0, fmt.Errorf("retire combos missing venue: %w", err)
 	}
 	return tag.RowsAffected(), nil
+}
+
+// DisablePitHitCombos D-587④：armed 评估环坑闸——enabled 组合 canonical/venue
+// 命中坑签名且 pit_exempt_d 未落 D# 豁免 → 自动 enabled=false+note 留痕。
+func (s *Store) DisablePitHitCombos(ctx context.Context, dir string) (int, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, canonical_buy, canonical_sell, venue_buy, venue_sell, pit_exempt_d
+		FROM xasset_allow_combos WHERE enabled=true`)
+	if err != nil {
+		return 0, fmt.Errorf("list armed combos pit gate: %w", err)
+	}
+	type cand struct {
+		id             int64
+		cb, cs, vb, vs string
+		ex             *string
+	}
+	var cands []cand
+	for rows.Next() {
+		var c cand
+		if err := rows.Scan(&c.id, &c.cb, &c.cs, &c.vb, &c.vs, &c.ex); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scan armed combo: %w", err)
+		}
+		cands = append(cands, c)
+	}
+	rows.Close()
+	disabled := 0
+	for _, c := range cands {
+		ex := ""
+		if c.ex != nil {
+			ex = *c.ex
+		}
+		blocked, hits := econkb.PitBlocked(dir, econkb.Input{
+			Canonical: c.cb, Canonicals: []string{c.cb, c.cs}, VenueA: c.vb, VenueB: c.vs,
+		}, ex)
+		if !blocked {
+			continue
+		}
+		ids := make([]string, 0, len(hits))
+		for _, h := range hits {
+			ids = append(ids, h.ID)
+		}
+		if _, err := s.pool.Exec(ctx, `
+			UPDATE xasset_allow_combos SET enabled=false,
+			note = note || '｜' || $1 WHERE id=$2`,
+			fmt.Sprintf("坑闸摘：命中 %v（armed 自动摘——豁免须 pit_exempt_d 落 D#）", ids), c.id); err != nil {
+			return disabled, fmt.Errorf("disable pit combo %d: %w", c.id, err)
+		}
+		disabled++
+	}
+	return disabled, nil
 }

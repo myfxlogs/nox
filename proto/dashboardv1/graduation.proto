@@ -95,7 +95,8 @@ message XAssetAllowComboRow {
   google.protobuf.Timestamp breaker_resume_at = 23;
   int32 breaker_count = 24;                // 本窗已抑制尝试数（徽标 ×N）
   string pool_verdict = 25;                // D-563 S3 池判定：ok/conflict/unknown（待定黄标）
-  optional double margin_usd = 26;         // D-010：组合保证金总预算（双腿占用和上限；与 notional_usd 互斥）
+  optional double margin_usd = 26;
+  repeated string pit_hits = 27;           // D-587④：armed 行坑签名命中透出（观察面同源标注——闸在 enable 写径）         // D-010：组合保证金总预算（双腿占用和上限；与 notional_usd 互斥）
 }
 message ListXAssetAllowCombosResponse { repeated XAssetAllowComboRow rows = 1; }
 

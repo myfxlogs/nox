@@ -18,7 +18,9 @@ import (
 	"nox/internal/store/pgstore"
 
 	"connectrpc.com/connect"
+
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"nox/internal/econkb"
 )
 
 var comboVenueTypes = map[string]bool{"mt5": true, "perp": true, "spot": true} // mt4 已退役
@@ -43,6 +45,12 @@ func (s *Service) ListXAssetAllowCombos(ctx context.Context, _ *connect.Request[
 			CanonicalSell: r.CanonicalSell, VenueSell: r.VenueSell,
 			MaxLongQty: r.MaxLongQty, MaxShortQty: r.MaxShortQty, MaxGrossUsd: r.MaxGrossUSD,
 			NotionalUsd: r.NotionalUSD, MarginUsd: r.MarginUSD, Enabled: r.Enabled, Simulated: r.Simulated, Note: r.Note,
+			// D-587④：armed 行坑签名命中透出（观察面同源标注——enable 写径物理拒在前）
+			PitHits: econkb.PitLabels(econkb.Dir(), econkb.Input{
+				Canonical:  r.CanonicalBuy,
+				Canonicals: []string{r.CanonicalBuy, r.CanonicalSell},
+				VenueA:     r.VenueBuy, VenueB: r.VenueSell,
+			}),
 		}
 		_, notional, _ := s.gradDB().ListOpenPositionsForCombo(ctx, r.CanonicalBuy, r.CanonicalSell, r.VenueBuy, r.VenueSell)
 		row.ActiveNotionalUsd = notional
