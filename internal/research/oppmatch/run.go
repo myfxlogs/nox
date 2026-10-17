@@ -46,14 +46,15 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	if err != nil {
 		return 0, 0, err
 	}
-	// D-604 P2③：无流池桶权益消费点实拉（扫描拍单次 RPC——拉败该桶跳过
-	// +warn 留痕，禁显示陈值禁静默）。
+	// D-604 P2③：无流池桶权益消费点实拉（扫描拍首单次拉→map 引用——
+	// 退回㉗伤③修法：禁逐桶 Refresh；拉败该桶跳过+warn 留痕，禁显示陈值）。
 	if liveEquityMapFn != nil {
+		lm := fetchLiveEquityMap(ctx)
 		for i, b := range led.Buckets {
 			if b.VenueType == "mt4" || b.VenueType == "mt5" {
 				continue
 			}
-			if eq, ok := livePoolEquity(ctx, b.Venue, b.VenueType, b.EquityRaw); ok {
+			if eq, ok := lm.poolEquity(b.Venue, b.VenueType, b.EquityRaw, "[oppmatch]"); ok {
 				led.Buckets[i].EquityRaw = eq
 			} else {
 				led.Buckets[i].EquityRaw = 0 // 拉败=0 如实缺非陈值
@@ -274,6 +275,9 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	xferScan(ctx, st)
 	// 闲置 CEX 池缺口扫描（okx unified 类——无 earn 执行径如实记缺口行）。
 	idleGapScan(ctx, st)
+	// D-612 息差轮动所内面：earn 池低效候选→earn_rotation 提案（autoexec 族，
+	// 净值差终判在执行拍实拉——D-613 补正①）。
+	rotateScan(ctx, st)
 	// CFD swap 正息面→假设行（采集在跑消费断档接上；只产假设不碰钱）。
 	swapScan(ctx, st)
 	// 裸腿假设→对冲腿可行面（asset_equiv 类桥实读 universe；无腿如实注记）。

@@ -56,3 +56,31 @@ func TestVenueIO(t *testing.T) {
 		t.Errorf("withdraw fee want 1.5, got %v", rec[0].Fee)
 	}
 }
+
+// TestVenueIOTxIDDedup D-607 退回㉘端到端锚：deal 行先落（txid=order:{n}）→
+// ticket 扫描同笔查 txid 命中→跳过（fin_venue_io 同笔入金仅 1 行）。
+func TestVenueIOTxIDDedup(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	// config_id 占位（broker_configs 库行无关——查重键=config_id+txid）
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO fin_venue_io (venue, config_id, direction, ccy, amount, txid, external_id, ts)
+		VALUES ('110660304', 9901, 'deposit', 'USD', 1000, 'order:888', 'mt5:deal:999', now())`); err != nil {
+		t.Fatal(err)
+	}
+	// deal 已落→ticket 扫描查 txid='order:888' 命中→应跳过（同笔不双记）
+	ok, err := st.VenueIOTxIDExists(ctx, 9901, "order:888")
+	if err != nil || !ok {
+		t.Fatalf("txid 查重应命中：%v %v", ok, err)
+	}
+	// 异 txid 不误中
+	ok, err = st.VenueIOTxIDExists(ctx, 9901, "order:777")
+	if err != nil || ok {
+		t.Fatalf("异 txid 误中：%v %v", ok, err)
+	}
+	// external_id 向查同径（deal→ticket 反向）
+	ok, err = st.VenueIOExternalExists(ctx, 9901, "mt5:deal:999")
+	if err != nil || !ok {
+		t.Fatalf("external_id 查重应命中：%v %v", ok, err)
+	}
+}

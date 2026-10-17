@@ -120,3 +120,69 @@ func (s *Store) RecentIncomeByConfig(ctx context.Context, venue, venueType strin
 	}
 	return out, rows.Err()
 }
+
+// BalanceSnap D-602：fin_venue_account_snapshot 相邻差分窗（id/balance/ts 三元组）。
+type BalanceSnap struct {
+	ID      int64
+	Balance float64
+	Ts      time.Time
+}
+
+// BalanceDeltaWindows MT5 账户快照时序窗（balance_raw 相邻差分落账器输入——
+// 升序返回；venue=account id 键）。
+func (s *Store) BalanceDeltaWindows(ctx context.Context, venue string, since time.Time) ([]BalanceSnap, error) {
+	// D-604：差分输入行限事件落地帧（mt_frame=流帧/mt_event=事件锚定写径）——
+	// rest 系周期摄取快照（rest_poll/rest_calib/scheduler）禁入差分输入。
+	// 小项⑶：id tiebreaker 防 fetched_at 同秒序不稳。
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, balance_raw, fetched_at FROM fin_venue_account_snapshot
+		WHERE venue=$1 AND fetched_at>=$2 AND balance_raw IS NOT NULL
+		  AND balance_raw > 0 -- D-609：断连/nil-acct 零余额帧=连接伪影非状态变（43 行实拍）——零↔真交替产 ±全额垃圾残差
+		  AND src IN ('mt_frame','mt_event')
+		ORDER BY fetched_at, id`, venue, since)
+	if err != nil {
+		return nil, fmt.Errorf("balance snaps %s: %w", venue, err)
+	}
+	defer rows.Close()
+	var out []BalanceSnap
+	for rows.Next() {
+		var b BalanceSnap
+		if err := rows.Scan(&b.ID, &b.Balance, &b.Ts); err != nil {
+			return nil, fmt.Errorf("scan snap: %w", err)
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+// ClosedPositionPnLBetween 窗口内关闭持仓的 realized_pnl 合计（差分残差抵扣——
+// venue 腿命中的 positions.realized_pnl；PnL 入账≠外部充提）。
+func (s *Store) ClosedPositionPnLBetween(ctx context.Context, venue string, from, to time.Time) (float64, error) {
+	var sum float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(p.realized_pnl),0) FROM positions p
+		WHERE p.status='CLOSED' AND p.closed_at>$2 AND p.closed_at<=$3
+		  AND EXISTS (SELECT 1 FROM position_legs l WHERE l.position_id=p.id AND l.venue=$1)`,
+		venue, from, to).Scan(&sum)
+	return sum, err
+}
+
+// VenueIOExternalExists D-607：external_id 存在性查（Deal 事件↔ticket 扫描
+// 双向查重联动——先到的留，防双记）。
+func (s *Store) VenueIOExternalExists(ctx context.Context, configID int64, externalID string) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM fin_venue_io WHERE config_id=$1 AND external_id=$2)`,
+		configID, externalID).Scan(&ok)
+	return ok, err
+}
+
+// VenueIOTxIDExists D-607：txid 存在性查（ticket 扫描面反向查重——deal 先落
+// 则 order 面 txid='order:{ticket}' 在库→跳过）。
+func (s *Store) VenueIOTxIDExists(ctx context.Context, configID int64, txid string) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM fin_venue_io WHERE config_id=$1 AND txid=$2)`,
+		configID, txid).Scan(&ok)
+	return ok, err
+}

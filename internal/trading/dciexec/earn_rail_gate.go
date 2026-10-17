@@ -110,6 +110,38 @@ func (r *gateEarnRail) Redeem(ctx context.Context, _ string, amount float64) err
 	return err
 }
 
+// Positions gate uni 借出在册 `GET /earn/uni/lends?currency=`——借出单列表
+// amount 字段聚合（防御解析：amount/current_amount 双键）。行缺=零在册如实空集。
+func (r *gateEarnRail) Positions(ctx context.Context, ccy string) ([]EarnPosition, error) {
+	b, err := r.req(ctx, http.MethodGet, "/earn/uni/lends", "currency="+ccy, "")
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		Currency string `json:"currency"`
+		Amount   string `json:"amount"`
+		CurAmt   string `json:"current_amount"`
+	}
+	if err := json.Unmarshal(b, &rows); err != nil {
+		return nil, fmt.Errorf("gate uni lends 解析: %w", err)
+	}
+	var tot float64
+	for _, row := range rows {
+		if row.Currency != "" && row.Currency != ccy {
+			continue
+		}
+		amt := parseF(row.Amount)
+		if amt <= 0 {
+			amt = parseF(row.CurAmt)
+		}
+		tot += amt
+	}
+	if tot <= 0 {
+		return nil, nil
+	}
+	return []EarnPosition{{ProductID: "gate-uni-" + ccy, Amount: tot}}, nil
+}
+
 // FreeBalance 现货户可动 `GET /spot/accounts?currency=`→available（uni-lend 从现货
 // 扣款——SG 实证期货户=0/现货户 $1999.6，perp 快照 998 是 9-30 化石行）。
 func (r *gateEarnRail) FreeBalance(ctx context.Context, ccy string) (float64, error) {

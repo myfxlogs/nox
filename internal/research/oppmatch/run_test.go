@@ -397,3 +397,118 @@ func TestXferScan(t *testing.T) {
 		t.Fatal("反向差不应产提案")
 	}
 }
+
+// TestXferScan_EarnPoolSource D-612 低效仓门锚：earn 已部署仓入源域——
+// xfergate:earn 仓权益+差超阈→调拨提案行产，文案带集中度透出（补正③ 35% 读数）。
+func TestXferScan_EarnPoolSource(t *testing.T) {
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
+	st, err := pgstore.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// 共享库防串扰：earn APR 全清（dst=argmax 会被其他测试残行抢位）。
+	if _, err := st.Pool().Exec(ctx, `
+		DELETE FROM fin_venue_account_snapshot WHERE venue IN ('xfrgate','xfrdst');
+		DELETE FROM fin_cex_earn_apr;
+		DELETE FROM fin_condition_gap WHERE subject LIKE 'USDT:xfrgate%'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx, `
+		INSERT INTO fin_venue_account_snapshot
+			(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at)
+			VALUES ('xfrgate','earn',800,800,0,'USDT',now());
+		INSERT INTO fin_cex_earn_apr (venue, ccy, product_type, apr) VALUES
+			('xfrgate','USDT','flexible',0.02),('xfrdst','USDT','flexible',0.09)`); err != nil {
+		t.Fatal(err)
+	}
+	xferScan(ctx, st)
+	var txt string
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT request_text FROM fin_condition_gap
+		 WHERE template_id='cross_venue_xfer' AND subject='USDT:xfrgate>xfrdst'`).Scan(&txt); err != nil {
+		t.Fatalf("earn 仓源调拨提案缺: %v", err)
+	}
+	if !strings.Contains(txt, "xfrgate→xfrdst") || !strings.Contains(txt, "集中度") {
+		t.Fatalf("提案文案缺集中度透出: %q", txt)
+	}
+	// 尾部自清：dst 残行会抢后续测试 argmax（共享库）。
+	st.Pool().Exec(ctx, `DELETE FROM fin_cex_earn_apr WHERE venue IN ('xfrgate','xfrdst')`)
+}
+
+// TestRotateScan_Proposal D-612 所内面锚：earn 池权益≥阈+鲜 APR 行→
+// earn_rotation 提案+评估卡落（净值差终判在执行拍实拉——扫描只产候选）。
+func TestRotateScan_Proposal(t *testing.T) {
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
+	st, err := pgstore.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx, `
+		DELETE FROM fin_venue_account_snapshot WHERE venue IN ('okx','gate');
+		DELETE FROM fin_cex_earn_apr WHERE venue IN ('okx','gate');
+		DELETE FROM fin_proposal WHERE template_id='earn_rotation' AND venue='okx'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx, `
+		INSERT INTO fin_venue_account_snapshot
+			(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at)
+			VALUES ('okx','earn',800,800,0,'USDT',now());
+		INSERT INTO fin_cex_earn_apr (venue, ccy, product_type, apr) VALUES
+			('okx','USDT','flexible',0.036)`); err != nil {
+		t.Fatal(err)
+	}
+	rotateScan(ctx, st)
+	var n int
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM fin_proposal WHERE template_id='earn_rotation' AND venue='okx' AND status='proposed'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("earn_rotation 提案缺: %d", n)
+	}
+	// 提案须带评估卡（无卡拒单 M4.1——autoexec 消费前提）。
+	if err := st.Pool().QueryRow(ctx, `
+		SELECT count(*) FROM fin_opp_eval e JOIN fin_proposal p ON e.proposal_id=p.id
+		WHERE p.template_id='earn_rotation' AND p.venue='okx'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("earn_rotation 评估卡缺: %d", n)
+	}
+	// 重扫幂等（proposed 唯一锚）。
+	rotateScan(ctx, st)
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM fin_proposal WHERE template_id='earn_rotation' AND venue='okx' AND status='proposed'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("重扫应幂等: %d", n)
+	}
+	// 陈 APR 行不比（fail-closed）：另一 venue 只落 25h 前行 → 零提案。
+	if _, err := st.Pool().Exec(ctx, `
+		INSERT INTO fin_venue_account_snapshot
+			(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at)
+			VALUES ('gate','earn',800,800,0,'USDT',now());
+		INSERT INTO fin_cex_earn_apr (venue, ccy, product_type, apr, ts) VALUES
+			('gate','USDT','flexible',0.036,now()-interval '25 hours')`); err != nil {
+		t.Fatal(err)
+	}
+	rotateScan(ctx, st)
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM fin_proposal WHERE template_id='earn_rotation' AND venue='gate'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("陈 APR 行不应产提案: %d", n)
+	}
+}

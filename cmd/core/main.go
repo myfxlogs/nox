@@ -18,6 +18,7 @@ import (
 	"nox/internal/ledger/reconcile"
 	"nox/internal/platform/config"
 	"nox/internal/platform/safego"
+	"nox/internal/research/oppmatch"
 	"nox/internal/research/scan"
 	"nox/internal/review"
 	"nox/internal/risk/position"
@@ -125,6 +126,18 @@ func main() {
 	// D-597 时序审计病灶①：swapledger 三倍日 venue weekday 延迟绑定（独立 cache 实例
 	// ——bpmon 自持一枚，fetcher 无状态每实例 24h TTL×3 户重拉量可忽略）。
 	swapVenueWeekday.Bind(dashboard.NewServerTZCache(24*time.Hour, serverTZFetcherFor(brokerMgr)))
+	// D-604 P1②：swapscan 入榜闸 MT equity 判定拍实拉（依赖注入——research 域禁
+	// import dashboard API 面；读败=nil ok=fail-closed 拒入榜非降级陈值）。
+	oppmatch.BindMTEquityFn(func(venue string) (float64, bool) {
+		// 退回㉖顺件①：5s 界（网关挂起卡死扫描环防护；venueLeverage 4s 限 ctx 先例）。
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		eq, _, _, err := brokerMgr.MTAccountSummary(ctx, venue)
+		if err != nil {
+			return 0, false
+		}
+		return eq, true
+	})
 	startCollectorsAndScanners(ctx, st, cfg, cexCfg, cexSymbols, incomeKickCh, okxIncomeKickCh, ioKickCh, refreshTopic, probeTopic, brokerMgr)
 	// 5c. TickSampler（§4.3）采样+落库装配已拆 wire_quotes.go（D-366 S2）。
 	startTickSampler(ctx, qbus, st, cexCfg)

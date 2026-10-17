@@ -274,3 +274,19 @@ func (s *Store) DCIOrderOpenIntent(ctx context.Context, reqPrefix string) (bool,
 		reqPrefix+"|%").Scan(&n)
 	return n > 0, err
 }
+
+// LatestEarnActivityAt D-612 轮动持有窗读口：venue 最近一次 EARN 账本行
+// （申购/轮动填单）时刻。无行→ok=false（无持仓史=窗约束不命中）。
+func (s *Store) LatestEarnActivityAt(ctx context.Context, venue string) (time.Time, bool, error) {
+	var ts *time.Time // max() 聚合恒回一行——无命中=NULL（非 ErrNoRows）
+	err := s.pool.QueryRow(ctx, `
+		SELECT max(created_at) FROM fin_dci_order
+		WHERE venue=$1 AND opt_type='EARN' AND status<>'failed'`, venue).Scan(&ts)
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("latest earn activity %s: %w", venue, err)
+	}
+	if ts == nil {
+		return time.Time{}, false, nil
+	}
+	return *ts, true, nil
+}

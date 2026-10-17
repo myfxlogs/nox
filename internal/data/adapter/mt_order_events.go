@@ -40,10 +40,28 @@ type OrderEventSource struct {
 	reconIdx int // 流重连退避档位（成功消费一帧后重置）
 
 	acctSink AcctFrameSink // D-445 S0：余额帧下沉（nil=不接）
+	dealSink DealSink      // D-607：Deal 事件下沉（nil=不接）
 }
 
 // SetAccountSink 注入余额帧 sink（可选；每帧含 Update==nil 纯余额帧都回调）。
 func (s *OrderEventSource) SetAccountSink(f AcctFrameSink) { s.acctSink = f }
+
+// DealEvent D-607：OnOrderUpdate Update.Deal 事件载荷（纯标量值对象——
+// service 层零 pb 泄漏；Type=proto DealType 原值供 sink 分类）。
+type DealEvent struct {
+	Ticket      int64
+	OrderTicket int64     // 查重联动键（↔ mt5:ticket:{n}）
+	Type        int32     // DealType 原值（2=Balance 等）
+	Profit      float64   // 入金正/出金负
+	Ts          time.Time // deal 时间（OpenTimeAsDateTime）
+}
+
+// DealSink Deal 事件下沉回调（cmd/core 注入——nil=不接）。
+type DealSink func(venueKey string, d DealEvent)
+
+// SetDealSink D-607：Deal 事件下沉（原 tap 弃件复得——DealInternal 在场被
+// 纯标量 tap 丢弃，三轮差分机在重建被自弃的信息）。
+func (s *OrderEventSource) SetDealSink(f DealSink) { s.dealSink = f }
 
 // Run 阻塞运行：OnOrderUpdate 事件流消费循环。ctx 取消退出。
 func (s *OrderEventSource) Run(ctx context.Context, sink func(bus.OrderEvent)) {
@@ -115,6 +133,19 @@ func (s *OrderEventSource) consumeStream(ctx context.Context, sink func(bus.Orde
 			continue
 		}
 		s.publish(sink, bus.OrderEvent{Venue: a.venue, Ticket: orderUpdateTicket(upd)})
+		// D-607：Deal 事件下沉（Balance/Credit/Charge/Correction/Bonus/InterestRate
+		// 非交易族→fin_venue_io；Buy/Sell 交易族=仓位流归 settlement 径不落 io）
+		if s.dealSink != nil {
+			if deal := upd.GetDeal(); deal != nil {
+				s.dealSink(a.venue, DealEvent{
+					Ticket:      deal.GetTicketNumber(),
+					OrderTicket: deal.GetOrderTicket(),
+					Type:        int32(deal.GetType()),
+					Profit:      deal.GetProfit(),
+					Ts:          deal.GetOpenTimeAsDateTime().AsTime(),
+				})
+			}
+		}
 		s.reconIdx = 0 // 成功消费一帧 → 重置重连退避档位
 	}
 }

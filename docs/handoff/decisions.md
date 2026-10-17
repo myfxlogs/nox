@@ -541,3 +541,83 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **反证锚**：清册任一「流✅」写径被证实为周期摄取伪装（src 值造假/帧合流夹带 rest 数据）——本照准塌，全景重审；无流白名单任一面被证实有官方推送——按 D-604 反证锚流化优先级拉满。
 - **拆票**：P2 票③=§3-3+3-4（rest_poll 退役+消费点拉取+NAV 日切实拉化+白名单面拉取落点，拉取败留痕+禁显示陈值）；P2 票④=§3-5（R2 对拍层删+N1/N2/N3 补闸+overview 待批卡 funding_ann 改 paper 现值）；P3 票⑤=§3-6（cexscan 消费拍化+swap_snapshots 帧锚定）——**票⑤前置=rate limit 核算**（设计稿原文「rate limit 核算后拆」）。每票带 §4 禁回归锚+SG 实拍项。
 - **复盘点**：P1 两票独立复审收口（票② @e74194eb5 待审中——本核验不妨碍其复审）；P2/P3 施工完成后判定径消费点 grep 清单全绿+快照坑四案同型零复发。
+
+## D-606（2026-10-17 决策席，业主回执）MT5 venue 能力边界定谳——供应商不扩函数
+
+- **业主回执**：mt5grp.io 不提供额外函数，可用面=mt5.proto 现有 RPC 终局（proto 权威源 /opt/grpc-proto/，仓内副本对拍一致）。
+- **裁定**：①#79（deal 史端点请求）生命周期能关——请求径死，resolve_note 注记挂下轮部署批带批（生产写权限闸）；②MT5 入金捕获终局架构=**order 面 ticket 扫描（主，实测滞后 ~48h 容许）+balance 差分兜底（成熟度+前向宽限防双计，ticket 滞后>宽限或永不落时补位）**——差分器从「过渡件」升**永久主径之一**，xmr-io 三返规格不变；③Manager API（mng5grpc）出局=非本 gateway 面；④D-604 反证锚「新 gateway 版本证实空户账户流」分支封死——MT5 判定面=判定时刻实拉终态。
+- **反证锚**：无（供应商能力定谳=外部事实，非本席推断可翻）。
+- **复盘点**：xmr-io 三返部署后差分器首行落账+双计回归锚绿=终局架构在产验证。
+
+## D-607（2026-10-17 决策席，业主纠偏）MT5 入金捕获主径翻案——OnOrderUpdate Deal 事件消费
+
+- **业主纠偏**：流事件是序列化好的——查 `OrderUpdate` 消息体实锤：自带 `Deal`（`DealInternal`：TicketNumber/DealType/Direction/**Profit 金额**/Commission/Swap/时间戳），`DealType_Balance=2` 即入金，Credit/Charge/Correction/Bonus/InterestRate 全族有标签。
+- **错误定性**：①D-601 只证了拉取面无 deal 端点、未查流面消息体；②「OnOrderUpdate 不推 Balance 事件」系未验证断言被采信（10-15 02:42Z mt_frame 余额帧到达=反证）；③现行 tap 纯标量（account_stream.go:40）把 Deal 丢弃——三轮差分机在重建被自弃的信息。
+- **裁定**：①主径=适配层 Deal 事件消费（提取→非交易 DealType 族过滤→`mt5:deal:{TicketNumber}` 幂等落 io）；②与既有 ticket 扫描查重联动（`Deal.OrderTicket`↔`mt5:ticket:{n}` 双向，先到留）；③差分器降对账兜底（三返规格不变，事件行入 ioSum 扣窗自洽）；④部署后首笔入金实证帧内容=验证锚（若 XM 实不推 Deal 帧=回落差分主径如实报）。
+- **反证锚**：若实证 OnOrderUpdate 对该券商 balance 操作不携 Deal/不推帧——主径回落差分（D-607①推翻，另 D#）。
+- **复盘点**：首笔真实入金 Deal 事件落 io 行+ticket/事件/差分三账本零双计对拍。
+
+## D-608（2026-10-17 决策席，业主令）skills 归属项目——正典路径顶层 skills/，应用目录降 symlink 桥
+
+- **业主令**：skills 是项目资产非某应用资产（devin cli 落 `.devin/skills/` 病灶）；每个席位/应用都须能读取使用。
+- **裁定**：①正典=仓库顶层 `skills/`（git 跟踪，deploy_sync 随推）；②`.devin/skills`/`.claude/skills`=指向 `../skills` 的 symlink 桥（应用原生发现不断，单一真相零副本）；③AGENTS boot④与工作流引用改指正典路径，并钉「禁再往应用私有目录落项目 skill」；④新增 skill 一律落 `skills/<名>/SKILL.md`。
+- **反证锚**：若某应用 symlink 机制不可用（Windows 克隆等）——该席位走 AGENTS.md 正典路径直读（文档引用已是主道，symlink 只是发现桥）。
+- **复盘点**：下一席位（含 devin cli 旧会话）按 AGENTS 引用路径调 skill 成功。
+
+## D-610（2026-10-17 实施席核算·决策席照准，原误号 D-606 已重编——撞号修）快照治理 P3 票⑤ rate limit 核算件——频度过但消费拍化不经济，范围①如实报不施工+范围③缩面待派
+
+> **决策席照准 10-17**：核算数学复核过（5min×7-10 REST≈2000-2900/day 对 venue 限额 <0.01%；判定消费=日频拍+执行侧实时复验兜陈值——候选面陈值降级=排序用非闸用）；「成本>收益不施工」在票面「先算后动」条款域内。**反证锚照单**：418/429/限频告警在案或陈表致候选错序实锤→消费拍化重启。
+
+- **核算（票面前置件，先算后动）**：现频度=cexscan 5min 扫描拍×（earn okx/binance ~2 + DCI product ~2 + spread 三所 ticker ~3-6）≈7-10 REST/拍≈2000-2900 req/day——对 venue 限额（binance sapi weight 12000/min、okx 公有 20/2s）占比 <0.01%，**rate limit 非约束**。
+- **消费拍化收益重估**：判定消费面（CexEarnAPR/DCI quotes）消费=opmatch 日频拍+执行侧实时复验（refreshOrderRef/APR 复验已在——设计稿自认「评估拍复核零变」）；spread 统计面 D-004 豁免保留主导频度。拆分后判定面拉取降 ~500×（日频化），但判定拉取占总频度占比小——**总频度降幅 <30%**；改造成本=scanOnce 判定/统计拉取分离+gate:earn 评估实拉接线，且判定陈值风险已被执行侧实时复验兜住（候选面陈值降级=排序用非闸用）。
+- **裁定**：**成本>收益，范围①消费拍化不施工（如实报——票面「核算未过=不施工」条款适用，核算结论=频度过但收益不经济）**；范围③ swap_snapshots 帧锚定独立于频度（MT swap 逐日计提正确性面）缩面保留待派；范围② 统计面豁免维持。P3 缩面后重整：票⑤′=swap_snapshots 帧锚定单件。
+- **反证锚**：若 cexscan 5min 拍被证实触发 venue 限频告警（418/429/权重告警在案）或判定消费面陈表致候选错序实锤——本裁定塌，消费拍化重启。
+
+## D-609（2026-10-17 决策席）零余额帧伪影拒入——差分/快照双径拦（热修直落）
+
+- **实证**：xmr-io 五返件部署首拍差分兜底回填 85 行 inferred（3001157 净 +69,113.61——3k 权益户不可能）；根因=断连/nil-acct **零余额帧**被持久化（7877 行 mt_frame 中 43 行 balance=0 实拍）→零↔真交替产 ±全额垃圾残差对；全部基线前（perf 零污染）。
+- **裁定**：belt+suspenders 双拦——`BalanceDeltaWindows` 加 `balance_raw>0`（读径）+`mtFrameRows` 拒非正余额帧（写径）；85 假行 DELETE 清除（系统性错误产物，非手工补账）；热修部署后差分新拍**零新增**实证。
+- **反证锚**：若某 MT 户真实清零再注资（balance 0 为真态）——该户差分漏捕该段，如实报另 D#（当前三户均非此形态）。
+- **复盘点**：下一断连周期后 mt_frame 零行不再新增+差分零垃圾行。
+
+## D-611（2026-10-17 决策席）venue 能力账专项目录=`docs/能力账/`——程序级资产定位
+
+- **业主问**：能力账工程要不要立专项目录。
+- **裁定**：立。①证据件目录=`docs/能力账/`（probe JSON+.md 表入此，不入 docs/ 根杂散）；②`INDEX.md`=全图入口——venue×域×探测日×证据件×skills 指针×已证盲区 五行头登记，新 venue 探完追加行（mt5/bn 票产物同步补 INDEX 行）；③harness 按 venue 落 `tools/<venue>probe`（第三 venue 到场再抽公共框架，现在不过度设计）；④skills 正典 `skills/` 不动（D-608）——能力账=证据层，skills=消费层，两层分开指向。
+- **复盘点**：INDEX.md 首两行（mt5/bn）随各自票交付在案。
+
+## D-612（2026-10-17 决策席，业主纠偏；原误号 D-611 已重编——撞号修）息差轮动原则——低效仓零容忍
+
+- **业主纠偏**：「等闲钱出现」路子错——活期收益到不了 8%；正确=**有更高收益时调动低收益仓换高收益仓**，才可能完成 ≥8%（D-030）。
+- **实证盲区**：`xfer.go:55 !p.Idle→continue`（「deployed 不动只提闲量」注释自认）——已部署资金对轮动面不可见；earn autoexec（D-598）只申闲钱。全系统零轮动径。
+- **裁定**：①**眠钱零容忍（D-286）升格为低效仓零容忍**——活期仓=轮动弹药非终点站：同资产活期族现仓 APR 与最优仓净差（扣申赎双程成本+时滞机会成本）超阈→轮动；②**所内轮动=autoexec 族**（redeemFlexible+Subscribe 现成 rail，D-598 语义延续：落库即执行+质量闸+坑表）；**跨 venue 轮动=调拨提案**（链上划转业主域——xferScan 扩面：idle 门换低效仓门）；③流动性守卫=各 venue 保留策略弹药水位（D-549 装配径依赖）+最小持有窗防费耗+促销档不计（D-514 窗口教训）；④轮动抬升 earn 基准→D-514 DCI 闸自动收紧=正确耦合零改。
+- **反证锚**：若轮动净值差实测被申赎成本/时滞吃尽（连续 N 次轮动净增益≤0）——阈值模型缺陷，回退仅闲钱径另 D#。
+- **复盘点**：首个轮动周期后 earn 基准 APR 上移实拍+轮动净增益≥阈值复算。
+
+## D-613（2026-10-17 复审席）息差轮动引擎方案核验——照准（附三处补正）拆施工
+
+- **核验（亲证 8 项）**：①`xfer.go:55 !p.Idle→continue`「deployed 不动只提闲量」自认盲区属实；②`fin_cex_earn_apr`+`LatestCexEarnAPRs`(cex_scan.go:56 DISTINCT ON)在案；③earn rail=redeem/subscribe 现成（dciexec/earn.go+bnapi_earn.go+earn_rail_gate.go 含 APR 复验）；④xferScan→fin_condition_gap 调拨提案径已在产；⑤fin_cex_earn_apr=cexscan scheduler 后台 poll 产物（D-604 无流白名单面）;⑥earn-io 划转腿记账已落地（earn-io-ledger 票）；⑦autoexec 族语义 D-598 在产；⑧经济面=活期跨所差 1.1%档（binance 2.5/okx 3.65）——轮动增益真实但温和，抬基准层不冒充收益源。
+- **裁定：照准**——六段范围与既有件全对榫（闸列/rail/提案径/账本/守卫全复用零新造），反证锚+app_config 判据落表合规。
+- **补正三处（施工票面须写进）**：①**比价面分层**——候选排序可消费 fin_cex_earn_apr 表值（D-606 判例：候选陈值=排序用非闸用），但**轮动放行判定须执行拍实拉 APR 复验**（earn rail 现成复验件接入轮动判定——D-604 判定径零快照口径对齐，禁仅凭 24h 表值放行真轮动）；②**时滞成本模型分级**——赎回到账档按 venue 产品实测分档（T+0/限额排队/每日赎回额度），禁一律假设即时，档值来源=产品面实拉字段或实测台账；③**跨 venue 提案须带 CEX 集中度透出**——轮动改 venue 分布，调拨提案行附 35% 硬线对照读数供业主回执判断。
+- **顺手锚**：轮动事件归因簿来源标=rotation（与 idle 申购区分——复盘可读轮动贡献份额）。
+- **反证锚**：沿用 D-612 锚（轮动净值差连续被成本吃尽→阈值模型缺陷回退另 D#）；补：若比价表值与执行拍实拉 APR 系统性偏离（>1 档）——比价面降级仅候选提示，判定全面实拉化。
+
+## D-614（2026-10-17 决策席）新生策略年龄宽限——退役闸出生即死病灶热修
+
+- **实证**：息差轮动引擎部署后 1min，`[retire] earn_rotation retired: live 零提案零动作零收益 14d`——新模板零历史=零活动窗必然命中委任退役判据，引擎落地即死。
+- **裁定**：`StrategyRetireVerdict` 加新生宽限——`fin_opp_template.updated_at > now()-idle 窗` → 零活动不退（尚未开工非已死）；PnL 硬线优先于宽限（灾难即杀）；updated_at 前移=编辑延宽限（保守向可受）。锚=`TestStrategyRetireVerdict_NewbornGrace`（新生不退/过窗照退双态）。earn_rotation 策略行复活（decision-seat-revive）。
+- **反证锚**：若宽限被用于保僵尸（模板周期性 touch updated_at 但零活动）——加 touch 检测另 D#。
+- **复盘点**：earn_rotation 存活过 14d 宽限窗后由真实活动/零活动自然裁决。
+
+## D-615（2026-10-17 决策席+业主令）能力账证据件格式=二进制 protobuf（机器读，禁 JSON）
+
+- **业主令**：将来项目统一 protobuf 不用 JSON；证据件只用机器读。
+- **裁定**：能力账证据件=binary .pb（prototext/json 均不用）。schema 唯一真相=`proto/capability/probe_evidence.proto` 先入仓再产证据；字段号不复用、只加不改（pb 演进纪律）。人审兜底=`protoc --decode`/`prototext` 一行转。
+- **适用范围**：tools/*probe 全部新产出+将来匹配引擎消费面；已交 JSON 件（mt5-rpc-probe-2026-10-17.*）留档不动不重跑。
+- **红利**：pb schema 强类型把「raw_body 字段名漂移」类病在编译期焊死；防做假四层照旧（raw 响应以 bytes/string 字段嵌 Evidence schema）。
+
+## D-616（2026-10-17 业主令）数据真实性硬约束——严禁猜测编造
+
+- **业主令**：所有数据必须来自服务器端真实数据，严禁猜测和编造（ARB 已有同款，NOX 补立主契约明线）。
+- **裁定**：AGENTS.md §5 增「数据单源真实」禁线条目——判定/执行/账本/证据/报审一切数据面只认 venue 真实返回或系统实测记录；查不到=如实标缺，禁默认值顶替/禁 mock 充真/禁凭字段名函数名推断补值；实测声明必附出处。
+- **反证锚**：出现「应该有/大概是」句式或无出处实测声明=违本条——复审可凭此单条退回。

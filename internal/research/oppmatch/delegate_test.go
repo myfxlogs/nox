@@ -2,7 +2,6 @@ package oppmatch
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -127,41 +126,5 @@ func TestD513_DelegateGraduation(t *testing.T) {
 	}
 	if approved != 1 {
 		t.Fatalf("日批≤1 闸：当日委任批应 1，得 %d", approved)
-	}
-}
-
-// TestLivePoolEquity D-604 P2③ 锚：无流池拉败跳过（warn 留痕）/映射缺跳过/
-// 有流池快照直返/mt 池不拉——四态钉死「禁显示陈值禁静默」。
-func TestLivePoolEquity(t *testing.T) {
-	defer func() { liveEquityMapFn = nil }()
-	ctx := context.Background()
-	// ①无钩=快照直返（保旧语义）
-	if v, ok := livePoolEquity(ctx, "gate", "spot", 100); !ok || v != 100 {
-		t.Fatalf("无钩：%v %v", v, ok)
-	}
-	// ②mt 池不拉（快照直返——mt 快照流合法面）
-	liveEquityMapFn = func(ctx context.Context) (map[string]float64, error) {
-		return map[string]float64{"gate:spot": 500}, nil
-	}
-	if v, ok := livePoolEquity(ctx, "3001157", "mt5", 100); !ok || v != 100 {
-		t.Fatalf("mt 池误拉：%v %v", v, ok)
-	}
-	// ③无流池拉中→实拉值
-	if v, ok := livePoolEquity(ctx, "gate", "spot", 100); !ok || v != 500 {
-		t.Fatalf("无流池实拉：%v %v", v, ok)
-	}
-	// ④拉败→跳过（ok=false）
-	liveEquityMapFn = func(ctx context.Context) (map[string]float64, error) {
-		return nil, fmt.Errorf("rpc timeout")
-	}
-	if _, ok := livePoolEquity(ctx, "gate", "spot", 100); ok {
-		t.Fatal("拉败应跳过（ok=false）")
-	}
-	// ⑤映射缺→跳过
-	liveEquityMapFn = func(ctx context.Context) (map[string]float64, error) {
-		return map[string]float64{}, nil
-	}
-	if _, ok := livePoolEquity(ctx, "gate", "spot", 100); ok {
-		t.Fatal("映射缺应跳过")
 	}
 }

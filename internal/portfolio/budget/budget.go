@@ -95,18 +95,18 @@ func DailyCut(ctx context.Context, s Store, now, dayStart time.Time, maxNotional
 	// D-604 P2③：无流池（CEX 非流）逐池实拉——权益残差覆写后 SumNav 重聚
 	// （日切拍=事件锚定批处理豁免；拉败=池剔除非陈值入账）。
 	if liveEquityMapFn != nil {
+		lm, lmerr := liveEquityMapFn(ctx) // 日切拍首单次实拉（退回㉗伤③：禁逐池 Refresh 风暴）
 		var adj []pgstore.ExplorerIdlePool
 		for _, p := range nav.Pools {
 			if p.Ghost || p.VenueType == "mt4" || p.VenueType == "mt5" || p.Currency == "" {
 				adj = append(adj, p)
 				continue
 			}
-			m, merr := liveEquityMapFn(ctx)
 			key := p.Venue + ":" + p.VenueType
-			if eq, ok := m[key]; merr == nil && ok {
+			if eq, ok := lm[key]; lmerr == nil && ok {
 				p.Equity = eq
 			} else {
-				log.Printf("[budget] live equity %s 缺/败：%v（池剔除·warn 留痕）", key, merr)
+				log.Printf("[budget] live equity %s 缺/败：%v（池剔除·warn 留痕）", key, lmerr)
 				continue
 			}
 			adj = append(adj, p)
