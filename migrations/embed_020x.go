@@ -139,3 +139,6 @@ var ComboKillTriggerSQL string // kill 扳机判据列（net_pnl+连败双闸 NU
 
 //go:embed 1045_earn_rotation.sql
 var EarnRotationSQL string // D-612/D-613：earn_rotation 模板+豁免+autoexec+fin_strategy live
+
+//go:embed 1046_earn_yield_fanout_reversal.sql
+var EarnYieldFanoutReversalSQL string // earn_yield 扇出假账冲正（镜像行对消，禁删史）

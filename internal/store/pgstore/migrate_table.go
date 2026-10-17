@@ -236,6 +236,7 @@ var migrationFiles = []struct {
 	{1040, migrations.PaperFirstGateSQL, false},               // D-593：全模板纸面先行不变量
 	{1042, migrations.TemplateAutoexecSQL, false},             // D-598：承接位提案自动执行判据列（autoexec+豁免族种子）
 	{1043, migrations.ComboPitGateSQL, false},
-	{1044, migrations.ComboKillTriggerSQL, false}, // D-587④：armed 坑签名闸（pit_exempt_d 列）
-	{1045, migrations.EarnRotationSQL, false},     // D-612/D-613：earn_rotation 息差轮动模板注册
+	{1044, migrations.ComboKillTriggerSQL, false},        // D-587④：armed 坑签名闸（pit_exempt_d 列）
+	{1045, migrations.EarnRotationSQL, false},            // D-612/D-613：earn_rotation 息差轮动模板注册
+	{1046, migrations.EarnYieldFanoutReversalSQL, false}, // earn_yield 扇出假账冲正（镜像行对消，禁删史）
 }

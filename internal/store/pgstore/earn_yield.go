@@ -29,15 +29,17 @@ func (s *Store) PrevSnapshotEquity(ctx context.Context, vn, venueType, ccy strin
 	return eq, ts, true, nil
 }
 
-// EarnSubscribeSum (venue) 窗内 fin_dci_order opt_type='EARN' status='filled' 申购量
-// 合计——池增量归属的「已归属流入」扣减项（赎回无台账行=无扣减项，负 Δ 如实负收益；
-// 划转台账现无 CEX earn 户记轨——禁臆造）。
-func (s *Store) EarnSubscribeSum(ctx context.Context, vn string, from, to time.Time) (float64, error) {
+// EarnSubscribeSum (venue,ccy) 窗内 fin_dci_order opt_type='EARN' status='filled'
+// 申购量合计——池增量归属的「已归属流入」扣减项（赎回无台账行=无扣减项，负 Δ 如实
+// 负收益；划转台账现无 CEX earn 户记轨——禁臆造）。ccy 维度必带：扣减只对申购币种
+// 自身行——venue 级汇总喂给逐币行=每行各扣一遍扇出假账（binance −$30k 实证，
+// STATE「binance earn_yield 归属扇出修复」票）。
+func (s *Store) EarnSubscribeSum(ctx context.Context, vn, ccy string, from, to time.Time) (float64, error) {
 	var sum float64
 	err := s.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(qty),0) FROM fin_dci_order
-		WHERE venue=$1 AND opt_type='EARN' AND status='filled'
-		  AND created_at > $2 AND created_at <= $3`, vn, from, to).Scan(&sum)
+		WHERE venue=$1 AND opt_type='EARN' AND status='filled' AND invest_ccy=$2
+		  AND created_at > $3 AND created_at <= $4`, vn, ccy, from, to).Scan(&sum)
 	if err != nil {
 		return 0, fmt.Errorf("earn subscribe sum: %w", err)
 	}

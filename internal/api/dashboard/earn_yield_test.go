@@ -15,7 +15,8 @@ type fakeYieldStore struct {
 		ts  time.Time
 		has bool
 	}
-	flows   float64
+	// flows 按 (venue,ccy) 行级窗内申购流——key=ccy（单池单币，测试域足够）。
+	flows   map[string]float64
 	shares  map[string]float64
 	events  []pgstore.IncomeEvent
 	orders  []pgstore.EarnPoolOrder
@@ -30,8 +31,8 @@ func (f *fakeYieldStore) PrevSnapshotEquity(_ context.Context, _, _, ccy string,
 	p := f.prev[ccy]
 	return p.eq, p.ts, p.has, nil
 }
-func (f *fakeYieldStore) EarnSubscribeSum(context.Context, string, time.Time, time.Time) (float64, error) {
-	return f.flows, nil
+func (f *fakeYieldStore) EarnSubscribeSum(_ context.Context, _, ccy string, _, _ time.Time) (float64, error) {
+	return f.flows[ccy], nil
 }
 func (f *fakeYieldStore) InsertIncomeEvents(_ context.Context, evs []pgstore.IncomeEvent) (int64, error) {
 	f.events = append(f.events, evs...)
@@ -82,13 +83,13 @@ func TestEarnYieldAttribution(t *testing.T) {
 		t.Fatalf("首拍误入账: %+v", fs.events)
 	}
 
-	// ②申购流入+x 后的池行：Δ=x 全为流入 → 零收益行
+	// ②申购流入+x 后的池行：Δ=x 全为流入 → 零收益行（流按 ccy 行级查）
 	fs.prev["USDT"] = struct {
 		eq  float64
 		ts  time.Time
 		has bool
 	}{1999.64, now.Add(-time.Hour), true}
-	fs.flows = 500 // 同拍内本系统申购 +500（Δ 全冲销）
+	fs.flows = map[string]float64{"USDT": 500} // 同拍内本系统申购 +500（Δ 全冲销）
 	m.attributeEarnYield(ctx, []pgstore.VenueAccountSnapshot{
 		{Venue: "gate", VenueType: "earn", Currency: "USDT", EquityRaw: 2499.64, FetchedAt: now.Add(time.Minute)},
 	})
@@ -97,7 +98,7 @@ func TestEarnYieldAttribution(t *testing.T) {
 	}
 
 	// ③复投增量：池 +0.0434 无申购流 → earn_yield=+0.0434
-	fs.flows = 0
+	fs.flows = nil
 	fs.prev["USDT"] = struct {
 		eq  float64
 		ts  time.Time
@@ -128,7 +129,7 @@ func TestEarnYieldAttribution(t *testing.T) {
 		t.Fatalf("赎出 Δ 未如实: %+v", fs.events)
 	}
 
-	// ⑤D-516 归属系数：BTC 池 share=0.3334 → 收益同乘
+	// ⑤D-516 归属系数：BTC 池 share=0.3334 → 收益同乘（Δ=0.03 过零额滤）
 	fs.shares = map[string]float64{"binance\x00earn\x00BTC": 0.3334}
 	fs.prev["BTC"] = struct {
 		eq  float64
@@ -136,14 +137,85 @@ func TestEarnYieldAttribution(t *testing.T) {
 		has bool
 	}{0.0568, now.Add(-time.Hour), true}
 	m.attributeEarnYield(ctx, []pgstore.VenueAccountSnapshot{
-		{Venue: "binance", VenueType: "earn", Currency: "BTC", EquityRaw: 0.0578, FetchedAt: now.Add(4 * time.Minute)},
+		{Venue: "binance", VenueType: "earn", Currency: "BTC", EquityRaw: 0.0868, FetchedAt: now.Add(4 * time.Minute)},
 	})
 	if len(fs.events) != 3 {
 		t.Fatalf("系数行未入账: %+v", fs.events)
 	}
-	want := 0.001 * 0.3334
+	want := 0.03 * 0.3334
 	if fs.events[2].AmountUSD < want-1e-9 || fs.events[2].AmountUSD > want+1e-9 {
 		t.Fatalf("归属系数未乘: got=%v want=%v", fs.events[2].AmountUSD, want)
+	}
+}
+
+// TestEarnYieldNoFanout 扇出回归锚：venue 级单币（USDT）申购流只落 USDT 自身行，
+// 同批非申购币种行零扇入（binance −$30k 假账病灶——逐币行扣 venue 级汇总）。
+func TestEarnYieldNoFanout(t *testing.T) {
+	fs := &fakeYieldStore{prev: map[string]struct {
+		eq  float64
+		ts  time.Time
+		has bool
+	}{}}
+	m := &AccountMonitor{yieldStore: fs}
+	ctx := context.Background()
+	now := time.Now()
+
+	fs.flows = map[string]float64{"USDT": 351.64} // venue 级流只属 USDT 池
+	fs.prev["USDT"] = struct {
+		eq  float64
+		ts  time.Time
+		has bool
+	}{1000.0, now.Add(-time.Hour), true}
+	fs.prev["DOGE"] = struct {
+		eq  float64
+		ts  time.Time
+		has bool
+	}{52886.43, now.Add(-time.Hour), true}
+	m.attributeEarnYield(ctx, []pgstore.VenueAccountSnapshot{
+		{Venue: "binance", VenueType: "earn", Currency: "USDT", EquityRaw: 1351.66, FetchedAt: now},  // 申购 351.64+真收益 0.02
+		{Venue: "binance", VenueType: "earn", Currency: "DOGE", EquityRaw: 52886.43, FetchedAt: now}, // 持平——病灶下=−351.64 假账行
+	})
+	if len(fs.events) != 1 {
+		t.Fatalf("扇出未绝: %+v", fs.events)
+	}
+	if fs.events[0].Symbol != "USDT" || fs.events[0].AmountUSD < 0.019 || fs.events[0].AmountUSD > 0.021 {
+		t.Fatalf("USDT 行口径错: %+v", fs.events[0])
+	}
+}
+
+// TestEarnYieldZeroNotRecorded 零额不落锚：写值 |Δ|<0.005（展示 0.00 界）不入账。
+func TestEarnYieldZeroNotRecorded(t *testing.T) {
+	fs := &fakeYieldStore{prev: map[string]struct {
+		eq  float64
+		ts  time.Time
+		has bool
+	}{}}
+	m := &AccountMonitor{yieldStore: fs}
+	ctx := context.Background()
+	now := time.Now()
+
+	fs.prev["DOGE"] = struct {
+		eq  float64
+		ts  time.Time
+		has bool
+	}{52886.43, now.Add(-time.Hour), true}
+	fs.prev["USDT"] = struct {
+		eq  float64
+		ts  time.Time
+		has bool
+	}{1000.0, now.Add(-time.Hour), true}
+	m.attributeEarnYield(ctx, []pgstore.VenueAccountSnapshot{
+		{Venue: "binance", VenueType: "earn", Currency: "DOGE", EquityRaw: 52886.4339, FetchedAt: now}, // +0.0039
+		{Venue: "binance", VenueType: "earn", Currency: "USDT", EquityRaw: 1000.0042, FetchedAt: now},  // +0.0042
+	})
+	if len(fs.events) != 0 {
+		t.Fatalf("零额行误入账: %+v", fs.events)
+	}
+	m.attributeEarnYield(ctx, []pgstore.VenueAccountSnapshot{
+		{Venue: "binance", VenueType: "earn", Currency: "USDT", EquityRaw: 1000.0051, FetchedAt: now}, // +0.0051 过界
+	})
+	if len(fs.events) != 1 || fs.events[0].AmountUSD < 0.005 {
+		t.Fatalf("过界行未入账: %+v", fs.events)
 	}
 }
 
