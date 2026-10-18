@@ -11,7 +11,10 @@
 // Equity=Σqty 指纹永不进 map（禁线：指纹禁入判定/账本径）。
 package main
 
-import v1 "nox/internal/gen/dashboardv1"
+import (
+	"nox/internal/data/venue"
+	v1 "nox/internal/gen/dashboardv1"
+)
 
 // liveEquityMapFromAccounts 账户实拉集→venue:type:ccy→权益映射（纯函数可测）。
 func liveEquityMapFromAccounts(accs []*v1.AccountInfo) map[string]float64 {
@@ -20,17 +23,21 @@ func liveEquityMapFromAccounts(accs []*v1.AccountInfo) map[string]float64 {
 		if a == nil {
 			continue
 		}
+		// 池键归一（okx unified/funding 按币种行映射缺实证坑）：spot/perp/futures
+		// 原始型与快照池 unified 键对不上→消费点永久映射缺 warn。写侧归一化
+		// 同口径（venue.NormalizeVenueType）——USDT 归现金池，非 USDT 各归各币种估值池。
+		vt := venue.NormalizeVenueType(a.AssetType, a.Venue, a.VenueType)
 		if len(a.Holdings) > 0 {
 			for _, h := range a.Holdings {
 				if h == nil || h.Ccy == "" {
 					continue
 				}
-				m[a.Venue+":"+a.VenueType+":"+h.Ccy] = h.Qty
+				m[a.Venue+":"+vt+":"+h.Ccy] = h.Qty
 			}
 			continue
 		}
 		if a.Currency != "" {
-			m[a.Venue+":"+a.VenueType+":"+a.Currency] = a.Equity
+			m[a.Venue+":"+vt+":"+a.Currency] = a.Equity
 		}
 	}
 	return m
