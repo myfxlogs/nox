@@ -75,18 +75,15 @@ function useHash(): string {
   return h;
 }
 
-// useActionBadge 投资人 nav 行动计数徽标（待批毕业数+请求箱未决数——
-// 前端只聚合 status 字段计数不裁准入；流事件驱动重取禁轮询）。
+// useActionBadge 投资人 nav 行动计数徽标（后端 GetActionBadge 供单值——
+// 前端零计算令：禁聚合禁过滤，流事件驱动重取禁轮询）。
 function useActionBadge(): number {
   const [n, setN] = useState(0);
   useEffect(() => {
     const load = async () => {
       try {
-        const [g, bx] = await Promise.all([
-          client.listCarryGraduations({}),
-          client.listRequestBox({}),
-        ]);
-        setN(g.rows.filter((r) => r.status === "pending").length + bx.items.length);
+        const r = await client.getActionBadge({});
+        setN(r.count);
       } catch { /* 徽标失败=静默降级不挡页 */ }
     };
     void load();
