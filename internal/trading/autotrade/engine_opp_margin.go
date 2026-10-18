@@ -92,10 +92,43 @@ func (e *Engine) resolveXAssetSizing(ctx context.Context, opp pgstore.Opportunit
 		return false
 	}
 	base := math.Min(eqB, eqS)
+	jitGapKind := ""
+	if base <= 0 && e.JitSweepFn != nil {
+		// JIT 归集前置（划转执行件）：缺资腿 earn 桶赎缺口额→交易户→重读
+		// 权益原路 sizing；归集败/仍非正才落业主请求箱。败因 kind=落箱分类
+		// （permission=授权面 key scope 缺——票面②）。
+		for _, lg := range []struct {
+			vk        string
+			eq, other float64
+		}{{spec.VenueBuy, eqB, eqS}, {spec.VenueSell, eqS, eqB}} {
+			if lg.eq > 0 || lg.other <= 0 {
+				continue
+			}
+			kind, err := e.JitSweepFn(ctx, lg.vk, lg.other-lg.eq)
+			if err != nil {
+				log.Printf("[autotrade] jit 归集 %s 缺口 %.2f 败（%s 落箱面）: %v", lg.vk, lg.other-lg.eq, kind, err)
+				jitGapKind = kind
+				continue
+			}
+			e.service.RefreshAccountEquity(ctx, lg.vk)
+			if v, _, _, ok := e.service.AccountEquityUSDAt(lg.vk); ok && v > 0 {
+				if lg.vk == spec.VenueBuy {
+					eqB = v
+				} else {
+					eqS = v
+				}
+			}
+		}
+		base = math.Min(eqB, eqS)
+	}
 	if base <= 0 {
 		// 池短fall → 条件请求自动化（D-581④）：armed 组合缺资机制化落箱。
+		gapKind := "capital"
+		if jitGapKind == "permission" {
+			gapKind = "permission" // jit 归集败因=授权面→permission 型请求箱（票面②）
+		}
 		if id, err := e.store.OpenConditionGap(ctx, &pgstore.ConditionGap{
-			TemplateID: "xasset_combo", Kind: "capital",
+			TemplateID: "xasset_combo", Kind: gapKind,
 			Subject: spec.VenueBuy + "|" + spec.VenueSell,
 			RequestText: fmt.Sprintf("毕业组合 armed 腿池缺资（%s=%.2f/%s=%.2f，sizing_mode=%s）——注资/装配后活池折算自动生效",
 				spec.VenueBuy, eqB, spec.VenueSell, eqS, spec.SizingMode)}); err == nil {

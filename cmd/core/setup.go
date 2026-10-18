@@ -289,6 +289,7 @@ func runServices(ctx context.Context, cancel context.CancelFunc, cfg *config.Con
 	// 9. HTTP 服务（装配+阻塞+优雅关闭提取至 setup_http.go 保行数）。
 	// D-191：DCI 申购执行器（凭据 exchange_configs 驱动，无凭据由 gap 径回执）。
 	dciEx := buildDCIExecutor(ctx, st, cp)
+	wireJit(atEngine, settleDeps, dciEx) // jit 划转执行件装配（dci_go.go——归集缝+结算回转钩）
 	startDCIPoolReconcile(ctx, dciEx)
 	startDCIResume(ctx, dciEx)               // D-198：提案断点续执（首个 DCI 采集拍后一次）
 	startDCISettle(ctx, dciEx, refreshTopic) // D-207：交割观察（cexscan 拍驱动）
