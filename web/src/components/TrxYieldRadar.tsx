@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { client } from "../api";
 import { onCase } from "../stream";
-import type { GetTrxYieldRadarResponse, GetTrxYieldCurveResponse } from "../gen/dashboardv1/trx_cex_pb";
+import type { GetTrxYieldRadarResponse, GetTrxYieldCurveResponse, HedgeCarry } from "../gen/dashboardv1/trx_cex_pb";
 import { fmtUsd, fmtNum, ts } from "./fmt";
 
 const fmtPct = (v: number) => (v ? `${v.toFixed(2)}%` : "—");
@@ -14,17 +14,20 @@ const round3 = (v: number) => Math.round(v * 1000) / 1000;
 export function TrxYieldRadar() {
   const [radar, setRadar] = useState<GetTrxYieldRadarResponse | null>(null);
   const [curve, setCurve] = useState<GetTrxYieldCurveResponse | null>(null);
+  const [carry, setCarry] = useState<HedgeCarry | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true); setErr(null);
     try {
-      const [r, c] = await Promise.all([
+      const [r, c, h] = await Promise.all([
         client.getTrxYieldRadar({}),
         client.getTrxYieldCurve({ days: 30 }),
+        client.getHedgeStructure({}),
       ]);
       setRadar(r); setCurve(c);
+      if (h.structure?.carry) setCarry(h.structure.carry);
     } catch { setErr("数据未就绪"); }
     finally { setLoading(false); }
   }, []);
@@ -116,6 +119,29 @@ export function TrxYieldRadar() {
             </div>
           </div>
         </>
+      )}
+      {carry && (
+        <div className="hedge-carry" role="group" aria-label="carry 统计">
+          <div className="hedge-carry-row">
+            <span className="muted">近 7 日</span>
+            <span>能量租金 {fmtNum(carry.trxRental7dTrx)} TRX</span>
+            <span>投票 {fmtNum(carry.trxVote7dTrx)} TRX</span>
+            <span>隔夜息 {fmtUsd(carry.cmcOvernight7dUsd)} USD</span>
+          </div>
+          <div className="hedge-carry-row">
+            <span className="muted">本月净额</span>
+            <span>{carry.mtdSampleDays > 0 ? `${fmtUsd(carry.mtdNetUsd)} USD` : "—"}</span>
+            <span className="muted">{carry.mtdSampleDays > 0 ? `样本 ${carry.mtdSampleDays} 天` : ""}</span>
+          </div>
+          <div className="hedge-carry-row">
+            <span className="muted">累计</span>
+            <span>{fmtUsd(carry.cumUsd)} USD</span>
+            <span className="muted">年化 {carry.annualizedPct > 0 ? `${carry.annualizedPct.toFixed(2)}%` : "—"}</span>
+            {carry.hedgedCumUsd > 0 && (
+              <span className="muted">对冲后 累计 {carry.hedgedCumUsd.toFixed(2)} USD · 年化 {carry.hedgedAnnualizedPct > 0 ? `${carry.hedgedAnnualizedPct.toFixed(2)}%` : "—"}</span>
+            )}
+          </div>
+        </div>
       )}
       <div className="muted" style={{ fontSize: "0.75em", marginTop: "8px", borderTop: "1px solid var(--line)", paddingTop: "8px" }}>
         能量=实收年化（收入÷质押量）；投票=SR 报价年化；组合=三成分合成年化（能量+投票+隔夜息）。

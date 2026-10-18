@@ -31,7 +31,6 @@ export function TrxHedgeCard() {
   const ready = structure && structure.mid > 0;
   const legSpot = structure?.legSpot;
   const legShort = structure?.legShort;
-  const carry = structure?.carry;
   const accts = structure?.accts;
 
   return (
@@ -92,29 +91,7 @@ export function TrxHedgeCard() {
               <span className="muted" style={{ marginLeft: 8 }}>· 近似中性</span>
             </span>
           </div>
-          {carry && (
-            <div className="hedge-carry" role="group" aria-label="carry 统计">
-              <div className="hedge-carry-row">
-                <span className="muted">近 7 日</span>
-                <span>能量租金 {fmtNum(carry.trxRental7dTrx)} TRX</span>
-                <span>投票 {fmtNum(carry.trxVote7dTrx)} TRX</span>
-                <span>隔夜息 {fmtUsd(carry.cmcOvernight7dUsd)} USD</span>
-              </div>
-              <div className="hedge-carry-row">
-                <span className="muted">本月净额</span>
-                <span>{carry.mtdSampleDays > 0 ? `${fmtUsd(carry.mtdNetUsd)} USD` : "—"}</span>
-                <span className="muted">{carry.mtdSampleDays > 0 ? `样本 ${carry.mtdSampleDays} 天` : ""}</span>
-              </div>
-              <div className="hedge-carry-row">
-                <span className="muted">累计</span>
-                <span>{fmtUsd(carry.cumUsd)} USD</span>
-                <span className="muted">年化 {carry.annualizedPct > 0 ? `${carry.annualizedPct.toFixed(2)}%` : "—"}</span>
-                {carry.hedgedCumUsd > 0 && (
-                  <span className="muted">对冲后 累计 {carry.hedgedCumUsd.toFixed(2)} USD · 年化 {carry.hedgedAnnualizedPct > 0 ? `${carry.hedgedAnnualizedPct.toFixed(2)}%` : "—"}</span>
-                )}
-              </div>
-            </div>
-          )}
+          {/* carry 统计条迁收益率卡（业主裁定——carry=收益事实非结构事实，归收益率卡域） */}
           {accts && (
             <div className="hedge-accts" role="group" aria-label="双账户摘要">
               <div className="hedge-acct-block">
