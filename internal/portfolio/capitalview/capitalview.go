@@ -118,8 +118,8 @@ func PoolKeys(bare, legType string) []string {
 	return out
 }
 
-// SnapPick 快照池行（与 D-358fix allocPoolOf 同序：精确 venue_type→unified→perp→
-// 该 venue 任意非空 equity 行）。CEX/MT 同构——MT 快照即其采集数据面。
+// SnapPick 快照池行（回退链=精确 venue_type→unified→perp 止——判定径快照清账：
+// 末档「任意非空行」已删，落不到 fail-closed）。CEX/MT 同构——MT 快照即其采集数据面。
 func SnapPick(snaps []pgstore.VenueAccountLatest, venueKey string) (pgstore.VenueAccountLatest, bool) {
 	k := keydomain.Parse(venueKey)
 	bare, vt := k.Venue, k.Type
@@ -136,11 +136,8 @@ func SnapPick(snaps []pgstore.VenueAccountLatest, venueKey string) (pgstore.Venu
 			return r, true
 		}
 	}
-	for _, r := range snaps {
-		if r.Venue == bare && r.EquityRaw != nil {
-			return r, true
-		}
-	}
+	// 判定径快照清账：末档「任意非空行」回退删——unified→perp 精确族止，
+	// 落不到=fail-closed 如实缺（禁拿不相关池凑数）。
 	return pgstore.VenueAccountLatest{}, false
 }
 

@@ -92,6 +92,8 @@ func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]Explore
 			&p.FreeMargin, &p.Currency, &p.FetchedAt, &p.BufferMultiple); err != nil {
 			return nil, fmt.Errorf("scan idle snapshot: %w", err)
 		}
+		// 判定径快照清账：Equity=此刻权益实拉（装配键在册才覆写；缺席如实保快照值）。
+		p.Equity = liveEquity(ctx, p.Venue, p.VenueType, p.Currency, p.Equity)
 		pools = append(pools, p)
 	}
 	if err := rows.Err(); err != nil {

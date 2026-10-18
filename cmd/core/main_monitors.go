@@ -17,7 +17,6 @@ import (
 	"nox/internal/platform/safego"
 	"nox/internal/portfolio/budget"
 	"nox/internal/research/oppmatch"
-	"nox/internal/trading/dciexec"
 
 	dashv1 "nox/internal/gen/dashboardv1"
 	dashv1connect "nox/internal/gen/dashboardv1/dashboardv1connect"
@@ -57,6 +56,7 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 	oppmatch.SetLiveEquityMapFn(liveMapFn)
 	budget.SetLiveEquityMapFn(liveMapFn)
 	dciexec.SetLiveEquityMapFn(liveMapFn) // 浓度透视分母实拉（earn.go liveConcentration）
+	pgstore.SetLiveEquityMapFn(liveMapFn) // explorer_idle 「此刻权益」实拉（判定径清账）
 	// D-571 包B：流状态事件双挂——bpMon（venue_online）+ acctMon（online 域分工不变）。
 	brokerMgr.SetStreamStateSink(func(vk string, on bool) {
 		bpMon.OnStreamState(vk, on)
