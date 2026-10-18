@@ -72,7 +72,8 @@ service DashboardService {
   // D-063：ListPersonalPositions RPC 随 personal 渲染面退役拆除（D-212 后零读者；表保留 TRX 域自用）。
   rpc TrxAccountRefresh(TrxAccountRefreshRequest) returns (TrxAccountRefreshResponse);  // D-254：手动刷新按钮+on-open 双踢 trx_account+trx_apr，返回最新 fin_trx_account 全字段快照
   rpc GetTrxYieldRadar(GetTrxYieldRadarRequest) returns (GetTrxYieldRadarResponse);  // D-258 S3：收益率雷达（能量 7d/30d + 投票 APR + floor）
-  rpc GetTrxYieldCurve(GetTrxYieldCurveRequest) returns (GetTrxYieldCurveResponse);  // D-278 S1：净收益率日曲线（三成分日序列+7d/30d 滚动年化+S4 敞口）
+  rpc GetTrxYieldCurve(GetTrxYieldCurveRequest) returns (GetTrxYieldCurveResponse);
+  rpc ListTrxTxs(ListTrxTxsRequest) returns (ListTrxTxsResponse); // TRX 页流水区读面（fin_trx_txs 直透，kind 过滤下推后端）  // D-278 S1：净收益率日曲线（三成分日序列+7d/30d 滚动年化+S4 敞口）
   rpc AddDailyIncome(AddDailyIncomeRequest) returns (AddDailyIncomeResponse);
   rpc ListDailyIncome(ListDailyIncomeRequest) returns (ListDailyIncomeResponse);
 

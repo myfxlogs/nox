@@ -79,7 +79,7 @@ func TestTRXTxUpsertIdempotent(t *testing.T) {
 	if err := s.UpsertTRXTx(ctx, tx); err != nil {
 		t.Fatalf("UpsertTRXTx 2: %v", err)
 	}
-	txs, err := s.ListTRXTxs(ctx, 10)
+	txs, err := s.ListTRXTxs(ctx, 10, "")
 	if err != nil {
 		t.Fatalf("ListTRXTxs: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestTRXTxVoteClaimAmountZero(t *testing.T) {
 	if err := s.UpsertTRXTx(ctx, tx); err != nil {
 		t.Fatalf("UpsertTRXTx vote_claim: %v", err)
 	}
-	txs, err := s.ListTRXTxs(ctx, 10)
+	txs, err := s.ListTRXTxs(ctx, 10, "")
 	if err != nil {
 		t.Fatalf("ListTRXTxs: %v", err)
 	}
