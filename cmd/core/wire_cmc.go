@@ -67,7 +67,12 @@ func buildCmcCollectors(ctx context.Context, st *pgstore.Store, cfg *config.Conf
 	// watchdog 陈旧告警+wire_health 表暗死三重，不静默轮询遮断）。
 	// history 无 WS 通道（归档 API 端点清单：WS 只 prices/heartbeat/account type6）——
 	// D-004 例外低频 reconcile（24h 增量流水，from=游标+1s）。
+	// D-212 修正：instrument bid/mid 价面 WS 无通道（订阅仅 type5/6/7 账户域——
+	// 协议面取证实证：无 instrument 价频订阅能力，禁凭猜写帧）——cmc_prices REST
+	// 是该字段主源非断流兜底（禁线语义不误伤：兜底禁的是遮断 WS 已有面）。
+	// collector 自带 wsHealthy+15min 降频闸限频。
 	return []collect.Named{
+		{Name: "cmc_prices", Interval: 60 * time.Second, Collector: prices},
 		{Name: "cmc_history", Interval: 24 * time.Hour, Collector: cmc.NewHistoryCollector(auth, accountID, st, cmc.DefaultRestBase)},
 	}, ws
 }
