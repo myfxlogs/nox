@@ -61,6 +61,7 @@ export function HedgeFlow() {
       </h2>
       {err && <div className="err">{err}</div>}
       {items.length > 0 ? (
+        <div className="table-scroll scroll-cap">
         <table className="rows">
           <thead><tr><th>时点</th><th>源</th><th>类型</th><th>金额</th><th>对手方/单据</th></tr></thead>
           <tbody>
@@ -75,6 +76,7 @@ export function HedgeFlow() {
             ))}
           </tbody>
         </table>
+        </div>
       ) : (
         <EmptyState>零流水行</EmptyState>
       )}
