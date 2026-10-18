@@ -48,6 +48,12 @@ func buildCexExchangeConfig(ctx context.Context, st *pgstore.Store, configKick *
 	if cfg.BinanceProxyURL != "" {
 		cexCfg.BinanceBaseURL = cfg.BinanceProxyURL
 	}
+	// TRADIFI 采集轴（D-624 前置闸②）：exchangeInfo 周期枚举 TRADIFI_PERPETUAL
+	// 品种→SymProvider 并源——funding/markPrice 既有采集轴自动扩面（禁双写径）。
+	tradifi := exchange.NewTradifiSymbols(httpx.BinanceApiSegBase(cexCfg.BinanceBaseURL, "fapi"))
+	tradifi.SetClient(httpx.Client())
+	safego.GoLoop("main:tradifi-syms", func() { tradifi.StartTradifiRefresh(ctx) })
+	cexCfg.SymProvider = exchange.MultiSymbolProvider{cexCfg.SymProvider, tradifi}
 	// D-551 S2：现货 exchangeInfo 端点注入（空=采集器内默认 vision 公开域）。
 	cexCfg.BinanceSpotInfoURL = cfg.BinanceSpotInfoURL
 	if cfg.OKXProxyURL != "" {

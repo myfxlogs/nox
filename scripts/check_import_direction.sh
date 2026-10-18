@@ -151,6 +151,7 @@ internal/research/explorer -> internal/platform/analyst
 internal/research/explorer -> internal/store/pgstore
 internal/research/oppmatch -> internal/data/collect/exchange
 internal/research/oppmatch -> internal/data/keydomain
+internal/research/oppmatch -> internal/data/fact
 internal/research/oppmatch -> internal/platform/httpx
 internal/research/oppmatch -> internal/portfolio/lifecycle
 internal/research/oppmatch -> internal/research/econ

@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"nox/internal/data/fact"
 	"nox/internal/store/pgstore"
 )
 
@@ -50,6 +51,28 @@ func s2Bridge(ctx context.Context, st *pgstore.Store) {
 			log.Printf("[s2-bridge] #%d %s: %v", h.ID, h.CategoryKey, err)
 		}
 	}
+}
+
+// s2TradifiAxesReady TRADIFI 采集轴达标判（D-624 前置闸消费面）：休市历轴
+// =MT 腿 trade_session facts 30d 内有行（SessionsFacts 日刷件——native/canonical
+// 双发故 mt_symbol 裸名直查）；资金费率轴=binance funding facts 26h 新鲜行
+// （premiumIndex/markPrice 采集轴产）。返回 miss=缺失轴名（""=双轴齐）。
+func s2TradifiAxesReady(ctx context.Context, st *pgstore.Store, mtVenue, mtSym, cexSym string) (string, error) {
+	sessions, err := st.FactsSince(ctx, fact.KindTradeSession, mtVenue, mtSym, time.Now().Add(-30*24*time.Hour))
+	if err != nil {
+		return "", fmt.Errorf("trade_session facts 读败: %w", err)
+	}
+	if len(sessions) == 0 {
+		return fmt.Sprintf("休市历轴空（%s %s trade_session 30d 零行——采集轴未建/品种未映射）", mtVenue, mtSym), nil
+	}
+	funding, err := st.FactsSince(ctx, fact.KindFunding, "binance", cexSym, time.Now().Add(-26*time.Hour))
+	if err != nil {
+		return "", fmt.Errorf("funding facts 读败: %w", err)
+	}
+	if len(funding) == 0 {
+		return fmt.Sprintf("资金费率轴空（binance %s funding 26h 零行——TRADIFI 品种枚举未覆盖/采集轴未产）", cexSym), nil
+	}
+	return "", nil
 }
 
 // s2LegCombo cfd_swap_hedged 方向→腿位映射（D-548 复审修）：category_key
@@ -125,6 +148,14 @@ func bridgeOne(ctx context.Context, st *pgstore.Store, h pgstore.OppHypothesis) 
 			return st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
 				"S2桥：approved 假设#%d（%s）TRADIFI_PERP 腿参数缺——params_proto{mt_venue,mt_symbol,side,cex_symbol} 未配齐，拒猜腿位",
 				h.ID, h.CategoryKey), 24*time.Hour)
+		}
+		// D-624 前置闸①②消费面（采集轴建置票）：休市历轴+资金费率轴缺一拒桥——
+		// 无历品种=休市窗不可对冲硬敞口；无费率实值=收益性无法评估。
+		if miss, aerr := s2TradifiAxesReady(ctx, st, legs.MtVenue, legs.MtSymbol, legs.CexSymbol); aerr != nil {
+			return fmt.Errorf("tradifi 采集轴读败: %w", aerr)
+		} else if miss != "" {
+			return st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
+				"S2桥：approved 假设#%d（%s）TRADIFI_PERP 采集轴未达——%s", h.ID, h.CategoryKey, miss), 24*time.Hour)
 		}
 		notional, nerr := s2TrialNotionalAt(ctx, st)
 		if nerr != nil {
