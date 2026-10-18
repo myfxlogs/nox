@@ -10,6 +10,7 @@ import type { RequestBoxItem } from "../gen/dashboardv1/request_box_pb";
 import { ResolveRequestState } from "../gen/dashboardv1/request_box_pb";
 import { fmtUsd } from "../components/fmt";
 import { RiskHeartbeat } from "./overview_heartbeat";
+import { QuoteStrip } from "../components/QuoteStrip";
 import { StatTile } from "../components/StatTile";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
@@ -121,6 +122,9 @@ export default function OverviewPage() {
         </section>
       )}
 
+      {/* S3′ 三件补：报价条=待办下 KPI 上第二眼活体感（自持订阅 quote 帧+UTC 钟） */}
+      <QuoteStrip />
+
       {/* §1 KPI 横排（StatTile 阵——NAV/总投入/本金/可动用/在息/业绩；
           卡可点击下钻组成明细——后端 breakdowns 按 group 过滤直渲） */}
       <h2>盘面</h2>
@@ -222,8 +226,6 @@ export default function OverviewPage() {
       ) : <EmptyState>无在仓订单</EmptyState>}
       {b && b.paperCount > 0 && <div className="muted">纸面沙箱 {b.paperCount} 条（不入本金）</div>}
 
-      <RiskHeartbeat b={b} onCard={setCardModal} />
-
       {/* §8 等待面缩览（pending/观察中毕业+待执行提案——等待因+龄，后端拼行） */}
       <h2>等待面</h2>
       {b && b.waiting.length > 0 ? (
@@ -276,6 +278,9 @@ export default function OverviewPage() {
           ))}
         </div>
       ) : <EmptyState>漏斗计数未供</EmptyState>}
+
+      {/* S3′ 三件补：风险心跳页底最末段（全段之后——组件/数据零动仅位移） */}
+      <RiskHeartbeat b={b} onCard={setCardModal} />
 
       {cardModal && (
         <Modal open onClose={() => setCardModal(null)} title={cardModal.title} width={520}>
