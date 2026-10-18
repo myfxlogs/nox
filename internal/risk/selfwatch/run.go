@@ -105,8 +105,20 @@ func anomalyLoop(ctx context.Context, d Deps) {
 	}
 }
 
+// seatDispatchLine D-622：需席位动作的告警末行固定嵌可转发开工令（与复审收口转交词
+// 同构——固定末位=缺席立辨，业主复制粘贴即派发；仅提示词载体，系统不代执行、
+// 不做可点击执行）。泛化面：fin_condition_gap 推送等需动作告警模板同法引入。
+func seatDispatchLine(role, goal string) string {
+	return fmt.Sprintf("\n[角色:%s] %s", role, goal)
+}
+
+// liveGateRenewDispatch D-622 首件：LIVE 时效告警（warn/critical）末行的决策席开工令。
+var liveGateRenewDispatch = seatDispatchLine("决策",
+	"LIVE 授权续权（读 STATE 本行——核 readiness+30d 运营实况→GrantLive 续权）")
+
 // checkLiveGateExpiry D-620⑧：LIVE 授权时效行——mode=LIVE 且剩<24h warn once、
 // 已过期 critical once（InsertAlertDedup 同窗去重，非自管 latch）。
+// 文案末行=D-622 席位转发开工令（去重键含全文案——换令=换键，部署后首枚即新推）。
 func checkLiveGateExpiry(ctx context.Context, d Deps) {
 	if d.LiveGateStatus == nil {
 		return
@@ -121,11 +133,11 @@ func checkLiveGateExpiry(ctx context.Context, d Deps) {
 	}
 	now := d.now()
 	if now.After(*exp) {
-		if err := d.Store.InsertAlertDedup(ctx, "critical", "live gate expired（真金授权已过期——到期自验锚 D-620）", 24*time.Hour); err != nil {
+		if err := d.Store.InsertAlertDedup(ctx, "critical", "live gate expired（真金授权已过期——到期自验锚 D-620）"+liveGateRenewDispatch, 24*time.Hour); err != nil {
 			log.Printf("[selfwatch] live gate expired alert: %v", err)
 		}
 	} else if left := exp.Sub(now); left < 24*time.Hour {
-		if err := d.Store.InsertAlertDedup(ctx, "warn", fmt.Sprintf("live gate 剩余 %.1fh（<24h 到期预警——续权须新 readiness 证据）", left.Hours()), 12*time.Hour); err != nil {
+		if err := d.Store.InsertAlertDedup(ctx, "warn", fmt.Sprintf("live gate 剩余 %.1fh（<24h 到期预警——续权须新 readiness 证据）%s", left.Hours(), liveGateRenewDispatch), 12*time.Hour); err != nil {
 			log.Printf("[selfwatch] live gate expiry warn: %v", err)
 		}
 	}
