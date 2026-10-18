@@ -42,10 +42,12 @@ export function MappingModal(p: { venue: string; onClose: () => void; onErr: (m:
       await load();
     } catch (e) { p.onErr(errText(e)); } finally { setBusy(false); }
   };
+  const [mapRes, setMapRes] = useState<import("../gen/dashboardv1/broker_admin_pb").AutoMapBrokerResult[] | null>(null);
   const autoMap = async () => {
     setBusy(true);
     try {
-      await client.autoMapBroker({ venue: p.venue });
+      const r = await client.autoMapBroker({ venue: p.venue });
+      setMapRes(r.results);
       await load();
     } catch (e) { p.onErr(errText(e)); } finally { setBusy(false); }
   };
@@ -54,6 +56,19 @@ export function MappingModal(p: { venue: string; onClose: () => void; onErr: (m:
       <div style={{ marginBottom: 8 }}>
         <button disabled={busy} onClick={() => void autoMap()}>自动映射</button>
       </div>
+      {mapRes && (
+        <div className="auto-map-report" role="status">
+          <div className="auto-map-summary">自动映射完成：{mapRes.filter((r) => r.status === "auto").length} 条新映射</div>
+          <div className="auto-map-list">
+            {mapRes.filter((r) => r.status !== "auto").map((r) => (
+              <div key={r.brokerSymbol} className="auto-map-row">
+                <span className="auto-map-sym">{r.brokerSymbol}{r.canonical ? ` → ${r.canonical}` : ""}</span>
+                <span className="auto-map-reason muted">{r.status}{r.reason ? `：${r.reason}` : ""}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <h4>已映射（{maps.length}）</h4>
       <ul className="opp-cards" style={{ maxHeight: 200, overflowY: "auto" }}>
         {maps.map((m) => (

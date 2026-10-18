@@ -22,6 +22,9 @@ import DciPage from "./pages/dci";
 import SettingsPage from "./pages/settings";
 import ReportsPage from "./pages/reports";
 import WatchPage from "./pages/watch";
+import KnowledgePage from "./pages/knowledge";
+import CexFinancePage from "./pages/cexfinance";
+import CexScanPage from "./pages/cexscan";
 // S1′ 设计体系基建：app.css 旧轨暂并存 + arb styles/ 12 件整批挂入
 // （逐页迁完再退役旧轨——双轨叠加期样式冲突出则以新 token 为准迭代修）。
 import "./app.css";
@@ -66,6 +69,9 @@ const NAV_GROUPS: { label: string; routes: [string, RouteDef][] }[] = [
       ["/dci", { title: "持仓理财", el: DciPage }],
       ["/reports", { title: "报告中心", el: ReportsPage }],
       ["/watch", { title: "盯盘", el: WatchPage }],
+      ["/knowledge", { title: "经验库", el: KnowledgePage }],
+      ["/cex-finance", { title: "CEX 财务", el: CexFinancePage }],
+      ["/cex-scan", { title: "CEX 扫描", el: CexScanPage }],
       ["/settings", { title: "设置", el: SettingsPage }],
     ],
   },
@@ -116,6 +122,9 @@ const ROUTE_ICONS: Record<string, string> = {
   "/dci": "M3 6h18v12H3zM3 10h18M7 14h4", // card
   "/reports": "M9 3h12v18H9M3 3h6v18H3M9 9h6M9 13h6M9 17h4", // book
   "/watch": "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 12a3 3 0 1 0 0 .01z", // eye
+  "/knowledge": "M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z",
+  "/cex-finance": "M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3",
+  "/cex-scan": "M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M12 12a4 4 0 1 0 0 .01z",
   "/settings": "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83", // gear
 };
 
