@@ -235,7 +235,7 @@ func warnMonitorBookAbsent(ctx context.Context, st PaperStore, slots []authSlot,
 		}
 	}
 	if len(noMonitor) > 0 {
-		if err := st.InsertAlert(ctx, nil, "warn", "[cfd 纸面保底] 授权组合 monitor 簿缺席（basis 将恒 NULL 不可毕业，请补 monitorPairs）: "+strings.Join(noMonitor, ", ")); err != nil {
+		if err := st.InsertAlert(ctx, nil, "warn", "[cfd 纸面保底] 授权组合 monitor 簿缺席（basis 将恒 NULL 不可毕业，请补 monitorPairs）: "+strings.Join(noMonitor, ", ")+cfdPaperDispatch); err != nil {
 			log.Printf("[cfd paper] monitor-book alert: %v", err)
 		}
 	}

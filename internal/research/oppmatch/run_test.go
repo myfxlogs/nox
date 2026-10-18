@@ -306,6 +306,15 @@ func TestZombieProposalSemantics(t *testing.T) {
 	if alerts == 0 {
 		t.Fatal("executor-missing info 留痕缺")
 	}
+	// D-622 三批：executor-missing 末行实施席转发令（模板名进令文）。
+	var emsg string
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT message FROM alerts WHERE message LIKE 'auto 轨无执行器%tzombie_auto%' ORDER BY id DESC LIMIT 1`).Scan(&emsg); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(emsg, "[角色:实施] tzombie_auto 执行器补件评估（读 STATE 本行——达标轨无执行器=补件或下架裁定）") {
+		t.Fatalf("executor-missing 末行令缺: %q", emsg)
+	}
 	// A 零新提案（行数仍 1 且非 proposed）。
 	var n int
 	if err := st.Pool().QueryRow(ctx,

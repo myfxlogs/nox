@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"nox/internal/platform/alerttext"
 	"nox/internal/platform/errclass"
 	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
@@ -245,8 +246,9 @@ func (e *Executor) concentrationAlert(ctx context.Context, pools []pgstore.Capit
 	if len(stalePools) > 0 {
 		sort.Strings(stalePools)
 		if aerr := e.Store.InsertAlertDedup(ctx, "info", fmt.Sprintf(
-			"分母池鲜度失：浓度透视分母缺 %s（陈旧快照剔计，恢复自动销）",
-			strings.Join(stalePools, ",")), 24*time.Hour); aerr != nil {
+			"分母池鲜度失：浓度透视分母缺 %s（陈旧快照剔计，恢复自动销）%s",
+			strings.Join(stalePools, ","),
+			alerttext.SeatDispatchLine("实施", "池快照缺口排查（读 STATE 本行——分母池缺 venue:type 清单在告警文）")), 24*time.Hour); aerr != nil {
 			log.Printf("[dciexec] 分母鲜度 alert: %v", aerr)
 		}
 	}

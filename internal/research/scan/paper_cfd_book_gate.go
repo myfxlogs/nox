@@ -14,8 +14,12 @@ import (
 	"time"
 
 	"nox/internal/data/keydomain"
+	"nox/internal/platform/alerttext"
 	"nox/internal/store/pgstore"
 )
+
+// cfdPaperDispatch D-622 三批：簿缺席/锚死 warn 末行实施席转发令（静态文本不进 dedup 字段）。
+var cfdPaperDispatch = alerttext.SeatDispatchLine("实施", "cfd纸面仓簿排查（读 STATE 本行——entry_basis 锚死径）")
 
 // cfdCexQuoteSources monitor 簿 CEX 报价源集（xasset-monitor fetcher 三所读库轨）。
 var cfdCexQuoteSources = map[string]bool{"binance": true, "okx": true, "gate": true}
@@ -158,12 +162,12 @@ func warnActiveBookAbsent(ctx context.Context, st PaperStore, active []pgstore.P
 		}
 	}
 	if len(noBook) > 0 {
-		if err := st.InsertAlert(ctx, nil, "warn", "[cfd 纸面] active 仓 monitor 簿缺席（entry basis 冻结 NULL 不可毕业，请查 venue 断供/覆盖闸）: "+strings.Join(noBook, ", ")); err != nil {
+		if err := st.InsertAlert(ctx, nil, "warn", "[cfd 纸面] active 仓 monitor 簿缺席（entry basis 冻结 NULL 不可毕业，请查 venue 断供/覆盖闸）: "+strings.Join(noBook, ", ")+cfdPaperDispatch); err != nil {
 			log.Printf("[cfd paper] active-book alert: %v", err)
 		}
 	}
 	if len(anchorDead) > 0 {
-		if err := st.InsertAlert(ctx, nil, "warn", "[cfd 纸面] active 仓 entry 锚死（簿在但 entry_basis NULL 超时未补——请查补锚径/簿未成噪）: "+strings.Join(anchorDead, ", ")); err != nil {
+		if err := st.InsertAlert(ctx, nil, "warn", "[cfd 纸面] active 仓 entry 锚死（簿在但 entry_basis NULL 超时未补——请查补锚径/簿未成噪）: "+strings.Join(anchorDead, ", ")+cfdPaperDispatch); err != nil {
 			log.Printf("[cfd paper] anchor-dead alert: %v", err)
 		}
 	}

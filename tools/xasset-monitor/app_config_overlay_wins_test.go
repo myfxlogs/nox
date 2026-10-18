@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"nox/internal/platform/alerttext"
 	"strings"
 	"testing"
 
@@ -72,7 +73,7 @@ func TestD558_FatalDedup30min(t *testing.T) {
 
 	// insertAlert 漏斗同键去重分级——critical 窗内重发仍落行（审计不丢），
 	// 仅跳飞书推送（同 key 对齐判定）；warn/info 维持全抑制。
-	mapped := "xasset-monitor " + fatal.Error()
+	mapped := "xasset-monitor " + fatal.Error() + alerttext.SeatDispatchLine("实施", "xasset 采集排障（读 STATE 本行）")
 	reportFatal(ctx, s, fatal) // 首发生：落行+推（凭据缺席只 log）
 	if !hasRecentSameKeyAlert(ctx, s, "critical", mapped) {
 		t.Fatal("首发生后 30min 内应有同键 critical 在档")
