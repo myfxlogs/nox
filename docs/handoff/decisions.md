@@ -635,3 +635,11 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：落 `fin_capability_constraint` #22（global/deployable_ccy=whitelist/flag=1，source=owner:session-1018）；请求箱 #81（binance:earn 持仓归属）以本令消解——份额系数无判定面消费场景，业主后续愿喂 ownership_share 键仅影响展示精度。
 - **现状对拍**：部署面天然 USDT 单币——perp 全 USDT 保证金、idle_gap earn 提案 `p.Currency!="USDT"` 即跳（idle_gap.go:47）、DCI USDT 计价、earn_rotation 处 dormant；**无自动化 dust 转换/alt 部署路径在册**——现行码面与本令一致，仅需新模板/venue 接入时复审闸核本约束。
 - **反证锚**：任何以非 USDT 资产计 sizing/申购/换仓的执行提案或落单=违本条——CheckBudget 前置闸与提案评审面凭此条拒。
+
+## D-617（2026-10-19 复审席）「画骨」重锚方案核验——照准附四补正
+
+- **核验亲证**：①纵深差实锤——arb-archive 85 件 vs NOX 24 件（BrokersPage 族 17 件独档）；②**arb 件自带 setInterval×4**（亲扫）=迁移即违 D-004 前端规的定时雷；③arb 流层=hooks/subs+useSnapshot（ConnectRPC 服务流，client.ts「unary+stream 统一」亲证）——与 NOX stream.ts 同宗范式，重接=对位件替换；④auth 族（LoginScreen/authErrorHandler/Bearer 拦截）在册=NOX 无此域。
+- **照准**：差量审计→分批派迁→门面组先行（accounts/capital/positions）路径成立；「后端本系 arb 移植同宗接面现成」前提与 M2.x 迁移史一致。
+- **补正四**（并入票面禁线/验收）：①**迁移合规闸**——setInterval 清零+流面接 stream.ts（轮询件=改流或先立后端票）；②**中文化令随批**（英文行话面禁直上——订单卡黑话教训）；③**交互范式对齐**——自定义 Modal/点卡弹窗/300 行棘轮随批过检；④**审计表三列**——数据消费形态（RPC/流/轮询）+迁/缓迁（缺后端）/不迁（域外：auth 族）分类。
+- **反证锚**：若差量表落成后「接面现成」假设大面积落空（>50% 件缺后端面）——分批序重排为后端先行另裁。
+- **复盘点**：首批门面组（accounts/capital/positions）SG 实拍纵深段在产+合规闸四项零违。
