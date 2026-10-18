@@ -701,3 +701,5 @@ SG 实拍：容器 healthy+公网 bundle/css 哈希与评审构建逐字一致=�
 > 决策席注记⑫（10-18 17:0xZ `date -u`）：**D-622 泛化收口裁定=未收口立三批**——24h 告警实拍四族动作类无令在案（cfd纸面锚死×31/executor-missing×40/xasset-monitor crit×6/分母池缺×31），批票已立。**另注**：「分母池鲜度失/缺池」复现×31=数据健康独立疑点（池快照缺 venue:type=浓度分母退化），若三批告警改完仍频发=另立排查工单；**MT5「实拉不可得」定性=boot+43s 会话未热瞬断**（60min 仅 1 发+ListAccounts equity=$1000.22 在案）非持久伤——代码级瑕疵=swapscan.go:71 err 与 eq≤0 同文案不可分（低优暂不立项）。
 
 > 决策席注记⑬（10-18 17:3xZ `date -u`）：**判定径快照清账票扩scope并派**——原「浓度透视分母改实拉」票升为「判定径快照读清账」：+service_capital_pools 同文案告警删（第二生产点）、+explorer_idle 权益源换 live map、+capitalview SnapPick 末档「任意非空池」回退删（落不到=fail-closed）。裁定依据=A/B 分级分析——B 级拆表不值（流落盘+展示=快照合法职责），A 级「判定域零快照读」=收益全拿成本最低。
+
+> 决策席注记⑭（10-18 17:5xZ `date -u`）：**业主入金 $1k @110660304 落账核毕**——fin_venue_io deposit 行在案（10-17 02:41Z，D-607 Deal→io 自动径）；`NOX_CAPITAL_BASE_USD=11317` 分母已同步；MT5 三户腿池=$5247（+23.5%）。该 $1k=venue 锁定腿保证金无 earn 承接——不眠形态=未来 cfd_swap/xasset 组合腿位，非闲置缺口。当前资金全景：crypto 腿=earn 桶趴位（gate $2000/okx $2128 待 JIT 归集）+binance perp $1344+spot $1038；CFD 腿=$5247。
