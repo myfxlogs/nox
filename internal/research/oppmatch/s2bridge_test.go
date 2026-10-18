@@ -121,3 +121,48 @@ func TestS2Bridge_LongSideLegs(t *testing.T) {
 		t.Fatalf("未知向错误入册 %d 行", badCombo)
 	}
 }
+
+// TestS2Bridge_TradifiPerp TRADIFI_PERPETUAL 路由锚（D-623族归——xasset 变体
+// 沉点）：params_proto 腿齐→xasset_allow_combos+trialing；腿缺→dedup warn 拒猜腿位。
+func TestS2Bridge_TradifiPerp(t *testing.T) {
+	s := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
+	ctx := context.Background()
+	full := seedHypothesis(t, s, "binance", "binance|TRADIFI_PERPETUAL|USD1", "TRADIFI_PERPETUAL", "USD1", "novel")
+	if _, err := s.Pool().Exec(ctx, `UPDATE fin_opp_hypothesis SET params_proto=$2 WHERE id=$1`,
+		full, `{"mt_venue":"110660304","mt_symbol":"US500Cash#","side":"short","cex_symbol":"SPCXUSD1"}`); err != nil {
+		t.Fatal(err)
+	}
+	bare := seedHypothesis(t, s, "binance", "binance|TRADIFI_PERPETUAL|USDT", "TRADIFI_PERPETUAL", "USDT", "novel")
+
+	s2Bridge(ctx, s)
+
+	var st string
+	if err := s.Pool().QueryRow(ctx, `SELECT status FROM fin_opp_hypothesis WHERE id=$1`, full).Scan(&st); err != nil {
+		t.Fatal(err)
+	}
+	if st != "trialing" {
+		t.Fatalf("腿齐行 status=%s want trialing", st)
+	}
+	var n int
+	if err := s.Pool().QueryRow(ctx, `SELECT count(*) FROM xasset_allow_combos
+		WHERE canonical_buy='SPCXUSD1' AND canonical_sell='US500Cash#'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("白名单行未入册: %d", n)
+	}
+	if err := s.Pool().QueryRow(ctx, `SELECT status FROM fin_opp_hypothesis WHERE id=$1`, bare).Scan(&st); err != nil {
+		t.Fatal(err)
+	}
+	if st != "approved" {
+		t.Fatalf("腿缺行应留 approved: %s", st)
+	}
+	var warnN int
+	if err := s.Pool().QueryRow(ctx, `SELECT count(*) FROM alerts
+		WHERE message LIKE '%TRADIFI_PERP 腿参数缺%'`).Scan(&warnN); err != nil {
+		t.Fatal(err)
+	}
+	if warnN < 1 {
+		t.Fatalf("腿缺 dedup 告警缺: %d", warnN)
+	}
+}

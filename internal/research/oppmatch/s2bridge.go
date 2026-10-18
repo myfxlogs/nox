@@ -15,6 +15,7 @@ package oppmatch
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -107,6 +108,41 @@ func bridgeOne(ctx context.Context, st *pgstore.Store, h pgstore.OppHypothesis) 
 		return st.InsertAlertDedup(ctx, "info", fmt.Sprintf(
 			"S2桥：approved 假设#%d（%s）已由 perp_delivery 纸面轨覆盖→trialing",
 			h.ID, h.CategoryKey), 24*time.Hour)
+	case parts[1] == "TRADIFI_PERPETUAL" && len(parts) == 3 && parts[0] == "binance":
+		// D-623族归（评估件 docs/能力账/binance-tradifi-perp-eval-2026-10-18.md）：
+		// TradFi 标的永续=「crypto perp × MT5 CFD」xasset 对冲变体——既有族
+		// 参数沉点复用 xasset_allow_combos。腿参数=params_proto{mt_venue,
+		// mt_symbol, side, cex_symbol} 显式供给（LLM memo 草案=顾问件——腿
+		// 未配 fail-closed dedup 告警，禁猜腿位）。
+		var legs struct {
+			MtVenue   string `json:"mt_venue"`
+			MtSymbol  string `json:"mt_symbol"`
+			Side      string `json:"side"`
+			CexSymbol string `json:"cex_symbol"`
+		}
+		_ = json.Unmarshal(h.ParamsProto, &legs)
+		if legs.MtVenue == "" || legs.MtSymbol == "" || legs.Side == "" || legs.CexSymbol == "" {
+			return st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
+				"S2桥：approved 假设#%d（%s）TRADIFI_PERP 腿参数缺——params_proto{mt_venue,mt_symbol,side,cex_symbol} 未配齐，拒猜腿位",
+				h.ID, h.CategoryKey), 24*time.Hour)
+		}
+		notional, nerr := s2TrialNotionalAt(ctx, st)
+		if nerr != nil {
+			return nerr
+		}
+		combo, cerr := s2LegCombo(h, legs.MtVenue, legs.MtSymbol, legs.Side, h.Venue, legs.CexSymbol, notional)
+		if cerr != nil {
+			return st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
+				"S2桥：approved 假设#%d（%s）%v", h.ID, h.CategoryKey, cerr), 24*time.Hour)
+		}
+		if _, err := st.InsertXAssetAllowCombo(ctx, combo); err != nil && err != pgstore.ErrXAssetComboExists {
+			return fmt.Errorf("allow combo insert: %w", err)
+		}
+		if err := st.MarkHypothesisTrialing(ctx, h.ID, "xasset_allow_combos 白名单行（TRADIFI_PERP→xasset 变体）"); err != nil {
+			return err
+		}
+		return st.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
+			"S2桥：approved 假设#%d（%s）→xasset 白名单（TRADIFI_PERP 变体——决策席试单闸另闸）", h.ID, h.CategoryKey))
 	case h.FamilyFit == "generic_yield":
 		return st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
 			"S2桥：approved 假设#%d（%s）族=generic_yield 参数面 schema 未建——立施工票",
