@@ -119,6 +119,9 @@ const (
 	// DashboardServiceListTrxTxsProcedure is the fully-qualified name of the DashboardService's
 	// ListTrxTxs RPC.
 	DashboardServiceListTrxTxsProcedure = "/nox.dashboard.v1.DashboardService/ListTrxTxs"
+	// DashboardServiceListHedgeFlowProcedure is the fully-qualified name of the DashboardService's
+	// ListHedgeFlow RPC.
+	DashboardServiceListHedgeFlowProcedure = "/nox.dashboard.v1.DashboardService/ListHedgeFlow"
 	// DashboardServiceAddDailyIncomeProcedure is the fully-qualified name of the DashboardService's
 	// AddDailyIncome RPC.
 	DashboardServiceAddDailyIncomeProcedure = "/nox.dashboard.v1.DashboardService/AddDailyIncome"
@@ -432,6 +435,7 @@ type DashboardServiceClient interface {
 	GetTrxYieldRadar(context.Context, *connect.Request[dashboardv1.GetTrxYieldRadarRequest]) (*connect.Response[dashboardv1.GetTrxYieldRadarResponse], error)
 	GetTrxYieldCurve(context.Context, *connect.Request[dashboardv1.GetTrxYieldCurveRequest]) (*connect.Response[dashboardv1.GetTrxYieldCurveResponse], error)
 	ListTrxTxs(context.Context, *connect.Request[dashboardv1.ListTrxTxsRequest]) (*connect.Response[dashboardv1.ListTrxTxsResponse], error)
+	ListHedgeFlow(context.Context, *connect.Request[dashboardv1.ListHedgeFlowRequest]) (*connect.Response[dashboardv1.ListHedgeFlowResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[dashboardv1.AddDailyIncomeRequest]) (*connect.Response[dashboardv1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[dashboardv1.ListDailyIncomeRequest]) (*connect.Response[dashboardv1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -752,6 +756,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceListTrxTxsProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("ListTrxTxs")),
+			connect.WithClientOptions(opts...),
+		),
+		listHedgeFlow: connect.NewClient[dashboardv1.ListHedgeFlowRequest, dashboardv1.ListHedgeFlowResponse](
+			httpClient,
+			baseURL+DashboardServiceListHedgeFlowProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListHedgeFlow")),
 			connect.WithClientOptions(opts...),
 		),
 		addDailyIncome: connect.NewClient[dashboardv1.AddDailyIncomeRequest, dashboardv1.AddDailyIncomeResponse](
@@ -1334,6 +1344,7 @@ type dashboardServiceClient struct {
 	getTrxYieldRadar             *connect.Client[dashboardv1.GetTrxYieldRadarRequest, dashboardv1.GetTrxYieldRadarResponse]
 	getTrxYieldCurve             *connect.Client[dashboardv1.GetTrxYieldCurveRequest, dashboardv1.GetTrxYieldCurveResponse]
 	listTrxTxs                   *connect.Client[dashboardv1.ListTrxTxsRequest, dashboardv1.ListTrxTxsResponse]
+	listHedgeFlow                *connect.Client[dashboardv1.ListHedgeFlowRequest, dashboardv1.ListHedgeFlowResponse]
 	addDailyIncome               *connect.Client[dashboardv1.AddDailyIncomeRequest, dashboardv1.AddDailyIncomeResponse]
 	listDailyIncome              *connect.Client[dashboardv1.ListDailyIncomeRequest, dashboardv1.ListDailyIncomeResponse]
 	getPnlAnchor                 *connect.Client[dashboardv1.GetPnlAnchorRequest, dashboardv1.GetPnlAnchorResponse]
@@ -1570,6 +1581,11 @@ func (c *dashboardServiceClient) GetTrxYieldCurve(ctx context.Context, req *conn
 // ListTrxTxs calls nox.dashboard.v1.DashboardService.ListTrxTxs.
 func (c *dashboardServiceClient) ListTrxTxs(ctx context.Context, req *connect.Request[dashboardv1.ListTrxTxsRequest]) (*connect.Response[dashboardv1.ListTrxTxsResponse], error) {
 	return c.listTrxTxs.CallUnary(ctx, req)
+}
+
+// ListHedgeFlow calls nox.dashboard.v1.DashboardService.ListHedgeFlow.
+func (c *dashboardServiceClient) ListHedgeFlow(ctx context.Context, req *connect.Request[dashboardv1.ListHedgeFlowRequest]) (*connect.Response[dashboardv1.ListHedgeFlowResponse], error) {
+	return c.listHedgeFlow.CallUnary(ctx, req)
 }
 
 // AddDailyIncome calls nox.dashboard.v1.DashboardService.AddDailyIncome.
@@ -2067,6 +2083,7 @@ type DashboardServiceHandler interface {
 	GetTrxYieldRadar(context.Context, *connect.Request[dashboardv1.GetTrxYieldRadarRequest]) (*connect.Response[dashboardv1.GetTrxYieldRadarResponse], error)
 	GetTrxYieldCurve(context.Context, *connect.Request[dashboardv1.GetTrxYieldCurveRequest]) (*connect.Response[dashboardv1.GetTrxYieldCurveResponse], error)
 	ListTrxTxs(context.Context, *connect.Request[dashboardv1.ListTrxTxsRequest]) (*connect.Response[dashboardv1.ListTrxTxsResponse], error)
+	ListHedgeFlow(context.Context, *connect.Request[dashboardv1.ListHedgeFlowRequest]) (*connect.Response[dashboardv1.ListHedgeFlowResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[dashboardv1.AddDailyIncomeRequest]) (*connect.Response[dashboardv1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[dashboardv1.ListDailyIncomeRequest]) (*connect.Response[dashboardv1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -2383,6 +2400,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceListTrxTxsProcedure,
 		svc.ListTrxTxs,
 		connect.WithSchema(dashboardServiceMethods.ByName("ListTrxTxs")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceListHedgeFlowHandler := connect.NewUnaryHandler(
+		DashboardServiceListHedgeFlowProcedure,
+		svc.ListHedgeFlow,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListHedgeFlow")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceAddDailyIncomeHandler := connect.NewUnaryHandler(
@@ -2991,6 +3014,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetTrxYieldCurveHandler.ServeHTTP(w, r)
 		case DashboardServiceListTrxTxsProcedure:
 			dashboardServiceListTrxTxsHandler.ServeHTTP(w, r)
+		case DashboardServiceListHedgeFlowProcedure:
+			dashboardServiceListHedgeFlowHandler.ServeHTTP(w, r)
 		case DashboardServiceAddDailyIncomeProcedure:
 			dashboardServiceAddDailyIncomeHandler.ServeHTTP(w, r)
 		case DashboardServiceListDailyIncomeProcedure:
@@ -3296,6 +3321,10 @@ func (UnimplementedDashboardServiceHandler) GetTrxYieldCurve(context.Context, *c
 
 func (UnimplementedDashboardServiceHandler) ListTrxTxs(context.Context, *connect.Request[dashboardv1.ListTrxTxsRequest]) (*connect.Response[dashboardv1.ListTrxTxsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListTrxTxs is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListHedgeFlow(context.Context, *connect.Request[dashboardv1.ListHedgeFlowRequest]) (*connect.Response[dashboardv1.ListHedgeFlowResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListHedgeFlow is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AddDailyIncome(context.Context, *connect.Request[dashboardv1.AddDailyIncomeRequest]) (*connect.Response[dashboardv1.AddDailyIncomeResponse], error) {

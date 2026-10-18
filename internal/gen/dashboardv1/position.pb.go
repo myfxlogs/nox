@@ -2406,6 +2406,203 @@ func (x *ListProbeProposalsResponse) GetProposals() []*ProbeProposalCard {
 	return nil
 }
 
+// HedgeFlow 统一流水卡（arb D-212 同名件对拍——trx/cmc 双源归一）。
+type HedgeFlowItem struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"` // trx|cmc
+	Ts            *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=ts,proto3" json:"ts,omitempty"`
+	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`                                    // 归一：rental_income|vote_claim|deposit|withdraw|stake|unstake|overnight|close_trade|other…
+	AmountValue   float64                `protobuf:"fixed64,4,opt,name=amount_value,json=amountValue,proto3" json:"amount_value,omitempty"` // 原生单位数值（TRX 笔=TRX 数；CMC 笔=USD）
+	AmountUnit    string                 `protobuf:"bytes,5,opt,name=amount_unit,json=amountUnit,proto3" json:"amount_unit,omitempty"`      // TRX|USD
+	Counterparty  string                 `protobuf:"bytes,6,opt,name=counterparty,proto3" json:"counterparty,omitempty"`                    // TRX=对手方地址；CMC=空
+	TxId          string                 `protobuf:"bytes,7,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"`                        // TRX=tx_id；CMC=transaction_id
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HedgeFlowItem) Reset() {
+	*x = HedgeFlowItem{}
+	mi := &file_dashboardv1_position_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HedgeFlowItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HedgeFlowItem) ProtoMessage() {}
+
+func (x *HedgeFlowItem) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_position_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HedgeFlowItem.ProtoReflect.Descriptor instead.
+func (*HedgeFlowItem) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *HedgeFlowItem) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *HedgeFlowItem) GetTs() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Ts
+	}
+	return nil
+}
+
+func (x *HedgeFlowItem) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *HedgeFlowItem) GetAmountValue() float64 {
+	if x != nil {
+		return x.AmountValue
+	}
+	return 0
+}
+
+func (x *HedgeFlowItem) GetAmountUnit() string {
+	if x != nil {
+		return x.AmountUnit
+	}
+	return ""
+}
+
+func (x *HedgeFlowItem) GetCounterparty() string {
+	if x != nil {
+		return x.Counterparty
+	}
+	return ""
+}
+
+func (x *HedgeFlowItem) GetTxId() string {
+	if x != nil {
+		return x.TxId
+	}
+	return ""
+}
+
+type ListHedgeFlowRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SourceFilter  string                 `protobuf:"bytes,1,opt,name=source_filter,json=sourceFilter,proto3" json:"source_filter,omitempty"` // ""=全部；trx=单源；cmc=单源
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	Offset        int32                  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListHedgeFlowRequest) Reset() {
+	*x = ListHedgeFlowRequest{}
+	mi := &file_dashboardv1_position_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListHedgeFlowRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListHedgeFlowRequest) ProtoMessage() {}
+
+func (x *ListHedgeFlowRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_position_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListHedgeFlowRequest.ProtoReflect.Descriptor instead.
+func (*ListHedgeFlowRequest) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *ListHedgeFlowRequest) GetSourceFilter() string {
+	if x != nil {
+		return x.SourceFilter
+	}
+	return ""
+}
+
+func (x *ListHedgeFlowRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListHedgeFlowRequest) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+type ListHedgeFlowResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Txs           []*HedgeFlowItem       `protobuf:"bytes,1,rep,name=txs,proto3" json:"txs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListHedgeFlowResponse) Reset() {
+	*x = ListHedgeFlowResponse{}
+	mi := &file_dashboardv1_position_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListHedgeFlowResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListHedgeFlowResponse) ProtoMessage() {}
+
+func (x *ListHedgeFlowResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_position_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListHedgeFlowResponse.ProtoReflect.Descriptor instead.
+func (*ListHedgeFlowResponse) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_position_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *ListHedgeFlowResponse) GetTxs() []*HedgeFlowItem {
+	if x != nil {
+		return x.Txs
+	}
+	return nil
+}
+
 var File_dashboardv1_position_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_position_proto_rawDesc = "" +
@@ -2663,7 +2860,22 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x19ListProbeProposalsRequest\x12'\n" +
 	"\x0finclude_decided\x18\x01 \x01(\bR\x0eincludeDecided\"_\n" +
 	"\x1aListProbeProposalsResponse\x12A\n" +
-	"\tproposals\x18\x01 \x03(\v2#.nox.dashboard.v1.ProbeProposalCardR\tproposalsB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\tproposals\x18\x01 \x03(\v2#.nox.dashboard.v1.ProbeProposalCardR\tproposals\"\xe4\x01\n" +
+	"\rHedgeFlowItem\x12\x16\n" +
+	"\x06source\x18\x01 \x01(\tR\x06source\x12*\n" +
+	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x12\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kind\x12!\n" +
+	"\famount_value\x18\x04 \x01(\x01R\vamountValue\x12\x1f\n" +
+	"\vamount_unit\x18\x05 \x01(\tR\n" +
+	"amountUnit\x12\"\n" +
+	"\fcounterparty\x18\x06 \x01(\tR\fcounterparty\x12\x13\n" +
+	"\x05tx_id\x18\a \x01(\tR\x04txId\"i\n" +
+	"\x14ListHedgeFlowRequest\x12#\n" +
+	"\rsource_filter\x18\x01 \x01(\tR\fsourceFilter\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06offset\x18\x03 \x01(\x05R\x06offset\"J\n" +
+	"\x15ListHedgeFlowResponse\x121\n" +
+	"\x03txs\x18\x01 \x03(\v2\x1f.nox.dashboard.v1.HedgeFlowItemR\x03txsB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_position_proto_rawDescOnce sync.Once
@@ -2677,7 +2889,7 @@ func file_dashboardv1_position_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_position_proto_rawDescData
 }
 
-var file_dashboardv1_position_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_dashboardv1_position_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_dashboardv1_position_proto_goTypes = []any{
 	(*PositionLeg)(nil),                  // 0: nox.dashboard.v1.PositionLeg
 	(*Position)(nil),                     // 1: nox.dashboard.v1.Position
@@ -2708,36 +2920,41 @@ var file_dashboardv1_position_proto_goTypes = []any{
 	(*ProbeProposalCard)(nil),            // 26: nox.dashboard.v1.ProbeProposalCard
 	(*ListProbeProposalsRequest)(nil),    // 27: nox.dashboard.v1.ListProbeProposalsRequest
 	(*ListProbeProposalsResponse)(nil),   // 28: nox.dashboard.v1.ListProbeProposalsResponse
-	(*timestamppb.Timestamp)(nil),        // 29: google.protobuf.Timestamp
+	(*HedgeFlowItem)(nil),                // 29: nox.dashboard.v1.HedgeFlowItem
+	(*ListHedgeFlowRequest)(nil),         // 30: nox.dashboard.v1.ListHedgeFlowRequest
+	(*ListHedgeFlowResponse)(nil),        // 31: nox.dashboard.v1.ListHedgeFlowResponse
+	(*timestamppb.Timestamp)(nil),        // 32: google.protobuf.Timestamp
 }
 var file_dashboardv1_position_proto_depIdxs = []int32{
-	29, // 0: nox.dashboard.v1.PositionLeg.ts:type_name -> google.protobuf.Timestamp
-	29, // 1: nox.dashboard.v1.Position.opened_at:type_name -> google.protobuf.Timestamp
-	29, // 2: nox.dashboard.v1.Position.closed_at:type_name -> google.protobuf.Timestamp
+	32, // 0: nox.dashboard.v1.PositionLeg.ts:type_name -> google.protobuf.Timestamp
+	32, // 1: nox.dashboard.v1.Position.opened_at:type_name -> google.protobuf.Timestamp
+	32, // 2: nox.dashboard.v1.Position.closed_at:type_name -> google.protobuf.Timestamp
 	0,  // 3: nox.dashboard.v1.Position.legs:type_name -> nox.dashboard.v1.PositionLeg
-	29, // 4: nox.dashboard.v1.Position.auto_close_at:type_name -> google.protobuf.Timestamp
+	32, // 4: nox.dashboard.v1.Position.auto_close_at:type_name -> google.protobuf.Timestamp
 	1,  // 5: nox.dashboard.v1.ListPositionsResponse.positions:type_name -> nox.dashboard.v1.Position
-	29, // 6: nox.dashboard.v1.BrokerPosition.opened_at:type_name -> google.protobuf.Timestamp
-	29, // 7: nox.dashboard.v1.BrokerPosition.swap_charge_at:type_name -> google.protobuf.Timestamp
-	29, // 8: nox.dashboard.v1.BrokerPosition.probe_auto_close_at:type_name -> google.protobuf.Timestamp
-	29, // 9: nox.dashboard.v1.BrokerPosition.as_of:type_name -> google.protobuf.Timestamp
-	29, // 10: nox.dashboard.v1.BrokerPosition.price_at:type_name -> google.protobuf.Timestamp
+	32, // 6: nox.dashboard.v1.BrokerPosition.opened_at:type_name -> google.protobuf.Timestamp
+	32, // 7: nox.dashboard.v1.BrokerPosition.swap_charge_at:type_name -> google.protobuf.Timestamp
+	32, // 8: nox.dashboard.v1.BrokerPosition.probe_auto_close_at:type_name -> google.protobuf.Timestamp
+	32, // 9: nox.dashboard.v1.BrokerPosition.as_of:type_name -> google.protobuf.Timestamp
+	32, // 10: nox.dashboard.v1.BrokerPosition.price_at:type_name -> google.protobuf.Timestamp
 	10, // 11: nox.dashboard.v1.ListBrokerPositionsResponse.positions:type_name -> nox.dashboard.v1.BrokerPosition
 	13, // 12: nox.dashboard.v1.CloseBrokerPositionsRequest.items:type_name -> nox.dashboard.v1.CloseBrokerPositionRequest
 	14, // 13: nox.dashboard.v1.CloseBrokerPositionsResponse.results:type_name -> nox.dashboard.v1.CloseBrokerPositionResponse
-	29, // 14: nox.dashboard.v1.OpenProbeRequest.auto_close_at:type_name -> google.protobuf.Timestamp
-	29, // 15: nox.dashboard.v1.ProbePosition.auto_close_at:type_name -> google.protobuf.Timestamp
-	29, // 16: nox.dashboard.v1.ProbePosition.opened_at:type_name -> google.protobuf.Timestamp
-	29, // 17: nox.dashboard.v1.ProbePosition.closed_at:type_name -> google.protobuf.Timestamp
+	32, // 14: nox.dashboard.v1.OpenProbeRequest.auto_close_at:type_name -> google.protobuf.Timestamp
+	32, // 15: nox.dashboard.v1.ProbePosition.auto_close_at:type_name -> google.protobuf.Timestamp
+	32, // 16: nox.dashboard.v1.ProbePosition.opened_at:type_name -> google.protobuf.Timestamp
+	32, // 17: nox.dashboard.v1.ProbePosition.closed_at:type_name -> google.protobuf.Timestamp
 	19, // 18: nox.dashboard.v1.ListProbesResponse.probes:type_name -> nox.dashboard.v1.ProbePosition
-	29, // 19: nox.dashboard.v1.ProbeProposalCard.auto_close_at:type_name -> google.protobuf.Timestamp
-	29, // 20: nox.dashboard.v1.ProbeProposalCard.proposed_at:type_name -> google.protobuf.Timestamp
+	32, // 19: nox.dashboard.v1.ProbeProposalCard.auto_close_at:type_name -> google.protobuf.Timestamp
+	32, // 20: nox.dashboard.v1.ProbeProposalCard.proposed_at:type_name -> google.protobuf.Timestamp
 	26, // 21: nox.dashboard.v1.ListProbeProposalsResponse.proposals:type_name -> nox.dashboard.v1.ProbeProposalCard
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	32, // 22: nox.dashboard.v1.HedgeFlowItem.ts:type_name -> google.protobuf.Timestamp
+	29, // 23: nox.dashboard.v1.ListHedgeFlowResponse.txs:type_name -> nox.dashboard.v1.HedgeFlowItem
+	24, // [24:24] is the sub-list for method output_type
+	24, // [24:24] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_position_proto_init() }
@@ -2756,7 +2973,7 @@ func file_dashboardv1_position_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_position_proto_rawDesc), len(file_dashboardv1_position_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   29,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
