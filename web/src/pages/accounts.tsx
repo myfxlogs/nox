@@ -11,6 +11,9 @@ import type { AccountEvent } from "../gen/dashboardv1/stream_pb";
 import { fmtUsd, ts } from "../components/fmt";
 import { ConfirmDialog } from "../components/Modal";
 import { MappingModal } from "../components/MappingModal";
+import { AllowRulesSection } from "../components/AllowRulesSection";
+import { XAssetCombosSection } from "../components/XAssetCombosSection";
+import { WsMeters } from "../components/WsMeters";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
 
@@ -147,6 +150,11 @@ export default function AccountsPage() {
         <MappingModal venue={mapVenue} onClose={() => { setMapVenue(null); void load(); }}
           onErr={setErr} />
       )}
+      {/* 画骨批二：护栏/组合/WS 计量三段（arb BrokersPage 族借形） */}
+      <AllowRulesSection />
+      <XAssetCombosSection />
+      <WsMeters />
+
       <ConfirmDialog open={cfm != null} text={cfm?.text}
         onCancel={() => setCfm(null)}
         onConfirm={() => { const r = cfm?.run; setCfm(null); r?.(); }} />

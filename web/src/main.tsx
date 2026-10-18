@@ -37,6 +37,7 @@ import "./styles/10-testnet-quote.css";
 import "./styles/11-account-responsive.css";
 import "./styles/12-nox-shell.css";
 import "./styles/20-semantic.css";
+import "./styles/10-broker.css";
 
 // S2c 左导航两组分排（业主令 10-16）：门面=总览/投资人/持仓；
 // 运维=账户/风控/观察/资金/DCI/报告/设置（盯盘归运维观察面）。

@@ -1,0 +1,1076 @@
+/* 10-broker.css — Broker 管理页（docs/broker管理器实现方案.md §4） */
+
+.broker-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1024px;
+}
+
+/* 表单行：标签 + 输入区 */
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.form-label {
+  width: 76px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.flex-1 {
+  flex: 1;
+}
+
+/* 平台切换段控 */
+.seg {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  padding: 3px;
+}
+.seg-btn {
+  border: none;
+  background: transparent;
+  color: var(--ink-2);
+  padding: 4px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.seg-btn:hover {
+  color: var(--ink);
+}
+.seg-active {
+  background: var(--ink);
+  color: var(--page);
+}
+
+/* 搜索框 + 结果下拉 */
+.search-box {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+.company-drop {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  padding: 6px;
+  margin-bottom: 12px;
+  background: var(--surface);
+}
+.company-item {
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.company-item:hover {
+  background: var(--page);
+}
+
+/* 行内小输入框（别名/映射） */
+.broker-alias {
+  width: 140px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* D-144 ① 三态：实盘标记 toggle 按钮（实盘红/demo 灰/未知黄） */
+.is-real-toggle {
+  padding: 2px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+.is-real-toggle.is-real-on {
+  background: #c0392b;
+  color: #fff;
+  border-color: #c0392b;
+}
+.is-real-toggle.is-real-demo {
+  background: var(--surface);
+  color: var(--muted);
+  border-color: var(--border);
+}
+.is-real-toggle.is-real-unknown {
+  background: #f39c12;
+  color: #fff;
+  border-color: #f39c12;
+}
+
+/* D-144 ① 三态：佣金框收窄（比别名更窄，bps 数字短） */
+.broker-comm {
+  width: 80px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.broker-website {
+  width: 160px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* 添加账户两段左右并排：列宽内容自适应 + 列间隔更宽（分隔线在各段顶部） */
+.add-steps {
+  display: flex;
+  gap: 58px;
+  justify-content: center;
+  align-items: flex-start;
+}
+.form-step {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.step-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin: 0 0 12px;
+}
+
+/* 4 个表单（经纪商搜索/服务器/账号/密码）缩短约 1/3，不再撑满整卡 */
+.form-step .form-row > .modal-input {
+  width: 280px;
+  flex: none;
+}
+/* 经纪商搜索行：输入留出按钮空间（280 = 220 输入 + 按钮） */
+.form-step .search-box {
+  flex: none;
+}
+.form-step .search-box .modal-input {
+  width: 220px;
+}
+
+/* 搜索结果下拉：与搜索输入同宽同起点（margin-left 对齐 label 后输入区） */
+.form-step .company-drop {
+  width: 220px;
+  margin-left: 76px;
+}
+
+/* 验证按钮：居中于密码输入框（280px 区）正下方 */
+.verify-row {
+  margin-left: 76px;
+  width: 280px;
+  display: flex;
+  justify-content: center;
+}
+
+/* 操作列：停用/启用 + 删除 横向排列，删除始终最后 */
+.broker-ops {
+  white-space: nowrap;
+}
+.broker-ops button {
+  margin-right: 6px;
+}
+.broker-ops button:last-child {
+  margin-right: 0;
+}
+
+/* === Symbol 映射（D-042 broker 为基准）=== */
+/* 账号选择行：选择框收窄（9 位数字不需要半屏宽），右侧显示服务器名（一眼看出账号来自哪个 broker） */
+.map-server {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.map-venue-select {
+  width: 200px;
+}
+
+/* 监控标的摘要 + Broker 符号浏览器：同卡风格 */
+.map-summary,
+.map-browser {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.map-view-chip {
+  border: 1px solid var(--ring);
+  background: var(--page);
+  color: var(--ink);
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.map-view-chip:hover {
+  border-color: var(--accent);
+}
+.map-view-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.map-canon-q {
+  width: 220px;
+}
+.map-matrix-del {
+  border: none;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.map-matrix-del:hover {
+  color: var(--critical);
+}
+/* 行级三态 chip（全配/部分/缺）——应配齐集 = connected 账号 */
+.map-status-ok,
+.map-status-part,
+.map-status-miss {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.map-status-ok {
+  color: var(--good);
+  border: 1px solid var(--good);
+}
+.map-status-part {
+  color: var(--warn);
+  border: 1px solid var(--warn);
+}
+.map-status-miss {
+  color: var(--critical);
+  border: 1px dashed var(--critical);
+}
+.map-sug {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  padding: 2px 8px 2px 10px;
+  font-size: 12px;
+  background: var(--page);
+}
+.map-sug.conflict {
+  border-color: var(--warn);
+}
+.map-sug-sym {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.map-sug-reason {
+  color: var(--warn);
+  font-size: 11px;
+  cursor: help;
+}
+
+/* Broker 符号浏览器：分组 chips + 搜索（适中宽）+ 符号行（canonical 下拉/新建） */
+.map-browser-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.map-fill-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.map-group-chip {
+  border: 1px solid var(--ring);
+  background: var(--page);
+  color: var(--ink);
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.map-group-chip:hover {
+  border-color: var(--accent);
+}
+.map-group-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.map-group-chip .muted {
+  opacity: 0.8;
+}
+.map-browser-q {
+  width: 260px;
+}
+.map-browser-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.map-browser-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.map-browser-row:hover {
+  background: var(--page);
+}
+.map-browser-row.mapped {
+  opacity: 0.65;
+}
+.map-bs-sym {
+  font-weight: 600;
+  min-width: 110px;
+}
+.map-bs-group {
+  font-size: 11px;
+  min-width: 70px;
+}
+.map-bs-mapped {
+  font-size: 11px;
+  color: var(--accent);
+}
+.map-canon-sel {
+  width: 200px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+/* 合约不符确认框（人工 override，D-042） */
+.map-override {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.map-override-reason {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--warn);
+}
+
+/* === D-044 补映射弹窗（操作区从主卡移出：建议区 + 符号拾取区，锁定账号+canonical）=== */
+.map-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+.map-modal {
+  width: min(860px, 100%);
+  max-height: 86vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 12px;
+  padding: 16px;
+}
+.map-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.map-modal-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.map-modal-sugs {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  background: var(--page);
+}
+.map-modal-sub {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.map-sug-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* === D-044 响应式（<768px）：同一第 1 原则换呈现维度——统计条给全貌数字 + 待办卡片堆叠（列转行），无横向滚动 === */
+@media (max-width: 767px) {
+  /* 添加账户两段式 → 垂直堆叠（表单输入占满，验证按钮对齐） */
+  .add-steps {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .form-step .form-row > .modal-input {
+    width: 100%;
+    flex: none;
+  }
+  .form-step .search-box .modal-input {
+    width: 100%;
+  }
+  .verify-row {
+    margin-left: 0;
+    width: 100%;
+  }
+  .broker-alias, .broker-comm, .broker-website {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+  }
+  .broker-ops {
+    white-space: normal;
+  }
+  /* 弹窗全屏（移动端天然形态，锁定账号逻辑不变） */
+  .map-modal-backdrop {
+    padding: 0;
+  }
+  .map-modal {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    border: none;
+  }
+}
+
+/* —— Broker 实持仓增强（D-052）：勾选列 / 选中行 / 分页 —— */
+.col-check {
+  width: 34px;
+  text-align: center;
+}
+tbody tr.row-sel {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+
+/* —— 账户资产（D-053）：账号号链接 + 交易所条 + 弹窗负值 —— */
+.acct-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.acct-link:hover {
+  filter: brightness(1.1);
+}
+.acct-neg {
+  color: var(--delta-down);
+}
+
+/* D-054 交易所管理：列表行 + 添加表单（复用 form-row/modal-input/btn-close 既有风格） */
+.exch-list {
+  margin-bottom: 16px;
+}
+.exch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 13px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.exch-venue {
+  font-weight: 600;
+}
+.exch-sim {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--accent-soft, rgba(96, 125, 255, 0.15));
+  color: var(--accent);
+}
+.exch-label {
+  color: var(--accent);
+}
+.exch-sim-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+.exch-key {
+  font-family: var(--font-mono, monospace);
+}
+.exch-base {
+  font-family: var(--font-mono, monospace);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.exch-time {
+  margin-left: auto;
+}
+.exch-row .btn-close {
+  flex-shrink: 0;
+}
+.exch-add {
+  border-top: 1px dashed var(--ring);
+  padding-top: 12px;
+}
+.exch-venue-sel {
+  max-width: 180px;
+}
+.exch-type-sel {
+  max-width: 100px;
+}
+.exch-type-label {
+  margin-left: 12px;
+}
+
+/* === 经纪商账号卡片化（docs/经纪商账号列表卡片化重构设计.md）=== */
+
+/* 工具栏：筛选 tab + 排序 + 视图切换 */
+.broker-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.broker-filter-group,
+.broker-view-group {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  padding: 3px;
+}
+.broker-tab {
+  border: none;
+  background: transparent;
+  color: var(--ink-2, var(--muted));
+  padding: 4px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.broker-tab:hover {
+  color: var(--ink);
+}
+.broker-tab.active {
+  background: var(--ink);
+  color: var(--page);
+}
+.broker-sort-sel {
+  padding: 5px 10px;
+  font-size: 13px;
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* 网格视图 */
+.broker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.broker-card {
+  border: 1px solid var(--ring);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.broker-card-unknown {
+  border-left: 3px solid #f39c12;
+}
+.broker-card-archived {
+  opacity: 0.75;
+}
+.broker-card-labels {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.broker-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 4px;
+  background: var(--page);
+  color: var(--ink-soft);
+  border: 1px solid var(--border);
+}
+.broker-card-acct {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.broker-card-balance {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.broker-card-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+.broker-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.broker-field .modal-input {
+  flex: 1;
+  min-width: 0;
+}
+.broker-card-ops {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* 横条视图 */
+.broker-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.broker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+.broker-row-unknown {
+  border-left: 3px solid #f39c12;
+}
+.broker-row-balance {
+  font-weight: 600;
+  margin-left: auto;
+}
+/* D-036：账户行占用保证金另列（紧随 balance） */
+.broker-row-margin {
+  font-size: 12px;
+  margin-left: 12px;
+  min-width: 64px;
+}
+.broker-row-date {
+  font-size: 11px;
+}
+.broker-row .broker-alias {
+  width: 120px;
+}
+.broker-row .broker-comm {
+  width: 60px;
+}
+.broker-row .broker-website {
+  width: 140px;
+}
+
+/* 归档折叠区 */
+.broker-archive {
+  margin-top: 16px;
+  border-top: 1px dashed var(--ring);
+  padding-top: 12px;
+}
+.broker-archive-head {
+  border: none;
+  background: none;
+  color: var(--ink-2, var(--muted));
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.broker-archive-head:hover {
+  color: var(--ink);
+}
+.broker-archive .broker-grid {
+  margin-top: 10px;
+}
+
+/* 响应式：<768px 网格单列、横条全宽、工具栏 wrap */
+@media (max-width: 767px) {
+  .broker-grid {
+    grid-template-columns: 1fr;
+  }
+  .broker-toolbar {
+    gap: 8px;
+  }
+  .broker-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .broker-row-balance {
+    margin-left: 0;
+  }
+}
+
+/* === V2：两级 tab + 三点菜单 + 弹窗卡片 + CEX 卡片（docs/经纪商账号列表卡片化重构设计.md §13-§19）=== */
+/* V3 移除 broker-category-group（改为两个 h2 并排，见末尾 V3 样式） */
+
+/* 三点菜单 */
+/* V3.1：图标按钮替代三点菜单 */
+.broker-ops { display: flex; gap: 4px; margin-left: auto; }
+.broker-icon-btn {
+  border: 1px solid var(--ring); background: var(--surface); color: var(--ink-2, var(--muted));
+  padding: 2px 8px; border-radius: 6px; cursor: pointer; line-height: 1;
+  font-size: 14px; min-width: 28px; transition: all 0.15s;
+}
+.broker-icon-btn:hover { background: var(--page); color: var(--ink); border-color: var(--ink-2, var(--muted)); }
+.broker-icon-btn.danger { color: var(--critical); border-color: var(--critical); }
+.broker-icon-btn.danger:hover { background: var(--critical); color: #fff; }
+.broker-icon-btn:disabled { opacity: 0.5; cursor: wait; }
+
+/* CEX 卡片 */
+.broker-card-cex { border-left: 3px solid var(--accent); }
+.broker-row-cex { border-left: 3px solid var(--accent); }
+
+/* 弹窗 Exness 卡片样式 */
+.broker-modal-card { width: min(420px, 100%); }
+.broker-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 12px;
+}
+.broker-modal-close {
+  border: none; background: none; color: var(--ink-2, var(--muted));
+  font-size: 18px; cursor: pointer; padding: 2px 8px; border-radius: 4px; line-height: 1;
+}
+.broker-modal-close:hover { background: var(--page); color: var(--ink); }
+.broker-modal-acct { margin-bottom: 8px; }
+.broker-modal-venue { font-size: 15px; font-weight: 600; color: var(--ink); }
+.broker-modal-balance { font-size: 28px; font-weight: 700; color: var(--ink); margin-bottom: 16px; }
+.broker-modal-balance-num { margin-right: 6px; }
+.broker-modal-details { border-top: 1px solid var(--line); padding-top: 8px; }
+.broker-modal-details .modal-row { padding: 4px 0; }
+
+/* 响应式补充 */
+@media (max-width: 767px) {
+  .broker-icon-btn { padding: 2px 6px; font-size: 13px; }
+}
+
+/* === V3：两个 h2 并排 + 官网链接（docs/经纪商账号列表卡片化重构设计.md §20-§26）=== */
+
+/* 两个 h2 并排（D9） */
+.broker-headings {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 12px;
+}
+.broker-headings h2 {
+  cursor: pointer;
+  padding-bottom: 4px;
+  border-bottom: 2px solid transparent;
+  transition: border-color 0.15s, color 0.15s;
+}
+.broker-headings h2.active {
+  border-bottom-color: var(--accent);
+  color: var(--ink);
+}
+.broker-headings h2:not(.active) {
+  color: var(--ink-2, var(--muted));
+}
+.broker-headings h2:hover {
+  color: var(--ink);
+}
+.broker-add-btn {
+  margin-left: auto;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  color: var(--accent);
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+  white-space: nowrap;
+  align-self: center;
+}
+.broker-add-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* V3.2 全屏遮罩（借鉴 Exness 开立账户页） */
+.broker-add-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+}
+.broker-add-overlay-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.broker-add-back {
+  border: none;
+  background: none;
+  color: var(--ink-2, var(--muted));
+  padding: 4px;
+  cursor: pointer;
+  line-height: 0;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+.broker-add-back:hover {
+  background: var(--page);
+  color: var(--ink);
+}
+.broker-add-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.broker-add-overlay-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  max-width: 960px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* V4.2 单账号映射视图（第一性重设计，替代全景矩阵） */
+.map-per-account {
+  margin-top: 12px;
+}
+.map-pa-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.map-pa-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.map-pa-stat {
+  color: var(--ink-2);
+}
+.map-pa-stat-ok {
+  color: var(--good);
+}
+.map-pa-stat-gap {
+  color: var(--critical);
+  font-weight: 600;
+}
+.map-pa-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.map-pa-classes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.map-pa-table {
+  overflow-x: auto;
+}
+.map-pa-row-gap {
+  background: color-mix(in srgb, var(--critical) 5%, transparent);
+}
+.map-pa-row-gap td {
+  border-bottom: 1px dashed var(--critical);
+}
+.map-pa-canon {
+  font-weight: 600;
+}
+.map-pa-bsym {
+  font-weight: 500;
+}
+.map-pa-ops {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.map-pa-ops .map-matrix-del {
+  font-size: 16px;
+  padding: 0 6px;
+}
+
+/* V4.5：Symbol 映射 section 默认收起（<details> 包裹） */
+.map-section-collapse {
+  padding: 0;
+}
+.map-section-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+.map-section-summary::-webkit-details-marker {
+  display: none;
+}
+.map-section-summary::after {
+  content: " ▸";
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.map-section-collapse[open] .map-section-summary::after {
+  content: " ▾";
+}
+.map-section-summary h2 {
+  display: inline;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+.map-section-body {
+  padding: 0 16px 16px;
+}
+
+/* V4.5：映射页表格左对齐（文本表，覆盖 table.rows td 全局右对齐） */
+table.rows.map-text-table th,
+table.rows.map-text-table td {
+  text-align: left;
+}
+
+/* 官网链接 */
+.broker-card-website {
+  color: var(--accent);
+  text-decoration: none;
+}
+.broker-card-website:hover {
+  text-decoration: underline;
+}
+
+/* 响应式 */
+@media (max-width: 767px) {
+  .broker-headings { gap: 12px; flex-wrap: wrap; }
+  .broker-headings h2 { font-size: 16px; }
+  .broker-add-btn { padding: 4px 10px; font-size: 12px; }
+  .broker-add-overlay-head { padding: 12px 16px; }
+  .broker-add-title { font-size: 18px; }
+  .broker-add-overlay-body { padding: 16px; }
+}
+
+/* D-402：自动映射报告（自 09-matrix.css 迁入——AutoMap 移植 Symbol 映射页，样式随组件走） */
+.auto-map-report {
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  background: var(--card);
+  font-size: 13px;
+}
+.auto-map-summary {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.auto-map-section {
+  margin-top: 8px;
+}
+.auto-map-sub {
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.auto-map-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.auto-map-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 12px;
+}
+.auto-map-row.conflict {
+  border-left: 3px solid var(--warn);
+  padding-left: 6px;
+}
+.auto-map-sym {
+  flex: 1;
+}
+.auto-map-reason {
+  color: var(--warn);
+  font-size: 11px;
+  cursor: help;
+}
+.auto-map-nomatch {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* D-493 S2：报价健康徽章（🟢live / 🟡stale / ⚫dark，hover 示报价龄） */
+.broker-feed {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--ring);
+  white-space: nowrap;
+}
+
+/* D-096：Broker 持仓表左对齐（业主令 10-06）——仅本表作用域覆盖全局
+   table.rows 右对齐（03-table-chip.css:114 (0,1,2)）；双类选择器 (0,2,1) 严格胜出，
+   10-broker 后于 03 加载。移动端 .resp 卡片态 label/值随之左对齐（作用域内预期）。 */
+.broker-pos-table.rows th,
+.broker-pos-table.rows td {
+  text-align: left;
+}
