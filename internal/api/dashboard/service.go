@@ -54,7 +54,7 @@ type Service struct {
 	acv            appConfigView // D-523：键视图快照+自杀重启注入（定义 service_appconfig.go）
 	// GetHedgeStructure 注入面（D-212 对冲工作台）：cmc ws LiveState 提供者+健康钩（nil=未接线→freshLive 全 DB 兜底/黄点）。
 	cmcLiveProvider func() cmc.LiveState
-	cmcWsHealth     func() bool // D-523：键视图快照+自杀重启注入（定义 service_appconfig.go）
+	cmcWsHealth     func() bool // D-212：GetHedgeStructure ws_connected 源（main 装配 cmcWs.IsHealthy；nil=REST 兜底径）
 	// D-545：密钥热读缓存（SetSecretResolver 注入；nil=未装配→Update 仅写库，热读点 fail-closed）。
 	secRes *config.SecretResolver
 	// D-546：资金全景三缺口实拉（CapitalMap 树用；60s 进程缓存=页面开即实拉、窗口内零

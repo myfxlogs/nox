@@ -6,12 +6,20 @@ import { fmtUsd } from "../components/fmt";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
 
-// orderTone 在仓订单态→徽标色（status 枚举显示映射非判据）
+// orderTone 在仓订单态→徽标色（status 枚举显示映射非判据——键集按
+// orders_fmt.ORDER_STATUS_CN 真枚举重建：filled/settled/failed/pending/live/
+// LIVE/open/active/OPEN/CLOSED/proposed；holding/open_order/paper 非枚举不硬编码）。
 function orderTone(s: string): "good" | "warn" | "critical" | "neutral" {
-  if (s === "open" || s === "open_order" || s === "paper") return "good";
-  if (s === "closing" || s === "pending") return "warn";
-  if (s === "failed" || s === "error") return "critical";
-  return "neutral";
+  switch (s) {
+    case "open": case "filled": case "live": case "LIVE": case "active": case "proposed": case "OPEN":
+      return "good";
+    case "pending": case "closing":
+      return "warn";
+    case "failed": case "error":
+      return "critical";
+    default: // settled/CLOSED/未知=结清态或非枚举——neutral 如实缺
+      return "neutral";
+  }
 }
 
 export function OrderWaitDuo({ b, setCardModal }: {
