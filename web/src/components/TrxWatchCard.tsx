@@ -50,6 +50,7 @@ export function TrxWatchCard() {
     try {
       await client.upsertWatchRule({ rule: {
         id: editId ?? undefined,
+        kind: "price",
         subject: f.subject, op: f.op, threshold: Number(f.threshold) || 0,
         level: f.level, message: f.message, note: f.note,
         fireMode: f.fire_mode, venueKey: f.venue_key, enabled: true,
