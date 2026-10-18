@@ -160,6 +160,7 @@ internal/research/oppmatch -> internal/risk/gate
 internal/research/oppmatch -> internal/store/pgstore
 internal/research/scan -> internal/data/fact
 internal/research/scan -> internal/data/keydomain
+internal/research/scan -> internal/data/marketstate
 internal/research/scan -> internal/platform/alerttext
 internal/research/scan -> internal/store/pgstore
 internal/review -> internal/store/pgstore
