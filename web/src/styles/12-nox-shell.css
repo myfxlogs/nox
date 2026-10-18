@@ -22,22 +22,18 @@
 
 /* S3′-b 补正：工序卡改流程图形态——十段小卡横排连线（纯布局，读模不动）。
    段间连线=::after 伪元素箭头，窄屏换行续连（横滚不折布局）。 */
-.pipe-flow { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding: 4px 0 8px; }
+.pipe-flow { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 4px 0 8px; }
+/* 业主令 10-19 总览版重排①：flex+overflow-x 横滚退役——宽屏单行 10 卡、
+   窄屏自动折 5×2，全工序卡一眼同屏（第一性「一眼看完」）；链式 ::after
+   箭头随退役——折行后箭头语义已破，边框色+icon+序位载状态足够。 */
 .pipe-flow .pipe-card {
-  position: relative; flex: 0 0 148px; border: 1px solid var(--line);
+  position: relative; border: 1px solid var(--line);
   border-radius: 8px; background: var(--surface); padding: 8px 10px;
-  margin-right: 20px; box-sizing: border-box;
-  /* 实时卡防抖（业主批 10-17）：①卡高钉死——流推帧文字变长不顶页面
-     （叙事钳 2 行定高；票面 grid-auto-rows 意译到现 flex 形态=卡高定值）；
+  box-sizing: border-box;
+  /* 实时卡防抖（业主批 10-17）：①卡高钉死——流推帧文字变长不顶页面；
      ④contain:layout——卡内重排不外溢传播。全文兜底=hover title+点卡 Modal。 */
   height: 70px; contain: layout; cursor: pointer;
 }
-.pipe-flow .pipe-card::after {
-  content: "→"; position: absolute; right: -16px; top: 50%; transform: translateY(-50%);
-  color: var(--ink-3); font-size: 12px;
-}
-.pipe-flow .pipe-card:last-child { margin-right: 0; }
-.pipe-flow .pipe-card:last-child::after { content: none; }
 .pipe-flow .pipe-card.live { border-color: var(--good); border-left-width: 4px; }
 .pipe-flow .pipe-card.stale { border-color: var(--warn); border-left-width: 4px; }
 .pipe-flow .pipe-card.down { border-color: var(--critical); border-left-width: 4px; }
@@ -50,3 +46,7 @@
 /* 时戳 HH:MM 缩写右置小字（防抖③固位：tabular-nums+nowrap 防跳宽；全时戳 title 兜底）。 */
 .pipe-flow .pipe-clock { font-size: 11px; color: var(--ink-3); margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .pipe-flow .pipe-line { font-size: 11px; color: var(--ink-3); line-height: 1.35; } /* 防抖②钳 2 行=共享 .clamp-2（04，TSX 挂） */
+
+/* ov-duo 业主令 10-19：订单/等待面双栏并置（右半空洞治，窄屏降列纵排）。 */
+.ov-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; align-items: start; }
+@media (max-width: 900px) { .ov-duo { grid-template-columns: 1fr; } }
