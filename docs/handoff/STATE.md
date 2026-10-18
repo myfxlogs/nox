@@ -502,3 +502,14 @@
 > 收口注记㊿（决策席 10-18 01:2xZ）：**ci-red ②③④ @6467283a4 照准并入 @f7f6d23e6——CI 红清账全收口（①@97bf86c64 先在案）**。**核验三症**：②race 真修非加固——`resubscribeCallTimeout` 包级 var 被 resubscribeAll goroutine 直读 vs 测试 defer 写回=真竞点（39031772519 race 报告对拍），修法=Subscribe 同步径捕获传参链（runQuoteStream→resubscribeAll），goroutine 零读 var=根治形态；③D388 EOF=http.Post 限定 EOF 单次重试（server 侧零 panic 取证在案=fd/端口族 CI 瞬断非码伤，真 handler 伤仍原样败）；④tmpdir fd=MkdirTemp+Cleanup RemoveAll 一次重试（CI 容器 fd 表瞬断族）。**gate_subscribe 注释订正**=env 门回撤案由补录（㊹退回史实留档）。**机检独立重跑**：build/vet/gofmt 净+adapter/exchange/dashboard 1124+race adapter·dashboard 905 全绿。**CI 推送者自检**：merge run `39085722722` success 5m10s+收口 run success——声明③④「CI 绿待核」已实证闭环。**坑处置**：坑候选二行挂 `待归纳-分析员`（复审席裁定 staging 档——「var 注入钩×异步读竞点族」中危模式坑，附排雷域提示：仓内其余 var 测试钩同型自查；「CI 传输瞬断族」限面单次重试形态在案）。**branch+worktree 已清**。
 
 > 收口注记#51（决策席 10-18 01:4xZ）：**nav-badge 挂账小票 @f5d2b275a 照准并入 @4d5584479，SG 部署实证**——fe-design S3′-b 复审裁挂账件收口（`useActionBadge` 前端 status 聚合计数违零计算令）。**核验**：`GetActionBadge` RPC 后端 SQL 单值（pending 毕业+requested 箱行）——等价性亲证：`ListRequestBox` 底层 `ListRequestedGaps` 本就只返 requested 行（service_request_box.go:17），旧前端 `bx.items.length`≡后端 count(requested)；测试锚 `TestGetActionBadge` 双源 seed+SQL 对拍断言。**机检**：build/vet/gofmt 净+buf regen 前端 npm build 过+dashboard 814 全绿。**SG 实拍**：部署后 RPC 直调 `GetActionBadge` 返 `{}`（count=0 proto3 零值省略）与 SQL 实查 0 行对拍一致；徽标零值=请求箱清零+零待批毕业真态。**坑处置**：无坑。**附记**：注记编号圈字用尽（㊿止）——本号起改 #N 序制。**观察项挂账**：trxvote tronscan Unavailable 瞬断族日内 3-4 发（00:01Z/01:38Z 等）——外部端点 flake 复发率升，fail-closed 在岗零误动；若续增频=立票查端点降级径/备用源多样度。
+
+<!-- 复审席 fe-investor-s2 化石分支核销（10-19 决策/复审同席）：
+五「待审」件全核——301dd877f（key+collect 纠偏）/a0f915d07（suspect 消费+assembly
+枚举）/c6eb75b00+5b71679c5（真心跳+返修）/1f9beb422（流程图形态）**内容早已以异
+hash 全量落 master 在产**（collect 跨段键过滤+suspect 转 waiting、gate_eval:watch
+真拍源、StateDegraded 枚举对齐、applyBeatStaleness+四断言锚、pipe-flow 卡阵、
+engine:opp Mark 在 engine_opp_loop.go:31）。master 严格更新：含 ledger/review
+归 event 分型注记、pipe-head-rework、brokertz import 白名单——分支两点点差
+15004 行落后，merge=倒灌。**裁定：分支删险、STATE 待审指针为过期记账翻正。**
+机检在评审 worktree 另跑（build/vet/gofmt 净+dashboard 802+race 802+前端构建绿）。
+坑处置：无新坑——化石分支堆积本身是记账病灶（待审指针不随异径合并翻正）。 -->
