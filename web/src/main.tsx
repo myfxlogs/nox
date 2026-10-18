@@ -7,6 +7,7 @@ import { onStatus, onCase } from "./stream";
 import { client } from "./api";
 import { NOX_NAME } from "./nox";
 import { Chip } from "./components/Chip";
+import { AnalystDrawer } from "./components/AnalystDrawer";
 import LoginPage from "./pages/login";
 import OverviewPage from "./pages/overview";
 import PositionsPage from "./pages/positions";
@@ -37,6 +38,7 @@ import "./styles/10-testnet-quote.css";
 import "./styles/11-account-responsive.css";
 import "./styles/12-nox-shell.css";
 import "./styles/20-semantic.css";
+import "./styles/15-analyst.css";
 import "./styles/10-broker.css";
 
 // S2c 左导航两组分排（业主令 10-16）：门面=总览/投资人/持仓；
@@ -130,6 +132,7 @@ function App() {
   const [connected, setConnected] = useState(false);
   const badge = useActionBadge();
   const [sideOpen, setSideOpen] = useState(false);
+  const [analystOpen, setAnalystOpen] = useState(false);
   useEffect(() => onStatus(setConnected), []);
   // S4 暗色解锁（画骨样式批——00-base dark remap 完整实锤）：localStorage > 系统偏好，主题钮可换。
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -163,6 +166,7 @@ function App() {
         <span className="app-spacer" />
         <Chip tone={connected ? "good" : "warn"}>{connected ? "已连接" : "连接中"}</Chip>
         <ShellClock />
+        <button className="theme-btn" title="分析员" onClick={() => setAnalystOpen(true)}>✦ 分析员</button>
         <button className="theme-btn" title="主题切换" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
           {theme === "dark" ? "☾" : "☀"}
         </button>
@@ -189,6 +193,7 @@ function App() {
       <div className="app-content">
         <El />
       </div>
+      <AnalystDrawer open={analystOpen} onClose={() => setAnalystOpen(false)} page={path} />
     </main>
   );
 }
