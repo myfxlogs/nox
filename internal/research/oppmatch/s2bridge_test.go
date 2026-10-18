@@ -244,3 +244,30 @@ func TestS2Bridge_TradifiPerp(t *testing.T) {
 		t.Fatalf("腿缺 dedup 告警缺: %d", warnN)
 	}
 }
+
+// TestS2Bridge_TradifiAxesSuffixKey 休市历轴键形修锚：facts 键=symbol#N 后缀
+// 分段（US500#0/#1），假设腿参给裸名 US500——旧精确匹配必空假「轴空」，
+// 后缀形匹配须命中放行（funding 轴同理补种）。
+func TestS2Bridge_TradifiAxesSuffixKey(t *testing.T) {
+	s := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
+	ctx := context.Background()
+	h := seedHypothesis(t, s, "binance", "binance|TRADIFI_PERPETUAL|USD9", "TRADIFI_PERPETUAL", "USD9", "novel")
+	if _, err := s.Pool().Exec(ctx, `UPDATE fin_opp_hypothesis SET params_proto=$2 WHERE id=$1`,
+		h, `{"mt_venue":"110660304","mt_symbol":"US500","side":"short","cex_symbol":"SPCXUSD9"}`); err != nil {
+		t.Fatal(err)
+	}
+	// 实产键形：US500#0..#n 会话分段行（裸名 US500 零行）+funding 行。
+	if _, err := s.Pool().Exec(ctx, `INSERT INTO facts (kind, venue, symbol, value, unit, ts, src) VALUES
+		('trade_session','110660304','US500#0',1,'mode',now(),'test'),
+		('trade_session','110660304','US500#1',1,'mode',now(),'test'),
+		('funding','binance','SPCXUSD9',1.5,'pct_annualized',now(),'test')`); err != nil {
+		t.Fatal(err)
+	}
+	miss, err := s2TradifiAxesReady(ctx, s, "110660304", "US500", "SPCXUSD9")
+	if err != nil {
+		t.Fatalf("axes ready 读败: %v", err)
+	}
+	if miss != "" {
+		t.Fatalf("US500#n 后缀行应命中裸名轴判: miss=%q", miss)
+	}
+}
