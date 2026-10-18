@@ -113,12 +113,21 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 	}
 }
 
-// fire 触发：InsertAlert warn（穿既有飞书滤噪闸）+MarkWatchFired（once 自翻 disabled）；
+// fire 触发：InsertAlert（level=规则级路由，空兜底 warn；message=自定义文案，空兜底默认格式串——
+// arb price_alerts 能力归并面）穿既有飞书滤噪闸 +MarkWatchFired（once 自翻 disabled）；
 // 内存集同步摘除——防 reload 前同 tick 二次触发。
 func (e *Engine) fire(ctx context.Context, r pgstore.WatchRule, q bus.Quote, mid float64) {
 	disable := r.FireMode != "repeat"
-	if err := e.st.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
-		"盯盘触发#%d: %s %.6g %s %.6g @%s（%s）", r.ID, q.Symbol, mid, opText(r.Op), r.Threshold, vkOrAll(q, r), r.Note)); err != nil {
+	level := r.Level
+	if level == "" {
+		level = "warn"
+	}
+	msg := r.Message
+	if msg == "" {
+		msg = fmt.Sprintf("盯盘触发#%d: %s %.6g %s %.6g @%s（%s）",
+			r.ID, q.Symbol, mid, opText(r.Op), r.Threshold, vkOrAll(q, r), r.Note)
+	}
+	if err := e.st.InsertAlert(ctx, nil, level, msg); err != nil {
 		log.Printf("[watch] rule#%d alert: %v", r.ID, err)
 	}
 	if err := e.st.MarkWatchFired(ctx, r.ID, disable); err != nil {

@@ -46,6 +46,7 @@ import "./styles/15-analyst.css";
 import "./styles/13-daily.css";
 import "./styles/10-broker.css";
 import "./styles/14-toast.css";
+import "./styles/18-price-alert.css";
 
 // S2c 左导航两组分排（业主令 10-16）：门面=总览/投资人/持仓；
 // 运维=账户/风控/观察/资金/DCI/报告/设置（盯盘归运维观察面）。

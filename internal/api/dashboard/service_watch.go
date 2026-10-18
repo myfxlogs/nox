@@ -17,6 +17,7 @@ import (
 var watchRuleKinds = map[string]bool{"price": true}
 var watchRuleOps = map[string]bool{"lt": true, "le": true, "gt": true, "ge": true}
 var watchRuleModes = map[string]bool{"once": true, "repeat": true}
+var watchRuleLevels = map[string]bool{"info": true, "warn": true, "critical": true}
 
 func validateWatchRule(r *v1.WatchRule) error {
 	if !watchRuleKinds[r.GetKind()] {
@@ -35,6 +36,12 @@ func validateWatchRule(r *v1.WatchRule) error {
 	if r.GetCooldownSec() < 0 {
 		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("cooldown_sec<0"))
 	}
+	if lv := r.GetLevel(); lv != "" && !watchRuleLevels[lv] {
+		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("level=%q 非法", lv))
+	}
+	if len(r.GetMessage()) > 200 {
+		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("message 超 200 字符"))
+	}
 	return nil
 }
 
@@ -46,7 +53,7 @@ func (s *Service) ListWatchRules(ctx context.Context, _ *connect.Request[v1.List
 	}
 	out := make([]*v1.WatchRule, 0, len(rules))
 	for _, r := range rules {
-		out = append(out, watchRuleProto(r, s.ruleStale(r)))
+		out = append(out, watchRuleProto(r, s.ruleStale(r), s.ruleSourceMatched(r)))
 	}
 	return connect.NewResponse(&v1.ListWatchRulesResponse{Rules: out}), nil
 }
@@ -69,6 +76,16 @@ func (s *Service) ruleStale(r pgstore.WatchRule) bool {
 	return !fresh
 }
 
+// ruleSourceMatched 源对拍：subject 在 QuoteBus latest 面有任源报价=matched（读时计算非存储——
+// 防 typo 规则静默永不响；arb source_matched 语义同构）。
+func (s *Service) ruleSourceMatched(r pgstore.WatchRule) bool {
+	if r.VenueKey != "" {
+		_, ok := s.qbus.Latest(r.Subject, r.VenueKey)
+		return ok
+	}
+	return len(s.qbus.Snapshot(context.Background(), []string{r.Subject})[r.Subject]) > 0
+}
+
 // UpsertWatchRule 增改（id=0 插入）；成功后 configKick 热载。
 func (s *Service) UpsertWatchRule(ctx context.Context, req *connect.Request[v1.UpsertWatchRuleRequest]) (*connect.Response[v1.UpsertWatchRuleResponse], error) {
 	r := req.Msg.GetRule()
@@ -86,7 +103,8 @@ func (s *Service) UpsertWatchRule(ctx context.Context, req *connect.Request[v1.U
 	id, err := s.store.UpsertWatchRule(ctx, pgstore.WatchRule{
 		ID: r.GetId(), Kind: r.GetKind(), Subject: strings.TrimSpace(r.GetSubject()),
 		VenueKey: strings.TrimSpace(r.GetVenueKey()), Op: r.GetOp(), Threshold: r.GetThreshold(),
-		FireMode: r.GetFireMode(), CooldownSec: int(r.GetCooldownSec()), Note: r.GetNote(), Enabled: enabled,
+		FireMode: r.GetFireMode(), CooldownSec: int(r.GetCooldownSec()), Note: r.GetNote(),
+		Level: r.GetLevel(), Message: r.GetMessage(), Enabled: enabled,
 	})
 	if err != nil {
 		return nil, err
@@ -107,8 +125,8 @@ func (s *Service) DeleteWatchRule(ctx context.Context, req *connect.Request[v1.D
 	return connect.NewResponse(&v1.DeleteWatchRuleResponse{}), nil
 }
 
-// watchRuleProto 行→proto（last_fired NULL→0）。
-func watchRuleProto(r pgstore.WatchRule, stale bool) *v1.WatchRule {
+// watchRuleProto 行→proto（last_fired NULL→0；stale/source_matched 服务侧对拍注入）。
+func watchRuleProto(r pgstore.WatchRule, stale, sourceMatched bool) *v1.WatchRule {
 	var ts int64
 	if r.LastFiredAt != nil {
 		ts = r.LastFiredAt.Unix()
@@ -117,5 +135,6 @@ func watchRuleProto(r pgstore.WatchRule, stale bool) *v1.WatchRule {
 		Id: r.ID, Kind: r.Kind, Subject: r.Subject, VenueKey: r.VenueKey, Op: r.Op,
 		Threshold: r.Threshold, FireMode: r.FireMode, CooldownSec: int32(r.CooldownSec),
 		Note: r.Note, Enabled: &r.Enabled, LastFiredTs: ts, Stale: stale,
+		Level: r.Level, Message: r.Message, SourceMatched: sourceMatched,
 	}
 }

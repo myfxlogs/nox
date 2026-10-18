@@ -1,0 +1,46 @@
+/* —— D-292 价格提醒规则管理卡 —— */
+
+/* 表单行：横向排列输入控件 */
+.price-alert-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.price-alert-form input[type="text"],
+.price-alert-form input[type="number"] {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+}
+.price-alert-form select {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+/* 行情源未覆盖角标 */
+.price-alert-unmatched {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  color: #eab308;
+  border: 1px solid #eab308;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* 卡脚固定提示 */
+.price-alert-footer {
+  margin-top: 8px;
+  font-size: 12px;
+  text-align: right;
+}

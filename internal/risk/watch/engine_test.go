@@ -169,3 +169,46 @@ func TestWatchEngine_RepeatCooldown(t *testing.T) {
 		t.Fatalf("repeat cooldown 内 fireCnt=%d, want 1", fs.cnt(4))
 	}
 }
+
+// level/message 路由：规则字段驱动告警分级与文案（空兜底 warn+默认格式串——D-282 归并面）。
+func TestWatchEngine_LevelMessage(t *testing.T) {
+	qbus := bus.New()
+	fs := newFake()
+	fs.rules = []pgstore.WatchRule{
+		{ID: 2, Kind: "price", Subject: "TRXUSDT", Op: "ge", Threshold: 0.3,
+			FireMode: "once", Level: "critical", Message: "TRX 到价补仓", Enabled: true},
+		{ID: 3, Kind: "price", Subject: "BTCUSDT", Op: "le", Threshold: 200000,
+			FireMode: "once", Enabled: true},
+	}
+	e := New(fs, qbus, time.Minute)
+	cancel, _ := runEngine(t, e, qbus)
+	defer cancel()
+
+	qbus.Publish(bus.Quote{Symbol: "TRXUSDT", Venue: "binance", VenueType: "perp", Bid: 0.34, Ask: 0.34, Time: time.Now()})
+	qbus.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "binance", VenueType: "spot", Bid: 190000, Ask: 190000, Time: time.Now()})
+	deadline := time.After(2 * time.Second)
+	for fs.alertN() < 2 {
+		select {
+		case <-deadline:
+			t.Fatalf("alerts=%d", fs.alertN())
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	var crit, def bool
+	for _, a := range fs.alerts {
+		if a == "critical:TRX 到价补仓" {
+			crit = true
+		}
+		if len(a) > 4 && a[:4] == "warn" {
+			def = true
+		}
+	}
+	if !crit {
+		t.Fatalf("critical 级+自定义文案未落: %v", fs.alerts)
+	}
+	if !def {
+		t.Fatalf("空 level 应兜底 warn: %v", fs.alerts)
+	}
+}

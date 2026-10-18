@@ -27,7 +27,7 @@ export default function TrxPage() {
   const saveRule = async () => {
     setBusy(true);
     try {
-      await client.upsertWatchRule({ rule: { subject: rf.subject, op: rf.op, threshold: Number(rf.threshold) || 0, note: rf.note, enabled: true, fireMode: "once" } });
+      await client.upsertWatchRule({ rule: { subject: rf.subject, op: rf.op, threshold: Number(rf.threshold) || 0, note: rf.note, level: "warn", message: "", enabled: true, fireMode: "once" } });
       setRuleModal(false); setRf({ subject: "TRXUSDT", op: "lt", threshold: "", note: "" });
       await load();
     } catch (e) { setErr(errText(e)); } finally { setBusy(false); }
