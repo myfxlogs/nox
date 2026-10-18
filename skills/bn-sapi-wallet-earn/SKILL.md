@@ -19,3 +19,4 @@ description: binance sapi 钱包+earn 域端点能力账（D-608）——最大�
 - **asset/transfer type 枚举**不含 earn 对（17 枚举清单在册=划转盲区根因——earn 划转走 `simple-earn` 族别拿 transfer 凑）。
 - **CL_USDTUSDT 双缀拼接雷**（私募坑——名字面拼接禁直接 `sym+USDT`，须交易所清单实读）。
 - **mutating**：`capital/withdraw`/`asset/transfer`/`universal-transfer`/`simple-earn/{subscribe,redeem}`/`convert` 全族黑名单零跑——划转/申赎面能力账=未实测如实缺。
+- **能力探测频控注记**（注记#74②）：probe 批跑须预留生产权重余量——预检 ping=存活验证≠频限合规（418 封禁窗内 ping 仍 200 实证）；批跑限速窗（pace ≥500ms）+错峰生产高负载窗+418 即停 abort 禁续扫——烧穿共享出口 IP 权重=REST 兜底全灭形态（10-19 实证 37 次/4min）。
