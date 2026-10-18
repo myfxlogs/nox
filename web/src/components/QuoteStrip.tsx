@@ -8,6 +8,7 @@ import { onCase } from "../stream";
 import type { Quote } from "../gen/dashboardv1/market_pb";
 import { FreshDot as Dot } from "./FreshDot";
 import { freshOf } from "./freshness";
+import { WatchlistModal } from "./WatchlistModal";
 
 // fmtPrice 保留 venue 原生精度——上限 12 位小数只是兜底不参与舍入，
 // 千分位便于阅读（不设最小小数位、不补尾零）。
@@ -27,6 +28,7 @@ function UtcClock() {
 
 export function QuoteStrip() {
   const [q, setQ] = useState<Record<string, Quote>>({});
+  const [edit, setEdit] = useState(false);
   useEffect(
     () =>
       onCase("quote", (v) => {
@@ -66,7 +68,20 @@ export function QuoteStrip() {
             )),
         ])
       )}
+      {/* watchlist 编辑钮（票面④——保存后清本地帧表：被过滤源的残帧不残存） */}
+      <button
+        style={{ fontSize: 11, padding: "1px 8px" }}
+        title="自选报价条编辑"
+        onClick={() => setEdit(true)}
+      >
+        自选✎
+      </button>
       <UtcClock />
+      <WatchlistModal
+        open={edit}
+        onClose={() => setEdit(false)}
+        onSaved={() => setQ({})}
+      />
     </div>
   );
 }
