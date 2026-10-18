@@ -382,6 +382,9 @@ const (
 	// DashboardServiceSetExecutionModeProcedure is the fully-qualified name of the DashboardService's
 	// SetExecutionMode RPC.
 	DashboardServiceSetExecutionModeProcedure = "/nox.dashboard.v1.DashboardService/SetExecutionMode"
+	// DashboardServiceDecideHypothesisProcedure is the fully-qualified name of the DashboardService's
+	// DecideHypothesis RPC.
+	DashboardServiceDecideHypothesisProcedure = "/nox.dashboard.v1.DashboardService/DecideHypothesis"
 	// DashboardServiceListEmployeesProcedure is the fully-qualified name of the DashboardService's
 	// ListEmployees RPC.
 	DashboardServiceListEmployeesProcedure = "/nox.dashboard.v1.DashboardService/ListEmployees"
@@ -574,6 +577,8 @@ type DashboardServiceClient interface {
 	// D-620⑦：执行模式读写口（LIVE 授权唯一径——live_gates 行唯一授权记录）。
 	GetExecutionMode(context.Context, *connect.Request[dashboardv1.GetExecutionModeRequest]) (*connect.Response[dashboardv1.GetExecutionModeResponse], error)
 	SetExecutionMode(context.Context, *connect.Request[dashboardv1.SetExecutionModeRequest]) (*connect.Response[dashboardv1.SetExecutionModeResponse], error)
+	// D-623：新品类假设裁决写口（live_gates 同型「有表无门」收口——唯一裁决径）。
+	DecideHypothesis(context.Context, *connect.Request[dashboardv1.DecideHypothesisRequest]) (*connect.Response[dashboardv1.DecideHypothesisResponse], error)
 	// D-190：员工花名册看板（daemon 编制实况：在职/离线/任务中）。
 	ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error)
 	// D-189：提案执行台——提案实体行实况+业主拒批回执（执行=飞书 go 口令径）。
@@ -1299,6 +1304,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("SetExecutionMode")),
 			connect.WithClientOptions(opts...),
 		),
+		decideHypothesis: connect.NewClient[dashboardv1.DecideHypothesisRequest, dashboardv1.DecideHypothesisResponse](
+			httpClient,
+			baseURL+DashboardServiceDecideHypothesisProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("DecideHypothesis")),
+			connect.WithClientOptions(opts...),
+		),
 		listEmployees: connect.NewClient[dashboardv1.ListEmployeesRequest, dashboardv1.ListEmployeesResponse](
 			httpClient,
 			baseURL+DashboardServiceListEmployeesProcedure,
@@ -1463,6 +1474,7 @@ type dashboardServiceClient struct {
 	selfRestart                  *connect.Client[dashboardv1.SelfRestartRequest, dashboardv1.SelfRestartResponse]
 	getExecutionMode             *connect.Client[dashboardv1.GetExecutionModeRequest, dashboardv1.GetExecutionModeResponse]
 	setExecutionMode             *connect.Client[dashboardv1.SetExecutionModeRequest, dashboardv1.SetExecutionModeResponse]
+	decideHypothesis             *connect.Client[dashboardv1.DecideHypothesisRequest, dashboardv1.DecideHypothesisResponse]
 	listEmployees                *connect.Client[dashboardv1.ListEmployeesRequest, dashboardv1.ListEmployeesResponse]
 	listProposals                *connect.Client[dashboardv1.ListProposalsRequest, dashboardv1.ListProposalsResponse]
 	ackProposal                  *connect.Client[dashboardv1.AckProposalRequest, dashboardv1.AckProposalResponse]
@@ -2058,6 +2070,11 @@ func (c *dashboardServiceClient) SetExecutionMode(ctx context.Context, req *conn
 	return c.setExecutionMode.CallUnary(ctx, req)
 }
 
+// DecideHypothesis calls nox.dashboard.v1.DashboardService.DecideHypothesis.
+func (c *dashboardServiceClient) DecideHypothesis(ctx context.Context, req *connect.Request[dashboardv1.DecideHypothesisRequest]) (*connect.Response[dashboardv1.DecideHypothesisResponse], error) {
+	return c.decideHypothesis.CallUnary(ctx, req)
+}
+
 // ListEmployees calls nox.dashboard.v1.DashboardService.ListEmployees.
 func (c *dashboardServiceClient) ListEmployees(ctx context.Context, req *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error) {
 	return c.listEmployees.CallUnary(ctx, req)
@@ -2262,6 +2279,8 @@ type DashboardServiceHandler interface {
 	// D-620⑦：执行模式读写口（LIVE 授权唯一径——live_gates 行唯一授权记录）。
 	GetExecutionMode(context.Context, *connect.Request[dashboardv1.GetExecutionModeRequest]) (*connect.Response[dashboardv1.GetExecutionModeResponse], error)
 	SetExecutionMode(context.Context, *connect.Request[dashboardv1.SetExecutionModeRequest]) (*connect.Response[dashboardv1.SetExecutionModeResponse], error)
+	// D-623：新品类假设裁决写口（live_gates 同型「有表无门」收口——唯一裁决径）。
+	DecideHypothesis(context.Context, *connect.Request[dashboardv1.DecideHypothesisRequest]) (*connect.Response[dashboardv1.DecideHypothesisResponse], error)
 	// D-190：员工花名册看板（daemon 编制实况：在职/离线/任务中）。
 	ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error)
 	// D-189：提案执行台——提案实体行实况+业主拒批回执（执行=飞书 go 口令径）。
@@ -2983,6 +3002,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("SetExecutionMode")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceDecideHypothesisHandler := connect.NewUnaryHandler(
+		DashboardServiceDecideHypothesisProcedure,
+		svc.DecideHypothesis,
+		connect.WithSchema(dashboardServiceMethods.ByName("DecideHypothesis")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceListEmployeesHandler := connect.NewUnaryHandler(
 		DashboardServiceListEmployeesProcedure,
 		svc.ListEmployees,
@@ -3261,6 +3286,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetExecutionModeHandler.ServeHTTP(w, r)
 		case DashboardServiceSetExecutionModeProcedure:
 			dashboardServiceSetExecutionModeHandler.ServeHTTP(w, r)
+		case DashboardServiceDecideHypothesisProcedure:
+			dashboardServiceDecideHypothesisHandler.ServeHTTP(w, r)
 		case DashboardServiceListEmployeesProcedure:
 			dashboardServiceListEmployeesHandler.ServeHTTP(w, r)
 		case DashboardServiceListProposalsProcedure:
@@ -3750,6 +3777,10 @@ func (UnimplementedDashboardServiceHandler) GetExecutionMode(context.Context, *c
 
 func (UnimplementedDashboardServiceHandler) SetExecutionMode(context.Context, *connect.Request[dashboardv1.SetExecutionModeRequest]) (*connect.Response[dashboardv1.SetExecutionModeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SetExecutionMode is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) DecideHypothesis(context.Context, *connect.Request[dashboardv1.DecideHypothesisRequest]) (*connect.Response[dashboardv1.DecideHypothesisResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.DecideHypothesis is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error) {

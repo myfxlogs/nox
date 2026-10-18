@@ -3185,6 +3185,152 @@ func (x *SetExecutionModeResponse) GetView() *ExecutionModeView {
 	return nil
 }
 
+// DecideHypothesisRequest D-623：fin_opp_hypothesis 裁决写口（actor/reason/evidence_ref 必填，
+// Bearer 同 SetExecutionMode 信任级——决策席 buf curl 径）。
+type DecideHypothesisRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Decision      string                 `protobuf:"bytes,2,opt,name=decision,proto3" json:"decision,omitempty"` // approved|rejected（service 层枚举校验，仅 proposed 态受理）
+	Actor         string                 `protobuf:"bytes,3,opt,name=actor,proto3" json:"actor,omitempty"`
+	Reason        string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	EvidenceRef   string                 `protobuf:"bytes,5,opt,name=evidence_ref,json=evidenceRef,proto3" json:"evidence_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DecideHypothesisRequest) Reset() {
+	*x = DecideHypothesisRequest{}
+	mi := &file_dashboardv1_account_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DecideHypothesisRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DecideHypothesisRequest) ProtoMessage() {}
+
+func (x *DecideHypothesisRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_account_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DecideHypothesisRequest.ProtoReflect.Descriptor instead.
+func (*DecideHypothesisRequest) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *DecideHypothesisRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *DecideHypothesisRequest) GetDecision() string {
+	if x != nil {
+		return x.Decision
+	}
+	return ""
+}
+
+func (x *DecideHypothesisRequest) GetActor() string {
+	if x != nil {
+		return x.Actor
+	}
+	return ""
+}
+
+func (x *DecideHypothesisRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *DecideHypothesisRequest) GetEvidenceRef() string {
+	if x != nil {
+		return x.EvidenceRef
+	}
+	return ""
+}
+
+type DecideHypothesisResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	DecidedBy     string                 `protobuf:"bytes,3,opt,name=decided_by,json=decidedBy,proto3" json:"decided_by,omitempty"`
+	DecidedAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=decided_at,json=decidedAt,proto3" json:"decided_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DecideHypothesisResponse) Reset() {
+	*x = DecideHypothesisResponse{}
+	mi := &file_dashboardv1_account_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DecideHypothesisResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DecideHypothesisResponse) ProtoMessage() {}
+
+func (x *DecideHypothesisResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_account_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DecideHypothesisResponse.ProtoReflect.Descriptor instead.
+func (*DecideHypothesisResponse) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *DecideHypothesisResponse) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *DecideHypothesisResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *DecideHypothesisResponse) GetDecidedBy() string {
+	if x != nil {
+		return x.DecidedBy
+	}
+	return ""
+}
+
+func (x *DecideHypothesisResponse) GetDecidedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.DecidedAt
+	}
+	return nil
+}
+
 var File_dashboardv1_account_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_account_proto_rawDesc = "" +
@@ -3467,7 +3613,20 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\n" +
 	"expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"S\n" +
 	"\x18SetExecutionModeResponse\x127\n" +
-	"\x04view\x18\x01 \x01(\v2#.nox.dashboard.v1.ExecutionModeViewR\x04viewB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x04view\x18\x01 \x01(\v2#.nox.dashboard.v1.ExecutionModeViewR\x04view\"\x96\x01\n" +
+	"\x17DecideHypothesisRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1a\n" +
+	"\bdecision\x18\x02 \x01(\tR\bdecision\x12\x14\n" +
+	"\x05actor\x18\x03 \x01(\tR\x05actor\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\x12!\n" +
+	"\fevidence_ref\x18\x05 \x01(\tR\vevidenceRef\"\x9c\x01\n" +
+	"\x18DecideHypothesisResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1d\n" +
+	"\n" +
+	"decided_by\x18\x03 \x01(\tR\tdecidedBy\x129\n" +
+	"\n" +
+	"decided_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tdecidedAtB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_account_proto_rawDescOnce sync.Once
@@ -3481,7 +3640,7 @@ func file_dashboardv1_account_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_account_proto_rawDescData
 }
 
-var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
+var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
 var file_dashboardv1_account_proto_goTypes = []any{
 	(*KnowledgeEntry)(nil),                  // 0: nox.dashboard.v1.KnowledgeEntry
 	(*ListKnowledgeEntriesRequest)(nil),     // 1: nox.dashboard.v1.ListKnowledgeEntriesRequest
@@ -3527,32 +3686,34 @@ var file_dashboardv1_account_proto_goTypes = []any{
 	(*GetExecutionModeResponse)(nil),        // 41: nox.dashboard.v1.GetExecutionModeResponse
 	(*SetExecutionModeRequest)(nil),         // 42: nox.dashboard.v1.SetExecutionModeRequest
 	(*SetExecutionModeResponse)(nil),        // 43: nox.dashboard.v1.SetExecutionModeResponse
-	nil,                                     // 44: nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
-	(*timestamppb.Timestamp)(nil),           // 45: google.protobuf.Timestamp
+	(*DecideHypothesisRequest)(nil),         // 44: nox.dashboard.v1.DecideHypothesisRequest
+	(*DecideHypothesisResponse)(nil),        // 45: nox.dashboard.v1.DecideHypothesisResponse
+	nil,                                     // 46: nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
+	(*timestamppb.Timestamp)(nil),           // 47: google.protobuf.Timestamp
 }
 var file_dashboardv1_account_proto_depIdxs = []int32{
-	45, // 0: nox.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
-	45, // 1: nox.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
+	47, // 0: nox.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
+	47, // 1: nox.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: nox.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> nox.dashboard.v1.KnowledgeEntry
-	45, // 3: nox.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	45, // 4: nox.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	47, // 3: nox.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	47, // 4: nox.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
 	10, // 5: nox.dashboard.v1.ListKBEntriesResponse.entries:type_name -> nox.dashboard.v1.KBEntry
 	3,  // 6: nox.dashboard.v1.ListDailyIncomeResponse.items:type_name -> nox.dashboard.v1.PositionDailyIncome
-	45, // 7: nox.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
+	47, // 7: nox.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
 	21, // 8: nox.dashboard.v1.AccountInfo.holdings:type_name -> nox.dashboard.v1.Holding
-	45, // 9: nox.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
+	47, // 9: nox.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
 	19, // 10: nox.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> nox.dashboard.v1.AccountMarginStatus
 	17, // 11: nox.dashboard.v1.ListAccountsResponse.accounts:type_name -> nox.dashboard.v1.AccountInfo
-	45, // 12: nox.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
-	45, // 13: nox.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
+	47, // 12: nox.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
+	47, // 13: nox.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
 	26, // 14: nox.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> nox.dashboard.v1.FinancePnlByEnv
 	27, // 15: nox.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> nox.dashboard.v1.FinanceIncomeRow
 	28, // 16: nox.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> nox.dashboard.v1.FinanceFlowRow
-	44, // 17: nox.dashboard.v1.GetFinanceOverviewResponse.equity_by_ccy:type_name -> nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
-	45, // 18: nox.dashboard.v1.GetFinanceOverviewResponse.baseline_at:type_name -> google.protobuf.Timestamp
-	45, // 19: nox.dashboard.v1.OverviewOrderRow.until:type_name -> google.protobuf.Timestamp
-	45, // 20: nox.dashboard.v1.GetOverviewBundleResponse.earliest_release:type_name -> google.protobuf.Timestamp
-	45, // 21: nox.dashboard.v1.GetOverviewBundleResponse.baseline_at:type_name -> google.protobuf.Timestamp
+	46, // 17: nox.dashboard.v1.GetFinanceOverviewResponse.equity_by_ccy:type_name -> nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
+	47, // 18: nox.dashboard.v1.GetFinanceOverviewResponse.baseline_at:type_name -> google.protobuf.Timestamp
+	47, // 19: nox.dashboard.v1.OverviewOrderRow.until:type_name -> google.protobuf.Timestamp
+	47, // 20: nox.dashboard.v1.GetOverviewBundleResponse.earliest_release:type_name -> google.protobuf.Timestamp
+	47, // 21: nox.dashboard.v1.GetOverviewBundleResponse.baseline_at:type_name -> google.protobuf.Timestamp
 	30, // 22: nox.dashboard.v1.GetOverviewBundleResponse.orders:type_name -> nox.dashboard.v1.OverviewOrderRow
 	38, // 23: nox.dashboard.v1.GetOverviewBundleResponse.stages:type_name -> nox.dashboard.v1.PipelineStageHealth
 	34, // 24: nox.dashboard.v1.GetOverviewBundleResponse.breakdowns:type_name -> nox.dashboard.v1.OverviewBreakdownRow
@@ -3560,18 +3721,19 @@ var file_dashboardv1_account_proto_depIdxs = []int32{
 	36, // 26: nox.dashboard.v1.GetOverviewBundleResponse.funnel:type_name -> nox.dashboard.v1.OverviewFunnelRow
 	37, // 27: nox.dashboard.v1.GetOverviewBundleResponse.waiting:type_name -> nox.dashboard.v1.OverviewWaitingRow
 	33, // 28: nox.dashboard.v1.GetOverviewBundleResponse.crit_alerts:type_name -> nox.dashboard.v1.OverviewCritAlert
-	45, // 29: nox.dashboard.v1.OverviewCritAlert.ts:type_name -> google.protobuf.Timestamp
-	45, // 30: nox.dashboard.v1.OverviewCritAlert.first_ts:type_name -> google.protobuf.Timestamp
-	45, // 31: nox.dashboard.v1.ExecutionModeView.gate_confirmed_at:type_name -> google.protobuf.Timestamp
-	45, // 32: nox.dashboard.v1.ExecutionModeView.gate_expires_at:type_name -> google.protobuf.Timestamp
+	47, // 29: nox.dashboard.v1.OverviewCritAlert.ts:type_name -> google.protobuf.Timestamp
+	47, // 30: nox.dashboard.v1.OverviewCritAlert.first_ts:type_name -> google.protobuf.Timestamp
+	47, // 31: nox.dashboard.v1.ExecutionModeView.gate_confirmed_at:type_name -> google.protobuf.Timestamp
+	47, // 32: nox.dashboard.v1.ExecutionModeView.gate_expires_at:type_name -> google.protobuf.Timestamp
 	39, // 33: nox.dashboard.v1.GetExecutionModeResponse.view:type_name -> nox.dashboard.v1.ExecutionModeView
-	45, // 34: nox.dashboard.v1.SetExecutionModeRequest.expires_at:type_name -> google.protobuf.Timestamp
+	47, // 34: nox.dashboard.v1.SetExecutionModeRequest.expires_at:type_name -> google.protobuf.Timestamp
 	39, // 35: nox.dashboard.v1.SetExecutionModeResponse.view:type_name -> nox.dashboard.v1.ExecutionModeView
-	36, // [36:36] is the sub-list for method output_type
-	36, // [36:36] is the sub-list for method input_type
-	36, // [36:36] is the sub-list for extension type_name
-	36, // [36:36] is the sub-list for extension extendee
-	0,  // [0:36] is the sub-list for field type_name
+	47, // 36: nox.dashboard.v1.DecideHypothesisResponse.decided_at:type_name -> google.protobuf.Timestamp
+	37, // [37:37] is the sub-list for method output_type
+	37, // [37:37] is the sub-list for method input_type
+	37, // [37:37] is the sub-list for extension type_name
+	37, // [37:37] is the sub-list for extension extendee
+	0,  // [0:37] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_account_proto_init() }
@@ -3585,7 +3747,7 @@ func file_dashboardv1_account_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_account_proto_rawDesc), len(file_dashboardv1_account_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   45,
+			NumMessages:   47,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

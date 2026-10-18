@@ -24,7 +24,7 @@ var File_dashboardv1_service_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_service_proto_rawDesc = "" +
 	"\n" +
-	"\x19dashboardv1/service.proto\x12\x10nox.dashboard.v1\x1a\x1cdashboardv1/app_config.proto\x1a\x1ddashboardv1/dept_report.proto\x1a\x1ddashboardv1/request_box.proto\x1a\x1adashboardv1/employee.proto\x1a\x1adashboardv1/proposal.proto\x1a\x1bdashboardv1/dci_panel.proto\x1a\x1ddashboardv1/app_secrets.proto\x1a\x19dashboardv1/account.proto\x1a\x1fdashboardv1/capital_pools.proto\x1a\x1edashboardv1/broker_admin.proto\x1a\x1cdashboardv1/graduation.proto\x1a\x18dashboardv1/market.proto\x1a\x1cdashboardv1/watch_rule.proto\x1a!dashboardv1/manual_position.proto\x1a\x15dashboardv1/ops.proto\x1a\x1adashboardv1/position.proto\x1a\x18dashboardv1/stream.proto\x1a\x19dashboardv1/trx_cex.proto\x1a#dashboardv1/watchlist_analyst.proto2\xeff\n" +
+	"\x19dashboardv1/service.proto\x12\x10nox.dashboard.v1\x1a\x1cdashboardv1/app_config.proto\x1a\x1ddashboardv1/dept_report.proto\x1a\x1ddashboardv1/request_box.proto\x1a\x1adashboardv1/employee.proto\x1a\x1adashboardv1/proposal.proto\x1a\x1bdashboardv1/dci_panel.proto\x1a\x1ddashboardv1/app_secrets.proto\x1a\x19dashboardv1/account.proto\x1a\x1fdashboardv1/capital_pools.proto\x1a\x1edashboardv1/broker_admin.proto\x1a\x1cdashboardv1/graduation.proto\x1a\x18dashboardv1/market.proto\x1a\x1cdashboardv1/watch_rule.proto\x1a!dashboardv1/manual_position.proto\x1a\x15dashboardv1/ops.proto\x1a\x1adashboardv1/position.proto\x1a\x18dashboardv1/stream.proto\x1a\x19dashboardv1/trx_cex.proto\x1a#dashboardv1/watchlist_analyst.proto2\xdag\n" +
 	"\x10DashboardService\x12]\n" +
 	"\x10ListLatestQuotes\x12#.nox.dashboard.v1.ListQuotesRequest\x1a$.nox.dashboard.v1.ListQuotesResponse\x12f\n" +
 	"\x0fListLatestFacts\x12(.nox.dashboard.v1.ListLatestFactsRequest\x1a).nox.dashboard.v1.ListLatestFactsResponse\x12l\n" +
@@ -147,7 +147,8 @@ const file_dashboardv1_service_proto_rawDesc = "" +
 	"\x0fUpdateAppConfig\x12(.nox.dashboard.v1.UpdateAppConfigRequest\x1a).nox.dashboard.v1.UpdateAppConfigResponse\x12Z\n" +
 	"\vSelfRestart\x12$.nox.dashboard.v1.SelfRestartRequest\x1a%.nox.dashboard.v1.SelfRestartResponse\x12i\n" +
 	"\x10GetExecutionMode\x12).nox.dashboard.v1.GetExecutionModeRequest\x1a*.nox.dashboard.v1.GetExecutionModeResponse\x12i\n" +
-	"\x10SetExecutionMode\x12).nox.dashboard.v1.SetExecutionModeRequest\x1a*.nox.dashboard.v1.SetExecutionModeResponse\x12`\n" +
+	"\x10SetExecutionMode\x12).nox.dashboard.v1.SetExecutionModeRequest\x1a*.nox.dashboard.v1.SetExecutionModeResponse\x12i\n" +
+	"\x10DecideHypothesis\x12).nox.dashboard.v1.DecideHypothesisRequest\x1a*.nox.dashboard.v1.DecideHypothesisResponse\x12`\n" +
 	"\rListEmployees\x12&.nox.dashboard.v1.ListEmployeesRequest\x1a'.nox.dashboard.v1.ListEmployeesResponse\x12`\n" +
 	"\rListProposals\x12&.nox.dashboard.v1.ListProposalsRequest\x1a'.nox.dashboard.v1.ListProposalsResponse\x12Z\n" +
 	"\vAckProposal\x12$.nox.dashboard.v1.AckProposalRequest\x1a%.nox.dashboard.v1.AckProposalResponse\x12x\n" +
@@ -274,137 +275,139 @@ var file_dashboardv1_service_proto_goTypes = []any{
 	(*SelfRestartRequest)(nil),                   // 114: nox.dashboard.v1.SelfRestartRequest
 	(*GetExecutionModeRequest)(nil),              // 115: nox.dashboard.v1.GetExecutionModeRequest
 	(*SetExecutionModeRequest)(nil),              // 116: nox.dashboard.v1.SetExecutionModeRequest
-	(*ListEmployeesRequest)(nil),                 // 117: nox.dashboard.v1.ListEmployeesRequest
-	(*ListProposalsRequest)(nil),                 // 118: nox.dashboard.v1.ListProposalsRequest
-	(*AckProposalRequest)(nil),                   // 119: nox.dashboard.v1.AckProposalRequest
-	(*ListPersonalPositionsRequest)(nil),         // 120: nox.dashboard.v1.ListPersonalPositionsRequest
-	(*ListDCIOrdersRequest)(nil),                 // 121: nox.dashboard.v1.ListDCIOrdersRequest
-	(*ListAppSecretsRequest)(nil),                // 122: nox.dashboard.v1.ListAppSecretsRequest
-	(*UpdateAppSecretRequest)(nil),               // 123: nox.dashboard.v1.UpdateAppSecretRequest
-	(*ListQuotesResponse)(nil),                   // 124: nox.dashboard.v1.ListQuotesResponse
-	(*ListLatestFactsResponse)(nil),              // 125: nox.dashboard.v1.ListLatestFactsResponse
-	(*ListOpportunitiesResponse)(nil),            // 126: nox.dashboard.v1.ListOpportunitiesResponse
-	(*ListAlertsResponse)(nil),                   // 127: nox.dashboard.v1.ListAlertsResponse
-	(*ListSourceHealthResponse)(nil),             // 128: nox.dashboard.v1.ListSourceHealthResponse
-	(*ListFactsResponse)(nil),                    // 129: nox.dashboard.v1.ListFactsResponse
-	(*AckAlertResponse)(nil),                     // 130: nox.dashboard.v1.AckAlertResponse
-	(*AckAllResponse)(nil),                       // 131: nox.dashboard.v1.AckAllResponse
-	(*ListUnackedResponse)(nil),                  // 132: nox.dashboard.v1.ListUnackedResponse
-	(*DeleteAlertsResponse)(nil),                 // 133: nox.dashboard.v1.DeleteAlertsResponse
-	(*ClearAckedAlertsResponse)(nil),             // 134: nox.dashboard.v1.ClearAckedAlertsResponse
-	(*ListKnowledgeEntriesResponse)(nil),         // 135: nox.dashboard.v1.ListKnowledgeEntriesResponse
-	(*ExecuteOpportunityResponse)(nil),           // 136: nox.dashboard.v1.ExecuteOpportunityResponse
-	(*ClosePositionResponse)(nil),                // 137: nox.dashboard.v1.ClosePositionResponse
-	(*BackfillSwapHistoryReply)(nil),             // 138: nox.dashboard.v1.BackfillSwapHistoryReply
-	(*ListPositionsResponse)(nil),                // 139: nox.dashboard.v1.ListPositionsResponse
-	(*ListBrokerPositionsResponse)(nil),          // 140: nox.dashboard.v1.ListBrokerPositionsResponse
-	(*CloseBrokerPositionResponse)(nil),          // 141: nox.dashboard.v1.CloseBrokerPositionResponse
-	(*CloseBrokerPositionsResponse)(nil),         // 142: nox.dashboard.v1.CloseBrokerPositionsResponse
-	(*OpenProbeResponse)(nil),                    // 143: nox.dashboard.v1.OpenProbeResponse
-	(*ListProbesResponse)(nil),                   // 144: nox.dashboard.v1.ListProbesResponse
-	(*ApproveProbeResponse)(nil),                 // 145: nox.dashboard.v1.ApproveProbeResponse
-	(*RejectProbeResponse)(nil),                  // 146: nox.dashboard.v1.RejectProbeResponse
-	(*ListProbeProposalsResponse)(nil),           // 147: nox.dashboard.v1.ListProbeProposalsResponse
-	(*ListAccountsResponse)(nil),                 // 148: nox.dashboard.v1.ListAccountsResponse
-	(*TrxAccountRefreshResponse)(nil),            // 149: nox.dashboard.v1.TrxAccountRefreshResponse
-	(*GetTrxYieldRadarResponse)(nil),             // 150: nox.dashboard.v1.GetTrxYieldRadarResponse
-	(*GetTrxYieldCurveResponse)(nil),             // 151: nox.dashboard.v1.GetTrxYieldCurveResponse
-	(*ListTrxTxsResponse)(nil),                   // 152: nox.dashboard.v1.ListTrxTxsResponse
-	(*ListHedgeFlowResponse)(nil),                // 153: nox.dashboard.v1.ListHedgeFlowResponse
-	(*GetHedgeStructureResponse)(nil),            // 154: nox.dashboard.v1.GetHedgeStructureResponse
-	(*AddDailyIncomeResponse)(nil),               // 155: nox.dashboard.v1.AddDailyIncomeResponse
-	(*ListDailyIncomeResponse)(nil),              // 156: nox.dashboard.v1.ListDailyIncomeResponse
-	(*GetPnlAnchorResponse)(nil),                 // 157: nox.dashboard.v1.GetPnlAnchorResponse
-	(*ResetPnlAnchorResponse)(nil),               // 158: nox.dashboard.v1.ResetPnlAnchorResponse
-	(*ListKBEntriesResponse)(nil),                // 159: nox.dashboard.v1.ListKBEntriesResponse
-	(*GetKBEntryResponse)(nil),                   // 160: nox.dashboard.v1.GetKBEntryResponse
-	(*ListVerificationStatsResponse)(nil),        // 161: nox.dashboard.v1.ListVerificationStatsResponse
-	(*SearchBrokerResponse)(nil),                 // 162: nox.dashboard.v1.SearchBrokerResponse
-	(*AddBrokerResponse)(nil),                    // 163: nox.dashboard.v1.AddBrokerResponse
-	(*RemoveBrokerResponse)(nil),                 // 164: nox.dashboard.v1.RemoveBrokerResponse
-	(*UpdateBrokerCredentialsResponse)(nil),      // 165: nox.dashboard.v1.UpdateBrokerCredentialsResponse
-	(*ListBrokerAccountsResponse)(nil),           // 166: nox.dashboard.v1.ListBrokerAccountsResponse
-	(*VerifyAccountResponse)(nil),                // 167: nox.dashboard.v1.VerifyAccountResponse
-	(*ListExchangesResponse)(nil),                // 168: nox.dashboard.v1.ListExchangesResponse
-	(*AddExchangeResponse)(nil),                  // 169: nox.dashboard.v1.AddExchangeResponse
-	(*RemoveExchangeResponse)(nil),               // 170: nox.dashboard.v1.RemoveExchangeResponse
-	(*SetExchangeLabelResponse)(nil),             // 171: nox.dashboard.v1.SetExchangeLabelResponse
-	(*SetExchangeWebsiteResponse)(nil),           // 172: nox.dashboard.v1.SetExchangeWebsiteResponse
-	(*BrokerSymbolsResponse)(nil),                // 173: nox.dashboard.v1.BrokerSymbolsResponse
-	(*SetBrokerAccountAliasResponse)(nil),        // 174: nox.dashboard.v1.SetBrokerAccountAliasResponse
-	(*SetBrokerAccountIsRealResponse)(nil),       // 175: nox.dashboard.v1.SetBrokerAccountIsRealResponse
-	(*SetBrokerDisabledResponse)(nil),            // 176: nox.dashboard.v1.SetBrokerDisabledResponse
-	(*SetBrokerCommissionResponse)(nil),          // 177: nox.dashboard.v1.SetBrokerCommissionResponse
-	(*SetBrokerWebsiteResponse)(nil),             // 178: nox.dashboard.v1.SetBrokerWebsiteResponse
-	(*ListSymbolMappingsResponse)(nil),           // 179: nox.dashboard.v1.ListSymbolMappingsResponse
-	(*SaveSymbolMappingResponse)(nil),            // 180: nox.dashboard.v1.SaveSymbolMappingResponse
-	(*DeleteSymbolMappingResponse)(nil),          // 181: nox.dashboard.v1.DeleteSymbolMappingResponse
-	(*ListMappingSuggestionsResponse)(nil),       // 182: nox.dashboard.v1.ListMappingSuggestionsResponse
-	(*ListCanonicalsResponse)(nil),               // 183: nox.dashboard.v1.ListCanonicalsResponse
-	(*AutoMapBrokerResponse)(nil),                // 184: nox.dashboard.v1.AutoMapBrokerResponse
-	(*ListSwapCombosResponse)(nil),               // 185: nox.dashboard.v1.ListSwapCombosResponse
-	(*ListMatrixUniverseResponse)(nil),           // 186: nox.dashboard.v1.ListMatrixUniverseResponse
-	(*StreamUpdatesResponse)(nil),                // 187: nox.dashboard.v1.StreamUpdatesResponse
-	(*HealthResponse)(nil),                       // 188: nox.dashboard.v1.HealthResponse
-	(*GetFrontConfigResponse)(nil),               // 189: nox.dashboard.v1.GetFrontConfigResponse
-	(*GetStrategyLedgerResponse)(nil),            // 190: nox.dashboard.v1.GetStrategyLedgerResponse
-	(*GetWatchlistResponse)(nil),                 // 191: nox.dashboard.v1.GetWatchlistResponse
-	(*SetWatchlistResponse)(nil),                 // 192: nox.dashboard.v1.SetWatchlistResponse
-	(*AskAnalystResponse)(nil),                   // 193: nox.dashboard.v1.AskAnalystResponse
-	(*AppendAnalystNoteResponse)(nil),            // 194: nox.dashboard.v1.AppendAnalystNoteResponse
-	(*GenerateKbReportResponse)(nil),             // 195: nox.dashboard.v1.GenerateKbReportResponse
-	(*GenerateRetroReportResponse)(nil),          // 196: nox.dashboard.v1.GenerateRetroReportResponse
-	(*ListReportsResponse)(nil),                  // 197: nox.dashboard.v1.ListReportsResponse
-	(*GetReportResponse)(nil),                    // 198: nox.dashboard.v1.GetReportResponse
-	(*ListDeptReportsResponse)(nil),              // 199: nox.dashboard.v1.ListDeptReportsResponse
-	(*ListRequestBoxResponse)(nil),               // 200: nox.dashboard.v1.ListRequestBoxResponse
-	(*GetActionBadgeResponse)(nil),               // 201: nox.dashboard.v1.GetActionBadgeResponse
-	(*ResolveRequestResponse)(nil),               // 202: nox.dashboard.v1.ResolveRequestResponse
-	(*GetAiSettingsResponse)(nil),                // 203: nox.dashboard.v1.GetAiSettingsResponse
-	(*SetAiSettingsResponse)(nil),                // 204: nox.dashboard.v1.SetAiSettingsResponse
-	(*GetCexScanSnapshotResponse)(nil),           // 205: nox.dashboard.v1.GetCexScanSnapshotResponse
-	(*ListWatchRulesResponse)(nil),               // 206: nox.dashboard.v1.ListWatchRulesResponse
-	(*UpsertWatchRuleResponse)(nil),              // 207: nox.dashboard.v1.UpsertWatchRuleResponse
-	(*DeleteWatchRuleResponse)(nil),              // 208: nox.dashboard.v1.DeleteWatchRuleResponse
-	(*ListManualPositionsResponse)(nil),          // 209: nox.dashboard.v1.ListManualPositionsResponse
-	(*UpsertManualPositionResponse)(nil),         // 210: nox.dashboard.v1.UpsertManualPositionResponse
-	(*DeleteManualPositionResponse)(nil),         // 211: nox.dashboard.v1.DeleteManualPositionResponse
-	(*GetFinanceOverviewResponse)(nil),           // 212: nox.dashboard.v1.GetFinanceOverviewResponse
-	(*GetOverviewBundleResponse)(nil),            // 213: nox.dashboard.v1.GetOverviewBundleResponse
-	(*GetCapitalPoolsResponse)(nil),              // 214: nox.dashboard.v1.GetCapitalPoolsResponse
-	(*ExecuteSpotCarryDemoResponse)(nil),         // 215: nox.dashboard.v1.ExecuteSpotCarryDemoResponse
-	(*ListSpotCarryDemoResponse)(nil),            // 216: nox.dashboard.v1.ListSpotCarryDemoResponse
-	(*ListPaperSpotCarryResponse)(nil),           // 217: nox.dashboard.v1.ListPaperSpotCarryResponse
-	(*ListAutotradeAllowRulesResponse)(nil),      // 218: nox.dashboard.v1.ListAutotradeAllowRulesResponse
-	(*SetAutotradeAllowRuleEnabledResponse)(nil), // 219: nox.dashboard.v1.SetAutotradeAllowRuleEnabledResponse
-	(*AddAutotradeAllowRuleResponse)(nil),        // 220: nox.dashboard.v1.AddAutotradeAllowRuleResponse
-	(*DeleteAutotradeAllowRuleResponse)(nil),     // 221: nox.dashboard.v1.DeleteAutotradeAllowRuleResponse
-	(*GetCapitalCoverageResponse)(nil),           // 222: nox.dashboard.v1.GetCapitalCoverageResponse
-	(*GetCapitalMapResponse)(nil),                // 223: nox.dashboard.v1.GetCapitalMapResponse
-	(*GetCexFinanceResponse)(nil),                // 224: nox.dashboard.v1.GetCexFinanceResponse
-	(*ListCarryGraduationsResponse)(nil),         // 225: nox.dashboard.v1.ListCarryGraduationsResponse
-	(*ApproveCarryGraduationResponse)(nil),       // 226: nox.dashboard.v1.ApproveCarryGraduationResponse
-	(*RejectCarryGraduationResponse)(nil),        // 227: nox.dashboard.v1.RejectCarryGraduationResponse
-	(*ListVenueExposureCapsResponse)(nil),        // 228: nox.dashboard.v1.ListVenueExposureCapsResponse
-	(*SetVenueExposureCapResponse)(nil),          // 229: nox.dashboard.v1.SetVenueExposureCapResponse
-	(*ListXAssetAllowCombosResponse)(nil),        // 230: nox.dashboard.v1.ListXAssetAllowCombosResponse
-	(*ListXAssetPendingEntriesResponse)(nil),     // 231: nox.dashboard.v1.ListXAssetPendingEntriesResponse
-	(*UpsertXAssetAllowComboResponse)(nil),       // 232: nox.dashboard.v1.UpsertXAssetAllowComboResponse
-	(*ResumeXAssetComboResponse)(nil),            // 233: nox.dashboard.v1.ResumeXAssetComboResponse
-	(*PreviewXAssetComboRiskResponse)(nil),       // 234: nox.dashboard.v1.PreviewXAssetComboRiskResponse
-	(*ListAccountMarginStatusResponse)(nil),      // 235: nox.dashboard.v1.ListAccountMarginStatusResponse
-	(*ListAppConfigResponse)(nil),                // 236: nox.dashboard.v1.ListAppConfigResponse
-	(*UpdateAppConfigResponse)(nil),              // 237: nox.dashboard.v1.UpdateAppConfigResponse
-	(*SelfRestartResponse)(nil),                  // 238: nox.dashboard.v1.SelfRestartResponse
-	(*GetExecutionModeResponse)(nil),             // 239: nox.dashboard.v1.GetExecutionModeResponse
-	(*SetExecutionModeResponse)(nil),             // 240: nox.dashboard.v1.SetExecutionModeResponse
-	(*ListEmployeesResponse)(nil),                // 241: nox.dashboard.v1.ListEmployeesResponse
-	(*ListProposalsResponse)(nil),                // 242: nox.dashboard.v1.ListProposalsResponse
-	(*AckProposalResponse)(nil),                  // 243: nox.dashboard.v1.AckProposalResponse
-	(*ListPersonalPositionsResponse)(nil),        // 244: nox.dashboard.v1.ListPersonalPositionsResponse
-	(*ListDCIOrdersResponse)(nil),                // 245: nox.dashboard.v1.ListDCIOrdersResponse
-	(*ListAppSecretsResponse)(nil),               // 246: nox.dashboard.v1.ListAppSecretsResponse
-	(*UpdateAppSecretResponse)(nil),              // 247: nox.dashboard.v1.UpdateAppSecretResponse
+	(*DecideHypothesisRequest)(nil),              // 117: nox.dashboard.v1.DecideHypothesisRequest
+	(*ListEmployeesRequest)(nil),                 // 118: nox.dashboard.v1.ListEmployeesRequest
+	(*ListProposalsRequest)(nil),                 // 119: nox.dashboard.v1.ListProposalsRequest
+	(*AckProposalRequest)(nil),                   // 120: nox.dashboard.v1.AckProposalRequest
+	(*ListPersonalPositionsRequest)(nil),         // 121: nox.dashboard.v1.ListPersonalPositionsRequest
+	(*ListDCIOrdersRequest)(nil),                 // 122: nox.dashboard.v1.ListDCIOrdersRequest
+	(*ListAppSecretsRequest)(nil),                // 123: nox.dashboard.v1.ListAppSecretsRequest
+	(*UpdateAppSecretRequest)(nil),               // 124: nox.dashboard.v1.UpdateAppSecretRequest
+	(*ListQuotesResponse)(nil),                   // 125: nox.dashboard.v1.ListQuotesResponse
+	(*ListLatestFactsResponse)(nil),              // 126: nox.dashboard.v1.ListLatestFactsResponse
+	(*ListOpportunitiesResponse)(nil),            // 127: nox.dashboard.v1.ListOpportunitiesResponse
+	(*ListAlertsResponse)(nil),                   // 128: nox.dashboard.v1.ListAlertsResponse
+	(*ListSourceHealthResponse)(nil),             // 129: nox.dashboard.v1.ListSourceHealthResponse
+	(*ListFactsResponse)(nil),                    // 130: nox.dashboard.v1.ListFactsResponse
+	(*AckAlertResponse)(nil),                     // 131: nox.dashboard.v1.AckAlertResponse
+	(*AckAllResponse)(nil),                       // 132: nox.dashboard.v1.AckAllResponse
+	(*ListUnackedResponse)(nil),                  // 133: nox.dashboard.v1.ListUnackedResponse
+	(*DeleteAlertsResponse)(nil),                 // 134: nox.dashboard.v1.DeleteAlertsResponse
+	(*ClearAckedAlertsResponse)(nil),             // 135: nox.dashboard.v1.ClearAckedAlertsResponse
+	(*ListKnowledgeEntriesResponse)(nil),         // 136: nox.dashboard.v1.ListKnowledgeEntriesResponse
+	(*ExecuteOpportunityResponse)(nil),           // 137: nox.dashboard.v1.ExecuteOpportunityResponse
+	(*ClosePositionResponse)(nil),                // 138: nox.dashboard.v1.ClosePositionResponse
+	(*BackfillSwapHistoryReply)(nil),             // 139: nox.dashboard.v1.BackfillSwapHistoryReply
+	(*ListPositionsResponse)(nil),                // 140: nox.dashboard.v1.ListPositionsResponse
+	(*ListBrokerPositionsResponse)(nil),          // 141: nox.dashboard.v1.ListBrokerPositionsResponse
+	(*CloseBrokerPositionResponse)(nil),          // 142: nox.dashboard.v1.CloseBrokerPositionResponse
+	(*CloseBrokerPositionsResponse)(nil),         // 143: nox.dashboard.v1.CloseBrokerPositionsResponse
+	(*OpenProbeResponse)(nil),                    // 144: nox.dashboard.v1.OpenProbeResponse
+	(*ListProbesResponse)(nil),                   // 145: nox.dashboard.v1.ListProbesResponse
+	(*ApproveProbeResponse)(nil),                 // 146: nox.dashboard.v1.ApproveProbeResponse
+	(*RejectProbeResponse)(nil),                  // 147: nox.dashboard.v1.RejectProbeResponse
+	(*ListProbeProposalsResponse)(nil),           // 148: nox.dashboard.v1.ListProbeProposalsResponse
+	(*ListAccountsResponse)(nil),                 // 149: nox.dashboard.v1.ListAccountsResponse
+	(*TrxAccountRefreshResponse)(nil),            // 150: nox.dashboard.v1.TrxAccountRefreshResponse
+	(*GetTrxYieldRadarResponse)(nil),             // 151: nox.dashboard.v1.GetTrxYieldRadarResponse
+	(*GetTrxYieldCurveResponse)(nil),             // 152: nox.dashboard.v1.GetTrxYieldCurveResponse
+	(*ListTrxTxsResponse)(nil),                   // 153: nox.dashboard.v1.ListTrxTxsResponse
+	(*ListHedgeFlowResponse)(nil),                // 154: nox.dashboard.v1.ListHedgeFlowResponse
+	(*GetHedgeStructureResponse)(nil),            // 155: nox.dashboard.v1.GetHedgeStructureResponse
+	(*AddDailyIncomeResponse)(nil),               // 156: nox.dashboard.v1.AddDailyIncomeResponse
+	(*ListDailyIncomeResponse)(nil),              // 157: nox.dashboard.v1.ListDailyIncomeResponse
+	(*GetPnlAnchorResponse)(nil),                 // 158: nox.dashboard.v1.GetPnlAnchorResponse
+	(*ResetPnlAnchorResponse)(nil),               // 159: nox.dashboard.v1.ResetPnlAnchorResponse
+	(*ListKBEntriesResponse)(nil),                // 160: nox.dashboard.v1.ListKBEntriesResponse
+	(*GetKBEntryResponse)(nil),                   // 161: nox.dashboard.v1.GetKBEntryResponse
+	(*ListVerificationStatsResponse)(nil),        // 162: nox.dashboard.v1.ListVerificationStatsResponse
+	(*SearchBrokerResponse)(nil),                 // 163: nox.dashboard.v1.SearchBrokerResponse
+	(*AddBrokerResponse)(nil),                    // 164: nox.dashboard.v1.AddBrokerResponse
+	(*RemoveBrokerResponse)(nil),                 // 165: nox.dashboard.v1.RemoveBrokerResponse
+	(*UpdateBrokerCredentialsResponse)(nil),      // 166: nox.dashboard.v1.UpdateBrokerCredentialsResponse
+	(*ListBrokerAccountsResponse)(nil),           // 167: nox.dashboard.v1.ListBrokerAccountsResponse
+	(*VerifyAccountResponse)(nil),                // 168: nox.dashboard.v1.VerifyAccountResponse
+	(*ListExchangesResponse)(nil),                // 169: nox.dashboard.v1.ListExchangesResponse
+	(*AddExchangeResponse)(nil),                  // 170: nox.dashboard.v1.AddExchangeResponse
+	(*RemoveExchangeResponse)(nil),               // 171: nox.dashboard.v1.RemoveExchangeResponse
+	(*SetExchangeLabelResponse)(nil),             // 172: nox.dashboard.v1.SetExchangeLabelResponse
+	(*SetExchangeWebsiteResponse)(nil),           // 173: nox.dashboard.v1.SetExchangeWebsiteResponse
+	(*BrokerSymbolsResponse)(nil),                // 174: nox.dashboard.v1.BrokerSymbolsResponse
+	(*SetBrokerAccountAliasResponse)(nil),        // 175: nox.dashboard.v1.SetBrokerAccountAliasResponse
+	(*SetBrokerAccountIsRealResponse)(nil),       // 176: nox.dashboard.v1.SetBrokerAccountIsRealResponse
+	(*SetBrokerDisabledResponse)(nil),            // 177: nox.dashboard.v1.SetBrokerDisabledResponse
+	(*SetBrokerCommissionResponse)(nil),          // 178: nox.dashboard.v1.SetBrokerCommissionResponse
+	(*SetBrokerWebsiteResponse)(nil),             // 179: nox.dashboard.v1.SetBrokerWebsiteResponse
+	(*ListSymbolMappingsResponse)(nil),           // 180: nox.dashboard.v1.ListSymbolMappingsResponse
+	(*SaveSymbolMappingResponse)(nil),            // 181: nox.dashboard.v1.SaveSymbolMappingResponse
+	(*DeleteSymbolMappingResponse)(nil),          // 182: nox.dashboard.v1.DeleteSymbolMappingResponse
+	(*ListMappingSuggestionsResponse)(nil),       // 183: nox.dashboard.v1.ListMappingSuggestionsResponse
+	(*ListCanonicalsResponse)(nil),               // 184: nox.dashboard.v1.ListCanonicalsResponse
+	(*AutoMapBrokerResponse)(nil),                // 185: nox.dashboard.v1.AutoMapBrokerResponse
+	(*ListSwapCombosResponse)(nil),               // 186: nox.dashboard.v1.ListSwapCombosResponse
+	(*ListMatrixUniverseResponse)(nil),           // 187: nox.dashboard.v1.ListMatrixUniverseResponse
+	(*StreamUpdatesResponse)(nil),                // 188: nox.dashboard.v1.StreamUpdatesResponse
+	(*HealthResponse)(nil),                       // 189: nox.dashboard.v1.HealthResponse
+	(*GetFrontConfigResponse)(nil),               // 190: nox.dashboard.v1.GetFrontConfigResponse
+	(*GetStrategyLedgerResponse)(nil),            // 191: nox.dashboard.v1.GetStrategyLedgerResponse
+	(*GetWatchlistResponse)(nil),                 // 192: nox.dashboard.v1.GetWatchlistResponse
+	(*SetWatchlistResponse)(nil),                 // 193: nox.dashboard.v1.SetWatchlistResponse
+	(*AskAnalystResponse)(nil),                   // 194: nox.dashboard.v1.AskAnalystResponse
+	(*AppendAnalystNoteResponse)(nil),            // 195: nox.dashboard.v1.AppendAnalystNoteResponse
+	(*GenerateKbReportResponse)(nil),             // 196: nox.dashboard.v1.GenerateKbReportResponse
+	(*GenerateRetroReportResponse)(nil),          // 197: nox.dashboard.v1.GenerateRetroReportResponse
+	(*ListReportsResponse)(nil),                  // 198: nox.dashboard.v1.ListReportsResponse
+	(*GetReportResponse)(nil),                    // 199: nox.dashboard.v1.GetReportResponse
+	(*ListDeptReportsResponse)(nil),              // 200: nox.dashboard.v1.ListDeptReportsResponse
+	(*ListRequestBoxResponse)(nil),               // 201: nox.dashboard.v1.ListRequestBoxResponse
+	(*GetActionBadgeResponse)(nil),               // 202: nox.dashboard.v1.GetActionBadgeResponse
+	(*ResolveRequestResponse)(nil),               // 203: nox.dashboard.v1.ResolveRequestResponse
+	(*GetAiSettingsResponse)(nil),                // 204: nox.dashboard.v1.GetAiSettingsResponse
+	(*SetAiSettingsResponse)(nil),                // 205: nox.dashboard.v1.SetAiSettingsResponse
+	(*GetCexScanSnapshotResponse)(nil),           // 206: nox.dashboard.v1.GetCexScanSnapshotResponse
+	(*ListWatchRulesResponse)(nil),               // 207: nox.dashboard.v1.ListWatchRulesResponse
+	(*UpsertWatchRuleResponse)(nil),              // 208: nox.dashboard.v1.UpsertWatchRuleResponse
+	(*DeleteWatchRuleResponse)(nil),              // 209: nox.dashboard.v1.DeleteWatchRuleResponse
+	(*ListManualPositionsResponse)(nil),          // 210: nox.dashboard.v1.ListManualPositionsResponse
+	(*UpsertManualPositionResponse)(nil),         // 211: nox.dashboard.v1.UpsertManualPositionResponse
+	(*DeleteManualPositionResponse)(nil),         // 212: nox.dashboard.v1.DeleteManualPositionResponse
+	(*GetFinanceOverviewResponse)(nil),           // 213: nox.dashboard.v1.GetFinanceOverviewResponse
+	(*GetOverviewBundleResponse)(nil),            // 214: nox.dashboard.v1.GetOverviewBundleResponse
+	(*GetCapitalPoolsResponse)(nil),              // 215: nox.dashboard.v1.GetCapitalPoolsResponse
+	(*ExecuteSpotCarryDemoResponse)(nil),         // 216: nox.dashboard.v1.ExecuteSpotCarryDemoResponse
+	(*ListSpotCarryDemoResponse)(nil),            // 217: nox.dashboard.v1.ListSpotCarryDemoResponse
+	(*ListPaperSpotCarryResponse)(nil),           // 218: nox.dashboard.v1.ListPaperSpotCarryResponse
+	(*ListAutotradeAllowRulesResponse)(nil),      // 219: nox.dashboard.v1.ListAutotradeAllowRulesResponse
+	(*SetAutotradeAllowRuleEnabledResponse)(nil), // 220: nox.dashboard.v1.SetAutotradeAllowRuleEnabledResponse
+	(*AddAutotradeAllowRuleResponse)(nil),        // 221: nox.dashboard.v1.AddAutotradeAllowRuleResponse
+	(*DeleteAutotradeAllowRuleResponse)(nil),     // 222: nox.dashboard.v1.DeleteAutotradeAllowRuleResponse
+	(*GetCapitalCoverageResponse)(nil),           // 223: nox.dashboard.v1.GetCapitalCoverageResponse
+	(*GetCapitalMapResponse)(nil),                // 224: nox.dashboard.v1.GetCapitalMapResponse
+	(*GetCexFinanceResponse)(nil),                // 225: nox.dashboard.v1.GetCexFinanceResponse
+	(*ListCarryGraduationsResponse)(nil),         // 226: nox.dashboard.v1.ListCarryGraduationsResponse
+	(*ApproveCarryGraduationResponse)(nil),       // 227: nox.dashboard.v1.ApproveCarryGraduationResponse
+	(*RejectCarryGraduationResponse)(nil),        // 228: nox.dashboard.v1.RejectCarryGraduationResponse
+	(*ListVenueExposureCapsResponse)(nil),        // 229: nox.dashboard.v1.ListVenueExposureCapsResponse
+	(*SetVenueExposureCapResponse)(nil),          // 230: nox.dashboard.v1.SetVenueExposureCapResponse
+	(*ListXAssetAllowCombosResponse)(nil),        // 231: nox.dashboard.v1.ListXAssetAllowCombosResponse
+	(*ListXAssetPendingEntriesResponse)(nil),     // 232: nox.dashboard.v1.ListXAssetPendingEntriesResponse
+	(*UpsertXAssetAllowComboResponse)(nil),       // 233: nox.dashboard.v1.UpsertXAssetAllowComboResponse
+	(*ResumeXAssetComboResponse)(nil),            // 234: nox.dashboard.v1.ResumeXAssetComboResponse
+	(*PreviewXAssetComboRiskResponse)(nil),       // 235: nox.dashboard.v1.PreviewXAssetComboRiskResponse
+	(*ListAccountMarginStatusResponse)(nil),      // 236: nox.dashboard.v1.ListAccountMarginStatusResponse
+	(*ListAppConfigResponse)(nil),                // 237: nox.dashboard.v1.ListAppConfigResponse
+	(*UpdateAppConfigResponse)(nil),              // 238: nox.dashboard.v1.UpdateAppConfigResponse
+	(*SelfRestartResponse)(nil),                  // 239: nox.dashboard.v1.SelfRestartResponse
+	(*GetExecutionModeResponse)(nil),             // 240: nox.dashboard.v1.GetExecutionModeResponse
+	(*SetExecutionModeResponse)(nil),             // 241: nox.dashboard.v1.SetExecutionModeResponse
+	(*DecideHypothesisResponse)(nil),             // 242: nox.dashboard.v1.DecideHypothesisResponse
+	(*ListEmployeesResponse)(nil),                // 243: nox.dashboard.v1.ListEmployeesResponse
+	(*ListProposalsResponse)(nil),                // 244: nox.dashboard.v1.ListProposalsResponse
+	(*AckProposalResponse)(nil),                  // 245: nox.dashboard.v1.AckProposalResponse
+	(*ListPersonalPositionsResponse)(nil),        // 246: nox.dashboard.v1.ListPersonalPositionsResponse
+	(*ListDCIOrdersResponse)(nil),                // 247: nox.dashboard.v1.ListDCIOrdersResponse
+	(*ListAppSecretsResponse)(nil),               // 248: nox.dashboard.v1.ListAppSecretsResponse
+	(*UpdateAppSecretResponse)(nil),              // 249: nox.dashboard.v1.UpdateAppSecretResponse
 }
 var file_dashboardv1_service_proto_depIdxs = []int32{
 	0,   // 0: nox.dashboard.v1.DashboardService.ListLatestQuotes:input_type -> nox.dashboard.v1.ListQuotesRequest
@@ -524,139 +527,141 @@ var file_dashboardv1_service_proto_depIdxs = []int32{
 	114, // 114: nox.dashboard.v1.DashboardService.SelfRestart:input_type -> nox.dashboard.v1.SelfRestartRequest
 	115, // 115: nox.dashboard.v1.DashboardService.GetExecutionMode:input_type -> nox.dashboard.v1.GetExecutionModeRequest
 	116, // 116: nox.dashboard.v1.DashboardService.SetExecutionMode:input_type -> nox.dashboard.v1.SetExecutionModeRequest
-	117, // 117: nox.dashboard.v1.DashboardService.ListEmployees:input_type -> nox.dashboard.v1.ListEmployeesRequest
-	118, // 118: nox.dashboard.v1.DashboardService.ListProposals:input_type -> nox.dashboard.v1.ListProposalsRequest
-	119, // 119: nox.dashboard.v1.DashboardService.AckProposal:input_type -> nox.dashboard.v1.AckProposalRequest
-	120, // 120: nox.dashboard.v1.DashboardService.ListPersonalPositions:input_type -> nox.dashboard.v1.ListPersonalPositionsRequest
-	121, // 121: nox.dashboard.v1.DashboardService.ListDCIOrders:input_type -> nox.dashboard.v1.ListDCIOrdersRequest
-	122, // 122: nox.dashboard.v1.DashboardService.ListAppSecrets:input_type -> nox.dashboard.v1.ListAppSecretsRequest
-	123, // 123: nox.dashboard.v1.DashboardService.UpdateAppSecret:input_type -> nox.dashboard.v1.UpdateAppSecretRequest
-	124, // 124: nox.dashboard.v1.DashboardService.ListLatestQuotes:output_type -> nox.dashboard.v1.ListQuotesResponse
-	125, // 125: nox.dashboard.v1.DashboardService.ListLatestFacts:output_type -> nox.dashboard.v1.ListLatestFactsResponse
-	126, // 126: nox.dashboard.v1.DashboardService.ListOpportunities:output_type -> nox.dashboard.v1.ListOpportunitiesResponse
-	127, // 127: nox.dashboard.v1.DashboardService.ListAlerts:output_type -> nox.dashboard.v1.ListAlertsResponse
-	128, // 128: nox.dashboard.v1.DashboardService.ListSourceHealth:output_type -> nox.dashboard.v1.ListSourceHealthResponse
-	129, // 129: nox.dashboard.v1.DashboardService.ListFacts:output_type -> nox.dashboard.v1.ListFactsResponse
-	130, // 130: nox.dashboard.v1.DashboardService.AckAlert:output_type -> nox.dashboard.v1.AckAlertResponse
-	131, // 131: nox.dashboard.v1.DashboardService.AckAll:output_type -> nox.dashboard.v1.AckAllResponse
-	132, // 132: nox.dashboard.v1.DashboardService.ListUnacked:output_type -> nox.dashboard.v1.ListUnackedResponse
-	133, // 133: nox.dashboard.v1.DashboardService.DeleteAlerts:output_type -> nox.dashboard.v1.DeleteAlertsResponse
-	134, // 134: nox.dashboard.v1.DashboardService.ClearAckedAlerts:output_type -> nox.dashboard.v1.ClearAckedAlertsResponse
-	135, // 135: nox.dashboard.v1.DashboardService.ListKnowledgeEntries:output_type -> nox.dashboard.v1.ListKnowledgeEntriesResponse
-	136, // 136: nox.dashboard.v1.DashboardService.ExecuteOpportunity:output_type -> nox.dashboard.v1.ExecuteOpportunityResponse
-	137, // 137: nox.dashboard.v1.DashboardService.ClosePosition:output_type -> nox.dashboard.v1.ClosePositionResponse
-	138, // 138: nox.dashboard.v1.DashboardService.BackfillSwapHistory:output_type -> nox.dashboard.v1.BackfillSwapHistoryReply
-	139, // 139: nox.dashboard.v1.DashboardService.ListPositions:output_type -> nox.dashboard.v1.ListPositionsResponse
-	140, // 140: nox.dashboard.v1.DashboardService.ListBrokerPositions:output_type -> nox.dashboard.v1.ListBrokerPositionsResponse
-	141, // 141: nox.dashboard.v1.DashboardService.CloseBrokerPosition:output_type -> nox.dashboard.v1.CloseBrokerPositionResponse
-	142, // 142: nox.dashboard.v1.DashboardService.CloseBrokerPositions:output_type -> nox.dashboard.v1.CloseBrokerPositionsResponse
-	143, // 143: nox.dashboard.v1.DashboardService.OpenProbe:output_type -> nox.dashboard.v1.OpenProbeResponse
-	144, // 144: nox.dashboard.v1.DashboardService.ListProbes:output_type -> nox.dashboard.v1.ListProbesResponse
-	145, // 145: nox.dashboard.v1.DashboardService.ApproveProbe:output_type -> nox.dashboard.v1.ApproveProbeResponse
-	146, // 146: nox.dashboard.v1.DashboardService.RejectProbe:output_type -> nox.dashboard.v1.RejectProbeResponse
-	147, // 147: nox.dashboard.v1.DashboardService.ListProbeProposals:output_type -> nox.dashboard.v1.ListProbeProposalsResponse
-	148, // 148: nox.dashboard.v1.DashboardService.ListAccounts:output_type -> nox.dashboard.v1.ListAccountsResponse
-	149, // 149: nox.dashboard.v1.DashboardService.TrxAccountRefresh:output_type -> nox.dashboard.v1.TrxAccountRefreshResponse
-	150, // 150: nox.dashboard.v1.DashboardService.GetTrxYieldRadar:output_type -> nox.dashboard.v1.GetTrxYieldRadarResponse
-	151, // 151: nox.dashboard.v1.DashboardService.GetTrxYieldCurve:output_type -> nox.dashboard.v1.GetTrxYieldCurveResponse
-	152, // 152: nox.dashboard.v1.DashboardService.ListTrxTxs:output_type -> nox.dashboard.v1.ListTrxTxsResponse
-	153, // 153: nox.dashboard.v1.DashboardService.ListHedgeFlow:output_type -> nox.dashboard.v1.ListHedgeFlowResponse
-	154, // 154: nox.dashboard.v1.DashboardService.GetHedgeStructure:output_type -> nox.dashboard.v1.GetHedgeStructureResponse
-	155, // 155: nox.dashboard.v1.DashboardService.AddDailyIncome:output_type -> nox.dashboard.v1.AddDailyIncomeResponse
-	156, // 156: nox.dashboard.v1.DashboardService.ListDailyIncome:output_type -> nox.dashboard.v1.ListDailyIncomeResponse
-	157, // 157: nox.dashboard.v1.DashboardService.GetPnlAnchor:output_type -> nox.dashboard.v1.GetPnlAnchorResponse
-	158, // 158: nox.dashboard.v1.DashboardService.ResetPnlAnchor:output_type -> nox.dashboard.v1.ResetPnlAnchorResponse
-	159, // 159: nox.dashboard.v1.DashboardService.ListKBEntries:output_type -> nox.dashboard.v1.ListKBEntriesResponse
-	160, // 160: nox.dashboard.v1.DashboardService.GetKBEntry:output_type -> nox.dashboard.v1.GetKBEntryResponse
-	161, // 161: nox.dashboard.v1.DashboardService.ListVerificationStats:output_type -> nox.dashboard.v1.ListVerificationStatsResponse
-	162, // 162: nox.dashboard.v1.DashboardService.SearchBroker:output_type -> nox.dashboard.v1.SearchBrokerResponse
-	163, // 163: nox.dashboard.v1.DashboardService.AddBroker:output_type -> nox.dashboard.v1.AddBrokerResponse
-	164, // 164: nox.dashboard.v1.DashboardService.RemoveBroker:output_type -> nox.dashboard.v1.RemoveBrokerResponse
-	165, // 165: nox.dashboard.v1.DashboardService.UpdateBrokerCredentials:output_type -> nox.dashboard.v1.UpdateBrokerCredentialsResponse
-	166, // 166: nox.dashboard.v1.DashboardService.ListBrokerAccounts:output_type -> nox.dashboard.v1.ListBrokerAccountsResponse
-	167, // 167: nox.dashboard.v1.DashboardService.VerifyAccount:output_type -> nox.dashboard.v1.VerifyAccountResponse
-	168, // 168: nox.dashboard.v1.DashboardService.ListExchanges:output_type -> nox.dashboard.v1.ListExchangesResponse
-	169, // 169: nox.dashboard.v1.DashboardService.AddExchange:output_type -> nox.dashboard.v1.AddExchangeResponse
-	170, // 170: nox.dashboard.v1.DashboardService.RemoveExchange:output_type -> nox.dashboard.v1.RemoveExchangeResponse
-	171, // 171: nox.dashboard.v1.DashboardService.SetExchangeLabel:output_type -> nox.dashboard.v1.SetExchangeLabelResponse
-	172, // 172: nox.dashboard.v1.DashboardService.SetExchangeWebsite:output_type -> nox.dashboard.v1.SetExchangeWebsiteResponse
-	173, // 173: nox.dashboard.v1.DashboardService.BrokerSymbols:output_type -> nox.dashboard.v1.BrokerSymbolsResponse
-	174, // 174: nox.dashboard.v1.DashboardService.SetBrokerAccountAlias:output_type -> nox.dashboard.v1.SetBrokerAccountAliasResponse
-	175, // 175: nox.dashboard.v1.DashboardService.SetBrokerAccountIsReal:output_type -> nox.dashboard.v1.SetBrokerAccountIsRealResponse
-	176, // 176: nox.dashboard.v1.DashboardService.SetBrokerDisabled:output_type -> nox.dashboard.v1.SetBrokerDisabledResponse
-	177, // 177: nox.dashboard.v1.DashboardService.SetBrokerCommission:output_type -> nox.dashboard.v1.SetBrokerCommissionResponse
-	178, // 178: nox.dashboard.v1.DashboardService.SetBrokerWebsite:output_type -> nox.dashboard.v1.SetBrokerWebsiteResponse
-	179, // 179: nox.dashboard.v1.DashboardService.ListSymbolMappings:output_type -> nox.dashboard.v1.ListSymbolMappingsResponse
-	180, // 180: nox.dashboard.v1.DashboardService.SaveSymbolMapping:output_type -> nox.dashboard.v1.SaveSymbolMappingResponse
-	181, // 181: nox.dashboard.v1.DashboardService.DeleteSymbolMapping:output_type -> nox.dashboard.v1.DeleteSymbolMappingResponse
-	182, // 182: nox.dashboard.v1.DashboardService.ListMappingSuggestions:output_type -> nox.dashboard.v1.ListMappingSuggestionsResponse
-	183, // 183: nox.dashboard.v1.DashboardService.ListCanonicals:output_type -> nox.dashboard.v1.ListCanonicalsResponse
-	184, // 184: nox.dashboard.v1.DashboardService.AutoMapBroker:output_type -> nox.dashboard.v1.AutoMapBrokerResponse
-	185, // 185: nox.dashboard.v1.DashboardService.ListSwapCombos:output_type -> nox.dashboard.v1.ListSwapCombosResponse
-	186, // 186: nox.dashboard.v1.DashboardService.ListMatrixUniverse:output_type -> nox.dashboard.v1.ListMatrixUniverseResponse
-	187, // 187: nox.dashboard.v1.DashboardService.StreamUpdates:output_type -> nox.dashboard.v1.StreamUpdatesResponse
-	188, // 188: nox.dashboard.v1.DashboardService.Health:output_type -> nox.dashboard.v1.HealthResponse
-	189, // 189: nox.dashboard.v1.DashboardService.GetFrontConfig:output_type -> nox.dashboard.v1.GetFrontConfigResponse
-	190, // 190: nox.dashboard.v1.DashboardService.GetStrategyLedger:output_type -> nox.dashboard.v1.GetStrategyLedgerResponse
-	191, // 191: nox.dashboard.v1.DashboardService.GetWatchlist:output_type -> nox.dashboard.v1.GetWatchlistResponse
-	192, // 192: nox.dashboard.v1.DashboardService.SetWatchlist:output_type -> nox.dashboard.v1.SetWatchlistResponse
-	193, // 193: nox.dashboard.v1.DashboardService.AskAnalyst:output_type -> nox.dashboard.v1.AskAnalystResponse
-	194, // 194: nox.dashboard.v1.DashboardService.AppendAnalystNote:output_type -> nox.dashboard.v1.AppendAnalystNoteResponse
-	195, // 195: nox.dashboard.v1.DashboardService.GenerateKbReport:output_type -> nox.dashboard.v1.GenerateKbReportResponse
-	196, // 196: nox.dashboard.v1.DashboardService.GenerateRetroReport:output_type -> nox.dashboard.v1.GenerateRetroReportResponse
-	197, // 197: nox.dashboard.v1.DashboardService.ListReports:output_type -> nox.dashboard.v1.ListReportsResponse
-	198, // 198: nox.dashboard.v1.DashboardService.GetReport:output_type -> nox.dashboard.v1.GetReportResponse
-	199, // 199: nox.dashboard.v1.DashboardService.ListDeptReports:output_type -> nox.dashboard.v1.ListDeptReportsResponse
-	200, // 200: nox.dashboard.v1.DashboardService.ListRequestBox:output_type -> nox.dashboard.v1.ListRequestBoxResponse
-	201, // 201: nox.dashboard.v1.DashboardService.GetActionBadge:output_type -> nox.dashboard.v1.GetActionBadgeResponse
-	202, // 202: nox.dashboard.v1.DashboardService.ResolveRequest:output_type -> nox.dashboard.v1.ResolveRequestResponse
-	203, // 203: nox.dashboard.v1.DashboardService.GetAiSettings:output_type -> nox.dashboard.v1.GetAiSettingsResponse
-	204, // 204: nox.dashboard.v1.DashboardService.SetAiSettings:output_type -> nox.dashboard.v1.SetAiSettingsResponse
-	205, // 205: nox.dashboard.v1.DashboardService.GetCexScanSnapshot:output_type -> nox.dashboard.v1.GetCexScanSnapshotResponse
-	206, // 206: nox.dashboard.v1.DashboardService.ListWatchRules:output_type -> nox.dashboard.v1.ListWatchRulesResponse
-	207, // 207: nox.dashboard.v1.DashboardService.UpsertWatchRule:output_type -> nox.dashboard.v1.UpsertWatchRuleResponse
-	208, // 208: nox.dashboard.v1.DashboardService.DeleteWatchRule:output_type -> nox.dashboard.v1.DeleteWatchRuleResponse
-	209, // 209: nox.dashboard.v1.DashboardService.ListManualPositions:output_type -> nox.dashboard.v1.ListManualPositionsResponse
-	210, // 210: nox.dashboard.v1.DashboardService.UpsertManualPosition:output_type -> nox.dashboard.v1.UpsertManualPositionResponse
-	211, // 211: nox.dashboard.v1.DashboardService.DeleteManualPosition:output_type -> nox.dashboard.v1.DeleteManualPositionResponse
-	212, // 212: nox.dashboard.v1.DashboardService.GetFinanceOverview:output_type -> nox.dashboard.v1.GetFinanceOverviewResponse
-	213, // 213: nox.dashboard.v1.DashboardService.GetOverviewBundle:output_type -> nox.dashboard.v1.GetOverviewBundleResponse
-	214, // 214: nox.dashboard.v1.DashboardService.GetCapitalPools:output_type -> nox.dashboard.v1.GetCapitalPoolsResponse
-	215, // 215: nox.dashboard.v1.DashboardService.ExecuteSpotCarryDemo:output_type -> nox.dashboard.v1.ExecuteSpotCarryDemoResponse
-	216, // 216: nox.dashboard.v1.DashboardService.ListSpotCarryDemo:output_type -> nox.dashboard.v1.ListSpotCarryDemoResponse
-	217, // 217: nox.dashboard.v1.DashboardService.ListPaperSpotCarry:output_type -> nox.dashboard.v1.ListPaperSpotCarryResponse
-	218, // 218: nox.dashboard.v1.DashboardService.ListAutotradeAllowRules:output_type -> nox.dashboard.v1.ListAutotradeAllowRulesResponse
-	219, // 219: nox.dashboard.v1.DashboardService.SetAutotradeAllowRuleEnabled:output_type -> nox.dashboard.v1.SetAutotradeAllowRuleEnabledResponse
-	220, // 220: nox.dashboard.v1.DashboardService.AddAutotradeAllowRule:output_type -> nox.dashboard.v1.AddAutotradeAllowRuleResponse
-	221, // 221: nox.dashboard.v1.DashboardService.DeleteAutotradeAllowRule:output_type -> nox.dashboard.v1.DeleteAutotradeAllowRuleResponse
-	222, // 222: nox.dashboard.v1.DashboardService.GetCapitalCoverage:output_type -> nox.dashboard.v1.GetCapitalCoverageResponse
-	223, // 223: nox.dashboard.v1.DashboardService.GetCapitalMap:output_type -> nox.dashboard.v1.GetCapitalMapResponse
-	224, // 224: nox.dashboard.v1.DashboardService.GetCexFinance:output_type -> nox.dashboard.v1.GetCexFinanceResponse
-	225, // 225: nox.dashboard.v1.DashboardService.ListCarryGraduations:output_type -> nox.dashboard.v1.ListCarryGraduationsResponse
-	226, // 226: nox.dashboard.v1.DashboardService.ApproveCarryGraduation:output_type -> nox.dashboard.v1.ApproveCarryGraduationResponse
-	227, // 227: nox.dashboard.v1.DashboardService.RejectCarryGraduation:output_type -> nox.dashboard.v1.RejectCarryGraduationResponse
-	228, // 228: nox.dashboard.v1.DashboardService.ListVenueExposureCaps:output_type -> nox.dashboard.v1.ListVenueExposureCapsResponse
-	229, // 229: nox.dashboard.v1.DashboardService.SetVenueExposureCap:output_type -> nox.dashboard.v1.SetVenueExposureCapResponse
-	230, // 230: nox.dashboard.v1.DashboardService.ListXAssetAllowCombos:output_type -> nox.dashboard.v1.ListXAssetAllowCombosResponse
-	231, // 231: nox.dashboard.v1.DashboardService.ListXAssetPendingEntries:output_type -> nox.dashboard.v1.ListXAssetPendingEntriesResponse
-	232, // 232: nox.dashboard.v1.DashboardService.UpsertXAssetAllowCombo:output_type -> nox.dashboard.v1.UpsertXAssetAllowComboResponse
-	233, // 233: nox.dashboard.v1.DashboardService.ResumeXAssetCombo:output_type -> nox.dashboard.v1.ResumeXAssetComboResponse
-	234, // 234: nox.dashboard.v1.DashboardService.PreviewXAssetComboRisk:output_type -> nox.dashboard.v1.PreviewXAssetComboRiskResponse
-	235, // 235: nox.dashboard.v1.DashboardService.ListAccountMarginStatus:output_type -> nox.dashboard.v1.ListAccountMarginStatusResponse
-	236, // 236: nox.dashboard.v1.DashboardService.ListAppConfig:output_type -> nox.dashboard.v1.ListAppConfigResponse
-	237, // 237: nox.dashboard.v1.DashboardService.UpdateAppConfig:output_type -> nox.dashboard.v1.UpdateAppConfigResponse
-	238, // 238: nox.dashboard.v1.DashboardService.SelfRestart:output_type -> nox.dashboard.v1.SelfRestartResponse
-	239, // 239: nox.dashboard.v1.DashboardService.GetExecutionMode:output_type -> nox.dashboard.v1.GetExecutionModeResponse
-	240, // 240: nox.dashboard.v1.DashboardService.SetExecutionMode:output_type -> nox.dashboard.v1.SetExecutionModeResponse
-	241, // 241: nox.dashboard.v1.DashboardService.ListEmployees:output_type -> nox.dashboard.v1.ListEmployeesResponse
-	242, // 242: nox.dashboard.v1.DashboardService.ListProposals:output_type -> nox.dashboard.v1.ListProposalsResponse
-	243, // 243: nox.dashboard.v1.DashboardService.AckProposal:output_type -> nox.dashboard.v1.AckProposalResponse
-	244, // 244: nox.dashboard.v1.DashboardService.ListPersonalPositions:output_type -> nox.dashboard.v1.ListPersonalPositionsResponse
-	245, // 245: nox.dashboard.v1.DashboardService.ListDCIOrders:output_type -> nox.dashboard.v1.ListDCIOrdersResponse
-	246, // 246: nox.dashboard.v1.DashboardService.ListAppSecrets:output_type -> nox.dashboard.v1.ListAppSecretsResponse
-	247, // 247: nox.dashboard.v1.DashboardService.UpdateAppSecret:output_type -> nox.dashboard.v1.UpdateAppSecretResponse
-	124, // [124:248] is the sub-list for method output_type
-	0,   // [0:124] is the sub-list for method input_type
+	117, // 117: nox.dashboard.v1.DashboardService.DecideHypothesis:input_type -> nox.dashboard.v1.DecideHypothesisRequest
+	118, // 118: nox.dashboard.v1.DashboardService.ListEmployees:input_type -> nox.dashboard.v1.ListEmployeesRequest
+	119, // 119: nox.dashboard.v1.DashboardService.ListProposals:input_type -> nox.dashboard.v1.ListProposalsRequest
+	120, // 120: nox.dashboard.v1.DashboardService.AckProposal:input_type -> nox.dashboard.v1.AckProposalRequest
+	121, // 121: nox.dashboard.v1.DashboardService.ListPersonalPositions:input_type -> nox.dashboard.v1.ListPersonalPositionsRequest
+	122, // 122: nox.dashboard.v1.DashboardService.ListDCIOrders:input_type -> nox.dashboard.v1.ListDCIOrdersRequest
+	123, // 123: nox.dashboard.v1.DashboardService.ListAppSecrets:input_type -> nox.dashboard.v1.ListAppSecretsRequest
+	124, // 124: nox.dashboard.v1.DashboardService.UpdateAppSecret:input_type -> nox.dashboard.v1.UpdateAppSecretRequest
+	125, // 125: nox.dashboard.v1.DashboardService.ListLatestQuotes:output_type -> nox.dashboard.v1.ListQuotesResponse
+	126, // 126: nox.dashboard.v1.DashboardService.ListLatestFacts:output_type -> nox.dashboard.v1.ListLatestFactsResponse
+	127, // 127: nox.dashboard.v1.DashboardService.ListOpportunities:output_type -> nox.dashboard.v1.ListOpportunitiesResponse
+	128, // 128: nox.dashboard.v1.DashboardService.ListAlerts:output_type -> nox.dashboard.v1.ListAlertsResponse
+	129, // 129: nox.dashboard.v1.DashboardService.ListSourceHealth:output_type -> nox.dashboard.v1.ListSourceHealthResponse
+	130, // 130: nox.dashboard.v1.DashboardService.ListFacts:output_type -> nox.dashboard.v1.ListFactsResponse
+	131, // 131: nox.dashboard.v1.DashboardService.AckAlert:output_type -> nox.dashboard.v1.AckAlertResponse
+	132, // 132: nox.dashboard.v1.DashboardService.AckAll:output_type -> nox.dashboard.v1.AckAllResponse
+	133, // 133: nox.dashboard.v1.DashboardService.ListUnacked:output_type -> nox.dashboard.v1.ListUnackedResponse
+	134, // 134: nox.dashboard.v1.DashboardService.DeleteAlerts:output_type -> nox.dashboard.v1.DeleteAlertsResponse
+	135, // 135: nox.dashboard.v1.DashboardService.ClearAckedAlerts:output_type -> nox.dashboard.v1.ClearAckedAlertsResponse
+	136, // 136: nox.dashboard.v1.DashboardService.ListKnowledgeEntries:output_type -> nox.dashboard.v1.ListKnowledgeEntriesResponse
+	137, // 137: nox.dashboard.v1.DashboardService.ExecuteOpportunity:output_type -> nox.dashboard.v1.ExecuteOpportunityResponse
+	138, // 138: nox.dashboard.v1.DashboardService.ClosePosition:output_type -> nox.dashboard.v1.ClosePositionResponse
+	139, // 139: nox.dashboard.v1.DashboardService.BackfillSwapHistory:output_type -> nox.dashboard.v1.BackfillSwapHistoryReply
+	140, // 140: nox.dashboard.v1.DashboardService.ListPositions:output_type -> nox.dashboard.v1.ListPositionsResponse
+	141, // 141: nox.dashboard.v1.DashboardService.ListBrokerPositions:output_type -> nox.dashboard.v1.ListBrokerPositionsResponse
+	142, // 142: nox.dashboard.v1.DashboardService.CloseBrokerPosition:output_type -> nox.dashboard.v1.CloseBrokerPositionResponse
+	143, // 143: nox.dashboard.v1.DashboardService.CloseBrokerPositions:output_type -> nox.dashboard.v1.CloseBrokerPositionsResponse
+	144, // 144: nox.dashboard.v1.DashboardService.OpenProbe:output_type -> nox.dashboard.v1.OpenProbeResponse
+	145, // 145: nox.dashboard.v1.DashboardService.ListProbes:output_type -> nox.dashboard.v1.ListProbesResponse
+	146, // 146: nox.dashboard.v1.DashboardService.ApproveProbe:output_type -> nox.dashboard.v1.ApproveProbeResponse
+	147, // 147: nox.dashboard.v1.DashboardService.RejectProbe:output_type -> nox.dashboard.v1.RejectProbeResponse
+	148, // 148: nox.dashboard.v1.DashboardService.ListProbeProposals:output_type -> nox.dashboard.v1.ListProbeProposalsResponse
+	149, // 149: nox.dashboard.v1.DashboardService.ListAccounts:output_type -> nox.dashboard.v1.ListAccountsResponse
+	150, // 150: nox.dashboard.v1.DashboardService.TrxAccountRefresh:output_type -> nox.dashboard.v1.TrxAccountRefreshResponse
+	151, // 151: nox.dashboard.v1.DashboardService.GetTrxYieldRadar:output_type -> nox.dashboard.v1.GetTrxYieldRadarResponse
+	152, // 152: nox.dashboard.v1.DashboardService.GetTrxYieldCurve:output_type -> nox.dashboard.v1.GetTrxYieldCurveResponse
+	153, // 153: nox.dashboard.v1.DashboardService.ListTrxTxs:output_type -> nox.dashboard.v1.ListTrxTxsResponse
+	154, // 154: nox.dashboard.v1.DashboardService.ListHedgeFlow:output_type -> nox.dashboard.v1.ListHedgeFlowResponse
+	155, // 155: nox.dashboard.v1.DashboardService.GetHedgeStructure:output_type -> nox.dashboard.v1.GetHedgeStructureResponse
+	156, // 156: nox.dashboard.v1.DashboardService.AddDailyIncome:output_type -> nox.dashboard.v1.AddDailyIncomeResponse
+	157, // 157: nox.dashboard.v1.DashboardService.ListDailyIncome:output_type -> nox.dashboard.v1.ListDailyIncomeResponse
+	158, // 158: nox.dashboard.v1.DashboardService.GetPnlAnchor:output_type -> nox.dashboard.v1.GetPnlAnchorResponse
+	159, // 159: nox.dashboard.v1.DashboardService.ResetPnlAnchor:output_type -> nox.dashboard.v1.ResetPnlAnchorResponse
+	160, // 160: nox.dashboard.v1.DashboardService.ListKBEntries:output_type -> nox.dashboard.v1.ListKBEntriesResponse
+	161, // 161: nox.dashboard.v1.DashboardService.GetKBEntry:output_type -> nox.dashboard.v1.GetKBEntryResponse
+	162, // 162: nox.dashboard.v1.DashboardService.ListVerificationStats:output_type -> nox.dashboard.v1.ListVerificationStatsResponse
+	163, // 163: nox.dashboard.v1.DashboardService.SearchBroker:output_type -> nox.dashboard.v1.SearchBrokerResponse
+	164, // 164: nox.dashboard.v1.DashboardService.AddBroker:output_type -> nox.dashboard.v1.AddBrokerResponse
+	165, // 165: nox.dashboard.v1.DashboardService.RemoveBroker:output_type -> nox.dashboard.v1.RemoveBrokerResponse
+	166, // 166: nox.dashboard.v1.DashboardService.UpdateBrokerCredentials:output_type -> nox.dashboard.v1.UpdateBrokerCredentialsResponse
+	167, // 167: nox.dashboard.v1.DashboardService.ListBrokerAccounts:output_type -> nox.dashboard.v1.ListBrokerAccountsResponse
+	168, // 168: nox.dashboard.v1.DashboardService.VerifyAccount:output_type -> nox.dashboard.v1.VerifyAccountResponse
+	169, // 169: nox.dashboard.v1.DashboardService.ListExchanges:output_type -> nox.dashboard.v1.ListExchangesResponse
+	170, // 170: nox.dashboard.v1.DashboardService.AddExchange:output_type -> nox.dashboard.v1.AddExchangeResponse
+	171, // 171: nox.dashboard.v1.DashboardService.RemoveExchange:output_type -> nox.dashboard.v1.RemoveExchangeResponse
+	172, // 172: nox.dashboard.v1.DashboardService.SetExchangeLabel:output_type -> nox.dashboard.v1.SetExchangeLabelResponse
+	173, // 173: nox.dashboard.v1.DashboardService.SetExchangeWebsite:output_type -> nox.dashboard.v1.SetExchangeWebsiteResponse
+	174, // 174: nox.dashboard.v1.DashboardService.BrokerSymbols:output_type -> nox.dashboard.v1.BrokerSymbolsResponse
+	175, // 175: nox.dashboard.v1.DashboardService.SetBrokerAccountAlias:output_type -> nox.dashboard.v1.SetBrokerAccountAliasResponse
+	176, // 176: nox.dashboard.v1.DashboardService.SetBrokerAccountIsReal:output_type -> nox.dashboard.v1.SetBrokerAccountIsRealResponse
+	177, // 177: nox.dashboard.v1.DashboardService.SetBrokerDisabled:output_type -> nox.dashboard.v1.SetBrokerDisabledResponse
+	178, // 178: nox.dashboard.v1.DashboardService.SetBrokerCommission:output_type -> nox.dashboard.v1.SetBrokerCommissionResponse
+	179, // 179: nox.dashboard.v1.DashboardService.SetBrokerWebsite:output_type -> nox.dashboard.v1.SetBrokerWebsiteResponse
+	180, // 180: nox.dashboard.v1.DashboardService.ListSymbolMappings:output_type -> nox.dashboard.v1.ListSymbolMappingsResponse
+	181, // 181: nox.dashboard.v1.DashboardService.SaveSymbolMapping:output_type -> nox.dashboard.v1.SaveSymbolMappingResponse
+	182, // 182: nox.dashboard.v1.DashboardService.DeleteSymbolMapping:output_type -> nox.dashboard.v1.DeleteSymbolMappingResponse
+	183, // 183: nox.dashboard.v1.DashboardService.ListMappingSuggestions:output_type -> nox.dashboard.v1.ListMappingSuggestionsResponse
+	184, // 184: nox.dashboard.v1.DashboardService.ListCanonicals:output_type -> nox.dashboard.v1.ListCanonicalsResponse
+	185, // 185: nox.dashboard.v1.DashboardService.AutoMapBroker:output_type -> nox.dashboard.v1.AutoMapBrokerResponse
+	186, // 186: nox.dashboard.v1.DashboardService.ListSwapCombos:output_type -> nox.dashboard.v1.ListSwapCombosResponse
+	187, // 187: nox.dashboard.v1.DashboardService.ListMatrixUniverse:output_type -> nox.dashboard.v1.ListMatrixUniverseResponse
+	188, // 188: nox.dashboard.v1.DashboardService.StreamUpdates:output_type -> nox.dashboard.v1.StreamUpdatesResponse
+	189, // 189: nox.dashboard.v1.DashboardService.Health:output_type -> nox.dashboard.v1.HealthResponse
+	190, // 190: nox.dashboard.v1.DashboardService.GetFrontConfig:output_type -> nox.dashboard.v1.GetFrontConfigResponse
+	191, // 191: nox.dashboard.v1.DashboardService.GetStrategyLedger:output_type -> nox.dashboard.v1.GetStrategyLedgerResponse
+	192, // 192: nox.dashboard.v1.DashboardService.GetWatchlist:output_type -> nox.dashboard.v1.GetWatchlistResponse
+	193, // 193: nox.dashboard.v1.DashboardService.SetWatchlist:output_type -> nox.dashboard.v1.SetWatchlistResponse
+	194, // 194: nox.dashboard.v1.DashboardService.AskAnalyst:output_type -> nox.dashboard.v1.AskAnalystResponse
+	195, // 195: nox.dashboard.v1.DashboardService.AppendAnalystNote:output_type -> nox.dashboard.v1.AppendAnalystNoteResponse
+	196, // 196: nox.dashboard.v1.DashboardService.GenerateKbReport:output_type -> nox.dashboard.v1.GenerateKbReportResponse
+	197, // 197: nox.dashboard.v1.DashboardService.GenerateRetroReport:output_type -> nox.dashboard.v1.GenerateRetroReportResponse
+	198, // 198: nox.dashboard.v1.DashboardService.ListReports:output_type -> nox.dashboard.v1.ListReportsResponse
+	199, // 199: nox.dashboard.v1.DashboardService.GetReport:output_type -> nox.dashboard.v1.GetReportResponse
+	200, // 200: nox.dashboard.v1.DashboardService.ListDeptReports:output_type -> nox.dashboard.v1.ListDeptReportsResponse
+	201, // 201: nox.dashboard.v1.DashboardService.ListRequestBox:output_type -> nox.dashboard.v1.ListRequestBoxResponse
+	202, // 202: nox.dashboard.v1.DashboardService.GetActionBadge:output_type -> nox.dashboard.v1.GetActionBadgeResponse
+	203, // 203: nox.dashboard.v1.DashboardService.ResolveRequest:output_type -> nox.dashboard.v1.ResolveRequestResponse
+	204, // 204: nox.dashboard.v1.DashboardService.GetAiSettings:output_type -> nox.dashboard.v1.GetAiSettingsResponse
+	205, // 205: nox.dashboard.v1.DashboardService.SetAiSettings:output_type -> nox.dashboard.v1.SetAiSettingsResponse
+	206, // 206: nox.dashboard.v1.DashboardService.GetCexScanSnapshot:output_type -> nox.dashboard.v1.GetCexScanSnapshotResponse
+	207, // 207: nox.dashboard.v1.DashboardService.ListWatchRules:output_type -> nox.dashboard.v1.ListWatchRulesResponse
+	208, // 208: nox.dashboard.v1.DashboardService.UpsertWatchRule:output_type -> nox.dashboard.v1.UpsertWatchRuleResponse
+	209, // 209: nox.dashboard.v1.DashboardService.DeleteWatchRule:output_type -> nox.dashboard.v1.DeleteWatchRuleResponse
+	210, // 210: nox.dashboard.v1.DashboardService.ListManualPositions:output_type -> nox.dashboard.v1.ListManualPositionsResponse
+	211, // 211: nox.dashboard.v1.DashboardService.UpsertManualPosition:output_type -> nox.dashboard.v1.UpsertManualPositionResponse
+	212, // 212: nox.dashboard.v1.DashboardService.DeleteManualPosition:output_type -> nox.dashboard.v1.DeleteManualPositionResponse
+	213, // 213: nox.dashboard.v1.DashboardService.GetFinanceOverview:output_type -> nox.dashboard.v1.GetFinanceOverviewResponse
+	214, // 214: nox.dashboard.v1.DashboardService.GetOverviewBundle:output_type -> nox.dashboard.v1.GetOverviewBundleResponse
+	215, // 215: nox.dashboard.v1.DashboardService.GetCapitalPools:output_type -> nox.dashboard.v1.GetCapitalPoolsResponse
+	216, // 216: nox.dashboard.v1.DashboardService.ExecuteSpotCarryDemo:output_type -> nox.dashboard.v1.ExecuteSpotCarryDemoResponse
+	217, // 217: nox.dashboard.v1.DashboardService.ListSpotCarryDemo:output_type -> nox.dashboard.v1.ListSpotCarryDemoResponse
+	218, // 218: nox.dashboard.v1.DashboardService.ListPaperSpotCarry:output_type -> nox.dashboard.v1.ListPaperSpotCarryResponse
+	219, // 219: nox.dashboard.v1.DashboardService.ListAutotradeAllowRules:output_type -> nox.dashboard.v1.ListAutotradeAllowRulesResponse
+	220, // 220: nox.dashboard.v1.DashboardService.SetAutotradeAllowRuleEnabled:output_type -> nox.dashboard.v1.SetAutotradeAllowRuleEnabledResponse
+	221, // 221: nox.dashboard.v1.DashboardService.AddAutotradeAllowRule:output_type -> nox.dashboard.v1.AddAutotradeAllowRuleResponse
+	222, // 222: nox.dashboard.v1.DashboardService.DeleteAutotradeAllowRule:output_type -> nox.dashboard.v1.DeleteAutotradeAllowRuleResponse
+	223, // 223: nox.dashboard.v1.DashboardService.GetCapitalCoverage:output_type -> nox.dashboard.v1.GetCapitalCoverageResponse
+	224, // 224: nox.dashboard.v1.DashboardService.GetCapitalMap:output_type -> nox.dashboard.v1.GetCapitalMapResponse
+	225, // 225: nox.dashboard.v1.DashboardService.GetCexFinance:output_type -> nox.dashboard.v1.GetCexFinanceResponse
+	226, // 226: nox.dashboard.v1.DashboardService.ListCarryGraduations:output_type -> nox.dashboard.v1.ListCarryGraduationsResponse
+	227, // 227: nox.dashboard.v1.DashboardService.ApproveCarryGraduation:output_type -> nox.dashboard.v1.ApproveCarryGraduationResponse
+	228, // 228: nox.dashboard.v1.DashboardService.RejectCarryGraduation:output_type -> nox.dashboard.v1.RejectCarryGraduationResponse
+	229, // 229: nox.dashboard.v1.DashboardService.ListVenueExposureCaps:output_type -> nox.dashboard.v1.ListVenueExposureCapsResponse
+	230, // 230: nox.dashboard.v1.DashboardService.SetVenueExposureCap:output_type -> nox.dashboard.v1.SetVenueExposureCapResponse
+	231, // 231: nox.dashboard.v1.DashboardService.ListXAssetAllowCombos:output_type -> nox.dashboard.v1.ListXAssetAllowCombosResponse
+	232, // 232: nox.dashboard.v1.DashboardService.ListXAssetPendingEntries:output_type -> nox.dashboard.v1.ListXAssetPendingEntriesResponse
+	233, // 233: nox.dashboard.v1.DashboardService.UpsertXAssetAllowCombo:output_type -> nox.dashboard.v1.UpsertXAssetAllowComboResponse
+	234, // 234: nox.dashboard.v1.DashboardService.ResumeXAssetCombo:output_type -> nox.dashboard.v1.ResumeXAssetComboResponse
+	235, // 235: nox.dashboard.v1.DashboardService.PreviewXAssetComboRisk:output_type -> nox.dashboard.v1.PreviewXAssetComboRiskResponse
+	236, // 236: nox.dashboard.v1.DashboardService.ListAccountMarginStatus:output_type -> nox.dashboard.v1.ListAccountMarginStatusResponse
+	237, // 237: nox.dashboard.v1.DashboardService.ListAppConfig:output_type -> nox.dashboard.v1.ListAppConfigResponse
+	238, // 238: nox.dashboard.v1.DashboardService.UpdateAppConfig:output_type -> nox.dashboard.v1.UpdateAppConfigResponse
+	239, // 239: nox.dashboard.v1.DashboardService.SelfRestart:output_type -> nox.dashboard.v1.SelfRestartResponse
+	240, // 240: nox.dashboard.v1.DashboardService.GetExecutionMode:output_type -> nox.dashboard.v1.GetExecutionModeResponse
+	241, // 241: nox.dashboard.v1.DashboardService.SetExecutionMode:output_type -> nox.dashboard.v1.SetExecutionModeResponse
+	242, // 242: nox.dashboard.v1.DashboardService.DecideHypothesis:output_type -> nox.dashboard.v1.DecideHypothesisResponse
+	243, // 243: nox.dashboard.v1.DashboardService.ListEmployees:output_type -> nox.dashboard.v1.ListEmployeesResponse
+	244, // 244: nox.dashboard.v1.DashboardService.ListProposals:output_type -> nox.dashboard.v1.ListProposalsResponse
+	245, // 245: nox.dashboard.v1.DashboardService.AckProposal:output_type -> nox.dashboard.v1.AckProposalResponse
+	246, // 246: nox.dashboard.v1.DashboardService.ListPersonalPositions:output_type -> nox.dashboard.v1.ListPersonalPositionsResponse
+	247, // 247: nox.dashboard.v1.DashboardService.ListDCIOrders:output_type -> nox.dashboard.v1.ListDCIOrdersResponse
+	248, // 248: nox.dashboard.v1.DashboardService.ListAppSecrets:output_type -> nox.dashboard.v1.ListAppSecretsResponse
+	249, // 249: nox.dashboard.v1.DashboardService.UpdateAppSecret:output_type -> nox.dashboard.v1.UpdateAppSecretResponse
+	125, // [125:250] is the sub-list for method output_type
+	0,   // [0:125] is the sub-list for method input_type
 	0,   // [0:0] is the sub-list for extension type_name
 	0,   // [0:0] is the sub-list for extension extendee
 	0,   // [0:0] is the sub-list for field type_name

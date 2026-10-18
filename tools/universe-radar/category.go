@@ -90,13 +90,7 @@ func processCategories(ctx context.Context, st *pgstore.Store, srcs []Source, ll
 			if !inserted && !memoPending {
 				continue // 键在册（proposed/rejected/trialing 不扰——弃件记忆+幂等锚）
 			}
-			ff, memo, proto := "novel", "", ""
-			if llm != nil {
-				ff, memo, proto = catMemo(ctx, llm, sig)
-			}
-			if err := st.UpdateHypothesisMemo(ctx, id, ff, memo, proto); err != nil {
-				log.Printf("[universe-radar] hypothesis memo %s: %v", sig.CategoryKey, err)
-			}
+			ff, memo := runHypothesisMemo(ctx, st, llm, sig, id)
 			if !inserted {
 				continue // 死行回填不产告警（告警只认新键）
 			}
@@ -118,6 +112,44 @@ func processCategories(ctx context.Context, st *pgstore.Store, srcs []Source, ll
 				"[新品类假设] "+strings.Join(newLines, "；")); err != nil {
 				log.Printf("[universe-radar] 品类告警落库败: %v", err)
 			}
+		}
+	}
+	backfillPendingMemos(ctx, st, llm)
+}
+
+// runHypothesisMemo D-623③：LLM 预审一段抽件——新键内联径与直写行回填径共用
+// （memo 只顾问，批准键永不进 LLM 手；写败 log fail-open）。
+func runHypothesisMemo(ctx context.Context, st *pgstore.Store, llm catLLM, sig CategorySignal, id int64) (ff, memo string) {
+	proto := ""
+	ff, memo, proto = "novel", "", ""
+	if llm != nil {
+		ff, memo, proto = catMemo(ctx, llm, sig)
+	}
+	if err := st.UpdateHypothesisMemo(ctx, id, ff, memo, proto); err != nil {
+		log.Printf("[universe-radar] hypothesis memo %s: %v", sig.CategoryKey, err)
+	}
+	return ff, memo
+}
+
+// backfillPendingMemos D-623③：memo 径归一——每拍扫 proposed AND family_fit IS NULL
+// 死行补预审，覆盖 swapScan/hedgeScan 等直写径产行（雷达键内联径之外的盲区）。
+func backfillPendingMemos(ctx context.Context, st *pgstore.Store, llm catLLM) {
+	if llm == nil {
+		return
+	}
+	rows, err := st.ListMemoPendingHypotheses(ctx)
+	if err != nil {
+		log.Printf("[universe-radar] memo 死行枚举: %v", err)
+		return
+	}
+	for _, h := range rows {
+		sig := CategorySignal{
+			CategoryKey: h.CategoryKey, Venue: h.Venue,
+			InstType: h.InstType, Shape: h.Shape, Sample: h.Sample, Detail: h.Detail,
+		}
+		ff, memo, proto := catMemo(ctx, llm, sig)
+		if err := st.UpdateHypothesisMemo(ctx, h.ID, ff, memo, proto); err != nil {
+			log.Printf("[universe-radar] memo 回填 #%d: %v", h.ID, err)
 		}
 	}
 }

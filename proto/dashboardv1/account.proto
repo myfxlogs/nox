@@ -375,3 +375,20 @@ message SetExecutionModeRequest {
 message SetExecutionModeResponse {
   ExecutionModeView view = 1;
 }
+
+// DecideHypothesisRequest D-623：fin_opp_hypothesis 裁决写口（actor/reason/evidence_ref 必填，
+// Bearer 同 SetExecutionMode 信任级——决策席 buf curl 径）。
+message DecideHypothesisRequest {
+  int64 id = 1;
+  string decision = 2;      // approved|rejected（service 层枚举校验，仅 proposed 态受理）
+  string actor = 3;
+  string reason = 4;
+  string evidence_ref = 5;
+}
+
+message DecideHypothesisResponse {
+  int64 id = 1;
+  string status = 2;
+  string decided_by = 3;
+  google.protobuf.Timestamp decided_at = 4;
+}
