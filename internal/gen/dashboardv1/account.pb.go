@@ -2420,10 +2420,15 @@ func (x *GetOverviewBundleResponse) GetCritAlerts() []*OverviewCritAlert {
 }
 
 // OverviewCritAlert 24h critical 告警明细行（全行 level 恒=critical 不复列）。
+// 归组语义（业主报障 10-18 同源告警霸屏）：message=组内最新一条原文、
+// ts=组内最新时、count=组内告警数、first_ts=组内最早时；封顶截断尾行
+// 「+N 组见告警页」以 count 携被截组内告警合计（Σcount 守恒=24h 计数）。
 type OverviewCritAlert struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"` // 告警文案原文（后端直透不裁剪）
-	Ts            *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=ts,proto3" json:"ts,omitempty"`           // 告警时
+	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`                // 组内最新一条告警文案原文（后端直透不裁剪）
+	Ts            *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=ts,proto3" json:"ts,omitempty"`                          // 组内最新告警时（last_ts）
+	Count         int32                  `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`                   // 组内告警数（=1 即未归组；截断尾行=被截告警合计）
+	FirstTs       *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=first_ts,json=firstTs,proto3" json:"first_ts,omitempty"` // 组内最早告警时（跨度面）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2468,6 +2473,20 @@ func (x *OverviewCritAlert) GetMessage() string {
 func (x *OverviewCritAlert) GetTs() *timestamppb.Timestamp {
 	if x != nil {
 		return x.Ts
+	}
+	return nil
+}
+
+func (x *OverviewCritAlert) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *OverviewCritAlert) GetFirstTs() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FirstTs
 	}
 	return nil
 }
@@ -3084,10 +3103,12 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\x10idle_streak_days\x18\x1b \x01(\x05R\x0eidleStreakDays\x12(\n" +
 	"\x10idle_streak_pool\x18\x1c \x01(\tR\x0eidleStreakPool\x12D\n" +
 	"\vcrit_alerts\x18\x1d \x03(\v2#.nox.dashboard.v1.OverviewCritAlertR\n" +
-	"critAlerts\"Y\n" +
+	"critAlerts\"\xa6\x01\n" +
 	"\x11OverviewCritAlert\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12*\n" +
-	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\"~\n" +
+	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x14\n" +
+	"\x05count\x18\x03 \x01(\x05R\x05count\x125\n" +
+	"\bfirst_ts\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\afirstTs\"~\n" +
 	"\x14OverviewBreakdownRow\x12\x14\n" +
 	"\x05group\x18\x01 \x01(\tR\x05group\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x10\n" +
@@ -3210,11 +3231,12 @@ var file_dashboardv1_account_proto_depIdxs = []int32{
 	37, // 27: nox.dashboard.v1.GetOverviewBundleResponse.waiting:type_name -> nox.dashboard.v1.OverviewWaitingRow
 	33, // 28: nox.dashboard.v1.GetOverviewBundleResponse.crit_alerts:type_name -> nox.dashboard.v1.OverviewCritAlert
 	40, // 29: nox.dashboard.v1.OverviewCritAlert.ts:type_name -> google.protobuf.Timestamp
-	30, // [30:30] is the sub-list for method output_type
-	30, // [30:30] is the sub-list for method input_type
-	30, // [30:30] is the sub-list for extension type_name
-	30, // [30:30] is the sub-list for extension extendee
-	0,  // [0:30] is the sub-list for field type_name
+	40, // 30: nox.dashboard.v1.OverviewCritAlert.first_ts:type_name -> google.protobuf.Timestamp
+	31, // [31:31] is the sub-list for method output_type
+	31, // [31:31] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_account_proto_init() }
