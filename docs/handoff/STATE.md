@@ -703,3 +703,8 @@ SG 实拍：容器 healthy+公网 bundle/css 哈希与评审构建逐字一致=�
 > 决策席注记⑬（10-18 17:3xZ `date -u`）：**判定径快照清账票扩scope并派**——原「浓度透视分母改实拉」票升为「判定径快照读清账」：+service_capital_pools 同文案告警删（第二生产点）、+explorer_idle 权益源换 live map、+capitalview SnapPick 末档「任意非空池」回退删（落不到=fail-closed）。裁定依据=A/B 分级分析——B 级拆表不值（流落盘+展示=快照合法职责），A 级「判定域零快照读」=收益全拿成本最低。
 
 > 决策席注记⑭（10-18 17:5xZ `date -u`）：**业主入金 $1k @110660304 落账核毕**——fin_venue_io deposit 行在案（10-17 02:41Z，D-607 Deal→io 自动径）；`NOX_CAPITAL_BASE_USD=11317` 分母已同步；MT5 三户腿池=$5247（+23.5%）。该 $1k=venue 锁定腿保证金无 earn 承接——不眠形态=未来 cfd_swap/xasset 组合腿位，非闲置缺口。当前资金全景：crypto 腿=earn 桶趴位（gate $2000/okx $2128 待 JIT 归集）+binance perp $1344+spot $1038；CFD 腿=$5247。
+
+> 决策席注记⑮（10-18 ~15:45Z）：**本金账明日逐笔核——基线已钉**。前端总览报 **$12,312.46** vs `NOX_CAPITAL_BASE_USD=11,317`——差 **$995.46**（≈入金$1k，双计/分母滞后为首要嫌疑）。
+> **15:44Z 快照基线**（fin_venue_account_snapshot 最新行）：MT5=110660304:$1000 + 15032313:$1000.22 + 3001157:$3247.41 + **62311223:$172.95（第四户，此前盘点漏计）**；binance=perp $1344.05 + spot $0.01 + earn 多资产行×5（各<1，earn 持仓≈空）；gate=earn $2000.13 + perp $0；okx=earn $2128.28 + unified≈0。
+> **核对疑点钉**：①`okx:funding equity_raw=51,788,586` 幻影行——单位/字段误读嫌疑（raw 未换算），前端若聚合此面会爆表=真 bug 候选；②binance:earn 5 行同 venue:type 键——聚合须按资产行求和非取最新；③空 venue_type 零值行×4 + 15032313:/3001157: 陈旧空键行——展示面串行空键病根同源；④binance:spot 快照 $0.01 vs 早前 ListAccounts $1038——口径差（per-asset 行 vs 总额）待辨。
+> 明日任务=前端分母装配径（service_capital_pools）逐池对账：哪池进总、哪池剔、io 账本金流量口径 vs 权益口径差。
