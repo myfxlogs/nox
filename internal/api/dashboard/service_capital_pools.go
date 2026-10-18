@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"sort"
-	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -44,13 +43,6 @@ func (s *Service) GetCapitalPools(ctx context.Context, req *connect.Request[v1.G
 		}
 	} else {
 		log.Printf("[capital] manual positions read: %v（空列表降级不拖垮全景）", merr)
-	}
-	if resp.DenominatorIncomplete {
-		if aerr := s.store.InsertAlertDedup(ctx, "info", fmt.Sprintf(
-			"分母池鲜度失：资金地图分母缺 %s（陈旧快照剔计，恢复自动销）",
-			strings.Join(resp.StalePools, ",")), 24*time.Hour); aerr != nil {
-			log.Printf("[capital] 分母鲜度告警落行败: %v", aerr)
-		}
 	}
 	return connect.NewResponse(resp), nil
 }

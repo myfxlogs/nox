@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"nox/internal/platform/alerttext"
 	"nox/internal/platform/errclass"
 	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
@@ -109,12 +108,9 @@ func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, err
 		}
 		return "", fmt.Errorf("earn 写径未接 venue=%s（rail 缺席——如实不执行）", p.Venue)
 	}
-	// D-288 浓度透视（非闸）：单 venue≥50% 或 CEX 总≥70%→info 标。读败不阻塞申购。
-	if pools, perr := e.Store.CapitalPoolSnapshots(ctx); perr != nil {
-		log.Printf("[dciexec] 浓度透视读败（不阻塞）: %v", perr)
-	} else {
-		e.concentrationAlert(ctx, pools)
-	}
+	// D-288 浓度透视（非闸）：分母=判定拍 venue:type:ccy 实拉（D-604 判定点读径——
+	// 快照池 15-30min 节拍×5min 鲜度阈伪信号已根治）；实拉败→warn 剔分母，不阻塞申购。
+	e.liveConcentration(ctx)
 	// 现货可动=申购额（D-192 venue 实读源；活期可赎=眠钱承接非锁仓）。
 	// 余额源=rail 所在池（okx=unified 交易户 / gate=perp 户 / binance=spot）。
 	spotFree, err := rail.FreeBalance(ctx, "USDT")
@@ -222,34 +218,41 @@ func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, err
 		p.TemplateID, pick.Asset, spotFree, pick.ProductID, pick.APR*100), nil
 }
 
+// liveConcentration 浓度透视实拉拍（goEarn 拍内单次调用）——fn nil=跳过
+// （装配缺席非病灶）；读败→warn dedup 剔分母（fail-closed 如实缺非陈值顶替）。
+func (e *Executor) liveConcentration(ctx context.Context) {
+	if e.LiveEquityMapFn == nil {
+		return
+	}
+	m, err := e.LiveEquityMapFn(ctx)
+	if err != nil {
+		if aerr := e.Store.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
+			"浓度透视实拉败（剔分母）：%v", err), 24*time.Hour); aerr != nil {
+			log.Printf("[dciexec] 浓度实拉 alert: %v", aerr)
+		}
+		return
+	}
+	e.concentrationAlert(ctx, m)
+}
+
 // concentrationAlert D-288 浓度透视（非闸）：单 venue 权益≥50% 或 CEX 总≥70%→
-// info alert 如实标，零拦截。阈值=D-288 字面量（业主令裁撤硬闸的保留透视面）。
-func (e *Executor) concentrationAlert(ctx context.Context, pools []pgstore.CapitalPoolRow) {
+// info alert 如实标，零拦截。分母=live equity map venue:type:ccy 键聚合。
+func (e *Executor) concentrationAlert(ctx context.Context, live map[string]float64) {
 	var totEq float64
 	venueEq := map[string]float64{}
 	cexEq := 0.0
-	var stalePools []string
-	for _, r := range pools {
-		if r.Stale && !r.Ghost {
-			stalePools = append(stalePools, r.PoolKey()) // 分母剔陈旧池——不拿陈旧值当现值
+	for k, eq := range live {
+		if eq <= 0 {
 			continue
 		}
-		if r.Ghost || r.Equity <= 0 {
+		parts := strings.SplitN(k, ":", 3)
+		if len(parts) != 3 {
 			continue
 		}
-		totEq += r.Equity
-		venueEq[r.Venue] += r.Equity
-		if r.VenueType != "mt4" && r.VenueType != "mt5" {
-			cexEq += r.Equity
-		}
-	}
-	if len(stalePools) > 0 {
-		sort.Strings(stalePools)
-		if aerr := e.Store.InsertAlertDedup(ctx, "info", fmt.Sprintf(
-			"分母池鲜度失：浓度透视分母缺 %s（陈旧快照剔计，恢复自动销）%s",
-			strings.Join(stalePools, ","),
-			alerttext.SeatDispatchLine("实施", "池快照缺口排查（读 STATE 本行——分母池缺 venue:type 清单在告警文）")), 24*time.Hour); aerr != nil {
-			log.Printf("[dciexec] 分母鲜度 alert: %v", aerr)
+		totEq += eq
+		venueEq[parts[0]] += eq
+		if parts[1] != "mt4" && parts[1] != "mt5" {
+			cexEq += eq
 		}
 	}
 	if totEq <= 0 {
@@ -268,12 +271,8 @@ func (e *Executor) concentrationAlert(ctx context.Context, pools []pgstore.Capit
 		return
 	}
 	sort.Strings(hot)
-	missNote := ""
-	if len(stalePools) > 0 {
-		missNote = "｜分母缺池 " + strings.Join(stalePools, ",")
-	}
 	if err := e.Store.InsertAlertDedup(ctx, "info", fmt.Sprintf(
-		"浓度透视：%s%s（D-288 透视面——只标不拦）", strings.Join(hot, " "), missNote), 24*time.Hour); err != nil {
+		"浓度透视：%s（D-288 透视面——只标不拦）", strings.Join(hot, " ")), 24*time.Hour); err != nil {
 		log.Printf("[dciexec] 浓度透视 alert: %v", err)
 	}
 }
