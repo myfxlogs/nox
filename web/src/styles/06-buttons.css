@@ -43,3 +43,258 @@ button.btn-close:disabled {
   opacity: 0.5;
   cursor: default;
 }
+
+/* —— arb-archive 同名件差量合入（画骨样式批 10-19）：arb 独有选择器追加，NOX 自有规则保留 —— */
+
+/* 实心主按钮（执行/添加/保存等主要动作） */
+.btn-primary {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 二次确认态：首点变「再次点击确认」实心警示色 */
+.btn-primary.armed {
+  background: var(--warn);
+  color: #000;
+}
+
+/* 危险按钮（平仓/删除）：默认警示色描边；二次确认 armed 实心高亮，提示再点一次真操作。 */
+button.btn-close {
+  padding: 2px 10px;
+  color: var(--warn);
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+}
+
+/* 次要/取消按钮 */
+.btn-ghost {
+  padding: 6px 14px;
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.btn-ghost:hover {
+  color: var(--ink);
+}
+
+.btn-ghost.armed {
+  color: var(--critical);
+  border-color: var(--critical);
+}
+
+.btn-ghost.armed:hover {
+  background: var(--critical);
+  color: #fff;
+}
+
+.btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 小按钮 */
+.btn-sm {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+
+/* —— 模态 —— */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 10px;
+  padding: 20px;
+  min-width: 400px;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.modal h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.modal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.modal-row .label {
+  color: var(--ink-3);
+}
+
+.modal-row .value {
+  font-weight: 600;
+}
+
+.modal-input {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+
+/* —— D-090 自选报价条编辑浮层（返修包① R2） —— */
+.watchlist-current,
+.watchlist-candidates {
+  margin: 12px 0;
+}
+
+.watchlist-order {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.watchlist-order li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  background: var(--surface);
+  flex-wrap: wrap;
+}
+
+.watchlist-order li .watchlist-sym {
+  flex: none;
+  min-width: 80px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.watchlist-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.watchlist-chips .chip {
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--ring);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.watchlist-chips .chip.chip-active {
+  background: var(--ink);
+  color: var(--page);
+  border-color: transparent;
+}
+
+/* 候选列表：限宽内纵向滚动（返修包① R2） */
+.watchlist-candidate-scroll {
+  max-height: 40vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 4px;
+}
+
+.watchlist-candidate-item {
+  text-align: left;
+  width: 100%;
+}
+
+
+/* —— 登录门禁 —— */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 10px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: center;
+}
+
+.login-card h1 {
+  font-size: 18px;
+}
+
+.login-card p {
+  color: var(--ink-2);
+}
+
+.login-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.login-card input {
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.login-card .btn-primary {
+  padding: 8px 10px;
+  font-size: 14px;
+}

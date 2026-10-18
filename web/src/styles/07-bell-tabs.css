@@ -145,3 +145,177 @@
 .tab-on:hover {
   color: var(--page);
 }
+
+/* —— arb-archive 同名件差量合入（画骨样式批 10-19）：arb 独有选择器追加，NOX 自有规则保留 —— */
+/* —— 通知中心铃铛 —— */
+.bell {
+  position: relative;
+}
+
+/* S5：告警 message 可点击跳转 */
+.bell-msg-clickable {
+  cursor: pointer;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.bell-msg-clickable:hover {
+  color: var(--ink);
+}
+
+.alert-goto-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.alert-goto-link:hover {
+  color: var(--ink);
+}
+
+@media (max-width: 600px) {
+  .bell-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    border: none;
+    border-radius: 0;
+  }
+}
+
+
+/* —— 顶部分页（胶囊 tab） —— */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+
+/* —— S1 移动端触控与字号基线（≤600px）：.tab ≥44px 高 / ≥14px 字号 / gap 8px —— */
+@media (max-width: 600px) {
+  .tabs {
+    gap: 8px;
+  }
+  .tab {
+    min-height: 44px;
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+  /* 铃铛按钮同步 ≥44px（header 触控达标） */
+  .bell-btn {
+    width: 44px;
+    height: 44px;
+  }
+  /* 铃铛面板操作按钮 ≥44px */
+  .bell-ack-all {
+    min-height: 44px;
+  }
+}
+
+
+/* —— V4 左侧栏（桌面常驻 + 移动汉堡抽屉，借鉴 Exness/GitHub/Linear）—— */
+.sidebar-toggle {
+  display: none; /* 桌面端常驻不需要 */
+  border: none;
+  background: none;
+  color: var(--ink);
+  padding: 4px;
+  cursor: pointer;
+  line-height: 0;
+  border-radius: 6px;
+}
+
+.sidebar-toggle:hover {
+  background: var(--page);
+}
+
+.sidebar {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 12px;
+  border-right: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: var(--ink-2);
+  font-size: 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.sidebar-item:hover {
+  background: var(--page);
+  color: var(--ink);
+}
+
+.sidebar-item.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.sidebar-item svg {
+  flex-shrink: 0;
+}
+
+.sidebar-overlay {
+  display: none;
+}
+
+
+/* 移动端：侧栏改抽屉 */
+@media (max-width: 767px) {
+  .sidebar-toggle {
+    display: inline-flex;
+  }
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 200;
+    height: 100vh;
+    width: 240px;
+    background: var(--surface);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    border-right: 1px solid var(--line);
+    box-shadow: 4px 0 16px rgba(0,0,0,0.08);
+    padding-top: 60px;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 199;
+    background: rgba(0,0,0,0.3);
+  }
+}

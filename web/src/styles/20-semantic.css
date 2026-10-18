@@ -1,0 +1,46 @@
+/* —— 语义色工具类（D-508 S11：颜色/状态类内联样式收编；几何微调内联保留） —— */
+.u-good { color: #27ae60; }
+.u-bad { color: #c0392b; }
+.u-na { color: #999; }
+.u-dim { color: #888; }
+.u-gold { color: #b58900; }
+.u-orange { color: #e67e22; }
+.u-amber { color: #f39c12; }
+.u-blue { color: #2980b9; }
+.u-grey { color: #7f8c8d; }
+.u-brick { color: #cb4b16; }
+.u-ok { color: #2a7; }
+.u-err { color: #a33; }
+
+/* 枚举裁决色（后端判定值 → 类名，D-273/S8 同口径） */
+.v-opportunity { color: #27ae60; }
+.v-not_opportunity { color: #999; }
+.v-trap { color: #c0392b; }
+.risk-red { color: #c0392b; }
+.risk-yellow { color: #f39c12; }
+.risk-green { color: #27ae60; }
+.oc-success { color: #27ae60; }
+.oc-failed { color: #c0392b; }
+.oc-withdrawn { color: #999; }
+.oc-pending { color: #f39c12; }
+
+/* 闸带色（与 gateColor 同源，走主题变量） */
+.g-ok { color: var(--good); }
+.g-warn { color: var(--warn); }
+.g-bad { color: var(--delta-down); }
+
+/* 状态 chip/徽标 */
+.chip-line { border: 1px solid currentColor; border-radius: 4px; padding: 0 6px; font-size: 12px; white-space: nowrap; }
+.chip-gold { border: 1px solid #b58900; color: #b58900; border-radius: 4px; padding: 1px 8px; font-size: 12px; }
+.badge-forbidden { border: 1px solid #a33; border-radius: 3px; padding: 0 4px; color: #a33; }
+.tag-orange { background: #e67e22; color: #fff; border-radius: 4px; padding: 2px 8px; font-size: 0.8em; }
+.eg-chip { color: #fff; border-radius: 3px; padding: 0 4px; font-size: 10px; margin-left: 4px; }
+.ptab-sel { background: #e0e0e0; }
+.bg-none { background: none; }
+.bg-transparent { background: transparent; }
+.bg-subtle { background: #fafafa; }
+.btn-danger { background: var(--critical); }
+.eg-1 { background: #2da44e; }
+.eg-2 { background: #0969da; }
+.eg-3 { background: #b58900; }
+.eg-4 { background: #d73a49; }
