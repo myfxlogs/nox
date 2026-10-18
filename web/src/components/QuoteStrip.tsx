@@ -1,20 +1,72 @@
-// QuoteStrip.tsx —— S1′ 移植裁剪（报价条形态：品种+价+新鲜度点）。
+// QuoteStrip.tsx —— 总览实时报价条（S3′ 三件补：arb QuoteStrip 借形重写）。
+// 数据=既有 StreamUpdates Quote 帧（stream.proto:22）——自持订阅建
+// venue|symbol 最新帧表直渲；纯展示不喂判定、零聚合，符号/venue 集=
+// 帧到达域驱动（禁硬编码清单）。零帧=如实缺态。
+// 右端 UTC 钟=票面裁准的唯一合法 setInterval（非业务数据刷新）。
+import { useEffect, useState } from "react";
+import { onCase } from "../stream";
+import type { Quote } from "../gen/dashboardv1/market_pb";
 import { FreshDot as Dot } from "./FreshDot";
-import type { FreshDot as Fd } from "./freshness";
+import { freshOf } from "./freshness";
 
-export interface Quote { symbol: string; price?: number; venue?: string; fresh?: Fd }
+// fmtPrice 保留 venue 原生精度——上限 12 位小数只是兜底不参与舍入，
+// 千分位便于阅读（不设最小小数位、不补尾零）。
+function fmtPrice(p: number): string {
+  return p.toLocaleString("zh-CN", { maximumFractionDigits: 12 });
+}
 
-export function QuoteStrip({ quotes }: { quotes: Quote[] }) {
+// UtcClock HH:MM:SS UTC——票面三件之一（展示件）。
+function UtcClock() {
+  const [t, setT] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setT(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <span className="quote-ts">{t.toISOString().slice(11, 19)} UTC</span>;
+}
+
+export function QuoteStrip() {
+  const [q, setQ] = useState<Record<string, Quote>>({});
+  useEffect(
+    () =>
+      onCase("quote", (v) => {
+        const f = v as Quote;
+        if (!f.venue || !f.symbol) return;
+        setQ((m) => ({ ...m, [`${f.venue}|${f.symbol}`]: f }));
+      }),
+    [],
+  );
+  // venue 动态分组（帧域驱动）；组内符号按名排序=稳定排布非聚合。
+  const venues = [...new Set(Object.values(q).map((f) => f.venue))].sort();
   return (
-    <div className="quote-strip">
-      {quotes.map((q) => (
-        <span key={q.symbol} className="quote-cell">
-          <b>{q.symbol}</b>
-          <span>{q.price ?? "—"}</span>
-          {q.fresh ? <Dot dot={q.fresh} /> : null}
-          <span className="muted">{q.venue ?? ""}</span>
-        </span>
-      ))}
+    <div className="quote-strip" aria-label="实时报价">
+      {venues.length === 0 ? (
+        <span className="muted">行情流待命——零帧如实</span>
+      ) : (
+        venues.flatMap((v) => [
+          <span key={v} className="quote-venue">
+            {v}
+          </span>,
+          ...Object.values(q)
+            .filter((f) => f.venue === v)
+            .sort((a, b) => a.symbol.localeCompare(b.symbol))
+            .map((f) => (
+              <span key={`${v}|${f.symbol}`} className="quote-tile">
+                <b>{f.symbol}</b>
+                <strong>
+                  {fmtPrice(f.bid)}/{fmtPrice(f.ask)}
+                </strong>
+                <Dot
+                  dot={freshOf({
+                    lastFactAt: f.time ? Number(f.time.seconds) * 1000 : 0,
+                    name: f.symbol,
+                  })}
+                />
+              </span>
+            )),
+        ])
+      )}
+      <UtcClock />
     </div>
   );
 }
