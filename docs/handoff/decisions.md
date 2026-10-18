@@ -689,3 +689,11 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 
 - **裁定**：fin_opp_hypothesis 增 `DecideHypothesis` RPC 写口（D-620 SetExecutionMode 同范式：actor/reason/evidence_ref 必填、status=proposed 才受理、alerts 留痕）；LLM memo 触发径归一——radar 每拍扫 `proposed AND family_fit IS NULL` 行补预审（直写径产出不再漏预审）；设计稿对齐实况+STATE 218 🧊票作废并入本票。
 - **依据**：审计亲证——SG 74 行假设裁决全 psql 直写零 actor/事件；memo 仅 3 行非空、category_memo 调用止于 10-14；§3「备忘录在手裁决秒级」前提在产未成立。同型病灶=D-620 前的 live_gates（有表无门）。
+
+## D-624（2026-10-18 决策席）TRADIFI_PERPETUAL 族归裁定——「crypto perp × MT5 CFD」xasset 对冲变体（cfd_swap_hedged 族扩 instType）
+
+- **裁定**：binance TRADIFI_PERPETUAL 族归入 **cfd_swap_hedged 变体**（instType=TRADIFI_PERPETUAL 路由——腿参 params_proto 决策席显式供给，拒猜腿 fail-closed 已在码）；funding-only 单腿**否决**（SPCXUSD1 lastFundingRate=0/interestRate=0 实拍，单腿无 carry 源）；generic_yield 不适用（无申赎）。
+- **依据**（评估实据 docs/能力账/binance-tradifi-perp-eval-2026-10-18.md）：①221 品种底层=TradFi 标的与 MT5 CFD 同根（SPCX→SPX500 三户在册、XAU/XAG/US30/个股 ETF 映射面富）；②USD1 面仅 SPCXUSD1 一件=样本薄试验田，USDT 计价 220 件=真实机会面。
+- **前置闸（试单入册前必须全达）**：①休市日历采集轴建立——MT5 CFD 腿有开闭市而 crypto perp 24/7 在流，闭市窗腿无法对冲=基差敞口硬风险，缺休市门控禁入册；②资金费率/标记价采集轴建立（现 lastFundingRate=0 无法评估收益性）；③腿参=决策席逐品种供给（mt_venue/mt_symbol/side/cex_symbol），系统拒猜。
+- **风险在案**：USD1 脱锚面（新稳定币计价）、休市窗基差、样本薄（USD1 面 1 品种——族裁定覆盖全 221，假设#5 仅 USD1 面实例）。
+- **反证锚**：若休市窗对冲缺口不可控（MT5 闭市>品种波动容忍）或 USDT 面 funding 普遍近零=族归错误→假设回 rejected 留弃件记忆（DecideHypothesis 写口在案）。
