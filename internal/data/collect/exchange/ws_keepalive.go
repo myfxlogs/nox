@@ -25,6 +25,12 @@ const (
 	// 10min 仍远小于安静市场可容忍窗？——不，对多符号 tickers 聚合流 10min
 	// 全静默即异常；安静窗由 ReadIdle+pong 语义承接，本窗只判数据帧缺席。
 	quoteWSDataIdle = 10 * time.Minute
+	// mktWSDataIdle mkt-ws 判死阈降档（venue epoch 裁断第四袭实证——perp 1s 频谱
+	// 流（markPrice/ticker/bookTicker 聚合流均 1000ms 推送频谱）无帧>60s=铁死非
+	// 静默期，10min 阈白送盲窗+funding stale 刷屏+418 期零兜底三损叠加；
+	// 3min=盲窗缩 70% 落回 funding stale 15min 阈内（告警自然哑）。
+	// user-ws/spot 低频连接阈不动（判死语义不变：死=重连非告警）。
+	mktWSDataIdle = 3 * time.Minute
 )
 
 // wsKeepalive 连接期调用一次：设初始读限 + pong 到达即续期。
