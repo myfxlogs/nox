@@ -14,7 +14,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// 路径基准（定死，禁路径探测逻辑）
+// 路径基准——初值保留 tools/noxkb 相对径（历史默认）；main() 启动时
+// resolvePaths() 上溯 repo root 重写为绝对径（错 cwd=显式报错非静默写丢——
+// cwd 绑死坑修，D-617 遗留）。NOX_KB_DIR env 覆写优先（induct.go）。
 var (
 	entriesDir      = "../../docs/经验库/条目"
 	indexFile       = "../../docs/经验库/索引.md"
