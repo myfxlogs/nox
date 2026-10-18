@@ -216,7 +216,9 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venu
 				// 裁断，wscloseprobe 同参数集复现 frames=1 后 1006 被杀）——改全市场
 				// 聚合流单订阅（数组帧与单帧元素同构，handleMarkPrice 双形解析+有效集过滤；
 				// 流名字面量禁规范化——binance-ws-stream-name-case-sensitive）。
-				params = []string{"!markPrice@arr@1s"}
+				// 10-19 直探实锤：!markPrice@arr@1s = ack{result:null} 收讫+零帧
+				// （venue 停推变体），!markPrice@arr 同窗复帧——降 @1s 变体。
+				params = []string{"!markPrice@arr"}
 			} else {
 				// 符号源与原 ticker 同源（effectiveSymbols：env ∪ SymProvider
 				// 动态 watchlist）；watchlist 新增符号随下次重连订阅生效，60s REST 兜底补窗。
