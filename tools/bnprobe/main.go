@@ -105,7 +105,7 @@ func probe(ctx context.Context, c *http.Client, apiKey, apiSecret, tier, path st
 	}
 	defer resp.Body.Close()
 	r.Status = resp.StatusCode
-	r.Weight = resp.Header.Get("X-MBX-USED-WEIGHT")
+	r.Weight = usedWeight(resp.Header)
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		r.Err = err.Error()
@@ -124,7 +124,7 @@ func probe(ctx context.Context, c *http.Client, apiKey, apiSecret, tier, path st
 			bodyBytes, _ = io.ReadAll(resp2.Body)
 			rawMap[path] = string(bodyBytes)
 			r.Status = resp2.StatusCode
-			r.Weight = resp2.Header.Get("X-MBX-USED-WEIGHT")
+			r.Weight = usedWeight(resp2.Header)
 			resp = resp2
 		}
 	}
@@ -156,13 +156,21 @@ func probe(ctx context.Context, c *http.Client, apiKey, apiSecret, tier, path st
 
 func main() {
 	offset := 0
-	limit := 0 // 0=全谱
+	limit := 0        // 0=全谱
+	weightCap := 1200 // 共享 IP 分钟预算上限（保守缺省——生产 REST 面大头后探针配额）
+	weightPct := 80   // 自限阈=cap×80%（缺省——超阈即截非 418 撞墙）
 	for i, a := range os.Args {
 		if a == "-offset" && i+1 < len(os.Args) {
 			fmt.Sscanf(os.Args[i+1], "%d", &offset)
 		}
 		if a == "-limit" && i+1 < len(os.Args) {
 			fmt.Sscanf(os.Args[i+1], "%d", &limit)
+		}
+		if a == "-weightcap" && i+1 < len(os.Args) {
+			fmt.Sscanf(os.Args[i+1], "%d", &weightCap)
+		}
+		if a == "-weightpct" && i+1 < len(os.Args) {
+			fmt.Sscanf(os.Args[i+1], "%d", &weightPct)
 		}
 	}
 	c := &http.Client{Timeout: 15 * time.Second}
