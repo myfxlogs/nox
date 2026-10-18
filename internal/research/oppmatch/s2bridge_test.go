@@ -133,6 +133,19 @@ func TestS2Bridge_TradifiPerp(t *testing.T) {
 		t.Fatal(err)
 	}
 	bare := seedHypothesis(t, s, "binance", "binance|TRADIFI_PERPETUAL|USDT", "TRADIFI_PERPETUAL", "USDT", "novel")
+	// 采集轴双闸种子（D-624 前置闸消费面）：MT 腿 trade_session + binance funding
+	// 各一行在 facts——缺一则拒桥（TRADIFI_PERP 采集轴未达告警）。
+	if _, err := s.Pool().Exec(ctx, `INSERT INTO facts (kind, venue, symbol, value, unit, ts, src) VALUES
+		('trade_session','110660304','US500Cash#',1,'mode',now(),'test'),
+		('funding','binance','SPCXUSD1',1.5,'pct_annualized',now(),'test')`); err != nil {
+		t.Fatal(err)
+	}
+	// 轴缺反例：funding 零行的 cex_symbol 变体须拦在采集轴未达告警。
+	axisMiss := seedHypothesis(t, s, "binance", "binance|TRADIFI_PERPETUAL|USD2", "TRADIFI_PERPETUAL", "USD2", "novel")
+	if _, err := s.Pool().Exec(ctx, `UPDATE fin_opp_hypothesis SET params_proto=$2 WHERE id=$1`,
+		axisMiss, `{"mt_venue":"110660304","mt_symbol":"US500Cash#","side":"short","cex_symbol":"SPCXUSD2"}`); err != nil {
+		t.Fatal(err)
+	}
 
 	s2Bridge(ctx, s)
 
@@ -161,6 +174,21 @@ func TestS2Bridge_TradifiPerp(t *testing.T) {
 	if err := s.Pool().QueryRow(ctx, `SELECT count(*) FROM alerts
 		WHERE message LIKE '%TRADIFI_PERP 腿参数缺%'`).Scan(&warnN); err != nil {
 		t.Fatal(err)
+	}
+	// 轴缺行：funding 零行→approved 保持+采集轴未达告警（不落白名单）。
+	if err := s.Pool().QueryRow(ctx, `SELECT status FROM fin_opp_hypothesis WHERE id=$1`, axisMiss).Scan(&st); err != nil {
+		t.Fatal(err)
+	}
+	if st != "approved" {
+		t.Fatalf("轴缺行应留 approved: %s", st)
+	}
+	var axisWarn int
+	if err := s.Pool().QueryRow(ctx, `SELECT count(*) FROM alerts
+		WHERE message LIKE '%TRADIFI_PERP 采集轴未达%'`).Scan(&axisWarn); err != nil {
+		t.Fatal(err)
+	}
+	if axisWarn < 1 {
+		t.Fatal("采集轴未达告警缺失")
 	}
 	if warnN < 1 {
 		t.Fatalf("腿缺 dedup 告警缺: %d", warnN)
