@@ -51,8 +51,7 @@ func buildCmcCollectors(ctx context.Context, st *pgstore.Store, cfg *config.Conf
 	}
 	// WS 事件驱动：健康短路接线（健康期 REST 降频/短路）
 	ws := cmc.NewWsClient(auth, accountID, st, cmc.DefaultWsBase, cmc.DefaultRestBase)
-	account.SetWSHealthy(ws.IsHealthy)
-	prices.SetWSHealthy(ws.IsHealthy)
+	account.SetWSHealthy(ws.IsHealthy) // 账户面 WS type5/6/7 真覆盖=降频闸保留；prices 摘闸——D-212 裁 REST=instrument 价主源按 Interval=60s 全速（休市 closed 门控保留）
 	// marketStatus 注入（WS 价格行 market_status 列）
 	ws.SetMarketStatus(func() string {
 		status, _, err := st.LastCMCMarketStatus(context.Background())
