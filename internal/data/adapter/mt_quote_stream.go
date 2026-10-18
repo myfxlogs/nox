@@ -11,7 +11,8 @@ import (
 	"nox/internal/platform/safego"
 )
 
-// resubscribeAll 逐符号超时上限。
+// resubscribeCallTimeout 逐符号超时上限（Subscribe 同步径捕获传参——
+// resubscribeAll 异步 goroutine 禁直读此 var，测试改值与读并发=竞点）。
 var resubscribeCallTimeout = 5 * time.Second
 
 // saveSubSet 初始化订阅集镜像（Subscribe 时调用，覆盖写）。
@@ -48,9 +49,10 @@ func (a *MT5Adapter) snapshotSubSet() []string {
 }
 
 // resubscribeAll 全量重订阅（开流后异步执行+逐符号超时挡楔死，D-563 S5；幂等安全）。
-func (a *MT5Adapter) resubscribeAll(sctx context.Context) {
+// to=逐符号超时由调用方同步径捕获（goroutine 内禁读包级 var——竞点禁线）。
+func (a *MT5Adapter) resubscribeAll(sctx context.Context, to time.Duration) {
 	for _, sym := range a.snapshotSubSet() {
-		sc, cancel := context.WithTimeout(sctx, resubscribeCallTimeout) // 逐符号超时
+		sc, cancel := context.WithTimeout(sctx, to) // 逐符号超时
 		_, err := a.subs.Subscribe(sc, &mt5pb.SubscribeRequest{
 			Id:     a.getToken(),
 			Symbol: sym,
@@ -64,7 +66,7 @@ func (a *MT5Adapter) resubscribeAll(sctx context.Context) {
 
 // runQuoteStream 外层循环：开流 → 消费帧 → 断流退避重开直到 ctx 取消；
 // ch 仅在此 defer close——重连不关 ch，下游 for-range 持续接收。
-func (a *MT5Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote) {
+func (a *MT5Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote, resubTo time.Duration) {
 	// 看门狗随 runQuoteStream 生命周期（episode 跨重连续存）；
 	// zfDone 先于 close(ch) 收口（T6 不泄漏语义由此保证）。
 	a.zfReset()
@@ -89,7 +91,7 @@ func (a *MT5Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote) {
 			continue
 		}
 		// 重订阅挪开流后异步执行——订阅楔形不再阻塞流建立（逐符号失败只记日志）。
-		safego.GoPlain("mt5:resubscribe", func() { a.resubscribeAll(sctx) })
+		safego.GoPlain("mt5:resubscribe", func() { a.resubscribeAll(sctx, resubTo) })
 		ok := a.consumeQuoteFrames(ctx, stream, ch)
 		streamCancel()
 		a.zfSetCancel(nil)
