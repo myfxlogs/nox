@@ -67,3 +67,20 @@ func (s *Store) ListHedgeFlowPage(ctx context.Context, sourceFilter string, limi
 	}
 	return out, rows.Err()
 }
+
+// ListHedgeFlowCount 同过滤 COUNT(*)（ListHedgeFlowPage 同源 UNION——
+// 真分页 total 源，D-212 页码式分页票）。
+func (s *Store) ListHedgeFlowCount(ctx context.Context, sourceFilter string) (int64, error) {
+	var n int64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM (
+			SELECT tx_id FROM fin_trx_txs
+			WHERE ($1 = '' OR $1 = 'trx') AND NOT cheat_status AND kind <> 'vote'
+			UNION ALL
+			SELECT transaction_id FROM fin_cmc_history
+			WHERE ($1 = '' OR $1 = 'cmc')
+			  AND transaction_type NOT IN ('SELL_TRADE','BUY_TRADE')
+		) AS u
+	`, sourceFilter).Scan(&n)
+	return n, err
+}

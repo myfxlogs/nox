@@ -1,12 +1,13 @@
 // HedgeFlow.tsx —— 统一流水卡（arb PositionsPageHedgeFlow 借形，D-212）：
-// ListHedgeFlow 双源归一行（trx/cmc source filter+limit/offset 全下推后端，
-// 前端零聚合零换算——amount_value 原生单位+unit 直渲）。
+// 页码式真分页（PAGE=10 每页 RPC limit/offset 全下推后端，total 后端 COUNT——
+// 「加载更多」追加式撤除；前端零聚合零换算——amount_value 原生单位直渲）。
 import { useCallback, useEffect, useState } from "react";
 import { client, errText } from "../api";
+import { onCase } from "../stream";
 import type { HedgeFlowItem } from "../gen/dashboardv1/position_pb";
 import { EmptyState } from "./EmptyState";
 
-const PAGE = 50;
+const PAGE = 10;
 
 function kindCN(k: string): string {
   switch (k) {
@@ -26,25 +27,26 @@ function kindCN(k: string): string {
 
 export function HedgeFlow() {
   const [items, setItems] = useState<HedgeFlowItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [src, setSrc] = useState("");
-  const [hasMore, setHasMore] = useState(false);
   const [err, setErr] = useState("");
 
-  const load = useCallback(async (source: string, offset: number, append: boolean) => {
+  const load = useCallback(async (source: string, pg: number) => {
     try {
-      const r = await client.listHedgeFlow({ sourceFilter: source, limit: PAGE, offset });
-      setItems((prev) => (append ? [...prev, ...r.txs] : r.txs));
-      setHasMore(r.txs.length === PAGE);
+      const r = await client.listHedgeFlow({ sourceFilter: source, limit: PAGE, offset: (pg - 1) * PAGE });
+      setItems(r.txs);
+      setTotal(Number(r.total));
       setErr("");
-    } catch (e) {
-      setErr(errText(e));
-    }
+    } catch (e) { setErr(errText(e)); }
   }, []);
 
-  useEffect(() => {
-    setItems([]);
-    void load(src, 0, false);
-  }, [src, load]);
+  useEffect(() => { void load(src, page); }, [src, page, load]);
+  // 切 source 回页1；流帧重取当前页不跳页（零轮询）。
+  useEffect(() => { setPage(1); }, [src]);
+  useEffect(() => onCase("dataRefresh", () => { void load(src, page); }), [src, page, load]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE));
 
   return (
     <section>
@@ -60,29 +62,31 @@ export function HedgeFlow() {
         </span>
       </h2>
       {err && <div className="err">{err}</div>}
-      {items.length > 0 ? (
-        <div className="table-scroll scroll-cap">
+      <div className="table-scroll scroll-cap">
         <table className="rows">
-          <thead><tr><th>时点</th><th>源</th><th>类型</th><th>金额</th><th>对手方/单据</th></tr></thead>
+          <thead>
+            <tr><th>时间</th><th>源</th><th>类型</th><th>金额</th><th>对手</th><th>tx</th></tr>
+          </thead>
           <tbody>
             {items.map((t, i) => (
-              <tr key={t.txId + i}>
-                <td>{t.ts ? new Date(Number(t.ts.seconds) * 1000).toLocaleString() : "—"}</td>
+              <tr key={i}>
+                <td>{t.ts ? new Date(Number(t.ts.seconds) * 1000).toISOString().replace("T", " ").slice(5, 19) : "—"}</td>
                 <td>{t.source}</td>
                 <td>{kindCN(t.kind)}</td>
-                <td>{t.amountValue.toFixed(t.amountUnit === "TRX" ? 4 : 2)} {t.amountUnit}</td>
-                <td className="muted">{t.counterparty || t.txId}</td>
+                <td className="num">{t.amountValue} {t.amountUnit}</td>
+                <td>{t.counterparty || "—"}</td>
+                <td className="muted" style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}>{t.txId || "—"}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        </div>
-      ) : (
-        <EmptyState>零流水行</EmptyState>
-      )}
-      {hasMore && (
-        <div style={{ marginTop: 8 }}>
-          <a href="#" onClick={(e) => { e.preventDefault(); void load(src, items.length, true); }}>加载更多…</a>
+      </div>
+      {items.length === 0 && <EmptyState>零流水行</EmptyState>}
+      {totalPages > 1 && (
+        <div className="pager">
+          <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
+          <span>第 {page} / {totalPages} 页（共 {total} 条）</span>
+          <button type="button" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>下一页</button>
         </div>
       )}
     </section>

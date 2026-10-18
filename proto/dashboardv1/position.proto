@@ -289,4 +289,5 @@ message ListHedgeFlowRequest {
 }
 message ListHedgeFlowResponse {
   repeated HedgeFlowItem txs = 1;
+  int64 total = 2;             // 同过滤 COUNT(*)——真分页页数源（加性，D-212）
 }

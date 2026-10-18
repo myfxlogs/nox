@@ -2562,6 +2562,7 @@ func (x *ListHedgeFlowRequest) GetOffset() int32 {
 type ListHedgeFlowResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Txs           []*HedgeFlowItem       `protobuf:"bytes,1,rep,name=txs,proto3" json:"txs,omitempty"`
+	Total         int64                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"` // 同过滤 COUNT(*)——真分页页数源（加性，D-212）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2601,6 +2602,13 @@ func (x *ListHedgeFlowResponse) GetTxs() []*HedgeFlowItem {
 		return x.Txs
 	}
 	return nil
+}
+
+func (x *ListHedgeFlowResponse) GetTotal() int64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
 }
 
 var File_dashboardv1_position_proto protoreflect.FileDescriptor
@@ -2873,9 +2881,10 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x14ListHedgeFlowRequest\x12#\n" +
 	"\rsource_filter\x18\x01 \x01(\tR\fsourceFilter\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
-	"\x06offset\x18\x03 \x01(\x05R\x06offset\"J\n" +
+	"\x06offset\x18\x03 \x01(\x05R\x06offset\"`\n" +
 	"\x15ListHedgeFlowResponse\x121\n" +
-	"\x03txs\x18\x01 \x03(\v2\x1f.nox.dashboard.v1.HedgeFlowItemR\x03txsB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x03txs\x18\x01 \x03(\v2\x1f.nox.dashboard.v1.HedgeFlowItemR\x03txs\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x03R\x05totalB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_position_proto_rawDescOnce sync.Once
