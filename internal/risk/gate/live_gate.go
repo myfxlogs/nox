@@ -23,21 +23,23 @@ type LiveGateCheckResult struct {
 
 // LiveGateChecker D-195 §3.2：LiveGate 8 条检查器。
 type LiveGateChecker struct {
-	store           *pgstore.Store
-	credentialsFunc func(ctx context.Context) bool // 第 4 条 readiness 检查函数（S3 注入；nil=占位 true）
+	store       *pgstore.Store
+	readinessFn func(ctx context.Context) bool // readiness 实查（D-620④：nil 占位退役——nil=fail-closed）
+	environment string                         // D-620 核验补正Ⓐ：构造注入，Check 直比 =="live"，空串拒
 }
 
-// NewLiveGateChecker 创建 LiveGate 检查器。
-// credentialsFunc 为 nil 时第 4 条默认 true（占位，S3 接入 readiness 后替换）。
-// snapshotTTL 参数随 capital 面退役移除。
-func NewLiveGateChecker(store *pgstore.Store, credentialsFunc func(ctx context.Context) bool) *LiveGateChecker {
-	return &LiveGateChecker{store: store, credentialsFunc: credentialsFunc}
+// NewLiveGateChecker D-620④：readinessFn=readyz Tradable 注入；environment=构造注入（空串=未配置）。
+func NewLiveGateChecker(store *pgstore.Store, readinessFn func(ctx context.Context) bool, environment string) *LiveGateChecker {
+	return &LiveGateChecker{store: store, readinessFn: readinessFn, environment: environment}
 }
+
+// Environment 返回构造注入的环境值（GrantLive check_snapshot 用）。
+func (lg *LiveGateChecker) Environment() string { return lg.environment }
 
 // Check 执行 LiveGate 8 条检查。
 // 步骤 5 首版：只做检查逻辑，不写入 live_gates 表（LIVE 未开放）。
 // 任何一条失败 → Passed=false，Reasons 收集所有失败原因。
-func (lg *LiveGateChecker) Check(ctx context.Context, accountKey, strategy, environment string) LiveGateCheckResult {
+func (lg *LiveGateChecker) Check(ctx context.Context) LiveGateCheckResult {
 	var result LiveGateCheckResult
 	var reasons []string
 
@@ -62,33 +64,23 @@ func (lg *LiveGateChecker) Check(ctx context.Context, accountKey, strategy, envi
 		}
 	}
 
-	// 第 3 条：账户环境与策略环境一致
-	// 查询 account 的 is_real，与 environment 比对
-	if environment != "" && accountKey != "" {
-		isReal, err := lg.store.GetAccountIsReal(ctx, accountKey)
-		if err != nil {
-			reasons = append(reasons, fmt.Sprintf("account is_real query failed: %v", err))
-		} else {
-			wantReal := environment == "live"
-			if isReal != wantReal {
-				reasons = append(reasons, fmt.Sprintf("environment mismatch: env=%s but account is_real=%v", environment, isReal))
-			} else {
-				result.EnvConsistent = true
-			}
-		}
+	// 第 3 条：环境判据=构造注入值直比 "live"（D-620 核验补正Ⓐ——空串=未配置 fail-closed，
+	// 禁「未配置不检查」短路放行形态）。
+	if lg.environment == "live" {
+		result.EnvConsistent = true
 	} else {
-		result.EnvConsistent = true // 未配置 environment 不检查
+		reasons = append(reasons, fmt.Sprintf("environment not configured as live (got %q)", lg.environment))
 	}
 
 	// 第 4 条：token/凭据/executor/broker/readiness 全部正常
 	// S3 接入 readiness checker；credentialsFunc=nil 时占位 true（步骤 5 LIVE 未开放，此条不影响 fail-closed 结论）
-	if lg.credentialsFunc != nil {
-		result.CredentialsReady = lg.credentialsFunc(ctx)
+	if lg.readinessFn == nil {
+		reasons = append(reasons, "readiness checker not wired")
+	} else {
+		result.CredentialsReady = lg.readinessFn(ctx)
 		if !result.CredentialsReady {
 			reasons = append(reasons, "credentials/readiness check failed")
 		}
-	} else {
-		result.CredentialsReady = true
 	}
 
 	// 原第 5/6/7 条（capital snapshot / hypothesis / capital 回撤）随

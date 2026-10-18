@@ -26,7 +26,7 @@ type Service struct {
 	qbus     *bus.QuoteBus
 	pipeline *exec.Pipeline
 	// D-195-A：执行控制面检查器（避免 dashboard→autotrade 循环依赖，用接口注入）。
-	// dashboard.New 内部自建 storeGateChecker（直接查 execution_controls）。
+	// D-620ⓑ：nil=控制面未接线 fail-closed（执行径 FAILED/展示径 kill=true）。
 	gateChecker GateChecker
 	// D-262 M4.3①：开仓风控闸（autotrade.Engine 同实例注入；nil=手动开仓面
 	// fail-closed 拒单不执行——闸门未接线比绕闸安全）。
@@ -229,8 +229,6 @@ type Service struct {
 	// environment 空 = 未配置（不检查，回退旧行为）。
 	environment string
 	// D-159 W6a S2：LIVE 人工开关（手动入口同源）。
-	// LiveTrade=false 时 is_real=true 账户拒绝开仓。
-	liveTrade bool
 
 	// D-182 S4：swap 偏差拦截阈值（手动入口同源，与 autotrade.Gate.SwapDeviationGatePct 对齐）。
 	// ≤0 = 禁用（默认）。main 从 cfg.SwapDeviationGatePct 注入。

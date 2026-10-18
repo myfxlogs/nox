@@ -35,9 +35,9 @@ func testLiveGateStore(t *testing.T) *pgstore.Store {
 // TestLiveGate_NoGateRecord §10.1.1：无 live_gate 记录 → Passed=false，reason 含"no active live gate record"。
 func TestLiveGate_NoGateRecord(t *testing.T) {
 	s := testLiveGateStore(t)
-	lg := gate.NewLiveGateChecker(s, nil)
+	lg := gate.NewLiveGateChecker(s, nil, "live")
 
-	result := lg.Check(context.Background(), "", "", "")
+	result := lg.Check(context.Background())
 	if result.Passed {
 		t.Errorf("Passed=true, want false (no live gate record)")
 	}
@@ -71,8 +71,8 @@ func TestLiveGate_Expired(t *testing.T) {
 		t.Fatalf("insert expired live_gate: %v", err)
 	}
 
-	lg := gate.NewLiveGateChecker(s, nil)
-	result := lg.Check(ctx, "", "", "")
+	lg := gate.NewLiveGateChecker(s, nil, "live")
+	result := lg.Check(ctx)
 	if result.Passed {
 		t.Errorf("Passed=true, want false (expired)")
 	}
@@ -109,8 +109,8 @@ func TestLiveGate_AllChecksPass(t *testing.T) {
 		t.Fatalf("insert live_gate: %v", err)
 	}
 
-	lg := gate.NewLiveGateChecker(s, nil)
-	result := lg.Check(ctx, "", "", "")
+	lg := gate.NewLiveGateChecker(s, nil, "live")
+	result := lg.Check(ctx)
 	if !result.Passed {
 		t.Errorf("Passed=false, want true; reasons=%v", result.Reasons)
 	}
@@ -120,8 +120,8 @@ func TestLiveGate_AllChecksPass(t *testing.T) {
 func TestLiveGate_Step5AlwaysFails(t *testing.T) {
 	s := testLiveGateStore(t)
 	// 不插入任何 live_gate 行（模拟步骤 5 状态）
-	lg := gate.NewLiveGateChecker(s, nil)
-	result := lg.Check(context.Background(), "", "", "")
+	lg := gate.NewLiveGateChecker(s, nil, "live")
+	result := lg.Check(context.Background())
 	if result.Passed {
 		t.Errorf("Passed=true, want false (step 5 no live_gate)")
 	}

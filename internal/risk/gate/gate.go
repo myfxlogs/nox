@@ -18,8 +18,11 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 
 	// 统一执行模式检查（execution_controls 是唯一真相源）
 	// 首版只用 global scope；account 级覆盖留后续工作包。
+	// D-620⑤：mode 提升作用域——真金门判据在尾部消费（nil 控制面=非 LIVE）。
+	var execMode string
 	if g.controlPlane != nil {
 		mode, allowed, cpReason, cpErr := g.controlPlane.CheckGate(ctx)
+		execMode = mode
 		if cpErr != nil || !allowed {
 			g.rejectLog(ctx, *intent, fmt.Sprintf("control plane: %v (mode=%s)", cpErr, mode), false)
 			return GateResult{Status: "REJECTED", Reason: "execution mode blocked: " + cpReason}
@@ -205,11 +208,11 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		return GateResult{Status: "REJECTED", Reason: verdict.Reason}
 	}
 
-	// LIVE 人工开关——verdict.Pass=true 后才检查（disabled/dedup/daily_loss 拒绝时不查）。
-	// is_real=true 账户 + LiveTrade=false → 拒绝开仓。demo（is_real=false）不受限制。
+	// LIVE 真金单闸（D-620①）——verdict.Pass=true 后才检查。
+	// mode!=LIVE 时任一腿 is_real=true → 拒绝开仓。demo（is_real=false）不受限制。
 	// fail-closed：is_real 查询失败 → 拒绝。
-	if !g.cfg.LiveTrade {
-		if rv := g.liveGateCheck(ctx, *intent); !rv.Pass {
+	if execMode != ModeLive {
+		if rv := g.liveGateCheck(ctx, *intent, execMode); !rv.Pass {
 			g.rejectLog(ctx, *intent, rv.Reason, false)
 			return GateResult{Status: "REJECTED", Reason: rv.Reason}
 		}

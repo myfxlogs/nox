@@ -20,8 +20,8 @@ func TestRestart_LiveGateClosed(t *testing.T) {
 	}
 
 	// 「重启」= 重新构造 LiveGateChecker（模拟新进程）
-	lg := NewLiveGateChecker(s, nil)
-	result := lg.Check(ctx, "", "", "")
+	lg := NewLiveGateChecker(s, nil, "live")
+	result := lg.Check(ctx)
 	if result.Passed {
 		t.Fatal("重启后 LiveGate 应关闭（Passed=false，无 live_gates 行），但 Passed=true")
 	}

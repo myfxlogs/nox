@@ -127,11 +127,11 @@ func (s *Service) OpenProbe(ctx context.Context, req *connect.Request[v1.OpenPro
 	}
 
 	// 守卫②：控制面（KillSwitch/mode——与 ExecuteOpportunityInternal 同检查器）。
-	if s.gateChecker != nil {
-		mode, allowed, reason, gerr := s.gateChecker.CheckGate(ctx)
-		if gerr != nil || !allowed {
-			return s.probeReject(ctx, r, fmt.Sprintf("控制面拒开（mode=%s reason=%s err=%v）", mode, reason, gerr))
-		}
+	if s.gateChecker == nil {
+		return s.probeReject(ctx, r, "控制面未接线")
+	}
+	if mode, allowed, reason, gerr := s.gateChecker.CheckGate(ctx); gerr != nil || !allowed {
+		return s.probeReject(ctx, r, fmt.Sprintf("控制面拒开（mode=%s reason=%s err=%v）", mode, reason, gerr))
 	}
 
 	// 守卫③：事故闸（D-032：∃ id>ack 游标事故仓 → 拒开；与 gate_incident 同谓词）。

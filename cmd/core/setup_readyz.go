@@ -148,13 +148,13 @@ func readyzCheck(ctx context.Context, st *pgstore.Store, qbus *bus.QuoteBus, cfg
 	}
 	report.SettlementReady = settleLayer
 
-	// live_gate_ready：LiveGate 检查（步骤 5 总是 not_ready，LIVE 未开放）
+	// live_gate_ready：LiveGate 检查（D-620——live_gates active 行+环境+readiness 全过才 ready）
 	lgLayer := ReadinessLayer{Name: "live_gate_ready"}
 	if liveGate == nil {
 		lgLayer.Ready = false
 		lgLayer.Reason = "live gate checker not configured"
 	} else {
-		lgResult := liveGate.Check(ctx, "", "", "")
+		lgResult := liveGate.Check(ctx)
 		if lgResult.Passed {
 			lgLayer.Ready = true
 		} else {

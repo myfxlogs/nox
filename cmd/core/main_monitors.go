@@ -246,11 +246,18 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 	path, handler := dashv1connect.NewDashboardServiceHandler(dashSvc,
 		connect.WithInterceptors(authIntercept),
 	)
-	// D-195-C1：LiveGate 检查器装配（LIVE 模式导出门；步骤 5 总是 fail）。
+	// D-620⑦：真金单闸装配——lg 单实例（readiness=readyz Tradable，env=构造注入）+cp 注入
+	// dashboard 执行径/提案执行器/selfwatch（统一实例非各自建件）。
+	liveGate := gate.NewLiveGateChecker(st, func(rctx context.Context) bool {
+		return readyzCheck(rctx, st, qbus, cfg, a.execReg, nil).Tradable
+	}, cfg.Environment)
+	cp := gate.NewControlPlane(st)
+	cp.SetLiveGateChecker(liveGate)
+	dashSvc.SetGateChecker(cp)
 	dashSvc.SetConfigKick(func() { a.configKick.Publish(struct{}{}) }) // D-469b S2/S5
 	// D-033：系统自盯汇报面（日报 08:00BJ / 周一 08:00BJ 周报=D-032 ④ 移入 / 小时级数据面告警）。
 	startSelfwatch(ctx, st, a.feishuClient, cfg.CapitalBaseUSD)
 	// D-017 R1：xassetAllowBind=atEngine 装配后接通 detector 白名单前置滤（延迟绑定收口）。
-	runServices(ctx, a.cancel, cfg, st, dashSvc, a.oppTopic, a.orderTopic, qbus, a.factsDone, a.dsn, path, handler, settleDeps, settlementCollector, a.execReg, gate.NewLiveGateChecker(st, nil), a.feishuClient, a.secRes, a.configKick, a.refreshTopic, a.pipeline, a.xassetAllow.Bind)
+	runServices(ctx, a.cancel, cfg, st, dashSvc, a.oppTopic, a.orderTopic, qbus, a.factsDone, a.dsn, path, handler, settleDeps, settlementCollector, a.execReg, liveGate, a.feishuClient, a.secRes, a.configKick, a.refreshTopic, a.pipeline, a.xassetAllow.Bind)
 	return dashSvc
 }

@@ -151,8 +151,10 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 	s.appendOverviewOutput(ctx, resp, navPools, perf, now)
 	// §4 风险心跳（kill 态+30d 净额对硬线+24h critical 数）。
 	if gc := s.gateChecker; gc != nil {
-		_, allowed, _, err := gc.CheckGate(ctx)
-		resp.KillSwitch = err == nil && !allowed
+		ks, err := gc.IsKillSwitchActive(ctx)
+		resp.KillSwitch = err != nil || ks
+	} else {
+		resp.KillSwitch = true // D-620ⓑ：展示 fail-closed——宁显停不显通
 	}
 	if n30, err := s.store.NetRealizedSince(ctx, now.Add(-30*24*time.Hour), false); err == nil {
 		resp.Net30Usd = n30

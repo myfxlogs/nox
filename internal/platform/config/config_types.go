@@ -251,9 +251,6 @@ type Config struct {
 	// 开仓前校验 venue 的 broker_accounts.is_real 与此值一致：is_real=true ↔ environment='live'。
 	// is_real=nil（未知）→ fail-closed 拒绝（不允许未知环境开仓）。
 	Environment string
-	// LIVE 人工开关（NOX_LIVE_TRADE，默认 false）。
-	// is_real=true 账户 + LiveTrade=false → 拒绝开仓。demo 不受限制。
-	LiveTrade bool
 	// swap 偏差拦截阈值（NOX_SWAP_DEVIATION_GATE_PCT，默认 50.0）。
 	// 同 venue 已有 OPEN 持仓的 broker 实际 swap vs facts 规格值偏差超阈值→拒绝新开仓。
 	SwapDeviationGatePct float64

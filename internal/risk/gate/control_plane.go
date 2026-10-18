@@ -2,6 +2,7 @@ package gate
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -13,7 +14,9 @@ const (
 	ModeReadOnly = "READ_ONLY"
 	ModePaper    = "PAPER"
 	ModeTest     = "TEST"
-	// LIVE 不在步骤 5 可写入 mode 中；只由步骤 6 PilotApproval+LiveGate 导出。
+	// D-620①：LIVE=唯一真金导出位——只许 GrantLive 写入（live_gates active 行=唯一授权记录），
+	// SetMode("LIVE") 直调拒绝。
+	ModeLive = "LIVE"
 )
 
 // KillSwitchReason D-195 §3.3：KillSwitch 触发原因。
@@ -61,8 +64,15 @@ func (cp *ControlPlane) GetMode(ctx context.Context) (string, error) {
 // 步骤 5 只允许 READ_ONLY/PAPER/TEST；LIVE 写入 → 返回错误。
 // scopeType 只支持 "global"（首版）；scopeKey=""。
 func (cp *ControlPlane) SetMode(ctx context.Context, mode, actor, reason string) error {
+	if mode == ModeLive {
+		return fmt.Errorf("control plane: mode LIVE is grant-only (use GrantLive)")
+	}
 	if mode != ModeReadOnly && mode != ModePaper && mode != ModeTest {
 		return fmt.Errorf("control plane: mode %s not allowed in step 5 (only READ_ONLY/PAPER/TEST)", mode)
+	}
+	// D-620③ 降级即撤权：离开 LIVE 先撤 live_gates active 行——kill 后回 LIVE 须重新 Grant 带新证据。
+	if rerr := cp.store.RevokeLiveGate(ctx, "global", "", "mode downgrade by "+actor); rerr != nil {
+		return fmt.Errorf("control plane: revoke live gate on downgrade: %w", rerr)
 	}
 
 	// 读取当前 mode（用于事件 from_mode）
@@ -91,6 +101,11 @@ func (cp *ControlPlane) SetMode(ctx context.Context, mode, actor, reason string)
 
 // TriggerKillSwitch 触发 KillSwitch（设 mode=READ_ONLY + enabled=false + 记录原因）。
 func (cp *ControlPlane) TriggerKillSwitch(ctx context.Context, actor, reason string) error {
+	// D-620③ kill 覆盖真金写面全集——先撤 live_gates active 行（无 active=no-op），
+	// 事故后不续旧权，回 LIVE 必须重新 Grant。
+	if rerr := cp.store.RevokeLiveGate(ctx, "global", "", "kill switch: "+reason); rerr != nil {
+		return fmt.Errorf("control plane: revoke live gate on kill: %w", rerr)
+	}
 	fromMode, _ := cp.GetMode(ctx)
 	ctrl := &pgstore.ExecutionControl{
 		ScopeType:  "global",
@@ -174,11 +189,11 @@ func (cp *ControlPlane) CheckGate(ctx context.Context) (mode string, allowed boo
 		return mode, true, "allowed", nil
 	}
 	// LIVE 模式导出门——LiveGate 8 条检查。
-	if mode == "LIVE" {
+	if mode == ModeLive {
 		if cp.liveGateChecker == nil {
 			return mode, false, "LIVE mode but no live gate checker configured", nil
 		}
-		lgResult := cp.liveGateChecker.Check(ctx, "", "", "")
+		lgResult := cp.liveGateChecker.Check(ctx)
 		if !lgResult.Passed {
 			return mode, false, "live gate check failed: " + FormatLiveGateReasons(lgResult.Reasons), nil
 		}
@@ -192,4 +207,67 @@ func (cp *ControlPlane) CheckGate(ctx context.Context) (mode string, allowed boo
 func ptrTimeNow() *time.Time {
 	t := time.Now()
 	return &t
+}
+
+// GrantLive D-620②：LIVE 授权——唯一写 mode=LIVE 的径。
+// 前置：environment=='live' 构造值非空、readiness Tradable、operator/reason/evidenceRef 非空、expiresAt>now。
+// 落账=pgstore.GrantLiveGate 单事务（撤旧+插新+mode=LIVE+事件 to_mode=LIVE）。
+// checkSnapshot=readiness 报告+前置结果 JSON；config_digest 留空如实（无 digest 源不编）。
+func (cp *ControlPlane) GrantLive(ctx context.Context, operator, reason, evidenceRef string, expiresAt time.Time, readiness TradableReport) error {
+	if cp.liveGateChecker == nil {
+		return fmt.Errorf("control plane: live gate checker not wired")
+	}
+	if operator == "" || reason == "" || evidenceRef == "" {
+		return fmt.Errorf("control plane: grant live requires operator/reason/evidence_ref")
+	}
+	if !expiresAt.After(time.Now()) {
+		return fmt.Errorf("control plane: grant live expires_at must be in the future")
+	}
+	if !readiness.Tradable {
+		return fmt.Errorf("control plane: grant live refused — readiness not tradable")
+	}
+	snap, _ := json.Marshal(map[string]any{
+		"prechecks": map[string]any{
+			"environment": cp.liveGateChecker.Environment(),
+			"readiness":   readiness,
+		},
+	})
+	fromMode, _ := cp.GetMode(ctx)
+	now := time.Now()
+	gate := &pgstore.LiveGate{
+		ScopeType:     "global",
+		ScopeKey:      "",
+		Operator:      operator,
+		ConfirmedAt:   now,
+		ExpiresAt:     &expiresAt,
+		EvidenceRef:   evidenceRef,
+		CheckSnapshot: snap,
+	}
+	ctrl := &pgstore.ExecutionControl{
+		ScopeType:   "global",
+		ScopeKey:    "",
+		Mode:        ModeLive,
+		Enabled:     true,
+		ApprovedBy:  operator,
+		ConfirmedAt: &now,
+		ExpiresAt:   &expiresAt,
+		Reason:      reason,
+	}
+	event := &pgstore.ExecutionControlEvent{
+		ScopeType:   "global",
+		ScopeKey:    "",
+		FromMode:    fromMode,
+		ToMode:      ModeLive,
+		Actor:       operator,
+		Reason:      reason,
+		EvidenceRef: evidenceRef,
+		EventKey:    fmt.Sprintf("grantlive-%d", now.UnixNano()),
+	}
+	return cp.store.GrantLiveGate(ctx, gate, ctrl, event)
+}
+
+// TradableReport D-620②：GrantLive 前置 readiness 报告（注入 Grant 时快照 check_snapshot）。
+type TradableReport struct {
+	Tradable bool   `json:"tradable"`
+	Detail   string `json:"detail,omitempty"`
 }

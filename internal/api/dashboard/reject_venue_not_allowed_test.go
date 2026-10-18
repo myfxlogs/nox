@@ -13,6 +13,7 @@ import (
 	"nox/internal/data/bus"
 	"nox/internal/platform/config"
 	"nox/internal/platform/testutil/storetest"
+	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/exec"
 
@@ -91,7 +92,7 @@ func d047Svc(t *testing.T) (*Service, *pgstore.Store, *fakeProbeExec) {
 		VenueSymbol: "BTC-USDT-SWAP", Bid: 60000, Ask: 60002, Time: time.Now()})
 	svc := &Service{
 		store: st, bm: &BrokerManager{store: st, reg: reg}, qbus: qbus,
-		gateChecker: &storeGateChecker{store: st},
+		gateChecker: gate.NewControlPlane(st),
 	}
 	svc.SetAppConfigView(&config.Config{Environment: "live", ProbeMaxNotionalUSD: 1000, ProbeRPCEnabled: true}, nil, nil)
 	return svc, st, fx

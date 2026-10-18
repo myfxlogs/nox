@@ -48,8 +48,9 @@ type FrontConfig struct {
 // commissionFor 为 per-venue 佣金解析器（D-111 收敛型实时 bps 成本扣除，nil = commissionBps=0）。
 // slippageBps 为滑点成本（D-111，slippageCost = slippageBps * 2）。
 // capitalBaseUSD 为经营目标资金基数（D-123 真北行年化分母，传 cfg.CapitalBaseUSD）。
+// gateChecker 须由装配层注 *gate.ControlPlane（wire_dashboard SetGateChecker）——nil=未接线全径 fail-closed（D-620ⓑ）。
 func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, swapArbEquityUseRatio float64, swapArbBareCap float64, swapArbVenueExposureCap float64, oppTopic *bus.Topic[pgstore.Opportunity], alertTopic *bus.Topic[pgstore.Alert], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor, commissionFor func(string) float64, slippageBps float64, xassetCexFeeBps float64, kickFn func(string), capitalBaseUSD float64) *Service {
-	return &Service{store: store, gradStore: store, qbus: qbus, pipeline: pipeline, gateChecker: &storeGateChecker{store: store}, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, oppTopic: oppTopic, alertTopic: alertTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps, xassetCexFeeBps: xassetCexFeeBps, kickFn: kickFn, capitalBaseUSD: capitalBaseUSD}
+	return &Service{store: store, gradStore: store, qbus: qbus, pipeline: pipeline, gateChecker: nil, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, oppTopic: oppTopic, alertTopic: alertTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps, xassetCexFeeBps: xassetCexFeeBps, kickFn: kickFn, capitalBaseUSD: capitalBaseUSD}
 }
 
 // SetBalanceLedger/Store/AutoClosePosition/ResumeClose/ClaimClose 转发与注入面

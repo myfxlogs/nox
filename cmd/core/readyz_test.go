@@ -54,7 +54,7 @@ func TestReadyzCheck_RunningAllOk(t *testing.T) {
 	qbus := bus.New()
 	cfg := setupReadyzCfg()
 	execReg := exec.NewRegistry()
-	lg := gate.NewLiveGateChecker(s, nil)
+	lg := gate.NewLiveGateChecker(s, nil, "live")
 
 	resp := readyzCheck(context.Background(), s, qbus, cfg, execReg, lg)
 	if !resp.DatabaseReady.Ready {
@@ -72,7 +72,7 @@ func TestReadyzCheck_CloseOnly(t *testing.T) {
 	qbus := bus.New()
 	cfg := setupReadyzCfg()
 	execReg := exec.NewRegistry()
-	lg := gate.NewLiveGateChecker(s, nil)
+	lg := gate.NewLiveGateChecker(s, nil, "live")
 
 	resp := readyzCheck(context.Background(), s, qbus, cfg, execReg, lg)
 	if !resp.SettlementReady.Ready {
@@ -87,7 +87,7 @@ func TestReadyzCheck_DBFail_503(t *testing.T) {
 	qbus := bus.New()
 	cfg := setupReadyzCfg()
 	execReg := exec.NewRegistry()
-	lg := gate.NewLiveGateChecker(s, nil)
+	lg := gate.NewLiveGateChecker(s, nil, "live")
 
 	resp := readyzCheck(context.Background(), s, qbus, cfg, execReg, lg)
 	if resp.DatabaseReady.Ready {
@@ -104,7 +104,7 @@ func TestReadyzEndpoint_HTTP(t *testing.T) {
 	qbus := bus.New()
 	cfg := setupReadyzCfg()
 	execReg := exec.NewRegistry()
-	lg := gate.NewLiveGateChecker(s, nil)
+	lg := gate.NewLiveGateChecker(s, nil, "live")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
@@ -133,7 +133,7 @@ func TestReadiness_AllLayers(t *testing.T) {
 	qbus := bus.New()
 	cfg := setupReadyzCfg()
 	execReg := exec.NewRegistry()
-	lg := gate.NewLiveGateChecker(s, nil)
+	lg := gate.NewLiveGateChecker(s, nil, "live")
 
 	resp := readyzCheck(context.Background(), s, qbus, cfg, execReg, lg)
 	// 各层都有 Name
@@ -159,7 +159,7 @@ func TestReadiness_AgeMaxAge(t *testing.T) {
 	qbus := bus.New()
 	cfg := setupReadyzCfg()
 	execReg := exec.NewRegistry()
-	lg := gate.NewLiveGateChecker(s, nil)
+	lg := gate.NewLiveGateChecker(s, nil, "live")
 
 	resp := readyzCheck(context.Background(), s, qbus, cfg, execReg, lg)
 	// max_age 应非空（配置了 TTL）
@@ -177,7 +177,7 @@ func TestReadiness_LiveGateNotReady(t *testing.T) {
 	qbus := bus.New()
 	cfg := setupReadyzCfg()
 	execReg := exec.NewRegistry()
-	lg := gate.NewLiveGateChecker(s, nil)
+	lg := gate.NewLiveGateChecker(s, nil, "live")
 
 	resp := readyzCheck(context.Background(), s, qbus, cfg, execReg, lg)
 	// live_gate_ready 应 not ready（步骤 5 无 live_gates 行）

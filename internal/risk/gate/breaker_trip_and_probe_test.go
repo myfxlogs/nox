@@ -17,7 +17,7 @@ import (
 func d560GateFixture(t *testing.T) *Gate {
 	t.Helper()
 	s := setupGateAlertStore(t) // autotrade_state=RUNNING + vA/vB demo 账户
-	return NewGate(s, Config{MaxDailyLoss: 1000, MaxPositions: 5, LiveTrade: false}, nil)
+	return NewGate(s, Config{MaxDailyLoss: 1000, MaxPositions: 5}, nil)
 }
 
 func d560Intent(dk string, execFn func(context.Context) (string, string, int64)) *TradeIntent {

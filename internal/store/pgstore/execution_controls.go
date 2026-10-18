@@ -67,7 +67,14 @@ func (s *Store) UpsertExecutionControl(ctx context.Context, c *ExecutionControl,
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if err := upsertExecutionControlTx(ctx, tx, c, event); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
 
+// upsertExecutionControlTx D-620：Upsert 体抽 tx 级助手——GrantLiveGate 同事务复用（禁复制 SQL）。
+func upsertExecutionControlTx(ctx context.Context, tx pgx.Tx, c *ExecutionControl, event *ExecutionControlEvent) error {
 	// 读取当前 mode（用于事件 from_mode）。D-508 写路径审计契约：fail-stop——
 	// ErrNoRows=新行首插合法空值，其余错误一律上抛（资金/审计写通道禁静默吞错）。
 	var fromMode string
@@ -75,7 +82,7 @@ func (s *Store) UpsertExecutionControl(ctx context.Context, c *ExecutionControl,
 		return fmt.Errorf("read current mode: %w", serr)
 	}
 
-	_, err = tx.Exec(ctx, `
+	_, err := tx.Exec(ctx, `
 		INSERT INTO execution_controls (scope_type, scope_key, mode, enabled, approved_by, confirmed_at, expires_at, revoked_at, reason, config_digest, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
 		ON CONFLICT (scope_type, scope_key) DO UPDATE SET
@@ -106,7 +113,36 @@ func (s *Store) UpsertExecutionControl(ctx context.Context, c *ExecutionControl,
 			return err
 		}
 	}
+	return nil
+}
 
+// GrantLiveGate D-620②：LIVE 授权单事务——撤旧 active 行（续权）+插新 live_gates 行+
+// execution_controls mode=LIVE/enabled+事件（to_mode=LIVE）。控制面层已做前置校验，
+// 本函数只管原子落账（三写任一败=全回滚）。
+func (s *Store) GrantLiveGate(ctx context.Context, gate *LiveGate, ctrl *ExecutionControl, event *ExecutionControlEvent) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	// 续权：先撤既有 active 行（历史行全留，禁 UPDATE 覆写）。
+	if _, err = tx.Exec(ctx, `
+		UPDATE live_gates SET revoked_at = now(), revoke_reason = $3
+		WHERE scope_type = $1 AND scope_key = $2 AND revoked_at IS NULL`,
+		gate.ScopeType, gate.ScopeKey, "renewed by "+gate.Operator); err != nil {
+		return fmt.Errorf("revoke prior live gate: %w", err)
+	}
+	if _, err = tx.Exec(ctx, `
+		INSERT INTO live_gates (scope_type, scope_key, account_key, strategy, operator,
+			confirmed_at, expires_at, config_digest, evidence_ref, check_snapshot)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		gate.ScopeType, gate.ScopeKey, gate.AccountKey, gate.Strategy, gate.Operator,
+		gate.ConfirmedAt, gate.ExpiresAt, gate.ConfigDigest, gate.EvidenceRef, gate.CheckSnapshot); err != nil {
+		return fmt.Errorf("insert live gate: %w", err)
+	}
+	if err = upsertExecutionControlTx(ctx, tx, ctrl, event); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 

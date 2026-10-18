@@ -72,7 +72,6 @@ var appConfigDescs = map[string]string{
 	"NOX_INTRA_MAX_NOTIONAL_USD":                 "日内策略单笔名义额上限（USD；env-passthrough 键）",
 	"NOX_INTRA_SESSION_GATE":                     "日内策略交易时段门（时段表达式；env-passthrough 键）",
 	"NOX_LIQ_MMR":                                "强平维持保证金率（个人持仓理论强平价计算用）",
-	"NOX_LIVE_TRADE":                             "true=开：实盘交易总闸（false=纸面/演练模式）",
 	"NOX_MARGIN_FACT_MAX_AGE":                    "保证金事实数据最大龄期（超时视为陈旧）",
 	"NOX_MARGIN_RATE_ANNUAL":                     "保证金年化占用率（%）",
 	"NOX_MARGIN_RESERVE_PCT":                     "保证金预留比例（%；不可动用缓冲）",

@@ -1,10 +1,11 @@
-// gate_live_test.go —— D-159 W6a S2：LIVE 人工开关单测（Gate.Submit 路径）。
+// gate_live_test.go —— D-620 T2：真金单闸模式判据版（Gate.Submit 路径：mode!=LIVE 拒实盘腿）。
 package gate
 
 import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"nox/internal/store/pgstore"
 )
@@ -14,7 +15,7 @@ func setupLiveGateStore(t *testing.T, venueLong, venueShort string, longReal, sh
 	t.Helper()
 	s := testAccumStore(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, fin_strategy, autotrade_logs, positions, position_legs, position_cashflows, broker_accounts CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state, strategy_stats, fin_strategy, autotrade_logs, positions, position_legs, position_cashflows, broker_accounts, execution_controls, execution_control_events, live_gates CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx,
@@ -36,68 +37,71 @@ func setupLiveGateStore(t *testing.T, venueLong, venueShort string, longReal, sh
 	return s
 }
 
-// TestGateLive_RealVenue_LiveTradeFalse_Rejected D-159 W6a S2：is_real=true + LiveTrade=false → REJECTED。
-func TestGateLive_RealVenue_LiveTradeFalse_Rejected(t *testing.T) {
+// paperCP 构造 PAPER 模式控制面（execution_controls PAPER/enabled 行）。
+func paperCP(t *testing.T, s *pgstore.Store) *ControlPlane {
+	t.Helper()
+	cp := NewControlPlane(s)
+	if err := cp.SetMode(context.Background(), ModePaper, "t", "t"); err != nil {
+		t.Fatalf("set mode paper: %v", err)
+	}
+	return cp
+}
+
+// grantedLiveCP 构造已授权 LIVE 控制面（live_gates active 行+mode=LIVE+readiness 真）。
+func grantedLiveCP(t *testing.T, s *pgstore.Store) *ControlPlane {
+	t.Helper()
+	cp := NewControlPlane(s)
+	cp.SetLiveGateChecker(NewLiveGateChecker(s, func(context.Context) bool { return true }, "live"))
+	if err := cp.GrantLive(context.Background(), "t", "t", "T2", time.Now().Add(time.Hour), TradableReport{Tradable: true}); err != nil {
+		t.Fatalf("grant live: %v", err)
+	}
+	return cp
+}
+
+// TestGateLive_PaperMode_RealVenue_Rejected D-620 T2①：mode=PAPER + is_real=true 腿 → REJECTED 含「非 LIVE」。
+func TestGateLive_PaperMode_RealVenue_Rejected(t *testing.T) {
 	s := setupLiveGateStore(t, "vA:mt5", "vB:mt5", true, false)
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: false}, nil)
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5}, paperCP(t, s))
 	intent := TradeIntent{
-		Strategy:  "CROSS_VENUE",
-		Canonical: "AUDJPY",
-		VenueBuy:  "vA:mt5",
-		VenueSell: "vB:mt5",
-		Qty:       0.01,
-		DedupKey:  "CROSS_VENUE:AUDJPY:vA:mt5:vB:mt5",
+		Strategy: "CROSS_VENUE", Canonical: "AUDJPY", VenueBuy: "vA:mt5", VenueSell: "vB:mt5",
+		Qty: 0.01, DedupKey: "CROSS_VENUE:AUDJPY:vA:mt5:vB:mt5",
 		Execute: func(ctx context.Context) (string, string, int64) {
-			t.Error("Execute should not be called (LIVE gate reject)")
+			t.Error("Execute should not be called (非 LIVE 拒)")
 			return "FAILED", "should not reach", 0
 		},
 	}
 	res := g.Submit(context.Background(), &intent)
-	if res.Status != "REJECTED" {
-		t.Errorf("is_real=true + LiveTrade=false: got %s, want REJECTED (reason=%s)", res.Status, res.Reason)
+	if res.Status != "REJECTED" || !strings.Contains(res.Reason, "非 LIVE") {
+		t.Errorf("PAPER+real: got %s reason=%q, want REJECTED 含 非 LIVE", res.Status, res.Reason)
 	}
 }
 
-// TestGateLive_RealVenue_LiveTradeTrue_PassGate D-159 W6a S2：is_real=true + LiveTrade=true → 通过 LIVE gate（到下一检查）。
-// 注：可能被其他 gate 拒绝（如 combo allow），但不应是 LIVE gate 拒绝。
-func TestGateLive_RealVenue_LiveTradeTrue_PassGate(t *testing.T) {
+// TestGateLive_GrantedLive_RealVenue_PassGate D-620 T2②：GrantLive 后 is_real=true → 过真金闸（至下游检查）。
+func TestGateLive_GrantedLive_RealVenue_PassGate(t *testing.T) {
 	s := setupLiveGateStore(t, "vA:mt5", "vB:mt5", true, false)
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, Environment: ""}, nil) // Environment 空=不检查 environment
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, Environment: ""}, grantedLiveCP(t, s))
 	intent := TradeIntent{
-		Strategy:  "CROSS_VENUE",
-		Canonical: "AUDJPY",
-		VenueBuy:  "vA:mt5",
-		VenueSell: "vB:mt5",
-		Qty:       0.01,
-		DedupKey:  "CROSS_VENUE:AUDJPY:vA:mt5:vB:mt5",
-		Execute: func(ctx context.Context) (string, string, int64) {
-			return "EXECUTED", "", 1
-		},
+		Strategy: "CROSS_VENUE", Canonical: "AUDJPY", VenueBuy: "vA:mt5", VenueSell: "vB:mt5",
+		Qty: 0.01, DedupKey: "CROSS_VENUE:AUDJPY:vA:mt5:vB:mt5",
+		Execute: func(ctx context.Context) (string, string, int64) { return "EXECUTED", "", 1 },
 	}
 	res := g.Submit(context.Background(), &intent)
-	// 不应因 LIVE gate 拒绝（LiveTrade=true 放行实盘）
-	if res.Status == "REJECTED" && strings.Contains(res.Reason, "live trade disabled") {
-		t.Errorf("LiveTrade=true should pass LIVE gate, but rejected: %s", res.Reason)
+	if res.Status == "REJECTED" && strings.Contains(res.Reason, "非 LIVE") {
+		t.Errorf("granted LIVE should pass 真金闸, rejected: %s", res.Reason)
 	}
 }
 
-// TestGateLive_DemoVenue_LiveTradeFalse_PassGate D-159 W6a S2：is_real=false（demo）+ LiveTrade=false → 放行（demo 不受 LIVE gate 限制）。
-func TestGateLive_DemoVenue_LiveTradeFalse_PassGate(t *testing.T) {
+// TestGateLive_PaperMode_DemoVenue_PassGate D-620 T2③：mode=PAPER + demo 腿 → 过真金闸。
+func TestGateLive_PaperMode_DemoVenue_PassGate(t *testing.T) {
 	s := setupLiveGateStore(t, "vA:mt5", "vB:mt5", false, false)
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: false, Environment: ""}, nil)
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, Environment: ""}, paperCP(t, s))
 	intent := TradeIntent{
-		Strategy:  "CROSS_VENUE",
-		Canonical: "AUDJPY",
-		VenueBuy:  "vA:mt5",
-		VenueSell: "vB:mt5",
-		Qty:       0.01,
-		DedupKey:  "CROSS_VENUE:AUDJPY:vA:mt5:vB:mt5",
-		Execute: func(ctx context.Context) (string, string, int64) {
-			return "EXECUTED", "", 1
-		},
+		Strategy: "CROSS_VENUE", Canonical: "AUDJPY", VenueBuy: "vA:mt5", VenueSell: "vB:mt5",
+		Qty: 0.01, DedupKey: "CROSS_VENUE:AUDJPY:vA:mt5:vB:mt5",
+		Execute: func(ctx context.Context) (string, string, int64) { return "EXECUTED", "", 1 },
 	}
 	res := g.Submit(context.Background(), &intent)
-	if res.Status == "REJECTED" && strings.Contains(res.Reason, "live trade disabled") {
-		t.Errorf("demo venue should not be blocked by LIVE gate, but rejected: %s", res.Reason)
+	if res.Status == "REJECTED" && strings.Contains(res.Reason, "非 LIVE") {
+		t.Errorf("PAPER+demo should pass 真金闸, rejected: %s", res.Reason)
 	}
 }

@@ -112,7 +112,6 @@ func runServices(ctx context.Context, cancel context.CancelFunc, cfg *config.Con
 		SwapArbMaxGrossExposure:   cfg.SwapArbMaxGrossExposure,                    // D-168 全局额度
 		MaxActiveCombos:           cfg.SwapArbMaxActiveCombos,                     // D-138 单组合口径
 		Environment:               cfg.Environment,                                // D-159 W1a I6：environment/is_real 检查
-		LiveTrade:                 cfg.LiveTrade,                                  // D-159 W6a S2：LIVE 人工开关
 		LiveGateChecker:           liveGateChecker,                                // D-195-C1：LIVE 模式导出门
 		SwapDeviationGatePct:      cfg.SwapDeviationGatePct,                       // D-165 S1：swap 偏差拦截
 		SwapDeviationExitPct:      cfg.SwapDeviationExitPct,                       // D-165 S2：swap 偏差退出

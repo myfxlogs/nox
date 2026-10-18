@@ -108,9 +108,9 @@ func d330CexFreshQuote(qb *bus.QuoteBus, ask float64) {
 }
 
 // d330Engine T5/T7 公共 engine：real gate（RUNNING 库）+ 白名单 spec + regime 配置。
-func d330Engine(s *pgstore.Store, svc *dashboard.Service, qb *bus.QuoteBus, spec exec.XAssetComboAllowSpec) *Engine {
+func d330Engine(t *testing.T, s *pgstore.Store, svc *dashboard.Service, qb *bus.QuoteBus, spec exec.XAssetComboAllowSpec) *Engine {
 	return &Engine{
-		store: s, service: svc, quotes: qb, gate: gate.NewGate(s, gate.Config{}, nil),
+		store: s, service: svc, quotes: qb, gate: gate.NewGate(s, gate.Config{}, grantLiveCP(t, s)),
 		csMissCounts: map[string]int{}, csMissSent: map[string]time.Time{},
 		cfg: gate.Config{
 			MinNetBps:         0,
@@ -160,7 +160,7 @@ func TestD330_XassetQtyFloorFromComboSpec(t *testing.T) {
 	}
 	d330CexFreshQuote(qb, 4355)
 	opp := d330GoldenOpp()
-	e := d330Engine(s, svc, qb, spec)
+	e := d330Engine(t, s, svc, qb, spec)
 	e.handleOpportunity(ctx, opp, newComboAccumulator())
 	if n := d330CountLogs(t, s, opp.ID); n != 1 {
 		t.Fatalf("fallback 应产 intent（disabled 预拒落 1 行）, got %d 行（红=现码静默 skip 0 行）", n)
@@ -185,7 +185,7 @@ func TestD330_XassetQtyFloor_GrossCapFallback(t *testing.T) {
 	}
 	d330CexFreshQuote(qb, 4355)
 	opp := d330GoldenOpp()
-	e := d330Engine(s, svc, qb, spec)
+	e := d330Engine(t, s, svc, qb, spec)
 	e.handleOpportunity(ctx, opp, newComboAccumulator())
 	if n := d330CountLogs(t, s, opp.ID); n != 0 {
 		t.Fatalf("gross 超帽应维持静默跳过, got %d 行", n)
@@ -198,7 +198,7 @@ func TestD330_XassetQtyFloor_GrossCapFallback(t *testing.T) {
 func TestD330_GateSkipNotionalXAsset(t *testing.T) {
 	s := d330Setup(t)
 	ctx := context.Background()
-	g := gate.NewGate(s, gate.Config{MaxDailyLoss: 1000, MaxPositions: 5, MaxNotional: 1000, LiveTrade: true}, nil)
+	g := gate.NewGate(s, gate.Config{MaxDailyLoss: 1000, MaxPositions: 5, MaxNotional: 1000}, grantLiveCP(t, s))
 	mkIntent := func(strategy string) *gate.TradeIntent {
 		return &gate.TradeIntent{
 			Strategy: strategy, Canonical: "XAUUSD",
@@ -241,7 +241,7 @@ func TestD330_NormalPathIgnoresSpecMaxLongQty(t *testing.T) {
 	}
 	d330CexFreshQuote(qb, 96.6)
 	opp := d330GoldenOpp()
-	e := d330Engine(s, svc, qb, spec)
+	e := d330Engine(t, s, svc, qb, spec)
 	e.handleOpportunity(ctx, opp, newComboAccumulator())
 	if n := d330CountLogs(t, s, opp.ID); n != 1 {
 		t.Fatalf("正常路径应产 intent, got %d 行", n)

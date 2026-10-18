@@ -48,12 +48,11 @@ func (g *Gate) environmentIsRealCheck(ctx context.Context, intent TradeIntent) G
 	return GateVerdict{Pass: true}
 }
 
-// liveGateCheck D-159 W6a S2：LIVE 人工开关检查。
-// LiveTrade=false 时，任一腿 is_real=true → 拒绝（实盘账户不允许开仓）。
+// liveGateCheck D-620⑤：真金单闸——execution mode 非 LIVE 时任一腿 is_real=true → 拒绝。
 // is_real=false（demo）→ 放行。is_real=nil（未知）→ fail-closed 拒绝。
 // venue 不存在 → fail-closed 拒绝。
 // 同 environmentIsRealCheck 切 ListVenueIsReal 合并视图（CEX venue 可判）。
-func (g *Gate) liveGateCheck(ctx context.Context, intent TradeIntent) GateVerdict {
+func (g *Gate) liveGateCheck(ctx context.Context, intent TradeIntent, mode string) GateVerdict {
 	isRealMap, err := g.store.ListVenueIsReal(ctx)
 	if err != nil {
 		return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: is_real map query failed (%v)", err)}
@@ -71,7 +70,7 @@ func (g *Gate) liveGateCheck(ctx context.Context, intent TradeIntent) GateVerdic
 			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: venue %s is_real unknown (null)", venueKey)}
 		}
 		if *isReal {
-			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live trade disabled (NOX_LIVE_TRADE=false, venueKey=%s is_real=true)", venueKey)}
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("模式=%s 非 LIVE（venueKey=%s 为实盘账户）", mode, venueKey)}
 		}
 	}
 	return GateVerdict{Pass: true}
