@@ -162,22 +162,22 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 	// 对逐符号高突发订阅短窗杀（分片/路径/源IP 全排除），E1 实测聚合流
 	// 单订阅存活 ≥10min 零断；D-529 双拆随聚合流天然单连接退役。
 	safego.GoLoopPlain("binance_market_ws:perp-public", func() {
-		b.runLoop(ctx, b.publicCands, "perp", "bookTicker", publish)
+		b.runLoop(ctx, b.publicCands, "perp", "bookTicker", publish, mktWSDataIdle)
 		wg.Done() // D-115：尾部非 defer——panic 重启不预支 Done（计数器只随逻辑循环终结 -1）
 	})
 	safego.GoLoopPlain("binance_market_ws:perp-market", func() {
-		b.runLoop(ctx, b.marketCands, "perp", "markPrice", publish)
+		b.runLoop(ctx, b.marketCands, "perp", "markPrice", publish, mktWSDataIdle)
 		wg.Done()
 	})
 	safego.GoLoopPlain("binance_market_ws:spot", func() {
-		b.ensureSpotInfo(ctx) // D-551 S2：首连前建立现货有效符号缓存
-		b.runLoop(ctx, b.spotCands, "spot", "bookTicker", publish)
+		b.ensureSpotInfo(ctx)                                         // D-551 S2：首连前建立现货有效符号缓存
+		b.runLoop(ctx, b.spotCands, "spot", "bookTicker", publish, 0) // spot 低频阈不动（票面禁线）
 		wg.Done()
 	})
 	// perp 24hrTicker 全量聚合流——vol24h facts 落库（radar 全量宇宙
 	// 资格判定源；批处理 24hr REST 轮询退役）。
 	safego.GoLoopPlain("binance_market_ws:perp-ticker", func() {
-		b.runLoop(ctx, b.marketCands, "perp", "ticker", publish)
+		b.runLoop(ctx, b.marketCands, "perp", "ticker", publish, mktWSDataIdle)
 		wg.Done()
 	})
 	// 死流 REST 看门狗兜底——dephealth 判 markPrice/ticker 流红才低频拉
@@ -195,11 +195,12 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 // kind=连接流类别（bookTicker|markPrice），venueType 恒喂 QuoteBus
 // perp/spot——连接身份与 venue 语义分离（venueType 污染=QuoteBus 键断供）。
 // perp bookTicker 订阅单帧 "!bookTicker" 聚合流（全市场同事件格式直转下游）。
-func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venueType, kind string, publish func(bus.Quote)) {
+func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venueType, kind string, publish func(bus.Quote), dataIdle time.Duration) {
 	meter := newReconnectMeter(venueType+":"+kind+":"+cands[0].URL, b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
 	RunWS(ctx, WSSpec{
 		Name: "binance-mkt-ws:" + venueType + ":" + kind, Candidates: cands, DepKey: "binance:ws-" + venueType + "-" + kind, // DepKey D-579 dephealth 记账键
-		AlertFn: b.cfg.AlertFn, // D-074 ①：冷却循环升级「通道死」告警同管道
+		DataIdle: dataIdle,      // 票名未注 D#：mkt-ws 阈降档票——perp 1s 频谱族 3min 判死盲窗（venue epoch 裁断第四袭实证——10min 阈白送盲窗）；0=回退 quoteWSDataIdle（spot 低频阈不动）
+		AlertFn:  b.cfg.AlertFn, // D-074 ①：冷却循环升级「通道死」告警同管道
 		InitialSubs: func() []any {
 			var params []string
 			if venueType == "perp" && kind == "bookTicker" {
