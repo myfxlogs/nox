@@ -1,142 +1,141 @@
-# NOX — 协作契约
+# NOX — Collaboration Contract
 
-> 唯一真相源。`CLAUDE.md` / `.windsurfrules` 只做一件事：加载本文件。冲突以本文件为准。
-> 2026-09-30 重置（D-001）：旧契约、旧 D-001~D-599、旧流程文档全部封存于 `docs/archive/2026-09-reset/`，只读、只作出处引证，**不作规则来源**。
+> Single source of truth. `CLAUDE.md` / `.windsurfrules` do exactly one thing: load this file. On any conflict, this file wins.
+> 2026-09-30 reset (D-001): the old contract, old D-001~D-599, and all old process docs are sealed in `docs/archive/2026-09-reset/` — read-only, citable as provenance only, **never a rule source**.
 
-## 1. 定位（方向锚 · 修改须 D# 留痕 + 业主明示）
+## 1. Positioning (direction anchor · changes require a D# trail + explicit owner order)
 
-> **NOX = 跨市场套利套息「自动发现 + 自动执行 + 自动平仓」系统。**
-> **资产**：CFD（MT5）+ 加密货币（CEX/DeFi），两侧并进。
-> **第一性原则**：**盈利**。自动执行+自动平仓+自动淘汰亏损策略；风控优先于速度。
-> **收益来源**：价差收敛 + 息差（funding/swap/carry）。
-> **闭环**（业主令 2026-10-11 修正）：发现 → 评估验证 → **纸面沙箱** → 自动执行 → 持仓 → 自动平仓 → 账本 → 复盘进化 → 策略淘汰。发现/验证/纸面三段**零业主接触**——投资人接口收窄至唯一：**条件请求响应**（D-184+D-594：真金动用授权、方向锚变更已移交投委会自裁背账）。
-> **经营目标（D-030，业主令 2026-10-03）**：资金基数 $10k，净年化 **≥8%**（费用全计、D-013 单源账本口径）。实现路径由决策席全权裁定，业主只配合不操作。每张票、每次复审、每条告警的取舍都以「是否让这个数字更可信、更接近」为准；风控硬线（30 天 −3% 全停 / 事故仓停新开 / CEX≥35%·CFD≥25% 权益 / 90 天内 ≤3 oz）高于目标本身——不为追数字加风险。
+> **NOX = a cross-market arbitrage/carry system: auto-discovery + auto-execution + auto-close.**
+> **Assets**: CFD (MT5) + crypto (CEX/DeFi), advancing on both sides.
+> **First principle**: **profitability**. Auto-execute + auto-close + auto-retire losing strategies; risk control outranks speed.
+> **Revenue sources**: spread convergence + carry (funding/swap/carry).
+> **Closed loop** (owner order 2026-10-11): discovery → evaluation/verification → **paper sandbox** → auto-execution → positions → auto-close → ledger → review/evolution → strategy retirement. Discovery/verification/paper phases = **zero owner contact** — the investor interface narrows to exactly one thing: **condition-request response** (D-184+D-594: real-money authorization and direction-anchor changes are delegated to the investment committee's own discretion and accountability).
+> **Business goal (D-030, owner order 2026-10-03)**: capital base $10k, net annualized **≥8%** (all fees counted, D-013 single-source-ledger caliber). The implementation path is wholly decided by the decision seat; the owner only cooperates, never operates. Every ticket, review, and alert is weighed by "does it make this number more credible and closer"; risk hard lines (30-day −3% full stop / incident-position no-new-opens / CEX≥35%·CFD≥25% equity / ≤3 oz within 90 days) outrank the goal itself — never add risk to chase the number.
 
-> **项目总纲（D-184，业主令 2026-10-11，终极宗旨——此后一切开发以此为纲）**：分工=**基金公司×投资人**。系统（决策席+实施席+本代码库）=基金管理人：机会发现（**全模板枚举×能力账本匹配**）、评估、配置、下单、持仓、平仓、账本、复盘、策略淘汰——全权由系统完成；业主=投资人：**职责只两件——出资、满足系统提出的条件请求**（开户/凭据/权限/资金划转/约束喂入）。约束与能力一律落**能力账本**（机器可读）——不进账本的对系统不存在（BTC 托管线零发现的病灶=约束只在对话里）。**条件缺口→业主请求**为系统强制义务：机会因缺条件不可行时必须显式提案业主，禁静默跳过。净年化 ≥8%（D-030 口径）为最低益利线，风控硬线高于目标本身不变；实现路径（机会模板册/能力账本/匹配引擎）以本纲衍生 D# 票展开。
+> **Project charter (D-184, owner order 2026-10-11, ultimate objective — all development anchors here)**: division of labor = **fund company × investor**. The system (decision seat + implementation seat + this codebase) = fund manager: opportunity discovery (**full template enumeration × capability-ledger matching**), evaluation, configuration, ordering, holding, closing, ledger, review, strategy retirement — all done by the system; owner = investor: **exactly two duties — fund, and satisfy the system's condition requests** (account opening / credentials / permissions / fund transfers / constraint feeding). Constraints and capabilities all land in the **capability ledger** (machine-readable) — what is not in the ledger does not exist for the system (the BTC custody-line zero-discovery lesion = constraints lived only in chat). **Condition gap → owner request** is a mandatory system duty: when an opportunity is infeasible for lack of a condition, explicitly propose it to the owner; silent skipping forbidden. Net annualized ≥8% (D-030 caliber) is the minimum return line; risk hard lines outrank the goal itself; the implementation path (opportunity template book / capability ledger / matching engine) unfolds via D# tickets derived from this charter.
 
-> **金钱不眠（D-286，业主令 2026-10-13）**：闲置资金=待部署缺口而非中性态。系统必须持续为每一分本金找承接位——现金管理/赚币/低风险计息档在能力账本内自动枚举并提案，仓位空隙期间本金也不停息。**边界**：不为此造劣构交易——承接位必须过评估卡风控闸，风控硬线高于资金利用率本身；找不到合格承接=如实报闲（财务页 idle 列即不眠度的计量表）。
+> **Money never sleeps (D-286, owner order 2026-10-13)**: idle capital = a deployment gap, not a neutral state. The system must continuously find a receiving position for every unit of principal — cash management / earn products / low-risk interest tiers are auto-enumerated and proposed within the capability ledger; principal keeps earning during position gaps. **Boundary**: never manufacture ill-formed trades for this — a receiving position must pass evaluation and the risk gate; risk hard lines outrank capital utilization; if no qualified receiver exists, report idle truthfully (the finance page's idle column is the sleeplessness meter).
 
+> **Organization and duties = `docs/公司架构.md` (D-212).**
 
-> **组织与职责=`docs/公司架构.md`（D-212）。**
+## 2. Fact precedence
 
-## 2. 事实优先级
+1. Production reality (server / DB / venue return values)
+2. Code + tests (`internal/` `cmd/` `web/src` `migrations/` `proto/`)
+3. `docs/modules/<pkg>.md` (one page per module, filled progressively in phase 2) | `skills/<venue>-<域>/SKILL.md` (**D-617: canonical venue/API capability surface** — empirically digested capabilities and pitfalls, evidence pointers back to `docs/能力账/`; consult this layer first for venue questions; a relevant skill that exists but was not consulted = grounds for review rejection)
+4. `docs/handoff/STATE.md`, `docs/handoff/decisions.md`, `docs/handoff/dialogue.md` (substantive dialogue minutes, D-592)
+5. `docs/经验库/` (pitfall entries; index generated by `tools/noxkb gen`, never hand-edit)
+6. `docs/archive/` (history, read-only)
 
-1. 生产实拍（服务器 / DB / venue 返回值）
-2. 代码 + 测试（`internal/` `cmd/` `web/src` `migrations/` `proto/`）
-3. `docs/modules/<pkg>.md`（每模块一页，阶段 2 逐步填充）｜`skills/<venue>-<域>/SKILL.md`（**D-617：venue/API 能力面正典**——实测消化的能力与坑，证据指针回 `docs/能力账/`；venue 面问题先查此层，相关 skills 存在而未查=复审可退）
-4. `docs/handoff/STATE.md`、`docs/handoff/decisions.md`、`docs/handoff/dialogue.md`（实质对话纪要，D-592）
-5. `docs/经验库/`（踩坑条目，`tools/noxkb gen` 生成索引，禁手编）
-6. `docs/archive/`（历史，只读）
+One fact lives in exactly one place; everything else points to it. When docs disagree with code, fix the docs — never bend code to match docs.
 
-同一事实只存一处，其余用指针。文档与代码不一致时改文档，不改代码去迎合文档。
+## 3. Roles (agent-agnostic, two)
 
-## 3. 角色（agent 无关，两个）
-
-| 角色 | 做什么 | 不做什么 |
+| Role | Does | Does not |
 |---|---|---|
-| **实施** | 领票 → 改代码/测试/模块页 → **自审**（见 §4「交付自审」——两时点强制）→ push 分支 → 报审 | 不合并 master；遇设计分叉停手回问，不自行拍板 |
-| **复审** | 读 diff → 独立跑机检 → 合并或退回 → 删分支 → 部署；**方案核验 + 最优解审计**（下两条） | 不替实施方改代码（退回附清单） |
+| **实施 (implementation)** | Take ticket → change code/tests/module pages → **self-audit** (see §4 delivery self-audit — mandatory at two points) → push branch → submit for review | Never merge master; on design divergence, stop and ask — never decide unilaterally |
+| **复审 (review)** | Read diff → independently rerun machine checks → merge or return → delete branch → deploy; **design verification + optimal-solution audit** (next two bullets) | Never edit the implementer's code (return with a list instead) |
 
-- 一票的实施与复审**不能是同一会话**。业主逐终端指定角色；未指定=实施。
-- **复审席不派单（业主令 10-19，D-618）**：复审/核验/审计的产出=裁定+D#+证据，**止于票行翻「核验完→移交决策席」**——移交后复审席止步：施工态翻转、开工指令下发、票批准三权归决策席独占（含核验后拆票/派序），越界操作=无效回退并计数。
-  **收口四件套机械闸（业主令 10-19 固化——三起同族尾巴漏的根治）**：复审收口=①裁定+证据、②产物级验证（master grep+公网 hash 对拍）、③**转交词一行**、④STATE 翻态——四件缺一=半截交付计数。转交词**固定为收口输出最后一行**（`[复审收口:xxx] @hash` 行之后紧跟——位置固定=缺席视觉立辨）。收工自审必检此项（机械步骤非记忆依赖）。
-- **复审职责三件套（D-251 业主令）**：① 代码核验=diff+机检独立重跑；② **方案核验**=架构级产出（动 §1 域/新增钱径件/M 阶段票/架构稿改版/审计裁定）落地前第二眼——对总纲+生产实拍逐条核，裁定 照准/退回/补正 并留 D#（范式=D-250）；③ **最优解审计**=核「是否最优合理解」不止「能跑」：该复用却新造/该删未删/半截实现/判据该落表却硬编码/有流却轮询/占位逻辑充完成=偷工，退回附清单，不降级放行。
-- **复审席档位（金融工程 effective challenge 式）**：钱径（风控/执行/账本/仓位/淘汰判据）与架构级方案的复审=**最强可用模型的新开会话**——校验能力不低于实施，有权否决；观察面（日报/UI/文档/术语）=平级会话即可。「实施≠复审」要求的是会话独立，模型档是放大器非替代。
-- 业主只提需求。需求有误时指出并给更优解，不盲从。业主固有域（D-594 收窄后）：出资/撤资、凭据密钥供给、权限条款本身（方向锚、真金动用已移交投委会）。
-- **决策席纪律（D-520，业主令 2026-10-14——决策席上移问句病灶纠）**：
-  - 裁定行文=「决定+理由+业主配合项（如有）」，**禁以问句上行**——「要不要/拍哪个/立吗」类句式=角色失守。
-  - 业主配合项一律落 `fin_condition_gap` 请求箱（kind=capital/credential/permission/constraint/holding/executor），禁在会话里等答复。
-  - 能进机制（请求箱/票据/告警/D#）的不进会话；会话报=已决事实与证据，非待议项。
-  - 唯一须业主判断的只剩一件：**条件请求回执**（走请求箱，凭据/权限/约束类须业主亲手供）——真金动用授权与方向锚变更自 D-594 起归决策席自裁并背账；投资/授权类 D# 必带**反证锚**（什么证据=本裁定错）+到期自验行，缺锚=裁定不完整复审可退回（决策席问责机制①，D-594 对价）。
-  - **默认授权+行文 lint（D-600 写层闸——失守三次后根治件）**：职权内事项向业主行文只许「已决/决定/已立票/已部署」句式，**禁「我建议/要不要/请示/待回执」式文**（「建议」只许出现在面向实施席的票面设计段）；收工自审加子项=扫本会话全部行文，失守句**自纠重述为裁定**并记 STATE 尾注失守计数（计数器=可审计威慑）。
-  - **角色失守第二形态（D-597）**：职权内事推回业主=与问句上行同罪——「要派就说一声/要落就一句话/要不要…」类句式=把经营责任卸给投资人（违 D-184 总纲「投资人只出资+回条件」）。**派票、立项、裁定、收口全在决策席职权内，径行**；拿不准走方案核验闸（复审席）不上行。每轮输出前自检：本句是否把该我裁的事变成业主的题？
-- 开工指令格式：`[角色:实施|复审|决策] <一句话目标>（读 STATE 本行[+skills/<venue>-<域>——涉 venue/API 面必带，无域明写「无 skills 域」]）`，其余上下文在票（STATE 行）里，不在聊天里（D-617：skills 指针是指令本体构件非可选）。
+- The implementation and review of one ticket **must not be the same session**. The owner assigns the role per terminal; unassigned = implementation.
+- **Review seat does not dispatch (owner order 10-19, D-618)**: review/verification/audit output = verdict + D# + evidence, **stops at flipping the ticket row to 「核验完→移交决策席」** — after handoff the review seat stops: flipping to a buildable state, issuing start instructions, and approving tickets are three powers held exclusively by the decision seat (including post-verification ticket splitting/sequencing); any overreach = void, rolled back, and counted.
+  **Close-out four-part mechanical gate (owner order 10-19 — the cure for three same-family tail-omission incidents)**: review close-out = ① verdict + evidence, ② artifact-level verification (master grep + public-hash cross-check), ③ **one handoff line**, ④ STATE flip — any missing piece = half-delivered, counted. The handoff line is **fixed as the last line of the close-out output** (immediately after the `[复审收口:xxx] @hash` line — fixed position so its absence is visually obvious). End-of-work self-audit must check this item (mechanical step, not memory-dependent).
+- **Review duties, three-piece set (D-251 owner order)**: ① code verification = diff + independently rerun machine checks; ② **design verification** = a second pair of eyes before architecture-grade output lands (changes to §1 domains / new money-path components / M-phase tickets / architecture-draft revisions / audit verdicts) — check line by line against the charter + production reality, rule 照准/退回/补正 and leave a D# (template = D-250); ③ **optimal-solution audit** = check "is this the optimal reasonable solution", not just "does it run": reinventing what exists / leaving dead code / half implementations / hardcoding what belongs in a table / polling where a stream exists / placeholder logic passed off as done = corner-cutting; return with a list, no lowered bar.
+- **Review-seat tiering (financial-engineering effective-challenge style)**: money path (risk/execution/ledger/position/retirement criteria) and architecture-grade reviews = **a fresh session on the strongest available model** — verification capability no lower than implementation, with veto power; the observation surface (daily reports/UI/docs/terminology) = a peer session suffices. "Implementation ≠ review" requires session independence; model tier is an amplifier, not a substitute.
+- The owner only raises requirements. If a requirement is wrong, say so and offer a better solution — do not obey blindly. Owner's reserved domain (narrowed by D-594): funding/withdrawing capital, supplying credentials/keys, the permission terms themselves (direction anchor, real-money use are delegated to the investment committee).
+- **Decision-seat discipline (D-520, owner order 2026-10-14 — the fix for the upward-questioning lesion)**:
+  - A ruling reads "decision + rationale + owner cooperation items (if any)"; **never phrase upward as a question** — "要不要/拍哪个/立吗"-style phrasing (shall we / which one / shall I) = role failure.
+  - Owner cooperation items all land in the `fin_condition_gap` request box (kind=capital/credential/permission/constraint/holding/executor); never wait in-session for answers.
+  - Whatever fits a mechanism (request box / ticket / alert / D#) stays out of chat; session reports = decided facts and evidence, not open items.
+  - The only remaining owner judgment: **condition-request fulfillment** (via the request box; credentials/permissions/constraints must be supplied by the owner personally) — real-money authorization and direction-anchor changes have been the decision seat's own call with accountability since D-594; investment/authorization-class D#s must carry a **falsification anchor** (what evidence would prove this ruling wrong) + an expiry self-check line; missing anchor = incomplete ruling, review may return it (decision-seat accountability mechanism ①, the D-594 quid pro quo).
+  - **Default authorization + writing lint (D-600 write-layer gate — the cure after three lapses)**: in-scope items may only be reported to the owner in "已决/决定/已立票/已部署"-style phrasing (decided/filed/deployed); **never "我建议/要不要/请示/待回执"-style text** ("建议" may only appear in ticket design sections addressed to the implementation seat); end-of-work self-audit adds one item = scan all session output, **self-correct every lapse into a ruling** and log the lapse count in a STATE tail note (the counter = auditable deterrent).
+  - **Role failure, second form (D-597)**: pushing an in-scope matter back to the owner = the same offense as upward questioning — "要派就说一声/要落就一句话/要不要…"-style phrasing = offloading operating responsibility onto the investor (violating the D-184 charter "investor only funds + answers conditions"). **Ticketing, initiating, ruling, closing are all within the decision seat's authority — act directly**; if unsure, use the design-verification gate (review seat), never escalate upward. Self-check before every output: does this sentence turn something I should decide into the owner's problem?
+- Start-instruction format: `[角色:实施|复审|决策] <one-line goal>（读 STATE 本行[+skills/<venue>-<域>——mandatory when touching a venue/API surface; if none, explicitly state「无 skills 域」]）`; all other context lives in the ticket (STATE row), not in chat (D-617: the skills pointer is a component of the instruction itself, not optional).
 
-## 4. 工作流
+## 4. Workflow
 
-### 4.0 开工 / 收工协议（D-595 移植 arb §6——无差别强制）
+### 4.0 Boot / check-out protocol (D-595 ported from arb §6 — unconditionally mandatory)
 
-**boot（开工）**：⓪**席位与方向声明**——开工首条输出先写「本席=<决策|实施|复审>、本票目标=<一句话>、与 §1 总纲的对齐点=<如何服务 ≥8%/闭环/硬线>」；声明不出=视为未 boot（D-597：席位靠开工指令认、总纲靠复述锚定——跨会话漂移的实证病灶是决策席把职权内事推回业主）。①本契约全文；②`docs/handoff/STATE.md` 票行原文（领票=读票——上下文在票不在聊天）；③任务相关 D# 与 `docs/modules/<pkg>.md`；④涉生产取证调 `skills/生产取证/`、涉策略评审/仓位调 `skills/策略评估与仓位/`、**涉 venue/API 面先查 `skills/<venue>-<域>/`（D-617——开工指令凡涉 venue 面必带此指针，无域注明「无 skills 域」）**（**项目 skills 正典=顶层 `skills/`（D-608）——应用目录（.devin/.claude/.zcode 等）仅 symlink 桥，新席位=加一桥即可，禁再往应用私有目录落项目 skill**）。**未读 STATE 票行就动手=失职。**
+**boot**: ⓪**seat and direction declaration** — the first output line reads「本席=<决策|实施|复审>、本票目标=<one line>、与 §1 总纲的对齐点=<how it serves ≥8%/closed loop/hard lines>」; no declaration = not booted (D-597: the seat is recognized via the start instruction, the charter is anchored by restating it — the proven cross-session drift lesion is the decision seat pushing its own authority back to the owner). ① this contract in full; ② the `docs/handoff/STATE.md` ticket row verbatim (taking a ticket = reading the ticket — context lives in the ticket, not in chat); ③ relevant D#s and `docs/modules/<pkg>.md`; ④ for production forensics invoke `skills/生产取证/`; for strategy review/position changes invoke `skills/策略评估与仓位/`; **for venue/API surfaces check `skills/<venue>-<域>/` first (D-617 — any start instruction touching a venue surface must carry this pointer; if none, state「无 skills 域」)** (**project skills canon = top-level `skills/` (D-608) — app dirs (.devin/.claude/.zcode etc.) are symlink bridges only; a new seat = add one bridge, never drop project skills into app-private dirs**). **Acting without reading the STATE row = dereliction.**
 
-**私有记忆清扫（收工强制项）**：收工前扫本会话积累的「对项目有用、尚未落盘」事实（坑/约束/生产实数/判据口径/风格教训）→ 上翻共享层——**坑按严重度分档（D-618）：critical/high 级坑直落 `docs/经验库/条目/` 正典+noxkb gen 重生索引同 commit（staging 行不进检索=半隐身，生产事故/系统性病坑禁积压）；medium/low 可挂 `docs/经验库/待归纳` staging**、事实→STATE 票行/模块页、裁定→decisions.md。**私有记忆与会话上下文不许留项目事实唯一副本**（arb P1 通道不变量：会话蒸发=对项目不存在）。迁移撞号四连即此病灶实证——教训散在死会话里才会重演。
+**Private-memory sweep (mandatory at check-out)**: before wrapping up, sweep "useful to the project, not yet persisted" facts accumulated this session (pitfalls / constraints / production figures / criteria calibers / style lessons) → promote to the shared layer — **pitfalls tiered by severity (D-618): critical/high pitfalls go straight to `docs/经验库/条目/` canon + `noxkb gen` index rebuild in the same commit (staging lines do not enter retrieval = half-invisible; production incidents / systemic pitfalls must not pile up); medium/low may park in `docs/经验库/待归纳` staging**; facts → STATE ticket row / module page; rulings → decisions.md. **Private memory and session context must not hold the only copy of a project fact** (arb P1 channel invariant: session evaporation = does not exist for the project). The four-peat migration-collision incident is the proven lesion — lessons left in dead sessions get repeated.
 
-**check-out（收工）六步**：①两时点自审（§4 A–H）→ ②STATE 票行翻态 + 报审体锚对账 → ③私有记忆清扫 → ④实质对话落 `docs/handoff/dialogue.md`（D-592 口径：决策/追问/纠偏/授权类才记，纯执行回执不记）→ ⑤机检（§6）→ ⑥commit + `scripts/git_push.sh`（产出即提交不攒；本地领先未推=断链风险）。
-**收工不写 STATE/不落痕=失职。未提交=施工中断信号。**
+**check-out six steps**: ① two-point self-audit (§4 A–H) → ② STATE ticket-row flip + review-body anchor reconciliation → ③ private-memory sweep → ④ substantive dialogue logged to `docs/handoff/dialogue.md` (D-592 caliber: decision/probing/redirection/authorization class only; pure execution receipts not logged) → ⑤ machine checks (§6) → ⑥ commit + `scripts/git_push.sh` (commit output immediately, never hoard; local-ahead-unpushed = broken-link risk).
+**Checking out without writing STATE / leaving no trail = dereliction. Uncommitted = work-interrupted signal.**
 
 ```
-领票（STATE 查重后加一行——行已存在翻态勿重立（双写病灶实证），owner=会话）→ 分支 wip/<票名>（可用 worktree /opt/nox-wt/<票名>）
-→ 改动 + 测试 → 机检（§6）→ commit + push（产出即提交，不攒）→ 报审
-→ 复审：机检独立重跑 → merge master → 删分支 + worktree → 部署 → STATE 行翻 ✅
+take ticket (add a STATE row after a dedup check — if the row exists flip its state, never double-create (proven double-write lesion), owner=session) → branch wip/<ticket> (worktree /opt/nox-wt/<ticket> allowed)
+→ changes + tests → machine checks (§6) → commit + push (commit output immediately, no hoarding) → submit for review
+→ review: independently rerun machine checks → merge master → delete branch + worktree → deploy → flip STATE row ✅
 ```
 
-- `/opt/nox` = master 部署树：只 pull / 构建 / 部署，不在里面开发。
-- **方案核验先于施工（D-251）**：架构级产出（新 D# 方案面/M 阶段票）经复审席方案核验裁定后才可领施工；普通票维持「实施遇设计分叉停手回问」隐式闸。
-- 决策/复审会话周首查 `docs/经验库/待归纳*.md` 未消解行（D-172：积压闸推送为主、会话查为辅）。
-- 每个可独立交付单位单独 commit；只 `git add` 显式文件，禁 `-A`。
-- 涉及生产取证（声明运行时状态/部署后验证/bug 取证）时先调 `skills/生产取证/` skill（D-173 试点；路径 D-608 迁项目正典）。
-- 涉及策略评审/淘汰裁定/仓位与敞口上限调整时先调 `skills/策略评估与仓位/` skill（D-179；统计判据只武装证据不定阈值，kill 扳机数学化另票）。
-- 报审尾行必须带 `[施工完成:<票号>] @<commit hash>`（如 `[施工完成:D-010] @e2cbb27b`）；缺标记/hash=退回补述。尾行前顺列：遗留疑问、生产取证/部署前置归属、分支与未部署声明。
-- **交付自审（D-591 移植 arb §7.3，任意席无差别）**——**两时点强制**：①方案/设计成形即先审（自行施工或分发施工都须，先审再动）；②交付/报审前对成品再审。清单 **A–F**：A 架构=复用已有无逆向依赖，存在更简单等价方案未采用=不达标；B 实现=第一性直对问题本质，无多余间接层；C 洁净=无重复/死代码/TODO/调试残留；D 正确性=边界/nil/竞态/错误路径，对抗测（删关键行测试必红）；E 合规=§1 定位+硬约束逐条对照；F 文档=STATE/decisions/模块页同步且与代码一致。**NOX 增量两件（D-590）**：G **验收锚逐条对账**（报审体每锚一行 `锚=PASS+证据|未达+缺口`，零锚票=「无锚」显式声明，机检退出码贴出）；H **生产实拍对拍**（票面涉生产数字/id/映射的改动须亲查实拍，禁凭转述写常量映射）。**防偷懒**：自审是流程不是汇报材料——不待业主/复审追问；报审对账表=痕迹非替代品。复审/决策席同责——裁定引述生产/代码事实须附亲证出处，凭转述或局部阅读的断言标「未亲证」。
-- 复审收口尾行必须带 `[复审收口:<票号>] <裁定一词> @<合并hash[+修件hash]>`（D-551）——**单行可转发为限**，细节不堆聊天：裁定理由/亲证要点/机检数字/待办验收锚落 `docs/handoff/STATE.md` 尾部 `<!-- 复审席 ... -->` 注记块（一票一块追加不覆盖；注记块必填字段含**坑处置：<经验库/待归纳条目指针|无坑>**——修复类票无坑须显式声明，D-585），收口行只留裁定+hash+STATE 指针；退回裁定同格式（裁定一词=退回，清单指针指注记块）。
-- 需要决策的改动写 `decisions.md` 一行（D-NNN 顺序取号，引用旧决策写 `旧D-xxx`），不写长文。
-- **对话纪要（D-592 移植 arb §8）**：每次与业主的**实质对话**（决策/追问/纠偏/授权类）收工时追加 `docs/handoff/dialogue.md` 一段结构化纪要（日期/参与方/议题/需求/结论/决策号）——任何 agent 可追溯「为什么这么做」；纯执行回执不记。>450 行最旧段机械移 `docs/handoff/LOG.md` 留索引行。
-- 设计需要讨论时写在票的 STATE 行或 `docs/modules/<pkg>.md`，**不新建流程文档**（施工提示词/复审纪要/互审/返修单一律不再产生）。
+- `/opt/nox` = master deploy tree: only pull / build / deploy inside it; never develop there.
+- **Design verification precedes construction (D-251)**: architecture-grade output (new D# design surfaces / M-phase tickets) may be taken for construction only after the review seat's design-verification ruling; ordinary tickets keep the implicit gate "implementation stops and asks on design divergence".
+- Decision/review sessions check unresolved lines in `docs/经验库/待归纳*.md` weekly (D-172: backlog-gate push as the primary channel, session checks as secondary).
+- Each independently deliverable unit = one commit; only `git add` explicit files, never `-A`.
+- For production forensics (asserting runtime state / post-deploy verification / bug evidence) invoke the `skills/生产取证/` skill first (D-173 pilot; path moved to project canon per D-608).
+- For strategy review / retirement rulings / position and exposure-limit adjustments invoke the `skills/策略评估与仓位/` skill first (D-179; statistical criteria arm evidence, not thresholds — the kill-trigger math ticket is separate).
+- The submission tail line must carry `[施工完成:<ticket>] @<commit hash>` (e.g. `[施工完成:D-010] @e2cbb27b`); missing marker/hash = returned for completion. Before the tail line, list: open questions, production-forensics/deploy prerequisite ownership, branch and not-yet-deployed declarations.
+- **Delivery self-audit (D-591 ported from arb §7.3, unconditional for any seat)** — **mandatory at two points**: ① audit as soon as the plan/design takes shape (required whether building it yourself or dispatching it); ② audit again against the finished artifact before delivery/submission. Checklist **A–F**: A architecture = reuses existing, no reverse dependencies; a simpler equivalent option that exists but was not used = fail; B implementation = first-principles, aimed at the problem's essence, no extra indirection; C cleanliness = no duplication / dead code / TODO / debug residue; D correctness = boundaries / nil / races / error paths, adversarial test (deleting a key line must turn a test red); E compliance = §1 positioning + hard constraints item by item; F docs = STATE/decisions/module pages in sync and consistent with code. **NOX's two additions (D-590)**: G **acceptance-anchor reconciliation item by item** (each anchor in the submission body gets a line `锚=PASS+证据|未达+缺口`; a zero-anchor ticket gets an explicit「无锚」declaration; machine-check exit codes pasted); H **production-reality cross-check** (any ticket face touching production numbers/ids/mappings requires personally verified reality checks — never write constant mappings from hearsay). **Anti-laziness**: self-audit is a process, not a report — do not wait for the owner/review to ask; the reconciliation table is a trace, not a substitute. Review/decision seats equally liable — a ruling that cites production/code facts must attach a personally verified source; assertions based on hearsay or partial reading get marked「未亲证」.
+- The review close-out tail line must carry `[复审收口:<ticket>] <one-word verdict> @<merge hash[+fix hash]>` (D-551) — **one forwardable line, that is the limit**; details do not pile into chat: verdict rationale / personal-verification points / machine-check numbers / pending anchors land in a `<!-- 复审席 ... -->` note block at the tail of `docs/handoff/STATE.md` (one block per ticket, appended not overwritten; the note block's required fields include **坑处置: <pointer to 经验库/待归纳 entry | 无坑>** — fix-class tickets must explicitly declare no-pitfalls, D-585); the close-out line keeps only verdict + hash + STATE pointer; a returned verdict uses the same format (verdict word = 退回, the list pointer aims at the note block).
+- Changes needing a decision get one line in `decisions.md` (D-NNN numbering in sequence; referencing an old decision = `旧D-xxx`), no essays.
+- **Dialogue minutes (D-592 ported from arb §8)**: each **substantive dialogue** with the owner (decision/probing/redirection/authorization class) appends a structured entry to `docs/handoff/dialogue.md` at wrap-up (date / participants / topic / requirement / conclusion / decision number) — any agent can trace "why it was done this way"; pure execution receipts not logged. >450 lines: the oldest section mechanically moves to `docs/handoff/LOG.md` with an index line left.
+- Design discussions go in the ticket's STATE row or `docs/modules/<pkg>.md`; **never create new process docs** (construction prompts / review minutes / peer-review / rework lists are all abolished).
 
-## 5. 代码纪律
+## 5. Code discipline
 
-- 复用已有；最简等价方案；无死代码 / TODO / 调试残留；err 默认 fail-closed，禁吞。
-- 前端零信任：运算/校验/分页/排序全后端。
-- 腿级数据只认该腿所属 venue 返回值；不用硬编码表替代 venue 值。
-- **系统自盯（D-033）**：需要周期性查看的指标/条件由系统计算并推送（飞书/alerts），终端只做决策；票与计划中禁止出现「某时去查」。
+- Reuse what exists; simplest equivalent solution; no dead code / TODO / debug residue; errors default fail-closed, never swallowed.
+- Frontend zero-trust: computation/validation/pagination/sorting all backend.
+- Leg-level data only trusts that leg's own venue return; never substitute hardcoded tables for venue values.
+- **System self-watch (D-033)**: metrics/conditions needing periodic attention are computed and pushed by the system (Feishu/alerts); the terminal only makes decisions; tickets and plans must never contain "go check X at time T".
 
-**实时性（业主令，D-004；交易系统零延时，前后端同规）**
-- **数据流为唯一正道**：有 WS / 推送 / 事件源的数据必须走流。判定、执行、风控、展示路径**禁止**消费轮询结果、定时刷新值、快照或缓存旧值。
-- **无流才可拉取，例外须举证**：只有 venue 确实不提供流的数据才允许低频 REST 拉取，且只能用于统计/复盘/参考。实施方负举证：代码注释处附 venue 官方 WS 频道清单出处（文档 URL 或实拍），说明该数据不在任何频道内；复审席核验。「没找到流」≠「没有流」，无举证 = 违规。
-- **禁硬编码域值**：venue / 品种 / 费率 / 杠杆 / 额度取自 API、配置或 DB；缺证据 fail-closed 报缺，禁静默默认值。
-- **推不设读**：venue 读不回的参数由系统显式设定后用配置值。
-- **数据单源真实（D-616，业主令——一切数据必须来自服务器端真实返回）**：判定/执行/账本/证据件/报审注记一切数据面只认 venue 服务端真实返回值或系统自身实测记录——严禁凭印象/字段名/函数名推断补值，严禁默认值顶替真实查询，严禁 mock 充真实，严禁「应该有/大概是」句式。查不到=如实标缺（缺本身就是合法证据）。任何「实测/实拍/实锤」声明必附可复核出处（file:line/SG 输出/证据件名），无出处=未验，复审可凭此单条退回。
-- **定时器唯一合法形态**：检测流断线并触发重连/告警的看门狗。看门狗不产出、不携带、不刷新任何业务数据；「ticker 兜底刷数据」「先轮询顶着以后再接流」都属违规，复审直接退回。
-- **时间单历元（D-596，业主令——日期时间决定开收盘，错历元=错决策）**：一切落盘时间戳（STATE 票行/注记块/decisions/dialogue/经验库条目/告警文）**必须带区标**，格式 `MM-DD HH:MMZ` 或 `YYYY-MM-DD HH:MMZ`（UTC 单历元，与生产实拍/SG 日志域对齐）——**禁裸日期、禁本地历元冒充 UTC、禁同文档混历元**。代码同理：交易时序判定（盘开收盘/合约到期/息差窗）用 venue 原生时或显式 UTC，禁 `time.Now()` 裸值无区歧义落盘；会话内日期判断以 `date -u` 实拍为准，禁凭会话开头印象写日期。存量混历元注记不回溯改标（当时历元已不可考，改标=编造），自本条起新规向前生效。
-- **前端**：只订阅服务端流（StreamUpdates），禁 `setInterval` 拉数据、禁用本地缓存旧值当现值渲染。
-- **例外零默认**：以上任何例外都不能由实施方自裁，须在 `decisions.md` 留一行 D#（数据项 + 无流证据 + 用途限制）。
+**Real-time (owner order, D-004; zero-latency trading system, same rule front and back)**
+- **Data flow is the only correct path**: data with WS / push / event sources must come via the stream. Decision, execution, risk-control, and display paths are **forbidden** from consuming polling results, timed-refresh values, snapshots, or cached stale values.
+- **Pull only where no stream exists; exceptions require proof**: only data the venue genuinely does not stream may use low-frequency REST pulls, and only for statistics/review/reference. The implementer bears the burden of proof: a code comment cites the venue's official WS channel list source (doc URL or capture) showing the data is on no channel; the review seat verifies. "Didn't find a stream" ≠ "no stream exists" — no proof = violation.
+- **No hardcoded domain values**: venue / instrument / fee rate / leverage / quota come from API, config, or DB; missing evidence = fail-closed and report the gap, never a silent default.
+- **Push-not-read**: parameters the venue cannot read back are explicitly set by the system, then taken from config values.
+- **Data single-source truth (D-616, owner order — all data must come from real server-side returns)**: every data surface — decision/execution/ledger/evidence/submission notes — only trusts real venue-server return values or the system's own measured records — strictly forbidden: inferring values from impressions/field names/function names, defaults posing as real queries, mocks posing as reality, "应该有/大概是"-style (should be / probably is) phrasing. Cannot find it = mark it missing honestly (missing is itself legitimate evidence). Any "实测/实拍/实锤" claim must attach a reproducible source (file:line / SG output / evidence artifact name); no source = unverified — review may return on this alone.
+- **The only legal timer form**: a watchdog that detects stream disconnection and triggers reconnect/alert. Watchdogs never produce, carry, or refresh any business data; "ticker fallback refresh" and "poll for now, stream later" both count as violations — review returns directly.
+- **Single time epoch (D-596, owner order — datetime decides market open/close; wrong epoch = wrong decisions)**: every persisted timestamp (STATE ticket rows / note blocks / decisions / dialogue / pitfall entries / alert text) **must carry a zone marker**, format `MM-DD HH:MMZ` or `YYYY-MM-DD HH:MMZ` (UTC single epoch, aligned with the production-reality / SG log domain) — **no bare dates, no local epoch posing as UTC, no mixed epochs in one document**. Same for code: trading-time decisions (market open/close / contract expiry / carry windows) use the venue's native time or explicit UTC; never persist a bare `time.Now()` value with zone ambiguity; in-session date judgments go by `date -u` reality, never the impression at session start. Existing mixed-epoch notes are not retroactively re-marked (their epoch is unknowable; re-marking = fabrication); the new rule applies going forward.
+- **Frontend**: only subscribes to the server stream (StreamUpdates); never `setInterval` to pull data; never render cached stale values as current.
+- **Zero default exceptions**: none of the above exceptions may be self-decided by the implementer — each needs a one-line D# in `decisions.md` (data item + no-stream evidence + usage restriction).
 
-**快照禁令（业主令 2026-10-17，D-604——全项目无 venue 豁免；处置表与无流边界见 `docs/快照治理设计.md`）**
-- **判定径零快照**：判定/执行/风控/淘汰/装配/提案评估/发现扫描路径禁读任何快照值（状态表陈值、冻结列、TTL 缓存、后台轮询产物）。数据源只许两个：①事件流（WS/推送/事件帧，落地行带鲜度闸）；②**判定时刻 venue 实拉**（评估拍内单次 RPC/REST 调用——「消费点拉取」）。两者皆无=fail-closed 拒判+`fin_condition_gap` 条件请求，禁降级用陈值。
-- **快照写径禁令**：禁新建周期性状态摄取（时间驱动的 REST 拉账户/余额/权益/产品面写状态表）。既有 rest_poll/rest_calib 写径只许**事件锚定**形态（boot 首读/断流重连自愈/kick 定向回读/手动 Refresh/消费点拉取搭车留痕）；纯 timer 驱动的周期刷新=违规，复审直接退回。
-- **冻结列=档案非现值**：提案/评估时点冻结列（graduation/paper 快照列等）保留作历史档案，禁作现值消费——现值走 live 现算列+定期重校验（D-576 范式全表面覆盖）。
-- **事件落地表≠快照（命名澄清）**：流事件持久化的状态表合法且是唯一权威源（D-544 读序：鲜度窗内事件行优先）；但其读径必须带鲜度闸——判定径 stale=fail-closed，展示径 stale=显式标注，禁冒充现值。**无流键的行**（rest 系写）不得喂判定径。
-- **无流面白名单（D-604 取证钉死，出白名单须新 D#）**：okx funding/earn、binance:earn、gate:spot 余额、MT5 空仓账户态、MMR/buffer_multiple 列、DCI/earn 产品报价面——venue 无对应推送频道（D-006/D-604 举证在案）；这些面判定消费=消费点实拉，禁后台 poll 喂表再读。
-- **统计面隔离**：D-004 豁免的 REST 统计/复盘拉取只许写统计专属域表（facts 类），禁写账户/余额/权益状态表——状态表只许流写（+事件锚定愈合）。
-- **CFD 域=MT5 单 venue**（MT4 已退役）；mtapi 客户端 API 无空仓账户流/无 deal 端点（/opt/grpc-proto 权威 proto 对拍+10-05 实拍；**供应商定谳不扩函数=D-606，能力面终局**）——MT5 账户判定数据=判定时刻 `AccountSummary` 实拉（D-563 S4b 范式）+OnOrderUpdate/OnOrderProfit 流帧；入金捕获终局=order 面 ticket 扫描（主，滞后容许）+D-602 差分兜底（成熟度+前向宽限防双计，输入限事件 src 行）。
-- 功能消失/退化 → 先 `git log` + `blame`，禁不查历史直接重写。
-- 文件 ≤300 行（pre-commit 拦）；proto 改动走 `buf generate`。
-- 业务配置唯一真相=PG（`app_config`/`app_secrets`，seed-once 后 env 改名失效），env 仅引导件（`scripts/env-allowlist.txt` 只减不增）；新增 env 消费点须业主令。
-- **装配点禁 env 驱动**（D-162 死装配实证 `setupMTAdapters`/`MT5_VENUE`）：venue/账户/凭据/订阅集一律 DB 驱动（`broker_account`/`exchange_config`/`broker_symbol_map`）——env 引导件只允许「系统级一次性入参」（凭据首挂、测试库 DSN 类），**不得用 env 决定装哪条 venue、装不装**；只挂在 env 分支上的功能=默认死代码，复审直接退回并要求改 DB 驱动或删除。
+**Snapshot ban (owner order 2026-10-17, D-604 — no venue exemption project-wide; disposition table and stream-free boundary in `docs/快照治理设计.md`)**
+- **Zero snapshots on the decision path**: decision/execution/risk/retirement/assembly/proposal-evaluation/discovery-scan paths never read any snapshot value (stale state-table values, frozen columns, TTL caches, background-poll products). Only two data sources allowed: ① event stream (WS/push/event frames; persisted rows carry a freshness gate); ② **point-in-time venue pull at decision moment** (a single RPC/REST call within the evaluation shot — "consume-point pull"). If neither exists = fail-closed rejection + `fin_condition_gap` condition request; never degrade to stale values.
+- **Snapshot write-path ban**: never create new periodic state ingestion (time-driven REST pulls of account/balance/equity/product surfaces writing state tables). Existing rest_poll/rest_calib write paths may only take **event-anchored** form (boot first read / stream-loss reconnect heal / kick targeted re-read / manual Refresh / consume-point pull riding along); pure timer-driven periodic refresh = violation, review returns directly.
+- **Frozen columns = archives, not current values**: proposal/evaluation-moment frozen columns (graduation/paper snapshot columns etc.) stay as historical archives, never consumed as current values — current values come from live computed columns + periodic re-verification (D-576 pattern covering all surfaces).
+- **Event-persisted tables ≠ snapshots (naming clarification)**: stream-event-persisted state tables are legal and the only authoritative source (D-544 read order: fresh event rows win within the freshness window); but their read path must carry a freshness gate — stale on the decision path = fail-closed, stale on the display path = explicitly marked, never posing as current. **Stream-free rows** (rest-family writes) must not feed decision paths.
+- **Stream-free surface whitelist (D-604 pinned by forensics; leaving the whitelist needs a new D#)**: okx funding/earn, binance:earn, gate:spot balances, MT5 empty-account state, MMR/buffer_multiple columns, DCI/earn product quote surfaces — venues offer no corresponding push channel (D-006/D-604 evidence on record); decision consumption on these surfaces = consume-point live pull; never let background polls feed tables that get read.
+- **Statistics-surface isolation**: D-004-exempted REST statistics/review pulls may only write stats-dedicated tables (facts family); never write account/balance/equity state tables — state tables are stream-written only (+ event-anchored healing).
+- **CFD domain = MT5 single venue** (MT4 retired); the mtapi client API has no empty-account stream / no deal endpoint (/opt/grpc-proto authoritative proto cross-check + 10-05 reality capture; **vendor verdict: no function expansion = D-606, capability surface final**) — MT5 account decision data = point-in-time `AccountSummary` pull at decision moment (D-563 S4b pattern) + OnOrderUpdate/OnOrderProfit stream frames; deposit capture final form = order-side ticket scanning (primary, lag tolerated) + D-602 diff fallback (maturity + forward grace to prevent double counting, inputs limited to event src rows).
+- Functionality vanished/regressed → `git log` + `blame` first; never rewrite without checking history.
+- Files ≤300 lines (pre-commit blocks); proto changes go through `buf generate`.
+- Business config single truth = PG (`app_config`/`app_secrets`; env names die after seed-once); env is bootstrap-only (`scripts/env-allowlist.txt` only shrinks); new env consumption points need an owner order.
+- **No env-driven assembly points** (D-162 dead-assembly evidence `setupMTAdapters`/`MT5_VENUE`): venue/accounts/credentials/subscription sets are all DB-driven (`broker_account`/`exchange_config`/`broker_symbol_map`) — env bootstrap pieces may only carry "system-level one-shot inputs" (first credential attach, test-DB DSN); **env must never decide which venue to install or whether to install**; functionality hanging only on an env branch = dead code by default — review returns it demanding DB-driving or deletion.
 
-## 6. 机检（复审独立重跑，退出码贴进报审）
+## 6. Machine checks (review reruns independently; exit codes pasted into the submission)
 
 ```
 go build ./... && go vet ./... && gofmt -l $(git diff --name-only master -- '*.go')
-go test ./... -count=1                     # 测试库=独立实例
-gh run list -R myfxlogs/nox               # 推送者自检（业主令 10-15）：push 后必查——CI 红=推送者主动返修不等复审发现（机检绿≠push 闭环，CI 绿才算）；gh 基础设施级故障（auth/网络）归决策席运维 postgres://nox:nox@127.0.0.1:5434/nox_test（D-021；env 未设自动缺省，生产 5433 零测试库）
-go test -race ./internal/<触碰包>/... -count=1
-cd web && npm run build                    # 触碰前端时（worktree 评审前置：buf generate——web/src/gen=gitignore 生成件不随 checkout）
+go test ./... -count=1                     # test DB = independent instance
+gh run list -R myfxlogs/nox               # pusher self-check (owner order 10-15): must check after push — red CI = pusher proactively reworks without waiting for review (green local checks ≠ push closed; only green CI counts); gh infrastructure failures (auth/network) go to the decision seat's ops postgres://nox:nox@127.0.0.1:5434/nox_test (D-021; auto-default when env unset; production 5433 has zero test DB)
+go test -race ./internal/<touched pkg>/... -count=1
+cd web && npm run build                    # when frontend touched (worktree review prerequisite: buf generate — web/src/gen is gitignored generated output, absent on checkout)
 ```
 
-## 7. 门禁（`git config core.hooksPath scripts/hooks`，禁 `--no-verify`）
+## 7. Gates (`git config core.hooksPath scripts/hooks`; never `--no-verify`)
 
-pre-commit（10 道）：kill_switch · 凭据直读 · 秘钥扫描 · staticcheck 基线 · 文件行数 · 迁移契约 · gofmt · `_ =` 吞错 · import 方向 · 经验库 schema。
-pre-push：master 只允许从 `/opt/nox` 推。reference-transaction：master 禁非 ff 回退。
+pre-commit (10 checks): kill_switch · credential direct-read · secret scan · staticcheck baseline · file length · migration contract · gofmt · `_ =` error-swallowing · import direction · 经验库 schema.
+pre-push: master may only be pushed from `/opt/nox`. reference-transaction: no non-ff rollback on master.
 
-## 8. 环境
+## 8. Environment
 
-| 项 | 值 |
+| Item | Value |
 |---|---|
-| 后端 | Go + ConnectRPC + PostgreSQL；`cmd/core` 单二进制，`//go:embed web/dist` |
-| 前端 | React 19 + 纯 CSS（不用 Tailwind），`cd web && npm install && npm run build` |
-| 生产部署 | **2026-10-07 起双机拓扑（D-105）**：生产=SG `192.229.85.35`（cex-proxy 不落生产，M3 业主令=直连）；本机=开发/测试席。发布流程=本机 `docker build --network=host -t nox-core:latest -f Dockerfile.core .`（`--network=host` 必需——宿主流量走 mihomo 代理而 docker NAT 裸出，npm/go 拉包 ECONNRESET 实证；镜像内 buf regen 已钉 `@bufbuild/buf@1.68.3`） → `docker save nox-core:latest \| gzip -1 \| ssh -i ~/.ssh/id_ed25519 root@192.229.85.35 'docker load'` → 改动文件 rsync 到 SG `/opt/nox` → `ssh root@192.229.85.35 'cd /opt/nox && docker compose -f docker-compose.yml -f docker-compose.sg.yml up -d'`（sg override：pg=15433 避让 alphaforge 5433、mem 适配 4C/7G）。本机 `docker compose up -d --build` 仅用于本机起服务（非生产）。源码同步**唯一入口 `scripts/deploy_sync.sh`**（只推 `git ls-files` 跟踪面；`.env`、`bin/`、`logs/`、`docs/报告` 等 SG 侧运行时/构建产物不推不删——2026-10-09 手写 rsync 多源参数曾毁树+把 bin/ wrapper 盖回 5433 化石版致 xasset_monitor 断写 1h）；SG 二进制只走 `scripts/build_host_tools.sh` 就地重建；SG cron 一律指 `scripts/` 权威版不指 `bin/` 副本。 |
-| 生产访问 | SG pg `localhost:15433`（alphaforge 占 5433）；RPC `localhost:50051`；Cloudflare Tunnel 跑在 SG（cloudflared-nox.service）→ `nox.myfxlogs.org` |
-| cron | digest 06:10 / backup 03:00 / test-db-gc 04:45 / snapshot 20:17 / xasset-monitor */5 / universe-radar 每时 17 分（Asia/Shanghai；SG crontab 用 CRON_TZ 段定界，勿按宿主 UTC 解读） |
-| 备份三落点（D-110） | ① SG 本机 `/opt/nox-backups/nox_*.sql.gz` 14 份滚动（600）；② R2 `r2:nox-backup` age 加密 14 份（配置=仓库外 `/opt/nox-backups/backup-r2.env`，rclone remote=r2）；③ github 代码。还原=`age -d -i <私钥> x.age \| gunzip \| psql`——**私钥业主离线持有，全系统零副本**；外推失败=critical 告警+本地照常 |
-| 运行时读写 docs 的路径 | `docs/经验库/`、`docs/报告/`（symdig 产物，不入 git）、`docs/handoff/STATE.md` — 搬动前先改代码 |
-| 参考 | `/opt/arbcn`（前端架构 + 加密采集） |
+| Backend | Go + ConnectRPC + PostgreSQL; `cmd/core` single binary, `//go:embed web/dist` |
+| Frontend | React 19 + plain CSS (no Tailwind), `cd web && npm install && npm run build` |
+| Production deploy | **Dual-host topology since 2026-10-07 (D-105)**: production = SG `192.229.85.35` (cex-proxy does not land in production, M3 owner order = direct connect); this machine = dev/test seat. Release flow = local `docker build --network=host -t nox-core:latest -f Dockerfile.core .` (`--network=host` required — host traffic goes through the mihomo proxy while docker NAT goes out bare; npm/go package pulls hit ECONNRESET proven; in-image buf regen pins `@bufbuild/buf@1.68.3`) → `docker save nox-core:latest \| gzip -1 \| ssh -i ~/.ssh/id_ed25519 root@192.229.85.35 'docker load'` → rsync changed files to SG `/opt/nox` → `ssh root@192.229.85.35 'cd /opt/nox && docker compose -f docker-compose.yml -f docker-compose.sg.yml up -d'` (sg override: pg=15433 to avoid alphaforge's 5433, mem tuned for 4C/7G). Local `docker compose up -d --build` only for local services (not production). Source sync **only entry `scripts/deploy_sync.sh`** (pushes only the `git ls-files` tracked surface; `.env`, `bin/`, `logs/`, `docs/报告` and other SG-side runtime/build artifacts are neither pushed nor deleted — on 2026-10-09 a hand-written rsync with multi-source args destroyed the tree + overwrote the bin/ wrapper with the 5433 fossil version, causing a 1h xasset_monitor write outage); SG binaries only rebuilt in place via `scripts/build_host_tools.sh`; SG cron always points at the authoritative `scripts/` versions, never `bin/` copies. |
+| Production access | SG pg `localhost:15433` (alphaforge holds 5433); RPC `localhost:50051`; Cloudflare Tunnel runs on SG (cloudflared-nox.service) → `nox.myfxlogs.org` |
+| cron | digest 06:10 / backup 03:00 / test-db-gc 04:45 / snapshot 20:17 / xasset-monitor */5 / universe-radar at minute 17 each hour (Asia/Shanghai; SG crontab uses CRON_TZ sections — do not read as host UTC) |
+| Backup, three locations (D-110) | ① SG-local `/opt/nox-backups/nox_*.sql.gz` rolling 14 (600); ② R2 `r2:nox-backup` age-encrypted 14 (config = outside-repo `/opt/nox-backups/backup-r2.env`, rclone remote=r2); ③ github code. Restore = `age -d -i <private key> x.age \| gunzip \| psql` — **private key held offline by the owner, zero copies anywhere in the system**; extrapolation failure = critical alert + local runs as usual |
+| Runtime-writable docs paths | `docs/经验库/`, `docs/报告/` (symdig products, not in git), `docs/handoff/STATE.md` — change code before moving |
+| Reference | `/opt/arbcn` (frontend architecture + crypto collection) |
