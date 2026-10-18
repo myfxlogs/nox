@@ -13,7 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"nox/internal/data/fact"
 	"nox/internal/data/keydomain"
+	"nox/internal/data/marketstate"
 	"nox/internal/platform/alerttext"
 	"nox/internal/store/pgstore"
 )
@@ -133,6 +135,16 @@ func cfdMtTickCandidates(ctx context.Context, st PaperStore, view *assetClassVie
 // 聚合节流每轮两维各至多一条。
 func warnActiveBookAbsent(ctx context.Context, st PaperStore, active []pgstore.PaperSpotCarry, view *assetClassView, now time.Time) {
 	var noBook, anchorDead []string
+	// entry_basis 锚死径会话闸（排查实证：周日/休市窗 MT 报价静默→簿断供→
+	// 补锚径（LatestXAssetEntryGate 15min 窗）无法自补=每拍重报伪警族）——
+	// MT 腿会话已知且闭市→锚死豁免（重开首拍簿补即自愈）；会话表缺席=
+	// 无证据不误赦（warn 照旧 fail-closed 语义）。
+	var sessTbl marketstate.Table
+	if src, ok := st.(interface {
+		LatestFactsByKind(context.Context, string) ([]fact.Fact, error)
+	}); ok {
+		sessTbl = marketstate.LoadSessionTable(ctx, src)
+	}
 	for _, p := range active {
 		if !cfdStructures[p.Structure] || p.VenueA == "" || p.VenueB == "" {
 			continue
@@ -158,6 +170,9 @@ func warnActiveBookAbsent(ctx context.Context, st PaperStore, active []pgstore.P
 		// entry 锚死：簿有行但 entry_basis 仍 NULL 且入场已超陈旧闸——补锚径
 		// （D-537② accrue 轮自愈）该收口未收口=异常透出。
 		if p.EntryBasisBps == nil && now.Sub(p.EntryTs) > paperCfdMonitorMaxAge {
+			if open, known := sessTbl.OpenAt(keydomain.BareOf(mtV), p.Symbol, now); known && !open {
+				continue // 休市窗簿断供=会话预期——豁免本拍锚死报（开市复测）
+			}
 			anchorDead = append(anchorDead, p.VenueA+"×"+p.VenueB+"|"+p.Symbol)
 		}
 	}
