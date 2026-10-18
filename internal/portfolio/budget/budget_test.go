@@ -244,3 +244,69 @@ func TestD522_NavCcySplit(t *testing.T) {
 		t.Fatalf("derived_from 缺币种键: %s", cb.DerivedFrom)
 	}
 }
+
+// TestDailyCut_LiveMapPerCcy NAV 指纹票回归锚：liveMap 键=venue:type:ccy——
+// MULTI 户 Σqty 指纹（101524.64）禁入映射，各币种池按分币键取原生量实拉值；
+// 未持币种池映射缺=剔除（非指纹覆写非陈值保留）。
+func TestDailyCut_LiveMapPerCcy(t *testing.T) {
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
+	ctx := context.Background()
+	if _, err := st.Pool().Exec(ctx, `TRUNCATE fin_nav_daily, fin_strategy_budget, fin_strategy,
+		fin_venue_account_snapshot, fin_capability_constraint, autotrade_state, strategy_stats CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	defer func() {
+		_, _ = st.Pool().Exec(ctx, `TRUNCATE fin_nav_daily, fin_strategy_budget, fin_strategy,
+			fin_venue_account_snapshot, fin_capability_constraint, autotrade_state, strategy_stats CASCADE`)
+	}()
+	defer func() { liveEquityMapFn = nil }()
+	now := time.Now()
+	// 快照池：binance:earn 双币（快照行已含指纹污染前的旧真值——live 覆写后
+	// 应以分币键为准）、binance:perp USDT、mt USD（免覆写）。
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_venue_account_snapshot
+		(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at) VALUES
+		('binance','earn',1,1,1,'USDT',$1),('binance','earn',1,1,1,'DOGE',$1),
+		('binance','perp',1300,1344,1344,'USDT',$1),('mtacct','mt5',4247,4247,4247,'USD',$1)`, now); err != nil {
+		t.Fatalf("seed snapshots: %v", err)
+	}
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO broker_accounts (venue, venue_type, host, port, password, is_real)
+		VALUES ('mtacct','mt5','h',443,'p',true) ON CONFLICT (venue) DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _, _ = st.Pool().Exec(ctx, `DELETE FROM broker_accounts WHERE venue='mtacct'`) }()
+	// liveMap 分币键（MULTI 户生产侧只产 Holdings 分币键——指纹值不在场）。
+	liveEquityMapFn = func(ctx context.Context) (map[string]float64, error) {
+		return map[string]float64{
+			"binance:earn:USDT": 1592.5, "binance:earn:DOGE": 52886,
+			"binance:perp:USDT": 1344.2,
+		}, nil
+	}
+	dayStart := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
+	if err := DailyCut(ctx, st, now, dayStart, 1e9); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := st.LatestNavDaily(ctx)
+	if err != nil || len(rows) != 3 {
+		t.Fatalf("应三行: %v %v", rows, err)
+	}
+	got := map[string]float64{}
+	for _, r := range rows {
+		got[r.Currency] = r.NavUSD
+	}
+	// USDT 桶=1592.5+1344.2=2936.7（分币实拉和）；DOGE 桶=52886 原生量；
+	// USD 桶=4247（mt 免覆写）。指纹 101524.64 任何桶不得出现。
+	if got["USDT"] != 2936.7 {
+		t.Fatalf("USDT 桶=%v want 2936.7", got["USDT"])
+	}
+	if got["DOGE"] != 52886 {
+		t.Fatalf("DOGE 桶=%v want 52886", got["DOGE"])
+	}
+	if got["USD"] != 4247 {
+		t.Fatalf("USD 桶=%v want 4247", got["USD"])
+	}
+	for c, v := range got {
+		if v == 101524.64 {
+			t.Fatalf("%s 桶被指纹注血", c)
+		}
+	}
+}

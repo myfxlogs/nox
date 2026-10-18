@@ -19,6 +19,16 @@ import (
 // 手工 waived 实证——尘池缺口骚扰收益不抵）。
 const idleGapDustUSD = 100.0
 
+// idleGapUSDish USD 族币种判定（尘阈适用域——原生量不可跨币种与 $100 比；
+// 与 binanceStablePx 同族口径：USD 锚稳定币视为同记帐单位非编）。
+func idleGapUSDish(ccy string) bool {
+	switch ccy {
+	case "USD", "USDT", "USDC", "BUSD", "FDUSD", "DAI", "TUSD", "USDP", "USD1", "BFUSD":
+		return true
+	}
+	return false
+}
+
 // idleGapScan 闲置 CEX 池缺口扫描（RunOnce 扫描拍尾挂）：CEX 池（非 mt 非 ghost）
 // Idle=true 且权益>0 且 venue 无 earn 执行径→OpenConditionGap+RequestConditionGap
 // （幂等——同键在册/已 requested 零重推）。读败仅 log 不阻塞扫描拍。
@@ -35,8 +45,10 @@ func idleGapScan(ctx context.Context, st *pgstore.Store) {
 			continue
 		}
 		// D-604 P2③：无流池判定输入=消费点实拉值（拉败/映射缺=如实跳过非陈值）。
-		eq, ok := lm.poolEquity(p.Venue, p.VenueType, p.Equity, "[oppmatch]")
-		if !ok || eq < idleGapDustUSD {
+		eq, ok := lm.poolEquity(p.Venue, p.VenueType, p.Currency, p.Equity, "[oppmatch]")
+		// 尘阈是 USD 口径——只对 USD 族币种池比（多币池原生量与 $100 比较=
+		// 单位混淆，NAV 指纹票同审项）；非 USD 族池放行后续币种闸裁决。
+		if !ok || (idleGapUSDish(p.Currency) && eq < idleGapDustUSD) {
 			continue
 		}
 		p.Equity = eq
@@ -125,8 +137,10 @@ func fetchLiveEquityMap(ctx context.Context) liveEquityMap {
 }
 
 // poolEquity 无流池实拉值取用（venueType 空/mt4/mt5=非无流池——快照行合法直返）。
-// 拉败/映射缺=跳过该池（fail-closed 如实缺——§6#4 warn 留痕，tag=消费点日志前缀）。
-func (lm liveEquityMap) poolEquity(venue, venueType string, snap float64, tag string) (float64, bool) {
+// 键=venue:type:ccy 分币粒度（NAV 指纹票——MULTI 户指纹禁入映射，池按币种取
+// 原生量）。拉败/映射缺=跳过该池（fail-closed 如实缺——§6#4 warn 留痕，
+// tag=消费点日志前缀）。
+func (lm liveEquityMap) poolEquity(venue, venueType, ccy string, snap float64, tag string) (float64, bool) {
 	if venueType == "" || venueType == "mt4" || venueType == "mt5" || (lm.m == nil && lm.err == nil) {
 		return snap, true
 	}
@@ -134,7 +148,7 @@ func (lm liveEquityMap) poolEquity(venue, venueType string, snap float64, tag st
 		log.Printf("%s live equity map: %v（如实跳过·warn 留痕）", tag, lm.err)
 		return 0, false
 	}
-	key := venue + ":" + venueType
+	key := venue + ":" + venueType + ":" + ccy
 	eq, ok := lm.m[key]
 	if !ok {
 		log.Printf("%s live equity %s 映射缺（跳过·warn 留痕）", tag, key)

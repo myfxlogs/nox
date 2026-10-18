@@ -142,3 +142,6 @@ var EarnRotationSQL string // D-612/D-613：earn_rotation 模板+豁免+autoexec
 
 //go:embed 1046_earn_yield_fanout_reversal.sql
 var EarnYieldFanoutReversalSQL string // earn_yield 扇出假账冲正（镜像行对消，禁删史）
+
+//go:embed 1047_nav_livemap_fix.sql
+var NavLivemapFixSQL string // NAV liveMap 指纹注血腐败行清理（分币粒度修配套）

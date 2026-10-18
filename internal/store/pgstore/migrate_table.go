@@ -239,4 +239,5 @@ var migrationFiles = []struct {
 	{1044, migrations.ComboKillTriggerSQL, false},        // D-587④：armed 坑签名闸（pit_exempt_d 列）
 	{1045, migrations.EarnRotationSQL, false},            // D-612/D-613：earn_rotation 息差轮动模板注册
 	{1046, migrations.EarnYieldFanoutReversalSQL, false}, // earn_yield 扇出假账冲正（镜像行对消，禁删史）
+	{1047, migrations.NavLivemapFixSQL, false},           // NAV liveMap 指纹注血腐败行清理（分币粒度修配套）
 }
