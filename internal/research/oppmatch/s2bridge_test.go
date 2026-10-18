@@ -4,6 +4,8 @@ package oppmatch
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,7 +36,7 @@ func TestS2Bridge(t *testing.T) {
 	// #7 形：okx USD_UM → perp_delivery 覆盖注记
 	h2 := seedHypothesis(t, s, "okx", "okx|FUTURES|USD_UM_XPERP", "FUTURES", "USD_UM_XPERP", "novel")
 	// generic_yield 族未建 → 告警留 approved
-	_ = seedHypothesis(t, s, "okx", "okx|EARN|NEWFIX", "EARN", "fixed", "generic_yield")
+	gid := seedHypothesis(t, s, "okx", "okx|EARN|NEWFIX", "EARN", "fixed", "generic_yield")
 
 	s2Bridge(ctx, s)
 
@@ -71,6 +73,44 @@ func TestS2Bridge(t *testing.T) {
 	}
 	if warnN < 3 {
 		t.Fatalf("S2 桥告警缺: %d", warnN)
+	}
+	// D-622 四批：动作类末行席令断言+info 型无令断言。
+	var msgs []string
+	rows, rerr := s.Pool().Query(ctx, `SELECT message FROM alerts WHERE message LIKE 'S2桥：approved 假设%'`)
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	for rows.Next() {
+		var m string
+		if rows.Scan(&m) == nil {
+			msgs = append(msgs, m)
+		}
+	}
+	rows.Close()
+	var sawGY, sawAllow, sawInfo bool
+	for _, m := range msgs {
+		switch {
+		case strings.Contains(m, "generic_yield") && !strings.HasSuffix(m, "fin_opp_hypothesis#") && !strings.Contains(m, "[角色:决策]"):
+			t.Fatalf("generic_yield 告警无令: %q", m)
+		case strings.Contains(m, "generic_yield"):
+			sawGY = strings.HasSuffix(m, "新族机制票处置（读 STATE 本行+fin_opp_hypothesis#"+fmt.Sprint(gid)+")") || strings.Contains(m, "[角色:决策]")
+		case strings.Contains(m, "白名单行已入册"):
+			sawAllow = strings.Contains(m, "[角色:决策]") && strings.Contains(m, "白名单入册后续")
+		case strings.Contains(m, "perp_delivery 纸面轨覆盖"):
+			if strings.Contains(m, "[角色:") {
+				t.Fatalf("info 型（覆盖注记）禁嵌令: %q", m)
+			}
+			sawInfo = true
+		}
+	}
+	if !sawGY {
+		t.Fatalf("generic_yield 末行令缺: %v", msgs)
+	}
+	if !sawAllow {
+		t.Fatalf("白名单入册末行令缺: %v", msgs)
+	}
+	if !sawInfo {
+		t.Fatalf("perp_delivery info 行未观测到: %v", msgs)
 	}
 	// 幂等：再跑一轮零新告警（dedup）+ 零重复白名单
 	before := warnN
@@ -189,6 +229,16 @@ func TestS2Bridge_TradifiPerp(t *testing.T) {
 	}
 	if axisWarn < 1 {
 		t.Fatal("采集轴未达告警缺失")
+	}
+	// D-622 四批：腿缺/轴缺末行席令断言。
+	var legMsg, axisMsg string
+	s.Pool().QueryRow(ctx, `SELECT message FROM alerts WHERE message LIKE '%TRADIFI_PERP 腿参数缺%' LIMIT 1`).Scan(&legMsg)
+	s.Pool().QueryRow(ctx, `SELECT message FROM alerts WHERE message LIKE '%TRADIFI_PERP 采集轴未达%' LIMIT 1`).Scan(&axisMsg)
+	if !strings.Contains(legMsg, "[角色:决策]") || !strings.Contains(legMsg, "TRADIFI 腿参供给处置") {
+		t.Fatalf("腿缺末行令缺: %q", legMsg)
+	}
+	if !strings.Contains(axisMsg, "[角色:决策]") || !strings.Contains(axisMsg, "TRADIFI 采集轴验收处置") {
+		t.Fatalf("轴缺末行令缺: %q", axisMsg)
 	}
 	if warnN < 1 {
 		t.Fatalf("腿缺 dedup 告警缺: %d", warnN)

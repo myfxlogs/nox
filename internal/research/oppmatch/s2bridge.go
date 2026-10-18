@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"nox/internal/data/fact"
+	"nox/internal/platform/alerttext"
 	"nox/internal/store/pgstore"
 )
 
@@ -112,7 +113,8 @@ func bridgeOne(ctx context.Context, st *pgstore.Store, h pgstore.OppHypothesis) 
 		combo, cerr := s2LegCombo(h, mtVenue, mtSym, side, cexVenue, cexSym, notional)
 		if cerr != nil {
 			return st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
-				"S2桥：approved 假设#%d（%s）%v", h.ID, h.CategoryKey, cerr), 24*time.Hour)
+				"S2桥：approved 假设#%d（%s）%v%s", h.ID, h.CategoryKey, cerr,
+				alerttext.SeatDispatchLine("决策", fmt.Sprintf("假设#%d S2桥入册败处置（读 STATE 本行）", h.ID))), 24*time.Hour)
 		}
 		if _, err := st.InsertXAssetAllowCombo(ctx, combo); err != nil && err != pgstore.ErrXAssetComboExists {
 			return fmt.Errorf("allow combo insert: %w", err)
@@ -121,8 +123,9 @@ func bridgeOne(ctx context.Context, st *pgstore.Store, h pgstore.OppHypothesis) 
 			return err
 		}
 		return st.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
-			"S2桥：approved 假设#%d（%s）→ xasset_allow_combos 白名单行已入册（notional=$%.0f 试单封顶）",
-			h.ID, h.CategoryKey, notional))
+			"S2桥：approved 假设#%d（%s）→ xasset_allow_combos 白名单行已入册（notional=$%.0f 试单封顶）%s",
+			h.ID, h.CategoryKey, notional,
+			alerttext.SeatDispatchLine("决策", fmt.Sprintf("假设#%d 白名单入册后续（读 STATE 本行——试单授权另闸 D-624）", h.ID))))
 	case h.InstType == "FUTURES" && strings.HasSuffix(h.Shape, "_XPERP"):
 		// okx USD_UM 日历基差——perp_delivery 纸面轨覆盖（同 canonical 配对+Δbasis 记账已产）。
 		if err := st.MarkHypothesisTrialing(ctx, h.ID, "perp_delivery 纸面轨已覆盖（okx USD_UM）"); err != nil {
@@ -146,8 +149,9 @@ func bridgeOne(ctx context.Context, st *pgstore.Store, h pgstore.OppHypothesis) 
 		_ = json.Unmarshal(h.ParamsProto, &legs)
 		if legs.MtVenue == "" || legs.MtSymbol == "" || legs.Side == "" || legs.CexSymbol == "" {
 			return st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
-				"S2桥：approved 假设#%d（%s）TRADIFI_PERP 腿参数缺——params_proto{mt_venue,mt_symbol,side,cex_symbol} 未配齐，拒猜腿位",
-				h.ID, h.CategoryKey), 24*time.Hour)
+				"S2桥：approved 假设#%d（%s）TRADIFI_PERP 腿参数缺——params_proto{mt_venue,mt_symbol,side,cex_symbol} 未配齐，拒猜腿位%s",
+				h.ID, h.CategoryKey,
+				alerttext.SeatDispatchLine("决策", fmt.Sprintf("假设#%d TRADIFI 腿参供给处置（读 STATE 本行——params_proto 字段清单在告警文）", h.ID))), 24*time.Hour)
 		}
 		// D-624 前置闸①②消费面（采集轴建置票）：休市历轴+资金费率轴缺一拒桥——
 		// 无历品种=休市窗不可对冲硬敞口；无费率实值=收益性无法评估。
@@ -155,7 +159,8 @@ func bridgeOne(ctx context.Context, st *pgstore.Store, h pgstore.OppHypothesis) 
 			return fmt.Errorf("tradifi 采集轴读败: %w", aerr)
 		} else if miss != "" {
 			return st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
-				"S2桥：approved 假设#%d（%s）TRADIFI_PERP 采集轴未达——%s", h.ID, h.CategoryKey, miss), 24*time.Hour)
+				"S2桥：approved 假设#%d（%s）TRADIFI_PERP 采集轴未达——%s%s", h.ID, h.CategoryKey, miss,
+				alerttext.SeatDispatchLine("决策", fmt.Sprintf("假设#%d TRADIFI 采集轴验收处置（读 STATE 本行）", h.ID))), 24*time.Hour)
 		}
 		notional, nerr := s2TrialNotionalAt(ctx, st)
 		if nerr != nil {
@@ -164,7 +169,8 @@ func bridgeOne(ctx context.Context, st *pgstore.Store, h pgstore.OppHypothesis) 
 		combo, cerr := s2LegCombo(h, legs.MtVenue, legs.MtSymbol, legs.Side, h.Venue, legs.CexSymbol, notional)
 		if cerr != nil {
 			return st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
-				"S2桥：approved 假设#%d（%s）%v", h.ID, h.CategoryKey, cerr), 24*time.Hour)
+				"S2桥：approved 假设#%d（%s）%v%s", h.ID, h.CategoryKey, cerr,
+				alerttext.SeatDispatchLine("决策", fmt.Sprintf("假设#%d S2桥入册败处置（读 STATE 本行）", h.ID))), 24*time.Hour)
 		}
 		if _, err := st.InsertXAssetAllowCombo(ctx, combo); err != nil && err != pgstore.ErrXAssetComboExists {
 			return fmt.Errorf("allow combo insert: %w", err)
@@ -173,14 +179,17 @@ func bridgeOne(ctx context.Context, st *pgstore.Store, h pgstore.OppHypothesis) 
 			return err
 		}
 		return st.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
-			"S2桥：approved 假设#%d（%s）→xasset 白名单（TRADIFI_PERP 变体——决策席试单闸另闸）", h.ID, h.CategoryKey))
+			"S2桥：approved 假设#%d（%s）→xasset 白名单（TRADIFI_PERP 变体——决策席试单闸另闸）%s", h.ID, h.CategoryKey,
+			alerttext.SeatDispatchLine("决策", fmt.Sprintf("假设#%d 白名单入册后续（读 STATE 本行——试单授权另闸 D-624）", h.ID))))
 	case h.FamilyFit == "generic_yield":
 		return st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
-			"S2桥：approved 假设#%d（%s）族=generic_yield 参数面 schema 未建——立施工票",
-			h.ID, h.CategoryKey), 24*time.Hour)
+			"S2桥：approved 假设#%d（%s）族=generic_yield 参数面 schema 未建——立施工票%s",
+			h.ID, h.CategoryKey,
+			alerttext.SeatDispatchLine("决策", fmt.Sprintf("假设#%d 新族机制票处置（读 STATE 本行+fin_opp_hypothesis#%d）", h.ID, h.ID))), 24*time.Hour)
 	default:
 		return st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
-			"S2桥：approved 假设#%d（%s 族=%s）无参数面沉点——新机制施工票待立",
-			h.ID, h.CategoryKey, h.FamilyFit), 24*time.Hour)
+			"S2桥：approved 假设#%d（%s 族=%s）无参数面沉点——新机制施工票待立%s",
+			h.ID, h.CategoryKey, h.FamilyFit,
+			alerttext.SeatDispatchLine("决策", fmt.Sprintf("假设#%d 新族机制票处置（读 STATE 本行+fin_opp_hypothesis#%d）", h.ID, h.ID))), 24*time.Hour)
 	}
 }
