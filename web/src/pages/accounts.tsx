@@ -14,6 +14,7 @@ import { MappingModal } from "../components/MappingModal";
 import { AllowRulesSection } from "../components/AllowRulesSection";
 import { XAssetCombosSection } from "../components/XAssetCombosSection";
 import { WsMeters } from "../components/WsMeters";
+import { CredEditModal, AccountInfoModal } from "../components/BrokerDetailModals";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
 
@@ -27,6 +28,8 @@ export default function AccountsPage() {
   const [msg, setMsg] = useState("");
   const [cfm, setCfm] = useState<{ text: string; run: () => void } | null>(null);
   const [mapVenue, setMapVenue] = useState<string | null>(null);
+  const [credVenue, setCredVenue] = useState<BrokerAccount | null>(null);
+  const [infoAcct, setInfoAcct] = useState<AccountInfo | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -104,6 +107,8 @@ export default function AccountsPage() {
                   <button onClick={() => act(() => client.setBrokerAccountIsReal({ venue: b.venue, isReal: !b.isReal }), "已切换 real")}>real={String(b.isReal)}</button>
                   <button onClick={() => act(() => client.setBrokerDisabled({ venue: b.venue, disabled: b.status !== "disabled" }), "已切换")}>{b.status === "disabled" ? "启用" : "停用"}</button>
                   <button onClick={() => setMapVenue(b.venue)}>映射</button>
+                  <button onClick={() => setCredVenue(b)}>凭据</button>
+                  {a && <button onClick={() => setInfoAcct(a)}>实况</button>}
                   <button className="danger" onClick={() => setCfm({ text: `删户 ${b.venue}？`, run: () => act(() => client.removeBroker({ venue: b.venue, reason: "ui" }), "已删户") })}>删</button>
                 </div>
               </li>
@@ -150,6 +155,10 @@ export default function AccountsPage() {
         <MappingModal venue={mapVenue} onClose={() => { setMapVenue(null); void load(); }}
           onErr={setErr} />
       )}
+      {/* 画骨批三：凭据/实况两浮层接线 */}
+      {credVenue && <CredEditModal b={credVenue} onClose={() => setCredVenue(null)} onErr={setErr} onDone={(m) => { setMsg(m); void load(); }} />}
+      {infoAcct && <AccountInfoModal a={infoAcct} onClose={() => setInfoAcct(null)} />}
+
       {/* 画骨批二：护栏/组合/WS 计量三段（arb BrokersPage 族借形） */}
       <AllowRulesSection />
       <XAssetCombosSection />
