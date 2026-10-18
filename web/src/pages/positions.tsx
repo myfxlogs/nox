@@ -12,6 +12,7 @@ import { fmtUsd, ts } from "../components/fmt";
 import { StatTile } from "../components/StatTile";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
+import { HedgeFlow } from "../components/HedgeFlow";
 
 const key = (p: { venueKey: string; ticket: string }) => p.venueKey + "/" + p.ticket;
 
@@ -248,6 +249,7 @@ export default function PositionsPage() {
           </>
         );
       })()}
+      <HedgeFlow />
     </div>
   );
 }
