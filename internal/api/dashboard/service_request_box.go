@@ -54,3 +54,15 @@ func (s *Service) ResolveRequest(ctx context.Context, req *connect.Request[v1.Re
 	}
 	return connect.NewResponse(&v1.ResolveRequestResponse{Applied: applied}), nil
 }
+
+// GetActionBadge 投资人 nav 行动徽标单值：待批毕业数 + 请求箱未决数
+// （fe-design 挂账小票——前端零计算令，计数挪后端 SQL 供单值）。
+func (s *Service) GetActionBadge(ctx context.Context, _ *connect.Request[v1.GetActionBadgeRequest]) (*connect.Response[v1.GetActionBadgeResponse], error) {
+	var n int
+	if err := s.store.Pool().QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM carry_graduations WHERE status='pending') +
+		(SELECT count(*) FROM fin_condition_gap WHERE status='requested')`).Scan(&n); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.GetActionBadgeResponse{Count: int32(n)}), nil
+}

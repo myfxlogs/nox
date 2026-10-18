@@ -253,6 +253,9 @@ const (
 	// DashboardServiceListRequestBoxProcedure is the fully-qualified name of the DashboardService's
 	// ListRequestBox RPC.
 	DashboardServiceListRequestBoxProcedure = "/nox.dashboard.v1.DashboardService/ListRequestBox"
+	// DashboardServiceGetActionBadgeProcedure is the fully-qualified name of the DashboardService's
+	// GetActionBadge RPC.
+	DashboardServiceGetActionBadgeProcedure = "/nox.dashboard.v1.DashboardService/GetActionBadge"
 	// DashboardServiceResolveRequestProcedure is the fully-qualified name of the DashboardService's
 	// ResolveRequest RPC.
 	DashboardServiceResolveRequestProcedure = "/nox.dashboard.v1.DashboardService/ResolveRequest"
@@ -489,6 +492,7 @@ type DashboardServiceClient interface {
 	ListDeptReports(context.Context, *connect.Request[dashboardv1.ListDeptReportsRequest]) (*connect.Response[dashboardv1.ListDeptReportsResponse], error)
 	// D-268 M4.6：投资人页请求箱回执
 	ListRequestBox(context.Context, *connect.Request[dashboardv1.ListRequestBoxRequest]) (*connect.Response[dashboardv1.ListRequestBoxResponse], error)
+	GetActionBadge(context.Context, *connect.Request[dashboardv1.GetActionBadgeRequest]) (*connect.Response[dashboardv1.GetActionBadgeResponse], error)
 	ResolveRequest(context.Context, *connect.Request[dashboardv1.ResolveRequestRequest]) (*connect.Response[dashboardv1.ResolveRequestResponse], error)
 	// D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
 	GetAiSettings(context.Context, *connect.Request[dashboardv1.GetAiSettingsRequest]) (*connect.Response[dashboardv1.GetAiSettingsResponse], error)
@@ -1016,6 +1020,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("ListRequestBox")),
 			connect.WithClientOptions(opts...),
 		),
+		getActionBadge: connect.NewClient[dashboardv1.GetActionBadgeRequest, dashboardv1.GetActionBadgeResponse](
+			httpClient,
+			baseURL+DashboardServiceGetActionBadgeProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetActionBadge")),
+			connect.WithClientOptions(opts...),
+		),
 		resolveRequest: connect.NewClient[dashboardv1.ResolveRequestRequest, dashboardv1.ResolveRequestResponse](
 			httpClient,
 			baseURL+DashboardServiceResolveRequestProcedure,
@@ -1359,6 +1369,7 @@ type dashboardServiceClient struct {
 	getReport                    *connect.Client[dashboardv1.GetReportRequest, dashboardv1.GetReportResponse]
 	listDeptReports              *connect.Client[dashboardv1.ListDeptReportsRequest, dashboardv1.ListDeptReportsResponse]
 	listRequestBox               *connect.Client[dashboardv1.ListRequestBoxRequest, dashboardv1.ListRequestBoxResponse]
+	getActionBadge               *connect.Client[dashboardv1.GetActionBadgeRequest, dashboardv1.GetActionBadgeResponse]
 	resolveRequest               *connect.Client[dashboardv1.ResolveRequestRequest, dashboardv1.ResolveRequestResponse]
 	getAiSettings                *connect.Client[dashboardv1.GetAiSettingsRequest, dashboardv1.GetAiSettingsResponse]
 	setAiSettings                *connect.Client[dashboardv1.SetAiSettingsRequest, dashboardv1.SetAiSettingsResponse]
@@ -1775,6 +1786,11 @@ func (c *dashboardServiceClient) ListRequestBox(ctx context.Context, req *connec
 	return c.listRequestBox.CallUnary(ctx, req)
 }
 
+// GetActionBadge calls nox.dashboard.v1.DashboardService.GetActionBadge.
+func (c *dashboardServiceClient) GetActionBadge(ctx context.Context, req *connect.Request[dashboardv1.GetActionBadgeRequest]) (*connect.Response[dashboardv1.GetActionBadgeResponse], error) {
+	return c.getActionBadge.CallUnary(ctx, req)
+}
+
 // ResolveRequest calls nox.dashboard.v1.DashboardService.ResolveRequest.
 func (c *dashboardServiceClient) ResolveRequest(ctx context.Context, req *connect.Request[dashboardv1.ResolveRequestRequest]) (*connect.Response[dashboardv1.ResolveRequestResponse], error) {
 	return c.resolveRequest.CallUnary(ctx, req)
@@ -2098,6 +2114,7 @@ type DashboardServiceHandler interface {
 	ListDeptReports(context.Context, *connect.Request[dashboardv1.ListDeptReportsRequest]) (*connect.Response[dashboardv1.ListDeptReportsResponse], error)
 	// D-268 M4.6：投资人页请求箱回执
 	ListRequestBox(context.Context, *connect.Request[dashboardv1.ListRequestBoxRequest]) (*connect.Response[dashboardv1.ListRequestBoxResponse], error)
+	GetActionBadge(context.Context, *connect.Request[dashboardv1.GetActionBadgeRequest]) (*connect.Response[dashboardv1.GetActionBadgeResponse], error)
 	ResolveRequest(context.Context, *connect.Request[dashboardv1.ResolveRequestRequest]) (*connect.Response[dashboardv1.ResolveRequestResponse], error)
 	// D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
 	GetAiSettings(context.Context, *connect.Request[dashboardv1.GetAiSettingsRequest]) (*connect.Response[dashboardv1.GetAiSettingsResponse], error)
@@ -2621,6 +2638,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("ListRequestBox")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGetActionBadgeHandler := connect.NewUnaryHandler(
+		DashboardServiceGetActionBadgeProcedure,
+		svc.GetActionBadge,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetActionBadge")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceResolveRequestHandler := connect.NewUnaryHandler(
 		DashboardServiceResolveRequestProcedure,
 		svc.ResolveRequest,
@@ -3035,6 +3058,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListDeptReportsHandler.ServeHTTP(w, r)
 		case DashboardServiceListRequestBoxProcedure:
 			dashboardServiceListRequestBoxHandler.ServeHTTP(w, r)
+		case DashboardServiceGetActionBadgeProcedure:
+			dashboardServiceGetActionBadgeHandler.ServeHTTP(w, r)
 		case DashboardServiceResolveRequestProcedure:
 			dashboardServiceResolveRequestHandler.ServeHTTP(w, r)
 		case DashboardServiceGetAiSettingsProcedure:
@@ -3426,6 +3451,10 @@ func (UnimplementedDashboardServiceHandler) ListDeptReports(context.Context, *co
 
 func (UnimplementedDashboardServiceHandler) ListRequestBox(context.Context, *connect.Request[dashboardv1.ListRequestBoxRequest]) (*connect.Response[dashboardv1.ListRequestBoxResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListRequestBox is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetActionBadge(context.Context, *connect.Request[dashboardv1.GetActionBadgeRequest]) (*connect.Response[dashboardv1.GetActionBadgeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetActionBadge is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ResolveRequest(context.Context, *connect.Request[dashboardv1.ResolveRequestRequest]) (*connect.Response[dashboardv1.ResolveRequestResponse], error) {

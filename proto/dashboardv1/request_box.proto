@@ -35,3 +35,10 @@ message ResolveRequestRequest {
 message ResolveRequestResponse {
   bool applied = 1; // 态机翻牌成=true；行已收口/非 requested=幂等 false
 }
+
+// GetActionBadge 投资人 nav 行动徽标——后端供单值（fe-design 挂账小票：
+// 前端零计算令，status 聚合计数挪后端 SQL）。
+message GetActionBadgeRequest {}
+message GetActionBadgeResponse {
+  int32 count = 1; // 待批毕业数 + 请求箱未决数
+}

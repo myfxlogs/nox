@@ -330,6 +330,88 @@ func (x *ResolveRequestResponse) GetApplied() bool {
 	return false
 }
 
+// GetActionBadge 投资人 nav 行动徽标——后端供单值（fe-design 挂账小票：
+// 前端零计算令，status 聚合计数挪后端 SQL）。
+type GetActionBadgeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetActionBadgeRequest) Reset() {
+	*x = GetActionBadgeRequest{}
+	mi := &file_dashboardv1_request_box_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetActionBadgeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetActionBadgeRequest) ProtoMessage() {}
+
+func (x *GetActionBadgeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_request_box_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetActionBadgeRequest.ProtoReflect.Descriptor instead.
+func (*GetActionBadgeRequest) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_request_box_proto_rawDescGZIP(), []int{5}
+}
+
+type GetActionBadgeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Count         int32                  `protobuf:"varint,1,opt,name=count,proto3" json:"count,omitempty"` // 待批毕业数 + 请求箱未决数
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetActionBadgeResponse) Reset() {
+	*x = GetActionBadgeResponse{}
+	mi := &file_dashboardv1_request_box_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetActionBadgeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetActionBadgeResponse) ProtoMessage() {}
+
+func (x *GetActionBadgeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_request_box_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetActionBadgeResponse.ProtoReflect.Descriptor instead.
+func (*GetActionBadgeResponse) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_request_box_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GetActionBadgeResponse) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
 var File_dashboardv1_request_box_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_request_box_proto_rawDesc = "" +
@@ -351,7 +433,10 @@ const file_dashboardv1_request_box_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12;\n" +
 	"\x05state\x18\x02 \x01(\x0e2%.nox.dashboard.v1.ResolveRequestStateR\x05state\"2\n" +
 	"\x16ResolveRequestResponse\x12\x18\n" +
-	"\aapplied\x18\x01 \x01(\bR\aapplied*\x83\x01\n" +
+	"\aapplied\x18\x01 \x01(\bR\aapplied\"\x17\n" +
+	"\x15GetActionBadgeRequest\".\n" +
+	"\x16GetActionBadgeResponse\x12\x14\n" +
+	"\x05count\x18\x01 \x01(\x05R\x05count*\x83\x01\n" +
 	"\x13ResolveRequestState\x12%\n" +
 	"!RESOLVE_REQUEST_STATE_UNSPECIFIED\x10\x00\x12#\n" +
 	"\x1fRESOLVE_REQUEST_STATE_FULFILLED\x10\x01\x12 \n" +
@@ -370,7 +455,7 @@ func file_dashboardv1_request_box_proto_rawDescGZIP() []byte {
 }
 
 var file_dashboardv1_request_box_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_dashboardv1_request_box_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_dashboardv1_request_box_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_dashboardv1_request_box_proto_goTypes = []any{
 	(ResolveRequestState)(0),       // 0: nox.dashboard.v1.ResolveRequestState
 	(*RequestBoxItem)(nil),         // 1: nox.dashboard.v1.RequestBoxItem
@@ -378,6 +463,8 @@ var file_dashboardv1_request_box_proto_goTypes = []any{
 	(*ListRequestBoxResponse)(nil), // 3: nox.dashboard.v1.ListRequestBoxResponse
 	(*ResolveRequestRequest)(nil),  // 4: nox.dashboard.v1.ResolveRequestRequest
 	(*ResolveRequestResponse)(nil), // 5: nox.dashboard.v1.ResolveRequestResponse
+	(*GetActionBadgeRequest)(nil),  // 6: nox.dashboard.v1.GetActionBadgeRequest
+	(*GetActionBadgeResponse)(nil), // 7: nox.dashboard.v1.GetActionBadgeResponse
 }
 var file_dashboardv1_request_box_proto_depIdxs = []int32{
 	1, // 0: nox.dashboard.v1.ListRequestBoxResponse.items:type_name -> nox.dashboard.v1.RequestBoxItem
@@ -400,7 +487,7 @@ func file_dashboardv1_request_box_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_request_box_proto_rawDesc), len(file_dashboardv1_request_box_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

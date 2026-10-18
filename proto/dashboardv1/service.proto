@@ -150,6 +150,7 @@ service DashboardService {
   rpc ListDeptReports(ListDeptReportsRequest) returns (ListDeptReportsResponse);
   // D-268 M4.6：投资人页请求箱回执
   rpc ListRequestBox(ListRequestBoxRequest) returns (ListRequestBoxResponse);
+  rpc GetActionBadge(GetActionBadgeRequest) returns (GetActionBadgeResponse); // nav 行动徽标单值（前端零计算令——计数后端 SQL 供）
   rpc ResolveRequest(ResolveRequestRequest) returns (ResolveRequestResponse);
   // D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
   rpc GetAiSettings(GetAiSettingsRequest) returns (GetAiSettingsResponse);
