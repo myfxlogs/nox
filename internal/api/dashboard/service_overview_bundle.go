@@ -4,6 +4,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -158,18 +159,84 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 	}
 	if alerts, err := s.store.ListAlerts(ctx, 500, 0); err == nil {
 		cut := now.Add(-24 * time.Hour)
+		var crits []struct {
+			msg string
+			ts  time.Time
+		}
 		for _, a := range alerts {
 			if a.Level == "critical" && a.Ts.After(cut) {
 				resp.CritAlerts_24H++
 				// 业主令 10-17：明细随段（可见「是什么红」非只计数）——文案原文直透不裁剪。
-				resp.CritAlerts = append(resp.CritAlerts, &v1.OverviewCritAlert{
-					Message: a.Message,
-					Ts:      timestamppb.New(a.Ts),
-				})
+				crits = append(crits, struct {
+					msg string
+					ts  time.Time
+				}{a.Message, a.Ts})
 			}
+		}
+		// 归组+封顶（业主报障 10-18：30 条同源告警霸屏压底）——按指纹归组
+		// （变数字段剥位，critFingerprint），组内 count/first/last，卡片=最新原文；
+		// ≤critCardCap 组，溢出尾行「+N 组见告警页」count=被截告警合计（Σcount 守恒）。
+		type grp struct {
+			latest, first time.Time
+			msg           string
+			n             int32
+		}
+		groups := map[string]*grp{}
+		var order []string
+		for _, c := range crits {
+			fp := critFingerprint(c.msg)
+			g := groups[fp]
+			if g == nil {
+				g = &grp{latest: c.ts, first: c.ts, msg: c.msg}
+				groups[fp] = g
+				order = append(order, fp)
+			}
+			g.n++
+			if c.ts.After(g.latest) {
+				g.latest, g.msg = c.ts, c.msg
+			}
+			if c.ts.Before(g.first) {
+				g.first = c.ts
+			}
+		}
+		hiddenAlerts := int32(0)
+		for i, fp := range order {
+			g := groups[fp]
+			if i >= critCardCap {
+				hiddenAlerts += g.n
+				continue
+			}
+			resp.CritAlerts = append(resp.CritAlerts, &v1.OverviewCritAlert{
+				Message: g.msg, Ts: timestamppb.New(g.latest),
+				Count: g.n, FirstTs: timestamppb.New(g.first),
+			})
+		}
+		if hidden := len(order) - minInt(len(order), critCardCap); hidden > 0 {
+			resp.CritAlerts = append(resp.CritAlerts, &v1.OverviewCritAlert{
+				Message: fmt.Sprintf("+%d 组见告警页", hidden), Count: hiddenAlerts,
+			})
 		}
 	}
 	return connect.NewResponse(resp), nil
+}
+
+// critCardCap 明细卡阵封顶组数（同等待面限行先例族——防同源刷屏压底）。
+const critCardCap = 8
+
+// critFingerprintDigits 归组指纹剥位规则（票面钉「stripping 规则落代码常量+测试锚」）：
+// 数字打头连同后续小写字母/数字整段归一——`age=1h31m20s`→`age=#`、
+// `BTCUSDT_261225`→`BTCUSDT_#`、版本号/id/时量全坍缩；文案骨架相同即同组。
+var critFingerprintDigits = regexp.MustCompile(`[0-9]+[a-z0-9]*`)
+
+func critFingerprint(msg string) string {
+	return critFingerprintDigits.ReplaceAllString(msg, "#")
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func derefInt(p *int) int {

@@ -283,9 +283,14 @@ message GetOverviewBundleResponse {
 }
 
 // OverviewCritAlert 24h critical 告警明细行（全行 level 恒=critical 不复列）。
+// 归组语义（业主报障 10-18 同源告警霸屏）：message=组内最新一条原文、
+// ts=组内最新时、count=组内告警数、first_ts=组内最早时；封顶截断尾行
+// 「+N 组见告警页」以 count 携被截组内告警合计（Σcount 守恒=24h 计数）。
 message OverviewCritAlert {
-  string message = 1;                 // 告警文案原文（后端直透不裁剪）
-  google.protobuf.Timestamp ts = 2;   // 告警时
+  string message = 1;                 // 组内最新一条告警文案原文（后端直透不裁剪）
+  google.protobuf.Timestamp ts = 2;   // 组内最新告警时（last_ts）
+  int32 count = 3;                    // 组内告警数（=1 即未归组；截断尾行=被截告警合计）
+  google.protobuf.Timestamp first_ts = 4; // 组内最早告警时（跨度面）
 }
 
 // OverviewBreakdownRow 盘面卡组成行（group=对应 StatTile 键；label 行名+amount 原生量

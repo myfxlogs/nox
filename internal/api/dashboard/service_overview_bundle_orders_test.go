@@ -4,8 +4,12 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
+	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/testutil/storetest"
 	"nox/internal/store/pgstore"
 )
 
@@ -87,11 +91,20 @@ func TestOverviewBundleCritAlertDetails(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp := cresp.Msg
-	if len(resp.CritAlerts) != int(resp.CritAlerts_24H) {
-		t.Fatalf("明细 %d 行 ≠ 计数 %d（同源同窗破）", len(resp.CritAlerts), resp.CritAlerts_24H)
+	// 归组+封顶守恒（票面注记：原 len==count 断言随归组改写为
+	// 「组数≤计数且 Σcount==计数」——截断尾行 count=被截告警合计故仍守恒）。
+	if len(resp.CritAlerts) > int(resp.CritAlerts_24H) {
+		t.Fatalf("组数 %d > 计数 %d", len(resp.CritAlerts), resp.CritAlerts_24H)
+	}
+	var sum int32
+	for _, a := range resp.CritAlerts {
+		sum += a.Count
+	}
+	if sum != resp.CritAlerts_24H {
+		t.Fatalf("Σcount %d ≠ 计数 %d（守恒破）", sum, resp.CritAlerts_24H)
 	}
 	if len(resp.CritAlerts) < 2 {
-		t.Fatalf("明细行=%d want ≥2（两测试红）", len(resp.CritAlerts))
+		t.Fatalf("明细组=%d want ≥2（两测试红异文案=两组）", len(resp.CritAlerts))
 	}
 	msgs := map[string]bool{}
 	for _, a := range resp.CritAlerts {
@@ -105,5 +118,80 @@ func TestOverviewBundleCritAlertDetails(t *testing.T) {
 	}
 	if msgs["黄行不入明细"] || msgs["窗外 critical 不入"] {
 		t.Fatalf("非 critical/窗外行漏入明细: %v", msgs)
+	}
+}
+
+// TestOverviewBundleCritAlertGroupCap 归组+封顶锚（业主报障 10-18 同源霸屏票面）：
+// ①N 条仅变数字段不同的同源告警→1 组 count=N+first/last 跨度；
+// ②异文案→多组；③≥9 组→截断 ≤8+尾行「+N 组见告警页」且 Σcount 守恒。
+func TestOverviewBundleCritAlertGroupCap(t *testing.T) {
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
+	ctx := context.Background()
+	defer func() {
+		st.Pool().Exec(ctx, `DELETE FROM alerts WHERE message LIKE '归组锚%' OR message LIKE '异组锚%'`)
+	}()
+	must := func(q string, args ...any) {
+		if _, err := st.Pool().Exec(ctx, q, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc := &Service{store: st}
+	// ①同源 30 条仅 age 数字段不同→1 组
+	for i := 0; i < 30; i++ {
+		must(`INSERT INTO alerts (level, message, ts) VALUES
+			('critical', $1, now() - interval '1 minute' * $2)`,
+			fmt.Sprintf("归组锚 fetch binance BTCUSDT: facts funding stale age=%dh%dm%ds", i, i%60, i%60), i)
+	}
+	// ②异文案两组
+	must(`INSERT INTO alerts (level, message, ts) VALUES
+		('critical', '异组锚A', now()), ('critical', '异组锚B', now())`)
+	cresp, err := svc.GetOverviewBundle(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := cresp.Msg
+	var g *v1.OverviewCritAlert
+	for _, a := range resp.CritAlerts {
+		if strings.HasPrefix(a.Message, "归组锚") {
+			g = a
+		}
+	}
+	if g == nil || g.Count != 30 {
+		t.Fatalf("同源 30 条应塌为 1 组 count=30: %+v", g)
+	}
+	if g.FirstTs == nil || g.Ts == nil || !g.FirstTs.AsTime().Before(g.Ts.AsTime()) {
+		t.Fatalf("first<last 跨度错: %+v", g)
+	}
+	var sum int32
+	for _, a := range resp.CritAlerts {
+		sum += a.Count
+	}
+	if sum != resp.CritAlerts_24H {
+		t.Fatalf("Σcount %d ≠ %d（守恒破）", sum, resp.CritAlerts_24H)
+	}
+	// ③9 组异文案→截断 8+尾行
+	must(`DELETE FROM alerts WHERE message LIKE '归组锚%' OR message LIKE '异组锚%'`)
+	for i := 0; i < 9; i++ {
+		must(`INSERT INTO alerts (level, message, ts) VALUES ('critical', $1, now())`,
+			fmt.Sprintf("异组锚 distinct-%c", 'A'+rune(i)))
+	}
+	cresp, err = svc.GetOverviewBundle(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp = cresp.Msg
+	if len(resp.CritAlerts) != critCardCap+1 {
+		t.Fatalf("9 组应截为 %d 卡+尾行: %d", critCardCap, len(resp.CritAlerts))
+	}
+	tail := resp.CritAlerts[len(resp.CritAlerts)-1]
+	if !strings.HasPrefix(tail.Message, "+") || !strings.Contains(tail.Message, "组见告警页") {
+		t.Fatalf("尾行指路文案错: %q", tail.Message)
+	}
+	sum = 0
+	for _, a := range resp.CritAlerts {
+		sum += a.Count
+	}
+	if sum != resp.CritAlerts_24H {
+		t.Fatalf("截断后 Σcount %d ≠ %d（守恒破）", sum, resp.CritAlerts_24H)
 	}
 }

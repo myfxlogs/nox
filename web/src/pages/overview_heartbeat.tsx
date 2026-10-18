@@ -29,10 +29,15 @@ export function RiskHeartbeat({
           {b.critAlerts.map((a, i) => (
             <li key={i} className="opp-card" onClick={() => onCard({
               title: "critical 告警 · " + new Date((a.ts ? Number(a.ts.seconds) * 1000 : 0)).toISOString().replace("T", " ").slice(0, 19) + "Z",
-              body: a.message,
+              body: a.message + (a.count > 1 && a.firstTs
+                ? "\n\n组内 " + a.count + " 条：" +
+                  new Date(Number(a.firstTs.seconds) * 1000).toISOString().slice(5, 16).replace("T", " ") + "Z → " +
+                  new Date(Number(a.ts!.seconds) * 1000).toISOString().slice(5, 16).replace("T", " ") + "Z"
+                : ""),
             })}>
               <div className="opp-card-head">
                 <Chip tone="critical">critical</Chip>
+                {a.count > 1 && <Chip tone="warn">×{a.count}</Chip>}
                 <span className="opp-card-friction">{a.ts ? new Date(Number(a.ts.seconds) * 1000).toISOString().slice(5, 16).replace("T", " ") + "Z" : "—"}</span>
               </div>
               <p className="opp-card-narrative muted clamp-2" title={a.message}>{a.message}</p>
