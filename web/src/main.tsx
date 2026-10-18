@@ -43,6 +43,7 @@ import "./styles/11-account-responsive.css";
 import "./styles/12-nox-shell.css";
 import "./styles/20-semantic.css";
 import "./styles/15-analyst.css";
+import "./styles/13-daily.css";
 import "./styles/10-broker.css";
 import "./styles/14-toast.css";
 
