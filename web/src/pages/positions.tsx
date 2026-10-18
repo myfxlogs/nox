@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { client, errText } from "../api";
 import { onCase } from "../stream";
 import type { BrokerPosition, Position } from "../gen/dashboardv1/position_pb";
+import type { XAssetPendingEntryRow } from "../gen/dashboardv1/graduation_pb";
 import type { BrokerPositionEvent } from "../gen/dashboardv1/stream_pb";
 import { fmtUsd, ts } from "../components/fmt";
 import { StatTile } from "../components/StatTile";
@@ -19,16 +20,19 @@ export default function PositionsPage() {
   const [broker, setBroker] = useState<Map<string, BrokerPosition>>(new Map());
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [sums, setSums] = useState<{ pnl?: number; net?: number }>({});
+  const [pending, setPending] = useState<XAssetPendingEntryRow[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [p, b] = await Promise.all([
+      const [pr, b, p2] = await Promise.all([
         client.listPositions({ limit: 500 }),
         client.listBrokerPositions({ refresh: false }),
+        client.listXAssetPendingEntries({}),
       ]);
-      setSysPos(new Map(p.positions.map((x) => [Number(x.id), x])));
+      setSysPos(new Map(pr.positions.map((x) => [Number(x.id), x])));
+      setPending(p2.rows);
       setBroker(new Map(b.positions.map((x) => [key(x), x])));
       setSums({ pnl: b.pnlSumUsd, net: b.netSumUsd });
       setErr("");
@@ -162,29 +166,88 @@ export default function PositionsPage() {
         <EmptyState>零券商仓</EmptyState>
       )}
 
-      <h2>系统仓台账</h2>
-      {sysPos.size > 0 ? (
+      {/* 画骨①：X-asset 待入场区（arb PositionsPagePendingEntries 借形——
+          wait_reason/tier/闸态后端算定直渲） */}
+      <h2>X-asset 待入场</h2>
+      {pending.length > 0 ? (
         <ul className="opp-cards opp-grid">
-          {[...sysPos.values()].map((p) => (
-            <li key={Number(p.id)} className="opp-card">
+          {pending.map((r) => (
+            <li key={String(r.comboId)} className="opp-card">
               <div className="opp-card-head">
-                <span className="opp-card-kind">#{Number(p.id)} {p.type}</span>
-                <Chip tone={p.status === "ACTIVE" ? "good" : "neutral"}>{p.status}</Chip>
-              </div>
-              <div className="opp-card-stats stats">
-                <StatTile label="净盈亏" value={fmtUsd(p.netPnlUsd)} />
-                <StatTile label="浮动" value={fmtUsd(p.floatingPnlUsd)} />
-                <StatTile label="腿数" value={String(p.legs.length)} />
+                <span className="opp-card-kind">{r.comboLabel}</span>
+                <Chip tone={r.ready ? "good" : r.tierWarn ? "critical" : "neutral"}>
+                  {r.ready ? "条件就绪" : "等待"}
+                </Chip>
+                <span className="opp-card-who">{r.entryKind}</span>
               </div>
               <div className="opp-card-narrative">
-                开 {ts(p.openedAt)} · 平 {ts(p.closedAt)}
+                {r.waitReason || "—"}
+                {r.tierDetail ? ` · ${r.tierDetail}` : ""}
+                {r.breakerPaused ? ` · 熔断暂停×${r.breakerCount}` : ""}
+                {r.recentFundingReject ? ` · 近期拒：${r.recentRejectReason}` : ""}
               </div>
+              {(r.waitCurrentBps !== undefined || r.waitThresholdBps !== undefined) && (
+                <div className="opp-card-narrative muted">
+                  价差 {r.waitCurrentBps?.toFixed(1) ?? "—"}bps / 阈 {r.waitThresholdBps?.toFixed(1) ?? "—"}bps
+                </div>
+              )}
             </li>
           ))}
         </ul>
       ) : (
-        <EmptyState>零系统仓</EmptyState>
+        <EmptyState>零待入场组合</EmptyState>
       )}
+
+      <h2>系统仓台账</h2>
+      {(() => {
+        const act = [...sysPos.values()].filter((p) => p.status === "ACTIVE");
+        const closed = [...sysPos.values()].filter((p) => p.status !== "ACTIVE");
+        return (
+          <>
+            {act.length > 0 ? (
+              <ul className="opp-cards opp-grid">
+                {act.map((p) => (
+                  <li key={Number(p.id)} className="opp-card">
+                    <div className="opp-card-head">
+                      <span className="opp-card-kind">#{Number(p.id)} {p.type}</span>
+                      <Chip tone="good">{p.status}</Chip>
+                    </div>
+                    <div className="opp-card-stats stats">
+                      <StatTile label="净盈亏" value={fmtUsd(p.netPnlUsd)} />
+                      <StatTile label="浮动" value={fmtUsd(p.floatingPnlUsd)} />
+                      <StatTile label="腿数" value={String(p.legs.length)} />
+                    </div>
+                    <div className="opp-card-narrative">
+                      开 {ts(p.openedAt)} · 平 {ts(p.closedAt)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState>零在跑系统仓</EmptyState>
+            )}
+            {/* 画骨②：已平仓区（arb PositionsPageClosedRow 借形——台账下半区） */}
+            <h3>已平仓</h3>
+            {closed.length > 0 ? (
+              <ul className="opp-cards opp-grid">
+                {closed.map((p) => (
+                  <li key={Number(p.id)} className="opp-card" style={{ opacity: 0.6 }}>
+                    <div className="opp-card-head">
+                      <span className="opp-card-kind">#{Number(p.id)} {p.type}</span>
+                      <Chip tone={(p.netPnlUsd ?? 0) >= 0 ? "good" : "critical"}>{p.status}</Chip>
+                    </div>
+                    <div className="opp-card-narrative">
+                      净 {fmtUsd(p.netPnlUsd ?? 0)} · 腿 {p.legs.length} · 平 {ts(p.closedAt)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState>零已平仓行</EmptyState>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }

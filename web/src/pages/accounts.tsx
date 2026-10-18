@@ -10,6 +10,7 @@ import type { AccountInfo } from "../gen/dashboardv1/account_pb";
 import type { AccountEvent } from "../gen/dashboardv1/stream_pb";
 import { fmtUsd, ts } from "../components/fmt";
 import { ConfirmDialog } from "../components/Modal";
+import { MappingModal } from "../components/MappingModal";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
 
@@ -22,6 +23,7 @@ export default function AccountsPage() {
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [cfm, setCfm] = useState<{ text: string; run: () => void } | null>(null);
+  const [mapVenue, setMapVenue] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -98,6 +100,7 @@ export default function AccountsPage() {
                 <div className="opp-card-narrative" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <button onClick={() => act(() => client.setBrokerAccountIsReal({ venue: b.venue, isReal: !b.isReal }), "已切换 real")}>real={String(b.isReal)}</button>
                   <button onClick={() => act(() => client.setBrokerDisabled({ venue: b.venue, disabled: b.status !== "disabled" }), "已切换")}>{b.status === "disabled" ? "启用" : "停用"}</button>
+                  <button onClick={() => setMapVenue(b.venue)}>映射</button>
                   <button className="danger" onClick={() => setCfm({ text: `删户 ${b.venue}？`, run: () => act(() => client.removeBroker({ venue: b.venue, reason: "ui" }), "已删户") })}>删</button>
                 </div>
               </li>
@@ -139,6 +142,11 @@ export default function AccountsPage() {
       )}
       <ExchangeForm onDone={(m) => setMsg(m)} onErr={setErr} reload={load} />
 
+      {/* 画骨③：符号映射浮层（broker_symbol_map 管理面——venue 级 scoped） */}
+      {mapVenue && (
+        <MappingModal venue={mapVenue} onClose={() => { setMapVenue(null); void load(); }}
+          onErr={setErr} />
+      )}
       <ConfirmDialog open={cfm != null} text={cfm?.text}
         onCancel={() => setCfm(null)}
         onConfirm={() => { const r = cfm?.run; setCfm(null); r?.(); }} />
