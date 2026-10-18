@@ -4,6 +4,7 @@ package dciexec
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -184,5 +185,60 @@ func TestJitReturnForPosition_LegDedup(t *testing.T) {
 	ex.JitReturnForPosition(context.Background(), 42)
 	if calls != 0 {
 		t.Fatalf("净零仍读 tradingFree %d 次", calls)
+	}
+}
+
+// TestJitSweep_HalfRevert D-? 半程残留回补锚：赎回成+二跳划转败→已赎金额
+// 重申回 earn 桶（Subscribe 发+jit-swp:...:undo 记账行）+零残留告警；
+// 回补败（无可购档）→warn 残留如实告。
+func TestJitSweep_HalfRevert(t *testing.T) {
+	// 回补成径
+	rail := &fakeRail{
+		positions: []EarnPosition{{ProductID: "p", Amount: 500}},
+		products:  []EarnProduct{{ProductID: "gate-uni-USDT", CanPurchase: true}},
+	}
+	ex, st := railFixture("gate", rail)
+	ex.JitTransferFn = func(_ context.Context, _, _ string, _ float64, _, _ string) error {
+		return errors.New("transfer 403")
+	}
+	fakeIOCaptures = nil
+	if err := ex.JitSweep(context.Background(), "gate:perp", 100); err == nil ||
+		!strings.Contains(err.Error(), "划转") {
+		t.Fatalf("二跳败应如实返 err: %v", err)
+	}
+	if rail.prodSub != 1 {
+		t.Fatalf("回补申购次数 %d≠1（残滞留未回补）", rail.prodSub)
+	}
+	var sawUndo bool
+	for _, io := range fakeIOCaptures {
+		if strings.HasSuffix(io.ExternalID, ":undo") {
+			sawUndo = true
+		}
+	}
+	if !sawUndo {
+		t.Fatalf("io 补偿行 jit-swp:...:undo 缺: %+v", fakeIOCaptures)
+	}
+	for _, a := range st.alerts {
+		if strings.Contains(a, "半程残留") {
+			t.Fatalf("回补成不应发残留告警: %v", a)
+		}
+	}
+
+	// 回补败径（无可购档）→warn 残留如实
+	rail2 := &fakeRail{positions: []EarnPosition{{ProductID: "p", Amount: 500}}}
+	ex2, st2 := railFixture("gate", rail2)
+	ex2.JitTransferFn = func(_ context.Context, _, _ string, _ float64, _, _ string) error {
+		return errors.New("transfer 403")
+	}
+	fakeIOCaptures = nil
+	_ = ex2.JitSweep(context.Background(), "gate:perp", 100)
+	var sawWarn bool
+	for _, a := range st2.alerts {
+		if strings.Contains(a, "JIT 归集半程残留") {
+			sawWarn = true
+		}
+	}
+	if !sawWarn {
+		t.Fatalf("回补败残留告警缺: %v", st2.alerts)
 	}
 }

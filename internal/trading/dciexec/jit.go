@@ -57,21 +57,25 @@ func (e *Executor) JitSweep(ctx context.Context, venueKey string, shortfall floa
 	}
 	nonce := e.nowOr().UnixNano()
 	need := shortfall
+	var redeemed float64 // 已赎在 funding/spot 的资金——后段败须回补 earn（半程残留病灶修）
 	for _, p := range positions {
 		if need <= 1e-8 {
 			break
 		}
 		amt := math.Min(need, p.Amount)
 		if err := rail.Redeem(ctx, p.ProductID, amt); err != nil {
+			e.jitSweepRevert(ctx, venue, redeemed, nonce)
 			return fmt.Errorf("%s earn 赎回 %s %.4f 败: %w", venue, p.ProductID, amt, err)
 		}
 		e.ioTransfer(ctx, venue, jitCcy, amt, "earn", jitFundingWallet(venue),
 			fmt.Sprintf("jit-swp:%s:%d:red", venue, nonce), "")
+		redeemed += amt
 		need -= amt
 	}
 	// 二跳：funding/spot→交易户（spot 腿赎回即达——免跳）。
 	if to := jitTradingWallet(venue, vt); to != "" {
 		if err := e.jitDoTransfer(ctx, venue, jitCcy, shortfall, jitFundingWallet(venue), to); err != nil {
+			e.jitSweepRevert(ctx, venue, redeemed, nonce) // 赎成+二跳败=残滞留回补（无回补=钱晾在 funding/spot 实证坑）
 			return fmt.Errorf("%s %s→%s 划转 %.4f 败: %w", venue, jitFundingWallet(venue), to, shortfall, err)
 		}
 		e.ioTransfer(ctx, venue, jitCcy, shortfall, jitFundingWallet(venue), to,
@@ -160,6 +164,52 @@ func (e *Executor) jitReturn(ctx context.Context, venue, vt string) error {
 		fmt.Sprintf("jit-ret:%s:%d:sub", venue, nonce), body)
 	log.Printf("[dciexec] jit return %s %.4f %s→earn 成（outstanding %.4f）", venue, amt, jitCcy, outstanding)
 	return nil
+}
+
+// jitSweepRevert 半程残留回补：赎回成+后段败→已赎金额重申回 earn 桶
+// （滞留 funding/spot=钱晾外面实证坑——本次靠 autoexec 顺手回申购才归位）。
+// 回补败/无可购档=残留如实 warn（告警携金额 venue 可追，下拍 jitReturn 面可续）。
+func (e *Executor) jitSweepRevert(ctx context.Context, venue string, amt float64, nonce int64) {
+	if amt <= 1e-6 {
+		return
+	}
+	fail := func(why error) {
+		log.Printf("[dciexec] jit sweep revert %s %.4f 败: %v", venue, amt, why)
+		if aerr := e.Store.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
+			"JIT 归集半程残留：%s 赎回 %.4f 成+后段败——回补 earn 败（金滞 %s，下拍/手工处置）: %v",
+			venue, amt, jitFundingWallet(venue), why)); aerr != nil {
+			log.Printf("[dciexec] jit revert alert: %v", aerr)
+		}
+	}
+	rail, ok := e.earnRail(venue)
+	if !ok {
+		fail(fmt.Errorf("earn rail 缺席"))
+		return
+	}
+	prods, err := rail.Products(ctx, jitCcy)
+	if err != nil {
+		fail(fmt.Errorf("earn 产品面读败: %w", err))
+		return
+	}
+	var pid string
+	for _, pr := range prods {
+		if pr.CanPurchase {
+			pid = pr.ProductID
+			break
+		}
+	}
+	if pid == "" {
+		fail(fmt.Errorf("earn 无可购档"))
+		return
+	}
+	body, err := rail.Subscribe(ctx, pid, amt)
+	if err != nil {
+		fail(fmt.Errorf("earn 回补申购 %.4f 败: %w", amt, err))
+		return
+	}
+	e.ioTransfer(ctx, venue, jitCcy, amt, jitFundingWallet(venue), "earn",
+		fmt.Sprintf("jit-swp:%s:%d:undo", venue, nonce), body)
+	log.Printf("[dciexec] jit sweep revert %s %.4f →earn 回补成", venue, amt)
 }
 
 // jitDoTransfer 划转缝（测试注 JitTransferFn 替真发；nil=jitWalletTransfer 实件）。
