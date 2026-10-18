@@ -1,0 +1,225 @@
+/* —— D-091 前端分析员抽屉 —— */
+
+/* 顶栏 ✦ 入口按钮 */
+.analyst-fab {
+  background: none;
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  padding: 4px 10px;
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 1;
+  user-select: none;
+  -webkit-touch-callout: none; /* 移动端防 fab 文本选中/callout（D-101 后仍防误选） */
+  -webkit-user-select: none;
+}
+.analyst-fab:hover { color: var(--ink); }
+/* 抽屉容器：桌面右停靠 420px；移动 bottom sheet 70vh */
+.analyst-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 100vw;
+  background: var(--surface);
+  border-left: 1px solid var(--ring);
+  box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
+  z-index: 150;
+}
+.analyst-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ring);
+  font-weight: 600;
+  font-size: 14px;
+}
+.analyst-drawer-close {
+  background: none;
+  border: none;
+  color: var(--ink-2);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+.analyst-drawer-close:hover { color: var(--ink); }
+
+/* 上下文 chips 栏 */
+.analyst-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--ring);
+  min-height: 36px;
+}
+.analyst-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg);
+  border: 1px solid var(--ring);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.analyst-chip.env { border-style: dashed; }
+/* F4：环境已关闭时的「+ 环境」灰 chip（可点击恢复） */
+.analyst-chip.env-off {
+  border-style: dashed;
+  border-color: var(--ring);
+  color: var(--ink-3, #888);
+  cursor: pointer;
+  background: none;
+}
+.analyst-chip.env-off:hover { color: var(--ink-2); }
+.analyst-chip button {
+  background: none;
+  border: none;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 0 0 2px;
+}
+.analyst-chip button:hover { color: var(--danger, #c33); }
+
+/* 回答区（滚动） */
+.analyst-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.analyst-turn { margin-bottom: 14px; }
+.analyst-turn-q {
+  color: var(--ink-2);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.analyst-turn-a { color: var(--ink); }
+.analyst-turn-a.ungrounded {
+  color: var(--ink-2);
+  border-left: 3px solid var(--danger, #c33);
+  padding-left: 8px;
+  opacity: 0.85;
+}
+.analyst-warn {
+  font-size: 11px;
+  color: var(--danger, #c33);
+  margin-top: 4px;
+}
+.analyst-citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.analyst-cite {
+  background: var(--bg);
+  border: 1px solid var(--ring);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.analyst-cite:hover { color: var(--accent); }
+.analyst-cite-excerpt {
+  display: block;
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+}
+.analyst-note-btn {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+.analyst-note-btn:hover { background: var(--accent); color: #fff; }
+.analyst-note-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* 追问 chips */
+.analyst-followups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--ring);
+}
+.analyst-followup {
+  background: var(--bg);
+  border: 1px solid var(--ring);
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.analyst-followup:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 输入栏 */
+.analyst-input {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--ring);
+}
+.analyst-input textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+  min-height: 36px;
+  max-height: 96px;
+}
+.analyst-input button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+.analyst-input button:disabled { opacity: 0.5; cursor: default; }
+.analyst-empty {
+  color: var(--ink-2);
+  font-size: 12px;
+  text-align: center;
+  padding: 40px 14px;
+}
+
+/* 移动端 bottom sheet */
+@media (max-width: 720px) {
+  .analyst-drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    width: 100vw;
+    height: 70vh;
+    border-left: none;
+    border-top: 1px solid var(--ring);
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+    border-radius: 12px 12px 0 0;
+  }
+}
