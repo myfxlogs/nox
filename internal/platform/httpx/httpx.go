@@ -62,6 +62,9 @@ func Client() *http.Client {
 	if fb := newFailoverRT(c.Transport); fb != nil {
 		c.Transport = fb
 	}
+	// 418 感知全局退避闸——最外包（封禁响应层语义先于 failover 传输层尝试；
+	// 单闸全 bn REST 消费径同过=封禁自持病灶单点治理）。
+	c.Transport = newBanGateRT(c.Transport)
 	return c
 }
 
