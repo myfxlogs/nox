@@ -189,7 +189,9 @@ internal/risk/position -> internal/platform/safego
 internal/risk/position -> internal/review/verification
 internal/risk/position -> internal/store/pgstore
 internal/risk/selfwatch -> internal/data/fact
+internal/risk/selfwatch -> internal/data/fact
 internal/risk/selfwatch -> internal/data/macro
+internal/risk/selfwatch -> internal/platform/alerttext
 internal/risk/selfwatch -> internal/platform/safego
 internal/risk/selfwatch -> internal/research/scan
 internal/risk/selfwatch -> internal/review/sysretro

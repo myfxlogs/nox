@@ -1,5 +1,5 @@
-// Package alerttext 告警出口文本归一（D-588）。叶包零项目依赖——pgstore 告警漏斗
-// 与各直推旁路共用；规避 notify→pgstore 反向依赖环。
+// Package alerttext 告警出口文本归一+席位转发令组装（D-588/D-622）。叶包零项目依赖
+// ——pgstore 告警漏斗与各直推旁路共用；规避 notify→pgstore 反向依赖环。
 package alerttext
 
 import (
