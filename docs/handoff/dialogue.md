@@ -132,3 +132,15 @@
 - **议题**：复审席全天收口 25+ 票——D-620 LIVE 授权链（方案核验+施工照准+部署）/ D-622 席位转发令泛化四批+condition_gap（八族全覆盖）/ D-623 假设裁决写口+memo 归一 / venue 内划转 JIT 执行件（方案核验四点+施工）/ TRADIFI_PERP 族评估+S2 桥+采集轴 / earn_yield 扇出修 / UI 六件（弹窗/网格/中文化/聚合/防抖/标题）/ bn-capability 全谱封账 / 多件基建修（ban gate/wsrunner/CMC/CI）。
 - **关键裁定**：方案核验四件（LIVE 授权链/venue 划转/TRADIFI/快照治理——均照准附补正）；复审不派单固化 D-618；收口四件套机械闸固化（D-618 补遗）；本席失守 2 次（无锚热修+假部署声明——产物级验证纪律立）。
 - **决策号**：D-617~D-624 + D-618 补遗。
+
+## 2026-10-18 决策席会话（资金账/泛化封账/JIT首拍/残差双计）
+
+- **本金账**：110660304 入金 $1k 落 io 账（deposit 行 10-17 02:41）；`NOX_CAPITAL_BASE_USD=11317` 已同步；前端总览报 $12,312.46 与 base 差 $995.46≈入金额——基线快照+四疑点（okx:funding 51.7M 幻影行/第四MT5户62311223=$172.95/binance:earn多资产同键行/spot口径差）钉 STATE⑮，明日逐笔核。
+- **报价条证实**：binance-mkt-ws bookTicker 实证 live（q:0s）；wire_quotes 头部「binance REST 轮询」注释陈旧挂账。
+- **D-622 泛化封账**：s2bridge 9 站漏面立四批→并入 @438fc0a1e；gap 推送 16:05:13+假设#5 复推实拍末行令→封账成立（尾锚全清）。
+- **master build 破**：denominator-live merge 丢 import @3c006a81e 修复——复审机检失守计 1。
+- **JIT 首拍=如实拒支路全通**：armed#19 信号→gate:perp=0→归集败分型落箱（permission #83=gate key 缺钱包写权限——业主配合项；capital=earn 可赎不足）。
+- **假设#5 腿参裁定**：side=short+15032313|US500（SPCXUSD1 funding −8.x 负→多CEX收息×US500空腿成本−0.03），前置闸挡=sessions 轴键形 bug 修后再喂 params_proto。
+- **残差 critical=真双计**：earn 申购 io+订单腿双径（第三案异键双写）→修件票立；JIT 半程残留票立；okx unified 映射缺票立。
+- **TrxWatchCard kind 漏传**修复+本机构镜像部署（SG npm buf 装败+compose cpus:8 超 4 核——部署须 `-f sg` override）。
+- **TRX 盯盘定参**：subject=TRXUSD venue_key=cmc（cmc_price 流实证）。
