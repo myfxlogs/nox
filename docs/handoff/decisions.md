@@ -684,3 +684,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 
 - **裁定**：需席位动作的告警文本末行固定嵌一行 `[角色:决策|实施]` 式可转发开工令（与复审收口转交词同构、固定末位=缺席立辨）。首件=LIVE 授权时效告警；业主动作从「转述」降为「复制粘贴」。判断与签发仍归席位——机制只闭合触发→派发，不自动化授权本身。
 - **依据**：业主指示立项；告警内嵌转发令比独立通知面更醒目（Feishu 单消息即完整处置线索）。
+
+## D-623（2026-10-18 决策席）假设裁决写口+memo径归一——「有表无门」同型病灶第二处收口
+
+- **裁定**：fin_opp_hypothesis 增 `DecideHypothesis` RPC 写口（D-620 SetExecutionMode 同范式：actor/reason/evidence_ref 必填、status=proposed 才受理、alerts 留痕）；LLM memo 触发径归一——radar 每拍扫 `proposed AND family_fit IS NULL` 行补预审（直写径产出不再漏预审）；设计稿对齐实况+STATE 218 🧊票作废并入本票。
+- **依据**：审计亲证——SG 74 行假设裁决全 psql 直写零 actor/事件；memo 仅 3 行非空、category_memo 调用止于 10-14；§3「备忘录在手裁决秒级」前提在产未成立。同型病灶=D-620 前的 live_gates（有表无门）。
