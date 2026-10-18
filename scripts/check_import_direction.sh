@@ -152,6 +152,7 @@ internal/research/explorer -> internal/store/pgstore
 internal/research/oppmatch -> internal/data/collect/exchange
 internal/research/oppmatch -> internal/data/keydomain
 internal/research/oppmatch -> internal/data/fact
+internal/research/oppmatch -> internal/platform/alerttext
 internal/research/oppmatch -> internal/platform/httpx
 internal/research/oppmatch -> internal/portfolio/lifecycle
 internal/research/oppmatch -> internal/research/econ
@@ -159,6 +160,7 @@ internal/research/oppmatch -> internal/risk/gate
 internal/research/oppmatch -> internal/store/pgstore
 internal/research/scan -> internal/data/fact
 internal/research/scan -> internal/data/keydomain
+internal/research/scan -> internal/platform/alerttext
 internal/research/scan -> internal/store/pgstore
 internal/review -> internal/store/pgstore
 internal/review/deptreport -> internal/platform/analyst
@@ -234,6 +236,7 @@ internal/trading/dciexec -> internal/data/keydomain
 internal/trading/dciexec -> internal/infra/dephealth
 internal/trading/dciexec -> internal/kbsearch
 internal/trading/dciexec -> internal/risk/gate
+internal/trading/dciexec -> internal/platform/alerttext
 internal/trading/dciexec -> internal/platform/errclass
 internal/trading/dciexec -> internal/platform/httpx
 internal/trading/dciexec -> internal/platform/signutil

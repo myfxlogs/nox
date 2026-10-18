@@ -10,6 +10,7 @@ import (
 	"sort"
 	"time"
 
+	"nox/internal/platform/alerttext"
 	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 )
@@ -114,7 +115,8 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 				log.Printf("[oppmatch] auto 轨无执行器 %s 翻 deferred %d 行", r.TemplateID, n)
 			}
 			if err := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
-				"auto 轨无执行器 %s@binance 达标但不产提案（executor-missing）", r.TemplateID)); err != nil {
+				"auto 轨无执行器 %s@binance 达标但不产提案（executor-missing）%s", r.TemplateID,
+				alerttext.SeatDispatchLine("实施", fmt.Sprintf("%s 执行器补件评估（读 STATE 本行——达标轨无执行器=补件或下架裁定）", r.TemplateID)))); err != nil {
 				log.Printf("[oppmatch] executor-missing alert %s: %v", r.TemplateID, err)
 			}
 			continue
