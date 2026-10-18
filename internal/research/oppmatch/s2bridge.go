@@ -59,7 +59,7 @@ func s2Bridge(ctx context.Context, st *pgstore.Store) {
 // 双发故 mt_symbol 裸名直查）；资金费率轴=binance funding facts 26h 新鲜行
 // （premiumIndex/markPrice 采集轴产）。返回 miss=缺失轴名（""=双轴齐）。
 func s2TradifiAxesReady(ctx context.Context, st *pgstore.Store, mtVenue, mtSym, cexSym string) (string, error) {
-	sessions, err := st.FactsSince(ctx, fact.KindTradeSession, mtVenue, mtSym, time.Now().Add(-30*24*time.Hour))
+	sessions, err := st.FactsSinceSymbolOrSuffix(ctx, fact.KindTradeSession, mtVenue, mtSym, time.Now().Add(-30*24*time.Hour)) // 休市历 facts 键=symbol#N 后缀族（裸名精确匹配必空=键形错位假「轴空」修）
 	if err != nil {
 		return "", fmt.Errorf("trade_session facts 读败: %w", err)
 	}
