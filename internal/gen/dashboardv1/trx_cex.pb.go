@@ -1393,6 +1393,760 @@ func (x *ListTrxTxsResponse) GetTxs() []*TrxTxRow {
 	return nil
 }
 
+// === GetHedgeStructure 复合读面（arb position.proto:270-370 同名件对拍，
+// D-212 对冲工作台——TRX 页 arb 原版式前置票） ===
+type HedgeStake struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Energy        float64                `protobuf:"fixed64,1,opt,name=energy,proto3" json:"energy,omitempty"`       // energy_delegated ÷ 1e6
+	Bandwidth     float64                `protobuf:"fixed64,2,opt,name=bandwidth,proto3" json:"bandwidth,omitempty"` // bandwidth_staked ÷ 1e6
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HedgeStake) Reset() {
+	*x = HedgeStake{}
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HedgeStake) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HedgeStake) ProtoMessage() {}
+
+func (x *HedgeStake) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HedgeStake.ProtoReflect.Descriptor instead.
+func (*HedgeStake) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_trx_cex_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *HedgeStake) GetEnergy() float64 {
+	if x != nil {
+		return x.Energy
+	}
+	return 0
+}
+
+func (x *HedgeStake) GetBandwidth() float64 {
+	if x != nil {
+		return x.Bandwidth
+	}
+	return 0
+}
+
+type HedgeLegSpot struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Label          string                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`                              // "质押现货"
+	QtyStaked      float64                `protobuf:"fixed64,2,opt,name=qty_staked,json=qtyStaked,proto3" json:"qty_staked,omitempty"`   // 质押数量（fin_trx_account.tron_power ÷ 1e6——votes_total 同源禁 personal_positions 静态）
+	QtyLiquid      float64                `protobuf:"fixed64,3,opt,name=qty_liquid,json=qtyLiquid,proto3" json:"qty_liquid,omitempty"`   // 流动余额（balance_sun ÷ 1e6）
+	PnlVsBase      float64                `protobuf:"fixed64,4,opt,name=pnl_vs_base,json=pnlVsBase,proto3" json:"pnl_vs_base,omitempty"` // 对冲镜像=−空单平台自报 PnL（现货购价未知，镜像近似）
+	Stake          *HedgeStake            `protobuf:"bytes,5,opt,name=stake,proto3" json:"stake,omitempty"`
+	VoteAprCurrent float64                `protobuf:"fixed64,6,opt,name=vote_apr_current,json=voteAprCurrent,proto3" json:"vote_apr_current,omitempty"` // 投票票数加权年化 %（fin_trx_vote_apr 最新行透传）
+	VoteAprMax     float64                `protobuf:"fixed64,7,opt,name=vote_apr_max,json=voteAprMax,proto3" json:"vote_apr_max,omitempty"`             // 市场最高年化 %（producer=true 第一）
+	VoteAprMaxSr   string                 `protobuf:"bytes,8,opt,name=vote_apr_max_sr,json=voteAprMaxSr,proto3" json:"vote_apr_max_sr,omitempty"`       // 最高年化 SR 名
+	VoteAprSpread  float64                `protobuf:"fixed64,9,opt,name=vote_apr_spread,json=voteAprSpread,proto3" json:"vote_apr_spread,omitempty"`    // max−current 差值（pp）
+	VoteAprTs      *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=vote_apr_ts,json=voteAprTs,proto3" json:"vote_apr_ts,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *HedgeLegSpot) Reset() {
+	*x = HedgeLegSpot{}
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HedgeLegSpot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HedgeLegSpot) ProtoMessage() {}
+
+func (x *HedgeLegSpot) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HedgeLegSpot.ProtoReflect.Descriptor instead.
+func (*HedgeLegSpot) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_trx_cex_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *HedgeLegSpot) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *HedgeLegSpot) GetQtyStaked() float64 {
+	if x != nil {
+		return x.QtyStaked
+	}
+	return 0
+}
+
+func (x *HedgeLegSpot) GetQtyLiquid() float64 {
+	if x != nil {
+		return x.QtyLiquid
+	}
+	return 0
+}
+
+func (x *HedgeLegSpot) GetPnlVsBase() float64 {
+	if x != nil {
+		return x.PnlVsBase
+	}
+	return 0
+}
+
+func (x *HedgeLegSpot) GetStake() *HedgeStake {
+	if x != nil {
+		return x.Stake
+	}
+	return nil
+}
+
+func (x *HedgeLegSpot) GetVoteAprCurrent() float64 {
+	if x != nil {
+		return x.VoteAprCurrent
+	}
+	return 0
+}
+
+func (x *HedgeLegSpot) GetVoteAprMax() float64 {
+	if x != nil {
+		return x.VoteAprMax
+	}
+	return 0
+}
+
+func (x *HedgeLegSpot) GetVoteAprMaxSr() string {
+	if x != nil {
+		return x.VoteAprMaxSr
+	}
+	return ""
+}
+
+func (x *HedgeLegSpot) GetVoteAprSpread() float64 {
+	if x != nil {
+		return x.VoteAprSpread
+	}
+	return 0
+}
+
+func (x *HedgeLegSpot) GetVoteAprTs() *timestamppb.Timestamp {
+	if x != nil {
+		return x.VoteAprTs
+	}
+	return nil
+}
+
+type HedgeLegShort struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Label            string                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`                                                 // "CMC 空单"
+	Qty              float64                `protobuf:"fixed64,2,opt,name=qty,proto3" json:"qty,omitempty"`                                                   // fin_cmc_positions.quantity
+	PnlVsBase        float64                `protobuf:"fixed64,3,opt,name=pnl_vs_base,json=pnlVsBase,proto3" json:"pnl_vs_base,omitempty"`                    // 平台自报 PnL（unrealisedPnL 直通——业主令真值非反推）
+	Lev              int32                  `protobuf:"varint,4,opt,name=lev,proto3" json:"lev,omitempty"`                                                    // 1/margin_percentage 推导
+	Liq              float64                `protobuf:"fixed64,5,opt,name=liq,proto3" json:"liq,omitempty"`                                                   // fin_cmc_account_summary.closeout_price
+	DistPct          float64                `protobuf:"fixed64,6,opt,name=dist_pct,json=distPct,proto3" json:"dist_pct,omitempty"`                            // distance_to_closeout_pct
+	BrokerUnrealised float64                `protobuf:"fixed64,7,opt,name=broker_unrealised,json=brokerUnrealised,proto3" json:"broker_unrealised,omitempty"` // broker 权威浮盈（参考展示不做镜像源——停用不删字段保兼容）
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *HedgeLegShort) Reset() {
+	*x = HedgeLegShort{}
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HedgeLegShort) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HedgeLegShort) ProtoMessage() {}
+
+func (x *HedgeLegShort) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HedgeLegShort.ProtoReflect.Descriptor instead.
+func (*HedgeLegShort) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_trx_cex_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *HedgeLegShort) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *HedgeLegShort) GetQty() float64 {
+	if x != nil {
+		return x.Qty
+	}
+	return 0
+}
+
+func (x *HedgeLegShort) GetPnlVsBase() float64 {
+	if x != nil {
+		return x.PnlVsBase
+	}
+	return 0
+}
+
+func (x *HedgeLegShort) GetLev() int32 {
+	if x != nil {
+		return x.Lev
+	}
+	return 0
+}
+
+func (x *HedgeLegShort) GetLiq() float64 {
+	if x != nil {
+		return x.Liq
+	}
+	return 0
+}
+
+func (x *HedgeLegShort) GetDistPct() float64 {
+	if x != nil {
+		return x.DistPct
+	}
+	return 0
+}
+
+func (x *HedgeLegShort) GetBrokerUnrealised() float64 {
+	if x != nil {
+		return x.BrokerUnrealised
+	}
+	return 0
+}
+
+type HedgeCarry struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	TrxRental_7DTrx     float64                `protobuf:"fixed64,1,opt,name=trx_rental_7d_trx,json=trxRental7dTrx,proto3" json:"trx_rental_7d_trx,omitempty"`
+	TrxVote_7DTrx       float64                `protobuf:"fixed64,2,opt,name=trx_vote_7d_trx,json=trxVote7dTrx,proto3" json:"trx_vote_7d_trx,omitempty"`
+	CmcOvernight_7DUsd  float64                `protobuf:"fixed64,3,opt,name=cmc_overnight_7d_usd,json=cmcOvernight7dUsd,proto3" json:"cmc_overnight_7d_usd,omitempty"`
+	CumUsd              float64                `protobuf:"fixed64,4,opt,name=cum_usd,json=cumUsd,proto3" json:"cum_usd,omitempty"`
+	AnnualizedPct       float64                `protobuf:"fixed64,5,opt,name=annualized_pct,json=annualizedPct,proto3" json:"annualized_pct,omitempty"` // 时间感知年化（cum/days×365——firstIncomeDay 缺=0 诚实缺）
+	HedgedCumUsd        float64                `protobuf:"fixed64,6,opt,name=hedged_cum_usd,json=hedgedCumUsd,proto3" json:"hedged_cum_usd,omitempty"`  // 对冲后累计（窗口=[hedgeStart,now]）
+	HedgedAnnualizedPct float64                `protobuf:"fixed64,7,opt,name=hedged_annualized_pct,json=hedgedAnnualizedPct,proto3" json:"hedged_annualized_pct,omitempty"`
+	MtdNetUsd           float64                `protobuf:"fixed64,8,opt,name=mtd_net_usd,json=mtdNetUsd,proto3" json:"mtd_net_usd,omitempty"`            // 月至今净额 USD
+	MtdSampleDays       int32                  `protobuf:"varint,9,opt,name=mtd_sample_days,json=mtdSampleDays,proto3" json:"mtd_sample_days,omitempty"` // 月内 rollup 行数（0=冷启动前端「—」）
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *HedgeCarry) Reset() {
+	*x = HedgeCarry{}
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HedgeCarry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HedgeCarry) ProtoMessage() {}
+
+func (x *HedgeCarry) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HedgeCarry.ProtoReflect.Descriptor instead.
+func (*HedgeCarry) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_trx_cex_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *HedgeCarry) GetTrxRental_7DTrx() float64 {
+	if x != nil {
+		return x.TrxRental_7DTrx
+	}
+	return 0
+}
+
+func (x *HedgeCarry) GetTrxVote_7DTrx() float64 {
+	if x != nil {
+		return x.TrxVote_7DTrx
+	}
+	return 0
+}
+
+func (x *HedgeCarry) GetCmcOvernight_7DUsd() float64 {
+	if x != nil {
+		return x.CmcOvernight_7DUsd
+	}
+	return 0
+}
+
+func (x *HedgeCarry) GetCumUsd() float64 {
+	if x != nil {
+		return x.CumUsd
+	}
+	return 0
+}
+
+func (x *HedgeCarry) GetAnnualizedPct() float64 {
+	if x != nil {
+		return x.AnnualizedPct
+	}
+	return 0
+}
+
+func (x *HedgeCarry) GetHedgedCumUsd() float64 {
+	if x != nil {
+		return x.HedgedCumUsd
+	}
+	return 0
+}
+
+func (x *HedgeCarry) GetHedgedAnnualizedPct() float64 {
+	if x != nil {
+		return x.HedgedAnnualizedPct
+	}
+	return 0
+}
+
+func (x *HedgeCarry) GetMtdNetUsd() float64 {
+	if x != nil {
+		return x.MtdNetUsd
+	}
+	return 0
+}
+
+func (x *HedgeCarry) GetMtdSampleDays() int32 {
+	if x != nil {
+		return x.MtdSampleDays
+	}
+	return 0
+}
+
+type HedgeAccounts struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	TrxBalance      float64                `protobuf:"fixed64,1,opt,name=trx_balance,json=trxBalance,proto3" json:"trx_balance,omitempty"`       // balance_sun ÷ 1e6
+	TrxAllowance    float64                `protobuf:"fixed64,2,opt,name=trx_allowance,json=trxAllowance,proto3" json:"trx_allowance,omitempty"` // reward_num_sun ÷ 1e6（tronscan rewardNum 链上真值）
+	EnergyDelegated float64                `protobuf:"fixed64,3,opt,name=energy_delegated,json=energyDelegated,proto3" json:"energy_delegated,omitempty"`
+	Votes           float64                `protobuf:"fixed64,4,opt,name=votes,proto3" json:"votes,omitempty"`                          // votes_total
+	CmcCash         float64                `protobuf:"fixed64,5,opt,name=cmc_cash,json=cmcCash,proto3" json:"cmc_cash,omitempty"`       // total_cash_balance
+	CmcEquity       float64                `protobuf:"fixed64,6,opt,name=cmc_equity,json=cmcEquity,proto3" json:"cmc_equity,omitempty"` // total_account_value
+	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	NetLimit        float64                `protobuf:"fixed64,8,opt,name=net_limit,json=netLimit,proto3" json:"net_limit,omitempty"` // 带宽上限（sun 原值透传不 ÷1e6）
+	NetUsed         float64                `protobuf:"fixed64,9,opt,name=net_used,json=netUsed,proto3" json:"net_used,omitempty"`
+	FreeNetLimit    float64                `protobuf:"fixed64,10,opt,name=free_net_limit,json=freeNetLimit,proto3" json:"free_net_limit,omitempty"`
+	FreeNetUsed     float64                `protobuf:"fixed64,11,opt,name=free_net_used,json=freeNetUsed,proto3" json:"free_net_used,omitempty"`
+	EnergyLimit     float64                `protobuf:"fixed64,12,opt,name=energy_limit,json=energyLimit,proto3" json:"energy_limit,omitempty"` // 能量上限（原值透传）
+	EnergyUsed      float64                `protobuf:"fixed64,13,opt,name=energy_used,json=energyUsed,proto3" json:"energy_used,omitempty"`
+	BandwidthStatus string                 `protobuf:"bytes,14,opt,name=bandwidth_status,json=bandwidthStatus,proto3" json:"bandwidth_status,omitempty"` // normal/yellow/red（trxvote 常量同源引用禁双写）
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *HedgeAccounts) Reset() {
+	*x = HedgeAccounts{}
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HedgeAccounts) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HedgeAccounts) ProtoMessage() {}
+
+func (x *HedgeAccounts) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HedgeAccounts.ProtoReflect.Descriptor instead.
+func (*HedgeAccounts) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_trx_cex_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *HedgeAccounts) GetTrxBalance() float64 {
+	if x != nil {
+		return x.TrxBalance
+	}
+	return 0
+}
+
+func (x *HedgeAccounts) GetTrxAllowance() float64 {
+	if x != nil {
+		return x.TrxAllowance
+	}
+	return 0
+}
+
+func (x *HedgeAccounts) GetEnergyDelegated() float64 {
+	if x != nil {
+		return x.EnergyDelegated
+	}
+	return 0
+}
+
+func (x *HedgeAccounts) GetVotes() float64 {
+	if x != nil {
+		return x.Votes
+	}
+	return 0
+}
+
+func (x *HedgeAccounts) GetCmcCash() float64 {
+	if x != nil {
+		return x.CmcCash
+	}
+	return 0
+}
+
+func (x *HedgeAccounts) GetCmcEquity() float64 {
+	if x != nil {
+		return x.CmcEquity
+	}
+	return 0
+}
+
+func (x *HedgeAccounts) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *HedgeAccounts) GetNetLimit() float64 {
+	if x != nil {
+		return x.NetLimit
+	}
+	return 0
+}
+
+func (x *HedgeAccounts) GetNetUsed() float64 {
+	if x != nil {
+		return x.NetUsed
+	}
+	return 0
+}
+
+func (x *HedgeAccounts) GetFreeNetLimit() float64 {
+	if x != nil {
+		return x.FreeNetLimit
+	}
+	return 0
+}
+
+func (x *HedgeAccounts) GetFreeNetUsed() float64 {
+	if x != nil {
+		return x.FreeNetUsed
+	}
+	return 0
+}
+
+func (x *HedgeAccounts) GetEnergyLimit() float64 {
+	if x != nil {
+		return x.EnergyLimit
+	}
+	return 0
+}
+
+func (x *HedgeAccounts) GetEnergyUsed() float64 {
+	if x != nil {
+		return x.EnergyUsed
+	}
+	return 0
+}
+
+func (x *HedgeAccounts) GetBandwidthStatus() string {
+	if x != nil {
+		return x.BandwidthStatus
+	}
+	return ""
+}
+
+type HedgeStructure struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	BaselinePrice      float64                `protobuf:"fixed64,1,opt,name=baseline_price,json=baselinePrice,proto3" json:"baseline_price,omitempty"` // 空单 entry_price（现货购价未知=基准注记）
+	Mid                float64                `protobuf:"fixed64,2,opt,name=mid,proto3" json:"mid,omitempty"`                                          // 两腿共用同一 mid=镜像成立
+	LegSpot            *HedgeLegSpot          `protobuf:"bytes,3,opt,name=leg_spot,json=legSpot,proto3" json:"leg_spot,omitempty"`
+	LegShort           *HedgeLegShort         `protobuf:"bytes,4,opt,name=leg_short,json=legShort,proto3" json:"leg_short,omitempty"`
+	NetExposureTrx     float64                `protobuf:"fixed64,5,opt,name=net_exposure_trx,json=netExposureTrx,proto3" json:"net_exposure_trx,omitempty"` // (balance+staked−short_qty) 真实计算
+	NetExposureUsd     float64                `protobuf:"fixed64,6,opt,name=net_exposure_usd,json=netExposureUsd,proto3" json:"net_exposure_usd,omitempty"` // × mid
+	Carry              *HedgeCarry            `protobuf:"bytes,7,opt,name=carry,proto3" json:"carry,omitempty"`
+	Accts              *HedgeAccounts         `protobuf:"bytes,8,opt,name=accts,proto3" json:"accts,omitempty"`
+	WsConnected        bool                   `protobuf:"varint,9,opt,name=ws_connected,json=wsConnected,proto3" json:"ws_connected,omitempty"`                        // cmc ws 健康（false=黄/REST 兜底中）
+	CloseoutSource     string                 `protobuf:"bytes,10,opt,name=closeout_source,json=closeoutSource,proto3" json:"closeout_source,omitempty"`               // "platform_rule_50"=CMC 面板标定保证金 50%
+	PlatformAlertState string                 `protobuf:"bytes,11,opt,name=platform_alert_state,json=platformAlertState,proto3" json:"platform_alert_state,omitempty"` // normal/warning/breach（alerts 直读）
+	PlatformAlerts     string                 `protobuf:"bytes,12,opt,name=platform_alerts,json=platformAlerts,proto3" json:"platform_alerts,omitempty"`               // alerts 原文 JSON 透传
+	CloseoutLevelUsd   float64                `protobuf:"fixed64,13,opt,name=closeout_level_usd,json=closeoutLevelUsd,proto3" json:"closeout_level_usd,omitempty"`     // = totalMargin×50%
+	WarningLevelUsd    float64                `protobuf:"fixed64,14,opt,name=warning_level_usd,json=warningLevelUsd,proto3" json:"warning_level_usd,omitempty"`        // = totalMargin×80%
+	Ask                float64                `protobuf:"fixed64,15,opt,name=ask,proto3" json:"ask,omitempty"`                                                         // ForSide Sell 口径（强平/PnL 同源）
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *HedgeStructure) Reset() {
+	*x = HedgeStructure{}
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HedgeStructure) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HedgeStructure) ProtoMessage() {}
+
+func (x *HedgeStructure) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HedgeStructure.ProtoReflect.Descriptor instead.
+func (*HedgeStructure) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_trx_cex_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *HedgeStructure) GetBaselinePrice() float64 {
+	if x != nil {
+		return x.BaselinePrice
+	}
+	return 0
+}
+
+func (x *HedgeStructure) GetMid() float64 {
+	if x != nil {
+		return x.Mid
+	}
+	return 0
+}
+
+func (x *HedgeStructure) GetLegSpot() *HedgeLegSpot {
+	if x != nil {
+		return x.LegSpot
+	}
+	return nil
+}
+
+func (x *HedgeStructure) GetLegShort() *HedgeLegShort {
+	if x != nil {
+		return x.LegShort
+	}
+	return nil
+}
+
+func (x *HedgeStructure) GetNetExposureTrx() float64 {
+	if x != nil {
+		return x.NetExposureTrx
+	}
+	return 0
+}
+
+func (x *HedgeStructure) GetNetExposureUsd() float64 {
+	if x != nil {
+		return x.NetExposureUsd
+	}
+	return 0
+}
+
+func (x *HedgeStructure) GetCarry() *HedgeCarry {
+	if x != nil {
+		return x.Carry
+	}
+	return nil
+}
+
+func (x *HedgeStructure) GetAccts() *HedgeAccounts {
+	if x != nil {
+		return x.Accts
+	}
+	return nil
+}
+
+func (x *HedgeStructure) GetWsConnected() bool {
+	if x != nil {
+		return x.WsConnected
+	}
+	return false
+}
+
+func (x *HedgeStructure) GetCloseoutSource() string {
+	if x != nil {
+		return x.CloseoutSource
+	}
+	return ""
+}
+
+func (x *HedgeStructure) GetPlatformAlertState() string {
+	if x != nil {
+		return x.PlatformAlertState
+	}
+	return ""
+}
+
+func (x *HedgeStructure) GetPlatformAlerts() string {
+	if x != nil {
+		return x.PlatformAlerts
+	}
+	return ""
+}
+
+func (x *HedgeStructure) GetCloseoutLevelUsd() float64 {
+	if x != nil {
+		return x.CloseoutLevelUsd
+	}
+	return 0
+}
+
+func (x *HedgeStructure) GetWarningLevelUsd() float64 {
+	if x != nil {
+		return x.WarningLevelUsd
+	}
+	return 0
+}
+
+func (x *HedgeStructure) GetAsk() float64 {
+	if x != nil {
+		return x.Ask
+	}
+	return 0
+}
+
+type GetHedgeStructureRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetHedgeStructureRequest) Reset() {
+	*x = GetHedgeStructureRequest{}
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetHedgeStructureRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetHedgeStructureRequest) ProtoMessage() {}
+
+func (x *GetHedgeStructureRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetHedgeStructureRequest.ProtoReflect.Descriptor instead.
+func (*GetHedgeStructureRequest) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_trx_cex_proto_rawDescGZIP(), []int{23}
+}
+
+type GetHedgeStructureResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Structure     *HedgeStructure        `protobuf:"bytes,1,opt,name=structure,proto3" json:"structure,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetHedgeStructureResponse) Reset() {
+	*x = GetHedgeStructureResponse{}
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetHedgeStructureResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetHedgeStructureResponse) ProtoMessage() {}
+
+func (x *GetHedgeStructureResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetHedgeStructureResponse.ProtoReflect.Descriptor instead.
+func (*GetHedgeStructureResponse) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_trx_cex_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *GetHedgeStructureResponse) GetStructure() *HedgeStructure {
+	if x != nil {
+		return x.Structure
+	}
+	return nil
+}
+
 var File_dashboardv1_trx_cex_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_trx_cex_proto_rawDesc = "" +
@@ -1528,7 +2282,85 @@ const file_dashboardv1_trx_cex_proto_rawDesc = "" +
 	"\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\"B\n" +
 	"\x12ListTrxTxsResponse\x12,\n" +
-	"\x03txs\x18\x01 \x03(\v2\x1a.nox.dashboard.v1.TrxTxRowR\x03txsB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x03txs\x18\x01 \x03(\v2\x1a.nox.dashboard.v1.TrxTxRowR\x03txs\"B\n" +
+	"\n" +
+	"HedgeStake\x12\x16\n" +
+	"\x06energy\x18\x01 \x01(\x01R\x06energy\x12\x1c\n" +
+	"\tbandwidth\x18\x02 \x01(\x01R\tbandwidth\"\x8d\x03\n" +
+	"\fHedgeLegSpot\x12\x14\n" +
+	"\x05label\x18\x01 \x01(\tR\x05label\x12\x1d\n" +
+	"\n" +
+	"qty_staked\x18\x02 \x01(\x01R\tqtyStaked\x12\x1d\n" +
+	"\n" +
+	"qty_liquid\x18\x03 \x01(\x01R\tqtyLiquid\x12\x1e\n" +
+	"\vpnl_vs_base\x18\x04 \x01(\x01R\tpnlVsBase\x122\n" +
+	"\x05stake\x18\x05 \x01(\v2\x1c.nox.dashboard.v1.HedgeStakeR\x05stake\x12(\n" +
+	"\x10vote_apr_current\x18\x06 \x01(\x01R\x0evoteAprCurrent\x12 \n" +
+	"\fvote_apr_max\x18\a \x01(\x01R\n" +
+	"voteAprMax\x12%\n" +
+	"\x0fvote_apr_max_sr\x18\b \x01(\tR\fvoteAprMaxSr\x12&\n" +
+	"\x0fvote_apr_spread\x18\t \x01(\x01R\rvoteAprSpread\x12:\n" +
+	"\vvote_apr_ts\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tvoteAprTs\"\xc3\x01\n" +
+	"\rHedgeLegShort\x12\x14\n" +
+	"\x05label\x18\x01 \x01(\tR\x05label\x12\x10\n" +
+	"\x03qty\x18\x02 \x01(\x01R\x03qty\x12\x1e\n" +
+	"\vpnl_vs_base\x18\x03 \x01(\x01R\tpnlVsBase\x12\x10\n" +
+	"\x03lev\x18\x04 \x01(\x05R\x03lev\x12\x10\n" +
+	"\x03liq\x18\x05 \x01(\x01R\x03liq\x12\x19\n" +
+	"\bdist_pct\x18\x06 \x01(\x01R\adistPct\x12+\n" +
+	"\x11broker_unrealised\x18\a \x01(\x01R\x10brokerUnrealised\"\xf1\x02\n" +
+	"\n" +
+	"HedgeCarry\x12)\n" +
+	"\x11trx_rental_7d_trx\x18\x01 \x01(\x01R\x0etrxRental7dTrx\x12%\n" +
+	"\x0ftrx_vote_7d_trx\x18\x02 \x01(\x01R\ftrxVote7dTrx\x12/\n" +
+	"\x14cmc_overnight_7d_usd\x18\x03 \x01(\x01R\x11cmcOvernight7dUsd\x12\x17\n" +
+	"\acum_usd\x18\x04 \x01(\x01R\x06cumUsd\x12%\n" +
+	"\x0eannualized_pct\x18\x05 \x01(\x01R\rannualizedPct\x12$\n" +
+	"\x0ehedged_cum_usd\x18\x06 \x01(\x01R\fhedgedCumUsd\x122\n" +
+	"\x15hedged_annualized_pct\x18\a \x01(\x01R\x13hedgedAnnualizedPct\x12\x1e\n" +
+	"\vmtd_net_usd\x18\b \x01(\x01R\tmtdNetUsd\x12&\n" +
+	"\x0fmtd_sample_days\x18\t \x01(\x05R\rmtdSampleDays\"\xfc\x03\n" +
+	"\rHedgeAccounts\x12\x1f\n" +
+	"\vtrx_balance\x18\x01 \x01(\x01R\n" +
+	"trxBalance\x12#\n" +
+	"\rtrx_allowance\x18\x02 \x01(\x01R\ftrxAllowance\x12)\n" +
+	"\x10energy_delegated\x18\x03 \x01(\x01R\x0fenergyDelegated\x12\x14\n" +
+	"\x05votes\x18\x04 \x01(\x01R\x05votes\x12\x19\n" +
+	"\bcmc_cash\x18\x05 \x01(\x01R\acmcCash\x12\x1d\n" +
+	"\n" +
+	"cmc_equity\x18\x06 \x01(\x01R\tcmcEquity\x129\n" +
+	"\n" +
+	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1b\n" +
+	"\tnet_limit\x18\b \x01(\x01R\bnetLimit\x12\x19\n" +
+	"\bnet_used\x18\t \x01(\x01R\anetUsed\x12$\n" +
+	"\x0efree_net_limit\x18\n" +
+	" \x01(\x01R\ffreeNetLimit\x12\"\n" +
+	"\rfree_net_used\x18\v \x01(\x01R\vfreeNetUsed\x12!\n" +
+	"\fenergy_limit\x18\f \x01(\x01R\venergyLimit\x12\x1f\n" +
+	"\venergy_used\x18\r \x01(\x01R\n" +
+	"energyUsed\x12)\n" +
+	"\x10bandwidth_status\x18\x0e \x01(\tR\x0fbandwidthStatus\"\x94\x05\n" +
+	"\x0eHedgeStructure\x12%\n" +
+	"\x0ebaseline_price\x18\x01 \x01(\x01R\rbaselinePrice\x12\x10\n" +
+	"\x03mid\x18\x02 \x01(\x01R\x03mid\x129\n" +
+	"\bleg_spot\x18\x03 \x01(\v2\x1e.nox.dashboard.v1.HedgeLegSpotR\alegSpot\x12<\n" +
+	"\tleg_short\x18\x04 \x01(\v2\x1f.nox.dashboard.v1.HedgeLegShortR\blegShort\x12(\n" +
+	"\x10net_exposure_trx\x18\x05 \x01(\x01R\x0enetExposureTrx\x12(\n" +
+	"\x10net_exposure_usd\x18\x06 \x01(\x01R\x0enetExposureUsd\x122\n" +
+	"\x05carry\x18\a \x01(\v2\x1c.nox.dashboard.v1.HedgeCarryR\x05carry\x125\n" +
+	"\x05accts\x18\b \x01(\v2\x1f.nox.dashboard.v1.HedgeAccountsR\x05accts\x12!\n" +
+	"\fws_connected\x18\t \x01(\bR\vwsConnected\x12'\n" +
+	"\x0fcloseout_source\x18\n" +
+	" \x01(\tR\x0ecloseoutSource\x120\n" +
+	"\x14platform_alert_state\x18\v \x01(\tR\x12platformAlertState\x12'\n" +
+	"\x0fplatform_alerts\x18\f \x01(\tR\x0eplatformAlerts\x12,\n" +
+	"\x12closeout_level_usd\x18\r \x01(\x01R\x10closeoutLevelUsd\x12*\n" +
+	"\x11warning_level_usd\x18\x0e \x01(\x01R\x0fwarningLevelUsd\x12\x10\n" +
+	"\x03ask\x18\x0f \x01(\x01R\x03ask\"\x1a\n" +
+	"\x18GetHedgeStructureRequest\"[\n" +
+	"\x19GetHedgeStructureResponse\x12>\n" +
+	"\tstructure\x18\x01 \x01(\v2 .nox.dashboard.v1.HedgeStructureR\tstructureB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_trx_cex_proto_rawDescOnce sync.Once
@@ -1542,7 +2374,7 @@ func file_dashboardv1_trx_cex_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_trx_cex_proto_rawDescData
 }
 
-var file_dashboardv1_trx_cex_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_dashboardv1_trx_cex_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_dashboardv1_trx_cex_proto_goTypes = []any{
 	(*TrxAccountRefreshRequest)(nil),   // 0: nox.dashboard.v1.TrxAccountRefreshRequest
 	(*TrxAccountRefreshResponse)(nil),  // 1: nox.dashboard.v1.TrxAccountRefreshResponse
@@ -1561,28 +2393,44 @@ var file_dashboardv1_trx_cex_proto_goTypes = []any{
 	(*TrxTxRow)(nil),                   // 14: nox.dashboard.v1.TrxTxRow
 	(*ListTrxTxsRequest)(nil),          // 15: nox.dashboard.v1.ListTrxTxsRequest
 	(*ListTrxTxsResponse)(nil),         // 16: nox.dashboard.v1.ListTrxTxsResponse
-	(*timestamppb.Timestamp)(nil),      // 17: google.protobuf.Timestamp
-	(*Holding)(nil),                    // 18: nox.dashboard.v1.Holding
+	(*HedgeStake)(nil),                 // 17: nox.dashboard.v1.HedgeStake
+	(*HedgeLegSpot)(nil),               // 18: nox.dashboard.v1.HedgeLegSpot
+	(*HedgeLegShort)(nil),              // 19: nox.dashboard.v1.HedgeLegShort
+	(*HedgeCarry)(nil),                 // 20: nox.dashboard.v1.HedgeCarry
+	(*HedgeAccounts)(nil),              // 21: nox.dashboard.v1.HedgeAccounts
+	(*HedgeStructure)(nil),             // 22: nox.dashboard.v1.HedgeStructure
+	(*GetHedgeStructureRequest)(nil),   // 23: nox.dashboard.v1.GetHedgeStructureRequest
+	(*GetHedgeStructureResponse)(nil),  // 24: nox.dashboard.v1.GetHedgeStructureResponse
+	(*timestamppb.Timestamp)(nil),      // 25: google.protobuf.Timestamp
+	(*Holding)(nil),                    // 26: nox.dashboard.v1.Holding
 }
 var file_dashboardv1_trx_cex_proto_depIdxs = []int32{
-	17, // 0: nox.dashboard.v1.TrxAccountRefreshResponse.fetched_at:type_name -> google.protobuf.Timestamp
-	17, // 1: nox.dashboard.v1.GetTrxYieldRadarResponse.updated_at:type_name -> google.protobuf.Timestamp
-	17, // 2: nox.dashboard.v1.TrxYieldCurvePoint.day:type_name -> google.protobuf.Timestamp
+	25, // 0: nox.dashboard.v1.TrxAccountRefreshResponse.fetched_at:type_name -> google.protobuf.Timestamp
+	25, // 1: nox.dashboard.v1.GetTrxYieldRadarResponse.updated_at:type_name -> google.protobuf.Timestamp
+	25, // 2: nox.dashboard.v1.TrxYieldCurvePoint.day:type_name -> google.protobuf.Timestamp
 	5,  // 3: nox.dashboard.v1.GetTrxYieldCurveResponse.points:type_name -> nox.dashboard.v1.TrxYieldCurvePoint
 	10, // 4: nox.dashboard.v1.GetCexScanSnapshotResponse.earn_aprs:type_name -> nox.dashboard.v1.CexEarnAPRRow
 	11, // 5: nox.dashboard.v1.GetCexScanSnapshotResponse.spreads:type_name -> nox.dashboard.v1.CexSpreadRow
 	12, // 6: nox.dashboard.v1.GetCexScanSnapshotResponse.fundings:type_name -> nox.dashboard.v1.CexFundingRow
 	13, // 7: nox.dashboard.v1.GetCexScanSnapshotResponse.balances:type_name -> nox.dashboard.v1.CexBalanceRow
 	9,  // 8: nox.dashboard.v1.GetCexScanSnapshotResponse.judgments:type_name -> nox.dashboard.v1.CexEarnJudgmentRow
-	18, // 9: nox.dashboard.v1.CexBalanceRow.holdings:type_name -> nox.dashboard.v1.Holding
-	17, // 10: nox.dashboard.v1.TrxTxRow.ts:type_name -> google.protobuf.Timestamp
-	17, // 11: nox.dashboard.v1.TrxTxRow.fetched_at:type_name -> google.protobuf.Timestamp
+	26, // 9: nox.dashboard.v1.CexBalanceRow.holdings:type_name -> nox.dashboard.v1.Holding
+	25, // 10: nox.dashboard.v1.TrxTxRow.ts:type_name -> google.protobuf.Timestamp
+	25, // 11: nox.dashboard.v1.TrxTxRow.fetched_at:type_name -> google.protobuf.Timestamp
 	14, // 12: nox.dashboard.v1.ListTrxTxsResponse.txs:type_name -> nox.dashboard.v1.TrxTxRow
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	17, // 13: nox.dashboard.v1.HedgeLegSpot.stake:type_name -> nox.dashboard.v1.HedgeStake
+	25, // 14: nox.dashboard.v1.HedgeLegSpot.vote_apr_ts:type_name -> google.protobuf.Timestamp
+	25, // 15: nox.dashboard.v1.HedgeAccounts.updated_at:type_name -> google.protobuf.Timestamp
+	18, // 16: nox.dashboard.v1.HedgeStructure.leg_spot:type_name -> nox.dashboard.v1.HedgeLegSpot
+	19, // 17: nox.dashboard.v1.HedgeStructure.leg_short:type_name -> nox.dashboard.v1.HedgeLegShort
+	20, // 18: nox.dashboard.v1.HedgeStructure.carry:type_name -> nox.dashboard.v1.HedgeCarry
+	21, // 19: nox.dashboard.v1.HedgeStructure.accts:type_name -> nox.dashboard.v1.HedgeAccounts
+	22, // 20: nox.dashboard.v1.GetHedgeStructureResponse.structure:type_name -> nox.dashboard.v1.HedgeStructure
+	21, // [21:21] is the sub-list for method output_type
+	21, // [21:21] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_trx_cex_proto_init() }
@@ -1598,7 +2446,7 @@ func file_dashboardv1_trx_cex_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_trx_cex_proto_rawDesc), len(file_dashboardv1_trx_cex_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

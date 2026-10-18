@@ -164,3 +164,79 @@ message ListTrxTxsRequest {
 message ListTrxTxsResponse {
   repeated TrxTxRow txs = 1;
 }
+
+// === GetHedgeStructure 复合读面（arb position.proto:270-370 同名件对拍，
+// D-212 对冲工作台——TRX 页 arb 原版式前置票） ===
+message HedgeStake {
+  double energy = 1;       // energy_delegated ÷ 1e6
+  double bandwidth = 2;    // bandwidth_staked ÷ 1e6
+}
+message HedgeLegSpot {
+  string label = 1;          // "质押现货"
+  double qty_staked = 2;     // 质押数量（fin_trx_account.tron_power ÷ 1e6——votes_total 同源禁 personal_positions 静态）
+  double qty_liquid = 3;     // 流动余额（balance_sun ÷ 1e6）
+  double pnl_vs_base = 4;    // 对冲镜像=−空单平台自报 PnL（现货购价未知，镜像近似）
+  HedgeStake stake = 5;
+  double vote_apr_current = 6;    // 投票票数加权年化 %（fin_trx_vote_apr 最新行透传）
+  double vote_apr_max = 7;        // 市场最高年化 %（producer=true 第一）
+  string vote_apr_max_sr = 8;     // 最高年化 SR 名
+  double vote_apr_spread = 9;     // max−current 差值（pp）
+  google.protobuf.Timestamp vote_apr_ts = 10;
+}
+message HedgeLegShort {
+  string label = 1;           // "CMC 空单"
+  double qty = 2;             // fin_cmc_positions.quantity
+  double pnl_vs_base = 3;     // 平台自报 PnL（unrealisedPnL 直通——业主令真值非反推）
+  int32 lev = 4;              // 1/margin_percentage 推导
+  double liq = 5;             // fin_cmc_account_summary.closeout_price
+  double dist_pct = 6;        // distance_to_closeout_pct
+  double broker_unrealised = 7;  // broker 权威浮盈（参考展示不做镜像源——停用不删字段保兼容）
+}
+message HedgeCarry {
+  double trx_rental_7d_trx = 1;
+  double trx_vote_7d_trx = 2;
+  double cmc_overnight_7d_usd = 3;
+  double cum_usd = 4;
+  double annualized_pct = 5;      // 时间感知年化（cum/days×365——firstIncomeDay 缺=0 诚实缺）
+  double hedged_cum_usd = 6;      // 对冲后累计（窗口=[hedgeStart,now]）
+  double hedged_annualized_pct = 7;
+  double mtd_net_usd = 8;         // 月至今净额 USD
+  int32 mtd_sample_days = 9;      // 月内 rollup 行数（0=冷启动前端「—」）
+}
+message HedgeAccounts {
+  double trx_balance = 1;         // balance_sun ÷ 1e6
+  double trx_allowance = 2;       // reward_num_sun ÷ 1e6（tronscan rewardNum 链上真值）
+  double energy_delegated = 3;
+  double votes = 4;               // votes_total
+  double cmc_cash = 5;            // total_cash_balance
+  double cmc_equity = 6;          // total_account_value
+  google.protobuf.Timestamp updated_at = 7;
+  double net_limit = 8;           // 带宽上限（sun 原值透传不 ÷1e6）
+  double net_used = 9;
+  double free_net_limit = 10;
+  double free_net_used = 11;
+  double energy_limit = 12;       // 能量上限（原值透传）
+  double energy_used = 13;
+  string bandwidth_status = 14;   // normal/yellow/red（trxvote 常量同源引用禁双写）
+}
+message HedgeStructure {
+  double baseline_price = 1;      // 空单 entry_price（现货购价未知=基准注记）
+  double mid = 2;                 // 两腿共用同一 mid=镜像成立
+  HedgeLegSpot leg_spot = 3;
+  HedgeLegShort leg_short = 4;
+  double net_exposure_trx = 5;    // (balance+staked−short_qty) 真实计算
+  double net_exposure_usd = 6;    // × mid
+  HedgeCarry carry = 7;
+  HedgeAccounts accts = 8;
+  bool ws_connected = 9;          // cmc ws 健康（false=黄/REST 兜底中）
+  string closeout_source = 10;    // "platform_rule_50"=CMC 面板标定保证金 50%
+  string platform_alert_state = 11;  // normal/warning/breach（alerts 直读）
+  string platform_alerts = 12;       // alerts 原文 JSON 透传
+  double closeout_level_usd = 13;    // = totalMargin×50%
+  double warning_level_usd = 14;    // = totalMargin×80%
+  double ask = 15;                // ForSide Sell 口径（强平/PnL 同源）
+}
+message GetHedgeStructureRequest {}
+message GetHedgeStructureResponse {
+  HedgeStructure structure = 1;
+}

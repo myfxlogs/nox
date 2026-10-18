@@ -155,7 +155,7 @@ func main() {
 	if trxW != nil {
 		trxSources = trxW.sources
 	}
-	cmcSources, _ := buildCmcCollectors(ctx, st, cfg, secRes)                                            // 凭据缺=内部优雅降级 nil+缺口落箱
+	cmcSources, cmcWs := buildCmcCollectors(ctx, st, cfg, secRes)                                        // 凭据缺=内部优雅降级 nil+缺口落箱
 	sources := append(append(append([]collect.Named{}, cexCollectors...), trxSources...), cmcSources...) // D-211 TRX + CMC（D-237/D-266 已随 D-139 摘除）
 	sources = append(sources,                                                                            // mt_swap 依赖 brokerMgr.SwapFacts（D-036）
 		collect.Named{Name: "mt_swap", Interval: cfg.SwapRefresh, Collector: &collect.MTSwapCollector{Fetch: brokerMgr.SwapFacts}},
@@ -293,8 +293,8 @@ func main() {
 		incomeKickCh: incomeKickCh, okxIncomeKickCh: okxIncomeKickCh, ioKickCh: ioKickCh, // D-469a S4
 		factsDone:  factsDoneTopic,                   // D-469c S3
 		configKick: configKick, posChange: posChange, // D-469b S2（D-063：persMon 渲染回推面拆）
-		probeTopic:  probeTopic,  // D-163：探针提案机审 kick
-		gateWS:      gateWs,      // D-570 包C S6⑤：OnContractInfo 装配寻址
-		xassetAllow: xassetAllow, // D-017 R1：detector Allow 延迟绑定（atEngine 装配后 Bind 接通）
+		probeTopic:  probeTopic,                // D-163：探针提案机审 kick
+		gateWS:      gateWs,                    // D-570 包C S6⑤：OnContractInfo 装配寻址
+		xassetAllow: xassetAllow, cmcWs: cmcWs, // D-017 R1+D-212：detector Allow 延迟绑定；cmc ws LiveState/健康注入
 	})
 }

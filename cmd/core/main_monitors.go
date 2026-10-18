@@ -231,6 +231,10 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 	wireReconFastRetry(ctx, recon, cfg)                          // D-407：残腿密集重试装配（拆 wire_posmon.go 保行数）
 	// dashSvc setter 注入（leg 查询/CS/frontConfig/analyst）提取至 wire_dashboard.go 保 main() ≤300 行。
 	wireDashboardSetters(ctx, dashSvc, cfg, st, brokerMgr, a.factCache, a.feishuClient)
+	if a.cmcWs != nil { // D-212：cmc ws LiveState/健康注入（nil=REST 兜底——freshLive 分域 DB 兜底径）
+		dashSvc.SetCmcLiveProvider(a.cmcWs.LiveState)
+		dashSvc.SetCmcWsHealth(a.cmcWs.IsHealthy)
+	}
 	wirePosreview(ctx, st, cfg, a) // D-266 M4.5：复盘员（posChange 订阅+存量补扫）
 	// D-163：探针机审——kick 驱动 + boot 扫（事件唯一正道，无定时轮询）。
 	safego.GoLoop("main:probeAdjudicator", func() {

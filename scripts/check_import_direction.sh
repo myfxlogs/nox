@@ -11,6 +11,7 @@ ALLOWED=$(cat <<'EOF'
 internal/api/dashboard -> internal/data/adapter
 internal/api/dashboard -> internal/data/adapter/gen/mtapi/mt5
 internal/api/dashboard -> internal/data/bus
+internal/api/dashboard -> internal/data/collect/cmc
 internal/api/dashboard -> internal/data/collect/exchange
 internal/api/dashboard -> internal/data/fact
 internal/api/dashboard -> internal/data/keydomain
