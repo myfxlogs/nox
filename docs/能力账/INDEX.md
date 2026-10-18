@@ -15,3 +15,13 @@
 **关键定谳速览**：token 走**请求体 Id 字段**（非 metadata header——harness 首版 metadata 径全 RPC "Value cannot be null" 实拍）；Connect 需服务器 token 回填后续请求；reflection 全 dump 在证据 JSON `.reflection`。
 
 **复跑**：`go run ./tools/mtprobe --dsn <SG pg DSN> --out docs/能力账 --window 30s [--demo-env /opt/nox-secrets/mt5-demo.env]`（SG 侧执行）。
+
+---
+
+# 能力账索引（D-608——venue 端点全图登记）
+
+| 账 | 件 | 覆盖 |
+|---|---|---|
+| binance 端点清单 | `binance_endpoints.gen.txt` | 三源并集 773 端点（postman=597/md=341/conn=552/union=773/mutating=205） |
+| binance probe 证据 | `bn-api-probe-2026-10-17-o0.pb`/`o150.pb` | 批化 4 批×150+5min 冷却跑毕——`o0`=59 端点（19 ok/23 400/17 404 封禁记忆钉 abort）；`o150`=abort 零行（208B——封禁窗内零覆盖如实钉）；`bn-api-probe-2026-10-17.pb`=批 2/3 同名覆盖伤实证（offset 命名件批 2/3 未带=文件名窗残差在案）；累计覆盖≈137 端点非全谱——禁记忆封禁窗内 repeat 同型钉 |
+| binance probe 证据（解禁窗续段重跑） | `bn-api-probe-2026-10-18-o{0,150,300,450}.pb` | 10-18 解禁窗终审开后全量重跑——o0=61 端点（21 ok/17 404/23 400——418 三轮封禁分三次跑成累计，同名覆盖伤在案=pb 仅末轮内容）；o150=150 端点全（76 ok/29 400——三候窗补成）；o300=150 全（55 ok）；o450=118 全（35 ok——清单尾段 568 端点止）；累计≈329 端点本轮覆盖+venue 再裁断 418 abort 记实（生产 IP 限速共享预算=pace 500ms+418 即停纪律守） |
