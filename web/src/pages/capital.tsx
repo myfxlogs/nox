@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
 import { client, errText } from "../api";
 import type { CapitalPoolsGroup, CapitalPool } from "../gen/dashboardv1/capital_pools_pb";
+import type { CapitalMapTier } from "../gen/dashboardv1/ops_pb";
 import type { ManualPosition } from "../gen/dashboardv1/manual_position_pb";
 import { ts } from "../components/fmt";
 import { StatTile } from "../components/StatTile";
@@ -95,10 +96,15 @@ export default function CapitalPage() {
   const [form, setForm] = useState({ symbol: "", qty: "", price: "", venueLabel: "", note: "" });
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<"" | "ghosts" | "others">("");
+  const [tiers, setTiers] = useState<CapitalMapTier[]>([]);
 
   async function load() {
     try {
-      const r = await client.getCapitalPools({});
+      const [r, cm] = await Promise.all([
+        client.getCapitalPools({}),
+        client.getCapitalMap({}),
+      ]);
+      setTiers(cm.tiers);
       setGroups(r.groups);
       setComputedAt(ts(r.computedAt));
       setStalePools(r.stalePools);
@@ -201,6 +207,41 @@ export default function CapitalPage() {
         );
       })()}
       {groups.length === 0 && !err && <EmptyState>无资金池快照</EmptyState>}
+
+      {/* 画骨④：资金地图分层区（arb CapitalCoverageCard/GetCapitalMap 借形——
+          立即可用/可转可用/锁定慢动三档后端分层直渲，节点原币+USD 折算） */}
+      {tiers.length > 0 && (
+        <section>
+          <h2>分层可动性</h2>
+          {tiers.map((t) => (
+            <div key={t.tier} style={{ marginBottom: 10 }}>
+              <h3 style={{ fontSize: 13 }}>
+                {t.tier}
+                {t.hasUsd && <span className="muted"> ≈${fmtAmt(t.totalUsd)}</span>}
+                {t.note && <span className="muted" style={{ fontWeight: "normal" }}> {t.note}</span>}
+              </h3>
+              {t.nodes.length > 0 ? (
+                <ul className="opp-cards opp-grid">
+                  {t.nodes.map((n) => (
+                    <li key={n.label} className="opp-card" style={{ cursor: "default", padding: "6px 10px" }}>
+                      <div className="opp-card-head">
+                        <span className="opp-card-kind">{n.label}</span>
+                        <span className="opp-card-who">
+                          {fmtAmt(n.amount)} {n.currency}
+                          {n.hasUsd ? ` ≈$${fmtAmt(n.amountUsd)}` : " —"}
+                        </span>
+                      </div>
+                      <div className="opp-card-narrative muted">{n.source}</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState>零节点</EmptyState>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
 
       {/* D-512 手工仓位只读段：src=manual——只进全景展示，不进敞口/分母/风控。 */}
       <section>
