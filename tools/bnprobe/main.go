@@ -202,7 +202,9 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	outPB = fmt.Sprintf("docs/能力账/bn-api-probe-%s-o%d.pb", time.Now().UTC().Format("2006-01-02"), offset)
+	// batch-seq 后缀（注记#72②坑件：同 offset 同日重跑同名覆盖伤实证——
+	// pb 文件加 HHMMSS 时序=同批重跑两版并存不丢）。
+	outPB = fmt.Sprintf("docs/能力账/bn-api-probe-%s-o%d-b%s.pb", time.Now().UTC().Format("2006-01-02"), offset, time.Now().UTC().Format("150405"))
 	f, err := os.Open(listPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "list open: %v\n", err)
