@@ -5,7 +5,9 @@ package dashboard
 import (
 	"context"
 	"testing"
+	"time"
 
+	"nox/internal/platform/testutil/storetest"
 	"nox/internal/store/pgstore"
 )
 
@@ -105,5 +107,57 @@ func TestOverviewBundleCritAlertDetails(t *testing.T) {
 	}
 	if msgs["黄行不入明细"] || msgs["窗外 critical 不入"] {
 		t.Fatalf("非 critical/窗外行漏入明细: %v", msgs)
+	}
+}
+
+// TestOverviewBundleIdleVsEarning 眠钱瓦片归组锚（STATE「眠钱口径修正+瓦片换面」
+// 票·行220 范围②）：闲置组=Idle 旗池（income30d=0），在产组=有余额非闲池
+// （earn/yield 入账面）——venue_type 先验分组退役。
+func TestOverviewBundleIdleVsEarning(t *testing.T) {
+	st := storetest.SharedStore(t, "NOX_TEST_PG_SERVICE_DSN")
+	ctx := context.Background()
+	defer func() {
+		st.Pool().Exec(ctx, `DELETE FROM fin_venue_account_snapshot WHERE venue IN ('idlev','mtidle');
+			DELETE FROM income_events WHERE venue='idlev'; DELETE FROM broker_accounts WHERE venue='mtidle'`)
+	}()
+	now := time.Now()
+	must := func(q string, args ...any) {
+		if _, err := st.Pool().Exec(ctx, q, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(`INSERT INTO fin_venue_account_snapshot
+		(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at) VALUES
+		('idlev','earn',2000,2000,2000,'USDT',$1),('idlev','spot',500,500,500,'USDT',$1),
+		('mtidle','mt5',5247,5247,5247,'USD',$1)`, now)
+	must(`INSERT INTO broker_accounts (venue, venue_type, host, port, password, is_real)
+		VALUES ('mtidle','mt5','h',443,'p',true) ON CONFLICT (venue) DO NOTHING`)
+	// idlev:earn 池有 income→在产（venue_key 生成列=binance:earn 归属该池）
+	must(`INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts)
+		VALUES ('idlev','earn','USDT','SAVINGS',1.5,900000001,$1)`, now)
+	svc := &Service{store: st}
+	cresp, err := svc.GetOverviewBundle(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	idle, earning := map[string]float64{}, map[string]float64{}
+	for _, r := range cresp.Msg.Breakdowns {
+		key := r.Label + ":" + r.Sub
+		switch r.Group {
+		case "idle":
+			idle[key] = r.Amount
+		case "earning":
+			earning[key] = r.Amount
+		}
+	}
+	// 在产组=idlev:earn（income 池）；闲置组=idlev:spot+mtidle:mt5（income=0）
+	if earning["idlev:earn"] != 2000 {
+		t.Fatalf("idlev:earn 应在产组: %+v", earning)
+	}
+	if idle["idlev:earn"] != 0 {
+		t.Fatalf("idlev:earn 不应入闲置组: %+v", idle)
+	}
+	if idle["idlev:spot"] != 500 || idle["mtidle:mt5"] != 5247 {
+		t.Fatalf("真闲池归组错: %+v", idle)
 	}
 }

@@ -87,13 +87,15 @@ func (s *Service) appendOverviewBreakdowns(resp *v1.GetOverviewBundleResponse, p
 		if p.Ghost || (p.Currency != "USDT" && p.Currency != "USD") {
 			continue
 		}
-		if p.VenueType == "earn" {
-			resp.Breakdowns = append(resp.Breakdowns, &v1.OverviewBreakdownRow{
-				Group: "earning", Label: p.Venue, Ccy: p.Currency, Amount: p.Equity, Sub: p.VenueType,
-			})
-		} else {
+		// 眠钱口径修正：闲置=Idle 旗池（income30d=0），在产=有余额非闲池
+		// （earn/yield 入账面——旗判据零动，venue:type 不再先验分组）。
+		if p.Idle {
 			resp.Breakdowns = append(resp.Breakdowns, &v1.OverviewBreakdownRow{
 				Group: "idle", Label: p.Venue, Ccy: p.Currency, Amount: p.Balance, Sub: p.VenueType,
+			})
+		} else if p.Balance > 0 {
+			resp.Breakdowns = append(resp.Breakdowns, &v1.OverviewBreakdownRow{
+				Group: "earning", Label: p.Venue, Ccy: p.Currency, Amount: p.Equity, Sub: p.VenueType,
 			})
 		}
 		r, ok := acc[p.Venue]

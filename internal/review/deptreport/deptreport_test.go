@@ -143,7 +143,7 @@ func testDeps(fs *fakeStore, fr *fakeRunner, fn *fakeNotifier) *Deps {
 func TestGenerate_CompanySingleCall(t *testing.T) {
 	fs := &fakeStore{rd: &pgstore.RetroDaily{OpenedToday: 2, FundingActualUSD: 3.5,
 		AlertDist: map[string]int{"warn": 1}, EvalDist: map[string]int{"A": 2}},
-		pools:  []pgstore.ExplorerIdlePool{{Venue: "binance", Equity: 9000, Balance: 4000, Currency: "USD"}},
+		pools:  []pgstore.ExplorerIdlePool{{Venue: "binance", Equity: 9000, Balance: 4000, Currency: "USD", Idle: true}},
 		llmUSD: 1.23, llmN: 7}
 	fr := &fakeRunner{}
 	fn := &fakeNotifier{}
@@ -173,7 +173,7 @@ func TestGenerate_CompanySingleCall(t *testing.T) {
 // 名册段不存在（零「员工/在职/离职」措辞）。
 func TestGather_MoneyFirst(t *testing.T) {
 	fs := &fakeStore{rd: &pgstore.RetroDaily{},
-		pools: []pgstore.ExplorerIdlePool{{Venue: "binance", Equity: 9000, Balance: 4000, Currency: "USD"}},
+		pools: []pgstore.ExplorerIdlePool{{Venue: "binance", Equity: 9000, Balance: 4000, Currency: "USD", Idle: true}},
 		props: []pgstore.Proposal{{ID: 7, TemplateID: "carry_x", Venue: "binance",
 			CreatedAt: time.Now().Add(-72 * time.Hour)}},
 		gaps: []pgstore.ConditionGap{
