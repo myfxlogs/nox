@@ -176,3 +176,35 @@ func TestCategoryBootstrapSilent(t *testing.T) {
 
 // UpsertHypothesis 幂等锚（xmax=0 判插入）。pgstore 层同测。
 var _ = pgstore.OppHypothesis{} // 引用保 import
+
+// TestCategoryMemoBackfill D-623③：memo 径归一——直写径（swapScan/hedgeScan 模拟
+// Upsert 直写）产 proposed 行，下拍 radar 回填 family_fit/memo 非空。
+func TestCategoryMemoBackfill(t *testing.T) {
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
+	ctx := context.Background()
+	key := "d623|swap|usd"
+	if _, err := st.Pool().Exec(ctx, `DELETE FROM fin_opp_hypothesis WHERE category_key=$1`, key); err != nil {
+		t.Fatal(err)
+	}
+	// 直写径产行（family_fit NULL——swapScan 同形态）。
+	if _, _, _, err := st.UpsertHypothesis(ctx, pgstore.OppHypothesis{
+		Venue: "3001157", CategoryKey: key, InstType: "swap", Shape: "usd",
+		Sample: "XAUUSD", Detail: "正息面入榜",
+	}); err != nil {
+		t.Fatalf("直写产行: %v", err)
+	}
+	llm := func(context.Context, string, string) (string, error) {
+		return `{"family_fit":"generic_yield","params_proto":{"product":"swap"},"memo":"装得进 generic_yield 参数面"}`, nil
+	}
+	// 下一拍（零品类信号源——纯回填径）。
+	processCategories(ctx, st, nil, llm, false)
+	var ff, memo string
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT COALESCE(family_fit,''), COALESCE(memo,'') FROM fin_opp_hypothesis WHERE category_key=$1`, key).
+		Scan(&ff, &memo); err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if ff == "" || memo == "" {
+		t.Fatalf("回填后 family_fit/memo 应非空: ff=%q memo=%q", ff, memo)
+	}
+}

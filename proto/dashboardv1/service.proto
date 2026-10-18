@@ -232,6 +232,9 @@ service DashboardService {
   rpc GetExecutionMode(GetExecutionModeRequest) returns (GetExecutionModeResponse);
   rpc SetExecutionMode(SetExecutionModeRequest) returns (SetExecutionModeResponse);
 
+  // D-623：新品类假设裁决写口（live_gates 同型「有表无门」收口——唯一裁决径）。
+  rpc DecideHypothesis(DecideHypothesisRequest) returns (DecideHypothesisResponse);
+
   // D-190：员工花名册看板（daemon 编制实况：在职/离线/任务中）。
   rpc ListEmployees(ListEmployeesRequest) returns (ListEmployeesResponse);
 

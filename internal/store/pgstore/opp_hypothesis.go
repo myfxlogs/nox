@@ -2,8 +2,11 @@ package pgstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // OppHypothesis 是 fin_opp_hypothesis 一行（新品类假设，S1 只到 proposed+memo）。
@@ -83,4 +86,67 @@ func (s *Store) MarkHypothesisTrialing(ctx context.Context, id int64, sink strin
 		return fmt.Errorf("mark hypothesis trialing #%d: %w", id, err)
 	}
 	return nil
+}
+
+// ListMemoPendingHypotheses D-623③：proposed AND family_fit IS NULL 死行枚举
+// （直写径 swapScan/hedgeScan 产行+上轮 memo 写败行——每拍归一补预审）。
+func (s *Store) ListMemoPendingHypotheses(ctx context.Context) ([]OppHypothesis, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, venue, category_key, COALESCE(inst_type,''), COALESCE(shape,''),
+		       COALESCE(sample,''), COALESCE(detail,'')
+		FROM fin_opp_hypothesis
+		WHERE status='proposed' AND family_fit IS NULL ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("list memo-pending hypotheses: %w", err)
+	}
+	defer rows.Close()
+	var out []OppHypothesis
+	for rows.Next() {
+		var h OppHypothesis
+		if err := rows.Scan(&h.ID, &h.Venue, &h.CategoryKey, &h.InstType,
+			&h.Shape, &h.Sample, &h.Detail); err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+// DecideHypothesis D-623①：假设裁决写口（单事务：status='proposed' 才受理 UPDATE
+// decided_* + info 告警留痕）。decision ∈ approved|rejected（调用面先验枚举）；
+// 非 proposed/不存在 → 分型 error。actor 必填（decided_by 禁 NULL/裸 manual——service 层校验）。
+func (s *Store) DecideHypothesis(ctx context.Context, id int64, decision, actor, reason, evidenceRef string) error {
+	rejectReason := ""
+	if decision == "rejected" {
+		rejectReason = reason
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	ct, err := tx.Exec(ctx, `
+		UPDATE fin_opp_hypothesis SET status=$2, decided_by=$3, decided_at=now(),
+			reject_reason=NULLIF($4,''), last_seen=now()
+		WHERE id=$1 AND status='proposed'`,
+		id, decision, actor, rejectReason)
+	if err != nil {
+		return fmt.Errorf("decide hypothesis #%d: %w", id, err)
+	}
+	if ct.RowsAffected() == 0 {
+		var cur string
+		qerr := tx.QueryRow(ctx, `SELECT status FROM fin_opp_hypothesis WHERE id=$1`, id).Scan(&cur)
+		if errors.Is(qerr, pgx.ErrNoRows) {
+			return fmt.Errorf("hypothesis #%d 不存在", id)
+		}
+		if qerr != nil {
+			return fmt.Errorf("decide hypothesis #%d status read: %w", id, qerr)
+		}
+		return fmt.Errorf("hypothesis #%d status=%s 非 proposed，裁决拒受理", id, cur)
+	}
+	msg := fmt.Sprintf("假设#%d 裁决=%s by %s（%s；证据 %s）", id, decision, actor, reason, evidenceRef)
+	if _, err = tx.Exec(ctx, `INSERT INTO alerts (level, message) VALUES ('info', $1)`, msg); err != nil {
+		return fmt.Errorf("decide hypothesis #%d alert: %w", id, err)
+	}
+	return tx.Commit(ctx)
 }
