@@ -126,7 +126,11 @@ func (cp *ControlPlane) TriggerKillSwitch(ctx context.Context, actor, reason str
 		Reason:    "kill switch: " + reason,
 		EventKey:  fmt.Sprintf("killswitch-trigger-%d", time.Now().UnixNano()),
 	}
-	return cp.store.UpsertExecutionControl(ctx, ctrl, event)
+	if err := cp.store.UpsertExecutionControl(ctx, ctrl, event); err != nil {
+		return err
+	}
+	alertKillTriggered(ctx, cp.store, actor, reason) // D-622 泛化二批：kill 触发通知（kill_alert.go）
+	return nil
 }
 
 // ResolveKillSwitch 解除 KillSwitch（显式人工，写入原因/操作者/时间/复核证据）。

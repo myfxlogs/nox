@@ -291,3 +291,40 @@ func TestControlPlane_GrantLive_ReadinessDown(t *testing.T) {
 		t.Fatal("readiness=false 时 GrantLive 应拒")
 	}
 }
+
+// TestKillTrigger_DispatchLine D-622 泛化二批锚：kill 触发通知=critical 告警+
+// 末行席转发令（dedup 窗内同因互抑——令文案静态不进 dedup 漂移位）。
+func TestKillTrigger_DispatchLine(t *testing.T) {
+	st := setupControlPlaneStore(t)
+	ctx := context.Background()
+	if _, err := st.Pool().Exec(ctx, `DELETE FROM alerts WHERE message LIKE 'kill switch 触发%'`); err != nil {
+		t.Fatal(err)
+	}
+	cp := NewControlPlane(st)
+	if err := cp.TriggerKillSwitch(ctx, "risk-dd30", "test kill"); err != nil {
+		t.Fatalf("trigger: %v", err)
+	}
+	var level, msg string
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT level, message FROM alerts WHERE level='critical' AND message LIKE 'kill switch 触发%' ORDER BY id DESC LIMIT 1`).Scan(&level, &msg); err != nil {
+		t.Fatalf("kill alert missing: %v", err)
+	}
+	if !strings.HasSuffix(msg, "[角色:决策] kill 处置（读 STATE——核触发因+GrantLive 重授判断）") {
+		t.Fatalf("kill 通知末行缺席转发令: %q", msg)
+	}
+	// dedup 稳性：令文案静态不参与漂移——同文重触发同窗互抑（dedup 行数不增）。
+	if err := cp.ResolveKillSwitch(ctx, "op", "release", "ev"); err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := cp.TriggerKillSwitch(ctx, "risk-dd30", "test kill"); err != nil {
+		t.Fatalf("re-trigger: %v", err)
+	}
+	var n int
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM alerts WHERE level='critical' AND message LIKE 'kill switch 触发%'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("同文重触发应 dedup 互抑仍 1 行: %d", n)
+	}
+}

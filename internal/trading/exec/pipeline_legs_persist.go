@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"nox/internal/platform/alerttext"
 	"nox/internal/store/pgstore"
 )
 
@@ -200,6 +201,7 @@ func (p *Pipeline) rollbackUnknownLeg(ctx context.Context, posID int64, i int, l
 
 // alertCrit D-508 审计契约：critical 告警写——写失败只落 log 防递归（不得再告警）。
 func (p *Pipeline) alertCrit(ctx context.Context, msg string) {
+	msg += alerttext.SeatDispatchLine("决策", "残腿/事故仓处置（读 STATE——核残因+ack 游标放行判断）")
 	if err := p.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
 		log.Printf("[exec] alert write failed: %v | original: %s", err, msg)
 	}

@@ -179,6 +179,7 @@ internal/risk/gate -> internal/data/bus
 internal/risk/gate -> internal/data/fact
 internal/risk/gate -> internal/data/keydomain
 internal/risk/gate -> internal/data/macro
+internal/risk/gate -> internal/platform/alerttext
 internal/risk/gate -> internal/platform/combo
 internal/risk/gate -> internal/platform/errclass
 internal/risk/gate -> internal/platform/usdnotional
@@ -250,6 +251,7 @@ internal/trading/exec -> internal/data/keydomain
 internal/trading/exec -> internal/data/marketstate
 internal/trading/autotrade -> internal/infra/dephealth
 internal/trading/exec -> internal/infra/dephealth
+internal/trading/exec -> internal/platform/alerttext
 internal/trading/exec -> internal/platform/combo
 internal/trading/exec -> internal/platform/httpx
 internal/trading/exec -> internal/platform/notional

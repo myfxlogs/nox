@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 
 	"golang.org/x/sync/singleflight"
 
 	"nox/internal/data/keydomain"
+	"nox/internal/platform/alerttext"
 	"nox/internal/platform/httpx"
 )
 
@@ -94,6 +96,10 @@ func NewCEXExecutor(venue, venueType, apiKey, apiSecret, passphrase, baseURL str
 
 // alertCritical 平仓被拒时 critical 告警（D-108 P2 T1，posID>0 才告警）。
 func (e *CEXExecutor) alertCritical(o Order, msg string) {
+	// D-622 泛化二批：「需人工核对」确认类模板末行嵌席转发令（自愈/自动处置类不嵌）。
+	if strings.Contains(msg, "需人工核对") {
+		msg += alerttext.SeatDispatchLine("决策", "挂单查证处置（读 STATE——核单子 venue 实盘态+人工关单判断）")
+	}
 	if e.AlertFn != nil && o.PosID > 0 {
 		pid := o.PosID
 		e.AlertFn(&pid, "critical", msg)
