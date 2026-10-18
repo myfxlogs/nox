@@ -32,6 +32,7 @@ const (
 	KindCMCAccount        = "cmc_account"         // CMC Markets 账户价值（UnitUSD）
 	KindCMCHistory        = "cmc_history"         // CMC Markets 隔夜利息结算（UnitUSD）
 	KindEgressCanary      = "egress_canary"       // D-104 本机出口 canary（UnitCount，值=三锚通过数 0..3）
+	KindEarnAPR           = "earn_apr"            // CEX earn 活期 APR（UnitPctAnnualized，划转执行件 APR 采集面——fin_cex_earn_apr 同源采入）
 )
 
 // Unit 常量表（§1.2）。
@@ -106,6 +107,7 @@ var validKinds = map[string]bool{
 	// 交割腿 bookTicker 价差（src=universe-radar，日历基差 P0 滑点前置）。
 	"delivery_depth_spread_bps": true,
 	KindEgressCanary:            true, // D-104 本机出口 canary
+	KindEarnAPR:                 true, // 划转执行件：earn APR facts 采集面
 }
 
 // ValidKind 报告 k 是否为已知 Kind。

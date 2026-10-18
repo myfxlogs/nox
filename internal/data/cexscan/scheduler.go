@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"nox/internal/data/bus"
+	"nox/internal/data/fact"
 
 	"nox/internal/data/keydomain"
 	"nox/internal/data/venue"
@@ -119,12 +120,21 @@ func (s *Scanner) hydrateAccountSnapshots(ctx context.Context) error {
 // ④：earn APR 判断结果 upsert 入库（fin_cex_earn_judgment），供前端展示，不发告警。
 func (s *Scanner) scanOnce(ctx context.Context) error {
 
-	// ② 理财 APR 采集 → 入库
+	// ② 理财 APR 采集 → 入库（划转执行件：同拍 facts earn_apr 采入——机会成本
+	// 底线面；扩本采集件禁双写径，fin_cex_earn_apr 与 facts 同轮同源）。
 	earnAPRs, earnErrs := s.earn.Collect(ctx)
+	earnFacts := make([]fact.Fact, 0, len(earnAPRs))
 	for i := range earnAPRs {
 		if err := s.store.InsertCexEarnAPR(ctx, &earnAPRs[i]); err != nil {
 			log.Printf("[cexscan] insert earn apr %s/%s: %v", earnAPRs[i].Venue, earnAPRs[i].Ccy, err)
 		}
+		earnFacts = append(earnFacts, fact.Fact{
+			Kind: fact.KindEarnAPR, Venue: earnAPRs[i].Venue, Symbol: earnAPRs[i].Ccy,
+			Value: earnAPRs[i].APR * 100, Unit: fact.UnitPctAnnualized,
+			Ts: time.Now().UTC(), Src: "cex_earn"})
+	}
+	if err := s.store.InsertFacts(ctx, earnFacts); err != nil {
+		log.Printf("[cexscan] insert earn_apr facts: %v", err)
 	}
 
 	// ②b 三所 DCI/双币报价采集 → 入库（单所失败在 CollectDCI 内隔离，

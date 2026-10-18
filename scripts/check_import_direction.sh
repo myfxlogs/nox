@@ -57,6 +57,7 @@ internal/data/bus -> internal/data/keydomain
 internal/data/bus -> internal/platform/safego
 internal/data/cexscan -> internal/data/bus
 internal/data/cexscan -> internal/data/keydomain
+internal/data/cexscan -> internal/data/fact
 internal/data/cexscan -> internal/data/venue
 internal/data/cexscan -> internal/gen/dashboardv1
 internal/data/cexscan -> internal/platform/config
@@ -225,10 +226,12 @@ internal/trading/autotrade -> internal/store/pgstore
 internal/trading/autotrade -> internal/trading/exec
 internal/trading/dciexec -> internal/data/bus
 internal/trading/dciexec -> internal/data/collect/exchange
+internal/trading/dciexec -> internal/data/keydomain
 internal/trading/dciexec -> internal/infra/dephealth
 internal/trading/dciexec -> internal/kbsearch
 internal/trading/dciexec -> internal/risk/gate
 internal/trading/dciexec -> internal/platform/errclass
+internal/trading/dciexec -> internal/platform/httpx
 internal/trading/dciexec -> internal/platform/signutil
 internal/trading/dciexec -> internal/store/pgstore
 internal/trading/engine -> internal/data/bus

@@ -167,6 +167,27 @@ func (s *Store) ClosedPositionPnLBetween(ctx context.Context, venue string, from
 	return sum, err
 }
 
+// JitNetOutstanding venue 内 JIT 归集净额：fin_venue_io 账 external_id
+// jit-swp:（earn→交易户）正号 − jit-ret:（回转）负号差分——挪多少回多少的
+// 权威锚（无独立状态表，账本自洽）。返回值<0 钳零（账异如实不虚报可回额）。
+func (s *Store) JitNetOutstanding(ctx context.Context, venue string) (float64, error) {
+	var net float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(CASE WHEN external_id LIKE 'jit-swp:%' THEN amount
+		                         WHEN external_id LIKE 'jit-ret:%' THEN -amount
+		                         ELSE 0 END), 0)
+		FROM fin_venue_io
+		WHERE venue = $1 AND direction = 'transfer' AND external_id LIKE 'jit-%'`,
+		venue).Scan(&net)
+	if err != nil {
+		return 0, fmt.Errorf("jit net outstanding %s: %w", venue, err)
+	}
+	if net < 0 {
+		net = 0
+	}
+	return net, nil
+}
+
 // VenueIOExternalExists D-607：external_id 存在性查（Deal 事件↔ticket 扫描
 // 双向查重联动——先到的留，防双记）。
 func (s *Store) VenueIOExternalExists(ctx context.Context, configID int64, externalID string) (bool, error) {

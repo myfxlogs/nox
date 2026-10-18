@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nox/internal/data/bus"
+	"nox/internal/ledger/settlement"
 	"nox/internal/platform/analyst"
 	"nox/internal/platform/httpx"
 	"nox/internal/platform/safego"
@@ -15,8 +16,27 @@ import (
 	"nox/internal/research/oppmatch"
 	"nox/internal/review/sysretro"
 	"nox/internal/store/pgstore"
+	"nox/internal/trading/autotrade"
 	"nox/internal/trading/dciexec"
 )
+
+// wireJit jit 划转执行件装配：armed 缺资归集缝（atEngine.JitSweepFn——败因分类
+// 落箱 permission=授权面）+结算回转钩（settlements 径 PostSettled——平仓腿保证
+// 金释放权威时点，票面核验②：非 ClosePositionFn 挂钩）。
+func wireJit(atEngine *autotrade.Engine, settleDeps settlement.Deps, ex *dciexec.Executor) {
+	if h, ok := settleDeps.(interface {
+		SetPostSettleHook(func(context.Context, int64))
+	}); ok {
+		h.SetPostSettleHook(ex.JitReturnForPosition)
+	}
+	atEngine.JitSweepFn = func(ctx context.Context, vk string, need float64) (string, error) {
+		err := ex.JitSweep(ctx, vk, need)
+		if err != nil {
+			return dciexec.JitErrKind(err), err
+		}
+		return "", nil
+	}
+}
 
 // buildDCIExecutor 凭据装配（无 binance:spot 凭据行=Executor 持空 key，
 // Go 内 credential 缺口径回「请配置凭据」——凭据缺不炸装配）。

@@ -58,6 +58,8 @@ type fakeStore struct {
 	cfgF           map[string]float64       // D-612：rotation_* 判据键种子
 	lastEarnAt     time.Time                // D-612：earn 活动史种子（持有窗）
 	hasEarnAt      bool
+	jitOutstanding float64               // jit 净额账种子（回转面）
+	legs           []pgstore.PositionLeg // jit 回转腿种子（pos 腿 venue 集）
 }
 
 // dciListJSON R14 重取产品面测试具——全候选品 canPurchase+orderId 齐帧。
@@ -1357,6 +1359,14 @@ func (f *fakeStore) AppConfigFloat(_ context.Context, key string) (float64, bool
 
 func (f *fakeStore) LatestEarnActivityAt(_ context.Context, _ string) (time.Time, bool, error) {
 	return f.lastEarnAt, f.hasEarnAt, nil
+}
+
+func (f *fakeStore) ListPositionLegs(_ context.Context, _ int64) ([]pgstore.PositionLeg, error) {
+	return f.legs, nil
+}
+
+func (f *fakeStore) JitNetOutstanding(_ context.Context, _ string) (float64, error) {
+	return f.jitOutstanding, nil
 }
 
 // TestM41_EvalGate 评估卡闸（D-258 M4.1③）：无卡/非 viable 拒单，viable 过闸。

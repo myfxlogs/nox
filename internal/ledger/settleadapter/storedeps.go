@@ -21,7 +21,7 @@ func New(store *pgstore.Store) *StoreDeps { return &StoreDeps{store: store} }
 // SumCashflowsNet/SumCashflowsNetWithQuality/GetSettlementStatsStatus/MarkSettlementStatsRetryable），本结构仅做接口声明桥接。
 type StoreDeps struct {
 	store      *pgstore.Store
-	postSettle func(context.Context, int64) // D-032 ①：结算后钩子（autotrade 风控线注入）
+	postSettle []func(context.Context, int64) // D-032 ①：结算后钩子链（autotrade 风控线/jit 回转等注入——多钩追加语义）
 	// HearElim D-249①：淘汰听证钩（cmd/core 装配=hearing.Deps.Debate 闭包；nil=不听证）。
 	HearElim func(ctx context.Context, trigger string, fam []string, total int, winRate, avgPnl, medianPnl float64, reason string)
 }
@@ -30,7 +30,10 @@ type StoreDeps struct {
 var _ settlement.Deps = (*StoreDeps)(nil)
 
 // SetPostSettleHook D-032 ①：注入结算后回调（autotrade.SetSettleDeps 装配点调）。
-func (d *StoreDeps) SetPostSettleHook(fn func(context.Context, int64)) { d.postSettle = fn }
+// 追加语义——多钩并存（风控线+jit 回转同挂；后注不顶先注）。
+func (d *StoreDeps) SetPostSettleHook(fn func(context.Context, int64)) {
+	d.postSettle = append(d.postSettle, fn)
+}
 
 // HearElimination 实现 settlement.ElimHearer——未注入钩子时空操作。
 func (d *StoreDeps) HearElimination(ctx context.Context, trigger string, fam []string,
@@ -40,10 +43,10 @@ func (d *StoreDeps) HearElimination(ctx context.Context, trigger string, fam []s
 	}
 }
 
-// PostSettled 实现 settlement.PostSettler——未注入钩子时空操作。
+// PostSettled 实现 settlement.PostSettler——未注入钩子时空操作；多钩按注册序逐调。
 func (d *StoreDeps) PostSettled(ctx context.Context, posID int64) {
-	if d.postSettle != nil {
-		d.postSettle(ctx, posID)
+	for _, fn := range d.postSettle {
+		fn(ctx, posID)
 	}
 }
 

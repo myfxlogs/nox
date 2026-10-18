@@ -36,6 +36,11 @@ type Engine struct {
 	// exec.Pipeline.ClosePosition；nil=不触发——退出动作不落=disabled 组合
 	// 持仓留在持仓位裸跑是禁线坑）。
 	ClosePositionFn func(ctx context.Context, posID int64) error
+	// JitSweepFn venue 内 JIT 归集缝（划转执行件——装配注入
+	// dciexec.Executor.JitSweep 包装；armed 缺资判定点先试 earn→交易户归集
+	// 后落箱。返回 gapKind=落箱分类（permission=凭据/授权面，capital=缺资面，
+	// err=nil 时 ""）。nil=未接线→直接落箱旧行为）。
+	JitSweepFn func(ctx context.Context, venueKey string, shortfallUSD float64) (gapKind string, err error)
 	// sessionNowFn D-029：休市判定时刻 hook（nil=真钟 UTC；测试控时相注入）。
 	sessionNowFn func() time.Time
 	// sessionTbl/At/sessionTblMu D-029 R1 ④：周表缓存（1min TTL；store 拉取+组表高频摊薄）。
