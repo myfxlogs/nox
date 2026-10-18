@@ -67,7 +67,6 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"NOX_JUDGE_BALANCE_HKD":               f64(func(c *Config) *float64 { return &c.JudgeBalanceHKD }),
 	"NOX_JUDGE_BALANCE_USD":               f64(func(c *Config) *float64 { return &c.JudgeBalanceUSD }),
 	"NOX_LIQ_MMR":                         f64(func(c *Config) *float64 { return &c.LiqMMR }),
-	"NOX_LIVE_TRADE":                      boolv(func(c *Config) *bool { return &c.LiveTrade }),
 	"NOX_MARGIN_FACT_MAX_AGE":             durv(func(c *Config) *time.Duration { return &c.MTData.MarginFactMaxAge }),
 	"NOX_MARGIN_RATE_ANNUAL":              f64(func(c *Config) *float64 { return &c.MarginRateAnnual }),
 	"NOX_MARGIN_RESERVE_PCT":              f64(func(c *Config) *float64 { return &c.MarginReservePct }),

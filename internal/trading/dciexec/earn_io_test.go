@@ -8,7 +8,7 @@ import (
 
 func TestEarnIO_SubscribeWrites(t *testing.T) {
 	fakeIOCaptures = nil
-	e := &Executor{Store: &fakeStore{}}
+	e := &Executor{ModeGate: liveModeGate, Store: &fakeStore{}}
 	e.ioTransfer(context.Background(), "binance", "USDT", 351.64,
 		"spot", "earn", "earn-sub:42:p1", "")
 	if len(fakeIOCaptures) != 1 {
@@ -23,7 +23,7 @@ func TestEarnIO_SubscribeWrites(t *testing.T) {
 
 func TestEarnIO_RedeemReverse(t *testing.T) {
 	fakeIOCaptures = nil
-	e := &Executor{Store: &fakeStore{}}
+	e := &Executor{ModeGate: liveModeGate, Store: &fakeStore{}}
 	e.ioTransfer(context.Background(), "binance", "USDT", 100.0,
 		"earn", "spot", "earn-red:p1:USDT", "")
 	if len(fakeIOCaptures) != 1 {

@@ -55,16 +55,16 @@ func TestD311_VenueIsRealGate_CEXAndMT(t *testing.T) {
 	if v := gLive.environmentIsRealCheck(ctx, TradeIntent{VenueBuy: "gate:perp", VenueSell: "gate:perp"}); !v.Pass {
 		t.Errorf("real CEX venue env=live: want pass, got %s", v.Reason)
 	}
-	// liveGate（NOX_LIVE_TRADE=false）：gate:perp 实盘拦；okx:perp 模拟放行；vD:mt5 demo 放行（MT 回归）。
+	// liveGate（mode=PAPER 非 LIVE）：gate:perp 实盘拦；okx:perp 模拟放行；vD:mt5 demo 放行（MT 回归）。
 	gl := &Gate{store: s, cfg: Config{}}
-	if v := gl.liveGateCheck(ctx, TradeIntent{VenueBuy: "gate:perp", VenueSell: "gate:perp"}); v.Pass {
+	if v := gl.liveGateCheck(ctx, TradeIntent{VenueBuy: "gate:perp", VenueSell: "gate:perp"}, ModePaper); v.Pass {
 		t.Error("liveGate real CEX: want reject, got pass")
 	}
-	if v := gl.liveGateCheck(ctx, TradeIntent{VenueBuy: "okx:perp", VenueSell: "vD:mt5"}); !v.Pass {
+	if v := gl.liveGateCheck(ctx, TradeIntent{VenueBuy: "okx:perp", VenueSell: "vD:mt5"}, ModePaper); !v.Pass {
 		t.Errorf("liveGate demo venues: want pass, got %s", v.Reason)
 	}
 	// 未知 venue fail-closed（MT 回归语义不变）。
-	if v := gl.liveGateCheck(ctx, TradeIntent{VenueBuy: "ghost:mt5", VenueSell: "vD:mt5"}); v.Pass {
+	if v := gl.liveGateCheck(ctx, TradeIntent{VenueBuy: "ghost:mt5", VenueSell: "vD:mt5"}, ModePaper); v.Pass {
 		t.Error("unknown venue: want reject (fail-closed), got pass")
 	}
 }

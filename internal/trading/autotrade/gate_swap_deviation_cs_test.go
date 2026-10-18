@@ -28,10 +28,10 @@ func csResolver(csMap map[string]float64) func(venueKey, venueSymbol string) (fl
 func TestSwapDeviationGate_CS100_HighDeviation_Rejected(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.5, -2.21) // facts=0.5 bps, actual=-2.21 USD
 	g := gate.NewGate(s, gate.Config{
-		MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0,
+		MaxDailyLoss: 100, MaxPositions: 5, SwapDeviationGatePct: 50.0,
 		LegContractSizeResolver: csResolver(map[string]float64{"vA:mt5": 100, "vB:mt5": 100}),
 		Quotes:                  setupSwapDeviationQuotes(),
-	}, nil)
+	}, grantLiveCP(t, s))
 	intent := gate.TradeIntent{
 		Strategy: "CROSS_VENUE", Canonical: "AUDJPY",
 		VenueBuy: "vA:mt5", VenueSell: "vB:mt5", Qty: 0.01,
@@ -52,10 +52,10 @@ func TestSwapDeviationGate_CS100_HighDeviation_Rejected(t *testing.T) {
 func TestSwapDeviationGate_CS100_LowDeviation_Pass(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.5, 0.005) // facts=0.5, actual=0.005
 	g := gate.NewGate(s, gate.Config{
-		MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0,
+		MaxDailyLoss: 100, MaxPositions: 5, SwapDeviationGatePct: 50.0,
 		LegContractSizeResolver: csResolver(map[string]float64{"vA:mt5": 100, "vB:mt5": 100}),
 		Quotes:                  setupSwapDeviationQuotes(),
-	}, nil)
+	}, grantLiveCP(t, s))
 	intent := gate.TradeIntent{
 		Strategy: "CROSS_VENUE", Canonical: "AUDJPY",
 		VenueBuy: "vA:mt5", VenueSell: "vB:mt5", Qty: 0.01,
@@ -74,10 +74,10 @@ func TestSwapDeviationGate_CS100_LowDeviation_Pass(t *testing.T) {
 func TestSwapDeviationGate_CS1_OriginalBehavior(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.0, -2.21) // facts=0, actual=-2.21
 	g := gate.NewGate(s, gate.Config{
-		MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0,
+		MaxDailyLoss: 100, MaxPositions: 5, SwapDeviationGatePct: 50.0,
 		LegContractSizeResolver: csResolver(map[string]float64{"vA:mt5": 1, "vB:mt5": 1}),
 		Quotes:                  setupSwapDeviationQuotes(),
-	}, nil)
+	}, grantLiveCP(t, s))
 	intent := gate.TradeIntent{
 		Strategy: "CROSS_VENUE", Canonical: "AUDJPY",
 		VenueBuy: "vA:mt5", VenueSell: "vB:mt5", Qty: 0.01,
@@ -98,10 +98,10 @@ func TestSwapDeviationGate_CS1_OriginalBehavior(t *testing.T) {
 func TestSwapDeviationGate_ResolverNil_CannotEvaluate(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.0, -2.21)
 	g := gate.NewGate(s, gate.Config{
-		MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0,
+		MaxDailyLoss: 100, MaxPositions: 5, SwapDeviationGatePct: 50.0,
 		LegContractSizeResolver: nil, // 未注入
 		Quotes:                  setupSwapDeviationQuotes(),
-	}, nil)
+	}, grantLiveCP(t, s))
 	executed := false
 	intent := gate.TradeIntent{
 		Strategy: "CROSS_VENUE", Canonical: "AUDJPY",
@@ -124,10 +124,10 @@ func TestSwapDeviationGate_ResolverNil_CannotEvaluate(t *testing.T) {
 func TestSwapDeviationGate_ResolverZero_CannotEvaluate(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.0, -2.21) // facts=0, actual=-2.21 → 若硬编 CS=1 会误拒
 	g := gate.NewGate(s, gate.Config{
-		MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0,
+		MaxDailyLoss: 100, MaxPositions: 5, SwapDeviationGatePct: 50.0,
 		LegContractSizeResolver: csResolver(map[string]float64{"vA:mt5": 0, "vB:mt5": 0}), // 非正=不可得
 		Quotes:                  setupSwapDeviationQuotes(),
-	}, nil)
+	}, grantLiveCP(t, s))
 	executed := false
 	intent := gate.TradeIntent{
 		Strategy: "CROSS_VENUE", Canonical: "AUDJPY",
@@ -158,11 +158,11 @@ func TestSwapDeviationGate_StaleFactIgnored(t *testing.T) {
 	}
 	newGate := func(s *pgstore.Store) *gate.Gate {
 		return gate.NewGate(s, gate.Config{
-			MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0,
+			MaxDailyLoss: 100, MaxPositions: 5, SwapDeviationGatePct: 50.0,
 			SwapFactMaxAge:          time.Hour,
 			LegContractSizeResolver: csResolver(map[string]float64{"vA:mt5": 1, "vB:mt5": 1}),
 			Quotes:                  setupSwapDeviationQuotes(),
-		}, nil)
+		}, grantLiveCP(t, s))
 	}
 	newIntent := func() gate.TradeIntent {
 		return gate.TradeIntent{

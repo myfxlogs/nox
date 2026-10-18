@@ -161,7 +161,7 @@ func TestD255_RefreshNoPit(t *testing.T) {
 func TestD255_RedeemPit(t *testing.T) {
 	fs := newFake()
 	redeemCalls := 0
-	e := &Executor{SigmaFn: testSigma, Store: fs, Now: time.Now,
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: fs, Now: time.Now,
 		EarnFn: func(context.Context, string) ([]EarnPosition, error) {
 			return []EarnPosition{{ProductID: "EP1", Amount: 1.0}}, nil
 		},
@@ -198,7 +198,7 @@ func TestD255_RedeemPit(t *testing.T) {
 func TestD255_RedeemDust(t *testing.T) {
 	fs := newFake()
 	redeemCalls := 0
-	e := &Executor{SigmaFn: testSigma, Store: fs, Now: time.Now,
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: fs, Now: time.Now,
 		EarnFn: func(context.Context, string) ([]EarnPosition, error) {
 			return []EarnPosition{{ProductID: "EP1", Amount: 0.000000004}}, nil
 		},
@@ -221,7 +221,7 @@ func TestD255_RedeemDust(t *testing.T) {
 func TestRedeemPit_ProductScoped(t *testing.T) {
 	fs := newFake()
 	var calls []string
-	e := &Executor{SigmaFn: testSigma, Store: fs, Now: time.Now,
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: fs, Now: time.Now,
 		EarnFn: func(context.Context, string) ([]EarnPosition, error) {
 			return []EarnPosition{{ProductID: "EP1", Amount: 0.5}, {ProductID: "EP2", Amount: 0.5}}, nil
 		},
@@ -256,7 +256,7 @@ func TestRedeemPit_ProductScoped(t *testing.T) {
 		t.Fatalf("应只发 EP2: %v", calls)
 	}
 	// MinRedeem 闸：额<min 不发赎。
-	e2 := &Executor{SigmaFn: testSigma, Store: newFake(), Now: time.Now,
+	e2 := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: newFake(), Now: time.Now,
 		EarnFn: func(context.Context, string) ([]EarnPosition, error) {
 			return []EarnPosition{{ProductID: "EP9", Amount: 0.001, MinRedeem: 0.1}}, nil
 		},

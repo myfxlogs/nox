@@ -376,6 +376,12 @@ const (
 	// DashboardServiceSelfRestartProcedure is the fully-qualified name of the DashboardService's
 	// SelfRestart RPC.
 	DashboardServiceSelfRestartProcedure = "/nox.dashboard.v1.DashboardService/SelfRestart"
+	// DashboardServiceGetExecutionModeProcedure is the fully-qualified name of the DashboardService's
+	// GetExecutionMode RPC.
+	DashboardServiceGetExecutionModeProcedure = "/nox.dashboard.v1.DashboardService/GetExecutionMode"
+	// DashboardServiceSetExecutionModeProcedure is the fully-qualified name of the DashboardService's
+	// SetExecutionMode RPC.
+	DashboardServiceSetExecutionModeProcedure = "/nox.dashboard.v1.DashboardService/SetExecutionMode"
 	// DashboardServiceListEmployeesProcedure is the fully-qualified name of the DashboardService's
 	// ListEmployees RPC.
 	DashboardServiceListEmployeesProcedure = "/nox.dashboard.v1.DashboardService/ListEmployees"
@@ -565,6 +571,9 @@ type DashboardServiceClient interface {
 	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
 	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
 	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
+	// D-620⑦：执行模式读写口（LIVE 授权唯一径——live_gates 行唯一授权记录）。
+	GetExecutionMode(context.Context, *connect.Request[dashboardv1.GetExecutionModeRequest]) (*connect.Response[dashboardv1.GetExecutionModeResponse], error)
+	SetExecutionMode(context.Context, *connect.Request[dashboardv1.SetExecutionModeRequest]) (*connect.Response[dashboardv1.SetExecutionModeResponse], error)
 	// D-190：员工花名册看板（daemon 编制实况：在职/离线/任务中）。
 	ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error)
 	// D-189：提案执行台——提案实体行实况+业主拒批回执（执行=飞书 go 口令径）。
@@ -1278,6 +1287,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("SelfRestart")),
 			connect.WithClientOptions(opts...),
 		),
+		getExecutionMode: connect.NewClient[dashboardv1.GetExecutionModeRequest, dashboardv1.GetExecutionModeResponse](
+			httpClient,
+			baseURL+DashboardServiceGetExecutionModeProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetExecutionMode")),
+			connect.WithClientOptions(opts...),
+		),
+		setExecutionMode: connect.NewClient[dashboardv1.SetExecutionModeRequest, dashboardv1.SetExecutionModeResponse](
+			httpClient,
+			baseURL+DashboardServiceSetExecutionModeProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SetExecutionMode")),
+			connect.WithClientOptions(opts...),
+		),
 		listEmployees: connect.NewClient[dashboardv1.ListEmployeesRequest, dashboardv1.ListEmployeesResponse](
 			httpClient,
 			baseURL+DashboardServiceListEmployeesProcedure,
@@ -1440,6 +1461,8 @@ type dashboardServiceClient struct {
 	listAppConfig                *connect.Client[dashboardv1.ListAppConfigRequest, dashboardv1.ListAppConfigResponse]
 	updateAppConfig              *connect.Client[dashboardv1.UpdateAppConfigRequest, dashboardv1.UpdateAppConfigResponse]
 	selfRestart                  *connect.Client[dashboardv1.SelfRestartRequest, dashboardv1.SelfRestartResponse]
+	getExecutionMode             *connect.Client[dashboardv1.GetExecutionModeRequest, dashboardv1.GetExecutionModeResponse]
+	setExecutionMode             *connect.Client[dashboardv1.SetExecutionModeRequest, dashboardv1.SetExecutionModeResponse]
 	listEmployees                *connect.Client[dashboardv1.ListEmployeesRequest, dashboardv1.ListEmployeesResponse]
 	listProposals                *connect.Client[dashboardv1.ListProposalsRequest, dashboardv1.ListProposalsResponse]
 	ackProposal                  *connect.Client[dashboardv1.AckProposalRequest, dashboardv1.AckProposalResponse]
@@ -2025,6 +2048,16 @@ func (c *dashboardServiceClient) SelfRestart(ctx context.Context, req *connect.R
 	return c.selfRestart.CallUnary(ctx, req)
 }
 
+// GetExecutionMode calls nox.dashboard.v1.DashboardService.GetExecutionMode.
+func (c *dashboardServiceClient) GetExecutionMode(ctx context.Context, req *connect.Request[dashboardv1.GetExecutionModeRequest]) (*connect.Response[dashboardv1.GetExecutionModeResponse], error) {
+	return c.getExecutionMode.CallUnary(ctx, req)
+}
+
+// SetExecutionMode calls nox.dashboard.v1.DashboardService.SetExecutionMode.
+func (c *dashboardServiceClient) SetExecutionMode(ctx context.Context, req *connect.Request[dashboardv1.SetExecutionModeRequest]) (*connect.Response[dashboardv1.SetExecutionModeResponse], error) {
+	return c.setExecutionMode.CallUnary(ctx, req)
+}
+
 // ListEmployees calls nox.dashboard.v1.DashboardService.ListEmployees.
 func (c *dashboardServiceClient) ListEmployees(ctx context.Context, req *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error) {
 	return c.listEmployees.CallUnary(ctx, req)
@@ -2226,6 +2259,9 @@ type DashboardServiceHandler interface {
 	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
 	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
 	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
+	// D-620⑦：执行模式读写口（LIVE 授权唯一径——live_gates 行唯一授权记录）。
+	GetExecutionMode(context.Context, *connect.Request[dashboardv1.GetExecutionModeRequest]) (*connect.Response[dashboardv1.GetExecutionModeResponse], error)
+	SetExecutionMode(context.Context, *connect.Request[dashboardv1.SetExecutionModeRequest]) (*connect.Response[dashboardv1.SetExecutionModeResponse], error)
 	// D-190：员工花名册看板（daemon 编制实况：在职/离线/任务中）。
 	ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error)
 	// D-189：提案执行台——提案实体行实况+业主拒批回执（执行=飞书 go 口令径）。
@@ -2935,6 +2971,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("SelfRestart")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGetExecutionModeHandler := connect.NewUnaryHandler(
+		DashboardServiceGetExecutionModeProcedure,
+		svc.GetExecutionMode,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetExecutionMode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceSetExecutionModeHandler := connect.NewUnaryHandler(
+		DashboardServiceSetExecutionModeProcedure,
+		svc.SetExecutionMode,
+		connect.WithSchema(dashboardServiceMethods.ByName("SetExecutionMode")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceListEmployeesHandler := connect.NewUnaryHandler(
 		DashboardServiceListEmployeesProcedure,
 		svc.ListEmployees,
@@ -3209,6 +3257,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceUpdateAppConfigHandler.ServeHTTP(w, r)
 		case DashboardServiceSelfRestartProcedure:
 			dashboardServiceSelfRestartHandler.ServeHTTP(w, r)
+		case DashboardServiceGetExecutionModeProcedure:
+			dashboardServiceGetExecutionModeHandler.ServeHTTP(w, r)
+		case DashboardServiceSetExecutionModeProcedure:
+			dashboardServiceSetExecutionModeHandler.ServeHTTP(w, r)
 		case DashboardServiceListEmployeesProcedure:
 			dashboardServiceListEmployeesHandler.ServeHTTP(w, r)
 		case DashboardServiceListProposalsProcedure:
@@ -3690,6 +3742,14 @@ func (UnimplementedDashboardServiceHandler) UpdateAppConfig(context.Context, *co
 
 func (UnimplementedDashboardServiceHandler) SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SelfRestart is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetExecutionMode(context.Context, *connect.Request[dashboardv1.GetExecutionModeRequest]) (*connect.Response[dashboardv1.GetExecutionModeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetExecutionMode is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) SetExecutionMode(context.Context, *connect.Request[dashboardv1.SetExecutionModeRequest]) (*connect.Response[dashboardv1.SetExecutionModeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.SetExecutionMode is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListEmployees(context.Context, *connect.Request[dashboardv1.ListEmployeesRequest]) (*connect.Response[dashboardv1.ListEmployeesResponse], error) {

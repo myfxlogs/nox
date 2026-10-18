@@ -18,7 +18,7 @@ func TestD517_ExerciseSellback(t *testing.T) {
 	st.cfgID = 42
 	var sellSym string
 	var sellQty float64
-	ex := &Executor{SigmaFn: testSigma,
+	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma,
 		Store: st, BnKey: "k", Now: time.Now,
 		PositionsFn: func(context.Context) ([]DCIPosition, error) {
 			return []DCIPosition{{
@@ -75,7 +75,7 @@ func TestD517_SellFail_PendingDisposal(t *testing.T) {
 	st := newFake()
 	st.cfgID = 42
 	calls := 0
-	ex := &Executor{SigmaFn: testSigma,
+	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma,
 		Store: st, BnKey: "k", Now: time.Now,
 		PositionsFn: func(context.Context) ([]DCIPosition, error) {
 			return []DCIPosition{{
@@ -121,7 +121,7 @@ func TestD517_SellFail_PendingDisposal(t *testing.T) {
 func TestD517_NoDisposal_SameCcy(t *testing.T) {
 	st := newFake()
 	st.cfgID = 42
-	ex := &Executor{SigmaFn: testSigma,
+	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma,
 		Store: st, BnKey: "k", Now: time.Now,
 		PositionsFn: func(context.Context) ([]DCIPosition, error) {
 			return []DCIPosition{{
@@ -150,7 +150,7 @@ func TestD542_LotSizeFloor(t *testing.T) {
 	st := newFake()
 	st.cfgID = 42
 	var sellQty float64
-	ex := &Executor{SigmaFn: testSigma,
+	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma,
 		Store: st, BnKey: "k", Now: time.Now,
 		SpotFiltersFn: func(context.Context, string) (float64, float64, int, error) {
 			return 0.00001, 0.00001, 5, nil
@@ -187,7 +187,7 @@ func TestD542_SweepPendingDisposal(t *testing.T) {
 		Note: "pending_disposal D-517：DCI#11 行权接货待卖回（LOT_SIZE 尽败）",
 	}}
 	st.orders = map[string]*pgstore.DCIOrder{"r11": {ID: 11, Qty: 351.0, Underlying: "BTCUSDT"}}
-	ex := &Executor{Store: st, BnKey: "k", Now: time.Now,
+	ex := &Executor{ModeGate: liveModeGate, Store: st, BnKey: "k", Now: time.Now,
 		SpotFiltersFn: func(context.Context, string) (float64, float64, int, error) {
 			return 0.00001, 0.00001, 5, nil
 		},
@@ -229,7 +229,7 @@ func TestD542_SweepUnanchored(t *testing.T) {
 		Note: "pending_disposal D-517：DCI#99 行权接货待卖回",
 	}}
 	// orders 表空——id=99 查无
-	ex := &Executor{Store: st, BnKey: "k", Now: time.Now,
+	ex := &Executor{ModeGate: liveModeGate, Store: st, BnKey: "k", Now: time.Now,
 		SpotFiltersFn: func(context.Context, string) (float64, float64, int, error) {
 			return 0.00001, 0.00001, 5, nil
 		},

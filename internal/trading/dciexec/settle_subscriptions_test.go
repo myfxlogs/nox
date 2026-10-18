@@ -23,7 +23,7 @@ func TestSettleViaSubscriptions(t *testing.T) {
 	o.Response = `{"positionId":"18537557","settleDate":` + fmt.Sprint(time.Now().Add(-time.Hour).UnixMilli()) + `}`
 	st.filledOrders = []pgstore.FilledDCIOrder{o}
 	st.cfgID = 42
-	ex := &Executor{SigmaFn: testSigma,
+	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma,
 		Store: st,
 		Now:   time.Now,
 		PositionsFn: func(context.Context) ([]DCIPosition, error) {
@@ -64,7 +64,7 @@ func TestSettleViaSubscriptions(t *testing.T) {
 func TestSettleSubscriptionsGuards(t *testing.T) {
 	st := newFake()
 	st.filledOrders = []pgstore.FilledDCIOrder{d207Order()}
-	ex := &Executor{SigmaFn: testSigma,
+	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma,
 		Store:       st,
 		Now:         time.Now,
 		PositionsFn: func(context.Context) ([]DCIPosition, error) { return nil, nil },

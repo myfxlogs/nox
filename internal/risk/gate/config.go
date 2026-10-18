@@ -51,10 +51,6 @@ type Config struct {
 	// Environment 执行环境固定值（'demo'/'live'）。开仓前校验 venue 的 is_real 与此值一致。
 	// 空 = 未配置（不检查，回退旧行为）。
 	Environment string
-	// LIVE 人工开关（NOX_LIVE_TRADE，默认 false）。
-	// is_real=true 账户 + LiveTrade=false → 拒绝开仓（Gate.Submit + 手动 RPC 同源）。
-	// is_real=false（demo）不受限制。切换=改 env+重启+审计日志（无 RPC）。
-	LiveTrade bool
 	// LiveGate 检查器（LIVE 模式导出门）。nil=LIVE 直接拒绝（fail-closed）。
 	LiveGateChecker *LiveGateChecker
 	// MtQuoteStaleMin D-029 ②：MT 报价新鲜度阈值（分钟）——周表说开市时动态闭市判定

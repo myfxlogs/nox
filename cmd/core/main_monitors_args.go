@@ -12,6 +12,7 @@ import (
 	"nox/internal/ledger/reconcile"
 	"nox/internal/platform/alertcool"
 	"nox/internal/platform/config"
+	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/engine"
 	"nox/internal/trading/exec"
@@ -28,6 +29,8 @@ type monitorsSetupArgs struct {
 	st           *pgstore.Store
 	qbus         *bus.QuoteBus
 	execReg      *exec.Registry
+	liveGate     *gate.LiveGateChecker // D-620⑦：真金单闸检查器单实例（main 早建下穿）
+	cp           *gate.ControlPlane    // D-620⑦：控制面单实例（dashboard/dciexec/selfwatch 共注）
 	brokerMgr    *dashboard.BrokerManager
 	pipeline     *exec.Pipeline
 	recon        *reconcile.Reconciler

@@ -100,8 +100,8 @@ func TestD327_ExecuteInternal_EntrySpreadBackfilled(t *testing.T) {
 
 	svc := &Service{
 		store: st, qbus: qb,
-		pipeline:  pipeline,
-		liveTrade: true,
+		pipeline:    pipeline,
+		gateChecker: grantedLiveChecker(t, st),
 	}
 	svc.SetLegContractSize(func(venueKey, venueSymbol string) (float64, bool) { return 1.0, true })
 	svc.SetCexContractSize(func(venue, venueSymbol string) (float64, bool) { return 1.0, true })

@@ -33,7 +33,7 @@ func d563Run(t *testing.T, cexBid float64, cexAge time.Duration, publishCex bool
 		qb.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "binance", VenueType: "perp",
 			Bid: cexBid, Ask: cexBid + 0.5, Time: time.Now().Add(-cexAge)})
 	}
-	e := d330Engine(s, svc, qb, d563Spec())
+	e := d330Engine(t, s, svc, qb, d563Spec())
 	opp := d330GoldenOpp()
 	e.handleOpportunity(ctx, opp, newComboAccumulator())
 	return d330CountLogs(t, s, opp.ID)

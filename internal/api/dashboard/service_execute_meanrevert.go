@@ -11,6 +11,7 @@ import (
 
 	"nox/internal/platform/combo"
 	"nox/internal/platform/usdnotional"
+	"nox/internal/risk/gate"
 	"nox/internal/trading/exec"
 )
 
@@ -34,11 +35,12 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 		return "FAILED", "下单数量无效", 0
 	}
 	// D-195-A：统一执行模式检查（手动入口同源，首版只用 global scope）
-	if s.gateChecker != nil {
-		mode, allowed, cpReason, cpErr := s.gateChecker.CheckGate(ctx)
-		if cpErr != nil || !allowed {
-			return "FAILED", fmt.Sprintf("当前运行模式禁止开仓（%s，模式=%s）", cpReason, mode), 0
-		}
+	if s.gateChecker == nil {
+		return "FAILED", "控制面未接线", 0
+	}
+	execMode, allowed, cpReason, cpErr := s.gateChecker.CheckGate(ctx)
+	if cpErr != nil || !allowed {
+		return "FAILED", fmt.Sprintf("当前运行模式禁止开仓（%s，模式=%s）", cpReason, execMode), 0
 	}
 	// D-159 W6a S5：手动 RPC 不绕 CLOSE_ONLY——非 RUNNING 拒绝开仓（fail-closed）。
 	state, err := s.checkAutotradeState(ctx)
@@ -148,7 +150,7 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 		}
 	}
 	// D-159 W6a S2：LIVE 人工开关（手动入口同源，pipeline.Execute 前拦截）。
-	if !s.liveTrade {
+	if execMode != gate.ModeLive {
 		if msg := s.checkLiveGate(ctx, venueBuy, venueSell); msg != "" {
 			return "FAILED", msg, 0
 		}

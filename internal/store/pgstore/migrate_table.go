@@ -242,4 +242,5 @@ var migrationFiles = []struct {
 	{1047, migrations.NavLivemapFixSQL, false},           // NAV liveMap 指纹注血腐败行清理（分币粒度修配套）
 	{1048, migrations.CmcTablesReturnSQL, false},         // CMC Markets 采集表族回归（fin_cmc_* 4 表+装配键种子）
 	{1049, migrations.WatchRuleUpgradeSQL, false},        // watch_rule 盯盘域升级（level/message——arb 能力归并）
+	{1050, migrations.LiveModeSQL, false},                // D-620：LIVE 授权链断层修（真金单闸）
 }

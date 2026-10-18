@@ -342,3 +342,36 @@ message PipelineStageHealth {
   // idle=设计性闲置无活可干；waiting=被卡带因（wait_reason 必填）。
   string evidence_kind = 7;
 }
+
+// ExecutionModeView D-620⑦：执行模式+真金授权视图（live_gates active 行投影）。
+message ExecutionModeView {
+  string mode = 1;                            // READ_ONLY/PAPER/TEST/LIVE
+  bool enabled = 2;                           // execution_controls.enabled（false=kill active）
+  bool allowed = 3;                           // CheckGate 结论
+  string reason = 4;                          // CheckGate 拒因（allowed=true 时 "allowed"）
+  string gate_operator = 5;                   // live_gates.operator（无行=空）
+  google.protobuf.Timestamp gate_confirmed_at = 6;
+  google.protobuf.Timestamp gate_expires_at = 7;
+  string gate_evidence_ref = 8;               // live_gates.evidence_ref
+}
+
+message GetExecutionModeRequest {}
+
+message GetExecutionModeResponse {
+  ExecutionModeView view = 1;
+}
+
+// SetExecutionModeRequest D-620⑦：执行模式写口（决策席 buf curl 径，Bearer 同 UpdateAppConfig 信任级）。
+// mode=LIVE → ControlPlane.GrantLive（operator/reason/evidence_ref 非空+expires_at>now 必填+live_gates 落账）；
+// 其余 → SetMode（降级自动撤 live_gates active 行）。
+message SetExecutionModeRequest {
+  string mode = 1;
+  string actor = 2;
+  string reason = 3;
+  string evidence_ref = 4;
+  google.protobuf.Timestamp expires_at = 5;
+}
+
+message SetExecutionModeResponse {
+  ExecutionModeView view = 1;
+}

@@ -163,7 +163,7 @@ func TestM44_BudgetGate_Submit(t *testing.T) {
 	insert("vA")
 	insert("vB")
 
-	g := gate.NewGate(st, gate.Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: false, MaxNotional: 100000}, nil)
+	g := gate.NewGate(st, gate.Config{MaxDailyLoss: 100, MaxPositions: 5, MaxNotional: 100000}, nil)
 	g.SetBudgetChecker(NewChecker(st))
 	mk := func(notional float64) *gate.TradeIntent {
 		return &gate.TradeIntent{

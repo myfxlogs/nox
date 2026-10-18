@@ -8,11 +8,11 @@ import (
 	"strings"
 )
 
-// AppConfigGroup 键分组（值集=设计稿 §2 六组）。
+// AppConfigGroup 键分组（值集=设计稿 §2 六组）。NOX_LIVE_TRADE 随 D-620 退役不在此表。
 func AppConfigGroup(key string) string {
 	switch {
 	case strings.HasPrefix(key, "NOX_AUTOTRADE_"), strings.HasPrefix(key, "NOX_INTRA_"),
-		strings.HasPrefix(key, "NOX_PAPER_AUTHORIZED_"), key == "NOX_LIVE_TRADE":
+		strings.HasPrefix(key, "NOX_PAPER_AUTHORIZED_"):
 		return "AUTOTRADE"
 	case strings.HasPrefix(key, "NOX_CARRY_"), strings.HasPrefix(key, "NOX_SWAPARB_"),
 		strings.HasPrefix(key, "NOX_PERPFUNDING_"), strings.HasPrefix(key, "NOX_XASSET_"):

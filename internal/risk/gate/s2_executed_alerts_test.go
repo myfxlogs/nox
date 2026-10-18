@@ -50,7 +50,7 @@ func countAlertsByPrefix(t *testing.T, s *pgstore.Store, prefix string) int {
 // TestD268_S2_ExecutedAlerts 通过全部门禁 + Execute=EXECUTED → alerts 表有 warn [机会执行]。
 func TestD268_S2_ExecutedAlerts(t *testing.T) {
 	s := setupGateAlertStore(t)
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: false, Environment: ""}, nil)
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, Environment: ""}, nil)
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",
@@ -102,7 +102,7 @@ func TestD268_S2_RejectedNoAlert(t *testing.T) {
 	if err := s.DisableStrategy(ctx, "CROSS_VENUE", "test disabled"); err != nil {
 		t.Fatalf("disable strategy: %v", err)
 	}
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: false, Environment: ""}, nil)
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, Environment: ""}, nil)
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",

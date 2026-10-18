@@ -41,8 +41,8 @@ func d328SeedManualFixture(t *testing.T, st *pgstore.Store) (*Service, string) {
 	qb.Publish(bus.Quote{Symbol: "CLUSDT", Venue: "3001157", VenueType: "mt5", Bid: 60.01, Ask: 60.03, Time: now, VenueSymbol: "USOILm"})
 	svc := &Service{
 		store: st, qbus: qb,
-		pipeline:  exec.NewPipeline(exec.NewRegistry(), st, qb, exec.RiskLimits{}, "demo"),
-		liveTrade: true, // 跳过 liveGate（聚焦本闸）
+		pipeline:    exec.NewPipeline(exec.NewRegistry(), st, qb, exec.RiskLimits{}, "demo"),
+		gateChecker: grantedLiveChecker(t, st), // D-620：LIVE 授权径（聚焦本闸）
 	}
 	svc.SetLegContractSize(func(venueKey, venueSymbol string) (float64, bool) { return 1.0, true })
 	svc.SetXAssetComboAllow([]exec.XAssetComboAllowSpec{
@@ -144,8 +144,8 @@ func TestD328_ExecuteInternal_NoTrigger(t *testing.T) {
 	qb.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "okx", VenueType: "perp", Bid: 60000, Ask: 60010, Time: now, VenueSymbol: "BTC-USDT-SWAP"})
 	svc := &Service{
 		store: st, qbus: qb,
-		pipeline:  exec.NewPipeline(exec.NewRegistry(), st, qb, exec.RiskLimits{}, "demo"),
-		liveTrade: true,
+		pipeline:    exec.NewPipeline(exec.NewRegistry(), st, qb, exec.RiskLimits{}, "demo"),
+		gateChecker: grantedLiveChecker(t, st),
 	}
 	svc.SetLegContractSize(func(venueKey, venueSymbol string) (float64, bool) { return 1.0, true })
 	svc.SetCexContractSize(func(venue, venueSymbol string) (float64, bool) { return 0.001, true })

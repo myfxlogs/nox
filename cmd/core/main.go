@@ -24,7 +24,6 @@ import (
 	"nox/internal/risk/position"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/engine"
-	"nox/internal/trading/exec"
 )
 
 func main() {
@@ -121,7 +120,8 @@ func main() {
 	// D-163：探针提案机审 kick 总线（explorer 落库 → dashSvc.RunProbeAdjudicator 订阅端）。
 	probeTopic := bus.NewTopic[struct{}]()
 	// income/IO 采集器与扫描器批量装配提取（D-474a 保 main() ≤300 行门禁）
-	execReg := exec.NewRegistry()
+	// D-620⑦：exec 注册表+真金单闸单实例（liveGate readiness=readyz Tradable；cp 穿注 dashboard/dciexec/selfwatch——wire_livegate.go）。
+	execReg, liveGate, cp := wireExecGateChain(st, qbus, cfg)
 	brokerMgr := dashboard.NewBrokerManager(st, qbus, execReg, cfg.SymbolsTTL)
 	// D-597 时序审计病灶①：swapledger 三倍日 venue weekday 延迟绑定（独立 cache 实例
 	// ——bpmon 自持一枚，fetcher 无状态每实例 24h TTL×3 户重拉量可忽略）。
@@ -138,7 +138,7 @@ func main() {
 		}
 		return eq, true
 	})
-	startCollectorsAndScanners(ctx, st, cfg, cexCfg, cexSymbols, incomeKickCh, okxIncomeKickCh, ioKickCh, refreshTopic, probeTopic, brokerMgr)
+	startCollectorsAndScanners(ctx, st, cfg, cexCfg, cexSymbols, incomeKickCh, okxIncomeKickCh, ioKickCh, refreshTopic, probeTopic, brokerMgr, cp)
 	// 5c. TickSampler（§4.3）采样+落库装配已拆 wire_quotes.go（D-366 S2）。
 	startTickSampler(ctx, qbus, st, cexCfg)
 
@@ -282,8 +282,8 @@ func main() {
 
 	// 6d~6g 监控器 + dashboard 服务 + auth + runServices 装配提取至 main_monitors.go 保 main() ≤300 行。
 	setupMonitorsAndServices(monitorsSetupArgs{
-		cexCfg: cexCfg,
-		ctx:    ctx, cancel: cancel, cfg: cfg, st: st, qbus: qbus, execReg: execReg, acDefaults: acDefaults, acEnvSnap: acEnvSnap, secRes: secRes,
+		cexCfg: cexCfg, liveGate: liveGate, cp: cp,
+		ctx: ctx, cancel: cancel, cfg: cfg, st: st, qbus: qbus, execReg: execReg, acDefaults: acDefaults, acEnvSnap: acEnvSnap, secRes: secRes,
 		brokerMgr: brokerMgr, pipeline: pipeline, recon: recon, factCache: factCache,
 		oppTopic: oppTopic, orderTopic: orderTopic,
 		alertTopic: alertTopic, hedgeTopic: hedgeTopic, refreshTopic: refreshTopic, reviewRun: reviewRun,

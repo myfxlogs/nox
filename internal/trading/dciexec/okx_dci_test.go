@@ -57,7 +57,7 @@ func TestOkxDCILeg_QuoteTradeSequence(t *testing.T) {
 		Strike: f64(80000), TenorDays: &tenor, APY: 0.11,
 		ProductRef: "BTC-USDT-260327-80000-P", DeliveryTs: &deliv,
 		MinAmount: f64(10), PurchaseDecimal: idec(0)})
-	ex := &Executor{SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
+	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	propID := int64(9)
 	msg, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, 0.02, &propID)
@@ -100,7 +100,7 @@ func TestOkxDCILeg_ExpiredQuoteFails(t *testing.T) {
 		Strike: f64(80000), TenorDays: &tenor, APY: 0.11,
 		ProductRef: "BTC-USDT-260327-80000-P", DeliveryTs: &deliv,
 		MinAmount: f64(10), PurchaseDecimal: idec(0)})
-	ex := &Executor{SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
+	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	propID := int64(9)
 	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, 0.02, &propID); err == nil {
@@ -115,7 +115,7 @@ func TestOkxDCILeg_ExpiredQuoteFails(t *testing.T) {
 
 func TestOkxDCILeg_NoCredGap(t *testing.T) {
 	st := newFake()
-	ex := &Executor{SigmaFn: testSigma, Store: st, Now: time.Now, EarnCreds: map[string]EarnCred{}}
+	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: st, Now: time.Now, EarnCreds: map[string]EarnCred{}}
 	propID := int64(9)
 	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 1.0, 90, 100000, 90000, 0.02, &propID); err == nil {
 		t.Fatal("凭据缺应 credential 缺口")
@@ -129,7 +129,7 @@ func TestOkxDCILeg_ConstraintGate(t *testing.T) {
 		srv := okxDCISrv(t, calls, false)
 		st := newFake()
 		st.quotes = append(st.quotes, q)
-		return srv, &Executor{SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
+		return srv, &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
 			EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	}
 	tenor := 7
@@ -204,7 +204,7 @@ func TestOkxDCILeg_DustShortfall(t *testing.T) {
 		Strike: f64(80000), TenorDays: &tenor, APY: 0.11,
 		ProductRef: "P1", DeliveryTs: &deliv,
 		MinAmount: f64(10), PurchaseDecimal: idec(0)})
-	ex := &Executor{SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
+	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	propID := int64(9)
 	// qty=(99.9999995+5e-7)→floor=100 ≥min10；needed=5e-7 尘差→跳划转照常申购。
@@ -237,7 +237,7 @@ func TestOkxSettle_SettledBooks(t *testing.T) {
 	defer srv.Close()
 	st := newFake()
 	st.cfgID = 42
-	ex := &Executor{SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
+	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	td := 7
 	pid := int64(9)
@@ -289,7 +289,7 @@ func TestOkxSettle_EarnRowSkipped(t *testing.T) {
 			OptType: "PUT", ProductRef: "BTC-USDT-301231-80000-P",
 			Response: `{"ordId":"2"}`}, // 远月未到期——不轮（50011 实证）
 	}
-	ex := &Executor{SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
+	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 	if _, err := ex.SettleExpiredOrders(context.Background()); err != nil {
 		t.Fatalf("settle: %v", err)
@@ -346,7 +346,7 @@ func d549Exec(srv *httptest.Server, st *fakeStore) *Executor {
 		Strike: f64(80000), TenorDays: &tenor, APY: 0.11,
 		ProductRef: "P1", DeliveryTs: &deliv,
 		MinAmount: f64(10), PurchaseDecimal: idec(0)})
-	return &Executor{SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
+	return &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: st, Client: srv.Client(), Now: time.Now,
 		EarnCreds: map[string]EarnCred{"okx": {Key: "k", Secret: "s", Pass: "p", BaseURL: srv.URL}}}
 }
 

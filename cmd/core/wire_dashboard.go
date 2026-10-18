@@ -59,7 +59,6 @@ func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *
 	dashSvc.SetXAssetComboAllow(xassetAllowFromTable(ctx, st, cfg.Environment)) // D-338 S3：表化同源（设计自审③漏此位点，施工按同源意图补齐防 auto/manual 分裂）
 	dashSvc.SetXAssetAllowEnvironment(cfg.Environment)                          // D-403 R2：approve 扇出 rows 单查环境
 	dashSvc.SetEnvironment(cfg.Environment)                                     // D-159 W1a I6：手动入口同源
-	dashSvc.SetLiveTrade(cfg.LiveTrade)                                         // D-159 W6a S2：LIVE 人工开关手动入口同源
 	dashSvc.SetSwapDeviationGatePct(cfg.SwapDeviationGatePct)                   // D-182 S4：swap 偏差拦截手动入口同源
 	dashSvc.SetSwapFactMaxAge(cfg.MTData.SwapFactMaxAge)                        // D-604 N1：deviation 闸 facts 龄期（discover 同源键）
 	oppmatch.SetDelegateTickMaxAge(cfg.LegTickWindow)                           // D-604 N2：delegate 真金 sizing 判价窗（残腿窗同源）

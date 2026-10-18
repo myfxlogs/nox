@@ -17,6 +17,7 @@ import (
 	"nox/internal/platform/safego"
 	"nox/internal/research/detector"
 	"nox/internal/research/evaluator"
+	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/autotrade"
 	"nox/internal/trading/engine"
@@ -153,7 +154,7 @@ func startDisabledStrategiesListener(ctx context.Context, st *pgstore.Store, eng
 func startCollectorsAndScanners(ctx context.Context, st *pgstore.Store, cfg *config.Config,
 	cexCfg exchange.Config, cexSymbols []string,
 	incomeKickCh, okxIncomeKickCh, ioKickCh chan struct{}, refreshTopic *bus.Topic[string],
-	probeTopic *bus.Topic[struct{}], brokerMgr *dashboard.BrokerManager) {
+	probeTopic *bus.Topic[struct{}], brokerMgr *dashboard.BrokerManager, cp *gate.ControlPlane) {
 	startIncomeCollector(ctx, st, cexCfg, cexSymbols, incomeKickCh)         // D-334ab S3：income 实数轨结算对齐采集
 	startOKXIncomeCollector(ctx, st, cexCfg, okxIncomeKickCh)               // D-385 S3：okx bills→income_events（15min 轮询）
 	startCexIOCollector(ctx, st, ioKickCh, brokerMgr)                       // D-365 S3：CEX 进出账采集 15min 水位增量
@@ -161,7 +162,7 @@ func startCollectorsAndScanners(ctx context.Context, st *pgstore.Store, cfg *con
 	startCarryUniverseScanner(ctx, st, cfg.TradeModeTTL, cfg, refreshTopic) // D-336 S1：carry 宇宙扫描器（发现层 4h）
 	startKbReporter(ctx, st, cfg)                                           // D-442 S3：KB 元分析周报器（周 ticker 落档）
 	startRetroReporter(ctx, st, cfg)                                        // D-457 S3：系统复盘日结+周复盘双定时器
-	startOppMatch(ctx, st, cfg)                                             // D-187：模板×账本日频匹配→提案/缺口
+	startOppMatch(ctx, st, cfg, cp)                                         // D-187：模板×账本日频匹配→提案/缺口
 	startExplorer(ctx, st, cfg, probeTopic)                                 // D-513 S5：探矿员壳（env 闸缺省关=零 goroutine）
 	startSleepmon(ctx, st, cfg)                                             // D-534 B4：睡钱触发层（BJ 日检 7d 破地板→alert+inbox）
 	startDecisionOutcomeRunner(ctx, st)                                     // D-561：裁定归因簿（物化+30d 归因+连败告警）

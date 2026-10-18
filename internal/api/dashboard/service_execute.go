@@ -233,7 +233,7 @@ func (s *Service) checkLiveGate(ctx context.Context, venueBuy, venueSell string)
 			return fmt.Sprintf("实盘开关检查：venue %s 实盘标记未知（null）", venueKey)
 		}
 		if *isReal {
-			return fmt.Sprintf("实盘交易开关关闭（NOX_LIVE_TRADE=false，venueKey=%s 为实盘账户）", venueKey)
+			return fmt.Sprintf("模式非 LIVE（venueKey=%s 为实盘账户）", venueKey)
 		}
 	}
 	return ""

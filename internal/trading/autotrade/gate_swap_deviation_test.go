@@ -91,8 +91,8 @@ func TestSwapDeviationGate_HighDeviation_Rejected(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.0, -2.21)
 	qb := setupSwapDeviationQuotes()
 	// cs=1 静默回退已删——显式 resolver 钉 CS=1 保持原拒语义。
-	g := gate.NewGate(s, gate.Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0, SwapArbAllowCombos: nil, Quotes: qb,
-		LegContractSizeResolver: csResolver(map[string]float64{"vA:mt5": 1, "vB:mt5": 1})}, nil)
+	g := gate.NewGate(s, gate.Config{MaxDailyLoss: 100, MaxPositions: 5, SwapDeviationGatePct: 50.0, SwapArbAllowCombos: nil, Quotes: qb,
+		LegContractSizeResolver: csResolver(map[string]float64{"vA:mt5": 1, "vB:mt5": 1})}, grantLiveCP(t, s))
 	intent := gate.TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",
@@ -119,7 +119,7 @@ func TestSwapDeviationGate_HighDeviation_Rejected(t *testing.T) {
 func TestSwapDeviationGate_LowDeviation_Pass(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.5, 0.005)
 	qb := setupSwapDeviationQuotes()
-	g := gate.NewGate(s, gate.Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0, Quotes: qb}, nil)
+	g := gate.NewGate(s, gate.Config{MaxDailyLoss: 100, MaxPositions: 5, SwapDeviationGatePct: 50.0, Quotes: qb}, grantLiveCP(t, s))
 	intent := gate.TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",
@@ -157,7 +157,7 @@ func TestSwapDeviationGate_NoHistory_Pass(t *testing.T) {
 		t.Fatalf("insert broker_accounts: %v", err)
 	}
 	// 无 positions → 无历史持仓
-	g := gate.NewGate(s, gate.Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0, Quotes: setupSwapDeviationQuotes()}, nil)
+	g := gate.NewGate(s, gate.Config{MaxDailyLoss: 100, MaxPositions: 5, SwapDeviationGatePct: 50.0, Quotes: setupSwapDeviationQuotes()}, grantLiveCP(t, s))
 	intent := gate.TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",
@@ -179,7 +179,7 @@ func TestSwapDeviationGate_NoHistory_Pass(t *testing.T) {
 func TestSwapDeviationGate_Disabled_Pass(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.0, -2.21)
 	qb := setupSwapDeviationQuotes()
-	g := gate.NewGate(s, gate.Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 0, Quotes: qb}, nil) // 禁用
+	g := gate.NewGate(s, gate.Config{MaxDailyLoss: 100, MaxPositions: 5, SwapDeviationGatePct: 0, Quotes: qb}, grantLiveCP(t, s)) // 禁用
 	intent := gate.TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",

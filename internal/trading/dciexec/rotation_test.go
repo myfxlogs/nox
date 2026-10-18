@@ -17,7 +17,7 @@ func rotFixture(t *testing.T, rail *fakeRail, cfg map[string]float64) (*Executor
 	t.Helper()
 	f := newFake()
 	f.cfgF = cfg
-	ex := &Executor{Store: f, Now: time.Now, EarnRails: map[string]EarnRail{"okx": rail}}
+	ex := &Executor{ModeGate: liveModeGate, Store: f, Now: time.Now, EarnRails: map[string]EarnRail{"okx": rail}}
 	p := &pgstore.Proposal{ID: 77, TemplateID: "earn_rotation", Venue: "okx",
 		Status: "proposed", Params: map[string]any{"ccy": "USDT"}}
 	f.proposals[77] = p

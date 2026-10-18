@@ -147,7 +147,6 @@ func Load() *Config {
 		FeishuAppSecret:            envStr("NOX_FEISHU_APP_SECRET", ""),                // D-264（同上）
 		FreezeGuard:                envDur("NOX_FREEZE_GUARD", 10*time.Minute),         // D-155 freeze guard 冻结腿预检窗口
 		Environment:                envStr("NOX_ENVIRONMENT", "demo"),                  // D-159 W1a I6：缺省 demo fail-safe
-		LiveTrade:                  envBool("NOX_LIVE_TRADE", false),                   // D-159 W6a S2：LIVE 人工开关默认 false
 		SwapDeviationGatePct:       envFloat("NOX_SWAP_DEVIATION_GATE_PCT", 50.0),      // D-165 S1：swap 偏差拦截默认 50%
 		SwapDeviationExitPct:       envFloat("NOX_SWAP_DEVIATION_EXIT_PCT", 50.0),      // D-165 S2：swap 偏差退出默认 50%
 		SwapFactsZeroCheckEnabled:  envBool("NOX_SWAP_FACTS_ZERO_CHECK", true),         // D-165 S3：swap facts 零值校验默认开

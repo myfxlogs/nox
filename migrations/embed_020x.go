@@ -150,3 +150,6 @@ var NavLivemapFixSQL string // NAV liveMap 指纹注血腐败行清理（分币�
 var CmcTablesReturnSQL string // CMC Markets 采集表族回归（M3 剔除后 TRX 页三区业主令复工）
 //go:embed 1049_watch_rule_upgrade.sql
 var WatchRuleUpgradeSQL string // watch_rule 盯盘域升级（level/message——arb price_alerts 能力归并，1003 裁废域不复活）
+
+//go:embed 1050_live_mode.sql
+var LiveModeSQL string // D-620：LIVE 授权链（mode 枚举+NOX_LIVE_TRADE 退役+live_gates active 部分唯一索引）

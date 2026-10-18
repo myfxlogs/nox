@@ -121,3 +121,32 @@ func TestMigrate_Idempotent(t *testing.T) {
 
 // 确保 strings 包被引用
 var _ = strings.TrimSpace
+
+// TestMigrate_LiveModeCheck D-620 T5：1050 后 execution_controls CHECK 收 'LIVE' 拒 'FOO'。
+func TestMigrate_LiveModeCheck(t *testing.T) {
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
+	ctx := context.Background()
+	s, err := New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("pgstore.New: %v", err)
+	}
+	defer s.Close()
+	defer s.pool.Exec(ctx, `DELETE FROM execution_controls WHERE scope_key='d620-t5'`)
+	if _, err := s.pool.Exec(ctx, `INSERT INTO execution_controls (scope_type,scope_key,mode,enabled) VALUES ('account','d620-t5','LIVE',true)`); err != nil {
+		t.Fatalf("CHECK 应收 LIVE: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, `INSERT INTO execution_controls (scope_type,scope_key,mode,enabled) VALUES ('account','d620-t5','FOO',true)`); err == nil {
+		t.Fatal("CHECK 应拒 FOO")
+	}
+	// 部分唯一索引：active+revoked 共存不撞键（撤权后续权路径前置条件）。
+	if _, err := s.pool.Exec(ctx, `INSERT INTO live_gates (scope_type,scope_key,account_key,strategy,operator,confirmed_at,check_snapshot) VALUES ('global','d620-t5','','','op',now(),'{}'::jsonb)`); err != nil {
+		t.Fatalf("live_gates 首插: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE live_gates SET revoked_at=now(),revoke_reason='t' WHERE scope_key='d620-t5'`); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, `INSERT INTO live_gates (scope_type,scope_key,account_key,strategy,operator,confirmed_at,check_snapshot) VALUES ('global','d620-t5','','','op2',now(),'{}'::jsonb)`); err != nil {
+		t.Fatalf("撤权后再插应不撞键（部分唯一索引）: %v", err)
+	}
+	defer s.pool.Exec(ctx, `DELETE FROM live_gates WHERE scope_key='d620-t5'`)
+}

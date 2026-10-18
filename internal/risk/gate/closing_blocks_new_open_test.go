@@ -32,7 +32,7 @@ func TestD015_ClosingBlocksNewOpen(t *testing.T) {
 		 VALUES ('opp:505','XASSET_CARRY','CLOSING',16.3,now())`); err != nil {
 		t.Fatalf("insert CLOSING pos: %v", err)
 	}
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: false, Environment: ""}, nil)
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, Environment: ""}, nil)
 	intent := d015Intent()
 	res := g.Submit(ctx, &intent)
 	if res.Status != "REJECTED" || !strings.Contains(res.Reason, "residual leg") {
@@ -49,7 +49,7 @@ func TestD015_LeggedBlocksNewOpen(t *testing.T) {
 		 VALUES ('opp:505','XASSET_CARRY','LEGGED',16.3,now())`); err != nil {
 		t.Fatalf("insert LEGGED pos: %v", err)
 	}
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: false, Environment: ""}, nil)
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, Environment: ""}, nil)
 	intent := d015Intent()
 	res := g.Submit(ctx, &intent)
 	if res.Status != "REJECTED" || !strings.Contains(res.Reason, "residual leg") {
@@ -61,7 +61,7 @@ func TestD015_LeggedBlocksNewOpen(t *testing.T) {
 func TestD015_NoResidualPasses(t *testing.T) {
 	s := setupGateAlertStore(t)
 	ctx := context.Background()
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: false, Environment: ""}, nil)
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, Environment: ""}, nil)
 	intent := d015Intent()
 	res := g.Submit(ctx, &intent)
 	if res.Status != "EXECUTED" {

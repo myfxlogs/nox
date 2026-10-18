@@ -23,7 +23,7 @@ func TestM42_AutoExecNonLiveFailClosed(t *testing.T) {
 	fs := newFake()
 	pid := fs.addProposal("dci_sell_high_covered_call") // viable 卡默认种
 	_ = pid
-	e := &Executor{SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL, APIBase: srv.URL,
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL, APIBase: srv.URL,
 		Client: srv.Client(), Now: time.Now,
 		PriceFn: func(context.Context, string) (float64, error) { return 100000, nil }}
 	n, err := e.AutoExecLive(context.Background())

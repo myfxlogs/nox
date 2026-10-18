@@ -6,6 +6,7 @@ package selfwatch
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -99,6 +100,33 @@ func anomalyLoop(ctx context.Context, d Deps) {
 			log.Printf("[selfwatch] hourly stage1 eval: %v", err)
 		} else {
 			emitStage1Ready(ctx, d, allOK(rows))
+		}
+		checkLiveGateExpiry(ctx, d)
+	}
+}
+
+// checkLiveGateExpiry D-620⑧：LIVE 授权时效行——mode=LIVE 且剩<24h warn once、
+// 已过期 critical once（InsertAlertDedup 同窗去重，非自管 latch）。
+func checkLiveGateExpiry(ctx context.Context, d Deps) {
+	if d.LiveGateStatus == nil {
+		return
+	}
+	mode, exp, err := d.LiveGateStatus(ctx)
+	if err != nil {
+		log.Printf("[selfwatch] live gate status: %v", err)
+		return
+	}
+	if mode != "LIVE" || exp == nil {
+		return
+	}
+	now := d.now()
+	if now.After(*exp) {
+		if err := d.Store.InsertAlertDedup(ctx, "critical", "live gate expired（真金授权已过期——到期自验锚 D-620）", 24*time.Hour); err != nil {
+			log.Printf("[selfwatch] live gate expired alert: %v", err)
+		}
+	} else if left := exp.Sub(now); left < 24*time.Hour {
+		if err := d.Store.InsertAlertDedup(ctx, "warn", fmt.Sprintf("live gate 剩余 %.1fh（<24h 到期预警——续权须新 readiness 证据）", left.Hours()), 12*time.Hour); err != nil {
+			log.Printf("[selfwatch] live gate expiry warn: %v", err)
 		}
 	}
 }

@@ -159,7 +159,7 @@ func TestD329_MeanRevertWithCap_SameHelper(t *testing.T) {
 	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "vA", VenueType: "mt5", Bid: 999, Ask: 1000, Time: now, VenueSymbol: "A1"})
 	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "vB", VenueType: "mt5", Bid: 1000, Ask: 1000.2, Time: now, VenueSymbol: "B1"})
 	pipeline := exec.NewPipeline(exec.NewRegistry(), st, qb, exec.RiskLimits{}, "demo")
-	s := &Service{store: st, qbus: qb, pipeline: pipeline}
+	s := &Service{store: st, qbus: qb, pipeline: pipeline, gateChecker: grantedLiveChecker(t, st)}
 	// D-466：binance step 只认运行时表（fallback 已撤）。
 	sm := NewCexStepMeta("http://unused", 0)
 	sm.rt = map[string]float64{"BTCUSDT": 0.001}
@@ -203,7 +203,7 @@ func TestD329R1_MeanRevertAsymmetricClampImbalanceRecheck(t *testing.T) {
 	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "vA", VenueType: "mt5", Bid: 4354.5, Ask: 4355, Time: now, VenueSymbol: "XAUUSDm"})
 	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "binance", VenueType: "perp", Bid: 4355, Ask: 4355.2, Time: now, VenueSymbol: "BTCUSDT"})
 	pipeline := exec.NewPipeline(exec.NewRegistry(), st, qb, exec.RiskLimits{}, "demo")
-	s := &Service{store: st, qbus: qb, pipeline: pipeline}
+	s := &Service{store: st, qbus: qb, pipeline: pipeline, gateChecker: grantedLiveChecker(t, st)}
 	// D-466：binance step 只认运行时表（fallback 已撤）。
 	sm := NewCexStepMeta("http://unused", 0)
 	sm.rt = map[string]float64{"BTCUSDT": 0.001}

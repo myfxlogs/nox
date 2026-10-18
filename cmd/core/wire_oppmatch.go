@@ -13,17 +13,18 @@ import (
 	"nox/internal/platform/safego"
 	"nox/internal/research/oppmatch"
 	"nox/internal/review/sysretro"
+	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 )
 
 // startOppMatch 装配机会匹配 loop（总纲衍生③；非报表环故不随 RetroDisabled 关）。
-func startOppMatch(ctx context.Context, st *pgstore.Store, cfg *config.Config) {
-	safego.GoLoop("main:oppmatch", func() { oppMatchLoop(ctx, st, cfg) })
+func startOppMatch(ctx context.Context, st *pgstore.Store, cfg *config.Config, cp *gate.ControlPlane) {
+	safego.GoLoop("main:oppmatch", func() { oppMatchLoop(ctx, st, cfg, cp) })
 }
 
-func oppMatchLoop(ctx context.Context, st *pgstore.Store, cfg *config.Config) {
+func oppMatchLoop(ctx context.Context, st *pgstore.Store, cfg *config.Config, cp *gate.ControlPlane) {
 	// D-260④：live 策略自动执行器——凭据同 D-191 装配径（缺凭据=GoProposal 内 gap 拒单径）。
-	ex := buildDCIExecutor(ctx, st)
+	ex := buildDCIExecutor(ctx, st, cp)
 	// D-193③：首扫等权限探针 boot 轮信号（消首轮假缺口/迟提案；
 	// scanner 未接线场景由 startCexScanner 立即标 done 零死等）。
 	select {

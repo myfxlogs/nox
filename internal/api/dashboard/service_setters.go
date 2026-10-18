@@ -10,6 +10,7 @@ import (
 	"nox/internal/data/bus"
 	"nox/internal/data/keydomain"
 	"nox/internal/research/econ"
+	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/exec"
 )
@@ -172,8 +173,13 @@ func (s *Service) SetCarryRegime(cfg exec.CarryRegimeConfig) { s.carryRegime = c
 // 空 = 未配置（不检查，回退旧行为）。
 func (s *Service) SetEnvironment(env string) { s.environment = env }
 
-// SetLiveTrade 注入 LIVE 人工开关（D-159 W6a S2，手动入口同源）。
-func (s *Service) SetLiveTrade(live bool) { s.liveTrade = live }
+// SetGateChecker D-620⑦：注入真金单闸控制面（*gate.ControlPlane；nil=未接线全径 fail-closed）。
+func (s *Service) SetGateChecker(gc GateChecker) {
+	s.gateChecker = gc
+	if cp, ok := gc.(*gate.ControlPlane); ok {
+		s.controlPlane = cp
+	}
+}
 
 // SetAliasMap D-175：注入 venue→alias 缓存（main 启动时加载 ListAccountAliases）。
 // nil/空 = 未接线（oppToProto alias 留空，前端回退 venueKey）。线程安全（RWMutex）。
