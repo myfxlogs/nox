@@ -1,9 +1,13 @@
 // watch.tsx —— 盯盘规则页（业主视窗两件套 B）：watch_rule CRUD + 启停开关。
 // 评估在后端引擎（QuoteBus 事件驱动）；本页纯渲染零运算零轮询——改动后经
 // configKick 热载即生效，本页手动操作后重拉一次列表。
+// S3′-final 批迁：第一眼=规则活态 opp-card 阵（启停/改/删绑径原样）；
+// 编辑表单挪卡内段（新增/改共享）。纯 JSX/CSS 重排零逻辑动。
 import { useEffect, useState } from "react";
 import { client, errText } from "../api";
 import type { WatchRule } from "../gen/dashboardv1/watch_rule_pb";
+import { Chip } from "../components/Chip";
+import { EmptyState } from "../components/EmptyState";
 
 const OPS = ["lt", "le", "gt", "ge"] as const;
 
@@ -78,69 +82,50 @@ export default function WatchPage() {
 
   return (
     <div>
+      <h1>盯盘</h1>
       {err && <div className="err">{err}</div>}
       {msg && <div className="muted">{msg}</div>}
-      <div className="dept">
-        <h3>
-          盯盘规则
-          <button style={{ marginLeft: 12 }} onClick={() => setForm(newForm())}>
-            新增
-          </button>
-        </h3>
-        <table>
-          <thead>
-            <tr>
-              <th>id</th>
-              <th>标的</th>
-              <th>源</th>
-              <th>条件</th>
-              <th>模式</th>
-              <th>冷却s</th>
-              <th>备注</th>
-              <th>状态</th>
-              <th>触发于</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rules.map((r) => (
-              <tr key={Number(r.id)} style={{ opacity: r.enabled ? 1 : 0.45 }}>
-                <td>{Number(r.id)}</td>
-                <td>{r.subject}</td>
-                <td>{r.venueKey || "全源"}</td>
-                <td>
-                  mid {r.op} {r.threshold}
-                </td>
-                <td>{r.fireMode}</td>
-                <td>{r.cooldownSec}</td>
-                <td className="muted">{r.note}</td>
-                <td>
-                  {r.stale && <span style={{ color: "#a66" }}>stale </span>}
-                  <a href="#" onClick={(e) => { e.preventDefault(); void toggle(r); }}>
-                    {r.enabled ? "启用" : "停用"}
-                  </a>
-                </td>
-                <td className="muted">
-                  {r.lastFiredTs > 0n ? new Date(Number(r.lastFiredTs) * 1000).toLocaleString() : "—"}
-                </td>
-                <td>
-                  <a href="#" onClick={(e) => { e.preventDefault(); setForm(r); }}>
-                    改
-                  </a>{" "}
-                  <a href="#" onClick={(e) => { e.preventDefault(); void del(r.id); }}>
-                    删
-                  </a>
-                </td>
-              </tr>
-            ))}
-            {rules.length === 0 && (
-              <tr><td className="muted">无规则——阈值业主自填，系统零预设</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+
+      {/* 第一眼=规则活态卡阵；新增入口挂段头 */}
+      <h2>
+        盯盘规则
+        <button style={{ marginLeft: 12 }} onClick={() => setForm(newForm())}>新增</button>
+      </h2>
+      {rules.length > 0 ? (
+        <ul className="opp-cards opp-grid">
+          {rules.map((r) => (
+            <li key={Number(r.id)} className="opp-card" style={{ opacity: r.enabled ? 1 : 0.45 }}>
+              <div className="opp-card-head">
+                <span className="opp-card-kind">{r.subject}</span>
+                <Chip tone={r.stale ? "critical" : r.enabled ? "good" : "neutral"}>
+                  {r.stale ? "stale" : r.enabled ? "启用" : "停用"}
+                </Chip>
+                <span className="opp-card-who">{r.venueKey || "全源"}</span>
+              </div>
+              <div className="opp-card-narrative">
+                mid {r.op} {r.threshold} · {r.fireMode}
+                {r.fireMode === "repeat" ? ` 冷却${r.cooldownSec}s` : ""}
+                {r.note ? ` · ${r.note}` : ""}
+              </div>
+              <div className="opp-card-narrative muted">
+                #{Number(r.id)} · 触发 {r.lastFiredTs > 0n ? new Date(Number(r.lastFiredTs) * 1000).toLocaleString() : "—"}
+              </div>
+              <div className="opp-card-narrative" style={{ display: "flex", gap: 8 }}>
+                <a href="#" onClick={(e) => { e.preventDefault(); void toggle(r); }}>
+                  {r.enabled ? "停用" : "启用"}
+                </a>
+                <a href="#" onClick={(e) => { e.preventDefault(); setForm(r); }}>改</a>
+                <a href="#" onClick={(e) => { e.preventDefault(); void del(r.id); }}>删</a>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState>无规则——阈值业主自填，系统零预设</EmptyState>
+      )}
+
       {form && (
-        <div className="dept">
+        <div className="card" style={{ marginTop: 12, padding: 12 }}>
           <h3>{Number(form.id) === 0 ? "新增规则" : `改规则 #${Number(form.id)}`}</h3>
           <table>
             <tbody>
@@ -169,9 +154,7 @@ export default function WatchPage() {
                 <td>
                   <select value={form.op} onChange={(e) => setForm({ ...form, op: e.target.value })}>
                     {OPS.map((o) => (
-                      <option key={o} value={o}>
-                        {o}
-                      </option>
+                      <option key={o} value={o}>{o}</option>
                     ))}
                   </select>{" "}
                   <input

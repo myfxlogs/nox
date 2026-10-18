@@ -1,4 +1,7 @@
 // risk.tsx —— 风控健康：数据源健康（case5）+保证金状态+覆盖率+告警（case3/10）。
+// S3′-final 批迁：第一眼=护栏态（账户保证金卡阵升顶——覆盖天数 crit 直透）+
+// 覆盖率 StatTile；源健康改卡阵挂 FreshDot；告警/验证比率台账密表保留。
+// 纯 JSX/CSS 重排零逻辑动。
 import { useCallback, useEffect, useState } from "react";
 import { client, errText } from "../api";
 import { onCase } from "../stream";
@@ -6,6 +9,11 @@ import type { Alert, SourceHealth, VerificationStat } from "../gen/dashboardv1/m
 import type { AccountMarginStatus } from "../gen/dashboardv1/account_pb";
 import type { CapitalCoverageRow } from "../gen/dashboardv1/ops_pb";
 import { fmtUsd, ts } from "../components/fmt";
+import { StatTile } from "../components/StatTile";
+import { Chip } from "../components/Chip";
+import { EmptyState } from "../components/EmptyState";
+import { FreshDot as Dot } from "../components/FreshDot";
+import { freshOf } from "../components/freshness";
 
 export default function RiskPage() {
   const [health, setHealth] = useState<Map<string, SourceHealth>>(new Map());
@@ -53,76 +61,99 @@ export default function RiskPage() {
 
   return (
     <div>
+      <h1>风控</h1>
       {err && <div className="err">{err}</div>}
-      <h2>数据源健康</h2>
-      <table>
-        <thead><tr><th>venue</th><th>源</th><th>状态</th><th>最后事件</th><th>重连次数</th></tr></thead>
-        <tbody>
-          {[...health.values()].map((h) => (
-            <tr key={h.venue}>
-              <td>{h.venue}</td><td>{h.source}</td>
-              <td className={h.state === "live" || h.state === "ok" ? "good" : "crit"}>{h.state}</td>
-              <td>{ts(h.lastEventAt)}</td>
-              <td>{String(h.reconnectCount)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
 
-      <h2>账户保证金</h2>
-      <table>
-        <thead><tr><th>venue</th><th>权益</th><th>已用保证金</th><th>可用</th><th>覆盖天数</th><th>建议补足</th><th>tier</th><th>更新</th></tr></thead>
-        <tbody>
+      {/* 第一眼=护栏态：账户保证金覆盖天数 <3d 直透 crit */}
+      <h2>账户保证金（护栏态）</h2>
+      {margin.length > 0 ? (
+        <ul className="opp-cards opp-grid">
           {margin.map((m) => (
-            <tr key={m.venue}>
-              <td>{m.venue}</td>
-              <td>{fmtUsd(m.equity)}</td>
-              <td>{fmtUsd(m.marginUsed)}</td>
-              <td>{fmtUsd(m.freeMargin)}</td>
-              <td className={m.coverageDays < 3 ? "crit" : ""}>{m.coverageDays.toFixed(1)}</td>
-              <td>{fmtUsd(m.suggestedTopupUsd)}</td>
-              <td>{m.tier}</td>
-              <td>{ts(m.updatedAt)}</td>
-            </tr>
+            <li key={m.venue} className="opp-card">
+              <div className="opp-card-head">
+                <span className="opp-card-kind">{m.venue}</span>
+                <Chip tone={m.coverageDays < 3 ? "critical" : "good"}>覆盖 {m.coverageDays.toFixed(1)}d</Chip>
+                <span className="opp-card-who">{m.tier}</span>
+              </div>
+              <div className="opp-card-stats stats">
+                <StatTile label="权益" value={fmtUsd(m.equity)} />
+                <StatTile label="已用保证金" value={fmtUsd(m.marginUsed)} />
+                <StatTile label="可用" value={fmtUsd(m.freeMargin)} />
+                <StatTile label="建议补足" value={fmtUsd(m.suggestedTopupUsd)} />
+              </div>
+              <div className="opp-card-narrative">更新 {ts(m.updatedAt)}</div>
+            </li>
           ))}
-        </tbody>
-      </table>
+        </ul>
+      ) : (
+        <EmptyState>零保证金行</EmptyState>
+      )}
 
       <h2>资本覆盖率 {cov && <span className="muted">{cov.note}</span>}</h2>
       {cov && (
-        <div className="cards">
-          <div className="card"><div className="k">总资金</div><div className="v">{fmtUsd(cov.total)}</div></div>
-          <div className="card"><div className="k">覆盖率</div><div className="v">{cov.pct.toFixed(1)}%</div></div>
+        <div className="stats">
+          <StatTile label="总资金" value={fmtUsd(cov.total)} />
+          <StatTile label="覆盖率" value={`${cov.pct.toFixed(1)}%`} />
         </div>
       )}
-      <table>
-        <thead><tr><th>vkey</th><th>样本</th><th>预期USD</th><th>实得USD</th><th>比率</th><th>末样本</th></tr></thead>
-        <tbody>
-          {vstats.map((v) => (
-            <tr key={v.vkey}>
-              <td>{v.vkey}</td><td>{v.samples}</td>
-              <td>{fmtUsd(v.expectedUsd)}</td><td>{fmtUsd(v.realizedUsd)}</td>
-              <td className={v.ratio < 0.5 ? "crit" : ""}>{v.ratio.toFixed(2)}</td>
-              <td>{ts(v.lastSampleAt)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
 
       <h2>告警</h2>
-      <table>
-        <thead><tr><th>时间</th><th>级别</th><th>内容</th><th>acked</th></tr></thead>
-        <tbody>
-          {alerts.map((a) => (
-            <tr key={Number(a.id)}>
-              <td>{ts(a.ts)}</td>
-              <td className={a.level === "crit" ? "crit" : a.level === "warn" ? "warn" : ""}>{a.level}</td>
-              <td style={{ whiteSpace: "normal" }}>{a.message}</td>
-              <td>{String(a.acked)}</td>
-            </tr>
+      {alerts.length > 0 ? (
+        <table>
+          <thead><tr><th>时间</th><th>级别</th><th>内容</th><th>acked</th></tr></thead>
+          <tbody>
+            {alerts.map((a) => (
+              <tr key={Number(a.id)}>
+                <td>{ts(a.ts)}</td>
+                <td className={a.level === "crit" ? "crit" : a.level === "warn" ? "warn" : ""}>{a.level}</td>
+                <td style={{ whiteSpace: "normal" }}>{a.message}</td>
+                <td>{String(a.acked)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <EmptyState>零告警行</EmptyState>
+      )}
+
+      <h2>数据源健康</h2>
+      {[...health.values()].length > 0 ? (
+        <ul className="opp-cards opp-grid">
+          {[...health.values()].map((h) => (
+            <li key={h.venue} className="opp-card">
+              <div className="opp-card-head">
+                <Dot dot={freshOf({ name: h.venue, status: h.state, lastFactAt: h.lastEventAt ? Number(h.lastEventAt.seconds) * 1000 : 0 })} />
+                <span className="opp-card-kind">{h.venue}</span>
+                <Chip tone={h.state === "live" || h.state === "ok" ? "good" : "critical"}>{h.state}</Chip>
+              </div>
+              <div className="opp-card-narrative">
+                {h.source} · 最后 {ts(h.lastEventAt)} · 重连 {String(h.reconnectCount)}
+              </div>
+            </li>
           ))}
-        </tbody>
-      </table>
+        </ul>
+      ) : (
+        <EmptyState>零源健康行</EmptyState>
+      )}
+
+      <h2>验证比率</h2>
+      {vstats.length > 0 ? (
+        <table>
+          <thead><tr><th>vkey</th><th>样本</th><th>预期USD</th><th>实得USD</th><th>比率</th><th>末样本</th></tr></thead>
+          <tbody>
+            {vstats.map((v) => (
+              <tr key={v.vkey}>
+                <td>{v.vkey}</td><td>{v.samples}</td>
+                <td>{fmtUsd(v.expectedUsd)}</td><td>{fmtUsd(v.realizedUsd)}</td>
+                <td className={v.ratio < 0.5 ? "crit" : ""}>{v.ratio.toFixed(2)}</td>
+                <td>{ts(v.lastSampleAt)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <EmptyState>零验证行</EmptyState>
+      )}
     </div>
   );
 }

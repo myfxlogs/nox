@@ -1,11 +1,16 @@
 // capital.tsx —— 资金地图（业主令 10-13 + D-285）：后端聚合池级 权益/闲置/在跑，
 // 按币种分组各报各的零换算。纯渲染零运算；幽灵池独立段，陈旧行置灰标时点。
+// S3′-final 批迁：第一眼=主币权益/闲置/在跑 StatTile+池 opp-card 阵（幽灵/陈旧
+// 徽标原语义）；幽灵/其他 Modal 与手工仓位段绑径原样。纯 JSX/CSS 重排零逻辑动。
 import { useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
 import { client, errText } from "../api";
 import type { CapitalPoolsGroup, CapitalPool } from "../gen/dashboardv1/capital_pools_pb";
 import type { ManualPosition } from "../gen/dashboardv1/manual_position_pb";
 import { ts } from "../components/fmt";
+import { StatTile } from "../components/StatTile";
+import { Chip } from "../components/Chip";
+import { EmptyState } from "../components/EmptyState";
 
 function fmtAmt(v: number): string {
   return v.toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -42,6 +47,41 @@ function PoolTable({ pools }: { pools: CapitalPool[] }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+function PoolCards({ pools }: { pools: CapitalPool[] }) {
+  return (
+    <ul className="opp-cards opp-grid">
+      {pools.map((p) => (
+        <li key={p.venue + ":" + p.venueType} className="opp-card"
+          style={p.stale || p.ghost ? { opacity: 0.45 } : undefined}>
+          <div className="opp-card-head">
+            <span className="opp-card-kind">{p.venue}</span>
+            <Chip tone={p.ghost ? "warn" : p.stale ? "critical" : "good"}>
+              {p.ghost ? "幽灵" : p.stale ? "陈旧" : p.online ? "在线" : "—"}
+            </Chip>
+            <span className="opp-card-who">{p.venueType}</span>
+          </div>
+          <div className="opp-card-stats stats">
+            <StatTile label="权益" value={fmtAmt(p.equity)} />
+            <StatTile label="闲置" value={fmtAmt(p.idle)} />
+            <StatTile label="在跑" value={fmtAmt(p.deployed)} />
+          </div>
+          <div className="opp-card-narrative">
+            {p.ownershipShare > 0 && p.ownershipShare < 1 && (
+              <span className="warn" title={`代管 ${fmtAmt(p.custodialEquity)} 不进判据`}>
+                {`归属${(p.ownershipShare * 100).toFixed(1)}%·代管${fmtAmt(p.custodialEquity)}`}{" "}
+              </span>
+            )}
+            {p.deployed > 0 && <a href="#/dci">在跑明细↗ </a>}
+            {p.deployedParts.map((d) => `${d.ref} ${fmtAmt(d.amount)}`).join("；")}
+            {p.deployedParts.length === 0 && "—"}
+            {" · "}{ts(p.updatedAt)}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -95,7 +135,7 @@ export default function CapitalPage() {
 
   return (
     <main>
-      <h2>资金地图 <small style={{ fontSize: 12, color: "#777" }}>算于 {computedAt} · 各币种原值零换算</small></h2>
+      <h1>资金地图 <small style={{ fontSize: 12, color: "#777" }}>算于 {computedAt} · 各币种原值零换算</small></h1>
       {err && <div className="err">{err}</div>}
       {stalePools.length > 0 && (
         <div className="warn">分母缺池（陈旧快照剔计）：{stalePools.join("、")}——合计为实有鲜池口径</div>
@@ -106,13 +146,13 @@ export default function CapitalPage() {
         const ghosts = g.pools.filter((p) => p.ghost);
         return (
           <section key={g.currency}>
-            <div className="cards">
-              <div className="card"><div className="k">币种</div><div className="v">{g.currency || "—"}</div></div>
-              <div className="card"><div className="k">权益合计</div><div className="v">{fmtAmt(g.equity)}</div></div>
-              <div className="card"><div className="k">闲置</div><div className="v">{fmtAmt(g.idle)}</div></div>
-              <div className="card"><div className="k">在跑</div><div className="v">{fmtAmt(g.deployed)}</div></div>
+            <h2>{g.currency || "—"}</h2>
+            <div className="stats">
+              <StatTile label="权益合计" value={fmtAmt(g.equity)} />
+              <StatTile label="闲置" value={fmtAmt(g.idle)} />
+              <StatTile label="在跑" value={fmtAmt(g.deployed)} />
             </div>
-            <PoolTable pools={live} />
+            {live.length > 0 ? <PoolCards pools={live} /> : <EmptyState>零活池</EmptyState>}
             {ghosts.length > 0 && (
               <>
                 <div onClick={() => setModal("ghosts")} style={{ cursor: "pointer" }}>
@@ -160,7 +200,7 @@ export default function CapitalPage() {
           </>
         );
       })()}
-      {groups.length === 0 && !err && <div>无资金池快照</div>}
+      {groups.length === 0 && !err && <EmptyState>无资金池快照</EmptyState>}
 
       {/* D-512 手工仓位只读段：src=manual——只进全景展示，不进敞口/分母/风控。 */}
       <section>

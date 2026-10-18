@@ -92,9 +92,11 @@ export default function ReportsPage() {
 
   return (
     <div>
+      <h1>报告</h1>
       {err && <div className="err">{err}</div>}
-      <div className="dept">
-        <h3>部门日报</h3>
+      {/* 第一眼=最新部门日报（报告主体）；文件台账居后 */}
+      <section>
+        <h2>部门日报</h2>
         <div className="muted" style={{ marginBottom: 6 }}>
           {dates.map((d) => (
             <a
@@ -130,9 +132,9 @@ export default function ReportsPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </section>
       {picked && (
-        <div className="dept">
+        <section>
           <h3>
             {picked.dept} · {picked.reportDate}
             <a href="#" style={{ marginLeft: 12, fontSize: 12 }} onClick={(e) => { e.preventDefault(); setPicked(null); }}>
@@ -140,10 +142,10 @@ export default function ReportsPage() {
             </a>
           </h3>
           {mdRender(picked.body)}
-        </div>
+        </section>
       )}
-      <div className="dept">
-        <h3>
+      <section>
+        <h2>
           报告文件
           <button style={{ marginLeft: 12 }} disabled={busy !== ""} onClick={() => void generate("daily")}>
             补跑日报
@@ -154,7 +156,7 @@ export default function ReportsPage() {
           <button style={{ marginLeft: 6 }} disabled={busy !== ""} onClick={() => void generate("kb")}>
             补跑 KB 报告
           </button>
-        </h3>
+        </h2>
         <table>
           <tbody>
             {files.map((f) => (
@@ -174,9 +176,9 @@ export default function ReportsPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </section>
       {fileBody && (
-        <div className="dept">
+        <section>
           <h3>
             {fileBody.name}
             <a href="#" style={{ marginLeft: 12, fontSize: 12 }} onClick={(e) => { e.preventDefault(); setFileBody(null); }}>
@@ -184,7 +186,7 @@ export default function ReportsPage() {
             </a>
           </h3>
           {mdRender(fileBody.content)}
-        </div>
+        </section>
       )}
     </div>
   );
