@@ -672,3 +672,4 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **反证锚**：①部署后 mode=PAPER 下任一 is_real 腿 intent 或 GoProposal 落 EXECUTED=闸漏=本设计错；②Grant 后 gate 过期/撤销 CheckGate 仍放行=错；③kill switch 触发后 live_gates 仍有 active 行=错。**到期自验**：Grant+30d 当日 selfwatch critical 必响且 autotrade_logs 拒因含 "live gate expired"。
 - **理由**：真金授权必须是「一条记录」（有人/有期/有证据/可撤）而非「一个布尔」；kill switch 覆盖面必须=真金写面全集（DCI/earn 漏网=硬线「全停」是假的）；复用 D-195 既有件（表/检查器/分支）比新造审批流简单等价（自审 A）。
 - **程序**：钱径架构改动→D-251 方案核验先行（复审席最强档新会话），照准后决策席径派施工。
+- **方案核验结果（复审席，10-18）**：照准附两补正，决策席并入票面施工强制项——Ⓐ `Check` 环境判据=构造注入值直比 `=="live"`，空串 fail-closed（现码「未配置不检查」短路形态删）；Ⓑ dashboard `gateChecker` nil 语义翻转全面核：执行径三处（execute_internal/meanrevert/probe）nil→FAILED、展示径（overview）nil→KillSwitch=true、ctor 默认 nil 禁默认实现顶替、测试面改注真 ControlPlane。施工已派 `wip/live-gate-chain`。
