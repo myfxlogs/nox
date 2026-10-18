@@ -174,7 +174,8 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 	}
 	defer conn.Close()
 
-	dephealth.Mark(spec.DepKey, true, nil) // D-579：拨号成功标 ok（进入读循环前防 half-open 假绿）
+	dephealth.Mark(spec.DepKey, true, nil)            // D-579：拨号成功标 ok（进入读循环前防 half-open 假绿）
+	log.Printf("[%s] dial ok %s", spec.Name, lastURL) // 生命周期证面：拨号落点可溯（僵尸诊断全静默病灶修）
 
 	if spec.OnConnect != nil {
 		spec.OnConnect()
@@ -183,11 +184,13 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 	// sender 持本连接唯一写锁——InitialSubs/ping/OnAliveTick 补订帧全经同一锁（单写者契约）。
 	sender := &wsSender{conn: conn}
 	if spec.InitialSubs != nil {
-		for _, frame := range spec.InitialSubs() {
+		subs := spec.InitialSubs()
+		for _, frame := range subs {
 			if err := sender.Send(frame); err != nil {
 				return fmt.Errorf("subscribe: %w", err)
 			}
 		}
+		log.Printf("[%s] subscribed %d frames", spec.Name, len(subs)) // 订阅帧发讫证——ack/帧缺席可定界
 	}
 
 	readIdle := spec.ReadIdle
@@ -208,6 +211,7 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 	if pingEvery == 0 {
 		pingEvery = quoteWSPingEvery
 	}
+	var sawFirst atomic.Bool // 首帧见证（只读环内访问——原子化只为 -race 面）
 	done := make(chan struct{})
 	defer close(done)
 	safego.GoPlain(spec.Name+":ws-ping", func() {
@@ -217,6 +221,10 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 			select {
 			case <-ticker.C:
 				if err := sender.SendRaw(websocket.PingMessage, nil); err != nil {
+					// ping 败=写径死——conn.Close 使读环报错走重连（原裸退=
+					// 看门狗同亡+读环靠 pong 续期僵尸化，10-18 bn markPrice 实证）。
+					log.Printf("[%s] ping write failed, closing conn: %v", spec.Name, err)
+					_ = conn.Close()
 					return
 				}
 				// 数据帧看门狗：pong 续期证明 TCP/WS 控制面活着，但数据帧
@@ -252,6 +260,9 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 		default:
 		}
 		_, data, err := conn.ReadMessage()
+		if sawFirst.CompareAndSwap(false, true) {
+			log.Printf("[%s] first frame received", spec.Name)
+		}
 		if err != nil {
 			// readIdle 到期=net timeout 显式标注（与 data watchdog/对端
 			// close 帧三类死因日志可区分）。
