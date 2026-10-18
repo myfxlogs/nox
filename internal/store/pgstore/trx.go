@@ -157,16 +157,22 @@ func (s *Store) ListTRXAccountByDay(ctx context.Context, day time.Time) ([]TRXAc
 }
 
 // ListTRXTxs 返回最近 limit 条交易流（按 ts DESC）。
-func (s *Store) ListTRXTxs(ctx context.Context, limit int) ([]TRXTx, error) {
+func (s *Store) ListTRXTxs(ctx context.Context, limit int, kind string) ([]TRXTx, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	rows, err := s.pool.Query(ctx, `
+	q := `
 		SELECT id, tx_id, ts, kind, amount_sun, counterparty, fetched_at
-		FROM fin_trx_txs
+		FROM fin_trx_txs`
+	args := []any{limit}
+	if kind != "" {
+		q += ` WHERE kind = $2`
+		args = append(args, kind)
+	}
+	q += `
 		ORDER BY ts DESC, id DESC
-		LIMIT $1
-	`, limit)
+		LIMIT $1`
+	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list trx txs: %w", err)
 	}

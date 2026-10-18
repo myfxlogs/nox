@@ -144,3 +144,23 @@ message CexBalanceRow {
   string venue_key = 6;           // D-273：稳定 React key（P2-6）
   repeated Holding holdings = 7;  // D-273：币种明细展开（P3-1）
 }
+
+// TRXTxRow 收入交易流行（fin_trx_txs 读面——TRX 页「发生了什么」区数据面；
+// amount_trx=后端预折 TRX 单位（÷1e6 落后端，前端零换算））。
+message TrxTxRow {
+  int64 id = 1;
+  string tx_id = 2;
+  google.protobuf.Timestamp ts = 3;
+  string kind = 4;          // rental_income|vote_claim|deposit|withdraw|stake|unstake|vote|delegate|undelegate|other…
+  double amount_trx = 5;
+  string counterparty = 6;  // 无对手方=空串
+  bool cheat_status = 7;    // TronScan 官方恶意标记（D-279）
+  google.protobuf.Timestamp fetched_at = 8;
+}
+message ListTrxTxsRequest {
+  int32 limit = 1;          // ≤0=50
+  string kind = 2;          // 空=全部；源过滤下推后端（前端零聚合令）
+}
+message ListTrxTxsResponse {
+  repeated TrxTxRow txs = 1;
+}

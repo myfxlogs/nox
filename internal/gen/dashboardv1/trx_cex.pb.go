@@ -1195,6 +1195,204 @@ func (x *CexBalanceRow) GetHoldings() []*Holding {
 	return nil
 }
 
+// TRXTxRow 收入交易流行（fin_trx_txs 读面——TRX 页「发生了什么」区数据面；
+// amount_trx=后端预折 TRX 单位（÷1e6 落后端，前端零换算））。
+type TrxTxRow struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	TxId          string                 `protobuf:"bytes,2,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"`
+	Ts            *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=ts,proto3" json:"ts,omitempty"`
+	Kind          string                 `protobuf:"bytes,4,opt,name=kind,proto3" json:"kind,omitempty"` // rental_income|vote_claim|deposit|withdraw|stake|unstake|vote|delegate|undelegate|other…
+	AmountTrx     float64                `protobuf:"fixed64,5,opt,name=amount_trx,json=amountTrx,proto3" json:"amount_trx,omitempty"`
+	Counterparty  string                 `protobuf:"bytes,6,opt,name=counterparty,proto3" json:"counterparty,omitempty"`                   // 无对手方=空串
+	CheatStatus   bool                   `protobuf:"varint,7,opt,name=cheat_status,json=cheatStatus,proto3" json:"cheat_status,omitempty"` // TronScan 官方恶意标记（D-279）
+	FetchedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=fetched_at,json=fetchedAt,proto3" json:"fetched_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrxTxRow) Reset() {
+	*x = TrxTxRow{}
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrxTxRow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrxTxRow) ProtoMessage() {}
+
+func (x *TrxTxRow) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrxTxRow.ProtoReflect.Descriptor instead.
+func (*TrxTxRow) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_trx_cex_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *TrxTxRow) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *TrxTxRow) GetTxId() string {
+	if x != nil {
+		return x.TxId
+	}
+	return ""
+}
+
+func (x *TrxTxRow) GetTs() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Ts
+	}
+	return nil
+}
+
+func (x *TrxTxRow) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *TrxTxRow) GetAmountTrx() float64 {
+	if x != nil {
+		return x.AmountTrx
+	}
+	return 0
+}
+
+func (x *TrxTxRow) GetCounterparty() string {
+	if x != nil {
+		return x.Counterparty
+	}
+	return ""
+}
+
+func (x *TrxTxRow) GetCheatStatus() bool {
+	if x != nil {
+		return x.CheatStatus
+	}
+	return false
+}
+
+func (x *TrxTxRow) GetFetchedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FetchedAt
+	}
+	return nil
+}
+
+type ListTrxTxsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Limit         int32                  `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"` // ≤0=50
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`    // 空=全部；源过滤下推后端（前端零聚合令）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTrxTxsRequest) Reset() {
+	*x = ListTrxTxsRequest{}
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTrxTxsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTrxTxsRequest) ProtoMessage() {}
+
+func (x *ListTrxTxsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTrxTxsRequest.ProtoReflect.Descriptor instead.
+func (*ListTrxTxsRequest) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_trx_cex_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ListTrxTxsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListTrxTxsRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+type ListTrxTxsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Txs           []*TrxTxRow            `protobuf:"bytes,1,rep,name=txs,proto3" json:"txs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTrxTxsResponse) Reset() {
+	*x = ListTrxTxsResponse{}
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTrxTxsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTrxTxsResponse) ProtoMessage() {}
+
+func (x *ListTrxTxsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_trx_cex_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTrxTxsResponse.ProtoReflect.Descriptor instead.
+func (*ListTrxTxsResponse) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_trx_cex_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ListTrxTxsResponse) GetTxs() []*TrxTxRow {
+	if x != nil {
+		return x.Txs
+	}
+	return nil
+}
+
 var File_dashboardv1_trx_cex_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_trx_cex_proto_rawDesc = "" +
@@ -1314,7 +1512,23 @@ const file_dashboardv1_trx_cex_proto_rawDesc = "" +
 	"\vfree_margin\x18\x05 \x01(\x01R\n" +
 	"freeMargin\x12\x1b\n" +
 	"\tvenue_key\x18\x06 \x01(\tR\bvenueKey\x125\n" +
-	"\bholdings\x18\a \x03(\v2\x19.nox.dashboard.v1.HoldingR\bholdingsB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\bholdings\x18\a \x03(\v2\x19.nox.dashboard.v1.HoldingR\bholdings\"\x90\x02\n" +
+	"\bTrxTxRow\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x13\n" +
+	"\x05tx_id\x18\x02 \x01(\tR\x04txId\x12*\n" +
+	"\x02ts\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x12\n" +
+	"\x04kind\x18\x04 \x01(\tR\x04kind\x12\x1d\n" +
+	"\n" +
+	"amount_trx\x18\x05 \x01(\x01R\tamountTrx\x12\"\n" +
+	"\fcounterparty\x18\x06 \x01(\tR\fcounterparty\x12!\n" +
+	"\fcheat_status\x18\a \x01(\bR\vcheatStatus\x129\n" +
+	"\n" +
+	"fetched_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tfetchedAt\"=\n" +
+	"\x11ListTrxTxsRequest\x12\x14\n" +
+	"\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\"B\n" +
+	"\x12ListTrxTxsResponse\x12,\n" +
+	"\x03txs\x18\x01 \x03(\v2\x1a.nox.dashboard.v1.TrxTxRowR\x03txsB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_trx_cex_proto_rawDescOnce sync.Once
@@ -1328,7 +1542,7 @@ func file_dashboardv1_trx_cex_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_trx_cex_proto_rawDescData
 }
 
-var file_dashboardv1_trx_cex_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_dashboardv1_trx_cex_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_dashboardv1_trx_cex_proto_goTypes = []any{
 	(*TrxAccountRefreshRequest)(nil),   // 0: nox.dashboard.v1.TrxAccountRefreshRequest
 	(*TrxAccountRefreshResponse)(nil),  // 1: nox.dashboard.v1.TrxAccountRefreshResponse
@@ -1344,25 +1558,31 @@ var file_dashboardv1_trx_cex_proto_goTypes = []any{
 	(*CexSpreadRow)(nil),               // 11: nox.dashboard.v1.CexSpreadRow
 	(*CexFundingRow)(nil),              // 12: nox.dashboard.v1.CexFundingRow
 	(*CexBalanceRow)(nil),              // 13: nox.dashboard.v1.CexBalanceRow
-	(*timestamppb.Timestamp)(nil),      // 14: google.protobuf.Timestamp
-	(*Holding)(nil),                    // 15: nox.dashboard.v1.Holding
+	(*TrxTxRow)(nil),                   // 14: nox.dashboard.v1.TrxTxRow
+	(*ListTrxTxsRequest)(nil),          // 15: nox.dashboard.v1.ListTrxTxsRequest
+	(*ListTrxTxsResponse)(nil),         // 16: nox.dashboard.v1.ListTrxTxsResponse
+	(*timestamppb.Timestamp)(nil),      // 17: google.protobuf.Timestamp
+	(*Holding)(nil),                    // 18: nox.dashboard.v1.Holding
 }
 var file_dashboardv1_trx_cex_proto_depIdxs = []int32{
-	14, // 0: nox.dashboard.v1.TrxAccountRefreshResponse.fetched_at:type_name -> google.protobuf.Timestamp
-	14, // 1: nox.dashboard.v1.GetTrxYieldRadarResponse.updated_at:type_name -> google.protobuf.Timestamp
-	14, // 2: nox.dashboard.v1.TrxYieldCurvePoint.day:type_name -> google.protobuf.Timestamp
+	17, // 0: nox.dashboard.v1.TrxAccountRefreshResponse.fetched_at:type_name -> google.protobuf.Timestamp
+	17, // 1: nox.dashboard.v1.GetTrxYieldRadarResponse.updated_at:type_name -> google.protobuf.Timestamp
+	17, // 2: nox.dashboard.v1.TrxYieldCurvePoint.day:type_name -> google.protobuf.Timestamp
 	5,  // 3: nox.dashboard.v1.GetTrxYieldCurveResponse.points:type_name -> nox.dashboard.v1.TrxYieldCurvePoint
 	10, // 4: nox.dashboard.v1.GetCexScanSnapshotResponse.earn_aprs:type_name -> nox.dashboard.v1.CexEarnAPRRow
 	11, // 5: nox.dashboard.v1.GetCexScanSnapshotResponse.spreads:type_name -> nox.dashboard.v1.CexSpreadRow
 	12, // 6: nox.dashboard.v1.GetCexScanSnapshotResponse.fundings:type_name -> nox.dashboard.v1.CexFundingRow
 	13, // 7: nox.dashboard.v1.GetCexScanSnapshotResponse.balances:type_name -> nox.dashboard.v1.CexBalanceRow
 	9,  // 8: nox.dashboard.v1.GetCexScanSnapshotResponse.judgments:type_name -> nox.dashboard.v1.CexEarnJudgmentRow
-	15, // 9: nox.dashboard.v1.CexBalanceRow.holdings:type_name -> nox.dashboard.v1.Holding
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	18, // 9: nox.dashboard.v1.CexBalanceRow.holdings:type_name -> nox.dashboard.v1.Holding
+	17, // 10: nox.dashboard.v1.TrxTxRow.ts:type_name -> google.protobuf.Timestamp
+	17, // 11: nox.dashboard.v1.TrxTxRow.fetched_at:type_name -> google.protobuf.Timestamp
+	14, // 12: nox.dashboard.v1.ListTrxTxsResponse.txs:type_name -> nox.dashboard.v1.TrxTxRow
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_trx_cex_proto_init() }
@@ -1378,7 +1598,7 @@ func file_dashboardv1_trx_cex_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_trx_cex_proto_rawDesc), len(file_dashboardv1_trx_cex_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

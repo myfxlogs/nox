@@ -116,6 +116,9 @@ const (
 	// DashboardServiceGetTrxYieldCurveProcedure is the fully-qualified name of the DashboardService's
 	// GetTrxYieldCurve RPC.
 	DashboardServiceGetTrxYieldCurveProcedure = "/nox.dashboard.v1.DashboardService/GetTrxYieldCurve"
+	// DashboardServiceListTrxTxsProcedure is the fully-qualified name of the DashboardService's
+	// ListTrxTxs RPC.
+	DashboardServiceListTrxTxsProcedure = "/nox.dashboard.v1.DashboardService/ListTrxTxs"
 	// DashboardServiceAddDailyIncomeProcedure is the fully-qualified name of the DashboardService's
 	// AddDailyIncome RPC.
 	DashboardServiceAddDailyIncomeProcedure = "/nox.dashboard.v1.DashboardService/AddDailyIncome"
@@ -428,6 +431,7 @@ type DashboardServiceClient interface {
 	TrxAccountRefresh(context.Context, *connect.Request[dashboardv1.TrxAccountRefreshRequest]) (*connect.Response[dashboardv1.TrxAccountRefreshResponse], error)
 	GetTrxYieldRadar(context.Context, *connect.Request[dashboardv1.GetTrxYieldRadarRequest]) (*connect.Response[dashboardv1.GetTrxYieldRadarResponse], error)
 	GetTrxYieldCurve(context.Context, *connect.Request[dashboardv1.GetTrxYieldCurveRequest]) (*connect.Response[dashboardv1.GetTrxYieldCurveResponse], error)
+	ListTrxTxs(context.Context, *connect.Request[dashboardv1.ListTrxTxsRequest]) (*connect.Response[dashboardv1.ListTrxTxsResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[dashboardv1.AddDailyIncomeRequest]) (*connect.Response[dashboardv1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[dashboardv1.ListDailyIncomeRequest]) (*connect.Response[dashboardv1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -742,6 +746,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceGetTrxYieldCurveProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("GetTrxYieldCurve")),
+			connect.WithClientOptions(opts...),
+		),
+		listTrxTxs: connect.NewClient[dashboardv1.ListTrxTxsRequest, dashboardv1.ListTrxTxsResponse](
+			httpClient,
+			baseURL+DashboardServiceListTrxTxsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListTrxTxs")),
 			connect.WithClientOptions(opts...),
 		),
 		addDailyIncome: connect.NewClient[dashboardv1.AddDailyIncomeRequest, dashboardv1.AddDailyIncomeResponse](
@@ -1323,6 +1333,7 @@ type dashboardServiceClient struct {
 	trxAccountRefresh            *connect.Client[dashboardv1.TrxAccountRefreshRequest, dashboardv1.TrxAccountRefreshResponse]
 	getTrxYieldRadar             *connect.Client[dashboardv1.GetTrxYieldRadarRequest, dashboardv1.GetTrxYieldRadarResponse]
 	getTrxYieldCurve             *connect.Client[dashboardv1.GetTrxYieldCurveRequest, dashboardv1.GetTrxYieldCurveResponse]
+	listTrxTxs                   *connect.Client[dashboardv1.ListTrxTxsRequest, dashboardv1.ListTrxTxsResponse]
 	addDailyIncome               *connect.Client[dashboardv1.AddDailyIncomeRequest, dashboardv1.AddDailyIncomeResponse]
 	listDailyIncome              *connect.Client[dashboardv1.ListDailyIncomeRequest, dashboardv1.ListDailyIncomeResponse]
 	getPnlAnchor                 *connect.Client[dashboardv1.GetPnlAnchorRequest, dashboardv1.GetPnlAnchorResponse]
@@ -1554,6 +1565,11 @@ func (c *dashboardServiceClient) GetTrxYieldRadar(ctx context.Context, req *conn
 // GetTrxYieldCurve calls nox.dashboard.v1.DashboardService.GetTrxYieldCurve.
 func (c *dashboardServiceClient) GetTrxYieldCurve(ctx context.Context, req *connect.Request[dashboardv1.GetTrxYieldCurveRequest]) (*connect.Response[dashboardv1.GetTrxYieldCurveResponse], error) {
 	return c.getTrxYieldCurve.CallUnary(ctx, req)
+}
+
+// ListTrxTxs calls nox.dashboard.v1.DashboardService.ListTrxTxs.
+func (c *dashboardServiceClient) ListTrxTxs(ctx context.Context, req *connect.Request[dashboardv1.ListTrxTxsRequest]) (*connect.Response[dashboardv1.ListTrxTxsResponse], error) {
+	return c.listTrxTxs.CallUnary(ctx, req)
 }
 
 // AddDailyIncome calls nox.dashboard.v1.DashboardService.AddDailyIncome.
@@ -2050,6 +2066,7 @@ type DashboardServiceHandler interface {
 	TrxAccountRefresh(context.Context, *connect.Request[dashboardv1.TrxAccountRefreshRequest]) (*connect.Response[dashboardv1.TrxAccountRefreshResponse], error)
 	GetTrxYieldRadar(context.Context, *connect.Request[dashboardv1.GetTrxYieldRadarRequest]) (*connect.Response[dashboardv1.GetTrxYieldRadarResponse], error)
 	GetTrxYieldCurve(context.Context, *connect.Request[dashboardv1.GetTrxYieldCurveRequest]) (*connect.Response[dashboardv1.GetTrxYieldCurveResponse], error)
+	ListTrxTxs(context.Context, *connect.Request[dashboardv1.ListTrxTxsRequest]) (*connect.Response[dashboardv1.ListTrxTxsResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[dashboardv1.AddDailyIncomeRequest]) (*connect.Response[dashboardv1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[dashboardv1.ListDailyIncomeRequest]) (*connect.Response[dashboardv1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -2360,6 +2377,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceGetTrxYieldCurveProcedure,
 		svc.GetTrxYieldCurve,
 		connect.WithSchema(dashboardServiceMethods.ByName("GetTrxYieldCurve")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceListTrxTxsHandler := connect.NewUnaryHandler(
+		DashboardServiceListTrxTxsProcedure,
+		svc.ListTrxTxs,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListTrxTxs")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceAddDailyIncomeHandler := connect.NewUnaryHandler(
@@ -2966,6 +2989,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetTrxYieldRadarHandler.ServeHTTP(w, r)
 		case DashboardServiceGetTrxYieldCurveProcedure:
 			dashboardServiceGetTrxYieldCurveHandler.ServeHTTP(w, r)
+		case DashboardServiceListTrxTxsProcedure:
+			dashboardServiceListTrxTxsHandler.ServeHTTP(w, r)
 		case DashboardServiceAddDailyIncomeProcedure:
 			dashboardServiceAddDailyIncomeHandler.ServeHTTP(w, r)
 		case DashboardServiceListDailyIncomeProcedure:
@@ -3267,6 +3292,10 @@ func (UnimplementedDashboardServiceHandler) GetTrxYieldRadar(context.Context, *c
 
 func (UnimplementedDashboardServiceHandler) GetTrxYieldCurve(context.Context, *connect.Request[dashboardv1.GetTrxYieldCurveRequest]) (*connect.Response[dashboardv1.GetTrxYieldCurveResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.GetTrxYieldCurve is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListTrxTxs(context.Context, *connect.Request[dashboardv1.ListTrxTxsRequest]) (*connect.Response[dashboardv1.ListTrxTxsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nox.dashboard.v1.DashboardService.ListTrxTxs is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AddDailyIncome(context.Context, *connect.Request[dashboardv1.AddDailyIncomeRequest]) (*connect.Response[dashboardv1.AddDailyIncomeResponse], error) {

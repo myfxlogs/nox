@@ -195,7 +195,7 @@ func TestTxsCollector_Poll_Classify(t *testing.T) {
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
-	rows, err := st.ListTRXTxs(context.Background(), 50)
+	rows, err := st.ListTRXTxs(context.Background(), 50, "")
 	if err != nil {
 		t.Fatalf("ListTRXTxs: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestTxsCollector_Poll_Pagination(t *testing.T) {
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
-	rows, err := st.ListTRXTxs(context.Background(), 300)
+	rows, err := st.ListTRXTxs(context.Background(), 300, "")
 	if err != nil {
 		t.Fatalf("ListTRXTxs: %v", err)
 	}
@@ -284,7 +284,7 @@ func TestTxsCollector_Poll_Idempotent(t *testing.T) {
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll 2: %v", err)
 	}
-	rows, err := st.ListTRXTxs(context.Background(), 10)
+	rows, err := st.ListTRXTxs(context.Background(), 10, "")
 	if err != nil {
 		t.Fatalf("ListTRXTxs: %v", err)
 	}
@@ -331,7 +331,7 @@ func TestTxsCollector_Poll_R5GapBackfill(t *testing.T) {
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
-	rows, err := st.ListTRXTxs(context.Background(), 10)
+	rows, err := st.ListTRXTxs(context.Background(), 10, "")
 	if err != nil {
 		t.Fatalf("ListTRXTxs: %v", err)
 	}
@@ -834,7 +834,7 @@ func TestTxsCollector_Poll_CheatStatusPersisted(t *testing.T) {
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
-	rows, err := st.ListTRXTxs(context.Background(), 10)
+	rows, err := st.ListTRXTxs(context.Background(), 10, "")
 	if err != nil {
 		t.Fatalf("ListTRXTxs: %v", err)
 	}

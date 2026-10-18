@@ -13,6 +13,7 @@ import AccountsPage from "./pages/accounts";
 import RiskPage from "./pages/risk";
 import OrgPage from "./pages/org";
 import InvestorPage from "./pages/investor";
+import TrxPage from "./pages/trx";
 import CapitalPage from "./pages/capital";
 import DciPage from "./pages/dci";
 import SettingsPage from "./pages/settings";
@@ -45,6 +46,7 @@ const NAV_GROUPS: { label: string; routes: [string, RouteDef][] }[] = [
       ["/", { title: "总览", el: OverviewPage }],
       ["/investor", { title: "投资人", el: InvestorPage }],
       ["/positions", { title: "持仓", el: PositionsPage }],
+      ["/trx", { title: "TRX", el: TrxPage }],
     ],
   },
   {
