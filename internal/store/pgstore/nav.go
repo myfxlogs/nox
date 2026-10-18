@@ -53,7 +53,11 @@ func SumNav(pools []ExplorerIdlePool, now time.Time) *NavReport {
 		}
 		b := r.ByCcy[p.Currency]
 		b.Nav += p.Equity
-		b.Idle += p.Balance
+		// 眠钱口径修正（STATE「眠钱口径修正+瓦片换面」票）：桶 Idle=Σ Idle 旗池
+		// 余额——earn/在产池（income30d>0 旗消）不计闲置，D-286 眠钱=待部署缺口。
+		if p.Idle {
+			b.Idle += p.Balance
+		}
 		r.ByCcy[p.Currency] = b
 	}
 	if b, ok := r.ByCcy["USD"]; ok {
