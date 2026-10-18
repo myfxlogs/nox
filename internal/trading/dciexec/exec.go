@@ -114,6 +114,9 @@ type Executor struct {
 	JitTransferFn func(ctx context.Context, venue, ccy string, amt float64, from, to string) error
 	// ModeGate D-620⑤：真金单闸控制面（*gate.ControlPlane 实形；nil=提案执行拒「控制面未接线」）。
 	ModeGate ModeGate
+	// LiveEquityMapFn 浓度透视分母实拉钩（venue:type:ccy→equity 判定拍单次调用；
+	// nil=透视段跳过非阻塞；err→warn「实拉败」剔分母——D-604 判定点读径）。
+	LiveEquityMapFn func(ctx context.Context) (map[string]float64, error)
 }
 
 // ModeGate D-620⑤：提案执行控制面接口（dciexec 不依赖 gate 具体型的测试注口）。
