@@ -29,3 +29,12 @@
 | CMC instrument 价频订阅 verdict | ——（无代码件，协议面取证判据） | **无 instrument 订阅能力实锤（四通道）**——①subscribe 帧 schema={subscriptionId:accountID,type:N} 零 instrumentId 位（internal/data/collect/cmc/ws_run.go:49-58）；②type 表仅 5/6/7 账户域（arb docs/cmc/完整认证流程.md:152-158）；③帧实证日志 35s 窗零 instrument 帧（arb docs/cmc/证据/connectapi-ws-帧实证-2026-09-04.log）；④arb 同构件零痕迹。→REST `/v1/markets/prices/{instrumentId}`=instrument 价唯一正道（cmc_rest 注册回 ws 模式调度在产 @4927cdba2） |
 | binance probe 证据（o0 段三次补跑·解禁后窗） | `bn-api-probe-2026-10-18-o0-b104818.pb` | 解禁判据达标后（10:50Z 禁解除）o0 段补跑——105 端点记实（36 ok/69 fail）后 418 再触发 abort（批跑自身权重+产线共享预算叠压——错峰纪律仍粘滞）；batch-seq 防覆盖件（o0 段累计：b095803=137+b104818=105 端点两窗记实——去重覆盖仍残 ~端点候窗另批） |
 | binance probe 证据（o0 残段三次补跑·权重自限闸首跑） | `bn-api-probe-2026-10-18-o0-b{135758,135803}.pb` | 预检达标（近30min零418+ping200）后 o0 残段补跑——`-skip` 跳表只采残段（免重复烧权重）：首跑闸实证截批（used=1248>80%×1200——fapi 族阈按 venue 实报 2400 调 `-weightcap 2400`）；二跑 13 端点全采（5 ok/5×400 缺参族/3×404 含 listenKey·leverage·marginType=POST 族 GET 不通记实）+权重闸接线修（闸件并入未接线实测抓获）+deceps 端点直解器（skipfile 生成件）。**全谱对账：568/568 探针域全覆盖**（mutating 205 黑名单除外） |
+
+## CMC instrument 订阅能力 verdict（正典段——D-608 对账升格）
+
+**无 instrument 订阅能力（四通道实锤）**：
+1. subscribe 帧 schema=`{subscriptionId:accountID, type:N}` 零 instrumentId 位（`internal/data/collect/cmc/ws_run.go:49-58`）
+2. type 表仅 5/6/7 账户域（arb `docs/cmc/完整认证流程.md:152-158`）
+3. 帧实证日志 35s 窗零 instrument 帧（arb `docs/cmc/证据/connectapi-ws-帧实证-2026-09-04.log`）
+4. arb 同构件零痕迹
+→ REST `/v1/markets/prices/{instrumentId}`=instrument 价唯一正道（cmc_rest 注册回 ws 模式调度在产 @4927cdba2）

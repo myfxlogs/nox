@@ -13,3 +13,4 @@ description: binance USDⓈ-M 合约账户域端点能力账（D-608）
 - **400/404 族**：参数缺面（symbol 定向端点裸跑无参）+404 死端点（v1→v2 迁移残影——404=真死如实标）。
 - **mutating**：`/fapi/v1/order*`/`positionSide` POST 全族黑名单零跑。
 - **能力探测频控注记**（注记#74②）：probe 批跑须预留生产权重余量——预检 ping=存活验证≠频限合规（418 封禁窗内 ping 仍 200 实证）；批跑限速窗（pace ≥500ms）+错峰生产高负载窗+418 即停 abort 禁续扫——烧穿共享出口 IP 权重=REST 兜底全灭形态（10-19 实证 37 次/4min）。
+- **端点级记实（o0 残段补跑批 b135758/b135803）**：404 POST→GET 不通族=`/fapi/v1/leverage`+`/fapi/v1/marginType`（POST 调参族 GET 不通=非读面端点，杠杆/保证金型读面在 `/fapi/v2/account`/`symbolConfig`）；5×400 缺参族=定向端点裸跑预期败；权重闸接线坑详 `docs/经验库/条目/bnprobe-weightcap-merged-unwired.md`。
