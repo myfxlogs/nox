@@ -14,6 +14,8 @@ import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
 import { HedgeFlow } from "../components/HedgeFlow";
 import { StrategyLedgerCard } from "../components/OverviewAuxCards";
+import { ProbeProposals } from "../components/ProbeProposals";
+import { PaperCarry } from "../components/PaperCarry";
 
 const key = (p: { venueKey: string; ticket: string }) => p.venueKey + "/" + p.ticket;
 
@@ -252,6 +254,8 @@ export default function PositionsPage() {
       })()}
       <h2>策略台账</h2>
       <StrategyLedgerCard />
+      <ProbeProposals />
+      <PaperCarry />
       <HedgeFlow />
     </div>
   );

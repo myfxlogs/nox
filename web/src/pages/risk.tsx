@@ -97,10 +97,19 @@ export default function RiskPage() {
         </div>
       )}
 
-      <h2>告警</h2>
+      <h2>告警{" "}
+        {alerts.some((a) => a.acked) && (
+          <a href="#" className="muted" style={{ fontSize: 12 }} onClick={(e) => {
+            e.preventDefault();
+            void (async () => {
+              try { await client.clearAckedAlerts({}); void load(); } catch (x) { setErr(errText(x)); }
+            })();
+          }}>清除已确认</a>
+        )}
+      </h2>
       {alerts.length > 0 ? (
         <table>
-          <thead><tr><th>时间</th><th>级别</th><th>内容</th><th>acked</th></tr></thead>
+          <thead><tr><th>时间</th><th>级别</th><th>内容</th><th>acked</th><th></th></tr></thead>
           <tbody>
             {alerts.map((a) => (
               <tr key={Number(a.id)}>
@@ -108,6 +117,14 @@ export default function RiskPage() {
                 <td className={a.level === "crit" ? "crit" : a.level === "warn" ? "warn" : ""}>{a.level}</td>
                 <td style={{ whiteSpace: "normal" }}>{a.message}</td>
                 <td>{String(a.acked)}</td>
+                <td>
+                  <a href="#" onClick={(e) => {
+                    e.preventDefault();
+                    void (async () => {
+                      try { await client.deleteAlerts({ ids: [a.id] }); void load(); } catch (x) { setErr(errText(x)); }
+                    })();
+                  }}>删</a>
+                </td>
               </tr>
             ))}
           </tbody>
