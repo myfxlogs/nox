@@ -17,6 +17,8 @@ import (
 	"nox/internal/platform/safego"
 	"nox/internal/portfolio/budget"
 	"nox/internal/research/oppmatch"
+	"nox/internal/store/pgstore"
+	"nox/internal/trading/dciexec"
 
 	dashv1 "nox/internal/gen/dashboardv1"
 	dashv1connect "nox/internal/gen/dashboardv1/dashboardv1connect"
