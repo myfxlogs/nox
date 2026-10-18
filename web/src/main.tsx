@@ -6,6 +6,7 @@ import { getToken } from "./api";
 import { onStatus, onCase } from "./stream";
 import { client } from "./api";
 import { NOX_NAME } from "./nox";
+import { Chip } from "./components/Chip";
 import LoginPage from "./pages/login";
 import OverviewPage from "./pages/overview";
 import PositionsPage from "./pages/positions";
@@ -35,6 +36,7 @@ import "./styles/09-sim.css";
 import "./styles/10-testnet-quote.css";
 import "./styles/11-account-responsive.css";
 import "./styles/12-nox-shell.css";
+import "./styles/20-semantic.css";
 
 // S2c 左导航两组分排（业主令 10-16）：门面=总览/投资人/持仓；
 // 运维=账户/风控/观察/资金/DCI/报告/设置（盯盘归运维观察面）。
@@ -95,13 +97,49 @@ function useActionBadge(): number {
   return n;
 }
 
+// ROUTE_ICONS —— 侧栏项 svg 路径（arb TAB_ICONS 借形语义对位；NOX 独项补
+// user/shield/cpu/eye 同族 stroke 范式，viewBox 0 0 24 24 strokeWidth 2）。
+const ROUTE_ICONS: Record<string, string> = {
+  "/": "M3 12l9-9 9 9M5 10v10h14V10", // home
+  "/investor": "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z", // user
+  "/positions": "M4 4h16v16H4zM4 9h16M9 4v16", // table
+  "/trx": "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M12 6v12M7 9l5-3 5 3", // coin
+  "/accounts": "M12 2l3 7h7l-5.5 4 2 8L12 17l-6.5 4 2-8L2 9h7z", // star
+  "/risk": "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z", // shield
+  "/org": "M4 4h16v16H4zM9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3", // cpu
+  "/capital": "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6", // dollar
+  "/dci": "M3 6h18v12H3zM3 10h18M7 14h4", // card
+  "/reports": "M9 3h12v18H9M3 3h6v18H3M9 9h6M9 13h6M9 17h4", // book
+  "/watch": "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 12a3 3 0 1 0 0 .01z", // eye
+  "/settings": "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83", // gear
+};
+
+// 壳层钟面——票面裁准唯一合法 setInterval（UTC 钟面非业务数据）。
+function ShellClock() {
+  const [t, setT] = useState(() => new Date());
+  useEffect(() => {
+    const i = setInterval(() => setT(new Date()), 1000);
+    return () => clearInterval(i);
+  }, []);
+  return <span className="muted">{t.toISOString().slice(11, 19)} UTC</span>;
+}
+
 function App() {
   const path = useHash();
   const [connected, setConnected] = useState(false);
   const badge = useActionBadge();
+  const [sideOpen, setSideOpen] = useState(false);
   useEffect(() => onStatus(setConnected), []);
-  // S4 暗色备变量未启用——S2c 期间钉 light（arb 00-base 缺省即暗色须显式钉）。
-  useEffect(() => { document.documentElement.dataset.theme = "light"; }, []);
+  // S4 暗色解锁（画骨样式批——00-base dark remap 完整实锤）：localStorage > 系统偏好，主题钮可换。
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const s = localStorage.getItem("nox-theme");
+    return s === "light" || s === "dark" ? s
+      : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("nox-theme", theme);
+  }, [theme]);
 
   if (!getToken()) {
     if (path !== "/login") location.hash = "#/login";
@@ -114,34 +152,43 @@ function App() {
   }
   const El = r.el;
   return (
-    <div className="nox-shell">
-      <aside className="nox-side">
+    <main className="app-layout">
+      {/* arb 壳层范式：顶头条（汉堡+品牌+健康 chip+UTC 钟+主题钮）+图标侧栏+移动抽屉 */}
+      <header className="app">
+        <button className="sidebar-toggle" onClick={() => setSideOpen((o) => !o)} aria-label="菜单">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+        </button>
         <span className="brand">{NOX_NAME}</span>
+        <span className="app-spacer" />
+        <Chip tone={connected ? "good" : "warn"}>{connected ? "已连接" : "连接中"}</Chip>
+        <ShellClock />
+        <button className="theme-btn" title="主题切换" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
+          {theme === "dark" ? "☾" : "☀"}
+        </button>
+      </header>
+      <nav className={`sidebar${sideOpen ? " open" : ""}`} aria-label="视图切换">
         {NAV_GROUPS.map((g) => (
-          <div key={g.label} className="nox-nav-group">
+          <div key={g.label}>
             <div className="grp-label">{g.label}</div>
-            <nav>
-              {g.routes.map(([p, v]) => (
-                <a key={p} href={"#" + p} className={p === path ? "on" : ""}>
-                  <span>{v.title}</span>
-                  {p === "/investor" && badge > 0 ? <span className="nav-badge">{badge}</span> : null}
-                </a>
-              ))}
-            </nav>
+            {g.routes.map(([p, v]) => (
+              <a key={p} href={"#" + p}
+                className={p === path ? "sidebar-item active" : "sidebar-item"}
+                onClick={() => setSideOpen(false)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d={ROUTE_ICONS[p] ?? "M4 4h16v16H4z"} />
+                </svg>
+                <span>{v.title}</span>
+                {p === "/investor" && badge > 0 ? <span className="nav-badge">{badge}</span> : null}
+              </a>
+            ))}
           </div>
         ))}
-      </aside>
-      <div className="nox-main">
-        <header className="nox-topbar">
-          <span className={connected ? "live" : "dead"}>
-            {connected ? "● 已连接" : "○ 连接中"}
-          </span>
-        </header>
-        <main className="shell">
-          <El />
-        </main>
+      </nav>
+      {sideOpen && <div className="sidebar-overlay" onClick={() => setSideOpen(false)} />}
+      <div className="app-content">
+        <El />
       </div>
-    </div>
+    </main>
   );
 }
 

@@ -76,3 +76,108 @@
   white-space: nowrap;
 }
 
+
+/* —— arb-archive 同名件差量合入（画骨样式批 10-19）：arb 独有选择器追加，NOX 自有规则保留 —— */
+/* —— 台账（§2.8 出入金台账） —— */
+/* 卡片标题行：h2 + 动作按钮 */
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.card-head h2 {
+  margin: 0;
+}
+
+/* R9 返修：WS 状态点（对冲结构卡标题行，绿=在线/黄=REST 兜底） */
+.ws-dot-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ws-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.ws-dot-ok {
+  background: #22c55e;
+}
+
+.ws-dot-warn {
+  background: #eab308;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+
+.ledger-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ledger-tier {
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.ledger-tier-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 4px;
+}
+
+.ledger-tier-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* —— 经验库（§2.9/§13.6 复盘回填，D 修复：人工复核表单已退役） —— */
+/* 理由长文换行（不复盖 tabular-nums 数值列） */
+table.rows td.wrap {
+  white-space: normal;
+  word-break: break-word;
+  min-width: 200px;
+}
+
+
+/* —— D-348 财务总览四区 —— */
+.finance-grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.finance-cols2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 760px) {
+  .finance-grid3,
+  .finance-cols2 {
+    grid-template-columns: 1fr;
+  }
+}

@@ -63,3 +63,80 @@ main {
   margin: 0 auto;
   padding: 24px 16px 48px;
 }
+
+/* —— arb-archive 同名件差量合入（画骨样式批 10-19）：arb 独有选择器追加，NOX 自有规则保留 —— */
+
+/* V4 左侧栏布局：main.app-layout = flex（侧栏 + 内容区），header 跨全宽 */
+main.app-layout {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 100vh;
+}
+
+main.app-layout > header.app {
+  flex: 1 0 100%;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0;
+}
+
+main.app-layout > .app-content {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 24px 48px;
+  max-width: calc(1440px - 200px);
+}
+
+@media (max-width: 600px) {
+  main {
+    padding: 12px 8px 32px;
+  }
+  main.app-layout > .app-content {
+    padding: 12px 8px 32px;
+    max-width: 100%;
+  }
+}
+
+/* 数字统一 tabular-nums（替代旧等宽字体显示数字） */
+.num,
+td,
+th {
+  font-variant-numeric: tabular-nums;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* 弱化文字（次级标签/占位） */
+.muted {
+  color: var(--ink-3);
+}
+
+
+/* —— S1 移动端触控与字号基线（≤600px）：全局 button/input/select min-height 44px + :active 反馈 —— */
+@media (max-width: 600px) {
+  button,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+  /* 纯文字按钮/链接型（无背景边框）不强制 44px 高，避免排版破坏；触控由 padding 补偿 */
+  button:active,
+  .tab:active,
+  .bell-btn:active,
+  .combo-badge:active,
+  .ticket-link:active,
+  .alert-goto-link:active {
+    opacity: 0.6;
+  }
+}

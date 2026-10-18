@@ -69,3 +69,48 @@
 .banner-close:hover {
   opacity: 1;
 }
+
+/* —— arb-archive 同名件差量合入（画骨样式批 10-19）：arb 独有选择器追加，NOX 自有规则保留 —— */
+/* —— 折叠块（Collapse 组件：受控 <details>；低频数据面折叠，首屏只留标题行） —— */
+.collapse {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+}
+
+
+/* 空态 */
+.empty {
+  color: var(--ink-3);
+}
+
+/* 可关闭提示条（Banner 组件）：默认 critical 警示色 */
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  background: rgba(208, 59, 59, 0.12);
+  border: 1px solid rgba(208, 59, 59, 0.4);
+  color: var(--critical);
+}
+
+/* 成功/提示类提示条 */
+.banner-good {
+  background: rgba(12, 163, 12, 0.1);
+  border: 1px solid rgba(12, 163, 12, 0.4);
+  color: var(--good-ink);
+}
+
+.banner-close {
+  flex: none;
+  background: none;
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  color: inherit;
+  opacity: 0.7;
+}

@@ -1,46 +1,23 @@
-/* 12-nox-shell：S2c 左导航壳层（arb 头壳范式借形——门面/运维两组分排；
-   <900px 收顶栏=11-account-responsive 借形域）。 */
-.nox-shell { display: flex; min-height: 100vh; }
-.nox-side {
-  width: 160px; flex: 0 0 160px; border-right: 1px solid var(--line);
-  background: var(--surface); padding: 14px 10px; position: sticky;
-  top: 0; height: 100vh; box-sizing: border-box; overflow-y: auto;
+/* 12-nox-shell：壳层范式（画骨样式批 10-19 升 arb 面——顶头条 header.app
+   + .sidebar 图标侧栏 + 移动汉堡抽屉；基础规则在 07-bell-tabs/00-base，
+   本件存 NOX 壳专属补面）。旧 .nox-shell/.nox-side/.nox-topbar 段退役。 */
+.brand { font-weight: 700; font-size: 16px; letter-spacing: 1px; color: var(--ink); }
+.app-spacer { flex: 1; }
+.theme-btn {
+  border: 1px solid var(--line); background: none; color: var(--ink);
+  border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 14px; line-height: 1;
 }
-.nox-side .brand { font-weight: 700; font-size: 16px; letter-spacing: 1px; display: block; margin: 2px 6px 14px; color: var(--ink); }
-.nox-nav-group { margin-bottom: 16px; }
-.nox-nav-group .grp-label { font-size: 11px; color: var(--ink-3); margin: 0 6px 4px; letter-spacing: 0.5px; }
-.nox-side nav { display: flex; flex-direction: column; gap: 2px; }
-.nox-side nav a {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 5px 8px; border-radius: 6px; color: var(--ink-2);
-  text-decoration: none; font-size: 13px;
-}
-.nox-side nav a:hover { background: var(--page, #f0f0ec); }
-.nox-side nav a.on { background: var(--accent); color: #fff; }
+.theme-btn:hover { background: var(--page); }
+.sidebar .grp-label { font-size: 11px; color: var(--ink-3); margin: 12px 12px 4px; letter-spacing: 0.5px; }
 .nav-badge {
   min-width: 18px; padding: 0 5px; border-radius: 9px; font-size: 11px;
   background: var(--warn); color: #0b0b0b; text-align: center; line-height: 16px;
+  margin-left: auto;
 }
-.nox-side nav a.on .nav-badge { background: rgba(255,255,255,0.85); }
-.nox-main { flex: 1; min-width: 0; }
-.nox-topbar {
-  display: flex; align-items: center; justify-content: flex-end; gap: 12px;
-  padding: 10px 20px; border-bottom: 1px solid var(--line);
-  background: var(--surface);
-}
-.nox-main .shell { max-width: none; padding: 16px 24px 32px; }
-/* <900px 左栏收顶栏（11-account-responsive 借形） */
-@media (max-width: 900px) {
-  .nox-shell { flex-direction: column; }
-  .nox-side {
-    width: 100%; flex: none; height: auto; position: static;
-    border-right: none; border-bottom: 1px solid var(--line);
-    padding: 8px 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-  }
-  .nox-side .brand { margin: 0; }
-  .nox-nav-group { display: contents; }
-  .nox-nav-group .grp-label { display: none; }
-  .nox-side nav { flex-direction: row; flex-wrap: wrap; }
+.sidebar-item.active .nav-badge { background: rgba(255,255,255,0.85); }
+/* 移动端：组标隐藏（抽屉内项自明） */
+@media (max-width: 767px) {
+  .sidebar .grp-label { margin-top: 8px; }
 }
 
 /* S3′-b 补正：工序卡改流程图形态——十段小卡横排连线（纯布局，读模不动）。

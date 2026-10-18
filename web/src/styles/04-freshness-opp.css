@@ -156,3 +156,107 @@
 .pipe-ts-live { color: var(--good); }
 .pipe-ts-stale { color: var(--ink-3); }
 .pipe-ts-down { color: var(--critical); }
+
+/* —— arb-archive 同名件差量合入（画骨样式批 10-19）：arb 独有选择器追加，NOX 自有规则保留 —— */
+/* —— freshness 状态点（live 绿 / stale 黄 / down 红；语义见 tooltip） —— */
+.fresh-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  flex: none;
+}
+
+
+/* —— 实时报价条（QuoteStrip，看盘第一眼数据） —— */
+.quote-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--ring);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.quote-tile {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.quote-tile strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.quote-venue {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.quote-ts {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+/* D-090 自选报价条：wrap（strip + ⚙ 按钮）+ bid/ask 两数 + 涨跌闪 */
+.quote-strip-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.quote-strip-wrap .quote-strip {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.quote-strip-edit {
+  flex: none;
+}
+
+.quote-bidask {
+  display: inline-flex;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.quote-bidask .num {
+  font-size: 13px;
+}
+
+.quote-bidask.up .num {
+  color: var(--good);
+  transition: color 0.4s ease;
+}
+
+.quote-bidask.down .num {
+  color: var(--critical);
+  transition: color 0.4s ease;
+}
+
+
+/* —— venue 类型图标（D-053）：spot=现 / perp=永 单字徽标，替代 "binance:spot" 冗长文本 —— */
+.venue-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.venue-type {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink-3) 15%, transparent);
+  color: var(--ink-2);
+  line-height: 1.5;
+  cursor: help;
+}
