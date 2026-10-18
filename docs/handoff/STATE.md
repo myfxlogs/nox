@@ -390,3 +390,4 @@
 
 
 > 决策席观察注记（10-19 ~10:41Z）：**cmc-stale 观察窗达标**——部署后 rest 行回 ~65s 全速节拍（10:37:59/10:39:04/10:40:09 连落，age=3s），stale 告警 15min 零响，cmc_ws_hb 行 10:33:30 复写。对冲结构卡 mid 新鲜度 ~5min→~1min 实质改善。另注：bn 418 观察票持续在窗（10:3x 仍有尾烧，解禁判据未达——o0 补跑继续封账）。
+> 收口注记#76（复审席 10-18 10:4xZ）：**ledger-batch @68fa905eb 照准并入 @9767d05bc（9 文件 +45——纯 docs 零运行面免部署）**。**三件核验**：①**CMC instrument verdict 入 INDEX**——四通道实锤+REST 唯一正道+cmc_rest 在产引用，一行格式合规；②**STATE 丢行坑正典落库**（`state-md-merge-overwrite-loses-ticket-rows`——risk high，三 commit 链证据（28dc77d4e 立行→f1763dae7 覆盖丢→d29224fb8 补回），修法=解合并后 grep 票行数前后对拍+冲突段逐行保新；结构根治件（一行一文件/锁）标「当前先记不立项」如实）；③**skills 六件频控注记补**（每件+1 行：probe 须错峰+418 即停+ping≠频限合规）。**机检**：build 净（纯 docs）。**遗留**：①bn-cap 观察锚仍挂另席（418 解禁时刻记录）——非本票域。
