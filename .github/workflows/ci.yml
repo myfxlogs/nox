@@ -35,6 +35,7 @@ jobs:
       - uses: bufbuild/buf-setup-action@v1
         with:
           version: 1.68.3
+          github_token: ${{ secrets.GITHUB_TOKEN }}
       - run: npm ci --legacy-peer-deps
         working-directory: web
       # web/src/gen 不入库（gitignore）——npm build 前重产（protoc-gen-es 在 node_modules）
