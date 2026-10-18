@@ -1,5 +1,6 @@
-// overview_duo.tsx —— 在仓订单+等待面双栏并置区（业主令 10-19 总览版重排③：
-// 右半空洞病灶治；300 行棘轮拆件）。语义/卡阵件原样——纯结构迁件零行为变。
+// overview_duo.tsx —— 在仓订单+等待面满宽纵排区（业主令 10-19 再裁：双栏并列
+// 两列行数差→行线错位病灶治；改两段顺序满宽 grid——无并列列即无行可对错，
+// 满宽栅格卡密度反升+右侧空洞仍自然填实，长列 scroll-cap 封顶既有机制）。
 import type { OverviewOrderRow, GetOverviewBundleResponse } from "../gen/dashboardv1/account_pb";
 import { ORDER_KIND_CN, ORDER_STATUS_CN, untilCN } from "../components/orders_fmt";
 import { fmtUsd } from "../components/fmt";
@@ -27,7 +28,7 @@ export function OrderWaitDuo({ b, setCardModal }: {
   setCardModal: (v: { title: string; body: string } | null) => void;
 }) {
   return (
-    <div className="ov-duo">
+    <>
       <div>
         {/* §2 在仓订单缩览卡阵（D-低密度网格化：三行=状态/对象截断/⏱ 叙事；点击 Modal 全文） */}
         <h2>在仓订单</h2>
@@ -75,6 +76,6 @@ export function OrderWaitDuo({ b, setCardModal }: {
           </ul>
         ) : <EmptyState>无等待项</EmptyState>}
       </div>
-    </div>
+    </>
   );
 }

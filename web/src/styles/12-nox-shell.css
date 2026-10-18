@@ -47,6 +47,5 @@
 .pipe-flow .pipe-clock { font-size: 11px; color: var(--ink-3); margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .pipe-flow .pipe-line { font-size: 11px; color: var(--ink-3); line-height: 1.35; } /* 防抖②钳 2 行=共享 .clamp-2（04，TSX 挂） */
 
-/* ov-duo 业主令 10-19：订单/等待面双栏并置（右半空洞治，窄屏降列纵排）。 */
-.ov-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; align-items: start; }
-@media (max-width: 900px) { .ov-duo { grid-template-columns: 1fr; } }
+/* ov-duo 退役（业主令 10-19 再裁）：双栏并列两列行数差→行线错位病灶——改
+   overview_duo.tsx 两段顺序满宽纵排，.opp-grid 满页宽卡密度升+无列可错。 */
