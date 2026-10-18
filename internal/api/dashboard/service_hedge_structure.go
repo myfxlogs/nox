@@ -28,13 +28,25 @@ func (s *Service) freshLive(ctx context.Context) cmc.LiveState {
 		ls = s.cmcLiveProvider()
 	}
 	posFresh := !ls.PosTs.IsZero() && time.Since(ls.PosTs) <= 30*time.Second
+	if !posFresh || ls.Mid <= 0 {
+		// D-212 mid 兜底序②：fin_cmc_prices 最新 mid 行（cmc_rest 主源——
+		// WS 无 instrument 价面；IS NOT NULL 过滤天然筛 ws 零值行）。
+		if mid, _, err := s.store.LastCMCPriceMidWithTime(ctx, "X-AFQUL"); err == nil && mid > 0 {
+			ls.Mid = mid
+		}
+	}
 	if !posFresh || ls.Ask <= 0 {
 		if cmcPos, err := s.store.LastCMCPositionByInstrument(ctx, "X-AFQUL"); err == nil {
 			if !posFresh || ls.Ask <= 0 {
 				ls.Ask = cmcPos.EvaluationAskPrice
 			}
 			if !posFresh || ls.Mid <= 0 {
-				ls.Mid = cmcPos.EvaluationBidPrice // DB 回退用 bid（无独立 mid；流 mid=(ask+bid)/2 优先）
+				// 兜底序③④：eval bid→eval ask（短腿 CMC 只给 ask——
+				// 无 bid 时 ask 载估值如实标非伪 mid；mid=0 时 ask 已填故用 ask）。
+				ls.Mid = cmcPos.EvaluationBidPrice
+				if ls.Mid <= 0 {
+					ls.Mid = cmcPos.EvaluationAskPrice
+				}
 			}
 			if !posFresh || ls.Qty <= 0 {
 				ls.Qty = cmcPos.Quantity
