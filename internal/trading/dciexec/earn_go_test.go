@@ -25,6 +25,13 @@ func earnFixture() (*Executor, *fakeStore, *int) {
 	}
 	var subCalls int
 	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma,
+		LiveEquityMapFn: func(context.Context) (map[string]float64, error) { // 分母实拉注件（poolRows 种子同款喂）
+			m := map[string]float64{}
+			for _, r := range f.poolRows {
+				m[r.Venue+":"+r.VenueType+":"+r.Currency] = r.Equity
+			}
+			return m, nil
+		},
 		Store: f, BnKey: "k", BnSec: "s",
 		BalanceFn: func(context.Context, string) (float64, error) { return 1045, nil },
 		EarnProductsFn: func(context.Context, string) ([]EarnProduct, error) {
