@@ -26,13 +26,17 @@ func (s *Store) SumVenueIOExternal(ctx context.Context, venue, ccy string, from,
 
 // SumVenueIOTransfers (venue,ccy,wallet) 窗内划转净值=Σ(to_wallet=w)−Σ(from_wallet=w)
 // （venue 级求和理由同 SumVenueIOExternal）。
+// D-539② 残差双计修：earn-sub:% 行剔——申购同事件订单腿（earnQty）已覆盖，
+// io transfer 再计=权益过解释假 critical（xmr-io 异键双写同族病灶）；
+// earn-red:% 赎回无订单腿=单计不动。
 func (s *Store) SumVenueIOTransfers(ctx context.Context, venue, ccy, wallet string, from, to time.Time) (float64, error) {
 	var net float64
 	err := s.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(CASE WHEN to_wallet=$3 THEN amount WHEN from_wallet=$3 THEN -amount ELSE 0 END),0)
 		FROM fin_venue_io
 		WHERE venue=$1 AND ccy=$2 AND direction='transfer' AND ts>$4 AND ts<=$5
-		  AND (from_wallet=$3 OR to_wallet=$3)`,
+		  AND (from_wallet=$3 OR to_wallet=$3)
+		  AND COALESCE(external_id,'') NOT LIKE 'earn-sub:%%'`,
 		venue, ccy, wallet, from, to).Scan(&net)
 	if err != nil {
 		return 0, fmt.Errorf("sum venue io transfers: %w", err)

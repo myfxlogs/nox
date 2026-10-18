@@ -219,3 +219,59 @@ func TestResidRecon_OrderLifecycle(t *testing.T) {
 		t.Fatalf("okx sfp 申购（spot 扣款/earn 零腿）应零告警: %d", n)
 	}
 }
+
+// TestResidRecon_EarnSubDoubleCount D-539② 双计修锚：earn 申购同事件
+// io transfer（earn-sub:%）与订单腿 earnQty 双径各计→earn 池过解释假警。
+// 修后：io 面剔 earn-sub 行（订单腿已覆盖）→双侧收敛零告警；赎回单计不动。
+func TestResidRecon_EarnSubDoubleCount(t *testing.T) {
+	s := d536Store(t)
+	ctx := context.Background()
+	r := NewResidualRecon(s)
+	base := time.Now().Add(-2 * time.Hour)
+	snap := func(vt string, eq float64, ts time.Time) pgstore.VenueAccountSnapshot {
+		return pgstore.VenueAccountSnapshot{Venue: "gate", VenueType: vt, Currency: "USDT",
+			EquityRaw: eq, FetchedAt: ts, Src: "test"}
+	}
+	seed := func(snaps ...pgstore.VenueAccountSnapshot) {
+		if err := s.InsertVenueAccountSnapshots(ctx, snaps); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	eval := func(snaps ...pgstore.VenueAccountSnapshot) {
+		for i := range snaps {
+			if err := r.evaluate(ctx, &snaps[i]); err != nil {
+				t.Fatalf("eval %s: %v", snaps[i].VenueType, err)
+			}
+		}
+	}
+	alertN := func() int {
+		var n int
+		if err := s.Pool().QueryRow(ctx,
+			`SELECT count(*) FROM alerts WHERE level='critical' AND message LIKE '%残差对账%'`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	// gate EARN filled 订单腿（源池 spot→earn 桶）+ io transfer earn-sub 同事件行。
+	if _, err := s.Pool().Exec(ctx, `
+		INSERT INTO fin_dci_order (id, request_id, venue, underlying, opt_type, invest_ccy, qty,
+		  status, created_at, resolved_at)
+		VALUES (950,'recon|EARN|950','gate','BTC','EARN','USDT',1000.32,'filled',$1,$1)`,
+		base.Add(10*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	cfgEarn, _ := s.ExchangeConfigID(ctx, "gate", "earn")
+	if _, err := s.InsertVenueIO(ctx, []pgstore.VenueIO{{
+		Venue: "gate", ConfigID: cfgEarn, Direction: "transfer", Ccy: "USDT",
+		Amount: 1000.32, ExternalID: "earn-sub:950:P1", Ts: base.Add(10 * time.Minute),
+		FromWallet: "spot", ToWallet: "earn",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	seed(snap("spot", 2000, base), snap("earn", 0, base))
+	eval(snap("spot", 999.68, base.Add(15*time.Minute)),
+		snap("earn", 1000.32, base.Add(15*time.Minute)))
+	if n := alertN(); n != 0 {
+		t.Fatalf("earn-sub 行被剔应零残差 critical: %d", n)
+	}
+}
