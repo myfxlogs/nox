@@ -1,4 +1,7 @@
 // accounts.tsx —— 账户管理：券商户 + 交易所配置。写径=对应 RPC；case16 增量。
+// S3′-final 批迁：第一眼=各 venue 户在通态+权益 opp-card 阵（卡内 别名/real/
+// 手续费/停启/删 绑径原样）；新增表单挪段尾（高频看态低频加户）。纯 JSX/CSS
+// 重排零逻辑动。
 import { useCallback, useEffect, useState } from "react";
 import { client, errText } from "../api";
 import { onCase } from "../stream";
@@ -7,6 +10,8 @@ import type { AccountInfo } from "../gen/dashboardv1/account_pb";
 import type { AccountEvent } from "../gen/dashboardv1/stream_pb";
 import { fmtUsd, ts } from "../components/fmt";
 import { ConfirmDialog } from "../components/Modal";
+import { Chip } from "../components/Chip";
+import { EmptyState } from "../components/EmptyState";
 
 const PLATFORMS = ["MT4", "MT5"];
 
@@ -58,62 +63,64 @@ export default function AccountsPage() {
 
   return (
     <div>
+      <h1>账户</h1>
       {err && <div className="err">{err}</div>}
       {msg && <div className="good">{msg}</div>}
 
+      {/* 第一眼=券商户在通态+权益（卡阵）；加户表单低频挪段尾 */}
       <h2>券商账户（MT）</h2>
-      <BrokerForm onDone={(m) => setMsg(m)} onErr={setErr} reload={load} />
-      <table>
-        <thead>
-          <tr><th>venue</th><th>平台</th><th>主机</th><th>账号</th><th>别名</th><th>状态</th><th>权益</th><th>行情龄s</th><th>real</th><th>手续费bps</th><th></th></tr>
-        </thead>
-        <tbody>
+      {brokers.length > 0 ? (
+        <ul className="opp-cards opp-grid">
           {brokers.map((b) => {
             const a = accts.get(b.venue);
             return (
-              <tr key={b.venue}>
-                <td>{b.venue}</td>
-                <td>{PLATFORMS[b.platform] ?? b.platform}</td>
-                <td>{b.host}:{b.port}</td>
-                <td>{String(b.user)}</td>
-                <td>
-                  <AliasCell venue={b.venue} alias={b.alias} act={act} />
-                </td>
-                <td className={b.feedState === "live" ? "good" : "warn"}>{b.status}/{b.feedState}</td>
-                <td>{a ? fmtUsd(a.equity) : "—"}</td>
-                <td>{b.lastQuoteAgeSec.toFixed(0)}</td>
-                <td>
-                  <button onClick={() => act(() => client.setBrokerAccountIsReal({ venue: b.venue, isReal: !b.isReal }), "已切换 real")}>{String(b.isReal)}</button>
-                </td>
-                <td>
+              <li key={b.venue} className="opp-card">
+                <div className="opp-card-head">
+                  <span className="opp-card-kind">{b.venue}</span>
+                  <Chip tone={b.feedState === "live" ? "good" : "warn"}>{b.status}/{b.feedState}</Chip>
+                  <span className="opp-card-who">{PLATFORMS[b.platform] ?? b.platform} · {a ? fmtUsd(a.equity) : "—"}</span>
+                </div>
+                <div className="opp-card-narrative">
+                  {b.host}:{b.port} · acct {String(b.user)} · 行情龄 {b.lastQuoteAgeSec.toFixed(0)}s
+                </div>
+                <div className="opp-card-narrative" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                  别名 <AliasCell venue={b.venue} alias={b.alias} act={act} />
+                  手续费bps{" "}
                   <input
-                    style={{ width: 60 }}
+                    style={{ width: 56 }}
                     defaultValue={b.commissionBps ?? ""}
                     onBlur={(e) =>
                       e.target.value !== String(b.commissionBps ?? "") &&
                       act(() => client.setBrokerCommission({ venue: b.venue, commissionBps: Number(e.target.value) }), "手续费已存")
                     }
                   />
-                </td>
-                <td>
-                  <button onClick={() => act(() => client.setBrokerDisabled({ venue: b.venue, disabled: b.status !== "disabled" }), "已切换")}>{b.status === "disabled" ? "启用" : "停用"}</button>{" "}
+                </div>
+                <div className="opp-card-narrative" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <button onClick={() => act(() => client.setBrokerAccountIsReal({ venue: b.venue, isReal: !b.isReal }), "已切换 real")}>real={String(b.isReal)}</button>
+                  <button onClick={() => act(() => client.setBrokerDisabled({ venue: b.venue, disabled: b.status !== "disabled" }), "已切换")}>{b.status === "disabled" ? "启用" : "停用"}</button>
                   <button className="danger" onClick={() => setCfm({ text: `删户 ${b.venue}？`, run: () => act(() => client.removeBroker({ venue: b.venue, reason: "ui" }), "已删户") })}>删</button>
-                </td>
-              </tr>
+                </div>
+              </li>
             );
           })}
-        </tbody>
-      </table>
+        </ul>
+      ) : (
+        <EmptyState>零券商户</EmptyState>
+      )}
+      <BrokerForm onDone={(m) => setMsg(m)} onErr={setErr} reload={load} />
 
       <h2>交易所（CEX）</h2>
-      <ExchangeForm onDone={(m) => setMsg(m)} onErr={setErr} reload={load} />
-      <table>
-        <thead><tr><th>id</th><th>venue</th><th>类型</th><th>标签</th><th>simulated</th><th>创建</th><th></th></tr></thead>
-        <tbody>
+      {exchs.length > 0 ? (
+        <ul className="opp-cards opp-grid">
           {exchs.map((x) => (
-            <tr key={x.id}>
-              <td>{x.id}</td><td>{x.venue}</td><td>{x.venueType}</td>
-              <td>
+            <li key={x.id} className="opp-card">
+              <div className="opp-card-head">
+                <span className="opp-card-kind">{x.venue}</span>
+                <Chip tone="neutral">{x.venueType}</Chip>
+                <span className="opp-card-who">#{x.id} · sim={String(x.simulated)}</span>
+              </div>
+              <div className="opp-card-narrative" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                标签{" "}
                 <input
                   defaultValue={x.label}
                   onBlur={(e) =>
@@ -121,14 +128,17 @@ export default function AccountsPage() {
                     act(() => client.setExchangeLabel({ id: x.id, label: e.target.value }), "标签已存")
                   }
                 />
-              </td>
-              <td>{String(x.simulated)}</td>
-              <td>{ts(x.createdAt)}</td>
-              <td><button className="danger" onClick={() => setCfm({ text: `删交易所 ${x.id}？`, run: () => act(() => client.removeExchange({ id: x.id }), "已删") })}>删</button></td>
-            </tr>
+                <button className="danger" onClick={() => setCfm({ text: `删交易所 ${x.id}？`, run: () => act(() => client.removeExchange({ id: x.id }), "已删") })}>删</button>
+              </div>
+              <div className="opp-card-narrative muted">创建 {ts(x.createdAt)}</div>
+            </li>
           ))}
-        </tbody>
-      </table>
+        </ul>
+      ) : (
+        <EmptyState>零交易所行</EmptyState>
+      )}
+      <ExchangeForm onDone={(m) => setMsg(m)} onErr={setErr} reload={load} />
+
       <ConfirmDialog open={cfm != null} text={cfm?.text}
         onCancel={() => setCfm(null)}
         onConfirm={() => { const r = cfm?.run; setCfm(null); r?.(); }} />

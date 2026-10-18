@@ -48,10 +48,12 @@ export default function SettingsPage() {
 
   return (
     <div>
+      <h1>设置</h1>
       {err && <div className="err">{err}</div>}
       {msg && <div className="muted">{msg}</div>}
-      <div className="dept">
-        <h3>AI 设置</h3>
+      {/* S3′-final 批迁：表单段壳卡化（绑径原样） */}
+      <section className="card" style={{ padding: 12 }}>
+        <h2>AI 设置</h2>
         <table>
           <tbody>
             <tr>
@@ -108,7 +110,7 @@ export default function SettingsPage() {
             </tr>
           </tbody>
         </table>
-      </div>
+      </section>
     </div>
   );
 }

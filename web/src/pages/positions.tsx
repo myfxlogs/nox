@@ -1,11 +1,16 @@
 // positions.tsx —— 持仓页：系统仓（case4）+ 券商逐仓（case15 upsert/remove）。
 // 写径：CloseBrokerPosition / CloseBrokerPositions（D-213 钦定运维操作）。
+// S3′-final 批迁：第一眼=券商仓 PnL/净额 StatTile + 逐仓 opp-card 阵（卡内
+// 勾选/平仓绑径原样），系统仓台账同卡化；纯 JSX/CSS 重排零逻辑动。
 import { useCallback, useEffect, useState } from "react";
 import { client, errText } from "../api";
 import { onCase } from "../stream";
 import type { BrokerPosition, Position } from "../gen/dashboardv1/position_pb";
 import type { BrokerPositionEvent } from "../gen/dashboardv1/stream_pb";
 import { fmtUsd, ts } from "../components/fmt";
+import { StatTile } from "../components/StatTile";
+import { Chip } from "../components/Chip";
+import { EmptyState } from "../components/EmptyState";
 
 const key = (p: { venueKey: string; ticket: string }) => p.venueKey + "/" + p.ticket;
 
@@ -92,68 +97,94 @@ export default function PositionsPage() {
   const bList = [...broker.values()];
   return (
     <div>
+      <h1>持仓</h1>
       {err && <div className="err">{err}</div>}
-      <div className="cards">
-        <div className="card"><div className="k">券商仓 pnl 合计</div><div className="v">{fmtUsd(sums.pnl)}</div></div>
-        <div className="card"><div className="k">净额合计</div><div className="v">{fmtUsd(sums.net)}</div></div>
-        <div className="card">
-          <div className="k">已选 {sel.size}</div>
-          <button className="danger" disabled={busy || sel.size === 0} onClick={closeSelected}>平仓所选</button>
-        </div>
+
+      {/* 第一眼=券商仓损益合计（后端 sums 直供单值）+ 批平仓动作 */}
+      <div className="stats">
+        <StatTile label="券商仓 PnL 合计" value={fmtUsd(sums.pnl)} />
+        <StatTile label="净额合计" value={fmtUsd(sums.net)} />
+      </div>
+      <div style={{ margin: "8px 0" }}>
+        <button className="danger" disabled={busy || sel.size === 0} onClick={closeSelected}>
+          平仓所选（{sel.size}）
+        </button>
       </div>
 
       <h2>券商逐仓</h2>
-      <table>
-        <thead>
-          <tr><th></th><th>账户</th><th>品种</th><th>向</th><th>量</th><th>现价</th><th>pnl</th><th>swap</th><th>开时</th><th></th></tr>
-        </thead>
-        <tbody>
+      {bList.length > 0 ? (
+        <ul className="opp-cards opp-grid">
           {bList.map((p) => (
-            <tr key={key(p)}>
-              <td>
-                <input
-                  type="checkbox"
-                  disabled={p.external}
-                  checked={!p.external && sel.has(key(p))}
-                  onChange={(e) =>
-                    setSel((s) => {
-                      const n = new Set(s);
-                      e.target.checked ? n.add(key(p)) : n.delete(key(p));
-                      return n;
-                    })
-                  }
-                />
-              </td>
-              <td>{p.accountAlias || p.venueKey}</td>
-              <td>{p.symbol}{p.external && <span className="warn" title="系统外单：台账查无记录——敞口并表但系统不开不平"> 外单</span>}</td>
-              <td>{p.side}</td>
-              <td>{p.volume}</td>
-              <td>{p.currentPrice || "—"}</td>
-              <td className={p.pnl >= 0 ? "good" : "crit"}>{fmtUsd(p.pnl)}</td>
-              <td>{fmtUsd(p.swap)}</td>
-              <td>{ts(p.openedAt)}</td>
-              <td>{p.external ? <span style={{ opacity: 0.5 }}>不接管</span> : <button disabled={busy} onClick={() => closeOne(p)}>平仓</button>}</td>
-            </tr>
+            <li key={key(p)} className="opp-card">
+              <div className="opp-card-head">
+                <span className="opp-card-kind">
+                  {p.symbol}
+                  {p.external && (
+                    <span className="warn" title="系统外单：台账查无记录——敞口并表但系统不开不平"> 外单</span>
+                  )}
+                </span>
+                <Chip tone={p.pnl >= 0 ? "good" : "critical"}>{p.side}</Chip>
+                <span className="opp-card-who">{p.accountAlias || p.venueKey}</span>
+              </div>
+              <div className="opp-card-stats stats">
+                <StatTile label="pnl" value={fmtUsd(p.pnl)} />
+                <StatTile label="swap" value={fmtUsd(p.swap)} />
+                <StatTile label="现价" value={String(p.currentPrice || "—")} />
+                <StatTile label="量" value={String(p.volume)} />
+              </div>
+              <div className="opp-card-narrative">
+                <label>
+                  <input
+                    type="checkbox"
+                    disabled={p.external}
+                    checked={!p.external && sel.has(key(p))}
+                    onChange={(e) =>
+                      setSel((s) => {
+                        const n = new Set(s);
+                        e.target.checked ? n.add(key(p)) : n.delete(key(p));
+                        return n;
+                      })
+                    }
+                  />{" "}
+                  勾选批平
+                </label>{" "}
+                {p.external ? (
+                  <span style={{ opacity: 0.5 }}>不接管</span>
+                ) : (
+                  <button disabled={busy} onClick={() => closeOne(p)}>平仓</button>
+                )}{" "}
+                <span className="muted">开 {ts(p.openedAt)}</span>
+              </div>
+            </li>
           ))}
-        </tbody>
-      </table>
+        </ul>
+      ) : (
+        <EmptyState>零券商仓</EmptyState>
+      )}
 
-      <h2>系统仓</h2>
-      <table>
-        <thead><tr><th>ID</th><th>类型</th><th>状态</th><th>净盈亏</th><th>浮动</th><th>腿数</th><th>开仓</th><th>平仓</th></tr></thead>
-        <tbody>
+      <h2>系统仓台账</h2>
+      {sysPos.size > 0 ? (
+        <ul className="opp-cards opp-grid">
           {[...sysPos.values()].map((p) => (
-            <tr key={Number(p.id)}>
-              <td>{Number(p.id)}</td><td>{p.type}</td><td>{p.status}</td>
-              <td className={(p.netPnlUsd ?? 0) >= 0 ? "good" : "crit"}>{fmtUsd(p.netPnlUsd)}</td>
-              <td>{fmtUsd(p.floatingPnlUsd)}</td>
-              <td>{p.legs.length}</td>
-              <td>{ts(p.openedAt)}</td>
-              <td>{ts(p.closedAt)}</td>
-            </tr>
+            <li key={Number(p.id)} className="opp-card">
+              <div className="opp-card-head">
+                <span className="opp-card-kind">#{Number(p.id)} {p.type}</span>
+                <Chip tone={p.status === "ACTIVE" ? "good" : "neutral"}>{p.status}</Chip>
+              </div>
+              <div className="opp-card-stats stats">
+                <StatTile label="净盈亏" value={fmtUsd(p.netPnlUsd)} />
+                <StatTile label="浮动" value={fmtUsd(p.floatingPnlUsd)} />
+                <StatTile label="腿数" value={String(p.legs.length)} />
+              </div>
+              <div className="opp-card-narrative">
+                开 {ts(p.openedAt)} · 平 {ts(p.closedAt)}
+              </div>
+            </li>
           ))}
-        </tbody>
-      </table>
+        </ul>
+      ) : (
+        <EmptyState>零系统仓</EmptyState>
+      )}
     </div>
   );
 }
