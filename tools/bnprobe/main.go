@@ -155,24 +155,7 @@ func probe(ctx context.Context, c *http.Client, apiKey, apiSecret, tier, path st
 }
 
 func main() {
-	offset := 0
-	limit := 0        // 0=全谱
-	weightCap := 1200 // 共享 IP 分钟预算上限（保守缺省——生产 REST 面大头后探针配额）
-	weightPct := 80   // 自限阈=cap×80%（缺省——超阈即截非 418 撞墙）
-	for i, a := range os.Args {
-		if a == "-offset" && i+1 < len(os.Args) {
-			fmt.Sscanf(os.Args[i+1], "%d", &offset)
-		}
-		if a == "-limit" && i+1 < len(os.Args) {
-			fmt.Sscanf(os.Args[i+1], "%d", &limit)
-		}
-		if a == "-weightcap" && i+1 < len(os.Args) {
-			fmt.Sscanf(os.Args[i+1], "%d", &weightCap)
-		}
-		if a == "-weightpct" && i+1 < len(os.Args) {
-			fmt.Sscanf(os.Args[i+1], "%d", &weightPct)
-		}
-	}
+	offset, limit, weightCap, weightPct, skip := parseFlags()
 	c := &http.Client{Timeout: 15 * time.Second}
 	ctx := context.Background()
 	// 凭据=pgstore.Open+Store.ListExchangeConfigs 一调（_enc 列+MasterKey+Open
@@ -244,6 +227,9 @@ func main() {
 			continue // 批前跳
 		}
 		tier, path := parts[1], parts[2]
+		if skip[path] {
+			continue // 残段补跑——已有记实端点跳过不重复烧权重
+		}
 		r := probe(ctx, c, apiKey, apiSecret, tier, path)
 		// 418 即停——一封即 abort（生产 IP 速率预算=与系统共享非独占，禁续扫）
 		if r.Status == 418 {
@@ -253,12 +239,17 @@ func main() {
 		r.Endpoint = path
 		results = append(results, r)
 		done++
+		w := 0
+		fmt.Sscanf(r.Weight, "%d", &w)
+		// 权重自限闸——超阈截批记实（撞 418 前停，partial pb 照常落盘）
+		if weightGate(w, weightCap, weightPct) {
+			fmt.Fprintf(os.Stderr, "权重余量不足 abort（used=%d > %d%%×%d）——已采 %d 端点落盘\n", w, weightPct, weightCap, done)
+			break
+		}
 		if limit > 0 && done >= limit {
 			break // 批界
 		}
 		// pace 权重预算（USED-WEIGHT 跟踪——>600 降速 2x/2 倍 pace）
-		w := 0
-		fmt.Sscanf(r.Weight, "%d", &w)
 		if w > 600 {
 			time.Sleep(2 * paceMs * time.Millisecond)
 		} else {
