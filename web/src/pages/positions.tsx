@@ -14,6 +14,7 @@ import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
 import { HedgeFlow } from "../components/HedgeFlow";
 import { StrategyLedgerCard } from "../components/OverviewAuxCards";
+import { CarryGraduationSection } from "../components/CarryGraduationSection";
 import { ProbeProposals } from "../components/ProbeProposals";
 import { PaperCarry } from "../components/PaperCarry";
 
@@ -252,6 +253,8 @@ export default function PositionsPage() {
           </>
         );
       })()}
+      <CarryGraduationSection />
+
       <h2>策略台账</h2>
       <StrategyLedgerCard />
       <ProbeProposals />

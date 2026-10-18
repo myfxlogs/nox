@@ -2,6 +2,7 @@
 // 既有 RPC——api_key 掩码尾4回显、留空提交=不动（后端 UPSERT 语义），零前端运算。
 import { useEffect, useState } from "react";
 import { client, errText } from "../api";
+import { SecretsCard, PnlResetCard } from "../components/SettingsCards";
 
 export default function SettingsPage() {
   const [baseURL, setBaseURL] = useState("");
@@ -111,6 +112,9 @@ export default function SettingsPage() {
           </tbody>
         </table>
       </section>
+
+      <SecretsCard />
+      <PnlResetCard />
     </div>
   );
 }
