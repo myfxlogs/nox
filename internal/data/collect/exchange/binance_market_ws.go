@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"nox/internal/infra/dephealth"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -252,6 +253,9 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venu
 			if isSubscribeAck(data) {
 				return false // {result:null,id:1} ack；{result:…,error} 已在 isSubscribeAck 记日志
 			}
+			// D-109 R1③：帧到喂 dephealth（节流件内建 1/min/键）——
+			// 「连接活帧死」形态 lastEventUnix 前移可证，解禁判据机读达标。
+			dephealth.MarkFrameOK("binance:ws-" + venueType + "-" + kind)
 			if kind == "ticker" {
 				b.lastFrameTicker.Store(b.now().UnixNano()) // D-109 R1①：帧到=流活（含解析失败帧——有流量即非死流）
 				// 24hrTicker 数组帧→vol24h facts（D-591 S6 handler 自创建日起

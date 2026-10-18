@@ -88,6 +88,10 @@ var (
 	afterFunc = time.AfterFunc
 	// initAt D-038③：Init 时刻（静默窗起点；零值=未初始化→窗不生效）。
 	initAt time.Time
+	// frameMarkAt D-109 R1③：MarkFrameOK 每键节流戳（帧到即喂 Mark(true)
+	// 节流 ≤1/min——帧频 100+/s 不刷注册表；解禁判据「帧时戳前移两样本
+	// 不等」要求 lastEventAt 随帧推进，节流戳独立域不扰 lastEventAt 语义）。
+	frameMarkAt = map[string]time.Time{}
 )
 
 // Init 装配告警出口（进程级一次；nil=静默只记账）。D-038③：记 initAt 为静默窗起点。
@@ -142,6 +146,25 @@ func warnCheck(key string) {
 }
 
 // Mark 喂入一次上游交互成败事实。key 空=不记（向后兼容未挂点路径）。
+// MarkFrameOK 帧级 OK 喂入（节流 ≤1/min/键）——ws 连接只在 dial/err 时
+// Mark，业务帧到不喂=「连接活帧死」形态绿假象（binance ws-dead 病灶实证：
+// dephealth healthy+lastEventUnix 钉死连接拍 573s 不前移）。本件只转发
+// 真实帧事件（被动性守——零合成探针零新流量）；节流防帧频刷表。
+func MarkFrameOK(key string) {
+	if key == "" {
+		return
+	}
+	now := nowFn()
+	mu.Lock()
+	if now.Sub(frameMarkAt[key]) < time.Minute {
+		mu.Unlock()
+		return
+	}
+	frameMarkAt[key] = now
+	mu.Unlock()
+	Mark(key, true, nil)
+}
+
 func Mark(key string, ok bool, err error) {
 	if key == "" {
 		return
