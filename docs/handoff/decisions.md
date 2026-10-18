@@ -628,3 +628,10 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定三闸**：①§2 事实优先级补位次——`skills/<venue>-<域>/` 列模块文档同级（能力正典=实测消化层，证据指针回 docs/能力账/）；②**开工指令模板**强制——venue/API 相关票提示词必带 `读 skills/<venue>-<域>` 指针（无域注明「无 skills 域如实」）；③**复审闸**——venue 能力声明（「没有某能力/端点死/凭据落点」类）出处只认 skills 行或新鲜 probe 实拍，相关 skills 存在而未查=退回单条。
 - **登记面**：docs/能力账/INDEX.md=全图入口（venue×域×skills 指针——新域落地必补行）；skills 由 probe 证据机械消化生成，禁脱离证据空写。
 - **D-618**（2026-10-17）：坑处置分档固化——critical/high 级坑（生产事故/系统性病坑）直落 `docs/经验库/条目/` 正典+noxkb gen 同 commit，禁走待归纳 staging（staging 行不进索引=检索面半隐身，418 封禁事故坑实证）；medium/low 可 staging。修法根因：原私有记忆清扫条明文「坑→待归纳」把下限写成标准动作。复审注记坑处置字段引用条目 id 时即知档位（条目=正典、待归纳=staging）。
+
+## D-619（2026-10-18 业主令）可动用资产=USDT 单币域——非 USDT 持仓一律不碰
+
+- **业主令**：「我们只动用USDT，其他杂币种，不碰」——DOGE/PEPE/BTC 等非 USDT 持仓不部署、不转换、不申购、不作保证金；earn 既有持仓维持原状仅记账（收益归属照常入账=记账非动用）。
+- **裁定**：落 `fin_capability_constraint` #22（global/deployable_ccy=whitelist/flag=1，source=owner:session-1018）；请求箱 #81（binance:earn 持仓归属）以本令消解——份额系数无判定面消费场景，业主后续愿喂 ownership_share 键仅影响展示精度。
+- **现状对拍**：部署面天然 USDT 单币——perp 全 USDT 保证金、idle_gap earn 提案 `p.Currency!="USDT"` 即跳（idle_gap.go:47）、DCI USDT 计价、earn_rotation 处 dormant；**无自动化 dust 转换/alt 部署路径在册**——现行码面与本令一致，仅需新模板/venue 接入时复审闸核本约束。
+- **反证锚**：任何以非 USDT 资产计 sizing/申购/换仓的执行提案或落单=违本条——CheckBudget 前置闸与提案评审面凭此条拒。
