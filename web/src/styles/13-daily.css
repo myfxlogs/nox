@@ -1,0 +1,337 @@
+/* —— 个人持仓实账（财务线工作项 3：每日记录 + 浮动盈亏色） —— */
+/* 浮动盈亏色：正绿 / 负红（数值符号由 "-" 自身承载，状态色不带字面语义）。 */
+td.pos {
+  color: var(--good);
+}
+
+/* —— 盈亏总览卡（D-072 资金提醒弹窗提示词 A1）：净值大数字行 —— */
+.pnl-overview .pnl-net {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--ring);
+}
+.pnl-net-label {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.pnl-net-value {
+  font-size: 32px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pnl-net.pos .pnl-net-value {
+  color: var(--good);
+}
+.pnl-net.neg .pnl-net-value {
+  color: var(--delta-down);
+}
+/* D-123 真北行：30d 净年化 / 目标 ≥8%（净值行下小字口径行） */
+.pnl-overview .pnl-true-north {
+  margin-top: 4px;
+  font-size: 12px;
+}
+/* F8：踩坑库条目展开内容 */
+.kb-entry-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 12px;
+  background: var(--surface-2, #f5f5f5);
+  border-radius: 4px;
+  max-height: 60vh;
+  overflow-y: auto;
+  text-align: left; /* G2：正文左对齐（覆盖 table.rows td 全局右对齐） */
+}
+/* G2：kb 表正文列左对齐（覆盖 03-table-chip.css:28 table.rows td text-align:right）。
+   03-table-chip.css:28 选择器作用于全站 table.rows（Positions/Overview/Ledger/Knowledge
+   10 处），数值列依赖右对齐，收窄会破坏其他页 → kb-table 显式覆盖正文列左对齐。
+   数值/时间列保留右对齐（列语义）。 */
+table.rows.kb-table td {
+  text-align: left;
+}
+table.rows.kb-table td.mono,
+table.rows.kb-table td:nth-last-child(1) {
+  text-align: left; /* id/时间列在 kb 表是文本语义，左对齐 */
+}
+/* G1：旧知识行理由列默认收拢（1 行截断 + 展开交互，复用 <details> 零 JS 依赖） */
+.kb-rationale-details {
+  display: inline-block;
+  max-width: 100%;
+}
+.kb-rationale-summary {
+  cursor: pointer;
+  list-style: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+  display: inline-block;
+  color: var(--ink-1);
+  font-size: 12px;
+  -webkit-tap-highlight-color: transparent;
+}
+.kb-rationale-summary::-webkit-details-marker {
+  display: none;
+}
+.kb-rationale-summary::after {
+  content: " ▸";
+  color: var(--ink-3);
+  font-size: 10px;
+}
+/* H1 修复：展开后 summary 保持可见可点击（toggle 收拢），仅切换 marker ▸→▾。
+   原 display:none 隐藏了唯一可点击 toggle → 展开后无法收拢。 */
+.kb-rationale-details[open] .kb-rationale-summary::after {
+  content: " ▾";
+}
+.kb-rationale-full {
+  white-space: normal;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-1);
+  padding-top: 2px;
+}
+/* G2：kb 行正文左对齐（kb-row 类覆盖） */
+table.rows.kb-table tr.kb-row td {
+  text-align: left;
+}
+/* G2：kb 详情行正文左对齐 */
+table.rows.kb-table tr.kb-detail-row td {
+  text-align: left;
+}
+/* H2：踩坑库计数 + 过滤框工具条 */
+.kb-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0 4px;
+}
+.kb-count {
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.kb-filter-input {
+  flex: 1 1 240px;
+  min-width: 180px;
+  padding: 4px 8px;
+  font-size: 13px;
+  border: 1px solid var(--ring);
+  border-radius: 4px;
+  background: var(--surface, #fff);
+  color: var(--ink-1);
+}
+.kb-filter-input:focus {
+  outline: none;
+  border-color: var(--accent, #4a90d9);
+}
+/* H2：踩坑库列表区高度封顶卡内滚动（对拍 arbcn .scroll-cap，不分页不删数据） */
+.kb-list-scroll {
+  max-height: min(68vh, 520px);
+  overflow-y: auto;
+  border-top: 1px solid var(--ring);
+}
+@media (max-width: 600px) {
+  .kb-list-scroll {
+    max-height: min(52vh, 360px);
+  }
+}
+/* T3：Broker 页运维折叠区（映射 + 交易所配置，复用 details 模式） */
+.broker-ops-collapse {
+  margin-top: 16px;
+}
+.broker-ops-summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-1);
+  padding: 8px 0;
+  border-top: 1px solid var(--ring);
+  -webkit-tap-highlight-color: transparent;
+}
+.broker-ops-summary::-webkit-details-marker {
+  display: none;
+}
+.broker-ops-summary::after {
+  content: " ▸";
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.broker-ops-collapse[open] .broker-ops-summary::after {
+  content: " ▾";
+}
+.broker-ops-body {
+  padding-top: 8px;
+}
+/* P3 修复⑧：映射清单按 broker 分组折叠（每 broker 一个 details，复用 ▸/▾ marker 模式） */
+.map-group-collapse {
+  margin-top: 8px;
+}
+.map-group-summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-1);
+  padding: 6px 0;
+  border-top: 1px solid var(--ring);
+  -webkit-tap-highlight-color: transparent;
+}
+.map-group-summary::-webkit-details-marker {
+  display: none;
+}
+.map-group-summary::after {
+  content: " ▸";
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.map-group-collapse[open] .map-group-summary::after {
+  content: " ▾";
+}
+.map-group-body {
+  margin-top: 6px;
+}
+/* S2：映射清单 broker 内二级类别折叠 */
+.map-class-collapse {
+  margin-left: 16px;
+  margin-top: 4px;
+}
+.map-class-summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  color: var(--ink-2);
+  padding: 4px 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.map-class-summary::-webkit-details-marker {
+  display: none;
+}
+.map-class-summary::after {
+  content: " ▸";
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.map-class-collapse[open] .map-class-summary::after {
+  content: " ▾";
+}
+.map-class-summary .muted {
+  font-size: 11px;
+}
+.map-group-sym {
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  white-space: nowrap;
+}
+/* 未映射标的区块（缺口排前，红色高亮） */
+.map-group-unmapped {
+  margin-bottom: 8px;
+}
+.map-group-unmapped-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--critical);
+  margin: 4px 0 2px;
+}
+.map-class-summary-gap {
+  color: var(--critical);
+}
+
+/* —— D-212 对冲结构卡：carry 统计条 + 双账户摘要 —— */
+.hedge-carry {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-top: 1px dashed var(--ring);
+  border-bottom: 1px dashed var(--ring);
+}
+.hedge-carry-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: baseline;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.hedge-carry-row .muted {
+  min-width: 64px;
+}
+.hedge-accts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--ring);
+}
+.hedge-acct-block {
+  flex: 1 1 240px;
+  font-size: 13px;
+  line-height: 1.7;
+  /* D-236 变更5：两列 grid（余额|待领取、能量委托|票权、能量|带宽，年化整行） */
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 16px;
+}
+.hedge-acct-block h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  grid-column: 1 / -1; /* 标题跨双列 */
+}
+/* D-236 变更5：最后一个 div 跨双列（投票年化行；行序耦合——纯 CSS，无 JS 参与） */
+.hedge-acct-block > div:last-child {
+  grid-column: 1 / -1;
+}
+
+/* —— D-212 统一流水卡：筛选按钮组 + 表左对齐 —— */
+.hedge-flow-filter {
+  display: flex;
+  gap: 6px;
+}
+table.rows.hedge-flow-table th,
+table.rows.hedge-flow-table td {
+  text-align: left;
+}
+table.rows.hedge-flow-table td.mono {
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+/* D-254：TRX 账户手动刷新按钮。D-289：改 inline 紧跟标题文字（原 float:right 太远太不显眼）。 */
+.hedge-acct-block h3 .trx-refresh-btn {
+  margin-left: 6px;
+  padding: 0 6px;
+  font-size: 15px;
+  line-height: 1.4;
+  cursor: pointer;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: #2980b9;
+  vertical-align: middle;
+}
+.hedge-acct-block h3 .trx-refresh-btn:hover:not(:disabled) {
+  border-color: #2980b9;
+  background: rgba(41, 128, 185, 0.08);
+}
+.hedge-acct-block h3 .trx-refresh-btn:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+/* D-254：刷新旋转动画（pending 期间） */
+.refresh-spin {
+  display: inline-block;
+  animation: refresh-spin 1s linear infinite;
+}
+@keyframes refresh-spin {
+  to { transform: rotate(360deg); }
+}
