@@ -97,15 +97,18 @@ export default function WatchPage() {
             <li key={Number(r.id)} className="opp-card" style={{ opacity: r.enabled ? 1 : 0.45 }}>
               <div className="opp-card-head">
                 <span className="opp-card-kind">{r.subject}</span>
+                <Chip tone={r.level === "critical" ? "critical" : r.level === "info" ? "neutral" : "warn"}>{r.level || "warn"}</Chip>
                 <Chip tone={r.stale ? "critical" : r.enabled ? "good" : "neutral"}>
                   {r.stale ? "stale" : r.enabled ? "启用" : "停用"}
                 </Chip>
+                {!r.sourceMatched && <Chip tone="critical">源未配</Chip>}
                 <span className="opp-card-who">{r.venueKey || "全源"}</span>
               </div>
               <div className="opp-card-narrative">
                 mid {r.op} {r.threshold} · {r.fireMode}
                 {r.fireMode === "repeat" ? ` 冷却${r.cooldownSec}s` : ""}
                 {r.note ? ` · ${r.note}` : ""}
+                {r.message ? ` · 文案:${r.message}` : ""}
               </div>
               <div className="opp-card-narrative muted">
                 #{Number(r.id)} · 触发 {r.lastFiredTs > 0n ? new Date(Number(r.lastFiredTs) * 1000).toLocaleString() : "—"}
@@ -165,6 +168,28 @@ export default function WatchPage() {
                     onChange={(e) => setForm({ ...form, threshold: Number(e.target.value) })}
                   />{" "}
                   <span className="muted">mid 价基准</span>
+                </td>
+              </tr>
+              <tr>
+                <td>级别</td>
+                <td>
+                  <select value={form.level || "warn"} onChange={(e) => setForm({ ...form, level: e.target.value })}>
+                    <option value="info">info（仅记录）</option>
+                    <option value="warn">warn（默认）</option>
+                    <option value="critical">critical（飞书即推）</option>
+                  </select>{" "}
+                  <span className="muted">告警分级路由</span>
+                </td>
+              </tr>
+              <tr>
+                <td>文案</td>
+                <td>
+                  <input
+                    value={form.message}
+                    maxLength={200}
+                    onChange={(e) => setForm({ ...form, message: e.target.value })}
+                    placeholder="空=默认格式串；自定义如「TRX 到价补仓」"
+                  />
                 </td>
               </tr>
               <tr>

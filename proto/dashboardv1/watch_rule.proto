@@ -17,6 +17,9 @@ message WatchRule {
   optional bool enabled = 10; // presence：缺席=默认启用，显式 false 才可关（proto3 裸 bool 缺席=false 会生来死规则）
   int64 last_fired_ts = 11; // unix ts；0=未触发
   bool stale = 12;          // subject 最新报价超窗（服务侧对 qbus 判）
+  string level = 13;        // info|warn|critical（空=warn——arb price_alerts 能力归并，告警分级路由）
+  string message = 14;      // 自定义告警文案（空=引擎默认格式串）
+  bool source_matched = 15; // subject 在 QuoteBus 有源（读时计算非存储——防 typo 永不响）
 }
 
 message ListWatchRulesRequest {}

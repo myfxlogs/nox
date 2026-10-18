@@ -241,4 +241,5 @@ var migrationFiles = []struct {
 	{1046, migrations.EarnYieldFanoutReversalSQL, false}, // earn_yield 扇出假账冲正（镜像行对消，禁删史）
 	{1047, migrations.NavLivemapFixSQL, false},           // NAV liveMap 指纹注血腐败行清理（分币粒度修配套）
 	{1048, migrations.CmcTablesReturnSQL, false},         // CMC Markets 采集表族回归（fin_cmc_* 4 表+装配键种子）
+	{1049, migrations.WatchRuleUpgradeSQL, false},        // watch_rule 盯盘域升级（level/message——arb 能力归并）
 }

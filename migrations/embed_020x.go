@@ -148,3 +148,5 @@ var NavLivemapFixSQL string // NAV liveMap 指纹注血腐败行清理（分币�
 
 //go:embed 1048_cmc_tables.sql
 var CmcTablesReturnSQL string // CMC Markets 采集表族回归（M3 剔除后 TRX 页三区业主令复工）
+//go:embed 1049_watch_rule_upgrade.sql
+var WatchRuleUpgradeSQL string // watch_rule 盯盘域升级（level/message——arb price_alerts 能力归并，1003 裁废域不复活）

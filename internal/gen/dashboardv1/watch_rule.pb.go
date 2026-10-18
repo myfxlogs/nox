@@ -33,9 +33,12 @@ type WatchRule struct {
 	FireMode      string                 `protobuf:"bytes,7,opt,name=fire_mode,json=fireMode,proto3" json:"fire_mode,omitempty"` // once|repeat
 	CooldownSec   int32                  `protobuf:"varint,8,opt,name=cooldown_sec,json=cooldownSec,proto3" json:"cooldown_sec,omitempty"`
 	Note          string                 `protobuf:"bytes,9,opt,name=note,proto3" json:"note,omitempty"`
-	Enabled       *bool                  `protobuf:"varint,10,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"`                        // presence：缺席=默认启用，显式 false 才可关（proto3 裸 bool 缺席=false 会生来死规则）
-	LastFiredTs   int64                  `protobuf:"varint,11,opt,name=last_fired_ts,json=lastFiredTs,proto3" json:"last_fired_ts,omitempty"` // unix ts；0=未触发
-	Stale         bool                   `protobuf:"varint,12,opt,name=stale,proto3" json:"stale,omitempty"`                                  // subject 最新报价超窗（服务侧对 qbus 判）
+	Enabled       *bool                  `protobuf:"varint,10,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"`                            // presence：缺席=默认启用，显式 false 才可关（proto3 裸 bool 缺席=false 会生来死规则）
+	LastFiredTs   int64                  `protobuf:"varint,11,opt,name=last_fired_ts,json=lastFiredTs,proto3" json:"last_fired_ts,omitempty"`     // unix ts；0=未触发
+	Stale         bool                   `protobuf:"varint,12,opt,name=stale,proto3" json:"stale,omitempty"`                                      // subject 最新报价超窗（服务侧对 qbus 判）
+	Level         string                 `protobuf:"bytes,13,opt,name=level,proto3" json:"level,omitempty"`                                       // info|warn|critical（空=warn——arb price_alerts 能力归并，告警分级路由）
+	Message       string                 `protobuf:"bytes,14,opt,name=message,proto3" json:"message,omitempty"`                                   // 自定义告警文案（空=引擎默认格式串）
+	SourceMatched bool                   `protobuf:"varint,15,opt,name=source_matched,json=sourceMatched,proto3" json:"source_matched,omitempty"` // subject 在 QuoteBus 有源（读时计算非存储——防 typo 永不响）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -150,6 +153,27 @@ func (x *WatchRule) GetLastFiredTs() int64 {
 func (x *WatchRule) GetStale() bool {
 	if x != nil {
 		return x.Stale
+	}
+	return false
+}
+
+func (x *WatchRule) GetLevel() string {
+	if x != nil {
+		return x.Level
+	}
+	return ""
+}
+
+func (x *WatchRule) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *WatchRule) GetSourceMatched() bool {
+	if x != nil {
+		return x.SourceMatched
 	}
 	return false
 }
@@ -406,7 +430,7 @@ var File_dashboardv1_watch_rule_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_watch_rule_proto_rawDesc = "" +
 	"\n" +
-	"\x1cdashboardv1/watch_rule.proto\x12\x10nox.dashboard.v1\"\xcd\x02\n" +
+	"\x1cdashboardv1/watch_rule.proto\x12\x10nox.dashboard.v1\"\xa4\x03\n" +
 	"\tWatchRule\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
@@ -420,7 +444,10 @@ const file_dashboardv1_watch_rule_proto_rawDesc = "" +
 	"\aenabled\x18\n" +
 	" \x01(\bH\x00R\aenabled\x88\x01\x01\x12\"\n" +
 	"\rlast_fired_ts\x18\v \x01(\x03R\vlastFiredTs\x12\x14\n" +
-	"\x05stale\x18\f \x01(\bR\x05staleB\n" +
+	"\x05stale\x18\f \x01(\bR\x05stale\x12\x14\n" +
+	"\x05level\x18\r \x01(\tR\x05level\x12\x18\n" +
+	"\amessage\x18\x0e \x01(\tR\amessage\x12%\n" +
+	"\x0esource_matched\x18\x0f \x01(\bR\rsourceMatchedB\n" +
 	"\n" +
 	"\b_enabled\"\x17\n" +
 	"\x15ListWatchRulesRequest\"K\n" +
