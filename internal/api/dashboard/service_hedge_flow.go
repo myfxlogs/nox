@@ -20,7 +20,8 @@ func (s *Service) ListHedgeFlow(ctx context.Context, req *connect.Request[v1.Lis
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list hedge flow: %w", err))
 	}
-	resp := &v1.ListHedgeFlowResponse{}
+	total, _ := s.store.ListHedgeFlowCount(ctx, req.Msg.SourceFilter) // 计数败=如实零（txs 仍返——读面容错径）
+	resp := &v1.ListHedgeFlowResponse{Total: total}
 	for _, it := range items {
 		resp.Txs = append(resp.Txs, &v1.HedgeFlowItem{
 			Source:       it.Source,
