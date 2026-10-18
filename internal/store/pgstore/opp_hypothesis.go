@@ -59,7 +59,8 @@ func (s *Store) UpdateHypothesisMemo(ctx context.Context, id int64, familyFit, m
 func (s *Store) ListApprovedHypotheses(ctx context.Context) ([]OppHypothesis, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, venue, category_key, COALESCE(inst_type,''), COALESCE(shape,''),
-		       COALESCE(family_fit,''), COALESCE(detail,'')
+		       COALESCE(family_fit,''), COALESCE(detail,''),
+		       COALESCE(params_proto::text,'')
 		FROM fin_opp_hypothesis WHERE status='approved' ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("list approved hypotheses: %w", err)
@@ -68,10 +69,12 @@ func (s *Store) ListApprovedHypotheses(ctx context.Context) ([]OppHypothesis, er
 	var out []OppHypothesis
 	for rows.Next() {
 		var h OppHypothesis
+		var proto string
 		if err := rows.Scan(&h.ID, &h.Venue, &h.CategoryKey, &h.InstType,
-			&h.Shape, &h.FamilyFit, &h.Detail); err != nil {
+			&h.Shape, &h.FamilyFit, &h.Detail, &proto); err != nil {
 			return nil, err
 		}
+		h.ParamsProto = []byte(proto)
 		out = append(out, h)
 	}
 	return out, rows.Err()
