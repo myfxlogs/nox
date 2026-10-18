@@ -74,7 +74,7 @@ func xferScan(ctx context.Context, st *pgstore.Store) {
 		if p.Ghost {
 			continue
 		}
-		eq, ok := lm.poolEquity(p.Venue, p.VenueType, p.Equity, "[xfer]") // 无流池实拉
+		eq, ok := lm.poolEquity(p.Venue, p.VenueType, p.Currency, p.Equity, "[xfer]") // 无流池实拉（分币键）
 		if !ok || eq <= 0 {
 			continue // 拉败/映射缺=如实跳过（禁显示陈值）
 		}

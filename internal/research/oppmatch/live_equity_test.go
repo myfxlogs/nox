@@ -14,35 +14,46 @@ import (
 
 // TestLivePoolEquity D-604 P2③ 锚：无流池拉败跳过（warn 留痕）/映射缺跳过/
 // 有流池快照直返/mt 池不拉/未接线旧径——五态钉死「禁显示陈值禁静默」。
+// 分币粒度修复增⑥⑦：键=venue:type:ccy——同 venue:type 异币种各取各值，
+// 未持币种映射缺跳过（MULTI 户指纹禁入映射=NAV 指纹票锚）。
 func TestLivePoolEquity(t *testing.T) {
 	defer func() { liveEquityMapFn = nil }()
 	ctx := context.Background()
 	// ①无钩=快照直返（保旧语义）
 	lm := fetchLiveEquityMap(ctx)
-	if v, ok := lm.poolEquity("gate", "spot", 100, "[t]"); !ok || v != 100 {
+	if v, ok := lm.poolEquity("gate", "spot", "USDT", 100, "[t]"); !ok || v != 100 {
 		t.Fatalf("无钩：%v %v", v, ok)
 	}
 	// ②mt 池不拉（快照直返——mt 快照流合法面）
 	liveEquityMapFn = func(ctx context.Context) (map[string]float64, error) {
-		return map[string]float64{"gate:spot": 500}, nil
+		return map[string]float64{"gate:spot:USDT": 500}, nil
 	}
 	lm = fetchLiveEquityMap(ctx)
-	if v, ok := lm.poolEquity("3001157", "mt5", 100, "[t]"); !ok || v != 100 {
+	if v, ok := lm.poolEquity("3001157", "mt5", "USD", 100, "[t]"); !ok || v != 100 {
 		t.Fatalf("mt 池误拉：%v %v", v, ok)
 	}
 	// ③无流池拉中→实拉值
-	if v, ok := lm.poolEquity("gate", "spot", 100, "[t]"); !ok || v != 500 {
+	if v, ok := lm.poolEquity("gate", "spot", "USDT", 100, "[t]"); !ok || v != 500 {
 		t.Fatalf("无流池实拉：%v %v", v, ok)
 	}
 	// ④拉败→跳过（ok=false）
 	lm = liveEquityMap{err: fmt.Errorf("rpc timeout")}
-	if _, ok := lm.poolEquity("gate", "spot", 100, "[t]"); ok {
+	if _, ok := lm.poolEquity("gate", "spot", "USDT", 100, "[t]"); ok {
 		t.Fatal("拉败应跳过（ok=false）")
 	}
 	// ⑤映射缺→跳过
 	lm = liveEquityMap{m: map[string]float64{}}
-	if _, ok := lm.poolEquity("gate", "spot", 100, "[t]"); ok {
+	if _, ok := lm.poolEquity("gate", "spot", "USDT", 100, "[t]"); ok {
 		t.Fatal("映射缺应跳过")
+	}
+	// ⑥分币键各取各值（MULTI 户形态：binance:earn 两币种池）
+	lm = liveEquityMap{m: map[string]float64{"binance:earn:USDT": 1592, "binance:earn:DOGE": 52886}}
+	if v, ok := lm.poolEquity("binance", "earn", "DOGE", 0, "[t]"); !ok || v != 52886 {
+		t.Fatalf("分币键 DOGE：%v %v", v, ok)
+	}
+	// ⑦未持币种映射缺→跳过（venue:type 存在但该 ccy 键无=如实 0 非陈值）
+	if _, ok := lm.poolEquity("binance", "earn", "BTC", 999, "[t]"); ok {
+		t.Fatal("未持币种应跳过（非快照陈值回退）")
 	}
 }
 
@@ -54,12 +65,12 @@ func TestLiveEquityMap_OncePerPass(t *testing.T) {
 	calls := 0
 	liveEquityMapFn = func(ctx context.Context) (map[string]float64, error) {
 		calls++
-		return map[string]float64{"gate:spot": 500, "okx:funding": 300}, nil
+		return map[string]float64{"gate:spot:USDT": 500, "okx:funding:USDT": 300}, nil
 	}
 	lm := fetchLiveEquityMap(ctx)
-	for _, tc := range [][3]string{{"gate", "spot", "1"}, {"okx", "funding", "2"}, {"gate", "spot", "3"}} {
-		if _, ok := lm.poolEquity(tc[0], tc[1], 0, "[t]"); !ok {
-			t.Fatalf("poolEquity %s:%s 应命中", tc[0], tc[1])
+	for _, tc := range [][4]string{{"gate", "spot", "USDT", "1"}, {"okx", "funding", "USDT", "2"}, {"gate", "spot", "USDT", "3"}} {
+		if _, ok := lm.poolEquity(tc[0], tc[1], tc[2], 0, "[t]"); !ok {
+			t.Fatalf("poolEquity %s:%s:%s 应命中", tc[0], tc[1], tc[2])
 		}
 	}
 	if calls != 1 {
@@ -97,7 +108,7 @@ func TestXferScan_LivePulled(t *testing.T) {
 	}
 	// 快照 equity=50（尘额下）；实拉 map=750——提案金额须取实拉值。
 	liveEquityMapFn = func(ctx context.Context) (map[string]float64, error) {
-		return map[string]float64{"lvgate:spot": 750}, nil
+		return map[string]float64{"lvgate:spot:USDT": 750}, nil
 	}
 	xferScan(ctx, st)
 	var txt string

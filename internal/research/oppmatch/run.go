@@ -54,7 +54,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 			if b.VenueType == "mt4" || b.VenueType == "mt5" {
 				continue
 			}
-			if eq, ok := lm.poolEquity(b.Venue, b.VenueType, b.EquityRaw, "[oppmatch]"); ok {
+			if eq, ok := lm.poolEquity(b.Venue, b.VenueType, b.Currency, b.EquityRaw, "[oppmatch]"); ok {
 				led.Buckets[i].EquityRaw = eq
 			} else {
 				led.Buckets[i].EquityRaw = 0 // 拉败=0 如实缺非陈值

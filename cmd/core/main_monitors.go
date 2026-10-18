@@ -48,17 +48,11 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 	acctMon := dashboard.NewAccountMonitor(brokerMgr, acctTopic) // D-571 包B：事件化（ticker 死净）
 	acctMon.SetExchangeStore(st)                                 // D-054：CEX 交易所后台增删/改 key → 定向 kick/Refresh 生效，不重启
 	// D-604 P2③：无流池消费点实拉钩——oppmatch 扫描拍/budget 日切拍内单次
-	// Refresh→venue:type→equity 映射（拉败=池跳过+warn 留痕；禁 TTL 变相快照）。
+	// Refresh→venue:type:ccy→equity 映射（拉败=池跳过+warn 留痕；禁 TTL 变相快照）。
+	// 分币粒度修复：MULTI 户（earn 族）Equity=Σqty 指纹不入 map——分币键取
+	// Holdings 原生量（live_equity_map.go）。
 	liveMapFn := func(ctx context.Context) (map[string]float64, error) {
-		accs := acctMon.Refresh(ctx)
-		m := map[string]float64{}
-		for _, a := range accs {
-			if a == nil {
-				continue
-			}
-			m[a.Venue+":"+a.VenueType] = a.Equity
-		}
-		return m, nil
+		return liveEquityMapFromAccounts(acctMon.Refresh(ctx)), nil
 	}
 	oppmatch.SetLiveEquityMapFn(liveMapFn)
 	budget.SetLiveEquityMapFn(liveMapFn)
