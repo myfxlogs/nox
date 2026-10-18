@@ -246,7 +246,9 @@ func (a *MT5Adapter) Subscribe(symbols []string) (<-chan bus.Quote, func()) {
 	ch := make(chan bus.Quote, 16)
 	ctx, cancel := context.WithCancel(a.stopCtx)
 	a.saveSubSet(symbols)
-	safego.Go("mt5:quoteStream", func() { a.runQuoteStream(ctx, ch) })
+	// resubscribeCallTimeout 同步径捕获（goroutine 零读包级 var——
+	// CI race run 39031772519：测试 defer 写回 vs resubscribeAll 读竞点）。
+	safego.Go("mt5:quoteStream", func() { a.runQuoteStream(ctx, ch, resubscribeCallTimeout) })
 	return ch, cancel
 }
 

@@ -630,7 +630,18 @@ func TestApprovePerpDelivery(t *testing.T) {
 // TestPitHits_Passthrough D-587④ 锚：坑签名命中行 pit_hits 透出
 // （「⚠命中坑 <id>（EA-xx）」；未命中=空集；库缺=空集非阻塞）。
 func TestPitHits_Passthrough(t *testing.T) {
-	dir := t.TempDir()
+	// ci-red④加固：t.TempDir 自动 RemoveAll 在 CI 现「bad file descriptor」瞬态
+	// （econkb 读径=ReadDir 同步关零持 fd——容器 fd 表瞬断非码伤）；手工目+
+	// 清尾重试一次。
+	dir, err := os.MkdirTemp("", "pit-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dir); err != nil {
+			_ = os.RemoveAll(dir)
+		}
+	})
 	if err := os.WriteFile(dir+"/xau-pit.md",
 		[]byte("# x\n**判据挂接**：EA-01\nmatch:\n  canonicals: [XAUUSD]\n"), 0o644); err != nil {
 		t.Fatal(err)

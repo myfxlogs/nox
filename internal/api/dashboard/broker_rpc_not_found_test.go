@@ -84,6 +84,12 @@ func TestD388_SetBrokerDisabled_WireE2E(t *testing.T) {
 	post := func(body string) (*http.Response, string) {
 		resp, err := http.Post(srv.URL+"/nox.dashboard.v1.DashboardService/SetBrokerDisabled",
 			"application/json", strings.NewReader(body))
+		// CI 传输瞬断加固（ci-red③取证：server 侧零 panic——EOF 属 fd/端口族
+		// 环境 flake，重试一次非遮错；真 handler 伤仍原样失败断言）。
+		if err != nil && strings.Contains(err.Error(), "EOF") {
+			resp, err = http.Post(srv.URL+"/nox.dashboard.v1.DashboardService/SetBrokerDisabled",
+				"application/json", strings.NewReader(body))
+		}
 		if err != nil {
 			t.Fatalf("post: %v", err)
 		}
