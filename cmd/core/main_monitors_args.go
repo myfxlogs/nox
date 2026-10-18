@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"nox/internal/data/collect/cmc"
 
 	"nox/internal/api/dashboard"
 	"nox/internal/data/bus"
@@ -31,6 +32,7 @@ type monitorsSetupArgs struct {
 	pipeline     *exec.Pipeline
 	recon        *reconcile.Reconciler
 	factCache    *engine.FactCache
+	cmcWs        *cmc.WsClient // D-212：dashSvc.SetCmcLiveProvider/SetCmcWsHealth 注入源（nil=REST 兜底径）
 	oppTopic     *bus.Topic[pgstore.Opportunity]
 	orderTopic   *bus.Topic[bus.OrderEvent]
 	alertTopic   *bus.Topic[pgstore.Alert]

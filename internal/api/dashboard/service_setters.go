@@ -4,6 +4,7 @@ package dashboard
 
 import (
 	"context"
+	"nox/internal/data/collect/cmc"
 	"time"
 
 	"nox/internal/data/bus"
@@ -206,3 +207,10 @@ func (s *Service) SetEconSources(posFn func(ctx context.Context, posID int64) (e
 	entryFn func(ctx context.Context, venueBuy, venueSell, canonBuy, canonSell string, legNotionalUSD float64) (float64, bool)) {
 	s.econPosFn, s.econEntryFn = posFn, entryFn
 }
+
+// SetCmcLiveProvider D-236 变更9：注入 CMC ws LiveState 快照提供者
+// （main 装配 ws.LiveState；nil=未接线→freshLive 全走 DB 兜底径）。
+func (s *Service) SetCmcLiveProvider(fn func() cmc.LiveState) { s.cmcLiveProvider = fn }
+
+// SetCmcWsHealth D-193-A/R9：注入 CMC ws 事件驱动健康检查（main 装配 ws.IsHealthy）。
+func (s *Service) SetCmcWsHealth(fn func() bool) { s.cmcWsHealth = fn }

@@ -169,3 +169,27 @@ func (s *Store) ListCMCHistory(ctx context.Context, accountID int64, limit int) 
 	}
 	return out, rows.Err()
 }
+
+// SumCMCOvernightByRange D-212：区间隔夜息合计（fin_cmc_history
+// transaction_type='OVERNIGHT_SETTLEMENT' 的 amount 和——负=支出照原值）。
+// from/to nil=不设界。
+func (s *Store) SumCMCOvernightByRange(ctx context.Context, from, to *time.Time) (float64, error) {
+	var sum float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(amount),0) FROM fin_cmc_history
+		WHERE transaction_type = 'OVERNIGHT_SETTLEMENT'
+		  AND ($1::timestamptz IS NULL OR transaction_time >= $1::timestamptz)
+		  AND ($2::timestamptz IS NULL OR transaction_time <= $2::timestamptz)
+	`, from, to).Scan(&sum)
+	return sum, err
+}
+
+// FirstCMCPositionOpenedAt D-236 变更15：最早空单开仓时刻（对冲后 carry 窗起点）。
+// 空表→nil（未建对冲——回落结构累计同值语义）。
+func (s *Store) FirstCMCPositionOpenedAt(ctx context.Context) (*time.Time, error) {
+	var t *time.Time
+	err := s.pool.QueryRow(ctx, `
+		SELECT MIN(opened_at) FROM fin_cmc_positions WHERE opened_at IS NOT NULL
+	`).Scan(&t)
+	return t, err
+}
