@@ -144,3 +144,13 @@
 - **残差 critical=真双计**：earn 申购 io+订单腿双径（第三案异键双写）→修件票立；JIT 半程残留票立；okx unified 映射缺票立。
 - **TrxWatchCard kind 漏传**修复+本机构镜像部署（SG npm buf 装败+compose cpus:8 超 4 核——部署须 `-f sg` override）。
 - **TRX 盯盘定参**：subject=TRXUSD venue_key=cmc（cmc_price 流实证）。
+
+## 2026-10-18 23:2xZ — 双席合一四票收口 + 假设#5 喂参入册
+
+业主令：「复审席位不在线，你做复审和决策吧，一起做了」——本会话双席合一，四票（earn-io-dedup/jit-residual/tradifi-axis-key/okx-pool-map）diff 读+机检独立重跑+并入+SG 部署验收一并完成。
+
+- 并入：3911efc2c/72a0cb689/eca3934fc/6b93a09be；master 全检 1272 测试+race 139 绿。
+- 部署：本机镜像→SG load→sg override 重启；SG 实拍验收。
+- 决策席喂参（D-624 前置仍闭）：假设#5 params_proto={15032313,US500,short,SPCXUSD1}——裸 SQL 写（params 面无 RPC 写径=机制缺口挂注）；桥过轴闸→combo#20 白名单入册+trialing+告警#2018 带令。试单授权另闸未开。
+- 纠偏实证：okx:earn 实持 $2128 USDT（计息行递增）——「okx 全所≈0」实为交易面≈0。
+- 残留：okx:unified:USDT 映射缺 warn=真零值池+尘阈滤行（语义正确不追修）；SPCXUSD1 depth 400/65s=TradFi perp orderbook 采集轴缺（D-624 观察挂）。
