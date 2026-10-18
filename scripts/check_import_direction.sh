@@ -75,6 +75,9 @@ internal/data/collect/exchange -> internal/platform/httpx
 internal/data/collect/exchange -> internal/platform/safego
 internal/data/collect/exchange -> internal/platform/signutil
 internal/data/collect/exchange -> internal/store/pgstore
+internal/data/collect/cmc -> internal/data/fact
+internal/data/collect/cmc -> internal/platform/safego
+internal/data/collect/cmc -> internal/store/pgstore
 internal/data/collect/trx -> internal/data/fact
 internal/data/collect/trx -> internal/store/pgstore
 internal/data/macro -> internal/platform/safego

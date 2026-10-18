@@ -148,16 +148,16 @@ func main() {
 	// D-177 报价量级校验：wildcard 订阅，首条报价触发，量级不符自动隔离
 	safego.Go("main:quoteGuard", func() { bus.NewQuoteGuard(qbus, st, brokerMgr.ReloadSymbolMap).Run(ctx) })
 
-	// 5b. 轮询 Fact 源启动（CEX funding + MT swap + TRX 质押；CMC 域随族件剔除不搬）。
-	// D-231 S5：hedgeTopic 对冲结构刷新通知总线（TRX 投票/质押/余额变化 → StreamUpdates case 12）。
+	// 5b. 轮询 Fact 源启动（CEX funding + MT swap + TRX 质押 + CMC Markets——1048 回归）；D-231 S5 hedgeTopic=对冲刷新总线（TRX 变化→case 12）。
 	hedgeTopic := bus.NewTopic[struct{}]()
 	trxW := buildTrxCollectors(ctx, st, hedgeTopic, refreshTopic, cfg, secRes)
 	var trxSources []collect.Named
 	if trxW != nil {
 		trxSources = trxW.sources
 	}
-	sources := append(append([]collect.Named{}, cexCollectors...), trxSources...) // D-211 TRX + D-231 S5 hedgeTopic（D-237 CN-FI/D-266 repo 已随 D-139 摘除）
-	sources = append(sources,                                                     // mt_swap 依赖 brokerMgr.SwapFacts（D-036）
+	cmcSources, _ := buildCmcCollectors(ctx, st, cfg, secRes)                                            // 凭据缺=内部优雅降级 nil+缺口落箱
+	sources := append(append(append([]collect.Named{}, cexCollectors...), trxSources...), cmcSources...) // D-211 TRX + CMC（D-237/D-266 已随 D-139 摘除）
+	sources = append(sources,                                                                            // mt_swap 依赖 brokerMgr.SwapFacts（D-036）
 		collect.Named{Name: "mt_swap", Interval: cfg.SwapRefresh, Collector: &collect.MTSwapCollector{Fetch: brokerMgr.SwapFacts}},
 		collect.Named{Name: "mt_sessions", Interval: 24 * time.Hour, PollTimeout: 120 * time.Second, Collector: &collect.MTSessionsCollector{Fetch: brokerMgr.SessionsFacts}}, // D-029 ①：周表静态每日刷新（首拍立即；brokerMgr 聚合静态适配器源）
 		// D-140 S2：MT5 符号元数据采集（CS 自动来源，1h 低频）+ meta sink 反哺

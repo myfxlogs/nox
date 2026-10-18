@@ -145,3 +145,6 @@ var EarnYieldFanoutReversalSQL string // earn_yield 扇出假账冲正（镜像�
 
 //go:embed 1047_nav_livemap_fix.sql
 var NavLivemapFixSQL string // NAV liveMap 指纹注血腐败行清理（分币粒度修配套）
+
+//go:embed 1048_cmc_tables.sql
+var CmcTablesReturnSQL string // CMC Markets 采集表族回归（M3 剔除后 TRX 页三区业主令复工）

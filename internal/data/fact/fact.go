@@ -28,6 +28,9 @@ const (
 	KindMTSymbolMeta      = "mt_symbol_meta"      // MT5 符号元数据（UnitContractSize，D-140 S2 CS 自动来源）
 	KindMTSymbolMargin    = "mt_symbol_margin"    // MT5 品种级保证金率（UnitRatio，D-142 ③ 品种级优先账户级回落）
 	KindMTSymbolProduct   = "mt_symbol_product"   // MT5 CalcMode 产品类型（UnitCalcMode，D-173 product_group 反哺）
+	KindCMCPrice          = "cmc_price"           // CMC Markets 报价（UnitPrice，fin_cmc_prices 同源）
+	KindCMCAccount        = "cmc_account"         // CMC Markets 账户价值（UnitUSD）
+	KindCMCHistory        = "cmc_history"         // CMC Markets 隔夜利息结算（UnitUSD）
 	KindEgressCanary      = "egress_canary"       // D-104 本机出口 canary（UnitCount，值=三锚通过数 0..3）
 )
 
