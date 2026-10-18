@@ -255,6 +255,7 @@ func (b *BinanceUserWS) runOnce(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("read: %w", err)
 		}
+		dephealth.MarkFrameOK(b.depKey()) // D-109 R1③：用户流帧到喂 dephealth（节流件内建 1/min/键）——存活判据=帧戳前移非连接戳
 		if b.handleFrame(ctx, data) {
 			return fmt.Errorf("listenKeyExpired")
 		}
