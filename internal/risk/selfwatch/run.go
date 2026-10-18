@@ -10,6 +10,7 @@ import (
 	"log"
 	"time"
 
+	"nox/internal/platform/alerttext"
 	"nox/internal/platform/safego"
 )
 
@@ -105,15 +106,9 @@ func anomalyLoop(ctx context.Context, d Deps) {
 	}
 }
 
-// seatDispatchLine D-622：需席位动作的告警末行固定嵌可转发开工令（与复审收口转交词
-// 同构——固定末位=缺席立辨，业主复制粘贴即派发；仅提示词载体，系统不代执行、
-// 不做可点击执行）。泛化面：fin_condition_gap 推送等需动作告警模板同法引入。
-func seatDispatchLine(role, goal string) string {
-	return fmt.Sprintf("\n[角色:%s] %s", role, goal)
-}
-
-// liveGateRenewDispatch D-622 首件：LIVE 时效告警（warn/critical）末行的决策席开工令。
-var liveGateRenewDispatch = seatDispatchLine("决策",
+// liveGateRenewDispatch D-622 首件：LIVE 时效告警（warn/critical）末行的决策席开工令
+// （组装单点=alerttext.SeatDispatchLine，D-622 泛化面票起 pgstore 请求箱推送共用）。
+var liveGateRenewDispatch = alerttext.SeatDispatchLine("决策",
 	"LIVE 授权续权（读 STATE 本行——核 readiness+30d 运营实况→GrantLive 续权）")
 
 // checkLiveGateExpiry D-620⑧：LIVE 授权时效行——mode=LIVE 且剩<24h warn once、
