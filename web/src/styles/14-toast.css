@@ -1,0 +1,73 @@
+/* —— 资金注入提醒弹窗（D-072）：置顶堆叠，不自动消失，需手动关闭，告警色 —— */
+.fund-need-stack {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(440px, calc(100vw - 32px));
+}
+.fund-need-toast {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--warn);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+}
+.fund-need-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fund-need-type {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--warn);
+}
+.fund-need-close {
+  flex: none;
+  background: none;
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.fund-need-close:hover {
+  color: var(--ink);
+}
+.fund-need-canonical {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+.fund-need-reason {
+  font-size: 12px;
+  color: var(--ink-2);
+  word-break: break-all;
+}
+.fund-need-action {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--warn);
+  font-variant-numeric: tabular-nums;
+}
+/* D-072 铃铛治理 B：弹窗可点击跳转样式 */
+.fund-need-clickable {
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.fund-need-clickable:hover {
+  border-color: var(--good);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.22);
+}

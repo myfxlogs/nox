@@ -8,6 +8,7 @@ import { client } from "./api";
 import { NOX_NAME } from "./nox";
 import { Chip } from "./components/Chip";
 import { AnalystDrawer } from "./components/AnalystDrawer";
+import { FundingNeedToast } from "./components/FundingNeedToast";
 import LoginPage from "./pages/login";
 import OverviewPage from "./pages/overview";
 import PositionsPage from "./pages/positions";
@@ -40,6 +41,7 @@ import "./styles/12-nox-shell.css";
 import "./styles/20-semantic.css";
 import "./styles/15-analyst.css";
 import "./styles/10-broker.css";
+import "./styles/14-toast.css";
 
 // S2c 左导航两组分排（业主令 10-16）：门面=总览/投资人/持仓；
 // 运维=账户/风控/观察/资金/DCI/报告/设置（盯盘归运维观察面）。
@@ -194,6 +196,7 @@ function App() {
         <El />
       </div>
       <AnalystDrawer open={analystOpen} onClose={() => setAnalystOpen(false)} page={path} />
+      <FundingNeedToast />
     </main>
   );
 }
