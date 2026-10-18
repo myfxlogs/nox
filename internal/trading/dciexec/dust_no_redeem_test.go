@@ -29,7 +29,7 @@ func TestD203_DustNoRedeem(t *testing.T) {
 	}))
 	defer srv.Close()
 	spot := 0.0068 * (1 - 5e-7) // 池=现货 0.0068（赚币 0），现货差 5e-7 相对=尘埃
-	e := &Executor{SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
 		Client: srv.Client(), Now: time.Now,
 		PriceFn: func(context.Context, string) (float64, error) { return 100000, nil },
 		BalanceFn: func(context.Context, string) (float64, error) {
@@ -63,7 +63,7 @@ func TestD203_RedeemEchoAndSkip(t *testing.T) {
 		fmt.Fprint(w, `{}`)
 	}))
 	defer srv.Close()
-	e := &Executor{SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
 		Client: srv.Client(), Now: time.Now,
 		PriceFn:   func(context.Context, string) (float64, error) { return 100000, nil },
 		BalanceFn: func(context.Context, string) (float64, error) { return 0.001, nil },
@@ -80,7 +80,7 @@ func TestD203_RedeemEchoAndSkip(t *testing.T) {
 		t.Fatalf("回声缺：%v", err)
 	}
 	// redeemShortfall 跳行单元锚：productId 空+NaN 量+locked 三跳行→notes 齐。
-	e3 := &Executor{SigmaFn: testSigma, Now: time.Now,
+	e3 := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Now: time.Now,
 		EarnFn: func(context.Context, string) ([]EarnPosition, error) {
 			return []EarnPosition{
 				{ProductID: "", Amount: 0.5},
@@ -97,7 +97,7 @@ func TestD203_RedeemEchoAndSkip(t *testing.T) {
 	}
 	// 跳行 note 场景：全行被跳→holding gap 带 note。
 	fs2 := newFake()
-	e2 := &Executor{SigmaFn: testSigma, Store: fs2, BnKey: "k", BnSec: "s", Sapi: srv.URL,
+	e2 := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: fs2, BnKey: "k", BnSec: "s", Sapi: srv.URL,
 		Client: srv.Client(), Now: time.Now,
 		PriceFn:   func(context.Context, string) (float64, error) { return 100000, nil },
 		BalanceFn: func(context.Context, string) (float64, error) { return 0.001, nil },
@@ -118,7 +118,7 @@ func TestD203_NoTypeFast(t *testing.T) {
 		fmt.Fprint(w, `{"success":true}`)
 	}))
 	defer srv.Close()
-	e := &Executor{SigmaFn: testSigma, BnKey: "k", BnSec: "s", Sapi: srv.URL, Client: srv.Client(), Now: time.Now}
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, BnKey: "k", BnSec: "s", Sapi: srv.URL, Client: srv.Client(), Now: time.Now}
 	if err := e.redeemFlexible(context.Background(), "P1", 0.01); err != nil {
 		t.Fatal(err)
 	}

@@ -46,8 +46,7 @@ func probeAnalystRO(ctx context.Context, st *pgstore.Store) error {
 
 // startSelfwatch 启动自盯 goroutine。feishu 未启用时仍跑（推送静默跳过，
 // 报告照常落 alerts+docs/报告/+日志——缺发送目标不等于缺报告）。
-func startSelfwatch(ctx context.Context, st *pgstore.Store, feishu *notify.FeishuClient, capitalBaseUSD float64) {
-	cp := gate.NewControlPlane(st)
+func startSelfwatch(ctx context.Context, st *pgstore.Store, feishu *notify.FeishuClient, capitalBaseUSD float64, cp *gate.ControlPlane) {
 	safego.Go("main:selfwatch", func() {
 		selfwatch.Run(ctx, selfwatch.Deps{
 			Store: st,
@@ -57,10 +56,11 @@ func startSelfwatch(ctx context.Context, st *pgstore.Store, feishu *notify.Feish
 			Weekly: func(ctx context.Context, now time.Time) (string, error) {
 				return autotrade.BuildRiskReport(ctx, st, cp, capitalBaseUSD, now)
 			},
-			KillActive:  cp.IsKillSwitchActive,
-			CapitalBase: capitalBaseUSD,
-			Notify:      feishu,
-			ChatID:      st.FeishuChatID,
+			KillActive:     cp.IsKillSwitchActive,
+			LiveGateStatus: cp.LiveGateStatus,
+			CapitalBase:    capitalBaseUSD,
+			Notify:         feishu,
+			ChatID:         st.FeishuChatID,
 			// D-059 ②：analyst 只读链路探针（热读 app_secrets 真值——boot cfg 是快照，
 			// 凭据轮换后未重启也能探到库内最新 DSN 的真实连通性）。
 			ProbeAnalystRO: func(ctx context.Context) error {

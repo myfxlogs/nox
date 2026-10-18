@@ -50,7 +50,7 @@ func (s *Store) GetActiveLiveGate(ctx context.Context, scopeType, scopeKey strin
 	return &g, nil
 }
 
-// InsertLiveGate D-195-C1：插入 LiveGate 记录（步骤 6 PilotApproval 调用，步骤 5 不调用）。
+// InsertLiveGate D-620：插入 LiveGate 记录——生产径走 GrantLiveGate 单事务版（本裸插仅供测试）。
 func (s *Store) InsertLiveGate(ctx context.Context, g *LiveGate) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO live_gates (scope_type, scope_key, account_key, strategy, operator,

@@ -2,7 +2,9 @@ package gate
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"nox/internal/store/pgstore"
 )
@@ -185,5 +187,107 @@ func TestControlPlane_AutotradeStateCannotElevate(t *testing.T) {
 	}
 	if allowed {
 		t.Errorf("allowed=true, want false (autotrade_state=RUNNING 不能提升 READ_ONLY)")
+	}
+}
+
+// ---- D-620 T1：LIVE 真金单闸（GrantLive/撤权/续权/过期/readiness）----
+
+func setupLiveCP(t *testing.T, ready bool) (*pgstore.Store, *ControlPlane) {
+	t.Helper()
+	s := setupControlPlaneStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE live_gates`); err != nil {
+		t.Fatalf("truncate live_gates: %v", err)
+	}
+	cp := NewControlPlane(s)
+	cp.SetLiveGateChecker(NewLiveGateChecker(s, func(context.Context) bool { return ready }, "live"))
+	return s, cp
+}
+
+// TestControlPlane_GrantLive D-620 T1：授权→mode=LIVE+active 行+事件；
+// 降级/kill 撤权；续权不撞键；过期/readiness=false 拒。
+func TestControlPlane_GrantLive(t *testing.T) {
+	s, cp := setupLiveCP(t, true)
+	ctx := context.Background()
+	exp := time.Now().Add(30 * 24 * time.Hour)
+
+	// SetMode("LIVE") 直调=错（grant-only）。
+	if err := cp.SetMode(ctx, ModeLive, "t", "t"); err == nil {
+		t.Fatal("SetMode(LIVE) want error")
+	}
+	// expires_at 过去→错且零行。
+	if err := cp.GrantLive(ctx, "op", "r", "D-620", time.Now().Add(-time.Second)); err == nil {
+		t.Fatal("GrantLive 过去 expires: want error")
+	}
+	if g, _ := cp.ActiveLiveGate(ctx); g != nil {
+		t.Fatal("过期 Grant 后 live_gates 应为零行")
+	}
+	// Grant 成功→mode=LIVE+active 行+事件 to_mode=LIVE。
+	if err := cp.GrantLive(ctx, "op1", "首授", "D-620", exp); err != nil {
+		t.Fatalf("GrantLive: %v", err)
+	}
+	mode, allowed, _, err := cp.CheckGate(ctx)
+	if err != nil || mode != ModeLive || !allowed {
+		t.Fatalf("post-grant CheckGate: mode=%s allowed=%v err=%v", mode, allowed, err)
+	}
+	g, _ := cp.ActiveLiveGate(ctx)
+	if g == nil || g.Operator != "op1" {
+		t.Fatalf("active live_gates 行缺或 operator 错: %+v", g)
+	}
+	var evCnt int
+	if err := s.Pool().QueryRow(ctx, `SELECT count(*) FROM execution_control_events WHERE to_mode='LIVE'`).Scan(&evCnt); err != nil || evCnt == 0 {
+		t.Fatalf("to_mode=LIVE 事件行缺: %d %v", evCnt, err)
+	}
+	// 降级即撤权：SetMode(PAPER)→live_gates revoked 非空+mode=PAPER。
+	if err := cp.SetMode(ctx, ModePaper, "op1", "降级"); err != nil {
+		t.Fatalf("SetMode(PAPER): %v", err)
+	}
+	if g, _ := cp.ActiveLiveGate(ctx); g != nil {
+		t.Fatal("降级后仍有 active live_gates 行（撤权未生效）")
+	}
+	var rvCnt int
+	if err := s.Pool().QueryRow(ctx, `SELECT count(*) FROM live_gates WHERE revoked_at IS NOT NULL`).Scan(&rvCnt); err != nil || rvCnt != 1 {
+		t.Fatalf("revoked 行应为 1: %d %v", rvCnt, err)
+	}
+	// kill 后再 Grant 成功（部分唯一索引不撞键：active 1+revoked ≥1）。
+	if err := cp.GrantLive(ctx, "op2", "续权", "D-620-续", exp); err != nil {
+		t.Fatalf("续权 GrantLive: %v", err)
+	}
+	var actCnt int
+	if err := s.Pool().QueryRow(ctx, `SELECT count(*) FROM live_gates WHERE revoked_at IS NULL`).Scan(&actCnt); err != nil || actCnt != 1 {
+		t.Fatalf("active 行应为 1: %d %v", actCnt, err)
+	}
+	// TriggerKillSwitch→revoked+enabled=false。
+	if err := cp.TriggerKillSwitch(ctx, "op2", "测试 kill"); err != nil {
+		t.Fatalf("kill: %v", err)
+	}
+	if g, _ := cp.ActiveLiveGate(ctx); g != nil {
+		t.Fatal("kill 后仍有 active live_gates 行")
+	}
+	if ks, _ := cp.IsKillSwitchActive(ctx); !ks {
+		t.Fatal("kill 后 enabled 应为 false")
+	}
+}
+
+// TestControlPlane_LiveGateExpiredRejected D-620 T1 补：过期行 CheckGate 拒（反证锚②）。
+func TestControlPlane_LiveGateExpiredRejected(t *testing.T) {
+	s, cp := setupLiveCP(t, true)
+	ctx := context.Background()
+	if err := cp.GrantLive(ctx, "op", "r", "D-620", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("grant: %v", err)
+	}
+	if _, err := s.Pool().Exec(ctx, `UPDATE live_gates SET expires_at=now()-interval '1s' WHERE revoked_at IS NULL`); err != nil {
+		t.Fatalf("expire gate: %v", err)
+	}
+	if _, allowed, reason, _ := cp.CheckGate(ctx); allowed || !strings.Contains(reason, "expired") {
+		t.Fatalf("过期后应拒且 reason 含 expired: allowed=%v reason=%q", allowed, reason)
+	}
+}
+
+// TestControlPlane_GrantLive_ReadinessDown D-620 T1 补：readiness=false→Grant 拒。
+func TestControlPlane_GrantLive_ReadinessDown(t *testing.T) {
+	_, cp := setupLiveCP(t, false)
+	if err := cp.GrantLive(context.Background(), "op", "r", "D-620", time.Now().Add(time.Hour)); err == nil {
+		t.Fatal("readiness=false 时 GrantLive 应拒")
 	}
 }

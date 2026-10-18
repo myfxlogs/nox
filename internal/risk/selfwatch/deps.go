@@ -88,6 +88,8 @@ type Deps struct {
 	// CEX 纸面入口拦截累计计数（进程内 sink 快照；nil=无此数据面，
 	// 日报该段省略而非零报）。
 	CexSkipStats func() map[string]int
+	// LiveGateStatus D-620⑧：LIVE 授权时效读面（nil=未接线跳过行）。
+	LiveGateStatus func(ctx context.Context) (mode string, expiresAt *time.Time, err error)
 }
 
 func (d Deps) now() time.Time {

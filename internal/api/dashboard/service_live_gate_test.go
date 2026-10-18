@@ -41,7 +41,7 @@ func TestCheckLiveGate_RealVenue_Rejected(t *testing.T) {
 	if msg == "" {
 		t.Error("is_real=true venue: want non-empty reject reason, got empty")
 	}
-	if !strings.Contains(msg, "实盘交易开关关闭") {
+	if !strings.Contains(msg, "非 LIVE") {
 		t.Errorf("want reason contains 'live trade disabled', got %q", msg)
 	}
 }

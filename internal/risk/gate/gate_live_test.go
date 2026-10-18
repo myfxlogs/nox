@@ -52,7 +52,7 @@ func grantedLiveCP(t *testing.T, s *pgstore.Store) *ControlPlane {
 	t.Helper()
 	cp := NewControlPlane(s)
 	cp.SetLiveGateChecker(NewLiveGateChecker(s, func(context.Context) bool { return true }, "live"))
-	if err := cp.GrantLive(context.Background(), "t", "t", "T2", time.Now().Add(time.Hour), TradableReport{Tradable: true}); err != nil {
+	if err := cp.GrantLive(context.Background(), "t", "t", "T2", time.Now().Add(time.Hour)); err != nil {
 		t.Fatalf("grant live: %v", err)
 	}
 	return cp

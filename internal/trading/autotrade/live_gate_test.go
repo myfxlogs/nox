@@ -109,7 +109,7 @@ func TestLiveGate_AllChecksPass(t *testing.T) {
 		t.Fatalf("insert live_gate: %v", err)
 	}
 
-	lg := gate.NewLiveGateChecker(s, nil, "live")
+	lg := gate.NewLiveGateChecker(s, func(context.Context) bool { return true }, "live")
 	result := lg.Check(ctx)
 	if !result.Passed {
 		t.Errorf("Passed=false, want true; reasons=%v", result.Reasons)

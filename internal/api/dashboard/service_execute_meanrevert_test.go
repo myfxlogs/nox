@@ -39,7 +39,7 @@ func setupMeanRevertService(t *testing.T, withUSDJPY bool) *Service {
 	}
 	// D-190 R6：fake pipeline（空 registry）——只需非 nil 让 line 122 放行，PerLot fail-closed 在 Execute 前返回。
 	pipeline := exec.NewPipeline(exec.NewRegistry(), st, qb, exec.RiskLimits{}, "demo")
-	svc := &Service{store: st, qbus: qb, pipeline: pipeline}
+	svc := &Service{store: st, qbus: qb, pipeline: pipeline, gateChecker: grantedLiveChecker(t, st)}
 	// MT 腿（vA:mt5/vB:mt5）需 legContractSize 注入，否则 legContractSizeOf 在 line 151 提前返回。
 	// CS=1 简化（与 service_swap_deviation_test.go 同语义）。
 	svc.SetLegContractSize(func(venueKey, venueSymbol string) (float64, bool) {

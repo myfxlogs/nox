@@ -112,6 +112,13 @@ type Executor struct {
 	// SpotFiltersFn 测试注口（nil=实 GET /v3/exchangeInfo）：LOT_SIZE stepSize/minQty/prec。
 	SpotFiltersFn func(ctx context.Context, symbol string) (step, minQty float64, prec int, err error)
 	KBDir         string // 拒单消费闸：经验库条目目录（空=禁附行；读败 fail-open）
+	// ModeGate D-620⑤：真金单闸控制面（*gate.ControlPlane 实形；nil=提案执行拒「控制面未接线」）。
+	ModeGate ModeGate
+}
+
+// ModeGate D-620⑤：提案执行控制面接口（dciexec 不依赖 gate 具体型的测试注口）。
+type ModeGate interface {
+	CheckGate(ctx context.Context) (mode string, allowed bool, reason string, err error)
 }
 
 // kbSuffix 拒单消费闸：败因签名对拍经验库条目 → ` kb:<id> <summary>` 附行；
@@ -157,6 +164,18 @@ func (e *Executor) Go(ctx context.Context) (string, error) {
 // expired/declined 拒单带因）+模板→腿子集+订单回链 proposal_id；
 // strike/qty 实时闸复验保留——提案 params 快照是审计锚非钉价。
 func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
+	// D-620⑤ 真金双径归一：提案执行（DCI/earn 全真 venue）首步过控制面——
+	// nil=未接线拒、!allowed=拒带因、mode≠LIVE=拒（kill 覆盖 DCI/earn 写面）。
+	if e.ModeGate == nil {
+		return "", fmt.Errorf("提案#%d 控制面未接线", id)
+	}
+	mode, allowed, gateReason, gerr := e.ModeGate.CheckGate(ctx)
+	if gerr != nil || !allowed {
+		return "", fmt.Errorf("提案#%d 控制面拒执行（mode=%s reason=%s err=%v）", id, mode, gateReason, gerr)
+	}
+	if mode != gate.ModeLive {
+		return "", fmt.Errorf("提案#%d 模式=%s 非 LIVE——真金径拒执行", id, mode)
+	}
 	p, err := e.Store.GetProposal(ctx, id)
 	if err != nil {
 		return "", fmt.Errorf("提案#%d 查询败: %w", id, err)

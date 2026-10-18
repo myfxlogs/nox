@@ -47,7 +47,7 @@ type ReadinessReport struct {
 //   - facts_fresh：最新 fact age < SwapFactMaxAge
 //   - executor_ready：execReg 注册了至少 1 个执行器
 //   - settlement_ready：DB 连接 + autotrade_state 可查
-//   - live_gate_ready：LiveGate 检查通过（步骤 5 总是 not_ready，LIVE 未开放）
+//   - live_gate_ready：live_gates active 行+env==live+readiness 全过（D-620）
 func readyzCheck(ctx context.Context, st *pgstore.Store, qbus *bus.QuoteBus, cfg *config.Config, execReg *exec.Registry, liveGate *gate.LiveGateChecker) ReadinessReport {
 	var report ReadinessReport
 
@@ -164,7 +164,7 @@ func readyzCheck(ctx context.Context, st *pgstore.Store, qbus *bus.QuoteBus, cfg
 	}
 	report.LiveGateReady = lgLayer
 
-	// Tradable：所有关键层 ready（live_gate 除外，步骤 5 LIVE 未开放但 PAPER/TEST 可交易）
+	// Tradable：所有关键层 ready（live_gate 除外——授权前永 false 但 PAPER/TEST 可交易，且 GrantLive 前置自调 readiness 含闸=自锁死）
 	report.Tradable = report.DatabaseReady.Ready && report.SourceReady.Ready &&
 		report.FactsFresh.Ready &&
 		report.ExecutorReady.Ready && report.SettlementReady.Ready

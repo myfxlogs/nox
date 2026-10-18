@@ -25,7 +25,7 @@ func TestD204_DormantGoReject(t *testing.T) {
 		fmt.Fprint(w, `{}`)
 	}))
 	defer srv.Close()
-	e := &Executor{SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
 		Client: srv.Client(), Now: time.Now,
 		PriceFn: func(context.Context, string) (float64, error) { return 100000, nil }}
 	pid := fs.addProposal("dci_sell_high_covered_call")
@@ -67,7 +67,7 @@ func TestD204_BareGoSkipsDormant(t *testing.T) {
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
 	defer srv.Close()
-	e := &Executor{SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
 		Client: srv.Client(), Now: time.Now,
 		PriceFn:   func(context.Context, string) (float64, error) { return 100000, nil },
 		BalanceFn: func(context.Context, string) (float64, error) { return 100.0, nil },

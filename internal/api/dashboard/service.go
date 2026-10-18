@@ -28,6 +28,8 @@ type Service struct {
 	// D-195-A：执行控制面检查器（避免 dashboard→autotrade 循环依赖，用接口注入）。
 	// D-620ⓑ：nil=控制面未接线 fail-closed（执行径 FAILED/展示径 kill=true）。
 	gateChecker GateChecker
+	// controlPlane D-620⑦：SetExecutionMode/GetExecutionMode 写口具体型（SetGateChecker 注入时断言提取）。
+	controlPlane *gate.ControlPlane
 	// D-262 M4.3①：开仓风控闸（autotrade.Engine 同实例注入；nil=手动开仓面
 	// fail-closed 拒单不执行——闸门未接线比绕闸安全）。
 	orderGate gate.Submitter

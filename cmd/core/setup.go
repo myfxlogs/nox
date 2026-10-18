@@ -84,7 +84,7 @@ func setupMTAdapters(ctx context.Context, execReg *exec.Registry, brokerMgr *das
 // readyzCheck 已提取至 setup_readyz.go（D-182 S3 拆分）。
 
 // runServices 启动自动交易引擎 + swap 记账 + HTTP 服务，并阻塞至收到终止信号后优雅关闭。
-func runServices(ctx context.Context, cancel context.CancelFunc, cfg *config.Config, st *pgstore.Store, dashSvc *dashboard.Service, oppTopic *bus.Topic[pgstore.Opportunity], orderTopic *bus.Topic[bus.OrderEvent], qbus *bus.QuoteBus, factsDone *bus.Topic[string], dsn, path string, handler http.Handler, settleDeps settlement.Deps, settlementCollector *dashboard.SettlementProfileCollector, execReg *exec.Registry, liveGateChecker *gate.LiveGateChecker, feishuClient *notify.FeishuClient, secRes *config.SecretResolver, configKick *bus.Topic[struct{}], refreshTopic *bus.Topic[string], pipeline *exec.Pipeline, xassetAllowBind func(*autotrade.Engine)) {
+func runServices(ctx context.Context, cancel context.CancelFunc, cfg *config.Config, st *pgstore.Store, dashSvc *dashboard.Service, oppTopic *bus.Topic[pgstore.Opportunity], orderTopic *bus.Topic[bus.OrderEvent], qbus *bus.QuoteBus, factsDone *bus.Topic[string], dsn, path string, handler http.Handler, settleDeps settlement.Deps, settlementCollector *dashboard.SettlementProfileCollector, execReg *exec.Registry, liveGateChecker *gate.LiveGateChecker, cp *gate.ControlPlane, feishuClient *notify.FeishuClient, secRes *config.SecretResolver, configKick *bus.Topic[struct{}], refreshTopic *bus.Topic[string], pipeline *exec.Pipeline, xassetAllowBind func(*autotrade.Engine)) {
 	// 8b. 自动交易引擎（D-070）：订阅机会 → 风控 → 自动执行 → 自动平仓 → 策略淘汰
 	allowVenues, allowCanonicals := allowRulesFromTable(ctx, st, cfg.Environment) // D-443 S3：白名单表化（env 弃用；live 空 venue 集 fatal）
 	seedSwapArbCombosFromEnv(ctx, st, cfg)                                        // D-515 S5：表空+env 有值一次性播种（幂等）
@@ -288,7 +288,7 @@ func runServices(ctx context.Context, cancel context.CancelFunc, cfg *config.Con
 
 	// 9. HTTP 服务（装配+阻塞+优雅关闭提取至 setup_http.go 保行数）。
 	// D-191：DCI 申购执行器（凭据 exchange_configs 驱动，无凭据由 gap 径回执）。
-	dciEx := buildDCIExecutor(ctx, st)
+	dciEx := buildDCIExecutor(ctx, st, cp)
 	startDCIPoolReconcile(ctx, dciEx)
 	startDCIResume(ctx, dciEx)               // D-198：提案断点续执（首个 DCI 采集拍后一次）
 	startDCISettle(ctx, dciEx, refreshTopic) // D-207：交割观察（cexscan 拍驱动）

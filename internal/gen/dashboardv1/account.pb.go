@@ -2881,6 +2881,310 @@ func (x *PipelineStageHealth) GetEvidenceKind() string {
 	return ""
 }
 
+// ExecutionModeView D-620⑦：执行模式+真金授权视图（live_gates active 行投影）。
+type ExecutionModeView struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Mode            string                 `protobuf:"bytes,1,opt,name=mode,proto3" json:"mode,omitempty"`                                     // READ_ONLY/PAPER/TEST/LIVE
+	Enabled         bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`                              // execution_controls.enabled（false=kill active）
+	Allowed         bool                   `protobuf:"varint,3,opt,name=allowed,proto3" json:"allowed,omitempty"`                              // CheckGate 结论
+	Reason          string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`                                 // CheckGate 拒因（allowed=true 时 "allowed"）
+	GateOperator    string                 `protobuf:"bytes,5,opt,name=gate_operator,json=gateOperator,proto3" json:"gate_operator,omitempty"` // live_gates.operator（无行=空）
+	GateConfirmedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=gate_confirmed_at,json=gateConfirmedAt,proto3" json:"gate_confirmed_at,omitempty"`
+	GateExpiresAt   *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=gate_expires_at,json=gateExpiresAt,proto3" json:"gate_expires_at,omitempty"`
+	GateEvidenceRef string                 `protobuf:"bytes,8,opt,name=gate_evidence_ref,json=gateEvidenceRef,proto3" json:"gate_evidence_ref,omitempty"` // live_gates.evidence_ref
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ExecutionModeView) Reset() {
+	*x = ExecutionModeView{}
+	mi := &file_dashboardv1_account_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecutionModeView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecutionModeView) ProtoMessage() {}
+
+func (x *ExecutionModeView) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_account_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecutionModeView.ProtoReflect.Descriptor instead.
+func (*ExecutionModeView) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *ExecutionModeView) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *ExecutionModeView) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *ExecutionModeView) GetAllowed() bool {
+	if x != nil {
+		return x.Allowed
+	}
+	return false
+}
+
+func (x *ExecutionModeView) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *ExecutionModeView) GetGateOperator() string {
+	if x != nil {
+		return x.GateOperator
+	}
+	return ""
+}
+
+func (x *ExecutionModeView) GetGateConfirmedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.GateConfirmedAt
+	}
+	return nil
+}
+
+func (x *ExecutionModeView) GetGateExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.GateExpiresAt
+	}
+	return nil
+}
+
+func (x *ExecutionModeView) GetGateEvidenceRef() string {
+	if x != nil {
+		return x.GateEvidenceRef
+	}
+	return ""
+}
+
+type GetExecutionModeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetExecutionModeRequest) Reset() {
+	*x = GetExecutionModeRequest{}
+	mi := &file_dashboardv1_account_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetExecutionModeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetExecutionModeRequest) ProtoMessage() {}
+
+func (x *GetExecutionModeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_account_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetExecutionModeRequest.ProtoReflect.Descriptor instead.
+func (*GetExecutionModeRequest) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{40}
+}
+
+type GetExecutionModeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	View          *ExecutionModeView     `protobuf:"bytes,1,opt,name=view,proto3" json:"view,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetExecutionModeResponse) Reset() {
+	*x = GetExecutionModeResponse{}
+	mi := &file_dashboardv1_account_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetExecutionModeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetExecutionModeResponse) ProtoMessage() {}
+
+func (x *GetExecutionModeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_account_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetExecutionModeResponse.ProtoReflect.Descriptor instead.
+func (*GetExecutionModeResponse) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *GetExecutionModeResponse) GetView() *ExecutionModeView {
+	if x != nil {
+		return x.View
+	}
+	return nil
+}
+
+// SetExecutionModeRequest D-620⑦：执行模式写口（决策席 buf curl 径，Bearer 同 UpdateAppConfig 信任级）。
+// mode=LIVE → ControlPlane.GrantLive（operator/reason/evidence_ref 非空+expires_at>now 必填+live_gates 落账）；
+// 其余 → SetMode（降级自动撤 live_gates active 行）。
+type SetExecutionModeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Mode          string                 `protobuf:"bytes,1,opt,name=mode,proto3" json:"mode,omitempty"`
+	Actor         string                 `protobuf:"bytes,2,opt,name=actor,proto3" json:"actor,omitempty"`
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	EvidenceRef   string                 `protobuf:"bytes,4,opt,name=evidence_ref,json=evidenceRef,proto3" json:"evidence_ref,omitempty"`
+	ExpiresAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetExecutionModeRequest) Reset() {
+	*x = SetExecutionModeRequest{}
+	mi := &file_dashboardv1_account_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetExecutionModeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetExecutionModeRequest) ProtoMessage() {}
+
+func (x *SetExecutionModeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_account_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetExecutionModeRequest.ProtoReflect.Descriptor instead.
+func (*SetExecutionModeRequest) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *SetExecutionModeRequest) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *SetExecutionModeRequest) GetActor() string {
+	if x != nil {
+		return x.Actor
+	}
+	return ""
+}
+
+func (x *SetExecutionModeRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *SetExecutionModeRequest) GetEvidenceRef() string {
+	if x != nil {
+		return x.EvidenceRef
+	}
+	return ""
+}
+
+func (x *SetExecutionModeRequest) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
+type SetExecutionModeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	View          *ExecutionModeView     `protobuf:"bytes,1,opt,name=view,proto3" json:"view,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetExecutionModeResponse) Reset() {
+	*x = SetExecutionModeResponse{}
+	mi := &file_dashboardv1_account_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetExecutionModeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetExecutionModeResponse) ProtoMessage() {}
+
+func (x *SetExecutionModeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_account_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetExecutionModeResponse.ProtoReflect.Descriptor instead.
+func (*SetExecutionModeResponse) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *SetExecutionModeResponse) GetView() *ExecutionModeView {
+	if x != nil {
+		return x.View
+	}
+	return nil
+}
+
 var File_dashboardv1_account_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_account_proto_rawDesc = "" +
@@ -3142,7 +3446,28 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"waitReason\x12\x14\n" +
 	"\x05error\x18\x05 \x01(\tR\x05error\x12&\n" +
 	"\x0flast_event_unix\x18\x06 \x01(\x03R\rlastEventUnix\x12#\n" +
-	"\revidence_kind\x18\a \x01(\tR\fevidenceKindB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\revidence_kind\x18\a \x01(\tR\fevidenceKind\"\xd0\x02\n" +
+	"\x11ExecutionModeView\x12\x12\n" +
+	"\x04mode\x18\x01 \x01(\tR\x04mode\x12\x18\n" +
+	"\aenabled\x18\x02 \x01(\bR\aenabled\x12\x18\n" +
+	"\aallowed\x18\x03 \x01(\bR\aallowed\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\x12#\n" +
+	"\rgate_operator\x18\x05 \x01(\tR\fgateOperator\x12F\n" +
+	"\x11gate_confirmed_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x0fgateConfirmedAt\x12B\n" +
+	"\x0fgate_expires_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\rgateExpiresAt\x12*\n" +
+	"\x11gate_evidence_ref\x18\b \x01(\tR\x0fgateEvidenceRef\"\x19\n" +
+	"\x17GetExecutionModeRequest\"S\n" +
+	"\x18GetExecutionModeResponse\x127\n" +
+	"\x04view\x18\x01 \x01(\v2#.nox.dashboard.v1.ExecutionModeViewR\x04view\"\xb9\x01\n" +
+	"\x17SetExecutionModeRequest\x12\x12\n" +
+	"\x04mode\x18\x01 \x01(\tR\x04mode\x12\x14\n" +
+	"\x05actor\x18\x02 \x01(\tR\x05actor\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12!\n" +
+	"\fevidence_ref\x18\x04 \x01(\tR\vevidenceRef\x129\n" +
+	"\n" +
+	"expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"S\n" +
+	"\x18SetExecutionModeResponse\x127\n" +
+	"\x04view\x18\x01 \x01(\v2#.nox.dashboard.v1.ExecutionModeViewR\x04viewB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_account_proto_rawDescOnce sync.Once
@@ -3156,7 +3481,7 @@ func file_dashboardv1_account_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_account_proto_rawDescData
 }
 
-var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
+var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
 var file_dashboardv1_account_proto_goTypes = []any{
 	(*KnowledgeEntry)(nil),                  // 0: nox.dashboard.v1.KnowledgeEntry
 	(*ListKnowledgeEntriesRequest)(nil),     // 1: nox.dashboard.v1.ListKnowledgeEntriesRequest
@@ -3197,32 +3522,37 @@ var file_dashboardv1_account_proto_goTypes = []any{
 	(*OverviewFunnelRow)(nil),               // 36: nox.dashboard.v1.OverviewFunnelRow
 	(*OverviewWaitingRow)(nil),              // 37: nox.dashboard.v1.OverviewWaitingRow
 	(*PipelineStageHealth)(nil),             // 38: nox.dashboard.v1.PipelineStageHealth
-	nil,                                     // 39: nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
-	(*timestamppb.Timestamp)(nil),           // 40: google.protobuf.Timestamp
+	(*ExecutionModeView)(nil),               // 39: nox.dashboard.v1.ExecutionModeView
+	(*GetExecutionModeRequest)(nil),         // 40: nox.dashboard.v1.GetExecutionModeRequest
+	(*GetExecutionModeResponse)(nil),        // 41: nox.dashboard.v1.GetExecutionModeResponse
+	(*SetExecutionModeRequest)(nil),         // 42: nox.dashboard.v1.SetExecutionModeRequest
+	(*SetExecutionModeResponse)(nil),        // 43: nox.dashboard.v1.SetExecutionModeResponse
+	nil,                                     // 44: nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
+	(*timestamppb.Timestamp)(nil),           // 45: google.protobuf.Timestamp
 }
 var file_dashboardv1_account_proto_depIdxs = []int32{
-	40, // 0: nox.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
-	40, // 1: nox.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
+	45, // 0: nox.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
+	45, // 1: nox.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: nox.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> nox.dashboard.v1.KnowledgeEntry
-	40, // 3: nox.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	40, // 4: nox.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	45, // 3: nox.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	45, // 4: nox.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
 	10, // 5: nox.dashboard.v1.ListKBEntriesResponse.entries:type_name -> nox.dashboard.v1.KBEntry
 	3,  // 6: nox.dashboard.v1.ListDailyIncomeResponse.items:type_name -> nox.dashboard.v1.PositionDailyIncome
-	40, // 7: nox.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
+	45, // 7: nox.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
 	21, // 8: nox.dashboard.v1.AccountInfo.holdings:type_name -> nox.dashboard.v1.Holding
-	40, // 9: nox.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
+	45, // 9: nox.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
 	19, // 10: nox.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> nox.dashboard.v1.AccountMarginStatus
 	17, // 11: nox.dashboard.v1.ListAccountsResponse.accounts:type_name -> nox.dashboard.v1.AccountInfo
-	40, // 12: nox.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
-	40, // 13: nox.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
+	45, // 12: nox.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
+	45, // 13: nox.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
 	26, // 14: nox.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> nox.dashboard.v1.FinancePnlByEnv
 	27, // 15: nox.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> nox.dashboard.v1.FinanceIncomeRow
 	28, // 16: nox.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> nox.dashboard.v1.FinanceFlowRow
-	39, // 17: nox.dashboard.v1.GetFinanceOverviewResponse.equity_by_ccy:type_name -> nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
-	40, // 18: nox.dashboard.v1.GetFinanceOverviewResponse.baseline_at:type_name -> google.protobuf.Timestamp
-	40, // 19: nox.dashboard.v1.OverviewOrderRow.until:type_name -> google.protobuf.Timestamp
-	40, // 20: nox.dashboard.v1.GetOverviewBundleResponse.earliest_release:type_name -> google.protobuf.Timestamp
-	40, // 21: nox.dashboard.v1.GetOverviewBundleResponse.baseline_at:type_name -> google.protobuf.Timestamp
+	44, // 17: nox.dashboard.v1.GetFinanceOverviewResponse.equity_by_ccy:type_name -> nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
+	45, // 18: nox.dashboard.v1.GetFinanceOverviewResponse.baseline_at:type_name -> google.protobuf.Timestamp
+	45, // 19: nox.dashboard.v1.OverviewOrderRow.until:type_name -> google.protobuf.Timestamp
+	45, // 20: nox.dashboard.v1.GetOverviewBundleResponse.earliest_release:type_name -> google.protobuf.Timestamp
+	45, // 21: nox.dashboard.v1.GetOverviewBundleResponse.baseline_at:type_name -> google.protobuf.Timestamp
 	30, // 22: nox.dashboard.v1.GetOverviewBundleResponse.orders:type_name -> nox.dashboard.v1.OverviewOrderRow
 	38, // 23: nox.dashboard.v1.GetOverviewBundleResponse.stages:type_name -> nox.dashboard.v1.PipelineStageHealth
 	34, // 24: nox.dashboard.v1.GetOverviewBundleResponse.breakdowns:type_name -> nox.dashboard.v1.OverviewBreakdownRow
@@ -3230,13 +3560,18 @@ var file_dashboardv1_account_proto_depIdxs = []int32{
 	36, // 26: nox.dashboard.v1.GetOverviewBundleResponse.funnel:type_name -> nox.dashboard.v1.OverviewFunnelRow
 	37, // 27: nox.dashboard.v1.GetOverviewBundleResponse.waiting:type_name -> nox.dashboard.v1.OverviewWaitingRow
 	33, // 28: nox.dashboard.v1.GetOverviewBundleResponse.crit_alerts:type_name -> nox.dashboard.v1.OverviewCritAlert
-	40, // 29: nox.dashboard.v1.OverviewCritAlert.ts:type_name -> google.protobuf.Timestamp
-	40, // 30: nox.dashboard.v1.OverviewCritAlert.first_ts:type_name -> google.protobuf.Timestamp
-	31, // [31:31] is the sub-list for method output_type
-	31, // [31:31] is the sub-list for method input_type
-	31, // [31:31] is the sub-list for extension type_name
-	31, // [31:31] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	45, // 29: nox.dashboard.v1.OverviewCritAlert.ts:type_name -> google.protobuf.Timestamp
+	45, // 30: nox.dashboard.v1.OverviewCritAlert.first_ts:type_name -> google.protobuf.Timestamp
+	45, // 31: nox.dashboard.v1.ExecutionModeView.gate_confirmed_at:type_name -> google.protobuf.Timestamp
+	45, // 32: nox.dashboard.v1.ExecutionModeView.gate_expires_at:type_name -> google.protobuf.Timestamp
+	39, // 33: nox.dashboard.v1.GetExecutionModeResponse.view:type_name -> nox.dashboard.v1.ExecutionModeView
+	45, // 34: nox.dashboard.v1.SetExecutionModeRequest.expires_at:type_name -> google.protobuf.Timestamp
+	39, // 35: nox.dashboard.v1.SetExecutionModeResponse.view:type_name -> nox.dashboard.v1.ExecutionModeView
+	36, // [36:36] is the sub-list for method output_type
+	36, // [36:36] is the sub-list for method input_type
+	36, // [36:36] is the sub-list for extension type_name
+	36, // [36:36] is the sub-list for extension extendee
+	0,  // [0:36] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_account_proto_init() }
@@ -3250,7 +3585,7 @@ func file_dashboardv1_account_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_account_proto_rawDesc), len(file_dashboardv1_account_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   40,
+			NumMessages:   45,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

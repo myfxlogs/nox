@@ -369,7 +369,7 @@ func (f *fakeStore) InsertAlert(_ context.Context, _ *int64, level, msg string) 
 
 // execR3 R3 形态 executor：PriceFn/BalanceFn 注入、Sapi=测试服。
 func execR3(fs *fakeStore, url string, cli *http.Client, bals map[string]float64) *Executor {
-	return &Executor{SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: url, Client: cli, Now: time.Now,
+	return &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: url, Client: cli, Now: time.Now,
 		PriceFn: func(context.Context, string) (float64, error) { return 100000, nil },
 		BalanceFn: func(_ context.Context, a string) (float64, error) {
 			return bals[a], nil
@@ -381,7 +381,7 @@ func execR3(fs *fakeStore, url string, cli *http.Client, bals map[string]float64
 
 // TestD191_SignQuery：签名串构造对拍——query 字段齐+HMAC 可验。
 func TestD191_SignQuery(t *testing.T) {
-	e := &Executor{SigmaFn: testSigma, BnKey: "k", BnSec: "s", Sapi: "https://x.test", Now: time.Now}
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, BnKey: "k", BnSec: "s", Sapi: "https://x.test", Now: time.Now}
 	at := time.UnixMilli(1700000000000)
 	q, url := e.SubscribeBody("PROJ1", "ORD1", 0.018, at)
 	// R10①：venue 参数面四参对拍（原 projectId/lots 错代）。
@@ -654,7 +654,7 @@ func TestD191R4_URLJoin(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	e := &Executor{SigmaFn: testSigma, Store: newFake(), BnKey: "k", BnSec: "s",
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: newFake(), BnKey: "k", BnSec: "s",
 		Sapi: srv.URL + "/sapi", APIBase: srv.URL + "/api",
 		Client: srv.Client(), Now: time.Now}
 	if _, err := e.spotPrice(context.Background(), "BTCUSDT"); err != nil {
@@ -720,7 +720,7 @@ func TestD191R5_LargeAccountJSON(t *testing.T) {
 		fmt.Fprint(w, sb.String())
 	}))
 	defer srv.Close()
-	e := &Executor{SigmaFn: testSigma, Store: newFake(), BnKey: "k", BnSec: "s",
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: newFake(), BnKey: "k", BnSec: "s",
 		APIBase: srv.URL + "/api", Client: srv.Client(), Now: time.Now}
 	bal, err := e.freeBalance(context.Background(), "BTC")
 	if err != nil || bal != 0.5 {
@@ -744,7 +744,7 @@ func TestD191R6_PoolEarnAndRedeem(t *testing.T) {
 		fmt.Fprint(w, `{"orderId":1}`)
 	}))
 	defer srv.Close()
-	e := &Executor{SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: fs, BnKey: "k", BnSec: "s", Sapi: srv.URL,
 		Client: srv.Client(), Now: time.Now,
 		PriceFn: func(context.Context, string) (float64, error) { return 100000, nil },
 		BalanceFn: func(_ context.Context, a string) (float64, error) {
@@ -822,7 +822,7 @@ func TestD192_StreamBalanceGate(t *testing.T) {
 	}))
 	defer srv.Close()
 	// 存活+有值→流值 0.32，REST 零调。
-	e := &Executor{SigmaFn: testSigma, Store: newFake(), BnKey: "k", BnSec: "s",
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: newFake(), BnKey: "k", BnSec: "s",
 		APIBase: srv.URL + "/api", Client: srv.Client(), Now: time.Now,
 		StreamFn: func() bool { return true }}
 	if v, err := e.freeBalance(context.Background(), "BTC"); err != nil || v != 0.32 {
@@ -1039,7 +1039,7 @@ func TestD196R1_SpotErrClass(t *testing.T) {
 // TestD191R11_AmountBoundLease：①floor dec 格式对拍；②界外 runtime 如实败；
 // ③120s 租约二发零 venue 调用；④runtime err 无双前缀。
 func TestD191R11_AmountBoundLease(t *testing.T) {
-	e := &Executor{SigmaFn: testSigma, BnKey: "k", BnSec: "s", Sapi: "https://x.test", Now: time.Now}
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, BnKey: "k", BnSec: "s", Sapi: "https://x.test", Now: time.Now}
 	at := time.UnixMilli(1700000000000)
 	q, _ := e.SubscribeBody("P1", "O1", 541.0, at)
 	if !strings.Contains(q, "depositAmount=541&") { // dec0 floor→"541" 非 "541.00000000"
@@ -1362,7 +1362,7 @@ func (f *fakeStore) LatestEarnActivityAt(_ context.Context, _ string) (time.Time
 // TestM41_EvalGate 评估卡闸（D-258 M4.1③）：无卡/非 viable 拒单，viable 过闸。
 func TestM41_EvalGate(t *testing.T) {
 	st := newFake()
-	e := &Executor{SigmaFn: testSigma, Store: st, BnKey: "k", BnSec: "s", Now: time.Now}
+	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, Store: st, BnKey: "k", BnSec: "s", Now: time.Now}
 	pid := st.addProposal("dci_buy_low")
 
 	delete(st.evals, pid)

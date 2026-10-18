@@ -24,7 +24,7 @@ func earnFixture() (*Executor, *fakeStore, *int) {
 		{Venue: "3001157", VenueType: "mt5", Equity: 4247, Currency: "USD"},
 	}
 	var subCalls int
-	ex := &Executor{SigmaFn: testSigma,
+	ex := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma,
 		Store: f, BnKey: "k", BnSec: "s",
 		BalanceFn: func(context.Context, string) (float64, error) { return 1045, nil },
 		EarnProductsFn: func(context.Context, string) ([]EarnProduct, error) {

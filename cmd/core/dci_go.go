@@ -20,8 +20,8 @@ import (
 
 // buildDCIExecutor 凭据装配（无 binance:spot 凭据行=Executor 持空 key，
 // Go 内 credential 缺口径回「请配置凭据」——凭据缺不炸装配）。
-func buildDCIExecutor(ctx context.Context, st *pgstore.Store) *dciexec.Executor {
-	ex := &dciexec.Executor{Store: st, Client: httpx.Client()}
+func buildDCIExecutor(ctx context.Context, st *pgstore.Store, modeGate dciexec.ModeGate) *dciexec.Executor {
+	ex := &dciexec.Executor{Store: st, Client: httpx.Client(), ModeGate: modeGate}
 	ex.Now = time.Now
 	oppmatch.AutoexecHook = ex.GoProposal      // D-598：autoexec 模板提案落库即执行
 	ex.KBDir = analyst.KnRoot + "/docs/经验库/条目" // 拒单消费闸：坑签名→条目教训附告警尾

@@ -36,15 +36,20 @@ func NewLiveGateChecker(store *pgstore.Store, readinessFn func(ctx context.Conte
 // Environment 返回构造注入的环境值（GrantLive check_snapshot 用）。
 func (lg *LiveGateChecker) Environment() string { return lg.environment }
 
-// Check 执行 LiveGate 8 条检查。
-// 步骤 5 首版：只做检查逻辑，不写入 live_gates 表（LIVE 未开放）。
+// ReadinessOK D-620②：readiness 实查（nil=未接线拒）。
+func (lg *LiveGateChecker) ReadinessOK(ctx context.Context) bool {
+	return lg.readinessFn != nil && lg.readinessFn(ctx)
+}
+
+// Check 执行 LiveGate 五条检查（D-620④：LIVE 每次 Submit 实查——
+// 记录存在/operator 非空/env=="live"/readiness/未过期，任一败=拒）。
 // 任何一条失败 → Passed=false，Reasons 收集所有失败原因。
 func (lg *LiveGateChecker) Check(ctx context.Context) LiveGateCheckResult {
 	var result LiveGateCheckResult
 	var reasons []string
 
 	// 第 1 条：有明确的 LiveGate 持久记录
-	// 步骤 5 无 live_gates 行 → 直接 fail（LIVE 未开放）
+	// D-620：无 live_gates active 行=未授权拒。
 	gate, err := lg.store.GetActiveLiveGate(ctx, "global", "")
 	if err != nil {
 		reasons = append(reasons, fmt.Sprintf("live gate query failed: %v", err))
@@ -73,7 +78,7 @@ func (lg *LiveGateChecker) Check(ctx context.Context) LiveGateCheckResult {
 	}
 
 	// 第 4 条：token/凭据/executor/broker/readiness 全部正常
-	// S3 接入 readiness checker；credentialsFunc=nil 时占位 true（步骤 5 LIVE 未开放，此条不影响 fail-closed 结论）
+	// D-620④：readinessFn=readyz Tradable 构造注入；nil=未接线 fail-closed。
 	if lg.readinessFn == nil {
 		reasons = append(reasons, "readiness checker not wired")
 	} else {
