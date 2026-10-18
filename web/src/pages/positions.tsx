@@ -13,6 +13,7 @@ import { StatTile } from "../components/StatTile";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
 import { HedgeFlow } from "../components/HedgeFlow";
+import { StrategyLedgerCard } from "../components/OverviewAuxCards";
 
 const key = (p: { venueKey: string; ticket: string }) => p.venueKey + "/" + p.ticket;
 
@@ -249,6 +250,8 @@ export default function PositionsPage() {
           </>
         );
       })()}
+      <h2>策略台账</h2>
+      <StrategyLedgerCard />
       <HedgeFlow />
     </div>
   );

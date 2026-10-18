@@ -12,6 +12,7 @@ import { ts } from "../components/fmt";
 import { StatTile } from "../components/StatTile";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
+import { CapitalCoverageCard } from "../components/CapitalCoverageCard";
 
 function fmtAmt(v: number): string {
   return v.toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -242,6 +243,8 @@ export default function CapitalPage() {
           ))}
         </section>
       )}
+
+      <CapitalCoverageCard />
 
       {/* D-512 手工仓位只读段：src=manual——只进全景展示，不进敞口/分母/风控。 */}
       <section>

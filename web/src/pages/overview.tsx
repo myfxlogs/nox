@@ -14,6 +14,7 @@ import { QuoteStrip } from "../components/QuoteStrip";
 import { StatTile } from "../components/StatTile";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
+import { PnlOverviewCard } from "../components/OverviewAuxCards";
 import { Modal } from "../components/Modal";
 import { ORDER_KIND_CN, ORDER_STATUS_CN, untilCN } from "../components/orders_fmt";
 import type { FreshDot as FreshDotData } from "../components/freshness";
@@ -147,6 +148,8 @@ export default function OverviewPage() {
           sub={b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%｜目标≥8%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"}
           active={tile === "perf"} onClick={() => setTile(tile === "perf" ? null : "perf")} />
       </div>
+
+      <PnlOverviewCard />
       {tile && (
         <Modal open={tile != null} onClose={() => setTile(null)}
           title={`${TILE_GROUP[tile]}·组成明细`} width={520}>
