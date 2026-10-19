@@ -37,6 +37,9 @@ func TestS2Bridge(t *testing.T) {
 	h2 := seedHypothesis(t, s, "okx", "okx|FUTURES|USD_UM_XPERP", "FUTURES", "USD_UM_XPERP", "novel")
 	// generic_yield 族未建 → 告警留 approved
 	gid := seedHypothesis(t, s, "okx", "okx|EARN|NEWFIX", "EARN", "fixed", "generic_yield")
+	// 入册败形：side 未知→s2LegCombo 拒桥→告警留 approved（D-622 四批逐站锚补：
+	// 入册败站断言「S2桥入册败处置」末行令；TRADIFI 腿版共享同模板不重复设锚）
+	badSide := seedHypothesis(t, s, "15032313", "cfd_swap_hedged|15032313|XAUUSD|weird|binance|PAXGUSDT", "cfd_hedged", "swap_hedge", "")
 
 	s2Bridge(ctx, s)
 
@@ -111,6 +114,27 @@ func TestS2Bridge(t *testing.T) {
 	}
 	if !sawInfo {
 		t.Fatalf("perp_delivery info 行未观测到: %v", msgs)
+	}
+	// 入册败站逐站锚：拒桥告警带末行令+假设行留 approved（不误翻 trialing）。
+	sawBad := false
+	for _, m := range msgs {
+		if strings.Contains(m, fmt.Sprintf("假设#%d", badSide)) && strings.Contains(m, "S2桥入册败处置") {
+			if !strings.Contains(m, "[角色:决策]") || !strings.Contains(m, "S2桥入册败处置") {
+				t.Fatalf("入册败告警末行令缺: %q", m)
+			}
+			sawBad = true
+		}
+	}
+	if !sawBad {
+		t.Fatalf("入册败告警未观测到: %v", msgs)
+	}
+	var badSt string
+	if err := s.Pool().QueryRow(ctx,
+		`SELECT status FROM fin_opp_hypothesis WHERE id=$1`, badSide).Scan(&badSt); err != nil {
+		t.Fatal(err)
+	}
+	if badSt != "approved" {
+		t.Fatalf("入册败行应留 approved: %s", badSt)
 	}
 	// 幂等：再跑一轮零新告警（dedup）+ 零重复白名单
 	before := warnN
