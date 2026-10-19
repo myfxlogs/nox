@@ -159,3 +159,36 @@ func TestCapabilityBuildNormalized(t *testing.T) {
 		t.Fatalf("全形组合×归一 caps 必须产对（查侧归一锚）, pairs=%v", pairs)
 	}
 }
+
+// TestComboExSymResolved 注记57 热修锚（归一漏接第 4 例）：1055 后组合行 canonical=
+// 裸形 TRX，ticks 实写键=全形 TRXUSDT——combo emit exSym 必经 acctSyms NJK 解析
+// 命中在流实写键（直查裸形=TRX 簿 03:35 停写实锤）。
+// 对抗锚：emit 回退 exSym=mtCanon 直填→本测红（簿停写复现）。
+func TestComboExSymResolved(t *testing.T) {
+	combos := []allowComboRow{{"TRXUSDT", "binance:perp", "TRX", "15032313:mt5"}}
+	uni := []universeRow{{"binance", "TRXUSDT", "TRXUSDT"}}
+	// acctSyms=ticks 在流实写键面（15032313 采到的是全形 TRXUSDT——生产实况）。
+	accts := []mtAcct{{venue: "15032313", vtype: "mt5", syms: []string{"TRXUSDT"}}}
+	caps := map[string]map[string]bool{"15032313": {"TRX": true}}
+	pairs, _ := deriveMonitorPairs(combos, uni, nil, accts, nil, caps)
+	found := false
+	for _, p := range pairs {
+		if p.mtVenueKey == "15032313:mt5" && p.pair == "TRXUSDT-TRX" {
+			if p.exSym != "TRXUSDT" {
+				t.Fatalf("exSym 必须解析到在流实写键 TRXUSDT（裸形禁直进 tick 查询）, got=%q", p.exSym)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("裸形组合×在流全形 ticks 必产写, pairs=%v", pairs)
+	}
+	// 无在流 tick 账户行为不变：退 mtCanon 兜底（该账户下拍 skip=既有形态零变）。
+	acctsGap := []mtAcct{{venue: "15032313", vtype: "mt5", syms: []string{"XAUUSD"}}}
+	pairsGap, _ := deriveMonitorPairs(combos, uni, nil, acctsGap, nil, caps)
+	for _, p := range pairsGap {
+		if p.mtVenueKey == "15032313:mt5" && p.exSym != "TRX" {
+			t.Fatalf("无在流 tick 账户应退 mtCanon 兜底（行为零变）, got=%q", p.exSym)
+		}
+	}
+}

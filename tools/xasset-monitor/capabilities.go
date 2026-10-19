@@ -17,10 +17,13 @@ import (
 // MT 腿裸形同款、与 pairs.go 派生 bareOf 同语义单源）：map.canonical 全形
 // （TRXUSDT）×组合行裸形（TRX）两侧键域在此合流。
 func bareCanon(s string) string {
-	if b := strings.TrimSuffix(s, "USDT"); b != s {
+	if b := strings.TrimSuffix(s, "USDT"); b != s && b != "" {
 		return b
 	}
-	return strings.TrimSuffix(s, "USD")
+	if b := strings.TrimSuffix(s, "USD"); b != s && b != "" {
+		return b
+	}
+	return s
 }
 
 // loadSymbolCapabilities 全账户能力集：裸户号→bareCanon(canonical) 集

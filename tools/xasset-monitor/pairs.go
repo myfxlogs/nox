@@ -16,7 +16,6 @@ import (
 	"nox/internal/store/pgstore"
 
 	"sort"
-	"strings"
 )
 
 // monitorPair D-335R1 S1 + D-423 venue 化 + D-144 多账户：{cexVenue, sym, pair, exSym,
@@ -115,20 +114,11 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdD
 		acctType[a.venue] = a.vtype
 		acctSyms[a.venue] = a.syms
 	}
-	njk := func(s string) string {
-		if b := strings.TrimSuffix(s, "USDT"); b != s && b != "" {
-			return b
-		}
-		if b := strings.TrimSuffix(s, "USD"); b != s && b != "" {
-			return b
-		}
-		return s
-	}
 	// demandExSym demand 行 MT 腿 tick 查询键：账户在流 symbol NJK 命中 canonical
 	// 优先（本账户实采样面），退 spec.ExSym（等价类 canonical），最后 canonical 兜底。
 	demandExSym := func(mtBare, canonical, specExSym string) string {
 		for _, s := range acctSyms[mtBare] {
-			if njk(s) == njk(canonical) {
+			if bareCanon(s) == bareCanon(canonical) {
 				return s
 			}
 		}
@@ -220,7 +210,12 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdD
 			if !capable(v, mtCanon) {
 				continue
 			}
-			emit(monitorPair{cexVenue: cexVenue, sym: sym, pair: cexCanon + "-" + bare, exSym: mtCanon, mtVenueKey: v})
+			// exSym 走 demandExSym 同径（注记57 热修——归一漏接第 4 例）：1055 后
+			// 组合行 canonical=裸形（TRX）而 ticks 实写键=全形（TRXUSDT），裸形键
+			// 直进 tick 查询必 MISS（TRX 簿 03:35 停写实锤）——acctSyms NJK 命中
+			// 在流实写键，命中退 mtCanon 兜底（无在流 tick 账户行为不变=仍 skip）。
+			emit(monitorPair{cexVenue: cexVenue, sym: sym, pair: cexCanon + "-" + bare,
+				exSym: demandExSym(keydomain.BareOf(v), mtCanon, ""), mtVenueKey: v})
 			emitted++
 		}
 		if emitted == 0 {
