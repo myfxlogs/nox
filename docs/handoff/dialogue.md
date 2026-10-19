@@ -162,3 +162,11 @@
 - 实施：auth.TOTPIdCode=SHA256(归一 secret+"|idcode") 前 3 字节 6 位小写 hex（secret 重生成→身份码随换，零额外状态）；OTPAuthURI 标签 Nox:<身份码>；GET /totp/idcode 指纹面+login.tsx 登录卡对号行；setup 补 Seal 落库（原纯 secRes.Set 内存写=重启即丢且 QR 一次性后无从恢复）。
 - 根因修：config IsAppSecretKey+appSecretSeedKeys 双表漏 NOX_TOTP_SECRET（descs 展示副本假象）→生产 login 恒 501（11:15Z 实拍基线）。经验库 app-secrets-key-config-whitelist-double-miss（high）。
 - 提交 e45ae2f31；机检全绿（build/vet/test 3965/race/vite）。
+
+## 2026-10-19 决策/复审席×业主——收口季终场
+
+- **复审收口**：earn-io（复审修 config_id 键域漏维 a19c9257b）/库卫生/reflection 双腿锚/TOTP+追加件 四票全 ✅核验完部署成活；swapRateFor+ovfix-f1f6 前轮已收。
+- **业主纠偏（已纠）**：watchlist 属业主自选域——助理因「跳动少」自扩 6 项被令回滚原 2 行；跳动少=价格变动少非数据流病。
+- **业主令落地**：CMC 报价入候选（TRXUSDT@cmc:cfd wire 实证）；急停开关全中文化+30d 净额≤−$300 自动触发口径透出；暗黑主题 app.css reset 层全量 var 化；bid 绿/ask 红+涨跌闪摘除+左对齐定宽。
+- **债面清零**：staging 12 条转正式条目+索引重生；施工零在飞、候裁零、可派零——P4/P5 合法阻塞候数据。
+- **业主令**：施工席收工。
