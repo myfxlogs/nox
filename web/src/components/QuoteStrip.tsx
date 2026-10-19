@@ -97,7 +97,7 @@ export function QuoteStrip() {
       )}
       {/* watchlist 编辑钮（票面④——保存后清本地帧表：被过滤源的残帧不残存） */}
       <button
-        style={{ fontSize: 11, padding: "1px 8px" }}
+        style={{ fontSize: 11, padding: "1px 8px", flex: "none" }}
         title="自选报价条编辑"
         onClick={() => setEdit(true)}
       >

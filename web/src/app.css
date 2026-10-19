@@ -1,42 +1,45 @@
 * { box-sizing: border-box; }
-body { margin: 0; font: 14px/1.5 -apple-system, "Segoe UI", "PingFang SC", sans-serif; background: #f7f7f5; color: #222; }
+/* 业主令 10-19⑤：全局 reset 层暗题化——硬编码 #fff/#ccc 灰底假设全摘，改走 00-base 主题 var
+   （var 在 :root 块定义，本文件先加载无碍——var 解析在用时非定义时） */
+body { margin: 0; font: 14px/1.5 -apple-system, "Segoe UI", "PingFang SC", sans-serif; background: var(--page, #f7f7f5); color: var(--ink, #222); }
 .shell { max-width: 1280px; margin: 0 auto; padding: 0 16px 32px; }
-.top { display: flex; align-items: center; gap: 20px; padding: 12px 0; border-bottom: 1px solid #ddd; margin-bottom: 16px; }
+.top { display: flex; align-items: center; gap: 20px; padding: 12px 0; border-bottom: 1px solid var(--line, #ddd); margin-bottom: 16px; }
 .brand { font-weight: 700; font-size: 18px; letter-spacing: 1px; }
 .top nav { display: flex; gap: 4px; flex: 1; }
-.top nav a { padding: 4px 10px; border-radius: 4px; color: #555; text-decoration: none; }
-.top nav a.on { background: #2a78d6; color: #fff; }
-.live { color: #1a7f37; font-size: 12px; }
-.dead { color: #b00; font-size: 12px; }
+.top nav a { padding: 4px 10px; border-radius: 4px; color: var(--ink-2, #555); text-decoration: none; }
+.top nav a.on { background: var(--accent, #2a78d6); color: #fff; }
+.live { color: var(--good, #1a7f37); font-size: 12px; }
+.dead { color: var(--critical, #b00); font-size: 12px; }
 h2 { font-size: 16px; margin: 18px 0 8px; }
-table { border-collapse: collapse; width: 100%; background: #fff; font-size: 13px; }
-th, td { border: 1px solid #e3e3e0; padding: 6px 8px; text-align: left; white-space: nowrap; }
-th { background: #f0f0ec; font-weight: 600; }
+table { border-collapse: collapse; width: 100%; background: var(--surface, #fff); font-size: 13px; }
+th, td { border: 1px solid var(--line, #e3e3e0); padding: 6px 8px; text-align: left; white-space: nowrap; }
+th { background: var(--page, #f0f0ec); font-weight: 600; }
 .cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
-.card { background: #fff; border: 1px solid #e3e3e0; border-radius: 6px; padding: 10px 16px; min-width: 140px; }
-.card .k { font-size: 12px; color: #777; }
+.card { background: var(--surface, #fff); border: 1px solid var(--line, #e3e3e0); border-radius: 6px; padding: 10px 16px; min-width: 140px; }
+.card .k { font-size: 12px; color: var(--ink-3, #777); }
 .card .v { font-size: 18px; font-weight: 600; }
-.muted { color: #888; font-size: 12px; }
-.warn { color: #b06000; }
-.crit { color: #b00; font-weight: 600; }
-.good { color: #1a7f37; }
-button { padding: 3px 10px; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; }
-button:hover { background: #f0f0ec; }
-button.danger { color: #b00; border-color: #e0b0b0; }
-input, select { padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
+.muted { color: var(--ink-3, #888); font-size: 12px; }
+.warn { color: var(--warn, #b06000); }
+.crit { color: var(--critical, #b00); font-weight: 600; }
+.good { color: var(--good-ink, #1a7f37); }
+button { padding: 3px 10px; border: 1px solid var(--line, #ccc); background: var(--surface, #fff); color: var(--ink, #222); border-radius: 4px; cursor: pointer; }
+button:hover { background: var(--page, #f0f0ec); }
+button.danger { color: var(--critical, #b00); border-color: var(--critical, #e0b0b0); }
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea { padding: 4px 6px; border: 1px solid var(--line, #ccc); border-radius: 4px; font: inherit; background: var(--surface, #fff); color: var(--ink, #222); }
 form.inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
-.login-card { max-width: 340px; margin: 120px auto; background: #fff; border: 1px solid #e3e3e0; border-radius: 8px; padding: 28px; }
+.login-card { max-width: 340px; margin: 120px auto; background: var(--surface, #fff); border: 1px solid var(--line, #e3e3e0); border-radius: 8px; padding: 28px; }
 .login-card h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: 2px; }
 .login-card form { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
-.err { color: #b00; font-size: 13px; }
+.err { color: var(--critical, #b00); font-size: 13px; }
 .dept { margin-bottom: 14px; }
 .dept h3 { font-size: 14px; margin: 0 0 6px; }
-.dept h3 .cnt { color: #888; font-weight: 400; margin-left: 6px; }
+.dept h3 .cnt { color: var(--ink-3, #888); font-weight: 400; margin-left: 6px; }
 .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; }
-.tag.st-run { background: #e3f3e8; color: #1a7f37; }
-.tag.st-lag { background: #fdf2dd; color: #b06000; }
-.tag.st-dead { background: #fbe3e3; color: #b00; }
-.tag.st-off { background: #eee; color: #888; }
-.investor-head { background: #fff; border: 1px solid #e3e3e0; border-radius: 8px; padding: 20px 24px; margin-bottom: 16px; }
+/* tag 态色=语义小徽标，暗题下半透明底保持可读 */
+.tag.st-run { background: color-mix(in srgb, var(--good, #1a7f37) 18%, transparent); color: var(--good, #1a7f37); }
+.tag.st-lag { background: color-mix(in srgb, var(--warn, #b06000) 18%, transparent); color: var(--warn, #b06000); }
+.tag.st-dead { background: color-mix(in srgb, var(--critical, #b00) 18%, transparent); color: var(--critical, #b00); }
+.tag.st-off { background: var(--page, #eee); color: var(--ink-3, #888); }
+.investor-head { background: var(--surface, #fff); border: 1px solid var(--line, #e3e3e0); border-radius: 8px; padding: 20px 24px; margin-bottom: 16px; }
 .investor-head h1 { margin: 0; font-size: 20px; letter-spacing: 1px; }
-.footer-note { margin-top: 24px; color: #999; font-size: 12px; }
+.footer-note { margin-top: 24px; color: var(--ink-3, #999); font-size: 12px; }

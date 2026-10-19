@@ -1,31 +1,13 @@
 /* —— 按钮 —— */
+/* 基件底色/文字/边框已归 app.css 主题 var 化（业主令 10-19⑤ 全局 reset 暗题化）——
+   本层只留交互补充：disabled 降透明。 */
 button {
-  font: inherit;
-  cursor: pointer;
   touch-action: manipulation; /* 消除双击缩放/点击延迟（D-051） */
   -webkit-tap-highlight-color: transparent; /* 触屏去掉默认灰框 */
-  /* 业主令 10-19②：暗题覆盖——原生灰底+白字失明（自选钮实证），基件全量 var 化；
-     特异件（.icon/.ack/.btn-close 等）由后随更专选择器覆写不受影响 */
-  background: var(--surface);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 3px 10px;
 }
 button:disabled {
   opacity: 0.55;
   cursor: default;
-}
-/* 表单基件同病同治——无底色继承者在暗题下同为原生灰底白字 */
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
-select,
-textarea {
-  font: inherit;
-  background: var(--surface);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 4px 8px;
 }
 button.icon,
 button.ack {

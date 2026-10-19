@@ -29,7 +29,7 @@
     --ring: rgba(255, 255, 255, 0.1);
     --accent: #3987e5;
     --delta-down: #e66767;
-    --good-ink: #0ca30c;
+    --good-ink: #34d17b;
   }
 }
 :root[data-theme="dark"] {
@@ -43,7 +43,7 @@
   --ring: rgba(255, 255, 255, 0.1);
   --accent: #3987e5;
   --delta-down: #e66767;
-  --good-ink: #0ca30c;
+  --good-ink: #34d17b;
 }
 * {
   box-sizing: border-box;
