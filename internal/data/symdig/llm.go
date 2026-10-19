@@ -72,6 +72,8 @@ func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error
 	covered := map[string]bool{}
 	var lastMalformed bool
 	var lastStop string
+	var anyTruncMalformed bool // ③荐位：任一批 max_tokens+malformed 累计——
+	// 票面原意「任一批截断→error」（原 lastStop 仅最后 malformed 批=混合序降级 warn 病灶）
 	for bi := 0; bi < len(picks); bi += symdigLLMBatch {
 		end := bi + symdigLLMBatch
 		if end > len(picks) {
@@ -93,13 +95,16 @@ func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error
 		}
 		if malformed {
 			lastMalformed, lastStop = malformed, res.StopReason
+			if res.StopReason == "max_tokens" {
+				anyTruncMalformed = true
+			}
 			log.Printf("[symdig] 批 %d 输出异常（%s）——%d/%d 品种提案落空（续批照跑）",
 				bi/symdigLLMBatch+1, res.StopReason, len(batch)-countCovered(props, batch), len(batch))
 		}
 	}
 	// 结案：任一批 max_tokens+malformed → error；其余 malformed → warn（两文案分级不变）。
-	if lastMalformed {
-		if lastStop == "max_tokens" {
+	if lastMalformed || anyTruncMalformed {
+		if anyTruncMalformed || lastStop == "max_tokens" {
 			msg := fmt.Sprintf("[symdig] 提案 AI 输出批内被长度截断（覆盖 %d/%d 品种，提案集不完整）", len(covered), len(sum.Rows))
 			log.Print(msg)
 			if deps.Store != nil {
