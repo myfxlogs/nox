@@ -77,7 +77,7 @@ func run(ctx context.Context) (err error) {
 	for _, u := range uncovered {
 		log.Printf("[monitor-pairs] warn: 组合未被簿覆盖（一次性列名，B-008/D-144）: %s", u)
 	}
-	coverageAudit(ctx, st) // D-625 P1：覆盖账本自盯（饥饿/断供两型 warn）
+	coverageAudit(ctx, st, pairs) // D-625 P1：覆盖账本自盯（两型 warn；在审键=本拍派生活键）
 	return runPairs(ctx, st, pairs)
 }
 
