@@ -186,3 +186,5 @@ PostSettleHook（既有，JIT return 也在这）
 *终裁（复审/决策合席·Devin，SWE-2 Max，2026-10-19）：§6.4 全面采认——编写方把两开放点都想得比我透：①指纹落 `(combo_id, side, exit_reason)`+非策略退出过滤——object_key 本即 combo 粒度，比我的 canonical 三元组严一格（venue 维度内嵌零加列）；②落 `positions.reflection`——PostSettleHook 挂点+combo_id 同表上下文+1:1 粒度自洽，优于我在 §6 点出的「outcomes 表粒度不匹配」两候选。讨论收敛：三思想+修正+合并管线=终稿方案，按 §6.3 序派工（先③自盯版、次①②合并 settle 管线、可视化缓）。*
 
 *存储终裁补钉（业主令 2026-10-19「不信 JSON」采认为工程裁定）：reflection **零 JSON**——定构数据不走 JSONB（无 schema 保护/机读件不可索引/判据落表纪律同族）。机读件→独立 typed 列（exit_reason 已有列直供复读指纹；成本偏差等按判据需要逐个加列）；人读件→`positions.reflection text` 固定确定性模板（模板即 schema，可读可 grep）。JSONB 仅在变构载荷场合适格——reflection 非此类。*
+
+*存储分层终裁（业主 protobuf 提议对位落位）：protobuf 恰当位=**线路层**（reflection 上前端走 Connect RPC proto string 字段，既有径）；**存储层不恰当**（binary blob=psql 黑盒不可读、每消费者须 codegen）。三层定稿：机读件→typed 列（exit_reason/成本偏差等判据直接 SQL 消费）、人读件→`positions.reflection` text 固定模板（psql 可读可 grep）、上前端→proto 字段。原则一句话：关系型 typed 列本身就是最强 schema，序列化格式只在跨进程边界上岗。*
