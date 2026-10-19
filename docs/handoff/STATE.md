@@ -846,3 +846,9 @@ earn-io 裁定=PASS 带复审修：实施面（earnIOExtID 回执抽 se-<purchas
 **坑处置**：循环修票=条目 pre-auth-rpc-401-interceptor-reload-loop 已入库+索引同 commit（实施侧完成，复核在案）；退出钮票=无坑。
 -->
 > 决策席注记（10-20 晨巡·三毕业批落账）：carry_graduations #276/277/278（JP225 long_cfd_short_perp，MT 三户×okx，龄 6.1-6.3d，accrued 6.18-8.27 均盖费 1.95-3.95×）全批准——pct 档 funding_pct=0.05 原样落表（precedent #48 同款），armed 径活池折算兜底，okx:unified=0 由 JitSweep armed 判定点自动归集（earn→funding→unified 链在案）。combo #21/#22/#23 生成 enabled。**附带处置**：`110660304:mt5`（XM 真户）autotrade 放行+敞口闸双行补建（cap=1000=1×净值保守档——同档 15032313 系 D-443 旧迁 6000 偏宽未动）。
+
+<!-- 决策席 10-19 亲办录（业主令「第一负责人兜底」后首批）：
+①symdig 收件箱分诊假账纠偏——施工席报 resolved=67 但改的是本机仓副本（gitignore 件），SG /kn 真件零动；本席亲改 SG 件：resolved=73/triaged=1（VAULTA 低置信留核）/pending=2（explorer 出域）。坑落 staging=runtime-inbox-vs-repo-copy-fake-claim。
+②venue-gap 五键全 waive——autotrade_allow_rules 实态 mt5 域专属（CEX 放行走 combo/allowlist），earn/funding/futures 非执行目标池，补放行行=扩权限面反错。
+③顺手清权限面脏行——allow_rules 脏户三键（277842155/39050818/52993526:mt5 白名单外）翻 enabled=f。
+④fin_symbol_aliases 施工席落 5 行实拍真（ALUMINIUM→XAL/COPPER→XCU/ES35→IBEX35/AUS200→AU200/FRANCE→FR40）。 -->
