@@ -24,6 +24,7 @@ import (
 var hotSecretKeys = map[string]bool{
 	"TRONGRID_API_KEY": true,
 	"NOX_AUTH_TOKEN":   true,
+	"NOX_TOTP_SECRET":  true, // TOTP secret——interceptor 热读即改即效
 }
 
 // SetSecretResolver 注入热读缓存（nil=未装配：List 仍可用，Update 仅写库不 panic）。

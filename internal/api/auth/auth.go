@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 )
@@ -37,11 +38,19 @@ func ValidateStartupToken(token, allowEmpty string) error {
 // 读 app_secrets DB 值∪env 回落；面板改后写时同步 Set 即效，旧令牌即失效）。
 type Interceptor struct {
 	tokenFn func() string
+	totpFn  func() string // TOTP secret 热读——nil/空=session 径死锁（static 唯一）
 }
 
 // NewInterceptor 创建认证拦截器（getToken=每请求调用的当前令牌读口；nil 视同恒空=fail-closed）。
 func NewInterceptor(getToken func() string) *Interceptor {
 	return &Interceptor{tokenFn: getToken}
+}
+
+// SetTOTP 装配 TOTP session 校验支（业主令 10-19：Bearer sess=4h session 经
+// VerifySession 验——static token 径原样保留=AI 席位 SSH/localhost 直调）。
+func (i *Interceptor) SetTOTP(getSecret func() string) *Interceptor {
+	i.totpFn = getSecret
+	return i
 }
 
 // WrapUnary 返回 connect.UnaryInterceptorFunc。
@@ -86,10 +95,18 @@ func (i *Interceptor) check(h http.Header) error {
 	if !strings.HasPrefix(auth, "Bearer ") {
 		return errors.New("invalid authorization scheme")
 	}
-	if strings.TrimPrefix(auth, "Bearer ") != token {
-		return errors.New("invalid token")
+	tok := strings.TrimPrefix(auth, "Bearer ")
+	if tok == token {
+		return nil
 	}
-	return nil
+	// TOTP session 支（业主令 10-19）：static 不中也验 session——
+	// secret 空=径死锁不侧漏。
+	if i.totpFn != nil {
+		if secret := i.totpFn(); secret != "" && VerifySession(secret, tok, time.Now()) {
+			return nil
+		}
+	}
+	return errors.New("invalid token")
 }
 
 // EncryptCredentials 用 AES-256-GCM 加密凭据（§13.5）。

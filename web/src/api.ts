@@ -21,7 +21,17 @@ const transport = createConnectTransport({
     (next) => async (req) => {
       const t = getToken();
       if (t) req.header.set("Authorization", `Bearer ${t}`);
-      return next(req);
+      try {
+        return await next(req);
+      } catch (e) {
+        // session 过期/失效→自动回登录页（TOTP 票禁线：过期后非静默续期=审计面）。
+        if (e instanceof Error && /unauthenticated|invalid token/i.test(e.message)) {
+          clearToken();
+          location.hash = "#/login";
+          location.reload();
+        }
+        throw e;
+      }
     },
   ],
 });
