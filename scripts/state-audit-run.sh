@@ -1,7 +1,7 @@
 #!/bin/bash
 # state-audit 呆行扫描 cron wrapper（注记60/62 结构性堵口——翻态滞后呆行日拍）。
 # 逻辑：/opt/nox-git bare clone fetch 同步 → state-audit 扫 master:STATE.md
-# 票行引用核拓扑 → 呆行候选 warn 落 alerts（24h 同键去重）。
+# 票行引用核拓扑 → 呆行候选 warn 落 alerts（6h 同键去重）。
 set -a
 source /opt/nox/.env
 set +a
