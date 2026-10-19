@@ -128,12 +128,15 @@ func (s *Store) FulfillConditionGap(ctx context.Context, id int64, note string) 
 	return err
 }
 
-// ReopenConditionGap D-193② 反向跳变：fulfilled 行条件再失→回 requested
+// ReopenConditionGap D-193② 反向跳变：人工收口行条件再失→回 requested
 // （同 key 复用不插新行；告警再推走 D-168 episode 闸防抖照旧）。
+// D-632：转移集扩 'waived'——删径级联把未决 gap 翻 waived（终态）后，同键重入册
+// （owner 重加同名户/配置）撞 UNIQUE(template_id,kind,subject) 静默吞复请；
+// waived 行复活只走显式调用方（venueGapSweep；reconcile 上游 skip waived 行不动）。
 func (s *Store) ReopenConditionGap(ctx context.Context, id int64) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE fin_condition_gap SET status='requested', requested_at=now(), resolved_at=NULL
-		WHERE id=$1 AND status='fulfilled'`, id)
+		WHERE id=$1 AND status IN ('fulfilled','waived')`, id)
 	if err != nil {
 		return fmt.Errorf("reopen condition gap: %w", err)
 	}

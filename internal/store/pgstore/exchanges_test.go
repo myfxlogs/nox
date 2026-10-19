@@ -60,8 +60,13 @@ func TestExchangeConfigsCRUD(t *testing.T) {
 		t.Fatalf("simulated 未往返：%+v", list[0])
 	}
 
-	if err := s.DeleteExchangeConfig(ctx, c.ID); err != nil {
+	// D-632：删 sim 行而 real 孪生行仍在→键仍在册，级联扫零（权限面行不动）。
+	sw, err := s.DeleteExchangeConfigCascade(ctx, c.ID)
+	if err != nil {
 		t.Fatalf("delete: %v", err)
+	}
+	if sw.Any() {
+		t.Fatalf("real 孪生行在册不应扫面：%+v", sw)
 	}
 	list2, _ := s.ListExchangeConfigs(ctx)
 	if len(list2) != 2 {

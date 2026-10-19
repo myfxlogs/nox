@@ -115,6 +115,8 @@ func (m *BrokerManager) CommissionBps(venue string) (float64, bool) {
 // ③采集/派生数据清（ticks/facts/equiv/universe/监控簿）+active 纸面退 venue_removed。
 // D-151：③劈两半——派生小表同步清（账号行删除前清完，保正确性），ticks/facts 批量行
 // 异步清（同步跑 RPC 卡 ~30s）；异步失败 warn 告警（残留=系统解决不了=推送域）。
+// D-632：④同键权限面级联扫清（allow_rules/combos/caps 删行+未决 gap 翻 waived，
+// D-631 死配置禁囤活表；扫败=RPC 报错可重试，历史台账零触）。
 // 保留：alerts/positions 等审计域。
 func (m *BrokerManager) RemoveBroker(ctx context.Context, venue string) error {
 	if n, err := m.store.CountVenueOpenPositions(ctx, venue); err != nil {
@@ -138,7 +140,11 @@ func (m *BrokerManager) RemoveBroker(ctx context.Context, venue string) error {
 	if err := m.store.DeleteBrokerAccount(ctx, venue); err != nil {
 		return fmt.Errorf("delete broker account: %w", err)
 	}
-	log.Printf("[broker] removed %s (purged=%v)", venue, purged)
+	sw, err := m.store.SweepVenuePermissionSurface(ctx, keydomain.Join(venue, "mt5"))
+	if err != nil {
+		return fmt.Errorf("permission surface sweep: %w", err)
+	}
+	log.Printf("[broker] removed %s (purged=%v, sweep %v)", venue, purged, sw)
 	m.purgeVenueBulkAsync(venue)
 	return nil
 }

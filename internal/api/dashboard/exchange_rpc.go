@@ -5,6 +5,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 
@@ -85,14 +86,17 @@ func (s *Service) AddExchange(ctx context.Context, req *connect.Request[v1.AddEx
 }
 
 // RemoveExchange 删除交易所配置；下轮 poll 停止该 querier。
+// D-632：同 (venue,venue_type) 双行删尽（sim/real）才级联扫权限面（键退役≠行删）。
 func (s *Service) RemoveExchange(ctx context.Context, req *connect.Request[v1.RemoveExchangeRequest]) (*connect.Response[v1.RemoveExchangeResponse], error) {
 	id, err := strconv.ParseInt(req.Msg.GetId(), 10, 64)
 	if err != nil || id <= 0 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("id 非法"))
 	}
-	if err := s.store.DeleteExchangeConfig(ctx, id); err != nil {
+	sw, err := s.store.DeleteExchangeConfigCascade(ctx, id)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	log.Printf("[exchange] #%d removed (sweep %v)", id, sw)
 	s.kickConfig() // D-469b S2
 	return connect.NewResponse(&v1.RemoveExchangeResponse{}), nil
 }

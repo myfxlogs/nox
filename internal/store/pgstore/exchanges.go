@@ -166,10 +166,44 @@ func (s *Store) SealExchangeKeys(ctx context.Context) (sealed int, err error) {
 	return sealed, nil
 }
 
-// DeleteExchangeConfig 按 id 删除。
-func (s *Store) DeleteExchangeConfig(ctx context.Context, id int64) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM exchange_configs WHERE id = $1`, id)
-	return err
+// DeleteExchangeConfigCascade D-632：删配置行+同键权限面级联（单事务）。同
+// (venue,venue_type) 余行存在（sim/real 双行合法并存）→只删行不扫面——键仍在册；
+// 键退役（余行零）→四_face 权限面扫清（venue_permission_sweep.go）。id 不存在=幂等
+// 零扫（原 DeleteExchangeConfig 语义保持）。
+func (s *Store) DeleteExchangeConfigCascade(ctx context.Context, id int64) (VenuePermissionSweep, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return VenuePermissionSweep{}, fmt.Errorf("delete exchange begin: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	var venue, venueType string
+	err = tx.QueryRow(ctx, `DELETE FROM exchange_configs WHERE id=$1 RETURNING venue, venue_type`, id).
+		Scan(&venue, &venueType)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return VenuePermissionSweep{}, tx.Commit(ctx)
+	}
+	if err != nil {
+		return VenuePermissionSweep{}, fmt.Errorf("delete exchange #%d: %w", id, err)
+	}
+	var twin bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM exchange_configs WHERE venue=$1 AND venue_type=$2)`,
+		venue, venueType).Scan(&twin); err != nil {
+		return VenuePermissionSweep{}, fmt.Errorf("exchange twin check: %w", err)
+	}
+	var sw VenuePermissionSweep
+	if !twin {
+		if sw, err = sweepVenuePermissionSurfaceTx(ctx, tx, venue+":"+venueType); err != nil {
+			return VenuePermissionSweep{}, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return VenuePermissionSweep{}, fmt.Errorf("delete exchange commit: %w", err)
+	}
+	if err := s.alertPermissionSweep(ctx, venue+":"+venueType, sw); err != nil {
+		return sw, err
+	}
+	return sw, nil
 }
 
 // ErrExchangeConflict UNIQUE 冲突判定。
