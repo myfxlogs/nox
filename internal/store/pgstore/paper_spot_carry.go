@@ -230,6 +230,8 @@ func (s *Store) ExitPaperSpotCarry(ctx context.Context, id int64, reason string,
 	if ct.RowsAffected() == 0 {
 		return fmt.Errorf("exit paper spot carry %d: not active", id)
 	}
+	// ② 自省（settle 单消费者同管——reflection.go；写败只记 log 观察面 fail-open）。
+	s.writePaperReflection(ctx, id)
 	return nil
 }
 

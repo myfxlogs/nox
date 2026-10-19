@@ -170,3 +170,5 @@ var S2CanonNormSQL string // s2bridge 写入侧 canonical 归一·存量回填
 var SnapshotLatestExprIdxSQL string // LatestVenueAccountSnapshots LATERAL 探针表达式索引
 //go:embed 1057_trial_cost_wiring.sql
 var TrialCostWiringSQL string // P0 续件：positions.combo_id 归因列
+//go:embed 1058_settle_reflection.sql
+var SettleReflectionSQL string // settle 单消费者：reflection+entry_expected_cost_bps 列
