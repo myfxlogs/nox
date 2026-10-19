@@ -3,7 +3,7 @@
 // venue|symbol 最新帧表直渲；纯展示不喂判定、零聚合，符号/venue 集=
 // 帧到达域驱动（禁硬编码清单）。零帧=如实缺态。
 // 右端 UTC 钟=票面裁准的唯一合法 setInterval（非业务数据刷新）。
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { onCase } from "../stream";
 import type { Quote } from "../gen/dashboardv1/market_pb";
 import { FreshDot as Dot } from "./FreshDot";
@@ -29,6 +29,25 @@ function UtcClock() {
 export function QuoteStrip() {
   const [q, setQ] = useState<Record<string, Quote>>({});
   const [edit, setEdit] = useState(false);
+  // 涨跌闪（arb QuoteStrip 原件移植）：上一帧 bid/ask 基线 diff→up/down class 400ms。
+  // 基线无条件更新（arb R3 顺手项——防回撤帧方向偶误）。
+  const prevRef = useRef<Map<string, { bid: number; ask: number }>>(new Map());
+  const [flash, setFlash] = useState<Map<string, "up" | "down">>(new Map());
+  useEffect(() => {
+    const next = new Map<string, "up" | "down">();
+    for (const [k, f] of Object.entries(q)) {
+      const prev = prevRef.current.get(k);
+      if (prev && (prev.bid !== f.bid || prev.ask !== f.ask)) {
+        next.set(k, f.bid > prev.bid || f.ask > prev.ask ? "up" : "down");
+      }
+      prevRef.current.set(k, { bid: f.bid, ask: f.ask });
+    }
+    if (next.size > 0) {
+      setFlash(next);
+      const t = setTimeout(() => setFlash(new Map()), 400);
+      return () => clearTimeout(t);
+    }
+  }, [q]);
   useEffect(
     () =>
       onCase("quote", (v) => {
@@ -55,9 +74,11 @@ export function QuoteStrip() {
             .map((f) => (
               <span key={`${v}|${f.symbol}`} className="quote-tile">
                 <b>{f.symbol}</b>
-                <strong>
-                  {fmtPrice(f.bid)}/{fmtPrice(f.ask)}
-                </strong>
+                <span className={`quote-bidask ${flash.get(`${v}|${f.symbol}`) ?? ""}`}>
+                  <span className="num">
+                    {fmtPrice(f.bid)}/{fmtPrice(f.ask)}
+                  </span>
+                </span>
                 <Dot
                   dot={freshOf({
                     lastFactAt: f.time ? Number(f.time.seconds) * 1000 : 0,
