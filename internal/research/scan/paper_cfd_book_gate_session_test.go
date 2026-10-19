@@ -28,9 +28,12 @@ func (s *bookLiveSessionStore) LatestFactsByKind(context.Context, string) ([]fac
 // 休市窗簿断供=豁免（无警）；开市窗锚死=照报（warn 末行令在案）；
 // 会话表缺席=无证据不误赦（照报）。
 func TestAnchorDead_SessionGate(t *testing.T) {
+	// EntryTs 固定字面量（复审修件 10-19）：原 time.Now()-48h 与下方固定 sat/sun 参考轴
+	// 混用两个时间系——真实时间越过 2026-10-19T11:45Z 后 age 恒 <15min 闸，用例③永假红
+	// （干净 master 亲证复现）。固定后 age(sat)=36h/age(sun)=71h，三支路语义不变、永久确定。
 	pos := pgstore.PaperSpotCarry{
 		VenueA: "3001157", VenueB: "binance", Symbol: "BRENT",
-		Structure: "short_cfd_long_perp", EntryTs: time.Now().Add(-48 * time.Hour),
+		Structure: "short_cfd_long_perp", EntryTs: time.Date(2026, 10, 16, 0, 0, 0, 0, time.UTC),
 	}
 	active := []pgstore.PaperSpotCarry{pos}
 	view := newAssetClassView(nil)
