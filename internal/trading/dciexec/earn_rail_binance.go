@@ -17,7 +17,7 @@ func (r *binanceEarnRail) Products(ctx context.Context, ccy string) ([]EarnProdu
 func (r *binanceEarnRail) Subscribe(ctx context.Context, productID string, amount float64) (string, error) {
 	return r.e.earnSubscribe(ctx, productID, amount)
 }
-func (r *binanceEarnRail) Redeem(ctx context.Context, productID string, amount float64) error {
+func (r *binanceEarnRail) Redeem(ctx context.Context, productID string, amount float64) (string, error) {
 	return r.e.redeemFlexible(ctx, productID, amount)
 }
 func (r *binanceEarnRail) FreeBalance(ctx context.Context, ccy string) (float64, error) {

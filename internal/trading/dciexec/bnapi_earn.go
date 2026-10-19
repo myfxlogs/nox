@@ -78,24 +78,24 @@ func (e *Executor) earnPositions(ctx context.Context, asset string) ([]EarnPosit
 
 // redeemFlexible 活期赎回步：POST /v1/simple-earn/flexible/redeem（签名；
 // 撤 type=FAST——官方参数表无此参（lending 家族残留）。
-func (e *Executor) redeemFlexible(ctx context.Context, productID string, amount float64) error {
+func (e *Executor) redeemFlexible(ctx context.Context, productID string, amount float64) (string, error) {
 	q := fmt.Sprintf("productId=%s&amount=%.8f&timestamp=%d&recvWindow=5000",
 		productID, amount, e.Now().UnixMilli())
 	url := fmt.Sprintf("%s/v1/simple-earn/flexible/redeem?%s&signature=%s",
 		strings.TrimRight(e.Sapi, "/"), q, sign(e.BnSec, q))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("X-MBX-APIKEY", e.BnKey)
 	resp, err := e.client().Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("redeem HTTP %d: %s", resp.StatusCode, string(b))
+		return "", fmt.Errorf("redeem HTTP %d: %s", resp.StatusCode, string(b))
 	}
-	return nil
+	return string(b), nil
 }

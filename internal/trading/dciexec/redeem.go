@@ -15,9 +15,9 @@ import (
 	"nox/internal/store/pgstore"
 )
 
-func (e *Executor) redeem(ctx context.Context, productID string, amount float64) error {
+func (e *Executor) redeem(ctx context.Context, productID string, amount float64) (string, error) {
 	if e.RedeemFn != nil {
-		return e.RedeemFn(ctx, productID, amount)
+		return "", e.RedeemFn(ctx, productID, amount)
 	}
 	return e.redeemFlexible(ctx, productID, amount)
 }
@@ -123,7 +123,8 @@ func (e *Executor) redeemShortfall(ctx context.Context, asset string, need float
 				"跳过 %s 额 %.8f<最小赎回 %.8f（防发径——发即 -6006 尘额拒）", p.ProductID, amt, p.MinRedeem))
 			continue
 		}
-		if err := e.redeem(ctx, p.ProductID, amt); err != nil {
+		body, err := e.redeem(ctx, p.ProductID, amt)
+		if err != nil {
 			if lerr := e.learnRedeemPit(ctx, err, p.ProductID); lerr != nil {
 				log.Printf("[dciexec] 赎回坑落行败: %v", lerr)
 			}
@@ -132,7 +133,7 @@ func (e *Executor) redeemShortfall(ctx context.Context, asset string, need float
 		}
 		// 写侧划转记账：赎回成功→transfer（earn→spot）。
 		e.ioTransfer(ctx, "binance", "USDT", amt, "earn", "spot",
-			fmt.Sprintf("earn-red:%s:%s:%d", p.ProductID, asset, runNonce), "")
+			earnIOExtID(body, "redeemId", fmt.Sprintf("earn-red:%s:%s:%d", p.ProductID, asset, runNonce)), body)
 		done += amt
 	}
 	return done, notes, nil

@@ -203,7 +203,7 @@ func (e *Executor) goEarn(ctx context.Context, p *pgstore.Proposal) (string, err
 	// venue asset/transfer 枚举不含 earn 钱包对，采集盲区补写侧实记。
 	// external_id=venue purchaseId（回执里抽）或提案 id 兜底幂等。
 	e.ioTransfer(ctx, p.Venue, "USDT", spotFree, "spot", "earn",
-		fmt.Sprintf("earn-sub:%d:%s", p.ID, pick.ProductID), body)
+		earnIOExtID(body, "purchaseId", fmt.Sprintf("earn-sub:%d:%s", p.ID, pick.ProductID)), body)
 	e.finish(ctx, oid, "filled", body)
 	if err := e.Store.SetProposalStatus(ctx, p.ID, "executed"); err != nil {
 		return "", fmt.Errorf("提案态机推进: %w", err)

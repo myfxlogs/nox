@@ -224,7 +224,8 @@ func (e *Executor) rotateOne(ctx context.Context, p *pgstore.Proposal, leg gate.
 		return "", fmt.Errorf("提案#%d 轮动 %s 已受理（request_id 幂等命中）", p.ID, pos.ProductID)
 	}
 	nonce := e.nowOr().UnixNano()
-	if err := rail.Redeem(ctx, pos.ProductID, pos.Amount); err != nil {
+	redBody, err := rail.Redeem(ctx, pos.ProductID, pos.Amount)
+	if err != nil {
 		e.finish(ctx, oid, "failed", err.Error())
 		if lerr := e.Store.LearnVenueReject(ctx, p.Venue, "earn_redeem",
 			errclass.VenueRejectSignature(err.Error()), 24*time.Hour); lerr != nil {
@@ -234,7 +235,7 @@ func (e *Executor) rotateOne(ctx context.Context, p *pgstore.Proposal, leg gate.
 			"系统侧病灶：轮动赎回 %s venue 拒单：%v", pos.ProductID, err)
 	}
 	e.ioTransfer(ctx, p.Venue, ccy, pos.Amount, "earn", "spot",
-		fmt.Sprintf("rot-red:%s:%d", pos.ProductID, nonce), "")
+		earnIOExtID(redBody, "redeemId", fmt.Sprintf("rot-red:%s:%d", pos.ProductID, nonce)), redBody)
 	body, err := rail.Subscribe(ctx, best.ProductID, pos.Amount)
 	if err != nil {
 		e.finish(ctx, oid, "failed", err.Error())

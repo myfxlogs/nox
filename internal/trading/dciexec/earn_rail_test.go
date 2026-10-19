@@ -32,9 +32,9 @@ func (r *fakeRail) Subscribe(_ context.Context, _ string, _ float64) (string, er
 	r.prodSub++
 	return `{"ok":true}`, r.subErr
 }
-func (r *fakeRail) Redeem(context.Context, string, float64) error {
+func (r *fakeRail) Redeem(context.Context, string, float64) (string, error) {
 	r.redeemN++
-	return r.redeemErr
+	return "", r.redeemErr
 }
 func (r *fakeRail) FreeBalance(_ context.Context, _ string) (float64, error) {
 	return r.freeBal, nil

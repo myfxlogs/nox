@@ -29,7 +29,7 @@ type EarnCred struct {
 type EarnRail interface {
 	Products(ctx context.Context, ccy string) ([]EarnProduct, error)
 	Subscribe(ctx context.Context, productID string, amount float64) (string, error)
-	Redeem(ctx context.Context, productID string, amount float64) error
+	Redeem(ctx context.Context, productID string, amount float64) (string, error) // 回执体返（抽 redeemId 供 io dedup 键域对齐）
 	FreeBalance(ctx context.Context, ccy string) (float64, error)
 	Positions(ctx context.Context, ccy string) ([]EarnPosition, error)
 }
@@ -183,11 +183,11 @@ func (r *okxEarnRail) Subscribe(ctx context.Context, _ string, amount float64) (
 	return string(b), err
 }
 
-func (r *okxEarnRail) Redeem(ctx context.Context, _ string, amount float64) error {
+func (r *okxEarnRail) Redeem(ctx context.Context, _ string, amount float64) (string, error) {
 	body := fmt.Sprintf(`{"ccy":"USDT","amt":"%s","side":"redempt"}`,
 		strconv.FormatFloat(amount, 'f', 8, 64))
-	_, err := r.req(ctx, http.MethodPost, "/api/v5/finance/savings/purchase-redempt", body)
-	return err
+	b, err := r.req(ctx, http.MethodPost, "/api/v5/finance/savings/purchase-redempt", body)
+	return string(b), err
 }
 
 // FreeBalance 可动=unified 交易户 availBal + funding 资金户 availBal 合并口径

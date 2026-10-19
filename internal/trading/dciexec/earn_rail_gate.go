@@ -103,11 +103,11 @@ func (r *gateEarnRail) Subscribe(ctx context.Context, _ string, amount float64) 
 	return string(b), err
 }
 
-func (r *gateEarnRail) Redeem(ctx context.Context, _ string, amount float64) error {
+func (r *gateEarnRail) Redeem(ctx context.Context, _ string, amount float64) (string, error) {
 	body := fmt.Sprintf(`{"currency":"USDT","amount":"%s","type":"redeem"}`,
 		strconv.FormatFloat(amount, 'f', 8, 64))
-	_, err := r.req(ctx, http.MethodPost, "/earn/uni/lends", "", body)
-	return err
+	b, err := r.req(ctx, http.MethodPost, "/earn/uni/lends", "", body)
+	return string(b), err
 }
 
 // Positions gate uni 借出在册 `GET /earn/uni/lends?currency=`——借出单列表
