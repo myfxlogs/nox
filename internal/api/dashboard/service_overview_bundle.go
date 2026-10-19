@@ -118,7 +118,7 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 	}
 	resp.PaperCount = int32(len(papers))
 	// §6-§10 产出面（棘轮拆 service_overview_output.go——组成明细/归因/漏斗/等待面/眠钱）。
-	s.appendOverviewOutput(ctx, resp, navPools, perf, now)
+	s.appendOverviewOutput(ctx, resp, navPools, perf)
 	// §4 风险心跳（kill 态+30d 净额对硬线+24h critical 数）。
 	if !killDone {
 		resp.KillSwitch = true // D-620ⓑ：展示 fail-closed——宁显停不显通
