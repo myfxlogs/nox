@@ -167,6 +167,7 @@ var (
 	T1PromotionSQL string
 	//go:embed replay/0101_canonical_fix.sql
 	CanonicalFixSQL string
+
 	//go:embed replay/0102_xasset_exec.sql
 	XassetExecSQL string
 	//go:embed replay/0103_income_events.sql

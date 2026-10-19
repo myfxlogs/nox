@@ -60,7 +60,7 @@ func TestS2Bridge(t *testing.T) {
 	}
 	var combo int
 	if err := s.Pool().QueryRow(ctx, `SELECT count(*) FROM xasset_allow_combos
-		WHERE canonical_buy='PAXGUSDT' AND canonical_sell='XAUUSD' AND venue_buy='binance' AND venue_sell='15032313'`).Scan(&combo); err != nil {
+		WHERE canonical_buy='PAXGUSDT' AND canonical_sell='XAU' AND venue_buy='binance' AND venue_sell='15032313' -- 写入侧归一：XAUUSD→XAU（mtBareCanon/映射同款）`).Scan(&combo); err != nil {
 		t.Fatal(err)
 	}
 	if combo != 1 {

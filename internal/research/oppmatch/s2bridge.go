@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"nox/internal/data/keydomain"
 	"strings"
 	"time"
 
@@ -116,6 +117,12 @@ func bridgeOne(ctx context.Context, st *pgstore.Store, h pgstore.OppHypothesis) 
 				"S2桥：approved 假设#%d（%s）%v%s", h.ID, h.CategoryKey, cerr,
 				alerttext.SeatDispatchLine("决策", fmt.Sprintf("假设#%d S2桥入册败处置（读 STATE 本行）", h.ID))), 24*time.Hour)
 		}
+		// 写入侧 canonical 归一（同族病灶根治：US500/TRXUSDT 类「簿侧归一/
+		// 组合存上游原值」——MT 腿先过 broker_symbol_map→canonical，未命中
+		// =bareOf 同口径尾裁；落库即归一，消费点不再各补）。
+		if nerr := normalizeComboCanonicals(ctx, st, combo); nerr != nil {
+			return nerr
+		}
 		if _, err := st.InsertXAssetAllowCombo(ctx, combo); err != nil && err != pgstore.ErrXAssetComboExists {
 			return fmt.Errorf("allow combo insert: %w", err)
 		}
@@ -172,6 +179,12 @@ func bridgeOne(ctx context.Context, st *pgstore.Store, h pgstore.OppHypothesis) 
 				"S2桥：approved 假设#%d（%s）%v%s", h.ID, h.CategoryKey, cerr,
 				alerttext.SeatDispatchLine("决策", fmt.Sprintf("假设#%d S2桥入册败处置（读 STATE 本行）", h.ID))), 24*time.Hour)
 		}
+		// 写入侧 canonical 归一（同族病灶根治：US500/TRXUSDT 类「簿侧归一/
+		// 组合存上游原值」——MT 腿先过 broker_symbol_map→canonical，未命中
+		// =bareOf 同口径尾裁；落库即归一，消费点不再各补）。
+		if nerr := normalizeComboCanonicals(ctx, st, combo); nerr != nil {
+			return nerr
+		}
 		if _, err := st.InsertXAssetAllowCombo(ctx, combo); err != nil && err != pgstore.ErrXAssetComboExists {
 			return fmt.Errorf("allow combo insert: %w", err)
 		}
@@ -192,4 +205,28 @@ func bridgeOne(ctx context.Context, st *pgstore.Store, h pgstore.OppHypothesis) 
 			h.ID, h.CategoryKey, h.FamilyFit,
 			alerttext.SeatDispatchLine("决策", fmt.Sprintf("假设#%d 新族机制票处置（读 STATE 本行+fin_opp_hypothesis#%d）", h.ID, h.ID))), 24*time.Hour)
 	}
+}
+
+// normalizeComboCanonicals MT 腿 canonical 写入归一：venue_key MT 型腿
+// canonical→CanonicalByBrokerSymbol(bareVenue,原值)（命中=规范形），未命中
+// =mtBareCanon 尾裁（regime.go 同款，同口径单源）。CEX 腿原样（universe
+// symbol 即 canonical 形）。映射键缺/venue 裸名不臆造=原值保留如实落。
+func normalizeComboCanonicals(ctx context.Context, st *pgstore.Store, c *pgstore.XAssetComboInsert) error {
+	for _, leg := range []struct {
+		canon *string
+		venue string
+	}{{&c.CanonicalBuy, c.VenueBuy}, {&c.CanonicalSell, c.VenueSell}} {
+		if !keydomain.IsMTKey(leg.venue) {
+			continue
+		}
+		bare := keydomain.BareOf(leg.venue)
+		if canon, ok, err := st.CanonicalByBrokerSymbol(ctx, bare, *leg.canon); err != nil {
+			return fmt.Errorf("canonical 归一查询 %s|%s: %w（fail-closed 拒写——脏键入库=假阳源）", bare, *leg.canon, err)
+		} else if ok {
+			*leg.canon = canon
+		} else {
+			*leg.canon = mtBareCanon(*leg.canon)
+		}
+	}
+	return nil
 }
