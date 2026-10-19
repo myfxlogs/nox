@@ -177,6 +177,24 @@ func (s *Store) ClosePosition(ctx context.Context, id int64, realizedPnl float64
 	if ct.RowsAffected() == 0 {
 		return ErrTerminalState
 	}
+	// P0 续件②：fill 实收→cost_model 累计（venue=首条 OPEN 腿归属，
+	// structure=仓 type；fee=实收，drift/latency/funding 本写点不可得=如实零
+	// 不占位虚报——消费面按 fills 折算均值）。
+	var posType, legVenue, legVtype string
+	var fee float64
+	if feesUSD != nil {
+		fee = *feesUSD
+	}
+	if qerr := s.pool.QueryRow(ctx, `
+		SELECT p.type, COALESCE(l.venue,''), COALESCE(l.venue_type,'')
+		FROM positions p
+		LEFT JOIN LATERAL (SELECT venue, venue_type FROM position_legs
+			WHERE position_id=p.id AND phase='OPEN' ORDER BY leg_no LIMIT 1) l ON true
+		WHERE p.id=$1`, id).Scan(&posType, &legVenue, &legVtype); qerr == nil && legVenue != "" {
+		if werr := s.RecordCostModel(ctx, legVenue, legVtype, posType, fee, 0, 0, 0, 0); werr != nil {
+			return fmt.Errorf("cost_model 写径: %w", werr)
+		}
+	}
 	s.notifyPositionChange() // D-469b S3
 	return nil
 }

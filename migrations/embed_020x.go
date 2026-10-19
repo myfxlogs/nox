@@ -168,3 +168,5 @@ var RegimePrecCfgSQL string // D-625 P2：regime/前提塌判据 app_config 种�
 var S2CanonNormSQL string // s2bridge 写入侧 canonical 归一·存量回填
 //go:embed 1056_snapshot_latest_expr_idx.sql
 var SnapshotLatestExprIdxSQL string // LatestVenueAccountSnapshots LATERAL 探针表达式索引
+//go:embed 1057_trial_cost_wiring.sql
+var TrialCostWiringSQL string // P0 续件：positions.combo_id 归因列
