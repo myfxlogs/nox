@@ -253,12 +253,14 @@ func csvFloats(s string) []float64 {
 }
 
 // mtTickSym MT 腿 tick 键同域解析（broker_symbol_map 实读）：裸 canon 三变体
-// （canon/canon+USDT/canon+USD）命中首行=broker 实存符号；全 miss=回退裸 canon
-// +注记（如实缺不臆造）。
+// （canon/canon+USDT/canon+USD）命中行取 **canonical 列**——ticks 存面键=canonical
+// 域（venue=裸户号+symbol=BTCUSDT 族），非 broker_symbol 线侧符号（BTCUSDTm——
+// 复审实证：返 broker_symbol 仍打不中 ticks，同族病灶第 6 例）。全 miss=回退裸
+// canon+注记（如实缺不臆造）。
 func mtTickSym(ctx context.Context, st *pgstore.Store, venue, canon string) (sym, note string) {
 	var hit string
 	if err := st.Pool().QueryRow(ctx, `
-		SELECT broker_symbol FROM broker_symbol_map
+		SELECT canonical FROM broker_symbol_map
 		WHERE venue = $1 AND canonical IN ($2, $2||'USDT', $2||'USD')
 		ORDER BY canonical LIMIT 1`, venue, canon).Scan(&hit); err == nil {
 		return hit, ""
