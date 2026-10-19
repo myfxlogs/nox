@@ -185,3 +185,7 @@
 
 - 即时测试径已答（新标签页/无痕窗口=sessionStorage 每 Tab 独立；DevTools 删 nox_token；4h 自动过期）。
 - 处置：立票 wip/logout-btn（顶头条「退出」钮，clearToken+回登录卡；无服务端吊销=单人短 session 设计内裁定）——施工完待部署授权。
+
+## 2026-10-19 13:2xZ — P1 实报：登录页无限刷新
+
+业主实报：「登陆页一直在刷新？根本无法填写6位码」。取证（服务端实拍+代码对拍）：useActionBadge 钩子先于登录门无条件执行→预登录 401→TOTP 拦截器 clearToken+reload→重挂载成环=TOTP 票拦截器回归（此前 401 为无害噪音）。双修（拦截器 #/login 断路+badge 预登录门）落 wip/logout-btn 叠加件，与退出钮同批待部署；条目 pre-auth-rpc-401-interceptor-reload-loop（high）入库。

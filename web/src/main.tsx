@@ -102,6 +102,7 @@ function useHash(): string {
 function useActionBadge(): number {
   const [n, setN] = useState(0);
   useEffect(() => {
+    if (!getToken()) return; // 未登录零发 authed RPC——预登录 401 会触发拦截器 reload（10-19 刷新循环病灶源头）
     const load = async () => {
       try {
         const r = await client.getActionBadge({});

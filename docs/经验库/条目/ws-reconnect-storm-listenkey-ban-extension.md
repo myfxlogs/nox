@@ -6,7 +6,7 @@ risk: high
 status: verified
 keywords: [binance, listenKey, -1003, 封禁, 重连风暴, 盲锤, 续期, 退避, flap, user ws, 资金路径]
 scope: [internal/collect/exchange, binance user ws, venue 用户流重连设计, cex-proxy]
-summary: 通道 flap×每轮重连 POST 新 listenKey 的 5s 盲锤→listenKey 端点 -1003 封禁（资金路径双目失明）；且封禁窗内继续锤会使 -1003 响应携带新到期时戳=锤续期封禁（04:10:50→04:14:51 实证）——「锤不延长封禁」假设被数据推翻。修=封禁窗感知退避（解析 banned until 时戳，窗内零 REST，到期+抖动恢复）。
+summary: 通道 flap×重连盲锤 listenKey→-1003 封禁且锤会续期封禁（实证）；修=封禁窗感知退避（窗内零 REST，到期+抖动恢复）。
 first_seen: 2026-09-30
 last_verified: 2026-09-30
 skills: [KB维护]

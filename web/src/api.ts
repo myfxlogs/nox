@@ -25,10 +25,14 @@ const transport = createConnectTransport({
         return await next(req);
       } catch (e) {
         // session 过期/失效→自动回登录页（TOTP 票禁线：过期后非静默续期=审计面）。
+        // 已在登录页则只清 token 不 reload——预登录 RPC 的 401 若触发刷新=死循环
+        // （10-19 业主实报：登录页反复刷新无法填 6 位码）。
         if (e instanceof Error && /unauthenticated|invalid token/i.test(e.message)) {
           clearToken();
-          location.hash = "#/login";
-          location.reload();
+          if ((location.hash || "#/").slice(1) !== "/login") {
+            location.hash = "#/login";
+            location.reload();
+          }
         }
         throw e;
       }
