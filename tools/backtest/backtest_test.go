@@ -41,7 +41,7 @@ func TestAdmitStarvingBRENTWindow(t *testing.T) {
 		mkRow(base, 1400, 90, 30, nil), // 断档 20h
 	}
 	stats := WindowStatsFrom(rows, 5*time.Minute)
-	ok, reasons := Admit(stats, fakeSession{known: false}, "3001157", "BRENT", 24*time.Hour, 5*time.Minute)
+	ok, reasons := Admit(stats, fakeSession{known: false}, "3001157", "BRENT", 24*time.Hour, 5*time.Minute, 15*time.Minute)
 	if ok {
 		t.Fatalf("BRENT 饥饿窗必须不可判, reasons=%v", reasons)
 	}
@@ -66,21 +66,21 @@ func TestAdmitHealthyWindow(t *testing.T) {
 		rows = append(rows, mkRow(base, m, 80, 20, &nz))
 	}
 	stats := WindowStatsFrom(rows, 5*time.Minute)
-	ok, reasons := Admit(stats, fakeSession{known: false}, "3001157", "BRENT", 24*time.Hour, 5*time.Minute)
+	ok, reasons := Admit(stats, fakeSession{known: false}, "3001157", "BRENT", 24*time.Hour, 5*time.Minute, 15*time.Minute)
 	if !ok {
 		t.Fatalf("健康窗应放行, reasons=%v", reasons)
 	}
 	// 会话对齐：开市 300min 期望 60 行，实得 10 → 不可判。
 	sparse := rows[:10]
 	s2 := WindowStatsFrom(sparse, 5*time.Minute)
-	ok2, reasons2 := Admit(s2, fakeSession{known: true, mins: 300}, "3001157", "BRENT", 24*time.Hour, 5*time.Minute)
+	ok2, reasons2 := Admit(s2, fakeSession{known: true, mins: 300}, "3001157", "BRENT", 24*time.Hour, 5*time.Minute, 15*time.Minute)
 	if ok2 {
 		t.Fatalf("对齐率 17%% 应不可判, reasons=%v", reasons2)
 	}
 	// 判别格：会话已知+满覆盖（1440min 全开=期望 288 行，实得 289）→必须放行。
 	// （回归锚：期望行数算反方向时满覆盖窗也被误拒——会话品种全废。）
 	s3 := WindowStatsFrom(rows, 5*time.Minute)
-	ok3, reasons3 := Admit(s3, fakeSession{known: true, mins: 1440}, "3001157", "BRENT", 24*time.Hour, 5*time.Minute)
+	ok3, reasons3 := Admit(s3, fakeSession{known: true, mins: 1440}, "3001157", "BRENT", 24*time.Hour, 5*time.Minute, 15*time.Minute)
 	if !ok3 {
 		t.Fatalf("会话已知满覆盖应放行, reasons=%v", reasons3)
 	}
@@ -168,5 +168,31 @@ func TestLatestFactsByKindAsOf(t *testing.T) {
 	}
 	if _, _, _, ok, err := s.LatestTickAsOf(ctx, "nosuch", "NOSUCH", t2); err != nil || ok {
 		t.Fatalf("零行应 ok=false 非 err: ok=%v err=%v", ok, err)
+	}
+}
+
+// TestAdmitGapThresholdOverride 阈参数化锚（口径双修②）：同一 20min 断档——
+// 15min 阈拒、30min 阈放行；Breaches 命中列表含起点+时长。
+func TestAdmitGapThresholdOverride(t *testing.T) {
+	base := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
+	nz := 9.0
+	var rows []BookRow
+	for m := 0; m <= 24*60; m += 5 {
+		if m >= 100 && m < 120 {
+			continue // 20min 断档
+		}
+		rows = append(rows, mkRow(base, m, 80, 20, &nz))
+	}
+	stats := WindowStatsFrom(rows, 5*time.Minute)
+	if len(stats.Breaches) != 1 || stats.Breaches[0].Dur != 25*time.Minute {
+		t.Fatalf("Breaches 应命中 25min 断档: %+v", stats.Breaches)
+	}
+	ok, reasons := Admit(stats, fakeSession{known: false}, "3001157", "BRENT", 24*time.Hour, 5*time.Minute, 15*time.Minute)
+	if ok {
+		t.Fatalf("25min 断档>15min 阈应拒: %v", reasons)
+	}
+	ok2, reasons2 := Admit(stats, fakeSession{known: false}, "3001157", "BRENT", 24*time.Hour, 5*time.Minute, 30*time.Minute)
+	if !ok2 {
+		t.Fatalf("30min 阈应放行: %v", reasons2)
 	}
 }
