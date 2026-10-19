@@ -19,7 +19,7 @@ var appSecretDescs = map[string]string{
 	"TRX_VOTE_PRIVATE_KEY":    "TRX 质押/投票签名私钥（链上投票执行）",
 	"TRONGRID_API_KEY":        "TronGrid API Key（TRX 链上采集限速提额）",
 	"NOX_AUTH_TOKEN":          "面板/API 认证令牌（Bearer；改后 ≤5s 生效，旧令牌即失效，无需重启）",
-	"NOX_TOTP_SECRET":         "TOTP 登录 secret（业主令 10-19；setup 一次性透出 otpauth_uri 后不可查，重生成=旧码+旧 session 全作废）",
+	"NOX_TOTP_SECRET":         "TOTP 登录 secret（业主令 10-19；setup 一次性透出 otpauth_uri 后不可查，重生成=旧码+旧 session 全作废；QR 标签=Nox:6位身份码，登录页同码对号）",
 	"NOX_BINANCE_PROXY_TOKEN": "币安代理通道 Bearer 令牌（D-145 入 secrets；仅发往代理端点，不泄给原生 venue 端点）",
 }
 

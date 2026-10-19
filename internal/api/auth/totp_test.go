@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -57,6 +58,37 @@ func TestTOTPLimiter(t *testing.T) {
 	l.Reset()
 	if ok, _ := l.Allow(now); !ok {
 		t.Fatal("Reset 后应放行")
+	}
+}
+
+// 身份码+QR 标签（业主令 10-19 追加）：6 位稳定小写 hex；归一化（大小写/空白）不变；
+// URI 标签 Nox:<身份码>+issuer=Nox+secret 大写。固定向量=python 同源对拍锚
+// （sha256("JBSWY3DPEHPK3PXP|idcode").hex()[:6]——跨语言推导一致性钉死）。
+func TestOTPAuthURIAndIdCode(t *testing.T) {
+	if got, want := TOTPIdCode("JBSWY3DPEHPK3PXP"), "1125ab"; got != want {
+		t.Fatalf("身份码固定向量: got %s want %s", got, want)
+	}
+	secret, err := GenerateTOTPSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := TOTPIdCode(secret)
+	if len(id) != 6 || id != strings.ToLower(id) {
+		t.Fatalf("身份码应 6 位小写 hex: %q", id)
+	}
+	if TOTPIdCode("  "+strings.ToLower(secret)+"  ") != id {
+		t.Fatal("归一化（大小写/空白）后身份码应不变")
+	}
+	other, _ := GenerateTOTPSecret()
+	if TOTPIdCode(other) == id {
+		t.Fatal("不同 secret 身份码应不同（160bit 随机碰撞可忽略）")
+	}
+	uri := OTPAuthURI(secret)
+	if !strings.HasPrefix(uri, "otpauth://totp/Nox:"+id+"?") {
+		t.Fatalf("URI 标签应 Nox:%s: %s", id, uri)
+	}
+	if !strings.Contains(uri, "issuer=Nox&") || !strings.Contains(uri, "secret="+strings.ToUpper(secret)) {
+		t.Fatalf("URI issuer/secret 应齐: %s", uri)
 	}
 }
 

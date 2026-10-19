@@ -48,10 +48,12 @@ func serveHTTP(cancel context.CancelFunc, cfg *config.Config, st *pgstore.Store,
 	})
 	mux.Handle(path, handler)
 	// TOTP 登录面（业主令 10-19）：/totp/login 6 位码→4h session；
-	// /totp/setup 首设/重生成（static Bearer 鉴权——QR 一次性透出后不查）。
-	totp := &totpEndpoints{secRes: secRes, lim: &auth.TOTPLimiter{}}
+	// /totp/setup 首设/重生成（static Bearer 鉴权——QR 一次性透出后不查，Seal 落库）；
+	// /totp/idcode 登录页身份码（Nox:xxxxxx 对号——业主令 10-19 追加）。
+	totp := &totpEndpoints{secRes: secRes, store: st, lim: &auth.TOTPLimiter{}}
 	mux.HandleFunc("/totp/login", totp.login)
 	mux.HandleFunc("/totp/setup", totp.setup)
+	mux.HandleFunc("/totp/idcode", totp.idcode)
 	// D-264：飞书事件订阅回调（challenge 握手+首条消息绑定 chat_id；公开端点仅提取无动作）。
 	// D-270 S3：扩展 replyHandler + feishuClient（已绑定→解析回复指令→SendText 发确认回执）。
 	// D-284 S4 → D-139：ReplyRouter 随 repo 面摘除（OK/SKIP 指令面退役），直连 FeishuQueryHandler。
