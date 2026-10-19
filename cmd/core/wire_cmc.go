@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"nox/internal/data/bus"
 	"nox/internal/data/collect"
 	"nox/internal/data/collect/cmc"
 	"nox/internal/platform/config"
@@ -17,7 +18,7 @@ import (
 // app_secrets 三键已注册且 SG 在值）；缺值=优雅降级跳过+请求箱落凭据缺口（禁凭据件误立）。
 // accountID/WS 开关走 app_config（D-162：装配点 DB 驱动禁 env）——迁移 1047 种子键。
 // 返回 WsClient 供 main 装配（nil=REST 回退态或未装配）。
-func buildCmcCollectors(ctx context.Context, st *pgstore.Store, cfg *config.Config, secRes *config.SecretResolver) ([]collect.Named, *cmc.WsClient) {
+func buildCmcCollectors(ctx context.Context, st *pgstore.Store, cfg *config.Config, secRes *config.SecretResolver, qbus *bus.QuoteBus) ([]collect.Named, *cmc.WsClient) {
 	cmc.SetCreateTplHex(secRes.Get("NOX_CMC_CREATE_TPL")) // 重登模板 secrets 注入（arb D-145 同源键 NOX 化）
 	email := secRes.Get("CMC_EMAIL")
 	pass := secRes.Get("CMC_PASSWORD")
@@ -38,6 +39,15 @@ func buildCmcCollectors(ctx context.Context, st *pgstore.Store, cfg *config.Conf
 	}
 	safego.GoLoop("wire_cmc:authRefresh", func() { auth.StartRefresh(context.Background()) })
 	prices := cmc.NewPricesCollector(auth, "X-AFQUL", st, cmc.DefaultRestBase)
+	// 业主令 10-19③：报价条候选接 CMC——REST 价（instrument 价唯一通道，WS 无价频）
+	// 写库后同步 publish qbus；venue_type=cfd、VenueSymbol=instrument_id。
+	// AllLatest 面增一源：cmc 非执行 venue（broker_symbol_map/combo 无 cmc 行）→eval/下单径零新配对。
+	prices.SetQuoteHook(func(bid, ask float64, ts time.Time) {
+		qbus.Publish(bus.Quote{
+			Symbol: "TRXUSD", Venue: "cmc", VenueType: "cfd",
+			Bid: bid, Ask: ask, Time: ts, VenueSymbol: "X-AFQUL",
+		})
+	})
 	safego.GoLoop("wire_cmc:pricesWatchdog", func() { prices.StartWatchdog(context.Background()) })
 	account := cmc.NewAccountCollector(auth, accountID, st, cmc.DefaultRestBase)
 	// WS 禁用开关（app_config cmc_ws_disabled）→ 回退全 REST（arb D-225 v2.1 同语义）

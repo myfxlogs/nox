@@ -35,6 +35,9 @@ type PricesCollector struct {
 	// D-234 R-V S2：REST 写库后触发同通知（frameHook seam，仿 WsClient.SetFrameHook）。
 	// nil=未接线→不通知（测试默认）。
 	frameHook func(FrameKind)
+	// 业主令 10-19③：报价条候选接 CMC——REST 价写库后同步 publish qbus（quoteHook seam）。
+	// nil=未接线→不发帧（测试默认）。
+	quoteHook func(bid, ask float64, ts time.Time)
 }
 
 func NewPricesCollector(auth jwtProvider, instrumentID string, store *pgstore.Store, restBase string) *PricesCollector {
@@ -44,6 +47,12 @@ func NewPricesCollector(auth jwtProvider, instrumentID string, store *pgstore.St
 // SetFrameHook D-234 R-V S2：注入帧钩子（main 装配 dashboard.NotifyCMCFrame）；nil=未接线→不通知。
 // REST 写库后触发同通知——5min mid/净敞口至少推得动（ws 静默期兜底）。
 func (c *PricesCollector) SetFrameHook(fn func(FrameKind)) { c.frameHook = fn }
+
+// SetQuoteHook 业主令 10-19③：注入报价总线钩子（main 装配 qbus.Publish）；nil=未接线→不发帧。
+// 仅双侧价齐全帧才发（bid/ask 缺一=残帧不发——venue 偶返单边价实拍在案）。
+func (c *PricesCollector) SetQuoteHook(fn func(bid, ask float64, ts time.Time)) {
+	c.quoteHook = fn
+}
 
 func (c *PricesCollector) Kind() string { return fact.KindCMCPrice }
 
@@ -89,6 +98,9 @@ func (c *PricesCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 	if err := c.store.InsertCMCPrice(ctx, rec); err != nil {
 		return nil, fmt.Errorf("cmc price insert: %w", err)
+	}
+	if c.quoteHook != nil && rec.BidPrice > 0 && rec.AskPrice > 0 {
+		c.quoteHook(rec.BidPrice, rec.AskPrice, quoteTime)
 	}
 	// D-234 R-V S2：REST 写库后触发同通知（5min mid/净敞口至少推得动）。
 	if c.frameHook != nil {

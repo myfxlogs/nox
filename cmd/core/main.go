@@ -155,7 +155,7 @@ func main() {
 	if trxW != nil {
 		trxSources = trxW.sources
 	}
-	cmcSources, cmcWs := buildCmcCollectors(ctx, st, cfg, secRes)                                        // 凭据缺=内部优雅降级 nil+缺口落箱
+	cmcSources, cmcWs := buildCmcCollectors(ctx, st, cfg, secRes, qbus)                                  // 凭据缺=内部优雅降级 nil+缺口落箱
 	sources := append(append(append([]collect.Named{}, cexCollectors...), trxSources...), cmcSources...) // D-211 TRX + CMC（D-237/D-266 已随 D-139 摘除）
 	sources = append(sources,                                                                            // mt_swap 依赖 brokerMgr.SwapFacts（D-036）
 		collect.Named{Name: "mt_swap", Interval: cfg.SwapRefresh, Collector: &collect.MTSwapCollector{Fetch: brokerMgr.SwapFacts}},
