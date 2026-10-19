@@ -196,3 +196,34 @@ func TestAdmitGapThresholdOverride(t *testing.T) {
 		t.Fatalf("30min 阈应放行: %v", reasons2)
 	}
 }
+
+// TestMtTickSymMap 诊断键同域锚（口径双修①）：broker_symbol_map 三变体命中
+// 返回实存 broker_symbol（ticks 存面键）；全 miss 回退裸 canon+注记如实缺。
+func TestMtTickSymMap(t *testing.T) {
+	s := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM broker_symbol_map WHERE venue='bt_diag_v'; DELETE FROM broker_accounts WHERE venue='bt_diag_v'`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = s.Pool().Exec(ctx, `DELETE FROM broker_symbol_map WHERE venue='bt_diag_v'; DELETE FROM broker_accounts WHERE venue='bt_diag_v'`)
+	})
+	if _, err := s.Pool().Exec(ctx,
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('bt_diag_v','mt5','h',443,'p')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Pool().Exec(ctx, `
+		INSERT INTO broker_symbol_map (venue, broker_symbol, canonical) VALUES
+		('bt_diag_v','BRENT.ft','BRENTUSD'),   -- canon 加 USD 变体命中
+		('bt_diag_v','XAUUSD.p','XAUUSD')`); err != nil {
+		t.Fatal(err)
+	}
+	sym, note := mtTickSym(ctx, s, "bt_diag_v", "BRENT")
+	if sym != "BRENT.ft" || note != "" {
+		t.Fatalf("BRENT 变体命中期 BRENT.ft: sym=%s note=%s", sym, note)
+	}
+	sym2, note2 := mtTickSym(ctx, s, "bt_diag_v", "NOSUCH")
+	if sym2 != "NOSUCH" || note2 == "" {
+		t.Fatalf("全 miss 应回退裸键+注记: sym=%s note=%s", sym2, note2)
+	}
+}
