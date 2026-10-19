@@ -131,9 +131,13 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 			if _, ok := gate.ExecTemplates[r.TemplateID]; ok {
 				venues = dciProposalVenues
 			} else if gate.EarnTemplates[r.TemplateID] {
-				// earn 族（earn_apr_lending/cash_mgmt）按有 USDT 报价行的 rail
-				// venue 各出（P3 同源修：cash_mgmt 主环单 binance+跨所顶档
-				// APR 是同型错价残留——报价所取 venue 如实写提案）。
+				if r.TemplateID == "cash_mgmt" {
+					// cash_mgmt per-venue 产制归 idleGapScan 独域（APR 下限闸
+					// 同源面——主环扇出不过闸=绕闸径，剔出归唯一产制点）。
+					continue
+				}
+				// earn 族（earn_apr_lending/earn_rotation）按有 USDT 报价行
+				// 的 rail venue 各出（报价所取 venue 如实写提案）。
 				venues, venueAPR = earnQuoteVenues(ctx, st)
 			}
 			for _, venue := range venues {
