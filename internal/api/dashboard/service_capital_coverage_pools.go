@@ -17,32 +17,27 @@ func trxPoolRow(ctx context.Context, s *Service) *v1.CapitalCoverageRow {
 	if err != nil {
 		return nil
 	}
+	// D-629 业绩口径剔 TRX（业主令）：质押/投票/能量=本金自带链上回报，非系统
+	// 发现/评估/执行产出→业绩外行（RealMoney/Productive=false 不入总资金分母与
+	// 在产分子；APR 仅落 note 展示不入加权年化）；行保留可见（钱在哪仍要看得见）。
 	r := covRow("TRX 质押+投票+能量")
 	r.BalanceCcy = "USD" // D-130 域3：TRX 行=折算 USD 值
-	r.Status = "在赚"
-	r.Productive = true
-	r.RealMoney = true
+	r.Status = "业绩外·自营盘"
+	r.Productive = false
+	r.RealMoney = false
 	voteAPR, hasVote := 0.0, false
 	if va, err := s.store.LastTRXVoteApr(ctx); err == nil {
 		voteAPR, hasVote = va.CurrentRate, true
-		r.AprPct = voteAPR
-		r.HasApr = true
 	}
 	energyAPR, sampleDays, err := s.TrxEnergyRentalAPR(ctx, 30)
 	// D-258 语义：样本<30d/零在押 → aprPct=0 不猜；sampleDays>=30 即有效读数
 	energyOK := err == nil && sampleDays >= 30
-	note := ""
+	note := "业绩外·自营盘（D-629：不入总资金/在产/加权年化）"
 	if hasVote {
-		note = fmt.Sprintf("投票 %.2f%%", voteAPR)
+		note += fmt.Sprintf("；投票 %.2f%%", voteAPR)
 	}
 	if energyOK {
 		note += fmt.Sprintf("+能量租赁 %.2f%%", energyAPR)
-		if hasVote {
-			r.AprPct += energyAPR
-		} else {
-			r.AprPct = energyAPR
-			r.HasApr = true
-		}
 	}
 	balTRX := float64(acct.BalanceSun+acct.TronPower) / 1e6
 	if price, ok := trxUSDPrice(ctx, s); ok {
