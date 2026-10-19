@@ -5,13 +5,29 @@ package pgstore
 import (
 	"context"
 	"fmt"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// execer pgx.Tx 与 *pgxpool.Pool 同构 Exec 面——recordCostModelTx 共用。
+type execer interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
 
 // RecordCostModel 单笔 fill 实收累计写（bucket_hour=-1=全天桶先粗后细）。
 // fills+1；fee/drift/latency/funding 双边累计——均值由消费面按 fills 折算。
+// 事务核 recordCostModelTx——ClosePosition 事务内挂同事务语义
+// （钱径原子性：status 翻转与成本累计同提交，写败=整 tx 回滚可重试）。
 func (s *Store) RecordCostModel(ctx context.Context, venue, venueType, structure string,
 	feeUSD, driftBps float64, latencyMs int64, fundingExp, fundingAct float64) error {
-	_, err := s.pool.Exec(ctx, `
+	return recordCostModelTx(ctx, s.pool, venue, venueType, structure,
+		feeUSD, driftBps, latencyMs, fundingExp, fundingAct)
+}
+
+// recordCostModelTx tx 参数化核——pgx.Tx/pool 同 Exec 签名直穿。
+func recordCostModelTx(ctx context.Context, tx execer, venue, venueType, structure string,
+	feeUSD, driftBps float64, latencyMs int64, fundingExp, fundingAct float64) error {
+	_, err := tx.Exec(ctx, `
 		INSERT INTO fin_cost_model (venue, venue_type, structure, bucket_hour,
 			fills, fee_usd, drift_bps, latency_ms, funding_exp, funding_act, updated_at)
 		VALUES ($1,$2,$3,-1, 1,$4,$5,$6,$7,$8, now())
