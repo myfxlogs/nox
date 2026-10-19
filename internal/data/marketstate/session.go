@@ -106,3 +106,40 @@ func (t Table) OpenAt(venue, symbol string, now time.Time) (open, known bool) {
 	}
 	return false, true
 }
+
+// openScanMaxMin 周表回扫窗封顶（分钟）：会话表周期=7 天，8 天窗必覆盖全周期——
+// 更老的 from 截到 to-8d（回扫只答「窗内是否/多少分钟开市」，超帽语义=照常答）。
+const openScanMaxMin = 8 * 24 * 60
+
+// OpenMinutes key=venue|canonical 在 [from,to] 内的开市分钟数（分钟步进周表；
+// known=false=表缺席）。自盯/审计面用（纯读，调用量=分钟数×窗数，5min 拍可承受）。
+func (t Table) OpenMinutes(venue, symbol string, from, to time.Time) (mins int, known bool) {
+	win, ok := t[venue+"|"+symbol]
+	if !ok {
+		return 0, false
+	}
+	if !from.Before(to) {
+		return 0, true
+	}
+	if to.Sub(from) > openScanMaxMin*time.Minute {
+		from = to.Add(-openScanMaxMin * time.Minute)
+	}
+	cur := from.Truncate(time.Minute)
+	for !cur.After(to) {
+		for _, w := range win {
+			if w.InSession(cur) {
+				mins++
+				break
+			}
+		}
+		cur = cur.Add(time.Minute)
+	}
+	return mins, true
+}
+
+// OpenSince (from,to] 是否存在任一开市分钟——停更窗豁免判据：窗内从未开市=
+// 静默由闭市解释；窗内曾开市而簿未写=真静默。known=false=表缺席。
+func (t Table) OpenSince(venue, symbol string, from, to time.Time) (openSeen, known bool) {
+	mins, known := t.OpenMinutes(venue, symbol, from, to)
+	return mins > 0, known
+}
