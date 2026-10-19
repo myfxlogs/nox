@@ -706,3 +706,16 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **授权边界在案**：trial 轨骑行走在 D-620 Grant/D-624 试单授权纪律内——试单轨建成≠授权自动开；armed#19 首笔真金 fill 走 armed 既有链不等本方案；combo#20 为 trial 轨首发标本（$200 显式额度）。
 - **失守计数**：决策席「等你裁拆票令」=D-597 第二形态失守（实现路径职权内裁定推回业主）——计 1，已纠正为径行裁定。
 - **反证锚**：trial 轨首月若 3 笔试单实测成本全部显著超模型值 → carry 成本模型整体失真 → 全线停派回表。
+
+## D-626 · TimescaleDB 有条件 GO——三阶段迁移序+回滚预案（10-19 决策席裁定）
+
+依据：tsdb-eval 基准全套在案（facts 8.5M/4565MB、ticks 2.7M/单月分区560MB、DB 6.8G、盘 71%）；design-verification 结论=有条件 GO 两阶段。裁定 GO，迁移序照实施序落地：
+
+- **阶段 A（vanilla 侧备，镜像未换）**：facts 列级手术——建新复合唯一索引 `(ts, kind, venue_key, symbol)` CONCURRENTLY（~8.5M 行预估分钟级，全程新写入不断流）、DROP 单列 `facts_pkey`→`ALTER PRIMARY KEY` 换复合键；ticks 建同构空表 `ticks_tsdb`（同 schema 零分区）。
+- **阶段 B（镜像切换）**：SG compose pg 镜像换 `timescale/timescaledb:latest-pg16`——**变更点=1 行**，滚动维护窗执行；起库后 `CREATE EXTENSION timescaledb`+`shared_preload_libraries` 确认（镜像自带配置，GUC 手工调优——pg mem cap 2500m，不信镜像默认 tune 值）。
+- **阶段 C（hypertable 化+策略接位）**：`create_hypertable('facts','ts',migrate_data=>true)`（8.5M 行在线搬迁——镜像更换后一次性事件，全量重写预估分钟级，错峰执行）；ticks 数据搬入 `ticks_tsdb`→RENAME 换名→`create_hypertable` 空表化；挂 retention policy（ticks 72h、facts 1y 起步）→删 `EnsureMonthPartition`/`PruneTicks` 代码+cron `ops_ticks_retention.sh`（退役，ops_disk_guard/test_db_gc 保留）。
+- **回滚预案**：阶段 A 全程在 vanilla——任意时点 `git revert`/镜像不换即回；阶段 B 后若 tsdb 起库失败：data 目录卷未配 shared_preload 时可直回 postgres:16-alpine 原镜像（extensions 仅 create 过未 hypertable 化=可降级），**已 hypertable 化则回滚须 dump/restore 单表导回 vanilla 库**（预案文档随施工票附）。在 GO/NO-GO 判决点（阶段 C 前）设 checkpoint：benchmark 对口读面 latency 复测（LatestFacts 4.8s 索引病根另案修）。
+- **falsification anchor**：阶段 C 完成后 `FactsSince`/覆盖账本主读面 p95 显著退化（>2× 基线）或 hypertable 插入路径报错率>0 → 回滚触发器拉响，回滚径=导回 vanilla。
+- **禁线**：迁移过程中 facts/ticks 写入零中断（覆盖账本噪声在迁移窗豁免报警）；compression 二期另裁（非本裁定范围）。
+
+——决策席·Devin（依据 tsdb-eval benchmark+坑正典+实施序 GO 建议）
