@@ -77,6 +77,13 @@ func TestAdmitHealthyWindow(t *testing.T) {
 	if ok2 {
 		t.Fatalf("对齐率 17%% 应不可判, reasons=%v", reasons2)
 	}
+	// 判别格：会话已知+满覆盖（1440min 全开=期望 288 行，实得 289）→必须放行。
+	// （回归锚：期望行数算反方向时满覆盖窗也被误拒——会话品种全废。）
+	s3 := WindowStatsFrom(rows, 5*time.Minute)
+	ok3, reasons3 := Admit(s3, fakeSession{known: true, mins: 1440}, "3001157", "BRENT", 24*time.Hour, 5*time.Minute)
+	if !ok3 {
+		t.Fatalf("会话已知满覆盖应放行, reasons=%v", reasons3)
+	}
 }
 
 // TestReplayMath 回放状态机逐笔精确：entry_net≥阈进、exit_spread≤阈出、

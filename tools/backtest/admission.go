@@ -83,7 +83,7 @@ func Admit(st WindowStats, sess SessionSource, mtVenue, mtCanon string,
 		if mins, known := sess.OpenMinutes(mtVenue, mtCanon, st.FirstTS, st.LastTS); known {
 			st.SessionKnown = true
 			st.SessionOpenMin = mins
-			expected := mins * int(cadence) / int(time.Minute)
+			expected := mins / (int(cadence) / int(time.Minute))
 			if expected < 1 {
 				expected = 1
 			}
