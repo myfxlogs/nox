@@ -160,11 +160,11 @@ func runBackfillMode(ctx context.Context, dsn string) (err error) {
 	hc := httpx.Client()
 	since := time.Now().Add(-5 * 24 * time.Hour) // MT ticks 保留窗（诚实边界）
 	var firstErr error
-	combos, uni, demand, accts, equiv, err := loadDerivationInputs(ctx, st)
+	combos, uni, demand, accts, equiv, caps, err := loadDerivationInputs(ctx, st)
 	if err != nil {
 		return fmt.Errorf("monitor pairs inputs: %w", err)
 	}
-	pairs, uncovered := deriveMonitorPairs(combos, uni, demand, accts, equiv)
+	pairs, uncovered := deriveMonitorPairs(combos, uni, demand, accts, equiv, caps)
 	for _, u := range uncovered {
 		log.Printf("[monitor-pairs] warn: 组合未被簿覆盖（一次性列名，B-008/D-144）: %s", u)
 	}

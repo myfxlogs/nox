@@ -57,7 +57,7 @@ func currentNine() [][3]string {
 // 注：现行第 4 行（binance BTCUSDT-BTC）无 enabled 组合源——入 legacyPairs 第三条保守保留
 // （B-009 对拍留痕，删行=决策席裁定）。
 func TestD472_DeriveCoversCurrentNine(t *testing.T) {
-	pairs, uncovered := deriveMonitorPairs(d472Combos(), d472Universe(), nil, nil, nil)
+	pairs, uncovered := deriveMonitorPairs(d472Combos(), d472Universe(), nil, nil, nil, nil)
 	have := map[string]bool{}
 	for _, p := range pairs {
 		have[p.cexVenue+"|"+p.sym+"|"+p.pair+"|"+p.exSym] = true
@@ -79,7 +79,7 @@ func TestD472_DeriveCoversCurrentNine(t *testing.T) {
 
 // TestD472_DerivePairKeyPaperCfdMirror 派生键与 paperCfdPairKey 口径镜像（消费端同式）。
 func TestD472_DerivePairKeyPaperCfdMirror(t *testing.T) {
-	pairs, _ := deriveMonitorPairs(d472Combos(), d472Universe(), nil, nil, nil)
+	pairs, _ := deriveMonitorPairs(d472Combos(), d472Universe(), nil, nil, nil, nil)
 	want := map[string]bool{
 		"XPTUSDT-XPT": false, "XPDUSDT-XPD": false, "BTCUSDT-BTC": false, "XAUUSDT-XAU": false,
 	}
@@ -98,7 +98,7 @@ func TestD472_DerivePairKeyPaperCfdMirror(t *testing.T) {
 // TestD472_UncoveredAndExclusions B-007/B-008：同所组合入名单；nonDerivable 静默排除；
 // universe miss → fail-closed 暴露。
 func TestD472_UncoveredAndExclusions(t *testing.T) {
-	_, uncovered := deriveMonitorPairs(d472Combos(), d472Universe(), nil, nil, nil)
+	_, uncovered := deriveMonitorPairs(d472Combos(), d472Universe(), nil, nil, nil, nil)
 	joined := strings.Join(uncovered, "\n")
 	if !strings.Contains(joined, "XAUTUSDT(binance:perp)×XAUUSDT(binance:perp)") {
 		t.Errorf("同所组合 id5 应入反向对账名单: %v", uncovered)
@@ -117,7 +117,7 @@ func TestD472_UncoveredAndExclusions(t *testing.T) {
 			noGate = append(noGate, r)
 		}
 	}
-	_, unc2 := deriveMonitorPairs(d472Combos(), noGate, nil, nil, nil)
+	_, unc2 := deriveMonitorPairs(d472Combos(), noGate, nil, nil, nil, nil)
 	if !strings.Contains(strings.Join(unc2, "\n"), "universe 无合约行") {
 		t.Errorf("universe miss 应 fail-closed 暴露: %v", unc2)
 	}
@@ -125,8 +125,8 @@ func TestD472_UncoveredAndExclusions(t *testing.T) {
 
 // TestD472_DeriveDeterminism 同输入两跑清单逐行一致（cron 轮稳定性）。
 func TestD472_DeriveDeterminism(t *testing.T) {
-	a, ua := deriveMonitorPairs(d472Combos(), d472Universe(), nil, nil, nil)
-	b, ub := deriveMonitorPairs(d472Combos(), d472Universe(), nil, nil, nil)
+	a, ua := deriveMonitorPairs(d472Combos(), d472Universe(), nil, nil, nil, nil)
+	b, ub := deriveMonitorPairs(d472Combos(), d472Universe(), nil, nil, nil, nil)
 	if len(a) != len(b) || len(ua) != len(ub) {
 		t.Fatalf("派生不稳定: %d/%d vs %d/%d", len(a), len(ua), len(b), len(ub))
 	}
@@ -139,7 +139,7 @@ func TestD472_DeriveDeterminism(t *testing.T) {
 
 // derivedPairs 集成测助手：生产形 fixture 派生清单（替代退役的 monitorPairs()）。
 func derivedPairs() []monitorPair {
-	pairs, _ := deriveMonitorPairs(d472Combos(), d472Universe(), nil, nil, nil)
+	pairs, _ := deriveMonitorPairs(d472Combos(), d472Universe(), nil, nil, nil, nil)
 	return pairs
 }
 
@@ -159,7 +159,7 @@ func TestD144_UniverseDemandDerivesPair(t *testing.T) {
 	uni := append(d472Universe(), universeRow{"binance", "SOLUSDT", "SOL"})
 	pairs, _ := deriveMonitorPairs(nil, uni,
 		[]cfdDemandRow{{canonical: "SOL", mtVenue: "277842155", cexVenue: "binance"}},
-		[]mtAcct{{venue: "277842155", vtype: "mt5"}}, nil)
+		[]mtAcct{{venue: "277842155", vtype: "mt5"}}, nil, nil)
 	if !d144HasPair(pairs, "binance:perp", "SOLUSDT-SOL", "SOL", "277842155:mt5") {
 		t.Fatalf("universe 达标行应派生簿对, pairs=%v", pairs)
 	}
@@ -170,7 +170,7 @@ func TestD144_NewStreamAccountDerives(t *testing.T) {
 	uni := append(d472Universe(), universeRow{"binance", "SOLUSDT", "SOL"})
 	demand := []cfdDemandRow{{canonical: "SOL", mtVenue: "99999999", cexVenue: "binance"}}
 	pairs, _ := deriveMonitorPairs(nil, uni, demand,
-		[]mtAcct{{venue: "99999999", vtype: "mt5"}}, nil)
+		[]mtAcct{{venue: "99999999", vtype: "mt5"}}, nil, nil)
 	if !d144HasPair(pairs, "binance:perp", "SOLUSDT-SOL", "SOL", "99999999:mt5") {
 		t.Fatalf("新在流账户应派生其键簿对, pairs=%v", pairs)
 	}
@@ -186,8 +186,8 @@ func TestD144_DisableAllowlistDemandRetains(t *testing.T) {
 	uni := d472Universe()
 	accts := []mtAcct{{venue: "3001157", vtype: "mt5"}}
 	demand := []cfdDemandRow{{canonical: "XAU", mtVenue: "3001157", cexVenue: "gate"}}
-	withCombo, _ := deriveMonitorPairs(d472Combos(), uni, demand, accts, nil)
-	withoutCombo, _ := deriveMonitorPairs(nil, uni, demand, accts, nil)
+	withCombo, _ := deriveMonitorPairs(d472Combos(), uni, demand, accts, nil, nil)
+	withoutCombo, _ := deriveMonitorPairs(nil, uni, demand, accts, nil, nil)
 	for _, tag := range []struct {
 		name  string
 		pairs []monitorPair

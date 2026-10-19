@@ -62,11 +62,16 @@ var nonDerivablePairs = map[string]bool{
 
 // deriveMonitorPairs D-472 S5 白名单派生→D-144 三源并集（纯函数，可测）。
 // 输入：combos=enabled 行；uni=TRADING 行；demand=universe 达标行∪active 纸面仓
-// (canonical,mt,cex)；accts=ticks 在流 MT 账户；equiv=asset_equiv enabled 行。
+// (canonical,mt,cex)；accts=ticks 在流 MT 账户；equiv=asset_equiv enabled 行；
+// caps=账户能力账本（broker_symbol_map 裸户→canonical 集；nil=滤关——测试零值路径，
+// 生产 loadDerivationInputs 恒非 nil）。
 // 返回派生清单（∪legacy，含 mtVenueKey 去重）+反向对账 uncovered 组合名
 // （enabled/demand 行未被派生覆盖者；nonDerivable 命名行除外——结构性已知不刷屏）。
+// 组合×venue 展开按 caps 过滤（裁定注记53③/簿饥饿销账遗留②）：无映射=该户无此
+// 能力不产对（TRXUSDT@110660304 类结构性 skip 噪音根除）；demand 绑定对不滤
+// （仓驱动必须继续暴露）。venue 全被滤的组合入 uncovered（反向对账不静默）。
 func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdDemandRow,
-	accts []mtAcct, equiv []pgstore.AssetEquivEntry) (pairs []monitorPair, uncovered []string) {
+	accts []mtAcct, equiv []pgstore.AssetEquivEntry, caps map[string]map[string]bool) (pairs []monitorPair, uncovered []string) {
 	byKey := map[string]string{} // venue|hc → symbol
 	symsByVenue := map[string]map[string]bool{}
 	for _, r := range uni {
@@ -77,12 +82,7 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdD
 		symsByVenue[r.venue][r.symbol] = true
 	}
 	isMT := keydomain.IsMTKey
-	bareOf := func(c string) string {
-		if b := strings.TrimSuffix(c, "USDT"); b != c {
-			return b
-		}
-		return strings.TrimSuffix(c, "USD")
-	}
+	bareOf := bareCanon // MT canonical 裸形归一单源（capabilities.go；组合行/map 两侧键域合流点）
 	// cexSymFor：universe 命中（venue+hedge_canonical）→ miss 按 venue 约定构造+回查
 	// 存在性 → 仍 miss=false（fail-closed 不静默丢，调用方 skip+warn）。
 	cexSymFor := func(cexVenueKey, mtCanonical, bare string) (string, bool) {
@@ -164,6 +164,15 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdD
 			pairs = append(pairs, p)
 		}
 	}
+	// capable venue×MT-canonical 能力判定：有账无 canonical=无能力（fail-closed）；
+	// 无账（map 全无该户行）=无能力；caps nil=滤关。键双侧过 bareOf：户号裸名
+	// （map.venue 域）+canonical 裸形（1055 后组合行 TRX×map TRXUSDT 同域合流）。
+	capable := func(venueKey, mtCanon string) bool {
+		if caps == nil {
+			return true
+		}
+		return caps[keydomain.BareOf(venueKey)][bareOf(mtCanon)]
+	}
 	// 确定性序：venue 键排序后展开（同输入同输出）。
 	venues := make([]string, 0, len(globalVenueKeys))
 	for v := range globalVenueKeys {
@@ -172,6 +181,9 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdD
 	sort.Strings(venues)
 	for _, lp := range legacyPairs {
 		for _, v := range venues {
+			if !capable(v, lp.exSym) { // legacy MT canonical=exSym（XAUUSD/BTCUSDT 域同 map.canonical）
+				continue
+			}
 			p := lp
 			p.mtVenueKey = v
 			emit(p)
@@ -203,8 +215,17 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdD
 			uncovered = append(uncovered, name+"（universe 无合约行，簿行缺失）")
 			continue
 		}
+		emitted := 0
 		for _, v := range venues {
+			if !capable(v, mtCanon) {
+				continue
+			}
 			emit(monitorPair{cexVenue: cexVenue, sym: sym, pair: cexCanon + "-" + bare, exSym: mtCanon, mtVenueKey: v})
+			emitted++
+		}
+		if emitted == 0 {
+			// 能力滤全剔：派生面无任何账户具备该 canonical——反向对账暴露不静默
+			uncovered = append(uncovered, name+"（无能力 venue，能力滤剔除）")
 		}
 	}
 	// 上游域：universe 达标行∪active 纸面仓——按其自带 (mt,cex) 绑账户派生，
