@@ -59,6 +59,34 @@ func idleGapScan(ctx context.Context, st *pgstore.Store) {
 			if p.Currency != "USDT" {
 				continue
 			}
+			// APR 下限闸（承接位提案噪音根治——484 expired 实证）：先读 APR 后建提案，
+			// 低于 cash_mgmt_min_apr（app_config 缺省 0.005=0.5%，分数域同 fin_cex_earn_apr.apr）或缺 APR 不提案，
+			// 假设层 UpsertHypothesis 幂等记实（低承接承接位不提案但留痕不静默）；
+			// 不进 cashLive=既存 pending 提案同拍 expired（噪面自然消）。
+			apr, aprOK, aprErr := st.LatestEarnAPR(ctx, p.Venue, p.Currency)
+			if aprErr != nil {
+				log.Printf("[oppmatch] idle apr %s: %v", p.Venue, aprErr)
+			}
+			minApr := 0.005
+			if v, ok, cerr := st.AppConfigFloat(ctx, "cash_mgmt_min_apr"); cerr == nil && ok {
+				minApr = v
+			}
+			if !aprOK || apr < minApr {
+				why := "无 APR 行"
+				if aprOK {
+					why = fmt.Sprintf("APR %.3f<阈 %.3f（分数域）", apr, minApr)
+				}
+				if _, _, _, herr := st.UpsertHypothesis(ctx, pgstore.OppHypothesis{
+					Venue: p.Venue, CategoryKey: "cash_mgmt:low_apr:" + p.Venue,
+					InstType: "cash_mgmt", Shape: "earn_apr",
+					Sample: fmt.Sprintf("%.4f", apr),
+					Detail: fmt.Sprintf("承接位闲池 %.4g USDT 不提案：%s（假设层如实记录，APR 回升即自然复提案）",
+						p.Equity, why)}); herr != nil {
+					log.Printf("[oppmatch] idle hypothesis %s: %v", p.Venue, herr)
+				}
+				log.Printf("[oppmatch] idle %s 不提案：%s", p.Venue, why)
+				continue
+			}
 			cashLive[p.Venue] = true
 			pid, _, err := st.CreateProposal(ctx, &pgstore.Proposal{
 				TemplateID: "cash_mgmt", ExecTrack: "auto", Venue: p.Venue})
@@ -67,15 +95,11 @@ func idleGapScan(ctx context.Context, st *pgstore.Store) {
 				continue
 			}
 			// 提案须带评估卡（M4.1 无卡拒单——SG 实证 #377/#378 零卡死提案）。
-			// 证源=池闲置实证+venue earn APR 最新行；APR 缺→卡面 gross missing
-			// 如实 unevaluable 不编值。
-			r := Result{TemplateID: "cash_mgmt", ExecTrack: "auto"}
-			if apr, ok, aerr := st.LatestEarnAPR(ctx, p.Venue, p.Currency); aerr == nil && ok {
-				r.APR = &apr
-				r.GrossEvidence = fmt.Sprintf(
-					"fin_cex_earn_apr %s %s 最新行；闲置池实证 equity=%.4g 30d收益=0",
-					p.Venue, p.Currency, p.Equity)
-			}
+			// 证源=池闲置实证+venue earn APR 最新行（闸已先读——此处同源填卡）。
+			r := Result{TemplateID: "cash_mgmt", ExecTrack: "auto", APR: &apr}
+			r.GrossEvidence = fmt.Sprintf(
+				"fin_cex_earn_apr %s %s 最新行；闲置池实证 equity=%.4g 30d收益=0",
+				p.Venue, p.Currency, p.Equity)
 			card := evalProposal(ctx, st, r, pid)
 			if _, uerr := st.UpsertOppEval(ctx, card); uerr != nil {
 				log.Printf("[oppmatch] idle eval card #%d: %v", pid, uerr)
