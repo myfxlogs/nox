@@ -764,3 +764,10 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 
 - **MT5 真户三户**：exness=3001157、ic=15032313、XM=110660304；1279967/1350684/62311223=脏数据（历史连接残留/死户），本金域与采集枚举须按白名单滤，禁快照全量枚举当真实账户面。
 - **快照层判读令升级**：对拍实盘/业绩口径取证一律走 live 帧（mt_frame/okx_event/rest_poll 实时 src）——`fetched_at` 陈旧行与 digest 段快照值**禁当现值引用**（本席对拍误引陈值实证在案）。
+
+### D-631（业主令 10-19 四：「历史就该进历史表，不该影响生产」）数据生命周期分层
+
+- **判定=同意**，界分两层：
+  1. **Ledger/审计类表**（income_events/fin_venue_io/fin_venue_account_snapshot/proposal/decision_outcomes）=append-only 历史——它们本就**是**历史表，「禁删史」令只适用于此层。
+  2. **配置/权限类表**（broker_accounts/autotrade_allow_rules/xasset_allow_combos/exposure_caps/exchange_configs）=**当前真值面**：引用已删/禁用对象的行=死配置非历史——`enabled=f` 囤积=「活表当历史表用」病灶（今天 12 行脏户孤儿实证：重载轴每拍扫死行、审计误读、再激活面残留）。处置=删（或如需留痕归档至历史面），禁留活表装死。
+- **衍生票（P2）**：删对象径级联——broker_account/exchange_config 删径须级联扫同键权限面行（allow_rules/combos/caps），前端删户后权限面零孤儿为准入锚。
