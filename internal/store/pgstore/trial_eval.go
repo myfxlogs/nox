@@ -71,3 +71,40 @@ func (s *Store) TrialPromotable(ctx context.Context, comboID int64) (bool, strin
 	}
 	return true, "fills/cost/crit 三判据实测达", nil
 }
+
+// PromoteComboTier trial→armed 迁线动作（判据达=TrialPromotable 真；原子单写
+// +audit 告警同事务外放——tier 翻 armed 后下拍按 armed 风控硬线全量评）。
+func (s *Store) PromoteComboTier(ctx context.Context, comboID int64) (bool, error) {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE xasset_allow_combos SET tier='armed', updated_at=now() WHERE id=$1 AND tier='trial'`, comboID)
+	if err != nil {
+		return false, fmt.Errorf("promote combo tier: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// TrialComboID trial 组合最小读面（晋级扫件取键）。
+type TrialComboID struct {
+	ID  int64
+	Key string // canonical_buy→canonical_sell|venue_buy×venue_sell（告警键）
+}
+
+// ListTrialComboIDs enabled trial 组合 ID+键（晋级判据扫件数据源）。
+func (s *Store) ListTrialComboIDs(ctx context.Context) ([]TrialComboID, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, canonical_buy||'→'||canonical_sell||'|'||venue_key_buy||'×'||venue_key_sell
+		 FROM xasset_allow_combos WHERE enabled AND tier='trial'`)
+	if err != nil {
+		return nil, fmt.Errorf("list trial combos: %w", err)
+	}
+	defer rows.Close()
+	var out []TrialComboID
+	for rows.Next() {
+		var r TrialComboID
+		if err := rows.Scan(&r.ID, &r.Key); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

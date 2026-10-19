@@ -65,6 +65,21 @@ func (s *Store) LoadXAssetAllowCombos(ctx context.Context, environment string) (
 	if err != nil {
 		return nil, fmt.Errorf("combo cooldown: %w", err)
 	}
+	// tier 消费闸（D-625 P0 续件③）：trial 仓名义额超 trial_tier_notional_usd
+	// →拒入本拍（fail-closed——闸是消费级拒单非删行；armed 级不消费=行为不变）。
+	if cap, ok, cerr := s.AppConfigFloat(ctx, "trial_tier_notional_usd"); cerr == nil && ok {
+		var final []XAssetAllowRow
+		for _, c := range kept {
+			if c.Tier == "trial" && c.NotionalUSD != nil && *c.NotionalUSD > cap {
+				_ = s.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
+					"[tier 闸] trial 组合 %s→%s|%s×%s 名义额 %.0f 超 trial_tier_notional_usd %.0f——拒入本拍（授权另闸 D-624 不动）",
+					c.CanonicalBuy, c.CanonicalSell, c.VenueBuy, c.VenueSell, *c.NotionalUSD, cap), 6*time.Hour)
+				continue
+			}
+			final = append(final, c)
+		}
+		kept = final
+	}
 	return kept, nil
 }
 

@@ -135,3 +135,27 @@ func preconditionWatch(ctx context.Context, st *pgstore.Store) {
 		}
 	}
 }
+
+// trialPromotionScan D-625 P0 续件④：trial 组合晋级判据机读→达即迁线
+// （PromoteComboTier tier→armed+info 留痕——翻转走判据非手工；armed 风控
+// 硬线全量承袭零豁免）。
+func trialPromotionScan(ctx context.Context, st *pgstore.Store) {
+	combos, err := st.ListTrialComboIDs(ctx)
+	if err != nil {
+		return
+	}
+	for _, c := range combos {
+		ok, why, err := st.TrialPromotable(ctx, c.ID)
+		if err != nil {
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if flipped, ferr := st.PromoteComboTier(ctx, c.ID); ferr == nil && flipped {
+			_ = st.InsertAlertDedup(ctx, "info", fmt.Sprintf(
+				"[trial 晋级] combo#%d %s 判据达（%s）→tier 翻 armed（armed 风控全量承袭）",
+				c.ID, c.Key, why), 24*time.Hour)
+		}
+	}
+}
