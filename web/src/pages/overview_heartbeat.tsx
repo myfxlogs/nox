@@ -27,13 +27,13 @@ export function RiskHeartbeat({
           title="30d 滚动账本净额（含事故仓）≤ −$300 自动触发停机（D-030 硬线）；读败视同停机（宁显停不显通）；解除=人工 Resolve"
         />
         <StatTile label="30d 净额（对 −3% 硬线）" value={b ? fmtUsd(b.net30Usd) : "—"} />
-        <StatTile label="24h critical" value={b ? String(b.critAlerts24h) : "—"} />
+        <StatTile label="24h 严重告警" value={b ? String(b.critAlerts24h) : "—"} />
       </div>
       {b && b.critAlerts.length > 0 && (
         <ul className="opp-cards">
           {b.critAlerts.map((a, i) => (
             <li key={i} className="opp-card" onClick={() => onCard({
-              title: "critical 告警 · " + new Date((a.ts ? Number(a.ts.seconds) * 1000 : 0)).toISOString().replace("T", " ").slice(0, 19) + "Z",
+              title: "严重告警 · " + new Date((a.ts ? Number(a.ts.seconds) * 1000 : 0)).toISOString().replace("T", " ").slice(0, 19) + "Z",
               body: a.message + (a.count > 1 && a.firstTs
                 ? "\n\n组内 " + a.count + " 条：" +
                   new Date(Number(a.firstTs.seconds) * 1000).toISOString().slice(5, 16).replace("T", " ") + "Z → " +
@@ -41,7 +41,7 @@ export function RiskHeartbeat({
                 : ""),
             })}>
               <div className="opp-card-head">
-                <Chip tone="critical">critical</Chip>
+                <Chip tone="critical">严重</Chip>
                 {a.count > 1 && <Chip tone="warn">×{a.count}</Chip>}
                 <span className="opp-card-friction">{a.ts ? new Date(Number(a.ts.seconds) * 1000).toISOString().slice(5, 16).replace("T", " ") + "Z" : "—"}</span>
               </div>
