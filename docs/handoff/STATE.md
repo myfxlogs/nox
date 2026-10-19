@@ -18,6 +18,8 @@
 - **D-213 前端重写**（业主令）：`web/src` 旧源码不搬；M2.5 收窄为 API+IR 后端，新增 **M2.5b 运营看板 v1 + 投资人页 v0**（设计先行 `docs/modules/web.md`，决策席批后施工，M3 前落地）。
 - 待移植：无（归档仓 master `ef29ee503` 自 M0 起仅文档提交）。
 
+| **TimescaleDB 评估票（业主令 10-19——数据存储层优化：PG 扩展零换库、hypertable 自动分区+压缩+retention 替手动 cron；当前痛点=ticks 手动分区+facts 500 万行查询慢+SG 磁盘 100% 满+三个手动清理 cron）** | 🔨待领（评估票——测试库先试，不碰生产） | 实施席 | **评估范围**：①测试库（5434）装 `timescaledb` 扩展（`apt install timescaledb-2-postgresql-16` 或 Docker 镜像 `timescale/timescaledb:latest-pg16`）——现有 84 张表零迁移验证；②ticks 表 hypertable 化（`create_hypertable('ticks','ts')`）——测试里手动建分区代码简化验证；③facts 表 hypertable 化——`FactsSince`/`LatestFacts`/`FactsWindowStats` 三查询基准测试（装前/装后各跑 10 次取中位数贴票面）；④压缩开（`ALTER TABLE facts SET (timescaledb.compress)`）——空间对比；⑤retention policy 替手动 prune（三处 cron 代码删除可行性核）；⑥continuous aggregate 试点（funding APR 滚动均值——xfer/rotate 每拍实时算改预聚合读）；⑦pgx 驱动兼容验证（NOX 现有 pgstore 零改动跑通）；⑧SG 部署影响面（compose 镜像替换 `postgres:16`→`timescale/timescaledb:latest-pg16`——D-013 单源不违、DSN 不变、现有迁移零冲突验证）。**禁线**：纯评估不动生产；不新建表；性能数字亲跑禁转述。**验收**：①基准测试数据表（装前/装后/压缩后三列）②兼容性结论（pgx/现有 SQL/迁移零冲突确认）③部署影响面结论④GO/NO-GO 建议。**开工指令**：`[角色:实施] TimescaleDB 评估（读 STATE 本行——测试库试装+三查询基准+兼容验证，不碰生产）`。 |
+
 ## 票
 
 | 票 | 状态 | owner | 备注 |
