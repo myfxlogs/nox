@@ -719,3 +719,15 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **禁线**：迁移过程中 facts/ticks 写入零中断（覆盖账本噪声在迁移窗豁免报警）；compression 二期另裁（非本裁定范围）。
 
 ——决策席·Devin（依据 tsdb-eval benchmark+坑正典+实施序 GO 建议）
+
+## D-627：TimescaleDB 阶段 A′ 修订裁定（替代 D-626 阶段 A 字面序）——2026-10-19 决策席
+
+**裁定：照准实施席 A′ 提案**，原 D-626 阶段 A「UNIQUE 复合索引+PK 换复合键」段以生产实况修订。
+
+- **冲突实证（复审独立复核）**：facts 现存 3,837 个 `(ts,kind,venue_key,symbol)` 重复组（合法同秒异值 facts 为主）——UNIQUE 索引物理不可建，且「唯一性」从未成立；`symbol` 可空现存 28,120 行 NULL——PK 换复合键撞 NOT NULL 约束不可行。D-626 评估期测试库无此体量故未暴露。
+- **修订后阶段 A**：①facts 建**普通非唯一** `facts_ts_kind_venuekey_symbol_idx` CONCURRENTLY（读径窗口扫描受益，hypertable 化本身不要求唯一索引存在——仅禁止「不含分区列的唯一索引」）；②`DROP facts_pkey`（id 留 identity 无索引——零 FK 引用/零 id 读径/零 ON CONFLICT 依赖，实施席+复审双证）；③`ticks_tsdb`=`LIKE ticks INCLUDING CONSTRAINTS INCLUDING GENERATED` 同构空表。三件幂等可重入分钟级施毕。
+- **替代案否决**：`(id,ts)` 复合 PK 可保 id 唯一+hypertable 合法，但生产无 id 读径——为不存在的消费者付 8.6M 行索引建造成本，否决。
+- **falsification anchor**：阶段 A′ 施毕后若任一 facts 写/读径因失 PK 报错或回退（报错率>0）→回滚=重建 facts_pkey（行级代价分钟级），修订作废记 lesson。
+- **阶段 B/C 不动**：仍按 D-626 原文（镜像切换→hypertable 化→retention 接位），逐段 checkpoint 停机可回。
+
+——决策席·Devin（依据实施席 checkpoint 报验+复审独立复核 3837 重复组/28120 NULL 行/零 FK 实证）
