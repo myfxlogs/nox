@@ -59,14 +59,24 @@ func TestVenueGapSweep_WaivedRevive(t *testing.T) {
 	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx,
-		`INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('gapwaive','mt5','h',443,'x') ON CONFLICT (venue) DO NOTHING;
-		 DELETE FROM fin_condition_gap WHERE template_id='venue_onboard' AND subject='gapwaive:mt5';
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('gapwaive','mt5','h',443,'x'),('gapownwaive','mt5','h',443,'x') ON CONFLICT (venue) DO NOTHING;
+		 DELETE FROM fin_condition_gap WHERE template_id='venue_onboard' AND subject IN ('gapwaive:mt5','gapownwaive:mt5');
 		 INSERT INTO fin_condition_gap (template_id, kind, subject, request_text, status, resolved_at, resolve_note) VALUES
-		 ('venue_onboard','constraint','gapwaive:mt5','r','waived',now(),'删径级联自动 waive（venue_key 已删，禁硬删留痕）');`); err != nil {
+		 ('venue_onboard','constraint','gapwaive:mt5','r','waived',now(),'删径级联自动 waive（venue_key 已删，禁硬删留痕）'),
+		 ('venue_onboard','constraint','gapownwaive:mt5','r','waived',now(),'决策席裁：非 autotrade 执行目标池');`); err != nil {
 		t.Fatal(err)
 	}
 	e := &Engine{store: st}
-	e.venueGapSweep(ctx, map[string]bool{}) // gapwaive:mt5 不在放行集→缺行缺口
+	e.venueGapSweep(ctx, map[string]bool{}) // gapwaive/gapownwaive:mt5 不在放行集→缺行缺口
+	// 出处闸对抗锚：级联出处行复活、业主裁出处行粘住（无闸=业主 waive 被复活实证）。
+	var stOwn string
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT status FROM fin_condition_gap WHERE template_id='venue_onboard' AND subject='gapownwaive:mt5'`).Scan(&stOwn); err != nil {
+		t.Fatal(err)
+	}
+	if stOwn != "waived" {
+		t.Fatalf("业主裁 waived 行应粘住不复活: %s", stOwn)
+	}
 	var st1 string
 	if err := st.Pool().QueryRow(ctx,
 		`SELECT status FROM fin_condition_gap WHERE template_id='venue_onboard' AND subject='gapwaive:mt5'`).Scan(&st1); err != nil {

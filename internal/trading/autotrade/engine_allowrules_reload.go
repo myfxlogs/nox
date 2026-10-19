@@ -102,8 +102,9 @@ func (e *Engine) venueGapSweep(ctx context.Context, allow map[string]bool) {
 		}
 		// D-632：删径级联把该键未决 gap 翻过 waived（终态，Request 不含）——同键重入册
 		// 须复活复推，否则 UNIQUE 撞键静默吞请求（ fulfilled→requested 已有径，
-		// open/requested 态此处 no-op 零重复推）。
-		if err := e.store.ReopenConditionGap(ctx, id); err != nil {
+		// open/requested 态此处 no-op 零重复推）。出处闸：仅级联 waive 行可复活，
+		// 业主/决策裁 waived 终身粘住（无闸= waive→复活→复推死循环实证）。
+		if err := e.store.ReopenCascadeWaivedGap(ctx, id); err != nil {
 			log.Printf("[venue-gap] revive %s#%d: %v", k, id, err)
 		}
 	}
