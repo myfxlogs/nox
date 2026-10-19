@@ -41,26 +41,6 @@ export function QuoteStrip() {
     }).catch(() => {});
   };
   useEffect(loadWatchlist, []);
-  // 涨跌闪（arb QuoteStrip 原件移植）：上一帧 bid/ask 基线 diff→up/down class 400ms。
-  // 基线无条件更新（arb R3 顺手项——防回撤帧方向偶误）。
-  const prevRef = useRef<Map<string, { bid: number; ask: number }>>(new Map());
-  const [flash, setFlash] = useState<Map<string, "up" | "down">>(new Map());
-  useEffect(() => {
-    const next = new Map<string, "up" | "down">();
-    for (const [k, f] of Object.entries(q)) {
-      const prev = prevRef.current.get(k);
-      if (prev && (prev.bid !== f.bid || prev.ask !== f.ask)) {
-        // F6：mid 判据（bid+ask 和比较——bid↑ask↓ 价差变宽帧方向不再偶误）。
-        next.set(k, f.bid + f.ask > prev.bid + prev.ask ? "up" : "down");
-      }
-      prevRef.current.set(k, { bid: f.bid, ask: f.ask });
-    }
-    if (next.size > 0) {
-      setFlash(next);
-      const t = setTimeout(() => setFlash(new Map()), 400);
-      return () => clearTimeout(t);
-    }
-  }, [q]);
   useEffect(
     () =>
       onCase("quote", (v) => {
@@ -99,8 +79,8 @@ export function QuoteStrip() {
             .sort((a, b) => posOf(a) - posOf(b))
             .map((f) => (
               <span key={`${v}|${f.symbol}`} className="quote-tile">
-                <b>{f.symbol}</b>
-                <span className={`quote-bidask ${flash.get(`${v}|${f.symbol}`) ?? ""}`}>
+                <span className="quote-sym">{f.symbol}</span>
+                <span className="quote-bidask">
                   <span className="num q-bid">{fmtPrice(f.bid)}</span>
                   <span className="num q-sep">/</span>
                   <span className="num q-ask">{fmtPrice(f.ask)}</span>

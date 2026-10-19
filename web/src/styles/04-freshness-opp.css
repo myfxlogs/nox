@@ -221,10 +221,20 @@
   flex: none;
 }
 
+/* 业主令 10-19②：符号对齐 arb 版式（muted 小字不加重——报价第一视觉是数不是名） */
+.quote-sym {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
 .quote-bidask {
   display: inline-flex;
   gap: 8px;
   font-variant-numeric: tabular-nums;
+  /* 业主令 10-19②：禁左右抖动——定宽+右对齐，数变时位宽不推挤邻居与 FreshDot */
+  min-width: 20ch;
+  justify-content: flex-end;
+  white-space: nowrap;
 }
 
 .quote-bidask .num {
@@ -232,7 +242,7 @@
 }
 
 /* 业主令 10-19：bid/ask 常设双色（金融终端惯例）——bid=买侧绿、ask=卖侧红，
-   分隔符随中性墨色；涨跌闪不改写语义色，改作同向淡底脉冲高亮 */
+   分隔符随中性墨色；涨跌闪整件摘除（业主令 10-19②）。 */
 .quote-bidask .q-bid {
   color: var(--good-ink);
 }
@@ -243,18 +253,6 @@
 
 .quote-bidask .q-sep {
   color: var(--ink-3);
-}
-
-.quote-bidask.up .num {
-  background: color-mix(in srgb, var(--good) 18%, transparent);
-  border-radius: 3px;
-  transition: background 0.4s ease;
-}
-
-.quote-bidask.down .num {
-  background: color-mix(in srgb, var(--critical) 18%, transparent);
-  border-radius: 3px;
-  transition: background 0.4s ease;
 }
 
 
