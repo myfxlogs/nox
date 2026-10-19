@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"nox/internal/data/keydomain"
@@ -68,14 +69,24 @@ func (c regimeCfg) RegimeLabel(st pgstore.XAssetSpreadStats) string {
 	}
 }
 
-// comboBookTriple 组合→簿三元组键（pair=cexSym-mtSym 实据形；venue 键=
+// mtBareCanon 簿对 MT canonical 归一（tools/xasset-monitor pairs.go bareOf 同口径：
+// USDT 尾先裁、USD 尾兜底）——簿 pair 键以归一形写入，消费侧必同归一否则假无行
+// （TRXUSDT→TRX 实证：10-19 前提塌三发全为此键失配假阳）。
+func mtBareCanon(c string) string {
+	if b := strings.TrimSuffix(c, "USDT"); b != c {
+		return b
+	}
+	return strings.TrimSuffix(c, "USD")
+}
+
+// comboBookTriple 组合→簿三元组键（pair=cexSym-mtBare 实据形；venue 键=
 // combo 行 venue_key 原值（typed `bare:type` 已在库——禁重建硬编 type）。
 func comboBookTriple(c pgstore.XAssetAllowRow) (pair, cex, mt, mtCanon string) {
 	switch {
 	case keydomain.IsMTKey(c.VenueBuy) && !keydomain.IsMTKey(c.VenueSell):
-		return c.CanonicalSell + "-" + c.CanonicalBuy, c.VenueSell, c.VenueBuy, c.CanonicalBuy
+		return c.CanonicalSell + "-" + mtBareCanon(c.CanonicalBuy), c.VenueSell, c.VenueBuy, c.CanonicalBuy
 	case keydomain.IsMTKey(c.VenueSell) && !keydomain.IsMTKey(c.VenueBuy):
-		return c.CanonicalBuy + "-" + c.CanonicalSell, c.VenueBuy, c.VenueSell, c.CanonicalSell
+		return c.CanonicalBuy + "-" + mtBareCanon(c.CanonicalSell), c.VenueBuy, c.VenueSell, c.CanonicalSell
 	}
 	return "", "", "", ""
 }
