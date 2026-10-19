@@ -70,7 +70,7 @@ export default function DciPage() {
 
   return (
     <div>
-      <h1>持仓与理财 <small style={{ fontSize: 12, color: "#777" }}>在跑仓 + DCI/earn 订单账本</small></h1>
+      <h1>持仓与理财 <small className="u-dim" style={{ fontSize: 12 }}>在跑仓 + DCI/earn 订单账本</small></h1>
       {err && <div className="err">{err}</div>}
 
       {/* 第一眼=在跑仓卡阵（仓单主体）；订单账本密表居后 */}

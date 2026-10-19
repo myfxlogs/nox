@@ -1,0 +1,27 @@
+/* —— 个人持仓状态点（ok 灰 / warn 橙 / crit 红；无报价中性灰，语义见 tooltip） —— */
+.pdot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  flex: none;
+  background: var(--ink-3);
+}
+.pdot-crit {
+  background: var(--critical);
+}
+/* D-052：Broker 实持仓在线状态点——在线=绿（离线复用 pdot-crit 红） */
+.pdot-good {
+  background: var(--good);
+}
+/* D-152：离线快照=灰（非红，离线非异常=最近快照可用） */
+.pdot-dim {
+  background: var(--ink-3);
+}
+/* D-152：未关联警示色（异常优先第一性，原 muted 升级） */
+.crit-text {
+  color: var(--critical);
+  font-weight: 600;
+}

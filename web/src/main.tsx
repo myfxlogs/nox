@@ -39,12 +39,19 @@ import "./styles/08-facts-ledger.css";
 import "./styles/09-sim.css";
 import "./styles/10-testnet-quote.css";
 import "./styles/11-account-responsive.css";
+import "./styles/11-personal.css";
 import "./styles/12-nox-shell.css";
+import "./styles/12-records.css";
 import "./styles/20-semantic.css";
 import "./styles/13-daily.css";
 import "./styles/10-broker.css";
 import "./styles/14-toast.css";
 import "./styles/18-price-alert.css";
+// arb 专属件差量合入（色彩差量迁移批 10-19）：19<20<21<22 数字序挂载，
+// 22-mobile 的 .resp 表卡化/触控目标规则即活（HedgeFlow .resp 已消费）。
+import "./styles/19-capital-coverage.css";
+import "./styles/21-settings.css";
+import "./styles/22-mobile.css";
 
 // S2c 左导航两组分排（业主令 10-16）：门面=总览/投资人/持仓；
 // 运维=账户/风控/观察/资金/DCI/报告/设置（盯盘归运维观察面）。

@@ -1,0 +1,39 @@
+/* 19-capital-coverage.css —— D-359：资金不眠覆盖率面板卡（OverviewPage 资金状态组）。 */
+
+/* 汇总行：两数三段，稍重于 muted 正文 */
+.capital-coverage-summary {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+/* 口径注记：小字灰，防误读（快照口径/加权分母/周末闭市） */
+.capital-coverage-note {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* D-365：CEX 财务页（账户卡权益大字+两栏盘点/流水） */
+.cex-finance-page h1 { margin-bottom: 12px; }
+.cex-finance-equity { font-size: 16px; font-weight: 600; }
+.cex-finance-footer { margin-top: 8px; font-size: 12px; }
+
+/* —— D-546：资金全景树（六面×三档折叠件，挂 capital coverage 卡下） —— */
+.capmap-tier {
+  margin-top: 12px;
+}
+.capmap-tier-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.capmap-tier-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.capmap-tier-total {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 600;
+}

@@ -8,7 +8,7 @@ import { onCase } from "../stream";
 import type { BrokerPosition, Position } from "../gen/dashboardv1/position_pb";
 import type { XAssetPendingEntryRow } from "../gen/dashboardv1/graduation_pb";
 import type { BrokerPositionEvent } from "../gen/dashboardv1/stream_pb";
-import { fmtUsd, ts } from "../components/fmt";
+import { fmtUsd, ts, pnlClass } from "../components/fmt";
 import { StatTile } from "../components/StatTile";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
@@ -111,8 +111,10 @@ export default function PositionsPage() {
 
       {/* 第一眼=券商仓损益合计（后端 sums 直供单值）+ 批平仓动作 */}
       <div className="stats">
-        <StatTile label="券商仓 PnL 合计" value={fmtUsd(sums.pnl)} />
-        <StatTile label="净额合计" value={fmtUsd(sums.net)} />
+        <StatTile label="券商仓 PnL 合计" value={fmtUsd(sums.pnl)}
+          valueClass={pnlClass(sums.pnl ?? 0, sums.pnl != null)} />
+        <StatTile label="净额合计" value={fmtUsd(sums.net)}
+          valueClass={pnlClass(sums.net ?? 0, sums.net != null)} />
       </div>
       <div style={{ margin: "8px 0" }}>
         <button className="danger" disabled={busy || sel.size === 0} onClick={closeSelected}>
@@ -136,7 +138,7 @@ export default function PositionsPage() {
                 <span className="opp-card-who">{p.accountAlias || p.venueKey}</span>
               </div>
               <div className="opp-card-stats stats">
-                <StatTile label="pnl" value={fmtUsd(p.pnl)} />
+                <StatTile label="pnl" value={fmtUsd(p.pnl)} valueClass={pnlClass(p.pnl, true)} />
                 <StatTile label="swap" value={fmtUsd(p.swap)} />
                 <StatTile label="现价" value={String(p.currentPrice || "—")} />
                 <StatTile label="量" value={String(p.volume)} />
@@ -218,8 +220,10 @@ export default function PositionsPage() {
                       <Chip tone="good">{p.status}</Chip>
                     </div>
                     <div className="opp-card-stats stats">
-                      <StatTile label="净盈亏" value={fmtUsd(p.netPnlUsd)} />
-                      <StatTile label="浮动" value={fmtUsd(p.floatingPnlUsd)} />
+                      <StatTile label="净盈亏" value={fmtUsd(p.netPnlUsd)}
+                        valueClass={pnlClass(p.netPnlUsd ?? 0, p.netPnlUsd != null)} />
+                      <StatTile label="浮动" value={fmtUsd(p.floatingPnlUsd)}
+                        valueClass={pnlClass(p.floatingPnlUsd ?? 0, p.floatingPnlUsd != null)} />
                       <StatTile label="腿数" value={String(p.legs.length)} />
                     </div>
                     <div className="opp-card-narrative">

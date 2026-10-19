@@ -1,0 +1,73 @@
+/* 22-mobile.css —— D-452 S1：移动原语层（umbrella 移动端总设计 §4，断点归一 767px）。
+   单断点内全量规则；表卡化两步法=组件加 .resp + td[data-label]，宽表用 .resp-scroll 横滚兜底。
+   实核修正（以代码为准，对 umbrella 意图稿）：
+   - 变量名：00-base 实为 --surface/--page（无 --bg），sticky 首列底色用 --surface；
+   - main.app-layout 包裹全树（含侧栏），触控目标选择器沿用提示词收窄版（hamburger 亦受益 36px）。 */
+@media (max-width: 767px) {
+  /* 表卡化：thead 隐藏，tr 成卡片，td 成 label:value 行 */
+  table.resp,
+  .resp thead,
+  .resp tbody,
+  .resp tr {
+    display: block;
+  }
+  .resp thead {
+    display: none;
+  }
+  .resp tr {
+    margin-bottom: 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px;
+  }
+  .resp td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    border: 0;
+    text-align: right;
+  }
+  .resp td::before {
+    content: attr(data-label);
+    color: var(--ink-3);
+    flex-shrink: 0;
+    text-align: left;
+  }
+  /* colspan 空态/跨列行：整行回退，不产生伪 label（umbrella §10 R3） */
+  .resp td[colspan] {
+    display: block;
+    text-align: center;
+  }
+  .resp td[colspan]::before {
+    content: none;
+  }
+  /* 横滚兜底：宽表保持原生表格，容器横滚+首列 sticky（10+ 列持仓/经纪商表） */
+  .resp-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .resp-scroll table {
+    min-width: max-content;
+  }
+  .resp-scroll td:first-child,
+  .resp-scroll th:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--surface);
+  }
+  /* 模态全屏（真实类名 .modal-overlay>.modal） */
+  .modal-overlay > .modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+  /* 触控目标 ≥36px（收窄版：豁免 icon/关闭小钮） */
+  main button:not(.icon):not(.btn-close),
+  .chip,
+  .sidebar-item {
+    min-height: 36px;
+  }
+}
