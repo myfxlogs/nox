@@ -16,18 +16,27 @@ type XAssetSpreadStats struct {
 	Delta  float64 // 最新-最早 entry_spread（趋势代理）
 }
 
-// XAssetSpreadStats 读窗内 spread 统计（行数<2→Stdev/Delta=0 如实缺）。
+// XAssetSpreadStats 读窗内 spread 统计（行数<2→Stdev/Delta=0 如实缺；
+// 零行窗 LastTs 零值——max(ts) 空集返 NULL 须可空接，否则整体读败）。
 func (s *Store) XAssetSpreadStats(ctx context.Context, pair, cexVenue, mtVenue string, since time.Time) (XAssetSpreadStats, error) {
 	var r XAssetSpreadStats
+	var last *time.Time
+	var delta *float64
 	err := s.pool.QueryRow(ctx, `
 		SELECT count(*), COALESCE(stddev_samp(entry_spread_bps),0), COALESCE(avg(entry_spread_bps),0),
 		       max(ts),
 		       (array_agg(entry_spread_bps ORDER BY ts DESC))[1]-(array_agg(entry_spread_bps ORDER BY ts ASC))[1]
 		FROM fin_xasset_monitor
 		WHERE pair=$1 AND cex_venue=$2 AND mt_venue=$3 AND ts>=$4`,
-		pair, cexVenue, mtVenue, since).Scan(&r.Rows, &r.Stdev, &r.Mean, &r.LastTs, &r.Delta)
+		pair, cexVenue, mtVenue, since).Scan(&r.Rows, &r.Stdev, &r.Mean, &last, &delta)
 	if err != nil {
 		return r, fmt.Errorf("xasset spread stats: %w", err)
+	}
+	if last != nil {
+		r.LastTs = *last
+	}
+	if delta != nil {
+		r.Delta = *delta
 	}
 	return r, nil
 }

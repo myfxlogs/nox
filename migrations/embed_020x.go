@@ -156,3 +156,6 @@ var LiveModeSQL string // D-620：LIVE 授权链（mode 枚举+NOX_LIVE_TRADE �
 
 //go:embed 1051_us500_spcx.sql
 var Us500SpcxSQL string // cfd 保底 US500 类 asset_equiv 注册（combo#20 簿缺席+universe 缺席根因）
+
+//go:embed 1054_regime_prec_cfg.sql
+var RegimePrecCfgSQL string // D-625 P2：regime/前提塌判据 app_config 种子（禁硬编码）
