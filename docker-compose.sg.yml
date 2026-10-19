@@ -2,12 +2,25 @@
 # docker compose -f docker-compose.yml -f docker-compose.sg.yml up -d）。
 # 覆写点：①生产 PG 端口 15433（宿主 5433 已被 alphaforge-postgres 占用）；
 # ②SG 机型资源降配（core 1500m/2c、pg 2500m/2c/512m shm；test 库维持基线）。
+# ③D-626 阶段B：pg 切 timescaledb——SG 本地薄镜像 nox-postgres:16-tsdb-2.30.2
+#   （postgres:16 底 + timescaledb-2-postgresql-16 2.30.2~debian13 deb 包构建；
+#   官方 timescale/timescaledb:latest-pg16 因 SG 拉网不可行以等价自构建替代，
+#   扩展版本同源 2.30.2）。GUC 手调按 2500m 帽（不信镜像默认 tune）。
+#   回滚=删 image/command 两行覆写 + compose up -d 重建（extension 已建未
+#   hypertable 化=可降级）。
 services:
   nox-core:
     mem_limit: 1500m
     cpus: 2
 
   nox-postgres:
+    image: nox-postgres:16-tsdb-2.30.2
+    command: >-
+      -c shared_preload_libraries=timescaledb,pg_stat_statements
+      -c shared_buffers=640MB
+      -c effective_cache_size=1792MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=256MB
     mem_limit: 2500m
     cpus: 2
     shm_size: "512m"
