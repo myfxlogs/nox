@@ -55,3 +55,49 @@ func (s *Store) LatestTickAsOf(ctx context.Context, venue, symbol string, asOf t
 	}
 	return bid, ask, ts, true, nil
 }
+
+// FactsWithinAnySymbol kind 多符号窗查（任一符号命中即并集）——键域对齐消费面
+// （canonical↔原生符号候选集；单符号退化为 FactsWithin 同语义）。
+func (s *Store) FactsWithinAnySymbol(ctx context.Context, kind, venue string, symbols []string, since time.Time) ([]fact.Fact, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT kind, venue, symbol, value, unit, ts, src FROM facts
+		WHERE kind = $1 AND venue = $2 AND symbol = ANY($3) AND ts >= $4
+		ORDER BY ts DESC`, kind, venue, symbols, since)
+	if err != nil {
+		return nil, fmt.Errorf("facts within any-symbol %s|%s: %w", kind, venue, err)
+	}
+	defer rows.Close()
+	var out []fact.Fact
+	for rows.Next() {
+		var f fact.Fact
+		if err := rows.Scan(&f.Kind, &f.Venue, &f.Symbol, &f.Value, &f.Unit, &f.Ts, &f.Src); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// LatestFactsAnySymbol kind 多符号最新值（每符号一组最新行，任一符号命中即出）。
+func (s *Store) LatestFactsAnySymbol(ctx context.Context, kind, venue string, symbols []string) ([]fact.Fact, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT kind, venue, symbol, value, unit, ts, src FROM (
+			SELECT DISTINCT ON (symbol) kind, venue, symbol, value, unit, ts, src
+			FROM facts
+			WHERE kind = $1 AND venue = $2 AND symbol = ANY($3)
+			ORDER BY symbol, ts DESC
+		) t ORDER BY ts DESC`, kind, venue, symbols)
+	if err != nil {
+		return nil, fmt.Errorf("facts latest any-symbol %s|%s: %w", kind, venue, err)
+	}
+	defer rows.Close()
+	var out []fact.Fact
+	for rows.Next() {
+		var f fact.Fact
+		if err := rows.Scan(&f.Kind, &f.Venue, &f.Symbol, &f.Value, &f.Unit, &f.Ts, &f.Src); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}

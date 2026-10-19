@@ -238,3 +238,27 @@ func (s *Store) UpdateProductGroupByCanonical(ctx context.Context, venue, canoni
 	}
 	return tag.RowsAffected(), nil
 }
+
+// BrokerSymbolsByCanonical 反解：venue 内 canonical→原生 broker_symbol 集
+// （facts 写侧键域）。canonical 比较走裸形（regexp 尾裁 USDT/USD——与 1055
+// 组合行归一同口径：组合行裸形 TRX×map 全形 TRXUSDT 可互解）。真无映射=空集，
+// 调用方保留 canonical 自查兜底（D-325 canonical 标签行语义）。
+func (s *Store) BrokerSymbolsByCanonical(ctx context.Context, venue, bareCanonical string) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT broker_symbol FROM broker_symbol_map
+		WHERE venue = $1 AND regexp_replace(canonical, 'USDT$|USD$', '') = $2`,
+		venue, bareCanonical)
+	if err != nil {
+		return nil, fmt.Errorf("broker symbols by canonical %s|%s: %w", venue, bareCanonical, err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var sym string
+		if err := rows.Scan(&sym); err != nil {
+			return nil, err
+		}
+		out = append(out, sym)
+	}
+	return out, rows.Err()
+}
