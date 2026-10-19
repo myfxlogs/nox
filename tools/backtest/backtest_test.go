@@ -219,8 +219,8 @@ func TestMtTickSymMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	sym, note := mtTickSym(ctx, s, "bt_diag_v", "BRENT")
-	if sym != "BRENT.ft" || note != "" {
-		t.Fatalf("BRENT 变体命中期 BRENT.ft: sym=%s note=%s", sym, note)
+	if sym != "BRENTUSD" || note != "" {
+		t.Fatalf("BRENT 变体命中期 canonical BRENTUSD（ticks 键域）: sym=%s note=%s", sym, note)
 	}
 	sym2, note2 := mtTickSym(ctx, s, "bt_diag_v", "NOSUCH")
 	if sym2 != "NOSUCH" || note2 == "" {
