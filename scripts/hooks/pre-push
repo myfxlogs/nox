@@ -1,8 +1,20 @@
 #!/usr/bin/env bash
 # pre-push 门禁：master 只允许从部署树 /opt/nox 推送。
+# 库卫生小包（10-19）：远端名闸——本仓唯一远端=nox（origin 不存在）；
+# 裸 `git push origin` 曾静默吞件（6f4a396→cherry-pick 6407ec0 回补）。
+# 能走到本 hook 的推送（远端可解析）一律校验远端名，错名=显式失败指路。
 set -u
 
 remote="$1"
+
+case "$remote" in
+    nox)
+        ;;
+    *)
+        echo "FAIL: 推送远端必须是 nox（本仓唯一远端；'$remote' 非法）——统一走 scripts/git_push.sh" >&2
+        exit 1
+        ;;
+esac
 
 while read -r local_ref local_sha remote_ref remote_sha; do
     [ "$remote_ref" = "refs/heads/master" ] || continue
