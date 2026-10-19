@@ -127,3 +127,58 @@
 
 *评估依据：[PraisonAI GitHub](https://github.com/MervinPraison/PraisonAI)（2026-10-19 访问），NOX 产线实况（本会话 25+ 票复审实证）。*
 *补评实证：fin_decision_outcomes.attrib_streak 在案（1041）、ApplyComboCooldown 三态在案、LatestFactsByKindAsOf/fin_cost_model/combo_id 今日并入（注记61 链）。*
+
+### 6.4 复审席回应（原稿作者·Claude，2026-10-19）
+
+#### 总态度：**全面采纳**——补评四修正（指纹降维/复用冷却层/入场锚定/③降级系统自盯）+一合并结构（settle 单消费者一管双用）全部比我原稿更对。逐条回应如下。
+
+#### ① 复读机——指纹设计与跨 venue 问题
+
+**采纳三处修正**（金额桶删/复用冷却层/venue_starved 过滤）。补充两点：
+
+**跨 venue 维度（业主问①）**：指纹应在 **combo 级**（`object_key` 含 venue 对），不在 canonical 级——理由：
+- 同 canonical 跨三 venue 各自亏=**三个独立信号**（gate 坏成交 ≠ binance 策略错），合在一起看「同一 canonical 三 venue 全亏」是策略级诊断面（归 kill 扳机域），不是复读检测面
+- 复读检的是「**同一组合**反复犯同一种错」——combo 级天然包含 venue 维度，不额外加列
+- `fin_decision_outcomes.object_key` 已是 combo 粒度（graduation_approved→combo_id / proposal_go→proposal_id），零 schema 变更
+
+**指纹最终形**：`(combo_id, side, exit_reason)` 三元组 + 滚动窗累计亏损 + `exit_reason NOT IN ('venue_starved','data_lost','manual')` 过滤非策略退出——比原稿四元组和补评三元组都严一格（combo_id 含 venue）。
+
+#### ② 自动自省——reflection 落点
+
+**业主问②**：`fin_decision_outcomes` 是 `UNIQUE(category, object_key)` per-decision 粒度，settle 是 per-position 事件——一个 decision 可能产多个 position（续仓/分批），粒度确实不匹配。
+
+**裁定：落 `positions.reflection` 列**（text/JSONB），不落 `fin_decision_outcomes` 也不新建表。理由：
+- 一个 position = 一个生命周期 = 一段 reflection（1:1 自然对齐）
+- `PostSettleHook`（D-624 已建，JIT return 也挂这里）是 per-position 触发——reflection 写入点天然就在这
+- `positions` 已有 `combo_id`（1057 迁移）归因列——reflection 的上下文全在同表，零跨表 JOIN
+- `fin_decision_outcomes` 的 attribution 归因（attrib_net_usd 等）是 **per-decision 滚动聚合**——reflection 是 **per-position 单次复盘**，两者正交不冲突，各在各的自然粒度
+- 新建表（`position_reflections`）在首版=过度设计——reflection 是写一次不改的数据，列够了；将来若需 append-only 多版本复盘再升表
+
+**入场锚定采纳**——`positions` 已有 `entry_basis_bps`/`entry_funding_ann` 等入场时快照列，再加 `entry_net_expected`/`entry_cost_model` 两列（写入时锁值），reflection 只读不重建。
+
+**paper 退出扩面采纳**——SAND 两行退出即刻可当回放素材，骨架先行不等真金。
+
+**确定性优先采纳**——首版纯模板（成本差+出场原因+预期差三个可计算段），LLM 叙述层后置。
+
+#### ③ 降级系统自盯
+
+**全盘采纳**——D-033 原则正确适用：「需要周期性查看的指标由系统计算并推送」。原稿落法（下钻页面）是给终终端加负担，系统自盯版（堵点>阈→告警）才是正道。可视化下钻等自盯版上线后再评估。
+
+#### 合并结构（§6.2）
+
+**全盘采纳**——settle 单消费者一管双用是最优拓扑：
+```
+PostSettleHook（既有，JIT return 也在这）
+  ├─ 写 positions.reflection（② 自省）
+  ├─ 喂复读指纹判据（① 冷却输入——消费已归因的 exit_reason）
+  └─ JIT return（已有）
+```
+一票出两件+省事件订阅+保证指纹只吃已归因数据——比原稿两票分立好。
+
+#### 优先级（§6.3）
+
+**照准**——③ 系统自盯版最先行（当下有料+最便宜）、①② 合并管线票次之（SAND paper 退出可先建骨架）、③ 可视化缓行。
+
+---
+
+*回应署名：复审席·Claude（GLM-5.3，原稿作者），2026-10-19。*
