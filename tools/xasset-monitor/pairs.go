@@ -82,12 +82,7 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdD
 		symsByVenue[r.venue][r.symbol] = true
 	}
 	isMT := keydomain.IsMTKey
-	bareOf := func(c string) string {
-		if b := strings.TrimSuffix(c, "USDT"); b != c {
-			return b
-		}
-		return strings.TrimSuffix(c, "USD")
-	}
+	bareOf := bareCanon // MT canonical 裸形归一单源（capabilities.go；组合行/map 两侧键域合流点）
 	// cexSymFor：universe 命中（venue+hedge_canonical）→ miss 按 venue 约定构造+回查
 	// 存在性 → 仍 miss=false（fail-closed 不静默丢，调用方 skip+warn）。
 	cexSymFor := func(cexVenueKey, mtCanonical, bare string) (string, bool) {
@@ -170,12 +165,13 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdD
 		}
 	}
 	// capable venue×MT-canonical 能力判定：有账无 canonical=无能力（fail-closed）；
-	// 无账（map 全无该户行）=无能力；caps nil=滤关。键=裸户号（map.venue 域）。
+	// 无账（map 全无该户行）=无能力；caps nil=滤关。键双侧过 bareOf：户号裸名
+	// （map.venue 域）+canonical 裸形（1055 后组合行 TRX×map TRXUSDT 同域合流）。
 	capable := func(venueKey, mtCanon string) bool {
 		if caps == nil {
 			return true
 		}
-		return caps[keydomain.BareOf(venueKey)][mtCanon]
+		return caps[keydomain.BareOf(venueKey)][bareOf(mtCanon)]
 	}
 	// 确定性序：venue 键排序后展开（同输入同输出）。
 	venues := make([]string, 0, len(globalVenueKeys))
