@@ -69,11 +69,11 @@ func run(ctx context.Context) (err error) {
 	// S5→D-144：监控簿三源派生（白名单∪universe 达标行∪active 纸面仓）×
 	// ticks 在流 MT 账户动态枚举——NOX_XASSET_EXNESS_VENUE env 删除（钉死单账户
 	// 致跨账户借用失真/新 broker 零覆盖，实证见 STATE D-144 行）。
-	combos, uni, demand, accts, equiv, err := loadDerivationInputs(ctx, st)
+	combos, uni, demand, accts, equiv, caps, err := loadDerivationInputs(ctx, st)
 	if err != nil {
 		return fmt.Errorf("monitor pairs inputs: %w", err)
 	}
-	pairs, uncovered := deriveMonitorPairs(combos, uni, demand, accts, equiv)
+	pairs, uncovered := deriveMonitorPairs(combos, uni, demand, accts, equiv, caps)
 	for _, u := range uncovered {
 		log.Printf("[monitor-pairs] warn: 组合未被簿覆盖（一次性列名，B-008/D-144）: %s", u)
 	}

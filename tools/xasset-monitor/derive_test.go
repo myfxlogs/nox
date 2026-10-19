@@ -36,7 +36,7 @@ func d552RealCombos() []allowComboRow {
 // 本测试双态同跑=SQL 供给契约钉死（谁回退谁负责让 T3 红）。
 func TestD552_BareColumnInputFailsKeyedInputDerives(t *testing.T) {
 	pairs, uncovered := deriveMonitorPairs(
-		[]allowComboRow{{"XAUUSD", "3001157", "XAUUSDT", "gate"}}, d472Universe(), nil, nil, nil)
+		[]allowComboRow{{"XAUUSD", "3001157", "XAUUSDT", "gate"}}, d472Universe(), nil, nil, nil, nil)
 	for _, p := range pairs {
 		if p.cexVenue == "gate:perp" && p.pair == "XAUUSDT-XAU" {
 			t.Fatalf("裸列输入不得派生病灶对 gate:perp XAUUSDT-XAU（legacy 三行恒在属正常）, got %+v", pairs)
@@ -53,7 +53,7 @@ func TestD552_BareColumnInputFailsKeyedInputDerives(t *testing.T) {
 	}
 
 	keyed, unc2 := deriveMonitorPairs(
-		[]allowComboRow{{"XAUUSD", "3001157:mt5", "XAUUSDT", "gate:perp"}}, d472Universe(), nil, nil, nil)
+		[]allowComboRow{{"XAUUSD", "3001157:mt5", "XAUUSDT", "gate:perp"}}, d472Universe(), nil, nil, nil, nil)
 	var p *monitorPair
 	for i := range keyed {
 		if keyed[i].cexVenue == "gate:perp" && keyed[i].pair == "XAUUSDT-XAU" {
@@ -74,7 +74,7 @@ func TestD552_BareColumnInputFailsKeyedInputDerives(t *testing.T) {
 // TestD552_RealFiveRowsDerive T2 真仓 enabled 行投影（键列口径）：3001157 五组合
 // 全部派生（B-008 warn 五行归零）；SKLUSDT 真同所保留；CLUSDT nonDerivable 静默不警告。
 func TestD552_RealFiveRowsDerive(t *testing.T) {
-	pairs, uncovered := deriveMonitorPairs(d552RealCombos(), d472Universe(), nil, nil, nil)
+	pairs, uncovered := deriveMonitorPairs(d552RealCombos(), d472Universe(), nil, nil, nil, nil)
 	got := map[[3]string]bool{}
 	for _, p := range pairs {
 		got[[3]string{p.cexVenue, p.pair, p.exSym}] = true
@@ -128,7 +128,7 @@ func TestD552_LoadDerivationInputsDeliversKeyedColumns(t *testing.T) {
 		VALUES ('XAUUSD', '3001157', 'mt5', 'XAUUSDT', 'gate', 'perp', 1, 1, 100, true, 'manual_seed')`); err != nil {
 		t.Fatalf("insert combo: %v", err)
 	}
-	combos, _, _, _, _, err := loadDerivationInputs(ctx, s)
+	combos, _, _, _, _, _, err := loadDerivationInputs(ctx, s)
 	if err != nil {
 		t.Fatalf("loadDerivationInputs: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestFuturesExcludedFromMonitorUniverse(t *testing.T) {
 		('binance','XMONPERPQ','XMON','TRADING',NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	_, uni, _, _, _, err := loadDerivationInputs(ctx, s)
+	_, uni, _, _, _, _, err := loadDerivationInputs(ctx, s)
 	if err != nil {
 		t.Fatalf("loadDerivationInputs: %v", err)
 	}
