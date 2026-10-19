@@ -29,11 +29,17 @@ type regimeCfg struct {
 	staleMax time.Duration
 }
 
-// loadRegimeCfg 判据装载（fail-closed：键缺→nil 调用方跳过本轮）。
+// loadRegimeCfg 判据装载（fail-closed：键缺→nil 调用方跳过本轮；err 与键缺分账记——
+// err=读面败（疑 ctx/池），ok=false=键真缺）。
 func loadRegimeCfg(ctx context.Context, st *pgstore.Store) *regimeCfg {
 	get := func(key string) (float64, bool) {
 		v, ok, err := st.AppConfigFloat(ctx, key)
-		if err != nil || !ok {
+		if err != nil {
+			log.Printf("[oppmatch] regime 判据 %s 读败: %v", key, err)
+			return 0, false
+		}
+		if !ok {
+			log.Printf("[oppmatch] regime 判据 %s 键缺", key)
 			return 0, false
 		}
 		return v, true
@@ -43,7 +49,6 @@ func loadRegimeCfg(ctx context.Context, st *pgstore.Store) *regimeCfg {
 	minR, ok3 := get("regime_min_rows")
 	staleMin, ok4 := get("prec_stale_max_min")
 	if !ok1 || !ok2 || !ok3 || !ok4 {
-		log.Printf("[oppmatch] regime 判据配置缺（regime_* / prec_stale_max_min）——本轮 fail-closed 跳过")
 		return nil
 	}
 	return &regimeCfg{volBps: vol, trendBps: trend, minRows: minR, staleMax: time.Duration(staleMin) * time.Minute}
