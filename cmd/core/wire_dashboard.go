@@ -35,7 +35,8 @@ func wireAuthIntercept(secRes *config.SecretResolver, cfg *config.Config) *auth.
 	if err := auth.ValidateStartupToken(secRes.Get("NOX_AUTH_TOKEN"), cfg.AllowEmptyAuth); err != nil {
 		log.Fatalf("[auth] startup token validation failed: %v", err)
 	}
-	return auth.NewInterceptor(func() string { return secRes.Get("NOX_AUTH_TOKEN") })
+	return auth.NewInterceptor(func() string { return secRes.Get("NOX_AUTH_TOKEN") }).
+		SetTOTP(func() string { return secRes.Get("NOX_TOTP_SECRET") }) // TOTP session 支
 }
 
 // wireDashboardSetters 注入 dashSvc 的 setter 依赖（leg 查询/CS/frontConfig/analyst）。
