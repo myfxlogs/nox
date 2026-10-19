@@ -739,3 +739,11 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **scope**：本裁定即时生效，**有效期=至业主明确复审席上线止**——业主对某票/某会话明示复审席时，该件回复审决策分离双程；无明示则默认合席单链。
 
 ——决策席·Devin（业主令 10-19 两次明令「决策/复审两席合1，复审即决策」）
+
+## D-629（业主令 10-19，口径修正）业绩基数=系统管辖域本金×系统产出收益——TRX 链上质押池与 CMC 手动持仓域双剔出业绩口径
+
+- **决定**：`GetCapitalCoverage`/digest 资金不眠覆盖率段的 **TRX 质押+投票+能量行** 与 **CMC 账户行** 改为业绩外行——RealMoney=false（不入总资金分母）、Productive=false（不入在产分子）、APR 仅落 note 文本展示（不入加权年化）；行保留可见（钱在哪仍要看得见），状态词=「业绩外·自营盘」。
+- **理由**：质押收益是本金自带收益（链上协议回报），非系统发现/评估/执行产出；CMC 手动仓是业主手动操作域。计入=虚增业绩基数与年化，D-030 ≥8% 判据被稀释失真。
+- **scope**：`internal/api/dashboard/service_capital_coverage_pools.go`（trxPoolRow 旗标）+ `service_capital_coverage.go`（口径注记）+ `tools/digest/capital_coverage.go`/`capital_coverage_render.go`（同源双实现+注记）+ 两侧测试锚数值同步修正；`position_daily_income` 腿级 TRX 收益**不剔**——那是系统持仓腿的收益产出（在仓 TRX 腿本身吃 funding+质押复合是策略产出的一部分）。
+- **反证锚**：若 venue 账户快照证实 TRX 池资金实际是系统策略调拨产物（非业主自营托管），本裁定翻案重审。
+- **配套**：「保证金占用」行年化=系统持仓近 7d 日均 carry 口径不动（存量仓 carry 属系统业绩）；总资金分母剔 TRX/CMC 后≈系统管辖 venue 净值和（向 D-030 $10k 基数口径收敛）。
