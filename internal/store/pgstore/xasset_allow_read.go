@@ -33,13 +33,14 @@ type XAssetAllowRow struct {
 	SizingMode string
 	FundingPct *float64
 	Note       string
+	Tier       string // D-625 P0：阶级层（armed|trial）
 }
 
 func (s *Store) LoadXAssetAllowCombos(ctx context.Context, environment string) ([]XAssetAllowRow, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT canonical_buy, canonical_sell, venue_key_buy AS venue_buy, venue_key_sell AS venue_sell,
 		       COALESCE(max_long_qty,0), COALESCE(max_short_qty,0), COALESCE(max_gross_usd,0),
-		       notional_usd, margin_usd, COALESCE(sizing_mode,'fixed'), funding_pct, note
+		       notional_usd, margin_usd, COALESCE(sizing_mode,'fixed'), funding_pct, note, tier
 		FROM xasset_allow_combos
 		WHERE enabled AND (simulated IS NULL OR simulated = ($1='demo'))`, environment)
 	if err != nil {
@@ -51,7 +52,7 @@ func (s *Store) LoadXAssetAllowCombos(ctx context.Context, environment string) (
 		var r XAssetAllowRow
 		if err := rows.Scan(&r.CanonicalBuy, &r.CanonicalSell, &r.VenueBuy, &r.VenueSell,
 			&r.MaxLongQty, &r.MaxShortQty, &r.MaxGrossUSD, &r.NotionalUSD, &r.MarginUSD,
-			&r.SizingMode, &r.FundingPct, &r.Note); err != nil {
+			&r.SizingMode, &r.FundingPct, &r.Note, &r.Tier); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
