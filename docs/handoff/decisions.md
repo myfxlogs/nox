@@ -747,3 +747,9 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **scope**：`internal/api/dashboard/service_capital_coverage_pools.go`（trxPoolRow 旗标）+ `service_capital_coverage.go`（口径注记）+ `tools/digest/capital_coverage.go`/`capital_coverage_render.go`（同源双实现+注记）+ 两侧测试锚数值同步修正；`position_daily_income` 腿级 TRX 收益**不剔**——那是系统持仓腿的收益产出（在仓 TRX 腿本身吃 funding+质押复合是策略产出的一部分）。
 - **反证锚**：若 venue 账户快照证实 TRX 池资金实际是系统策略调拨产物（非业主自营托管），本裁定翻案重审。
 - **配套**：「保证金占用」行年化=系统持仓近 7d 日均 carry 口径不动（存量仓 carry 属系统业绩）；总资金分母剔 TRX/CMC 后≈系统管辖 venue 净值和（向 D-030 $10k 基数口径收敛）。
+
+## D-630（业主令 10-19「要的是真正盈利情况」）真实净盈利权威口径=venue 权益差−io 划转净流
+
+- **决定**：系统真实盈亏的唯一权威口径=**Σ venue 实盘权益差 − Σ fin_venue_io 划转净流入**（权益变动扣除入金出金=真盈亏，穿透一切归因中间层与账面伪影）。income_events/attrib_net 等归因面降为解释层不作判定层。
+- **理由**：income_events 混会计伪影（earn 申购划转记负收益、尘币扇出残疤）+attrib_net_usd 全 NULL 空壳+TRX/CMC 自营盘曾混入基数——逐层归因口径已被三次证伪，只有「权益差−净流」是 venue 实拍对拍的硬口径。
+- **scope**：①导航/业绩面主指标改口径（权益差−io 净流，30d/全时双窗）；②`fin_decision_outcomes.attrib_net_usd` 填充径补建（settle 时落仓级净额）；③income_events 中 earn 申购类行语义订正（划转非收益——is_transfer 标或收入面剔）；④D-629 覆盖率票同源收敛。**反证锚**：若 venue 权益差口径与腿级台账和差值>5% 持续 3d=口径面有漏计域（手动仓/费用漏），另案排查。
