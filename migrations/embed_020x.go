@@ -153,3 +153,6 @@ var WatchRuleUpgradeSQL string // watch_rule 盯盘域升级（level/message—�
 
 //go:embed 1050_live_mode.sql
 var LiveModeSQL string // D-620：LIVE 授权链（mode 枚举+NOX_LIVE_TRADE 退役+live_gates active 部分唯一索引）
+
+//go:embed 1051_us500_spcx.sql
+var Us500SpcxSQL string // cfd 保底 US500 类 asset_equiv 注册（combo#20 簿缺席+universe 缺席根因）
