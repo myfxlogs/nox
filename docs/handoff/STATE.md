@@ -813,3 +813,7 @@ SG 实拍：容器 healthy+公网 bundle/css 哈希与评审构建逐字一致=�
 裁定=PASS。①swapRateFor：canonical→原生符号经 broker_symbol_map 反解（BrokerSymbolsByCanonical 裸形归一+facts ANY() 批读零 N+1），settled/spec/swap_free/non-settle 四径语义不动、写侧键零动、fail-closed 保留；部署后 `none canonical=TRX` 45min 零发。②ovfix F1-F6：六缺陷全修——proto 补 principal_available/idle_streak_available 双旗标（perf_available 同型）、Pnl/Ledger 卡挂 onCase 自持订阅、三处「无X」措辞改「读模未供（或零行）」、QuoteStrip 序归 watchlist 后端序+帧 mid 判据；SG 复验双旗标 wire=true。
 坑处置（新坑在案须录）：**buf curl --schema 按本地 proto 解码——SG proto 滞版时 wire 上的新字段被静默弃显**（本次 principalAvailable 假缺实真两轮排查的根因）；生产取证 RPC 断言新字段前必查 SG proto 同步态（deploy_sync 只推 tracked 面、proto 属 tracked 但本段未推）——录入待归纳 staging。
 -->
+<!-- 复审席 10-19：earn-io 专项+库卫生小包 双票收口注记
+earn-io 裁定=PASS 带复审修：实施面（earnIOExtID 回执抽 se-<purchaseId>/<redeemId> 键域对齐采集器+读侧剔除面随迁+体检表 13 端点格）全对版，但**复审实证补抓一处致命漏**——唯一键 (venue,config_id,direction,external_id) 含 config_id，exec ioTransfer 不写=0 而采集器写 spot 配置行（binance=19/okx=17）→se- 同键也撞不上 dedup 形同虚设；修件 a19c9257b=ioTransfer 反解 ExchangeConfigID(spot→earn 兜底，gate=33) + TestEarnIO_ConfigIDAligned/earnIOExtID 双锚。实施自测掩坑因=测试双侧同 cfgID 夹具未镜像真域差——同族病灶第 8 例（键域=多维键域不只符号列）。库卫生小包 PASS：STATE 双行合一+staging 两条目转正+push 陷阱双闸（git_push.sh remote 探测+pre-push 拦+test_push_guard.sh）。
+坑处置：config_id 键域漏维坑已录待归纳 staging（同族第 8 例维度——复合唯一键对齐须全维同域）；复审席修件在本席权内（窄函数+锚）。
+-->
