@@ -86,6 +86,44 @@
 | ② 自动自省 | P0 微额试单轨的配套件（trial→settle→reflection 自动产出） |
 | ③ 管线可视化 | 独立呈现面件，不依赖复议稿任何件 |
 
+## 6. 合席补评——意见与优化方案（复审/决策合席·Devin，SWE-2 Max，2026-10-19）
+
+**总评：结论采认**——「不引框架借三思想」裁定正确，且 §4「瓶颈在执行末米不在 LLM 编排」的诊断比我预期更准：本会话今日实证=armed TRX 簿复产等价差信号、positions 零行——瓶颈确实在「没仓可反思」，不在自动化形态本身。三思想全对，但落法细节有三处需要修，另加一条原稿漏掉的合并结构优化。
+
+### 6.1 逐条意见
+
+**① 复读机检测——方向对，指纹设计要改，且应复用现有闸不立新机制**
+
+- **指纹过脆**：原文 4 元组含 `loss_amount_band`——「亏相同金额」几乎永不精确重复，金额分桶后小漂移就逃出指纹。**改法**：指纹=`(canonical, side, exit_reason)` 三元组+滚动窗累计亏损额（不逐笔等值），N 笔同纹且窗累计<0=复读。
+- **不该立新闸**：`ApplyComboCooldown` 冷却层已存在（`xasset_allow_read.go`——clean/cooling/expired 三态在案），`fin_decision_outcomes.attrib_streak` 连败列也已建。**复读指纹应作为冷却层的第三种输入**（clean→cooling 的触发源=连败/复读/手摘），复用复资格/降仓语义而非新造——否则出现第四个并行退役机制=判据分散病灶。
+- **反证锚**：某组合「同纹 N 笔亏」但实为 venue 断供型退出（venue_starved 类 exit_reason）时不应计复读——指纹必须滤掉非策略性退出原因。
+
+**② 自动自省——三依赖今日全落地，比原稿写作时便宜很多；两处硬坑要先堵**
+
+- **依赖现状（本文写后 4 小时内补齐的）**：`LatestFactsByKindAsOf`（P3 as-of 层今日并入——「当时读数回取」的具体机制已存在，不用新造）、`fin_cost_model` 写径（RecordCostModel 今日落）、`positions.combo_id` 归因列（1057）。自省件的工程量原稿估大了——骨架全是现成的，剩「settle 事件→组装 reflection」一层薄壳。
+- **硬坑一：预期值必须入场时锚定**。「预期 PnL」若在写 reflection 时重建=用后视数据算预期=口径自欺（look-ahead 变体）。**要求**：entry 时刻把预期值（entry_net/模型成本/预期持有收益）落 positions/执行单字段，reflection 只读落库值不重建。
+- **硬坑二：先纯确定性模板，LLM 慎入**。reflection 的 80% 内容是可计算的（成本差/出场原因/预期差）——首版全确定性模板直落，LLM 叙述层后置且可选（LLM 加的是失败模式不加上限）。这与原稿「LLM 可写初稿」不冲突但收紧了默认序。
+- **扩面**：自省对象不应只 trial/armed fill——**paper 退出（venue_starved 类）同样产 outcome**，且 paper 是当前唯一有量的层（今日 SAND 两行退出即素材）。只盯真金仓=无料自省的死锁延续。
+
+**③ 管线可视化——按 D-033 原则降级：先系统自盯，可视化是 garnish**
+
+- 原稿落法是「下钻页面给人看」——但本契约 §5 写死「需要周期性查看的指标由系统计算并推送，终端只做决策」。**修法**：堵点检测先程序化——`PipelineStageHealth` 联查假设/提案/毕业表算「单段积压>阈+停滞时长>阈」→告警（复用今日 state-audit 呆行件的同款暴露模式）；页面下钻后置为非必需 garnish。「28 假设卡 memo」该由系统推警不是等人看图。
+
+### 6.2 原稿漏掉的结构优化：settle 单消费者一管双用
+
+①② 不应分立两票——两者同挂 **settle 事件**（ClosePosition/ExitPaperSpotCarry 出口点）：同一消费者先写 reflection（②），再以 reflection 的归因结果喂复读指纹判据（①，exit_reason 分型已在 reflection 里算过）。一票出两件：**「平仓→自省→复读判→冷却输入」单管线**。省一个事件订阅面、保证①只消费已归因的 exit_reason（不误判 venue 断供为策略复读）。
+
+### 6.3 优先级建议（本席裁定序）
+
+| 序 | 件 | 理由 |
+|---|---|---|
+| 先 | ③的系统自盯版（堵点推警） | 最便宜+当下就有料（假设积压现状可见） |
+| 次 | ①② 合并管线票 | 等首笔 settle（trial 仓未升）或拿 SAND 两 paper 退出当回放料先建骨架——骨架先行不等料 |
+| 缓 | ③可视化下钻 | 自盯版上线后再评估是否还需要 |
+
+**对原稿的唯一实质修正**：三思想全部成立，但「不引框架」的正确度比原稿论证的还强——①② 的全部依赖件在写作时点已缺到「无从起笔」，4 小时后今日已全数补齐；这本身证明瓶颈诊断（执行末米）是对的：件在等仓，不在等框架。
+
 ---
 
 *评估依据：[PraisonAI GitHub](https://github.com/MervinPraison/PraisonAI)（2026-10-19 访问），NOX 产线实况（本会话 25+ 票复审实证）。*
+*补评实证：fin_decision_outcomes.attrib_streak 在案（1041）、ApplyComboCooldown 三态在案、LatestFactsByKindAsOf/fin_cost_model/combo_id 今日并入（注记61 链）。*
