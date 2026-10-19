@@ -163,3 +163,6 @@ var Spx500BinanceSQL string // cfd 保底订正：US500 幻影类撤销，binanc
 var TrialTierSQL string // D-625 P0：微额试单轨 tier+cost_model+晋级判据种子
 //go:embed 1054_regime_prec_cfg.sql
 var RegimePrecCfgSQL string // D-625 P2：regime/前提塌判据 app_config 种子（禁硬编码）
+
+//go:embed 1055_s2canon_norm.sql
+var S2CanonNormSQL string // s2bridge 写入侧 canonical 归一·存量回填

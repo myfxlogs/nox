@@ -243,6 +243,7 @@ var migrationFiles = []struct {
 	{1048, migrations.CmcTablesReturnSQL, false},         // CMC Markets 采集表族回归（fin_cmc_* 4 表+装配键种子）
 	{1049, migrations.WatchRuleUpgradeSQL, false},        // watch_rule 盯盘域升级（level/message——arb 能力归并）
 	{1050, migrations.LiveModeSQL, false},                // D-620：LIVE 授权链断层修（真金单闸）
+	{1055, migrations.S2CanonNormSQL, false},             // s2bridge 写入侧 canonical 归一·存量回填（全列齐后跑）
 	{1051, migrations.Us500SpcxSQL, false},               // cfd 保底 US500 类 asset_equiv 注册（combo#20 双告警根因）
 	{1052, migrations.Spx500BinanceSQL, false},           // cfd 保底订正：US500 幻影类撤销，binance SPCX 双腿归 SPX500 类
 	{1053, migrations.TrialTierSQL, false},               // D-625 P0：微额试单轨 tier+cost_model+晋级判据
