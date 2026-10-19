@@ -248,3 +248,22 @@ func TestOverviewBundleIdleVsEarning(t *testing.T) {
 		t.Fatalf("真闲池归组错: %+v", idle)
 	}
 }
+
+// TestOverviewBundleAvailFlags F1/F4 显缺旗标锚：读径成功→principal_available/
+// idle_streak_available 置 true（空库=真零值合法显 $0——读败→false 由
+// prefetch err==nil 守卫兜，本锚锁装配线不断线回归）。
+func TestOverviewBundleAvailFlags(t *testing.T) {
+	st := serviceTestStoreSingleInit(t)
+	svc := &Service{store: st}
+	cresp, err := svc.GetOverviewBundle(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := cresp.Msg
+	if !r.PrincipalAvailable {
+		t.Error("nav 读径成功但 PrincipalAvailable=false——四瓦片将显「—」错杀真零")
+	}
+	if !r.IdleStreakAvailable {
+		t.Error("streaks 读径成功但 IdleStreakAvailable=false——眠钱瓦片将错显「—」")
+	}
+}

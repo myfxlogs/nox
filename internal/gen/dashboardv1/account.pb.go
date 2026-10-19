@@ -2195,9 +2195,12 @@ type GetOverviewBundleResponse struct {
 	IdleStreakPool string `protobuf:"bytes,28,opt,name=idle_streak_pool,json=idleStreakPool,proto3" json:"idle_streak_pool,omitempty"` // 最长眠钱池（venue:venue_type；空=无在册破地板池）
 	// §11 风险心跳 critical 明细（业主令 10-17：可见「是什么红」非只「有几个红」；
 	// 24h 窗内 critical 告警后端拼行，前端零拼零新 RPC——bundle 既有 ListAlerts 读搭车）。
-	CritAlerts    []*OverviewCritAlert `protobuf:"bytes,29,rep,name=crit_alerts,json=critAlerts,proto3" json:"crit_alerts,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	CritAlerts []*OverviewCritAlert `protobuf:"bytes,29,rep,name=crit_alerts,json=critAlerts,proto3" json:"crit_alerts,omitempty"`
+	// F1 显缺旗标（同族病灶第 5 例修——读败≠真值 0；perf_available/invested_available 同型范式）。
+	PrincipalAvailable  bool `protobuf:"varint,30,opt,name=principal_available,json=principalAvailable,proto3" json:"principal_available,omitempty"`      // nav 段读败→false（四瓦片显「—」不冒 $0）
+	IdleStreakAvailable bool `protobuf:"varint,31,opt,name=idle_streak_available,json=idleStreakAvailable,proto3" json:"idle_streak_available,omitempty"` // streaks 读败→false（眠钱瓦片显「—」不冒「无在册破地板池」）
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *GetOverviewBundleResponse) Reset() {
@@ -2417,6 +2420,20 @@ func (x *GetOverviewBundleResponse) GetCritAlerts() []*OverviewCritAlert {
 		return x.CritAlerts
 	}
 	return nil
+}
+
+func (x *GetOverviewBundleResponse) GetPrincipalAvailable() bool {
+	if x != nil {
+		return x.PrincipalAvailable
+	}
+	return false
+}
+
+func (x *GetOverviewBundleResponse) GetIdleStreakAvailable() bool {
+	if x != nil {
+		return x.IdleStreakAvailable
+	}
+	return false
 }
 
 // OverviewCritAlert 24h critical 告警明细行（全行 level 恒=critical 不复列）。
@@ -3516,8 +3533,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"amount_usd\x18\x03 \x01(\x01R\tamountUsd\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x120\n" +
 	"\x05until\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x05until\"\x1a\n" +
-	"\x18GetOverviewBundleRequest\"\xca\n" +
-	"\n" +
+	"\x18GetOverviewBundleRequest\"\xaf\v\n" +
 	"\x19GetOverviewBundleResponse\x12)\n" +
 	"\x10pending_requests\x18\x01 \x01(\x05R\x0fpendingRequests\x12.\n" +
 	"\x13principal_total_usd\x18\x02 \x01(\x01R\x11principalTotalUsd\x12,\n" +
@@ -3553,7 +3569,9 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\x10idle_streak_days\x18\x1b \x01(\x05R\x0eidleStreakDays\x12(\n" +
 	"\x10idle_streak_pool\x18\x1c \x01(\tR\x0eidleStreakPool\x12D\n" +
 	"\vcrit_alerts\x18\x1d \x03(\v2#.nox.dashboard.v1.OverviewCritAlertR\n" +
-	"critAlerts\"\xa6\x01\n" +
+	"critAlerts\x12/\n" +
+	"\x13principal_available\x18\x1e \x01(\bR\x12principalAvailable\x122\n" +
+	"\x15idle_streak_available\x18\x1f \x01(\bR\x13idleStreakAvailable\"\xa6\x01\n" +
 	"\x11OverviewCritAlert\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12*\n" +
 	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x14\n" +
