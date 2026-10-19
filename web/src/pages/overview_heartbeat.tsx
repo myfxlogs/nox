@@ -20,7 +20,12 @@ export function RiskHeartbeat({
           点击 Modal 全文兜底，前端零拼零新 RPC） */}
       <h2>风险心跳</h2>
       <div className="stats">
-        <StatTile label="KillSwitch" value={b ? (b.killSwitch ? "ON" : "off") : "—"} />
+        <StatTile
+          label="急停开关"
+          value={b ? (b.killSwitch ? "停机中" : "运行中") : "—"}
+          valueClass={b ? (b.killSwitch ? "u-bad" : "u-good") : undefined}
+          title="30d 滚动账本净额（含事故仓）≤ −$300 自动触发停机（D-030 硬线）；读败视同停机（宁显停不显通）；解除=人工 Resolve"
+        />
         <StatTile label="30d 净额（对 −3% 硬线）" value={b ? fmtUsd(b.net30Usd) : "—"} />
         <StatTile label="24h critical" value={b ? String(b.critAlerts24h) : "—"} />
       </div>
