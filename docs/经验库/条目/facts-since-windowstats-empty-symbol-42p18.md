@@ -3,7 +3,7 @@ schema_version: 2
 id: facts-since-windowstats-empty-symbol-42p18
 kind: pitfall
 risk: medium
-status: observed
+status: fixed
 keywords: [42P18, could not determine data type, factSymbolPred, FactsSince, FactsWindowStats, symbol 空, 参数化, pgx]
 scope: [pgstore, facts, 账号级 fact 读取]
 summary: factSymbolPred 双字面分派（D-574）把 $3 从 SQL 拿掉但调用侧仍绑 4 参——FactsSince/FactsWindowStats 传 symbol="" 即 42P18 硬错；现役调用面全非空（10-19 审计），属潜在陷阱非现症
@@ -49,3 +49,5 @@ notes: 10-19 审计：FactsSince×6 / FactsWindowStats×2 现役调用点（mark
 ## 适用边界
 
 `facts.go` 内按参数裁 SQL 的读取面（FactsSince/FactsWindowStats 及后续同形 helper）；LatestFacts 用 `($3='' OR symbol=$3)` 恒占位形态不受影响。
+
+**修讫（10-19，`e46e84e`）**：`FactsSince`/`FundingPredWindow`/`FactsWindowStats` 三调用点参绑定随谓词分派（symbol 非空才占参位，后续占位号 len(args) 动态算）；回归测试 `TestD412b_EmptySymbol42P18` 在案。
