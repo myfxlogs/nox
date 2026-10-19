@@ -283,3 +283,60 @@ func TestD180_SwapSrcFromVenueKey(t *testing.T) {
 		t.Errorf("no suffix: want vA, got %s", got)
 	}
 }
+
+// TestSwapRateFor_KeyDomainResolved 锚①（键域错位第 7 例）：组合行 canonical=裸形
+// TRX（1055 后），facts 写侧键=venue 原生符号（TRXUSD）——种 broker_symbol_map
+// 反解行+原生键 spec facts → swapRateFor 经候选集命中 spec 不再 none（生产实锤
+// 「swapRateFor none venue=15032313 canonical=TRX」根修）。
+// 对抗锚：①canonical 标签行兜底（D-325：无 map 行 venue 的 facts 键=canonical
+// 本形→仍命中）；②真无 facts→none fail-closed 语义保留。
+func TestSwapRateFor_KeyDomainResolved(t *testing.T) {
+	s := testAccumStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE facts CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM broker_symbol_map WHERE venue LIKE '999905%'`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = s.Pool().Exec(ctx, `DELETE FROM broker_symbol_map WHERE venue LIKE '999905%'`)
+		_, _ = s.Pool().Exec(ctx, `DELETE FROM broker_accounts WHERE venue='99990513'`)
+	})
+	if _, err := s.Pool().Exec(ctx,
+		`INSERT INTO broker_accounts (venue, host, port, password, venue_type)
+		 VALUES ('99990513','swaprate-test.invalid',443,'x','mt5')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Pool().Exec(ctx,
+		`INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, product_group, is_primary, source)
+		 VALUES ('99990513','TRXUSD','TRXUSDT','cfd_spot',true,'swaprate-test')`); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if err := s.InsertFacts(ctx, []fact.Fact{
+		// 原生键 spec facts（facts 写侧键域=venue 原生符号——生产实况镜像）
+		{Kind: fact.KindSwapLong, Venue: "99990513", Symbol: "TRXUSD", Value: 22.5, Unit: fact.UnitBpsDaily, Ts: now.Add(-time.Hour)},
+		// canonical 标签行兜底（D-325：无 map 行 venue 的 facts 键=canonical 本形）
+		{Kind: fact.KindSwapLong, Venue: "99990514", Symbol: "TRX", Value: 18.0, Unit: fact.UnitBpsDaily, Ts: now.Add(-time.Hour)},
+	}); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	e := &Engine{store: s, quotes: bus.New(), cfg: gate.Config{}}
+
+	// 主锚：裸形 canonical TRX×map 反解（TRXUSD）→ spec 命中。
+	bps, src := e.swapRateFor(ctx, "99990513", "TRX", "BUY", 0)
+	if src != swapSrcSpec || bps != 22.5 {
+		t.Fatalf("反解命中: want spec 22.5, got %s %.2f", src, bps)
+	}
+	// 兜底锚：canonical 标签行（无 map 行→cands=[TRX]）→ spec 命中。
+	bps2, src2 := e.swapRateFor(ctx, "99990514", "TRX", "BUY", 0)
+	if src2 != swapSrcSpec || bps2 != 18.0 {
+		t.Fatalf("canonical 兜底: want spec 18.0, got %s %.2f", src2, bps2)
+	}
+	// fail-closed 锚：真无 facts venue → none 语义保留。
+	_, src3 := e.swapRateFor(ctx, "99990515", "TRX", "BUY", 0)
+	if src3 != swapSrcNone {
+		t.Fatalf("真无 facts 应 none, got %s", src3)
+	}
+}

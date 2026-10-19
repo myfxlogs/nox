@@ -54,9 +54,14 @@ func (e *Engine) swapRateFor(ctx context.Context, venue, symbol, side string, sp
 	if side != "BUY" {
 		kind = fact.KindSwapSettledShort
 	}
+	// 键域对齐（键域错位第 7 例）：调用方传 canonical（1055 后组合行裸形 TRX），
+	// facts 写侧键=venue 原生符号（TRXUSDT/TRXUSD）——经 broker_symbol_map 反解
+	// 原生集+canonical 兜底（D-325 canonical 标签行语义保留）。真无映射=[canonical]
+	// =既有行为，fail-closed 不变。
+	cands := e.swapSymbolsFor(ctx, venue, symbol)
 	// 1. settled 优先：7d 窗口内样本取中位数
 	since := time.Now().Add(-settledWindow)
-	settledFacts, err := e.store.FactsWithin(ctx, kind, venue, symbol, since)
+	settledFacts, err := e.store.FactsWithinAnySymbol(ctx, kind, venue, cands, since)
 	if err == nil && len(settledFacts) > 0 {
 		values := make([]float64, 0, len(settledFacts))
 		for _, f := range settledFacts {
@@ -84,7 +89,7 @@ func (e *Engine) swapRateFor(ctx context.Context, venue, symbol, side string, sp
 		specKind = fact.KindSwapShort
 	}
 	if specMeanWindow > 0 { // D-027：滚动均值口径（spec fact 按采集频度采样，窗内均值含周末零）
-		specFacts, err := e.store.FactsWithin(ctx, specKind, venue, symbol, time.Now().Add(-specMeanWindow))
+		specFacts, err := e.store.FactsWithinAnySymbol(ctx, specKind, venue, cands, time.Now().Add(-specMeanWindow))
 		if err == nil && len(specFacts) > 0 {
 			var sum float64
 			for _, f := range specFacts {
@@ -93,13 +98,23 @@ func (e *Engine) swapRateFor(ctx context.Context, venue, symbol, side string, sp
 			return sum / float64(len(specFacts)), swapSrcSpec
 		}
 	} else {
-		specFacts, err := e.store.LatestFacts(ctx, specKind, venue, symbol)
+		specFacts, err := e.store.LatestFactsAnySymbol(ctx, specKind, venue, cands)
 		if err == nil && len(specFacts) > 0 {
 			return specFacts[0].Value, swapSrcSpec
 		}
 	}
 	// 3. none fail-closed
 	return 0, swapSrcNone
+}
+
+// swapSymbolsFor swap 费率 facts 查询键候选集：canonical→venue 原生符号集
+// （broker_symbol_map 反解）+canonical 兜底。真无映射=[canonical]（既有行为）。
+func (e *Engine) swapSymbolsFor(ctx context.Context, venue, canonical string) []string {
+	natives, err := e.store.BrokerSymbolsByCanonical(ctx, venue, canonical)
+	if err != nil || len(natives) == 0 {
+		return []string{canonical}
+	}
+	return append(natives, canonical)
 }
 
 // notionalPerLotForRate D-180 S2：算 notionalPerLot（USD）= CS × mid × 计价币→USD 换算。
