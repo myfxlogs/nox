@@ -71,6 +71,7 @@ func (s *Service) prefetchOverview(ctx context.Context, now time.Time, resp *v1.
 				}
 				resp.PrincipalIdleUsd = idle
 				resp.PrincipalEarningUsd = earning
+				resp.PrincipalAvailable = true // F1：读成才真（读败=缺省 false→前端显「—」不冒 $0）
 			}
 		})
 		return nil
@@ -187,6 +188,7 @@ func (s *Service) prefetchOverview(ctx context.Context, now time.Time, resp *v1.
 				}
 				resp.IdleStreakDays = int32(bestDays)
 				resp.IdleStreakPool = bestPool
+				resp.IdleStreakAvailable = true // F4/F1：读败（或真零）不再冒充「无在册破地板池」
 			}
 		})
 		return nil

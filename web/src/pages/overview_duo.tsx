@@ -48,7 +48,7 @@ export function OrderWaitDuo({ b, setCardModal }: {
               </li>
             ))}
           </ul>
-        ) : <EmptyState>无在仓订单</EmptyState>}
+        ) : <EmptyState>在仓订单读模未供或零行</EmptyState>}
         {b && b.paperCount > 0 && <div className="muted">纸面沙箱 {b.paperCount} 条（不入本金）</div>}
       </div>
       <div>
@@ -74,7 +74,7 @@ export function OrderWaitDuo({ b, setCardModal }: {
               </li>
             ))}
           </ul>
-        ) : <EmptyState>无等待项</EmptyState>}
+        ) : <EmptyState>等待面读模未供或零行</EmptyState>}
       </div>
     </>
   );

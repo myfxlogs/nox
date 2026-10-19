@@ -3,19 +3,26 @@
 // 30d 年化全后端下发直读）+策略台账（per-strategy 行——承诺/实际/持仓数）。
 import { useEffect, useState } from "react";
 import { client, errText } from "../api";
+import { onCase } from "../stream";
 import type { GetPnlAnchorResponse } from "../gen/dashboardv1/account_pb";
 import type { StrategyLedgerEntry } from "../gen/dashboardv1/broker_admin_pb";
 import { StatTile } from "./StatTile";
 import { EmptyState } from "./EmptyState";
 import { ts, pnlClass, fmtUsd } from "./fmt";
 
+// pnlRefreshCases F2 复用父页 re() 节拍案件集（陈值充现值修——持仓/账户/刷新帧即重取）。
+const pnlRefreshCases = ["position", "accountEvent", "dataRefresh", "brokerPositionEvent"] as const;
+
 export function PnlOverviewCard() {
   const [r, setR] = useState<GetPnlAnchorResponse | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => {
-    (async () => {
+    const re = async () => {
       try { setR(await client.getPnlAnchor({})); } catch (e) { setErr(errText(e)); }
-    })();
+    };
+    void re();
+    const offs = pnlRefreshCases.map((c) => onCase(c, () => void re()));
+    return () => offs.forEach((f) => f());
   }, []);
   if (err) return <div className="err">{err}</div>;
   if (!r) return null;
@@ -37,9 +44,12 @@ export function StrategyLedgerCard() {
   const [rows, setRows] = useState<StrategyLedgerEntry[]>([]);
   const [err, setErr] = useState("");
   useEffect(() => {
-    (async () => {
+    const re = async () => {
       try { setRows((await client.getStrategyLedger({})).entries); } catch (e) { setErr(errText(e)); }
-    })();
+    };
+    void re();
+    const offs = pnlRefreshCases.map((c) => onCase(c, () => void re()));
+    return () => offs.forEach((f) => f());
   }, []);
   if (err) return <div className="err">{err}</div>;
   if (rows.length === 0) return <EmptyState>零策略台账行</EmptyState>;

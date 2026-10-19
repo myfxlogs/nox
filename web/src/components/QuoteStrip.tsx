@@ -9,6 +9,7 @@ import type { Quote } from "../gen/dashboardv1/market_pb";
 import { FreshDot as Dot } from "./FreshDot";
 import { freshOf } from "./freshness";
 import { WatchlistModal } from "./WatchlistModal";
+import { client } from "../api";
 
 // fmtPrice 保留 venue 原生精度——上限 12 位小数只是兜底不参与舍入，
 // 千分位便于阅读（不设最小小数位、不补尾零）。
@@ -29,6 +30,17 @@ function UtcClock() {
 export function QuoteStrip() {
   const [q, setQ] = useState<Record<string, Quote>>({});
   const [edit, setEdit] = useState(false);
+  // F5：渲染序=watchlist 后端配置序（「排序全后端」——禁前端 sort）；
+  // canonical→序位映射，外帧按到达序插尾。
+  const [orderIdx, setOrderIdx] = useState<Map<string, number>>(new Map());
+  const seqRef = useRef<Map<string, number>>(new Map());
+  const seqNext = useRef(0);
+  const loadWatchlist = () => {
+    void client.getWatchlist({}).then((w) => {
+      setOrderIdx(new Map(w.items.map((x, i) => [x.canonical, i] as const)));
+    }).catch(() => {});
+  };
+  useEffect(loadWatchlist, []);
   // 涨跌闪（arb QuoteStrip 原件移植）：上一帧 bid/ask 基线 diff→up/down class 400ms。
   // 基线无条件更新（arb R3 顺手项——防回撤帧方向偶误）。
   const prevRef = useRef<Map<string, { bid: number; ask: number }>>(new Map());
@@ -38,7 +50,8 @@ export function QuoteStrip() {
     for (const [k, f] of Object.entries(q)) {
       const prev = prevRef.current.get(k);
       if (prev && (prev.bid !== f.bid || prev.ask !== f.ask)) {
-        next.set(k, f.bid > prev.bid || f.ask > prev.ask ? "up" : "down");
+        // F6：mid 判据（bid+ask 和比较——bid↑ask↓ 价差变宽帧方向不再偶误）。
+        next.set(k, f.bid + f.ask > prev.bid + prev.ask ? "up" : "down");
       }
       prevRef.current.set(k, { bid: f.bid, ask: f.ask });
     }
@@ -53,12 +66,25 @@ export function QuoteStrip() {
       onCase("quote", (v) => {
         const f = v as Quote;
         if (!f.venue || !f.symbol) return;
-        setQ((m) => ({ ...m, [`${f.venue}|${f.symbol}`]: f }));
+        setQ((m) => {
+          const k = `${f.venue}|${f.symbol}`;
+          if (!seqRef.current.has(k)) seqRef.current.set(k, seqNext.current++);
+          return { ...m, [k]: f };
+        });
       }),
     [],
   );
-  // venue 动态分组（帧域驱动）；组内符号按名排序=稳定排布非聚合。
-  const venues = [...new Set(Object.values(q).map((f) => f.venue))].sort();
+  // F5：帧序=watchlist canonical 序位→无配置帧按到达序插尾；venue 组序=
+  // 组内最小序位（组标签仍帧域驱动，排序源全后端零自定）。
+  const posOf = (f: Quote) => {
+    const i = orderIdx.get(f.symbol);
+    return i !== undefined ? i : 1e9 + (seqRef.current.get(`${f.venue}|${f.symbol}`) ?? 0);
+  };
+  const venues = [...new Set(Object.values(q).map((f) => f.venue))].sort(
+    (a, b) =>
+      Math.min(...Object.values(q).filter((f) => f.venue === a).map(posOf)) -
+      Math.min(...Object.values(q).filter((f) => f.venue === b).map(posOf)),
+  );
   return (
     <div className="quote-strip" aria-label="实时报价">
       {venues.length === 0 ? (
@@ -70,7 +96,7 @@ export function QuoteStrip() {
           </span>,
           ...Object.values(q)
             .filter((f) => f.venue === v)
-            .sort((a, b) => a.symbol.localeCompare(b.symbol))
+            .sort((a, b) => posOf(a) - posOf(b))
             .map((f) => (
               <span key={`${v}|${f.symbol}`} className="quote-tile">
                 <b>{f.symbol}</b>
@@ -101,7 +127,12 @@ export function QuoteStrip() {
       <WatchlistModal
         open={edit}
         onClose={() => setEdit(false)}
-        onSaved={() => setQ({})}
+        onSaved={() => {
+          setQ({});
+          seqRef.current.clear();
+          seqNext.current = 0;
+          loadWatchlist();
+        }}
       />
     </div>
   );

@@ -280,6 +280,9 @@ message GetOverviewBundleResponse {
   // §11 风险心跳 critical 明细（业主令 10-17：可见「是什么红」非只「有几个红」；
   // 24h 窗内 critical 告警后端拼行，前端零拼零新 RPC——bundle 既有 ListAlerts 读搭车）。
   repeated OverviewCritAlert crit_alerts = 29;
+  // F1 显缺旗标（同族病灶第 5 例修——读败≠真值 0；perf_available/invested_available 同型范式）。
+  bool principal_available = 30;    // nav 段读败→false（四瓦片显「—」不冒 $0）
+  bool idle_streak_available = 31;  // streaks 读败→false（眠钱瓦片显「—」不冒「无在册破地板池」）
 }
 
 // OverviewCritAlert 24h critical 告警明细行（全行 level 恒=critical 不复列）。
