@@ -85,6 +85,16 @@ func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]Explore
 		return nil, fmt.Errorf("explorer idle snapshots: %w", err)
 	}
 	defer rows.Close()
+	// 判定径快照清账：Equity=此刻权益实拉——map 单次扇出上提出行循环
+	// （D-604 「禁逐池 Refresh」纪律：liveEquityMapFn=acctMon.Refresh 全 venue
+	// poll，逐行调=~115 键×全量扇出=overview nav/perf 段撞 2m5s 死线实证）。
+	// 装配缺席/拉败=快照行值如实保（非清零）。
+	var liveMap map[string]float64
+	if liveEquityMapFn != nil {
+		if m, err := liveEquityMapFn(ctx); err == nil {
+			liveMap = m
+		}
+	}
 	var pools []ExplorerIdlePool
 	for rows.Next() {
 		var p ExplorerIdlePool
@@ -92,8 +102,9 @@ func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]Explore
 			&p.FreeMargin, &p.Currency, &p.FetchedAt, &p.BufferMultiple); err != nil {
 			return nil, fmt.Errorf("scan idle snapshot: %w", err)
 		}
-		// 判定径快照清账：Equity=此刻权益实拉（装配键在册才覆写；缺席如实保快照值）。
-		p.Equity = liveEquity(ctx, p.Venue, p.VenueType, p.Currency, p.Equity)
+		if v, ok := liveMap[p.Venue+":"+p.VenueType+":"+p.Currency]; ok {
+			p.Equity = v
+		}
 		pools = append(pools, p)
 	}
 	if err := rows.Err(); err != nil {
