@@ -13,41 +13,14 @@ import (
 	"nox/internal/store/pgstore"
 )
 
-// appendOverviewOutput §6-§10 产出面一次装配——组成明细（六组）+收益归因+闭环漏斗+
-// 等待面+眠钱时长。pools=§1 ComputeNav 池行（nil=读败面如实空）；perf=§2 业绩报告
-// （nil=无锚/读败，invested 面随缺）。
-func (s *Service) appendOverviewOutput(ctx context.Context, resp *v1.GetOverviewBundleResponse, pools []pgstore.ExplorerIdlePool, perf *pgstore.PerfReport, now time.Time) {
-	s.appendOverviewBreakdowns(resp, pools)
-	s.appendOverviewInvested(ctx, resp, perf)
-	// 收益归因（策略键×30d 结算净额）。
-	if attrib, err := s.store.OverviewAttribution(ctx, now.Add(-30*24*time.Hour)); err == nil {
-		for _, a := range attrib {
-			resp.Attribution = append(resp.Attribution, &v1.OverviewAttribRow{
-				Strategy: a.Strategy, Positions: int32(a.Positions),
-				Net30Usd: a.Net30USD, Wins: int32(a.Wins), Losses: int32(a.Losses),
-			})
-		}
-	}
-	// 闭环漏斗（九环 48h——发现→评估→沙箱→执行→持仓→平仓→账本→复盘→淘汰）。
-	if funnel, err := s.store.OverviewFunnel(ctx, now.Add(-48*time.Hour)); err == nil {
-		for _, f := range funnel {
-			resp.Funnel = append(resp.Funnel, &v1.OverviewFunnelRow{
-				Stage: f.Stage, Label: f.Label, Count_48H: int32(f.Count48h), Cumulative: f.Cumulative,
-			})
-		}
-	}
-	s.appendOverviewWaiting(ctx, resp)
-	// 眠钱时长（idle_floor_streak 最长连破天数——D-286 眠钱不眠计量呈现面）。
-	if streaks, err := s.store.GetStreaks(ctx); err == nil {
-		bestDays, bestPool := 0, ""
-		for k, st := range streaks {
-			if st.Days > bestDays {
-				bestDays, bestPool = st.Days, k
-			}
-		}
-		resp.IdleStreakDays = int32(bestDays)
-		resp.IdleStreakPool = bestPool
-	}
+// appendOverviewOutput §6/§invested 依赖段装配——组成明细（吃 pf.navPools）+
+// invested（吃 perf.BaselineAt→NetExternalFlowByVenueSince）。attribution/
+// funnel/waiting/streaks 四段零 pf 依赖已上提 prefetch 并发面
+// （service_overview_prefetch.go），不再经此。pools=§1 ComputeNav 池行
+// （nil=读败面如实空）；perf=§2 业绩报告（nil=无锚/读败，invested 面随缺）。
+func (s *Service) appendOverviewOutput(ctx context.Context, resp *v1.GetOverviewBundleResponse, pools []pgstore.ExplorerIdlePool, perf *pgstore.PerfReport) {
+	overviewSeg("breakdowns", func() { s.appendOverviewBreakdowns(resp, pools) })
+	overviewSeg("invested", func() { s.appendOverviewInvested(ctx, resp, perf) })
 }
 
 // appendOverviewBreakdowns 池行→四组组成明细：nav=venue 级 USD 族加总+非USD币种计数

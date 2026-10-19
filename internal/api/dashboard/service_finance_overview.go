@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	v1 "nox/internal/gen/dashboardv1"
 	"nox/internal/store/pgstore"
@@ -40,23 +41,55 @@ func (s *Service) GetFinanceOverview(ctx context.Context, req *connect.Request[v
 	return connect.NewResponse(resp), nil
 }
 
-// buildFinanceOverview 全量聚合（缓存未命中时执行）。
+// buildFinanceOverview 全量聚合（缓存未命中时执行）。五读零依赖全并发
+// （并行化票——NAV+perf+池三段同法）；pnls/incomes/flows 三核心读败仍
+// 整包 500 契约不动，equity/perf 为既有如实缺面；每段耗时 log 验证面。
 func (s *Service) buildFinanceOverview(ctx context.Context) (*v1.GetFinanceOverviewResponse, error) {
-	pnls, err := s.store.FinancePnlByEnv(ctx)
-	if err != nil {
-		return nil, err
+	var (
+		pnls    []pgstore.FinancePnlEnv
+		incomes []pgstore.FinanceIncomeKind
+		flows   []pgstore.FinanceFlow
+		equity  float64
+		byCcy   map[string]float64
+		skipped int
+		perf    *pgstore.PerfReport
+	)
+	var g errgroup.Group
+	var pnlsErr, incomesErr, flowsErr error
+	g.Go(func() error {
+		overviewSeg("fin_pnl_env", func() { pnls, pnlsErr = s.store.FinancePnlByEnv(ctx) })
+		return nil
+	})
+	g.Go(func() error {
+		overviewSeg("fin_income_kind", func() { incomes, incomesErr = s.store.FinanceIncomeByKind(ctx) })
+		return nil
+	})
+	g.Go(func() error {
+		overviewSeg("fin_flows", func() { flows, flowsErr = s.store.FinanceFlows(ctx, financeFlowsLimit) })
+		return nil
+	})
+	g.Go(func() error {
+		overviewSeg("fin_equity_nav", func() { equity, skipped, byCcy = s.equityTotalUSD(ctx) })
+		return nil
+	})
+	g.Go(func() error {
+		overviewSeg("fin_perf", func() {
+			if p, err := s.perfSinceBaseline(ctx); err == nil {
+				perf = p
+			} else {
+				log.Printf("[finance] perf baseline: %v（业绩面如实缺）", err)
+			}
+		})
+		return nil
+	})
+	_ = g.Wait()
+	for _, e := range []error{pnlsErr, incomesErr, flowsErr} {
+		if e != nil {
+			return nil, e
+		}
 	}
-	incomes, err := s.store.FinanceIncomeByKind(ctx)
-	if err != nil {
-		return nil, err
-	}
-	flows, err := s.store.FinanceFlows(ctx, financeFlowsLimit)
-	if err != nil {
-		return nil, err
-	}
-	equity, skippedNonUSD, byCcy := s.equityTotalUSD(ctx)
-	if skippedNonUSD > 0 {
-		log.Printf("[finance] overview: %d 个非 USD/USDT 计价账户跳过未计权益（诚实口径，不做假换算）", skippedNonUSD)
+	if skipped > 0 {
+		log.Printf("[finance] overview: %d 个非 USD/USDT 计价账户跳过未计权益（诚实口径，不做假换算）", skipped)
 	}
 
 	resp := &v1.GetFinanceOverviewResponse{
@@ -87,7 +120,7 @@ func (s *Service) buildFinanceOverview(ctx context.Context) (*v1.GetFinanceOverv
 		resp.Flows = append(resp.Flows, row)
 	}
 	// D-535：业绩基线面——本金池变动−外部净流；锚缺/读败 → available=false 如实缺（不冒充 0）。
-	if perf, err := s.perfSinceBaseline(ctx); err == nil && perf != nil {
+	if perf != nil {
 		resp.PerfAvailable = true
 		resp.BaselineUsd = perf.BaselineUSD
 		resp.BaselineAt = timestamppb.New(perf.BaselineAt)
@@ -96,8 +129,6 @@ func (s *Service) buildFinanceOverview(ctx context.Context) (*v1.GetFinanceOverv
 		resp.PerfUsd = perf.PerfUSD
 		resp.PerfAnnPct = perf.PerfAnnPct
 		resp.PerfFlowProvisional = perf.FlowProvisional
-	} else if err != nil {
-		log.Printf("[finance] perf baseline: %v（业绩面如实缺）", err)
 	}
 	return resp, nil
 }
