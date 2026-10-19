@@ -767,3 +767,5 @@ SG 实拍：容器 healthy+公网 bundle/css 哈希与评审构建逐字一致=�
 注记㊻（10-19 第 1 责任席·armed 前提径全链核验）：#1 续件结案——armed gate 引擎 pairKey 本就做 TrimSuffix 归一（engine_opp.go/service_carry_comparison/service_pending_entries 三面消费键全对），**armed#19 信号径从未断**，前提塌假阳只伤告警面（已修 cc4128b）。armed#19 未动真因=行情未过阈，非前提病。归一函数散 5+ 处各写=同族病灶形态根，写入侧归一票候选在坑条目。
 
 注记㊼（10-19 决策席·总览加载哑症取证定罪）：业主报总览页全「—」。排除链=①隧道/服务端健康（RPC 401 正常回、~1s 往返实测）；②token 存 app_secrets DB 跨重启有效；③`context canceled` 服务端日志实锤=客户端在服务端计算中途弃读。**真病灶=读面慢**：`LatestVenueAccountSnapshots` DISTINCT ON seq-scan+外排 182K 行 1.52s/次（索引在但 PG 不做 loose index scan）、bundle 五段全串行、retention DELETE 203s×138——叠加隧道 LHR 绕路=加载超时流产。性能票已立项（串行→并发+DISTINCT ON 模式统一换 LATERAL/物化+DELETE 分批）。用户侧 workaround=刷新后等 30-60s 数据会陆续填。
+
+注记㊽（10-19 复审席·s2-canon-norm 收口 PASS）：并入 master+SG 03:36Z 部署成活。核验：①Go 侧 `normalizeComboCanonicals`（s2bridge.go）MT 腿 `CanonicalByBrokerSymbol` 实归一+miss→mtBareCanon 兜底+查询败 fail-closed 拒写，双插入点同接；②迁移 1055 幂等两阶（broker_map join→尾裁兜底），schema_migrations 1055 在案；③**存量回填实拍**——#16 `PAXGUSDT|XAU`（真归一命中非尾裁）、#17-19 `TRXUSDT|TRX`、#20 `SPCXUSDT|SPX500`；#15 SKLUSDT cex-cex 无 MT 腿正确免动；④部署后 10min 前提塌零新发（修前同键三发）。同族病灶根断：写入侧归一+消费侧 mtBareCanon 双闸兜底。commit msg「改 1053」为文面残误（实际落 1055 正确）。
