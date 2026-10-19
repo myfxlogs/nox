@@ -35,7 +35,9 @@ func TestD338_XassetAllowFromTableZeroRows(t *testing.T) {
 	// D-367+D-010：跨 run 残留表形态自愈（LoadErrorFatal cleanup 重建为 D-338 时代形态）——
 	// 幂等补列，保证含 notional_usd/margin_usd 的 SELECT 不因残留形态炸加载。
 	if _, err := s.Pool().Exec(ctx, `ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS notional_usd NUMERIC;
-		ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS margin_usd NUMERIC`); err != nil {
+		ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS margin_usd NUMERIC;
+		ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS tier TEXT NOT NULL DEFAULT 'armed';
+		ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS source_tier TEXT NOT NULL DEFAULT 'armed'`); err != nil {
 		t.Fatalf("self-heal column: %v", err)
 	}
 	got := xassetAllowFromTable(ctx, s, "demo")
@@ -53,7 +55,9 @@ func TestD338_XassetAllowFromTableRows(t *testing.T) {
 	// D-367+D-010：跨 run 残留表形态自愈（LoadErrorFatal cleanup 重建为 D-338 时代形态）——
 	// 幂等补列，保证含 notional_usd/margin_usd 的 SELECT 不因残留形态炸加载。
 	if _, err := s.Pool().Exec(ctx, `ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS notional_usd NUMERIC;
-		ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS margin_usd NUMERIC`); err != nil {
+		ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS margin_usd NUMERIC;
+		ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS tier TEXT NOT NULL DEFAULT 'armed';
+		ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS source_tier TEXT NOT NULL DEFAULT 'armed'`); err != nil {
 		t.Fatalf("self-heal column: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx, `
@@ -115,6 +119,9 @@ func TestD338_LoadErrorFatal(t *testing.T) {
 				ADD COLUMN IF NOT EXISTS funding_pct double precision,
 				ADD COLUMN IF NOT EXISTS source text,
 				ADD COLUMN IF NOT EXISTS provenance_id bigint;
+			-- 1053/D-625 tier 列（P0 续件起 loader SELECT tier——重建面缺列即炸读径）
+			ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS tier text NOT NULL DEFAULT 'armed',
+				ADD COLUMN IF NOT EXISTS source_tier text NOT NULL DEFAULT 'armed';
 			-- 1039 同构序：先回填（4 颗 demo 种子行 enabled+NULL 出处）再加 required CHECK
 			UPDATE xasset_allow_combos SET source='manual_seed' WHERE source IS NULL;
 			ALTER TABLE xasset_allow_combos DROP CONSTRAINT IF EXISTS xasset_allow_combos_source_check;
@@ -171,7 +178,9 @@ func TestD367_NotionalNonPositiveDropped(t *testing.T) {
 	// D-338 LoadErrorFatal 的 cleanup 会用 D-338 时代建表 SQL 重建本表（无新列）——
 	// 本锚开头幂等自愈 notional/margin 列（0116 同款+D-010 margin_usd），不依赖测试顺序。
 	if _, err := s.Pool().Exec(ctx, `ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS notional_usd NUMERIC;
-		ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS margin_usd NUMERIC`); err != nil {
+		ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS margin_usd NUMERIC;
+		ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS tier TEXT NOT NULL DEFAULT 'armed';
+		ALTER TABLE xasset_allow_combos ADD COLUMN IF NOT EXISTS source_tier TEXT NOT NULL DEFAULT 'armed'`); err != nil {
 		t.Fatalf("self-heal column: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx, `
