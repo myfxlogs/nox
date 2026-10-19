@@ -100,32 +100,61 @@ func (s *Store) WritePositionReflection(ctx context.Context, posID int64) error 
 
 // AnchorEntryExpectedCost ①② 前置锚：开仓时点把成本模型实测均值锁进
 // entry_expected_cost_bps（reflection 只读落库值禁重建——look-ahead 硬坑）。
-// 读 fin_cost_model 同 venue×structure 全天桶 fee 均值（fills>0 实测优先，
-// 无实测=NULL 如实缺——不占位虚报）；IS NULL 守卫=首锚不覆（重入幂等）。
+// 读 fin_cost_model 全 OPEN 腿逐腿 venue×structure 全天桶 fee 均值求和
+// （fills>0 实测优先；任一腿无实测=NULL 如实缺——不占位虚报不估零）；
+// IS NULL 守卫=首锚不覆（重入幂等）；旧单腿锚行留痕不回改。
 // 调用点=pipeline_notional 双腿名义额落定后（venue/structure/notional 三要素齐）。
 func (s *Store) AnchorEntryExpectedCost(ctx context.Context, posID int64) error {
 	var (
-		ptype, venue, vtype string
-		notional            *float64
+		ptype    string
+		notional *float64
 	)
 	err := s.pool.QueryRow(ctx, `
-		SELECT p.type, COALESCE(l.venue,''), COALESCE(l.venue_type,''), p.notional_usd
-		FROM positions p
-		LEFT JOIN LATERAL (SELECT venue, venue_type FROM position_legs
-			WHERE position_id=p.id AND phase='OPEN' ORDER BY leg_no LIMIT 1) l ON true
-		WHERE p.id=$1`, posID).Scan(&ptype, &venue, &vtype, &notional)
-	if err != nil || venue == "" || notional == nil || *notional <= 0 {
-		return err // 腿未齐/无名义=不锚（如实缺）
+		SELECT type, notional_usd FROM positions WHERE id=$1`, posID).Scan(&ptype, &notional)
+	if err != nil || notional == nil || *notional <= 0 {
+		return err // 无名义=不锚（如实缺）
 	}
-	var avgFee *float64
-	if err := s.pool.QueryRow(ctx, `
-		SELECT SUM(fee_usd)::float8 / NULLIF(SUM(fills),0)
-		FROM fin_cost_model
-		WHERE venue=$1 AND venue_type=$2 AND structure=$3 AND bucket_hour=-1 AND fills>0`,
-		venue, vtype, ptype).Scan(&avgFee); err != nil || avgFee == nil {
-		return err // 无实测=如实缺
+	// 双腿聚合（refinement——旧径 LEFT JOIN LATERAL 首腿只锚单边 venue 费，
+	// 跨所双腿仓 CEX+MT5 费率结构异=成本系统性低估→指纹净额偏乐观）：
+	// 全 OPEN 腿逐腿 cost_model 均值求和；任一腿无实测=如实缺锚不记（禁估零）。
+	legs, err := s.pool.Query(ctx, `
+		SELECT venue, venue_type FROM position_legs
+		WHERE position_id=$1 AND phase='OPEN' AND COALESCE(venue,'')<>''`, posID)
+	if err != nil {
+		return err
 	}
-	bps := *avgFee / *notional * 1e4
+	defer legs.Close()
+	type legKey struct{ venue, vtype string }
+	var legKeys []legKey
+	for legs.Next() {
+		var k legKey
+		if err := legs.Scan(&k.venue, &k.vtype); err != nil {
+			return err
+		}
+		legKeys = append(legKeys, k)
+	}
+	if err := legs.Err(); err != nil {
+		return err
+	}
+	if len(legKeys) == 0 {
+		return nil // 腿未齐=不锚（如实缺）
+	}
+	var totalFee float64
+	for _, k := range legKeys {
+		var avgFee *float64
+		if err := s.pool.QueryRow(ctx, `
+			SELECT SUM(fee_usd)::float8 / NULLIF(SUM(fills),0)
+			FROM fin_cost_model
+			WHERE venue=$1 AND venue_type=$2 AND structure=$3 AND bucket_hour=-1 AND fills>0`,
+			k.venue, k.vtype, ptype).Scan(&avgFee); err != nil {
+			return err
+		}
+		if avgFee == nil {
+			return nil // 缺腿实测=如实缺锚不记（禁估零——禁线）
+		}
+		totalFee += *avgFee
+	}
+	bps := totalFee / *notional * 1e4
 	_, err = s.pool.Exec(ctx, `
 		UPDATE positions SET entry_expected_cost_bps=$2
 		WHERE id=$1 AND entry_expected_cost_bps IS NULL`, posID, bps)
