@@ -83,7 +83,7 @@ func startTickSampler(ctx context.Context, qbus *bus.QuoteBus, st *pgstore.Store
 			}
 			return st.InsertTicks(ctx, pgRows)
 		},
-		func(ctx context.Context, y, m int) error { return st.EnsureMonthPartition(ctx, y, m) },
+		func(ctx context.Context, y, m int) error { return nil }, // D-626 C 段：ticks 已 hypertable 化——分区由 tsdb 自管，手动月分区退役
 	)
 	safego.GoLoop("main:ticker", func() { ticker.Run(ctx, allSymbols) })
 }

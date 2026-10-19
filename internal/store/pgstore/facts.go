@@ -190,7 +190,7 @@ func (s *Store) InsertTicks(ctx context.Context, ticks []TickRow) error {
 	return nil
 }
 
-// EnsureMonthPartition 惰性创建月分区（§4.3）。
+// EnsureMonthPartition 惰性创建月分区（§4.3）。D-626 C 段：生产 ticks 已 hypertable——本函数仅测试库 fixtures 域留用（测试 DB 仍为声明式分区）。
 func (s *Store) EnsureMonthPartition(ctx context.Context, year int, month int) error {
 	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
 	end := start.AddDate(0, 1, 0)

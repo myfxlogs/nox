@@ -157,10 +157,8 @@ func (s *Store) PruneFacts(ctx context.Context) (int64, error) {
 	return total + tag.RowsAffected(), nil
 }
 
-// PruneTicks D-508 S4b：ticks 长保窗 90d=分区级裁剪——保留当前月+前 3 个月分区，
-// 更早分区 DETACH+DROP（分区级删除零表扫零膨胀，替代原 72h DELETE+VACUUM——74MB/日
-// 实测下 90d≈6.7GB；72h 窗是 D-213 按 FX 单一读侧定的历史遗留）。返回 DROP 分区数；
-// 首月边界无旧分区时优雅跳过（0,nil）。宿主 crontab ops_ticks_retention.sh 幂等保留。
+// PruneTicks：生产 ticks 已 hypertable——tsdb retention job 接管，本函数仅测试库
+// 声明式分区 fixtures 留用（名字过滤 ticks_%d_%d 对 chunk 天然 skip）。
 func (s *Store) PruneTicks(ctx context.Context) (int64, error) {
 	rows, err := s.pool.Query(ctx, `SELECT inhrelid::regclass::text FROM pg_inherits
 		WHERE inhparent = 'ticks'::regclass`)
