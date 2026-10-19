@@ -122,22 +122,17 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 			continue
 		}
 		if len(r.Missing) == 0 {
-			// dci 族 venue 参化：同模板按 venue 各出独立提案（pending 幂等键
-			// template_id+venue）；earn_apr_lending 按有 USDT 报价行的 rail
-			// venue 各出（报价所取 venue 如实写提案——跨 venue 顶档价配错
-			// venue 轨=错价出单面）；其余族照旧 binance 单 venue。
+			// dci 族 venue 参化/earn_apr_lending 按有 USDT 报价行的 rail venue
+			// 各出独立提案（报价所取 venue 如实写提案）；其余族照旧 binance 单 venue。
 			venues := []string{"binance"}
 			var venueAPR map[string]float64
 			if _, ok := gate.ExecTemplates[r.TemplateID]; ok {
 				venues = dciProposalVenues
 			} else if gate.EarnTemplates[r.TemplateID] {
 				if r.TemplateID == "cash_mgmt" {
-					// cash_mgmt per-venue 产制归 idleGapScan 独域（APR 下限闸
-					// 同源面——主环扇出不过闸=绕闸径，剔出归唯一产制点）。
-					continue
+					continue // cash_mgmt 产制归 idleGapScan 独域（APR 闸同源——扇出不过闸=绕闸径）
 				}
-				// earn 族（earn_apr_lending/earn_rotation）按有 USDT 报价行
-				// 的 rail venue 各出（报价所取 venue 如实写提案）。
+				// earn 族按有 USDT 报价行的 rail venue 各出（报价所取 venue 如实写提案）。
 				venues, venueAPR = earnQuoteVenues(ctx, st)
 			}
 			for _, venue := range venues {
@@ -269,6 +264,10 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	// 对账哨兵并入扫描拍（零新定时器）。
 	checkVenueFloat(ctx, st, in)
 	reconcileGaps(ctx, st, in, view)
+	// cash_mgmt 保活键无条件追（返修 a：产制点唯一、保活面不变）。
+	for _, lv := range sortedVenues(gate.EarnExecVenues) {
+		liveTmpls = append(liveTmpls, "cash_mgmt@"+lv)
+	}
 	// 过期并入扫描拍——当轮不再达标的 pending 提案→expired。
 	if n, err := st.ExpireProposalsExcept(ctx, liveTmpls); err != nil {
 		log.Printf("[oppmatch] expire proposals: %v", err)
