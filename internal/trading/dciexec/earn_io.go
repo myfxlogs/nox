@@ -41,8 +41,17 @@ func (e *Executor) ioTransfer(ctx context.Context, venue, ccy string, amount flo
 	if venue == "" || amount <= 0 {
 		return
 	}
+	// 复审修件（earn-io 专项）：config_id 必须与采集器同域（binance→spot 配置行 19）
+	// ——唯一键 (venue,config_id,direction,external_id) 里 config_id=0 会让 se- 同键
+	// 也撞不上（dedup 形同虚设，复审实证）。best-effort：反解败仍记行（台账完整性
+	// 高于 dedup），spot 缺行退 earn 型（gate 无 spot 配置行→earn=33）。
+	cfgID, _ := e.Store.ExchangeConfigID(ctx, venue, "spot")
+	if cfgID == 0 {
+		cfgID, _ = e.Store.ExchangeConfigID(ctx, venue, "earn")
+	}
 	n, err := e.Store.InsertVenueIO(ctx, []pgstore.VenueIO{{
 		Venue:      venue,
+		ConfigID:   cfgID,
 		Direction:  "transfer",
 		Ccy:        ccy,
 		Amount:     amount,
