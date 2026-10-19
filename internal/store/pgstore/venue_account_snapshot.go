@@ -194,8 +194,8 @@ type VenueAccountLatest struct {
 // 空表 → 空 nil 切片（调用方回退「未采」占位）。
 func (s *Store) LatestVenueAccountSnapshots(ctx context.Context) ([]VenueAccountLatest, error) {
 	// 读径=D-625 性能票：键枚举走 index-only distinct + 每键 LATERAL 单点探针
-	// （fin_venue_account_snapshot_key_ts_idx 支撑——DISTINCT ON seq-scan+外排
-	// 182K 行=1.52s/次 实测，改后 O(#keys) 索引下探）。
+	// （1056 表达式索引支撑——`IS NOT DISTINCT FROM` 不被 planner 当索引等值，
+	// venue-only 索引探 118 键×滤 1.6K 行=2.2s 反劣实测后订正为 COALESCE 等值）。
 	rows, err := s.pool.Query(ctx, `
 		SELECT v.venue, v.venue_type, v.balance_raw, v.equity_raw, v.free_margin_raw,
 		       v.buffer_multiple, COALESCE(v.currency,''), v.fetched_at
@@ -207,7 +207,7 @@ func (s *Store) LatestVenueAccountSnapshots(ctx context.Context) ([]VenueAccount
 			       buffer_multiple, currency, fetched_at
 			FROM fin_venue_account_snapshot t
 			WHERE t.venue = k.venue AND t.venue_type = k.venue_type
-			  AND t.currency IS NOT DISTINCT FROM k.currency
+			  AND COALESCE(t.currency,'') = COALESCE(k.currency,'')
 			ORDER BY t.fetched_at DESC LIMIT 1
 		) v
 		ORDER BY v.venue, v.venue_type, COALESCE(v.currency,'')`)

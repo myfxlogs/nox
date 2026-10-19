@@ -248,4 +248,5 @@ var migrationFiles = []struct {
 	{1052, migrations.Spx500BinanceSQL, false},           // cfd 保底订正：US500 幻影类撤销，binance SPCX 双腿归 SPX500 类
 	{1053, migrations.TrialTierSQL, false},               // D-625 P0：微额试单轨 tier+cost_model+晋级判据
 	{1054, migrations.RegimePrecCfgSQL, false},           // D-625 P2：regime/前提塌判据 app_config 种子
+	{1056, migrations.SnapshotLatestExprIdxSQL, false},   // rpc-perf 复审修：快照最新行 LATERAL 探针表达式索引
 }

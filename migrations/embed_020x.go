@@ -166,3 +166,5 @@ var RegimePrecCfgSQL string // D-625 P2：regime/前提塌判据 app_config 种�
 
 //go:embed 1055_s2canon_norm.sql
 var S2CanonNormSQL string // s2bridge 写入侧 canonical 归一·存量回填
+//go:embed 1056_snapshot_latest_expr_idx.sql
+var SnapshotLatestExprIdxSQL string // LatestVenueAccountSnapshots LATERAL 探针表达式索引
