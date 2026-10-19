@@ -95,9 +95,18 @@ func sessionSig(secretB32, body string) string {
 	return hex.EncodeToString(m.Sum(nil))
 }
 
-// OTPAuthURI 设置页 QR 内容（otpauth://totp/NOX:owner?secret=…&issuer=NOX）。
+// TOTPIdCode 身份码：SHA256(归一 secret+"|idcode") 前 3 字节=6 位小写 hex。
+// 业主令 10-19 追加：绑定程序太多不易区分——扫码标签与登录页同源同码，
+// Authenticator 里凭 Nox:9663dc 对号。指纹面（SSH host key 同理）：单向衍生，
+// 不泄 secret 本体可验证信息；secret 重生成→身份码随换（无需另存状态）。
+func TOTPIdCode(secretB32 string) string {
+	sum := sha256.Sum256([]byte(strings.ToUpper(strings.TrimSpace(secretB32)) + "|idcode"))
+	return hex.EncodeToString(sum[:3])
+}
+
+// OTPAuthURI 设置页 QR 内容（otpauth://totp/Nox:<身份码>?secret=…&issuer=Nox）。
 func OTPAuthURI(secretB32 string) string {
-	return "otpauth://totp/NOX:dashboard?secret=" + strings.ToUpper(secretB32) + "&issuer=NOX&digits=6&period=30"
+	return "otpauth://totp/Nox:" + TOTPIdCode(secretB32) + "?secret=" + strings.ToUpper(secretB32) + "&issuer=Nox&digits=6&period=30"
 }
 
 // TOTPLimiter 登录限速器（连续 5 败锁 5min——防暴力扫 6 位空间）。
