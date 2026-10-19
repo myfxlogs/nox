@@ -203,6 +203,8 @@ func buildCexFundingCollectors(st *pgstore.Store, cexCfg exchange.Config, alertC
 	// D-152 fixup：retention 是批量维护任务非采集源——首轮回填六表存量（~150 万行）
 	// + 稳态 facts 日增量，35s 缺省预算必超时（生产实证 boot 轮六连 deadline exceeded）。
 	cs = append(cs, collect.Named{Name: "retention", Interval: 24 * time.Hour, PollTimeout: 30 * time.Minute, Collector: &retentionCollector{st: st}})
+	// §6.1③：发现漏斗堵点自盯日轮（假设/提案/毕业三段积压+停滞→warn 告警）。
+	cs = append(cs, collect.Named{Name: "pipeline_watch", Interval: 24 * time.Hour, Collector: &pipelineWatchCollector{st: st}})
 
 	// D-137/D-144 ④：Deribit 期权平价偏离采集监控装配。
 	cs = append(cs, buildDeribitCollector(st, alertCooler, cfg)...)
