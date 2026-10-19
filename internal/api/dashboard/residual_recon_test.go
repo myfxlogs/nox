@@ -50,9 +50,13 @@ func TestD539_ResidRecon(t *testing.T) {
 			t.Fatalf("seed snap: %v", err)
 		}
 	}
+	// ExternalID 用中性前缀（复审修件 10-19）：本用例语义=纯划转靠 io 行自解释；
+	// earn-io 专项后 SumVenueIOTransfers 读口径剔「se-* 且 to_wallet='earn」（申购行
+	// 由订单腿覆盖），旧 fixture 恰撞 se- 前缀→划转失解释双侧假 critical（3afed0ca9 起
+	// CI/本地恒红亲证）。改中性 id 对齐读口径，纯划转解释语义不变。
 	if _, err := s.InsertVenueIO(ctx, []pgstore.VenueIO{{
 		Venue: "d536bn", ConfigID: cfgEarn, Direction: "transfer", Ccy: "USDT",
-		Amount: 200, ExternalID: "se-p1", Ts: base.Add(10 * time.Minute),
+		Amount: 200, ExternalID: "xfer-p1", Ts: base.Add(10 * time.Minute),
 		FromWallet: "spot", ToWallet: "earn",
 	}}); err != nil {
 		t.Fatalf("seed transfer: %v", err)
