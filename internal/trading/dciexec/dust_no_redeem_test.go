@@ -119,7 +119,7 @@ func TestD203_NoTypeFast(t *testing.T) {
 	}))
 	defer srv.Close()
 	e := &Executor{ModeGate: liveModeGate, SigmaFn: testSigma, BnKey: "k", BnSec: "s", Sapi: srv.URL, Client: srv.Client(), Now: time.Now}
-	if err := e.redeemFlexible(context.Background(), "P1", 0.01); err != nil {
+	if _, err := e.redeemFlexible(context.Background(), "P1", 0.01); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(gotQ, "type=") {

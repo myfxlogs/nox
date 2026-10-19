@@ -84,3 +84,41 @@ func TestVenueIOTxIDDedup(t *testing.T) {
 		t.Fatalf("external_id 查重应命中：%v %v", ok, err)
 	}
 }
+
+// TestVenueIOEarnDualWriteDedup earn-io 专项验收锚①：执行侧手写行×采集器
+// se-* 行同 external_id 域（键域对齐后）撞键行为钉死——同键第二插=幂等吞
+// （禁静默双记），异键异事=各行独立在册（禁误吞）。
+func TestVenueIOEarnDualWriteDedup(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	if _, err := st.Pool().Exec(ctx, `DELETE FROM fin_venue_io WHERE venue='bndedup'`); err != nil {
+		t.Fatal(err)
+	}
+	// 执行侧申购行：external_id=se-<purchaseId>（键域对齐后径）
+	execRow := VenueIO{Venue: "bndedup", ConfigID: 9902, Direction: "transfer", Ccy: "USDT",
+		Amount: 100.5, Status: "CONFIRMED", ExternalID: "se-882211", Ts: time.Now(),
+		FromWallet: "spot", ToWallet: "earn"}
+	n, err := st.InsertVenueIO(ctx, []VenueIO{execRow})
+	if err != nil || n != 1 {
+		t.Fatalf("执行侧首插应成: n=%d err=%v", n, err)
+	}
+	// 采集器同事件行（同 se- 键——史回放到场）→ 撞键幂等吞不双记
+	collRow := execRow
+	collRow.Status = "SUCCESS" // 采集器原生状态域
+	n, err = st.InsertVenueIO(ctx, []VenueIO{collRow})
+	if err != nil || n != 0 {
+		t.Fatalf("同键采集行应幂等吞: n=%d err=%v", n, err)
+	}
+	// 异键异事件不误吞（se-882212 独立成账）
+	n, err = st.InsertVenueIO(ctx, []VenueIO{{Venue: "bndedup", ConfigID: 9902, Direction: "transfer",
+		Ccy: "USDT", Amount: 7.25, Status: "SUCCESS", ExternalID: "se-882212", Ts: time.Now(),
+		FromWallet: "earn", ToWallet: "spot"}})
+	if err != nil || n != 1 {
+		t.Fatalf("异键异事件应独立在册: n=%d err=%v", n, err)
+	}
+	var cnt int
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM fin_venue_io WHERE venue='bndedup'`).Scan(&cnt); err != nil || cnt != 2 {
+		t.Fatalf("台账行数应=2（撞键吞+异键留）: %d %v", cnt, err)
+	}
+}

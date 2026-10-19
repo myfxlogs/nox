@@ -63,7 +63,7 @@ func (e *Executor) JitSweep(ctx context.Context, venueKey string, shortfall floa
 			break
 		}
 		amt := math.Min(need, p.Amount)
-		if err := rail.Redeem(ctx, p.ProductID, amt); err != nil {
+		if _, err := rail.Redeem(ctx, p.ProductID, amt); err != nil {
 			e.jitSweepRevert(ctx, venue, redeemed, nonce)
 			return fmt.Errorf("%s earn 赎回 %s %.4f 败: %w", venue, p.ProductID, amt, err)
 		}
