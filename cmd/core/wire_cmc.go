@@ -44,7 +44,7 @@ func buildCmcCollectors(ctx context.Context, st *pgstore.Store, cfg *config.Conf
 	// AllLatest 面增一源：cmc 非执行 venue（broker_symbol_map/combo 无 cmc 行）→eval/下单径零新配对。
 	prices.SetQuoteHook(func(bid, ask float64, ts time.Time) {
 		qbus.Publish(bus.Quote{
-			Symbol: "TRXUSD", Venue: "cmc", VenueType: "cfd",
+			Symbol: "TRXUSDT", Venue: "cmc", VenueType: "cfd",
 			Bid: bid, Ask: ask, Time: ts, VenueSymbol: "X-AFQUL",
 		})
 	})

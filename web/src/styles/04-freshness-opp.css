@@ -231,9 +231,9 @@
   display: inline-flex;
   gap: 8px;
   font-variant-numeric: tabular-nums;
-  /* 业主令 10-19②：禁左右抖动——定宽+右对齐，数变时位宽不推挤邻居与 FreshDot */
+  /* 业主令 10-19②：禁左右抖动——定宽不收缩；左对齐（业主令 10-19⑥：跟符号名同一基线方向） */
   min-width: 20ch;
-  justify-content: flex-end;
+  justify-content: flex-start;
   white-space: nowrap;
 }
 
