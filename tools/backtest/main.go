@@ -74,7 +74,13 @@ func run(ctx context.Context, st *pgstore.Store, cfg runCfg) error {
 	stats := WindowStatsFrom(rows, cadence)
 	sess := marketstate.LoadSessionTable(ctx, st)
 	mtCanon := cfg.pair[strings.LastIndex(cfg.pair, "-")+1:]
-	ok, reasons := Admit(stats, sessionAdapter{sess}, keyBare(cfg.mt), mtCanon, cfg.to.Sub(cfg.from), cadence)
+	// 断档阈参数化（口径双修②）：app_config backtest_gap_min 分钟，
+	// 缺省 15min 兜底（原 cadence×3 对真实窗偏苛实证）。
+	gapMax := 15 * time.Minute
+	if v, ok, err := st.AppConfigFloat(ctx, "backtest_gap_min"); err == nil && ok && v > 0 {
+		gapMax = time.Duration(v) * time.Minute
+	}
+	ok, reasons := Admit(stats, sessionAdapter{sess}, keyBare(cfg.mt), mtCanon, cfg.to.Sub(cfg.from), cadence, gapMax)
 
 	fmt.Printf("== 回放窗覆盖证明 ==\n窗 %s → %s｜行数 %d｜最大断档 %s｜断档越阈 %d 次｜noise 缺计 %d",
 		cfg.from.Format("01-02 15:04Z"), cfg.to.Format("01-02 15:04Z"),
@@ -88,7 +94,7 @@ func run(ctx context.Context, st *pgstore.Store, cfg runCfg) error {
 		for _, r := range reasons {
 			fmt.Println("× " + r)
 		}
-		diagnose(ctx, st, rows, stats, cfg)
+		diagnose(ctx, st, rows, stats, cfg, gapMax)
 		return nil
 	}
 
@@ -103,8 +109,10 @@ func run(ctx context.Context, st *pgstore.Store, cfg runCfg) error {
 	return nil
 }
 
-// diagnose 不可判诊断（as-of-t 层消费面）：最大断档中点的双腿最新 tick 回溯。
-func diagnose(ctx context.Context, st *pgstore.Store, rows []BookRow, stats WindowStats, cfg runCfg) {
+// diagnose 不可判诊断（as-of-t 层消费面）：命中 gap 列表+最大断档中点的
+// 双腿最新 tick 回溯（MT 腿键=broker_symbol_map 同域——ticks 存面 BTCUSD 族
+// 非裸 canon，同族病灶第 5 例销账）。
+func diagnose(ctx context.Context, st *pgstore.Store, rows []BookRow, stats WindowStats, cfg runCfg, gapMax time.Duration) {
 	if stats.MaxGap == 0 || stats.Rows < 2 {
 		return
 	}
@@ -119,10 +127,22 @@ func diagnose(ctx context.Context, st *pgstore.Store, rows []BookRow, stats Wind
 		return
 	}
 	mtCanon := cfg.pair[strings.LastIndex(cfg.pair, "-")+1:]
+	mtSym, mtNote := mtTickSym(ctx, st, keyBare(cfg.mt), mtCanon)
+	// 命中 gap 列表（阈 gapMax——票面「诊断报文带命中 gap 列表」）。
+	for _, bh := range stats.Breaches {
+		mark := ""
+		if bh.Dur > gapMax {
+			mark = " ✗越阈"
+		}
+		fmt.Printf("gap@%s +%s%s\n", bh.At.Format("01-02 15:04Z"), bh.Dur.Round(time.Minute), mark)
+	}
 	for _, leg := range []struct{ name, venue, sym string }{
 		{"CEX", keyBare(cfg.cex), cexSym(cfg)},
-		{"MT", keyBare(cfg.mt), mtCanon},
+		{"MT", keyBare(cfg.mt), mtSym},
 	} {
+		if leg.name == "MT" && mtNote != "" {
+			fmt.Printf("MT 腿键解析：%s\n", mtNote)
+		}
 		_, _, ts, ok, err := st.LatestTickAsOf(ctx, leg.venue, leg.sym, gapMid)
 		if err != nil {
 			log.Printf("诊断读败 %s: %v", leg.name, err)
@@ -230,4 +250,18 @@ func csvFloats(s string) []float64 {
 		out = append(out, v)
 	}
 	return out
+}
+
+// mtTickSym MT 腿 tick 键同域解析（broker_symbol_map 实读）：裸 canon 三变体
+// （canon/canon+USDT/canon+USD）命中首行=broker 实存符号；全 miss=回退裸 canon
+// +注记（如实缺不臆造）。
+func mtTickSym(ctx context.Context, st *pgstore.Store, venue, canon string) (sym, note string) {
+	var hit string
+	if err := st.Pool().QueryRow(ctx, `
+		SELECT broker_symbol FROM broker_symbol_map
+		WHERE venue = $1 AND canonical IN ($2, $2||'USDT', $2||'USD')
+		ORDER BY canonical LIMIT 1`, venue, canon).Scan(&hit); err == nil {
+		return hit, ""
+	}
+	return canon, "broker_symbol_map 无 " + venue + "×" + canon + " 映射——回退裸键（如实缺）"
 }
