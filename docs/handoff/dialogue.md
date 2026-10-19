@@ -154,3 +154,11 @@
 - 决策席喂参（D-624 前置仍闭）：假设#5 params_proto={15032313,US500,short,SPCXUSD1}——裸 SQL 写（params 面无 RPC 写径=机制缺口挂注）；桥过轴闸→combo#20 白名单入册+trialing+告警#2018 带令。试单授权另闸未开。
 - 纠偏实证：okx:earn 实持 $2128 USDT（计息行递增）——「okx 全所≈0」实为交易面≈0。
 - 残留：okx:unified:USDT 映射缺 warn=真零值池+尘阈滤行（语义正确不追修）；SPCXUSD1 depth 400/65s=TradFi perp orderbook 采集轴缺（D-624 观察挂）。
+
+## 2026-10-19 11:27Z — TOTP 追加令：QR 直出+身份码对号
+
+业主令：「你直接生成二维码给我扫吧，扫描二维码时，自动加上标题Nox+6位字符的身份码，填写6位码的页面，也要显示6位身份码，以便用户能快速区分…比如，在authenticator上显示Nox:9663dc」——追加三件：①QR 直接出图（免业主侧 qrencode 手工步）；②otpauth 标签 Nox:6位身份码；③登录页同码显示（业主绑定程序多，凭码对号取 6 位码）。
+
+- 实施：auth.TOTPIdCode=SHA256(归一 secret+"|idcode") 前 3 字节 6 位小写 hex（secret 重生成→身份码随换，零额外状态）；OTPAuthURI 标签 Nox:<身份码>；GET /totp/idcode 指纹面+login.tsx 登录卡对号行；setup 补 Seal 落库（原纯 secRes.Set 内存写=重启即丢且 QR 一次性后无从恢复）。
+- 根因修：config IsAppSecretKey+appSecretSeedKeys 双表漏 NOX_TOTP_SECRET（descs 展示副本假象）→生产 login 恒 501（11:15Z 实拍基线）。经验库 app-secrets-key-config-whitelist-double-miss（high）。
+- 提交 e45ae2f31；机检全绿（build/vet/test 3965/race/vite）。
