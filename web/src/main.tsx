@@ -2,7 +2,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { useEffect, useState } from "react";
-import { getToken } from "./api";
+import { getToken, clearToken } from "./api";
 import { onStatus, onCase } from "./stream";
 import { client } from "./api";
 import { NOX_NAME } from "./nox";
@@ -135,6 +135,14 @@ const ROUTE_ICONS: Record<string, string> = {
   "/settings": "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83", // gear
 };
 
+// logout 弃置本标签页 session 回登录卡（业主扫码验收后补件：无退出钮没法重测登录流）。
+// 无服务端吊销面：单人 4h 短 session 设计，密钥级吊销=重生成 secret（/totp/setup 另票径）。
+function logout() {
+  clearToken();
+  location.hash = "#/login";
+  location.reload();
+}
+
 // 壳层钟面——票面裁准唯一合法 setInterval（UTC 钟面非业务数据）。
 function ShellClock() {
   const [t, setT] = useState(() => new Date());
@@ -186,6 +194,7 @@ function App() {
         <button className="theme-btn" title="主题切换" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
           {theme === "dark" ? "☾" : "☀"}
         </button>
+        <button className="theme-btn" title="退出登录" onClick={logout}>退出</button>
       </header>
       <nav className={`sidebar${sideOpen ? " open" : ""}`} aria-label="视图切换">
         {NAV_GROUPS.map((g) => (
