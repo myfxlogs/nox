@@ -52,3 +52,36 @@ func TestVenueGapSweep(t *testing.T) {
 		t.Fatalf("幂等重扫应仍 1 行: %d", n3)
 	}
 }
+
+// TestVenueGapSweep_WaivedRevive D-632：删径级联把未决 gap 翻 waived（终态）后，
+// 同键重入册（owner 重加户）撞 UNIQUE 静默吞复请——扫经 ReopenConditionGap 复活。
+func TestVenueGapSweep_WaivedRevive(t *testing.T) {
+	st := storetest.SharedStore(t, "NOX_TEST_PG_DSN")
+	ctx := context.Background()
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('gapwaive','mt5','h',443,'x') ON CONFLICT (venue) DO NOTHING;
+		 DELETE FROM fin_condition_gap WHERE template_id='venue_onboard' AND subject='gapwaive:mt5';
+		 INSERT INTO fin_condition_gap (template_id, kind, subject, request_text, status, resolved_at, resolve_note) VALUES
+		 ('venue_onboard','constraint','gapwaive:mt5','r','waived',now(),'删径级联自动 waive（venue_key 已删，禁硬删留痕）');`); err != nil {
+		t.Fatal(err)
+	}
+	e := &Engine{store: st}
+	e.venueGapSweep(ctx, map[string]bool{}) // gapwaive:mt5 不在放行集→缺行缺口
+	var st1 string
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT status FROM fin_condition_gap WHERE template_id='venue_onboard' AND subject='gapwaive:mt5'`).Scan(&st1); err != nil {
+		t.Fatal(err)
+	}
+	if st1 != "requested" {
+		t.Fatalf("waived 行重入册应复活回 requested: %s", st1)
+	}
+	// 已复流行重扫：requested 态两推闸皆 no-op，态稳（不弹 fulfilled/open 旁支）。
+	e.venueGapSweep(ctx, map[string]bool{})
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT status FROM fin_condition_gap WHERE template_id='venue_onboard' AND subject='gapwaive:mt5'`).Scan(&st1); err != nil {
+		t.Fatal(err)
+	}
+	if st1 != "requested" {
+		t.Fatalf("重扫态应稳在 requested: %s", st1)
+	}
+}
