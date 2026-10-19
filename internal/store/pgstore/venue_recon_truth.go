@@ -12,6 +12,8 @@ import (
 )
 
 // TrueNetProfit 权威净盈亏行（窗口双出：30d/全时由调用方给 since 早界）。
+// 返修①：池枚举=全 venue_type×USDT/USD（perp/unified/mt5/futures 不再盲面——
+// 返修前只取 spot/funding/earn=57% 本金盲面实证在案）。
 type TrueNetProfit struct {
 	NetUSD    float64
 	Covered   []string // 覆盖池 venue|venue_type|ccy（有基线快照有现拍）
@@ -25,7 +27,7 @@ func (s *Store) TrueNetProfitSince(ctx context.Context, since, now time.Time) (*
 	// 池清单=有快照的稳定币 spot/funding/earn 键域（与 residual 同源口径）。
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT venue, venue_type, currency FROM fin_venue_account_snapshot
-		WHERE venue_type IN ('spot','funding','earn') AND upper(currency) IN ('USDT','USD')`)
+		WHERE upper(currency) IN ('USDT','USD')`)
 	if err != nil {
 		return nil, fmt.Errorf("truth pools: %w", err)
 	}
