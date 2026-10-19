@@ -205,7 +205,10 @@ func (s *Service) prefetchOverview(ctx context.Context, now time.Time, resp *v1.
 			resp.TrueNet_30DUsd = r30.NetUSD
 			resp.TrueNetAllUsd = rall.NetUSD
 			resp.TrueNetAvailable = len(rall.Covered) > 0
-			unc := append(r30.Uncovered, rall.Uncovered...)
+			unc := append(append([]string{}, r30.Uncovered...), rall.Uncovered...)
+			for _, v := range rall.IoGap {
+				unc = append(unc, v+":io采集缺") // io 缺口 venue 如实标（gate 实证面）
+			}
 			if len(unc) > 8 {
 				unc = unc[:8]
 			}

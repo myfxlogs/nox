@@ -8,6 +8,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -18,6 +19,9 @@ type TrueNetProfit struct {
 	NetUSD    float64
 	Covered   []string // 覆盖池 venue|venue_type|ccy（有基线快照有现拍）
 	Uncovered []string // 缺基线/缺现拍池（如实缺——漏计域标注）
+	IoGap     []string // io 采集缺口 venue（覆盖池存在但外部充提无采集径——
+	// gate 实证：采集层零 gate io 件，权益差照算但 io 净流缺半边=真净值
+	// 对该 venue 系统性偏低，如实标不装全）
 }
 
 // TrueNetProfitSince 窗口权威口径：Σ(现拍权益−基线权益)−Σ外部 io 净流。
@@ -80,5 +84,30 @@ func (s *Store) TrueNetProfitSince(ctx context.Context, since, now time.Time) (*
 		ioNet += n
 	}
 	r.NetUSD = eqDelta - ioNet
-	return r, vrows.Err()
+	// io 缺口面：覆盖池 venue 中 deposit/withdraw 行史零在案=采集径缺
+	covVenues := map[string]bool{}
+	for _, c := range r.Covered {
+		covVenues[strings.SplitN(c, "|", 2)[0]] = true
+	}
+	ioVenues := map[string]bool{}
+	irows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT venue FROM fin_venue_io
+		WHERE direction IN ('deposit','withdraw')`)
+	if err != nil {
+		return nil, fmt.Errorf("truth io venues: %w", err)
+	}
+	defer irows.Close()
+	for irows.Next() {
+		var v string
+		if err := irows.Scan(&v); err != nil {
+			return nil, err
+		}
+		ioVenues[v] = true
+	}
+	for v := range covVenues {
+		if !ioVenues[v] {
+			r.IoGap = append(r.IoGap, v)
+		}
+	}
+	return r, irows.Err()
 }
