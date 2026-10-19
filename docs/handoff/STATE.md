@@ -852,3 +852,8 @@ earn-io 裁定=PASS 带复审修：实施面（earnIOExtID 回执抽 se-<purchas
 ②venue-gap 五键全 waive——autotrade_allow_rules 实态 mt5 域专属（CEX 放行走 combo/allowlist），earn/funding/futures 非执行目标池，补放行行=扩权限面反错。
 ③顺手清权限面脏行——allow_rules 脏户三键（277842155/39050818/52993526:mt5 白名单外）翻 enabled=f。
 ④fin_symbol_aliases 施工席落 5 行实拍真（ALUMINIUM→XAL/COPPER→XCU/ES35→IBEX35/AUS200→AU200/FRANCE→FR40）。 -->
+<!-- 决策席 10-19 权限面清尸（业主令「白名单外脏户删掉」）：
+前端删户=broker_accounts 行删（3 户实拍零行），但权限面不级联=孤儿残留。本席清：
+①autotrade_allow_rules 脏户 venue 键 5 行删（277842155/39050818/52993526 + 追加查出的 591959217/59892915——D-443 env 迁移化石）；现 8 行=3 真户+5 真 CEX spot/perp 键零孤儿。
+②xasset_allow_combos 脏户 combo 7 行删（全 277842155 enabled=f 遗产）。
+③机制缺口留档：删户动作应对 broker_accounts 删径级联清扫 allow_rules/combos/caps 权限面（级联清扫票=P2 排程）。 -->
