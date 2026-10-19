@@ -157,6 +157,8 @@ func (s *Store) PruneFacts(ctx context.Context) (int64, error) {
 	return total + tag.RowsAffected(), nil
 }
 
+// PruneTicks：生产 ticks 已 hypertable——tsdb retention job 接管，本函数仅测试库
+// 声明式分区 fixtures 留用（名字过滤 ticks_%d_%d 对 chunk 天然 skip）。
 func (s *Store) PruneTicks(ctx context.Context) (int64, error) {
 	rows, err := s.pool.Query(ctx, `SELECT inhrelid::regclass::text FROM pg_inherits
 		WHERE inhparent = 'ticks'::regclass`)
