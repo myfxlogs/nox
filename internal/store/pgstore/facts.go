@@ -84,6 +84,7 @@ func (s *Store) LatestFacts(ctx context.Context, kind, venue, symbol string) ([]
 // `symbol IS NOT DISTINCT FROM NULLIF($n,”)` 参数化形 planner 不可用索引
 // （66k 行 bitmap-or+heap 过滤 3.74s/次）——”→`symbol IS NULL`、非空→`symbol=$n`
 // 双字面查询，语义域=IS NOT DISTINCT FROM 的 NULL 精确匹配（” 非通配）。
+// 42P18 坑修（10-19）：空 symbol 时谓词不占参位——参绑定随谓词分派。
 func factSymbolPred(ph, symbol string) string {
 	if symbol == "" {
 		return `symbol IS NULL`
@@ -92,11 +93,17 @@ func factSymbolPred(ph, symbol string) string {
 }
 
 func (s *Store) FactsSince(ctx context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error) {
+	args := []any{kind, venue}
+	if symbol != "" {
+		args = append(args, symbol)
+	}
+	symPh, args := fmt.Sprintf("$%d", len(args)), append(args, since)
+	tsPh := fmt.Sprintf("$%d", len(args))
 	rows, err := s.pool.Query(ctx, `
 		SELECT kind, venue, COALESCE(symbol,'') AS symbol, value, unit, ts, src
 		FROM facts
-		WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND `+factSymbolPred("$3", symbol)+` AND ts >= $4
-		ORDER BY ts`, kind, venue, symbol, since)
+		WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND `+factSymbolPred(symPh, symbol)+` AND ts >= `+tsPh+`
+		ORDER BY ts`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("facts since: %w", err)
 	}
@@ -217,10 +224,16 @@ type FactPoint struct {
 // carry 入口持久性闸数据源——kind='funding' 预测流实时入库且 facts 留全史
 // （funding_history 结算史是 24h 批量，结算后最长一天才入库，不可用于入场时点判定）。
 func (s *Store) FundingPredWindow(ctx context.Context, venue, symbol string, since time.Time) ([]FactPoint, error) {
+	args := []any{venue}
+	if symbol != "" {
+		args = append(args, symbol)
+	}
+	symPh, args := fmt.Sprintf("$%d", len(args)), append(args, since)
+	tsPh := fmt.Sprintf("$%d", len(args))
 	rows, err := s.pool.Query(ctx,
 		`SELECT ts, value FROM facts
-		 WHERE kind='funding' AND (venue_key=$1 OR venue=$1) AND `+factSymbolPred("$2", symbol)+` AND ts>=$3 ORDER BY ts`,
-		venue, symbol, since)
+		 WHERE kind='funding' AND (venue_key=$1 OR venue=$1) AND `+factSymbolPred(symPh, symbol)+` AND ts>=`+tsPh+` ORDER BY ts`,
+		args...)
 	if err != nil {
 		return nil, fmt.Errorf("funding pred window: %w", err)
 	}
@@ -244,11 +257,17 @@ var ErrNoFactsInWindow = errors.New("facts: no samples in window")
 func (s *Store) FactsWindowStats(ctx context.Context, kind, venue, symbol string, window time.Duration) (float64, error) {
 	var mean *float64
 	var n int
+	args := []any{kind, venue}
+	if symbol != "" {
+		args = append(args, symbol)
+	}
+	symPh, args := fmt.Sprintf("$%d", len(args)), append(args, window.Seconds())
+	winPh := fmt.Sprintf("$%d", len(args))
 	err := s.pool.QueryRow(ctx, `
 		SELECT AVG(value), COUNT(*) FROM facts
-		WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND `+factSymbolPred("$3", symbol)+`
-		  AND ts >= now() - ($4::double precision * interval '1 second')`,
-		kind, venue, symbol, window.Seconds()).Scan(&mean, &n)
+		WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND `+factSymbolPred(symPh, symbol)+`
+		  AND ts >= now() - (`+winPh+`::double precision * interval '1 second')`,
+		args...).Scan(&mean, &n)
 	if err != nil {
 		return 0, fmt.Errorf("facts window stats: %w", err)
 	}
