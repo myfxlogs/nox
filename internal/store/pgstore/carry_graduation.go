@@ -205,6 +205,7 @@ type XAssetComboInsert struct {
 	ProvenanceID *int64
 	// PitExemptD D-587④ armed 坑闸豁免引用（空=禁豁免；非空=留痕通过）。
 	PitExemptD string
+	Tier       string // D-625 P0：阶级层（armed|trial；空=armed 缺省）
 }
 
 // InsertXAssetAllowCombo approve 写组合白名单（simulated=false=真仓白名单；venue env 门
@@ -244,11 +245,11 @@ func (s *Store) InsertXAssetAllowCombo(ctx context.Context, r *XAssetComboInsert
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell,
 			max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated, note, sizing_mode, funding_pct,
-			source, provenance_id, pit_exempt_d)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11,$12,$13,$14,$15,$16,$17)
+			source, provenance_id, pit_exempt_d, tier)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11,$12,$13,$14,$15,$16,$17,$18)
 		RETURNING id`,
 		r.CanonicalBuy, r.CanonicalSell, vb.Venue, vb.Type, vs.Venue, vs.Type,
-		lq, sq, gr, nt, r.Simulated, r.Note, mode, r.FundingPct, r.Source, r.ProvenanceID, pex).Scan(&id)
+		lq, sq, gr, nt, r.Simulated, r.Note, mode, r.FundingPct, r.Source, r.ProvenanceID, pex, tierOr(r.Tier, "armed")).Scan(&id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {

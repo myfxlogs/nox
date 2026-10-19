@@ -245,4 +245,5 @@ var migrationFiles = []struct {
 	{1050, migrations.LiveModeSQL, false},                // D-620：LIVE 授权链断层修（真金单闸）
 	{1051, migrations.Us500SpcxSQL, false},               // cfd 保底 US500 类 asset_equiv 注册（combo#20 双告警根因）
 	{1052, migrations.Spx500BinanceSQL, false},           // cfd 保底订正：US500 幻影类撤销，binance SPCX 双腿归 SPX500 类
+	{1053, migrations.TrialTierSQL, false},               // D-625 P0：微额试单轨 tier+cost_model+晋级判据
 }
