@@ -128,15 +128,15 @@ export default function OverviewPage() {
         <StatTile label="总投入（基线+注资）" value={b?.investedAvailable ? fmtUsd(b.netInvestedUsd) : "—"}
           sub={b?.perfFlowProvisional ? "净流 provisional" : undefined}
           active={tile === "invested"} onClick={() => setTile(tile === "invested" ? null : "invested")} />
-        <StatTile label="本金合计（USDT+USD）" value={b ? fmtUsd(b.principalTotalUsd) : "—"}
+        <StatTile label="本金合计（USDT+USD）" value={b?.principalAvailable ? fmtUsd(b.principalTotalUsd) : "—"}
           active={tile === "principal"} onClick={() => setTile(tile === "principal" ? null : "principal")} />
-        <StatTile label="可动用" value={b ? fmtUsd(b.principalIdleUsd) : "—"}
+        <StatTile label="可动用" value={b?.principalAvailable ? fmtUsd(b.principalIdleUsd) : "—"}
           active={tile === "idle"} onClick={() => setTile(tile === "idle" ? null : "idle")} />
-        <StatTile label="在息" value={b ? fmtUsd(b.principalEarningUsd) : "—"}
-          sub={b && b.principalLockedUsd > 0 ? `含锁定 ${fmtUsd(b.principalLockedUsd)}${b.earliestRelease ? "·最早回笼 " + utc(timestampDate(b.earliestRelease)) : ""}` : undefined}
+        <StatTile label="在息" value={b?.principalAvailable ? fmtUsd(b.principalEarningUsd) : "—"}
+          sub={b?.principalAvailable && b.principalLockedUsd > 0 ? `含锁定 ${fmtUsd(b.principalLockedUsd)}${b.earliestRelease ? "·最早回笼 " + utc(timestampDate(b.earliestRelease)) : ""}` : undefined}
           active={tile === "earning"} onClick={() => setTile(tile === "earning" ? null : "earning")} />
-        <StatTile label="眠钱时长" value={b && b.idleStreakDays > 0 ? `${b.idleStreakDays} 天` : "—"}
-          sub={b && b.idleStreakPool ? `最长池 ${b.idleStreakPool}` : "无在册破地板池"} />
+        <StatTile label="眠钱时长" value={b?.idleStreakAvailable && b.idleStreakDays > 0 ? `${b.idleStreakDays} 天` : "—"}
+          sub={b?.idleStreakAvailable ? (b.idleStreakPool ? `最长池 ${b.idleStreakPool}` : "读模零行或在册零破地板池") : undefined} />
         <StatTile label="基线后业绩" value={b?.perfAvailable ? (b.perfUsd >= 0 ? "+" : "") + fmtUsd(b.perfUsd) : "—"}
           sub={b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%｜目标≥8%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"}
           active={tile === "perf"} onClick={() => setTile(tile === "perf" ? null : "perf")} />
@@ -220,7 +220,7 @@ export default function OverviewPage() {
             ))}
           </tbody>
         </table>
-      ) : <EmptyState>30d 窗内无结算归因行</EmptyState>}
+      ) : <EmptyState>30d 归因读模未供或零行</EmptyState>}
 
       {/* §7 闭环漏斗计数（八环 48h——后端 COUNT 直出；淘汰环 cumulative 如实标注） */}
       <h2>闭环漏斗（48h）</h2>
