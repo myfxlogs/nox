@@ -29,6 +29,8 @@ type EarnYieldStore interface {
 	PrevSnapshotEquity(ctx context.Context, venue, venueType, ccy string, before time.Time) (float64, time.Time, bool, error)
 	EarnSubscribeSum(ctx context.Context, venue, ccy string, from, to time.Time) (float64, error)
 	InsertIncomeEvents(ctx context.Context, evs []pgstore.IncomeEvent) (int64, error)
+	// D-630 ③：earn 划转出流回补读口（赎回划出=假亏非收益）。
+	SumVenueIOWalletOut(ctx context.Context, venue, ccy, wallet string, from, to time.Time) (float64, error)
 	ExchangeConfigID(ctx context.Context, venue, venueType string) (int64, error)
 	OwnershipShares(ctx context.Context) (map[string]float64, error)
 	// D-527①③：actual_apr 回写读面——池申购本金（提案回链）+窗内收益净额+评估卡写口。
@@ -77,6 +79,13 @@ func (m *AccountMonitor) attributeEarnYield(ctx context.Context, rows []pgstore.
 			continue
 		}
 		delta := r.EquityRaw - prev - flow
+		// D-630 ③：earn→外钱包划转出流回补（赎回/划转划出=账面假亏非收益——
+		// 写侧语义订正；is_transfer 列给历史行标的，新行经回补即净）。
+		if out, oerr := m.yieldStore.SumVenueIOWalletOut(ctx, r.Venue, r.Currency, "earn", prevTS, r.FetchedAt); oerr == nil {
+			delta += out
+		} else {
+			log.Printf("[earn-yield] %s:earn %s io out read: %v", r.Venue, r.Currency, oerr)
+		}
 		share, hasShare := pgstore.OwnershipShare(shares, r.Venue, "earn", r.Currency)
 		if !hasShare {
 			share = 1 // 未配置池全归属（D-516 缺省语义）

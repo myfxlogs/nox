@@ -2198,9 +2198,14 @@ type GetOverviewBundleResponse struct {
 	CritAlerts []*OverviewCritAlert `protobuf:"bytes,29,rep,name=crit_alerts,json=critAlerts,proto3" json:"crit_alerts,omitempty"`
 	// F1 显缺旗标（同族病灶第 5 例修——读败≠真值 0；perf_available/invested_available 同型范式）。
 	PrincipalAvailable  bool `protobuf:"varint,30,opt,name=principal_available,json=principalAvailable,proto3" json:"principal_available,omitempty"`      // nav 段读败→false（四瓦片显「—」不冒 $0）
-	IdleStreakAvailable bool `protobuf:"varint,31,opt,name=idle_streak_available,json=idleStreakAvailable,proto3" json:"idle_streak_available,omitempty"` // streaks 读败→false（眠钱瓦片显「—」不冒「无在册破地板池」）
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	IdleStreakAvailable bool `protobuf:"varint,31,opt,name=idle_streak_available,json=idleStreakAvailable,proto3" json:"idle_streak_available,omitempty"` // streaks 读败→false（眠钱瓦片显「—」不冒「无在册破地板池」)
+	// D-630 真实净盈利权威口径=Σ venue 权益差−Σ io 外部净流（归因面降级解释层后的唯一判定口径）。
+	TrueNet_30DUsd   float64 `protobuf:"fixed64,32,opt,name=true_net_30d_usd,json=trueNet30dUsd,proto3" json:"true_net_30d_usd,omitempty"`       // 30d 窗（快照基线有盖池才计）
+	TrueNetAllUsd    float64 `protobuf:"fixed64,33,opt,name=true_net_all_usd,json=trueNetAllUsd,proto3" json:"true_net_all_usd,omitempty"`       // 全时窗
+	TrueNetAvailable bool    `protobuf:"varint,34,opt,name=true_net_available,json=trueNetAvailable,proto3" json:"true_net_available,omitempty"` // 全池缺盖→false（显「—」不冒数）
+	TrueNetUncovered string  `protobuf:"bytes,35,opt,name=true_net_uncovered,json=trueNetUncovered,proto3" json:"true_net_uncovered,omitempty"`  // 缺基线池清单（如实标缺面）
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *GetOverviewBundleResponse) Reset() {
@@ -2434,6 +2439,34 @@ func (x *GetOverviewBundleResponse) GetIdleStreakAvailable() bool {
 		return x.IdleStreakAvailable
 	}
 	return false
+}
+
+func (x *GetOverviewBundleResponse) GetTrueNet_30DUsd() float64 {
+	if x != nil {
+		return x.TrueNet_30DUsd
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetTrueNetAllUsd() float64 {
+	if x != nil {
+		return x.TrueNetAllUsd
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetTrueNetAvailable() bool {
+	if x != nil {
+		return x.TrueNetAvailable
+	}
+	return false
+}
+
+func (x *GetOverviewBundleResponse) GetTrueNetUncovered() string {
+	if x != nil {
+		return x.TrueNetUncovered
+	}
+	return ""
 }
 
 // OverviewCritAlert 24h critical 告警明细行（全行 level 恒=critical 不复列）。
@@ -3533,7 +3566,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"amount_usd\x18\x03 \x01(\x01R\tamountUsd\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x120\n" +
 	"\x05until\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x05until\"\x1a\n" +
-	"\x18GetOverviewBundleRequest\"\xaf\v\n" +
+	"\x18GetOverviewBundleRequest\"\xdd\f\n" +
 	"\x19GetOverviewBundleResponse\x12)\n" +
 	"\x10pending_requests\x18\x01 \x01(\x05R\x0fpendingRequests\x12.\n" +
 	"\x13principal_total_usd\x18\x02 \x01(\x01R\x11principalTotalUsd\x12,\n" +
@@ -3571,7 +3604,11 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\vcrit_alerts\x18\x1d \x03(\v2#.nox.dashboard.v1.OverviewCritAlertR\n" +
 	"critAlerts\x12/\n" +
 	"\x13principal_available\x18\x1e \x01(\bR\x12principalAvailable\x122\n" +
-	"\x15idle_streak_available\x18\x1f \x01(\bR\x13idleStreakAvailable\"\xa6\x01\n" +
+	"\x15idle_streak_available\x18\x1f \x01(\bR\x13idleStreakAvailable\x12'\n" +
+	"\x10true_net_30d_usd\x18  \x01(\x01R\rtrueNet30dUsd\x12'\n" +
+	"\x10true_net_all_usd\x18! \x01(\x01R\rtrueNetAllUsd\x12,\n" +
+	"\x12true_net_available\x18\" \x01(\bR\x10trueNetAvailable\x12,\n" +
+	"\x12true_net_uncovered\x18# \x01(\tR\x10trueNetUncovered\"\xa6\x01\n" +
 	"\x11OverviewCritAlert\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12*\n" +
 	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x14\n" +

@@ -10,7 +10,8 @@ import (
 )
 
 type fakeYieldStore struct {
-	prev map[string]struct {
+	ioOut float64
+	prev  map[string]struct {
 		eq  float64
 		ts  time.Time
 		has bool
@@ -37,6 +38,9 @@ func (f *fakeYieldStore) EarnSubscribeSum(_ context.Context, _, ccy string, _, _
 func (f *fakeYieldStore) InsertIncomeEvents(_ context.Context, evs []pgstore.IncomeEvent) (int64, error) {
 	f.events = append(f.events, evs...)
 	return int64(len(evs)), nil
+}
+func (f *fakeYieldStore) SumVenueIOWalletOut(context.Context, string, string, string, time.Time, time.Time) (float64, error) {
+	return f.ioOut, nil
 }
 func (f *fakeYieldStore) ExchangeConfigID(context.Context, string, string) (int64, error) {
 	return 42, nil

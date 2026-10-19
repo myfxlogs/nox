@@ -96,6 +96,7 @@ func (s *Store) FinanceFlows(ctx context.Context, limit int) ([]FinanceFlow, err
 			       ie.amount_usd, COALESCE(ie.position_id, 0)::BIGINT AS position_id, '' AS note
 			FROM income_events ie
 			LEFT JOIN exchange_configs ec ON ec.venue = ie.venue AND ec.venue_type = ie.venue_type AND ec.simulated
+			WHERE NOT ie.is_transfer
 			UNION ALL
 			SELECT cf.ts, cf.venue_key, cf.kind, '' AS symbol, cf.amount_usd,
 			       cf.position_id::BIGINT, '' AS note

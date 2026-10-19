@@ -80,7 +80,8 @@ func (s *Store) SumIncomeForDay(ctx context.Context, venue, symbol string, day t
 	var rows int
 	err := s.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(amount_usd), 0), COUNT(*) FROM income_events
-		 WHERE (venue = $1 OR venue_key = $1) AND symbol = $2 AND ts >= $3 AND ts < $4`,
+		 WHERE (venue = $1 OR venue_key = $1) AND symbol = $2 AND ts >= $3 AND ts < $4
+		   AND NOT is_transfer`,
 		venue, symbol, start, end).Scan(&sum, &rows)
 	if err != nil {
 		return 0, 0, fmt.Errorf("sum income for day: %w", err)
@@ -97,7 +98,8 @@ func (s *Store) SumIncomeWindow(ctx context.Context, venue, symbol string, from,
 	var rows int
 	err := s.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(amount_usd), 0), COUNT(*) FROM income_events
-		 WHERE (venue = $1 OR venue_key = $1) AND symbol = $2 AND ts >= $3 AND ts < $4`,
+		 WHERE (venue = $1 OR venue_key = $1) AND symbol = $2 AND ts >= $3 AND ts < $4
+		   AND NOT is_transfer`,
 		venue, symbol, from, to).Scan(&sum, &rows)
 	if err != nil {
 		return 0, 0, fmt.Errorf("sum income window %s %s: %w", venue, symbol, err)

@@ -230,6 +230,12 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 			log.Printf("[reflection] pos=%d write: %v", posID, err)
 		}
 	})
+	// D-630 ②：attrib_net_usd settle 填充径——结算拍同步归因刷新（30min runner 外加速道）。
+	settleDeps.SetPostSettleHook(func(ctx context.Context, _ int64) {
+		if _, err := st.RefreshDecisionOutcomeAttribution(ctx); err != nil {
+			log.Printf("[decision-attrib] settle refresh: %v", err)
+		}
+	})
 	// D-249①：淘汰多空听证钩（裁定击杀前对辩落 fin_strategy_hearing；观察面 fail-open）。
 	settleDeps.HearElim = newElimHearing(st, cfg)
 	recon.SetCloser(dashSvc)

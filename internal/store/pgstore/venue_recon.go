@@ -54,7 +54,7 @@ func (s *Store) SumIncomeForPool(ctx context.Context, venue, venueType, ccy stri
 	var sum float64
 	err := s.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(amount_usd),0) FROM income_events
-		WHERE venue=$1 AND venue_type=$2 AND symbol=$3 AND ts>$4 AND ts<=$5`,
+		WHERE venue=$1 AND venue_type=$2 AND symbol=$3 AND ts>$4 AND ts<=$5 AND NOT is_transfer`,
 		venue, venueType, ccy, from, to).Scan(&sum)
 	if err != nil {
 		return 0, fmt.Errorf("sum income for pool: %w", err)

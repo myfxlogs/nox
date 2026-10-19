@@ -140,6 +140,10 @@ export default function OverviewPage() {
         <StatTile label="基线后业绩" value={b?.perfAvailable ? (b.perfUsd >= 0 ? "+" : "") + fmtUsd(b.perfUsd) : "—"}
           sub={b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%｜目标≥8%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"}
           active={tile === "perf"} onClick={() => setTile(tile === "perf" ? null : "perf")} />
+        {/* D-630 权威口径：权益差−io 净流（穿透归因层；缺盖池如实标注） */}
+        <StatTile label="真实净盈利（权威口径）"
+          value={b?.trueNetAvailable ? `30d ${(b.trueNet30dUsd >= 0 ? "+" : "")}${fmtUsd(b.trueNet30dUsd)}｜全时 ${(b.trueNetAllUsd >= 0 ? "+" : "")}${fmtUsd(b.trueNetAllUsd)}` : "—"}
+          sub={b?.trueNetUncovered ? `缺基线池: ${b.trueNetUncovered}` : "权益差−io 净流"} />
       </div>
 
       <PnlOverviewCard />
