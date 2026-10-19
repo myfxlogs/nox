@@ -34,17 +34,22 @@ var retentionTableTTL = []struct {
 // pruneTTL 通用分批 TTL 删：ts<cutoff 且非组终值（组=gROUP 列集，存在更新兄弟行才删）。
 // 表名/列名=代码内常量（无外部输入）；批量循环至清零。返回删除行数。
 func (s *Store) pruneTTL(ctx context.Context, table, tsCol string, group []string, cutoff time.Time) (int64, error) {
-	join := ""
+	var cols, join string
 	for i, c := range group {
 		if i > 0 {
+			cols += ", "
 			join += " AND "
 		}
-		join += fmt.Sprintf("g.%s IS NOT DISTINCT FROM f.%s", c, c)
+		cols += c
+		join += fmt.Sprintf("f.%s IS NOT DISTINCT FROM g.%s", c, c)
 	}
-	q := fmt.Sprintf(`DELETE FROM %s WHERE ctid IN (
-		SELECT f.ctid FROM %s f WHERE f.%s < $1
-		  AND EXISTS (SELECT 1 FROM %s g WHERE %s AND g.%s > f.%s)
-		LIMIT $2)`, table, table, tsCol, table, join, tsCol, tsCol)
+	// 性能票②：组最大值 CTE 一次算（键索引扫）+del 批 join——原 EXISTS 相关
+	// 子查询逐批全表扫 182K 行=203s×138 调实测。语义等价：f.ts<组max ⇔
+	// ∃同组更新行（终值行保留，同 ts 并列不误删）。
+	q := fmt.Sprintf(`WITH g AS (SELECT %s, max(%s) AS mx FROM %s GROUP BY %s),
+		del AS (SELECT f.ctid FROM %s f JOIN g ON %s WHERE f.%s < $1 AND f.%s < g.mx LIMIT $2)
+		DELETE FROM %s WHERE ctid IN (SELECT ctid FROM del)`,
+		cols, tsCol, table, cols, table, join, tsCol, tsCol, table)
 	var total int64
 	for {
 		tag, err := s.pool.Exec(ctx, q, cutoff, pruneTTLBatch)
