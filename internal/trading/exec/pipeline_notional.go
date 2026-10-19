@@ -66,4 +66,9 @@ func (p *Pipeline) writeOpenNotional(ctx context.Context, posType, opportunityID
 	if err := p.store.UpdatePositionNotional(ctx, posID, total); err != nil {
 		log.Printf("[exec] pos %d notional write: %v", posID, err)
 	}
+	// settle 单消费者管线：名义额落定后锁预期成本锚（reflection 只读落库值
+	// 禁重建=look-ahead 硬坑堵口；无实测=如实缺）。
+	if err := p.store.AnchorEntryExpectedCost(ctx, posID); err != nil {
+		log.Printf("[exec] pos %d entry cost anchor: %v", posID, err)
+	}
 }

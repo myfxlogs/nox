@@ -223,6 +223,13 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 	safego.GoLoop("main:idleCapital", func() { dashboard.NewIdleCapitalMonitor(dashSvc, 30*time.Minute).Run(ctx) }) // D-554
 	// D-087 §3.2：settlement.Settle 统一结算入口——构造 storeDeps（实现 settlement.Deps）注入三调用点
 	settleDeps := settleadapter.New(st)
+	// settle 单消费者管线②：结算行落账→reflection 自省写（err 吞记 log——
+	// 观察面 fail-open 不可中断钩链；同管复读指纹=ApplyComboCooldown 第三源）。
+	settleDeps.SetPostSettleHook(func(ctx context.Context, posID int64) {
+		if err := st.WritePositionReflection(ctx, posID); err != nil {
+			log.Printf("[reflection] pos=%d write: %v", posID, err)
+		}
+	})
 	// D-249①：淘汰多空听证钩（裁定击杀前对辩落 fin_strategy_hearing；观察面 fail-open）。
 	settleDeps.HearElim = newElimHearing(st, cfg)
 	recon.SetCloser(dashSvc)
