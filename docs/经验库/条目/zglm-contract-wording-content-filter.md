@@ -1,0 +1,20 @@
+---
+schema_version: 2
+id: zglm-contract-wording-content-filter
+kind: pitfall
+risk: high
+status: verified
+keywords: [ZGLM, 1301, 内容过滤, AGENTS.md, 契约措辞]
+scope: [llm-provider, agent-contract, outage]
+summary: 契约禁令句式×加密词密度相乘触发 ZGLM 供应商过滤拦死全席位——新契约行须别目录烟雾测；排障=二分注入文件
+first_seen: 2026-10-18
+last_seen: 2026-10-18
+---
+
+## 契约措辞=供应商内容过滤面：禁令句式×加密词密度相乘拦死全席位
+
+- **触发**：AGENTS.md 新增禁令子句后，ZGLM（zcode）自 turn-0 起全部请求 1301——rollout model-io jsonl 实证请求体=系统提示+AGENTS.md 全文注入，过滤按该全文判，与用户提示词无关。
+- **病灶定位**：二分注入文件——「禁翻施工态/禁发开工指令/禁直接派批」职权枚举句式叠 §1 加密词密度（加密货币/真金/年化）越阈；删任一侧即通。
+- **修法**：禁令改「三权归决策席独占」正面表述即过线，语义零损（@37da68b69）。
+- **教训**：①契约行文是供应商过滤攻击面——禁令/职权枚举句式与加密词密度**相乘**，新增契约行须过「别目录开会话发 hi」烟雾测；②排障径=二分注入文件（先空目录判工作区/账号级，再逐半删文定位触线句）。
+- **证据**：~/.zcode/cli/log/zcode-2026-10-18.jsonl traceId ca285b46-740f-4f79-9f0c-6d0d4594b606。
