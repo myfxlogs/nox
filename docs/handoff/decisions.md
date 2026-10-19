@@ -771,3 +771,9 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
   1. **Ledger/审计类表**（income_events/fin_venue_io/fin_venue_account_snapshot/proposal/decision_outcomes）=append-only 历史——它们本就**是**历史表，「禁删史」令只适用于此层。
   2. **配置/权限类表**（broker_accounts/autotrade_allow_rules/xasset_allow_combos/exposure_caps/exchange_configs）=**当前真值面**：引用已删/禁用对象的行=死配置非历史——`enabled=f` 囤积=「活表当历史表用」病灶（今天 12 行脏户孤儿实证：重载轴每拍扫死行、审计误读、再激活面残留）。处置=删（或如需留痕归档至历史面），禁留活表装死。
 - **衍生票（P2）**：删对象径级联——broker_account/exchange_config 删径须级联扫同键权限面行（allow_rules/combos/caps），前端删户后权限面零孤儿为准入锚。
+
+### D-632（10-19 23:06Z，删径级联施工席裁定）删径级联范围与 waived 复活语义
+
+- 级联=权限/配置面四表（allow_rules venue kind / combos venue_key 生成列 / venue exposure caps / 未决 fin_condition_gap）；gap 翻 waived+resolve_note 留痕非硬删（D-631 遵行）；exchange 删径须同 (venue,venue_type) sim/real 孪生行删尽才扫面（D-271 双行并存语义不破，键仍在册=面不动）。
+- waived 终态补：删径 waive 后同键重入册（owner 重加同名户/配置）撞 UNIQUE(template_id,kind,subject) 会静默吞复请——`ReopenConditionGap` 转移集扩 'fulfilled'|'waived'，唯 venueGapSweep 显式调用（oppmatch reconcile 上游 skip waived 行=模板面 waive 仍终态静默零变）。
+- 伪证锚：同键删户→重入册后，venue_onboard 缺口未复现于请求箱（无 requested 行+无推送）即本裁错。
