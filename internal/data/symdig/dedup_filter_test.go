@@ -79,23 +79,25 @@ func TestD530TruncatedSecondRound(t *testing.T) {
 	if err := llmDig(context.Background(), deps, d530Sum("GOLD", "SILVER"), time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
-	if calls.Load() != 2 {
-		t.Fatalf("应两轮，calls=%d", calls.Load())
+	if calls.Load() != 1 {
+		t.Fatalf("2 品种单批 calls=%d", calls.Load())
 	}
 	data, _ := os.ReadFile(inbox)
-	for _, want := range []string{"GOLD→CGOLD", "SILVER→CSILVER"} {
-		if !strings.Contains(string(data), want) {
-			t.Fatalf("两轮提案应合并且含 %s:\n%s", want, data)
-		}
+	if !strings.Contains(string(data), "GOLD→CGOLD") {
+		t.Fatalf("EOF 容忍解析 GOLD 行应入箱:\n%s", data)
 	}
+	var errs int
 	for _, a := range st.alerts {
 		if strings.HasPrefix(a, "error:") {
-			t.Fatalf("二轮闭合后不应 error 告警: %v", st.alerts)
+			errs++
 		}
+	}
+	if errs != 1 {
+		t.Fatalf("批内截断应 error 告警一条: %v", st.alerts)
 	}
 }
 
-// A2：第二轮仍截断 → error 级告警。
+// A2：批内截断 → error 级告警（分批径 max_tokens+malformed 即达）。
 func TestD530DoubleTruncatedError(t *testing.T) {
 	st := &fakeStore{}
 	var calls atomic.Int32
@@ -108,8 +110,8 @@ func TestD530DoubleTruncatedError(t *testing.T) {
 	if err := llmDig(context.Background(), d530Deps(t, st, run), d530Sum("GOLD", "SILVER"), time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if calls.Load() != 2 {
-		t.Fatalf("上限两轮，calls=%d", calls.Load())
+	if calls.Load() != 1 {
+		t.Fatalf("2 品种单批 calls=%d", calls.Load())
 	}
 	found := false
 	for _, a := range st.alerts {
@@ -118,7 +120,7 @@ func TestD530DoubleTruncatedError(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("二轮仍截断应 error 告警: %v", st.alerts)
+		t.Fatalf("批内截断应 error 告警: %v", st.alerts)
 	}
 }
 
@@ -136,7 +138,7 @@ func TestD530MaxTokensDefault(t *testing.T) {
 	}
 }
 
-// 坑2 B1：malformed-非截断（end_turn 未闭合）→ 进第二轮救回（calls==2 无告警）。
+// 坑2 B1：malformed-非截断（end_turn 未闭合）→ 批记异常+warn 一条（分批径不再续提救回，EOF 容忍解析 GOLD 行仍入箱）。
 func TestD589MalformedNonTruncatedRetries(t *testing.T) {
 	st := &fakeStore{}
 	var calls atomic.Int32
@@ -154,21 +156,25 @@ func TestD589MalformedNonTruncatedRetries(t *testing.T) {
 	if err := llmDig(context.Background(), deps, d530Sum("GOLD", "SILVER"), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
-	if calls.Load() != 2 {
-		t.Fatalf("malformed 应进第二轮，calls=%d", calls.Load())
+	if calls.Load() != 1 {
+		t.Fatalf("2 品种单批 calls=%d", calls.Load())
 	}
 	data, _ := os.ReadFile(inbox)
-	if !strings.Contains(string(data), "SILVER→CSILVER") {
-		t.Fatalf("二轮提案应入箱:\n%s", data)
+	if !strings.Contains(string(data), "GOLD→CGOLD") {
+		t.Fatalf("EOF 容忍解析 GOLD 行应入箱:\n%s", data)
 	}
+	var warns int
 	for _, a := range st.alerts {
-		if strings.HasPrefix(a, "error:") || strings.HasPrefix(a, "warn:") {
-			t.Fatalf("二轮救回不应告警: %v", st.alerts)
+		if strings.HasPrefix(a, "warn:") {
+			warns++
 		}
+	}
+	if warns != 1 {
+		t.Fatalf("非截断 malformed 应 warn 一条: %v", st.alerts)
 	}
 }
 
-// 坑2 B2：两轮皆 malformed（非截断）→ warn 恰好一条且文案=格式异常原文。
+// 坑2 B2：批 malformed（非截断）→ warn 恰好一条且文案=格式异常原文。
 func TestD589DoubleMalformedWarnsOnce(t *testing.T) {
 	st := &fakeStore{}
 	var calls atomic.Int32
@@ -181,8 +187,8 @@ func TestD589DoubleMalformedWarnsOnce(t *testing.T) {
 	if err := llmDig(context.Background(), d530Deps(t, st, run), d530Sum("GOLD", "SILVER"), time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if calls.Load() != 2 {
-		t.Fatalf("上限两轮，calls=%d", calls.Load())
+	if calls.Load() != 1 {
+		t.Fatalf("2 品种单批 calls=%d", calls.Load())
 	}
 	var warns int
 	for _, a := range st.alerts {
@@ -195,5 +201,50 @@ func TestD589DoubleMalformedWarnsOnce(t *testing.T) {
 	}
 	if warns != 1 {
 		t.Fatalf("两轮耗尽应 warn 恰好一条, got %d: %v", warns, st.alerts)
+	}
+}
+
+// 返修① 多批对抗锚：12 品种→2 批（10+2），批 1 max_tokens+malformed（仅
+// GOLD 行容忍解析）+批 2 干净续跑——断言 calls=2+两批提案合并入箱+
+// error 恰一条（混合序不降级=anyTruncMalformed 累计语义钉死）。
+func TestSymdigBatchAdversarial(t *testing.T) {
+	st := &fakeStore{}
+	var calls atomic.Int32
+	syms := []string{"GOLD", "SILVER", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+	run := func(_ context.Context, _ *analyst.Client, _ analyst.ToolExecutor, _ []analyst.ToolSpec,
+		_ string, msgs []analyst.Message, cb analyst.LoopCallbacks) (analyst.LoopResult, error) {
+		n := calls.Add(1)
+		if n == 1 {
+			cb.OnDelta(propDelta("GOLD", false)) // 批1：max_tokens+malformed，GOLD 行容忍解析
+			return analyst.LoopResult{StopReason: "max_tokens"}, nil
+		}
+		cb.OnDelta(propDelta("SILVER", true)) // 批2：干净
+		return analyst.LoopResult{StopReason: "end_turn"}, nil
+	}
+	inbox := filepath.Join(t.TempDir(), "inbox.md")
+	deps := Deps{Store: st, Client: &analyst.Client{}, Run: run, InboxPath: inbox}
+	if err := llmDig(context.Background(), deps, d530Sum(syms...), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("12 品种应两批 calls=%d", calls.Load())
+	}
+	data, _ := os.ReadFile(inbox)
+	for _, want := range []string{"GOLD→CGOLD", "SILVER→CSILVER"} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("两批提案应合并且含 %s:\n%s", want, data)
+		}
+	}
+	var errs, warns int
+	for _, a := range st.alerts {
+		if strings.HasPrefix(a, "error:") {
+			errs++
+		}
+		if strings.HasPrefix(a, "warn:") {
+			warns++
+		}
+	}
+	if errs != 1 || warns != 0 {
+		t.Fatalf("混合序应 error 恰一条零 warn: %v", st.alerts)
 	}
 }
