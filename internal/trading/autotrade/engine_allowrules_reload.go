@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"nox/internal/store/pgstore"
 )
@@ -55,5 +56,49 @@ func (e *Engine) ReloadAllowRules(ctx context.Context) error {
 	}
 	e.allowRules.Store(&allowRules{venues: venues, canonicals: canonicals})
 	log.Printf("[whitelist] autotrade rules reload: venues=%d canonicals=%d (D-443 热重载免重启)", len(venues), len(canonicals))
+	e.venueGapSweep(ctx, venues)
 	return nil
+}
+
+// venueGapSweep 新户入册放行/闸行缺口扫（reload 60s 轴搭车）：在册
+// venue_key（exchange_configs+broker_accounts 两源）缺放行单 kind='venue'
+// 行或缺 fin_venue_exposure_caps 闸行→constraint 型 condition_gap（幂等
+// UNIQUE(template_id,kind,subject)——新户落账即自动出箱非人工作业）。
+// 禁线：扫行不建闸/放行行本体（授权面=决策席裁定，本扫只出缺口箱）。
+func (e *Engine) venueGapSweep(ctx context.Context, allow map[string]bool) {
+	if e.store == nil {
+		return
+	}
+	keys, err := e.store.ListOnboardVenueKeys(ctx)
+	if err != nil {
+		log.Printf("[venue-gap] onboard keys read: %v", err)
+		return
+	}
+	caps, err := e.store.ListVenueExposureCaps(ctx)
+	if err != nil {
+		log.Printf("[venue-gap] exposure caps read: %v", err)
+		return
+	}
+	for _, k := range keys {
+		var miss []string
+		if !allow[k] {
+			miss = append(miss, "autotrade_allow_rules 放行行")
+		}
+		if _, ok := caps[k]; !ok {
+			miss = append(miss, "fin_venue_exposure_caps 闸行")
+		}
+		if len(miss) == 0 {
+			continue
+		}
+		id, err := e.store.OpenConditionGap(ctx, &pgstore.ConditionGap{
+			TemplateID: "venue_onboard", Kind: "constraint", Subject: k,
+			RequestText: fmt.Sprintf("新户 venue_key=%s 在册但缺 %s——放行/闸行缺行机制化落箱（决策席裁定后 SQL 补行或 waive）", k, strings.Join(miss, "+"))})
+		if err != nil {
+			log.Printf("[venue-gap] open %s: %v", k, err)
+			continue
+		}
+		if err := e.store.RequestConditionGap(ctx, id); err != nil {
+			log.Printf("[venue-gap] request %s#%d: %v", k, id, err)
+		}
+	}
 }
