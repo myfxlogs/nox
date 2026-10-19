@@ -75,9 +75,9 @@ export function QuoteStrip() {
               <span key={`${v}|${f.symbol}`} className="quote-tile">
                 <b>{f.symbol}</b>
                 <span className={`quote-bidask ${flash.get(`${v}|${f.symbol}`) ?? ""}`}>
-                  <span className="num">
-                    {fmtPrice(f.bid)}/{fmtPrice(f.ask)}
-                  </span>
+                  <span className="num q-bid">{fmtPrice(f.bid)}</span>
+                  <span className="num q-sep">/</span>
+                  <span className="num q-ask">{fmtPrice(f.ask)}</span>
                 </span>
                 <Dot
                   dot={freshOf({

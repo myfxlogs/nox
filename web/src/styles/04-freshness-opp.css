@@ -231,14 +231,30 @@
   font-size: 13px;
 }
 
+/* 业主令 10-19：bid/ask 常设双色（金融终端惯例）——bid=买侧绿、ask=卖侧红，
+   分隔符随中性墨色；涨跌闪不改写语义色，改作同向淡底脉冲高亮 */
+.quote-bidask .q-bid {
+  color: var(--good-ink);
+}
+
+.quote-bidask .q-ask {
+  color: var(--critical);
+}
+
+.quote-bidask .q-sep {
+  color: var(--ink-3);
+}
+
 .quote-bidask.up .num {
-  color: var(--good);
-  transition: color 0.4s ease;
+  background: color-mix(in srgb, var(--good) 18%, transparent);
+  border-radius: 3px;
+  transition: background 0.4s ease;
 }
 
 .quote-bidask.down .num {
-  color: var(--critical);
-  transition: color 0.4s ease;
+  background: color-mix(in srgb, var(--critical) 18%, transparent);
+  border-radius: 3px;
+  transition: background 0.4s ease;
 }
 
 
