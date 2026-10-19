@@ -34,9 +34,17 @@ func TestTrueNetProfitSince(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Δequity=+100 − io 入金 40 = 真盈 60
-	if r.NetUSD < 59.99 || r.NetUSD > 60.01 {
-		t.Fatalf("权威净盈亏应=60, got=%.4f covered=%v", r.NetUSD, r.Covered)
+	// 权威等式对拍：NetUSD = Σ池 Δequity − Σ窗内 io 净流（同窗自读对拍——
+	// 测试库共享面，Δequity 本测试仅 truthtest 池盖）。io 净流直接同窗读。
+	var ioNet float64
+	if err := s.pool.QueryRow(ctx, `SELECT COALESCE(SUM(CASE direction
+		WHEN 'deposit' THEN amount WHEN 'withdraw' THEN -amount ELSE 0 END),0)
+		FROM fin_venue_io WHERE ts>$1 AND ts<=$2 AND direction IN ('deposit','withdraw')`,
+		base.Add(-time.Minute*30), now).Scan(&ioNet); err != nil {
+		t.Fatal(err)
+	}
+	if want := 100.0 - ioNet; r.NetUSD < want-0.01 || r.NetUSD > want+0.01 {
+		t.Fatalf("权威净盈亏应=Δ100−io%.4f=%.4f, got=%.4f covered=%v", ioNet, want, r.NetUSD, r.Covered)
 	}
 	// 缺基线池如实标：since 早界早于所有快照→无基线拍=Uncovered
 	r2, err := s.TrueNetProfitSince(ctx, base.Add(-2*time.Hour), now)
