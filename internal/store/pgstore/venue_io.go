@@ -97,6 +97,17 @@ func (s *Store) RecentVenueIO(ctx context.Context, venue string, configID int64,
 
 // RecentIncomeByConfig 财务页收益流水：该 (venue,venue_type) 通道最近 N 条 income
 // （funding fee/earn 利息等实收，D-365 S4 并入账户块）。
+// SumVenueIOWalletOut (venue,ccy,from_wallet) 窗内划出额（earn→spot 赎回腿——
+// D-630 earn_yield 伪影回补：赎回是划转非负收益，delta 须加回补）。
+func (s *Store) SumVenueIOWalletOut(ctx context.Context, venue, ccy, wallet string, from, to time.Time) (float64, error) {
+	var v float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(amount),0) FROM fin_venue_io
+		WHERE venue=$1 AND ccy=$2 AND direction='transfer' AND from_wallet=$3 AND ts>$4 AND ts<=$5`,
+		venue, ccy, wallet, from, to).Scan(&v)
+	return v, err
+}
+
 func (s *Store) RecentIncomeByConfig(ctx context.Context, venue, venueType string, limit int) ([]IncomeEvent, error) {
 	if limit <= 0 {
 		limit = 50
@@ -104,7 +115,7 @@ func (s *Store) RecentIncomeByConfig(ctx context.Context, venue, venueType strin
 	rows, err := s.pool.Query(ctx, `
 		SELECT income_type, amount_usd, symbol, ts
 		FROM income_events
-		WHERE venue = $1 AND venue_type = $2
+		WHERE venue = $1 AND venue_type = $2 AND NOT is_transfer
 		ORDER BY ts DESC LIMIT $3`, venue, venueType, limit)
 	if err != nil {
 		return nil, fmt.Errorf("recent income by config: %w", err)

@@ -67,6 +67,19 @@ func (s *Store) InsertIncomeEvents(ctx context.Context, evs []IncomeEvent) (int6
 		}
 		written += cmd.RowsAffected()
 	}
+	// D-630 返修②：is_transfer 写径补建——新插行对拍 fin_venue_io 划转行
+	// （同 venue 同币同额±10min transfer 行存在=收益行实是划转伪影打标；
+	// earn 申购/赎回划转不再冒充收益；禁删史=标记不删）。
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE income_events ie SET is_transfer = true
+		WHERE NOT ie.is_transfer AND ie.ts > now() - interval '1 day' AND EXISTS(
+			SELECT 1 FROM fin_venue_io io
+			WHERE io.venue = ie.venue AND io.direction = 'transfer'
+			  AND io.ccy = ie.symbol
+			  AND abs(io.amount - abs(ie.amount_usd)) < greatest(0.01, abs(ie.amount_usd)*0.05)
+			  AND abs(extract(epoch from io.ts) - extract(epoch from ie.ts)) < 600)`); err != nil {
+		return written, fmt.Errorf("mark income transfers: %w", err)
+	}
 	return written, nil
 }
 
@@ -80,7 +93,8 @@ func (s *Store) SumIncomeForDay(ctx context.Context, venue, symbol string, day t
 	var rows int
 	err := s.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(amount_usd), 0), COUNT(*) FROM income_events
-		 WHERE (venue = $1 OR venue_key = $1) AND symbol = $2 AND ts >= $3 AND ts < $4`,
+		 WHERE (venue = $1 OR venue_key = $1) AND symbol = $2 AND ts >= $3 AND ts < $4
+		   AND NOT is_transfer`,
 		venue, symbol, start, end).Scan(&sum, &rows)
 	if err != nil {
 		return 0, 0, fmt.Errorf("sum income for day: %w", err)
@@ -97,7 +111,8 @@ func (s *Store) SumIncomeWindow(ctx context.Context, venue, symbol string, from,
 	var rows int
 	err := s.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(amount_usd), 0), COUNT(*) FROM income_events
-		 WHERE (venue = $1 OR venue_key = $1) AND symbol = $2 AND ts >= $3 AND ts < $4`,
+		 WHERE (venue = $1 OR venue_key = $1) AND symbol = $2 AND ts >= $3 AND ts < $4
+		   AND NOT is_transfer`,
 		venue, symbol, from, to).Scan(&sum, &rows)
 	if err != nil {
 		return 0, 0, fmt.Errorf("sum income window %s %s: %w", venue, symbol, err)

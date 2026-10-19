@@ -172,3 +172,5 @@ var SnapshotLatestExprIdxSQL string // LatestVenueAccountSnapshots LATERAL 探�
 var TrialCostWiringSQL string // P0 续件：positions.combo_id 归因列
 //go:embed 1058_settle_reflection.sql
 var SettleReflectionSQL string // settle 单消费者：reflection+entry_expected_cost_bps 列
+//go:embed 1059_income_is_transfer.sql
+var IncomeIsTransferSQL string // D-630：income_events.is_transfer 划转伪影标

@@ -282,7 +282,12 @@ message GetOverviewBundleResponse {
   repeated OverviewCritAlert crit_alerts = 29;
   // F1 显缺旗标（同族病灶第 5 例修——读败≠真值 0；perf_available/invested_available 同型范式）。
   bool principal_available = 30;    // nav 段读败→false（四瓦片显「—」不冒 $0）
-  bool idle_streak_available = 31;  // streaks 读败→false（眠钱瓦片显「—」不冒「无在册破地板池」）
+  bool idle_streak_available = 31;  // streaks 读败→false（眠钱瓦片显「—」不冒「无在册破地板池」)
+  // D-630 真实净盈利权威口径=Σ venue 权益差−Σ io 外部净流（归因面降级解释层后的唯一判定口径）。
+  double true_net_30d_usd = 32;     // 30d 窗（快照基线有盖池才计）
+  double true_net_all_usd = 33;     // 全时窗
+  bool true_net_available = 34;     // 全池缺盖→false（显「—」不冒数）
+  string true_net_uncovered = 35;   // 缺基线池清单（如实标缺面）
 }
 
 // OverviewCritAlert 24h critical 告警明细行（全行 level 恒=critical 不复列）。

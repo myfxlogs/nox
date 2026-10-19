@@ -157,5 +157,8 @@ func (s *Service) equityTotalUSD(ctx context.Context) (total float64, skippedNon
 	for c, b := range nav.ByCcy {
 		byCcy[c] = b.Nav
 	}
-	return nav.NavUSD, nav.SkippedNonUSD, byCcy
+	// D-630 返修⑤：总权益=USDT+USD 两桶合（本金口径——原 NavUSD=USD 桶
+	// 单读致 earn USDT 1592.43 漏计=10777 错值实证；非 U 币桶 ByCcy 可见不入）。
+	total = nav.ByCcy["USD"].Nav + nav.ByCcy["USDT"].Nav
+	return total, nav.SkippedNonUSD, byCcy
 }

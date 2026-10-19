@@ -145,7 +145,7 @@ func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]Explore
 	income := map[string]float64{}
 	irows, err := s.pool.Query(ctx, `
 		SELECT venue_key, COALESCE(SUM(amount_usd),0) FROM income_events
-		WHERE ts >= $1 GROUP BY venue_key`, now.Add(-30*24*time.Hour))
+		WHERE ts >= $1 AND NOT is_transfer GROUP BY venue_key`, now.Add(-30*24*time.Hour))
 	if err != nil {
 		return nil, fmt.Errorf("explorer idle income: %w", err)
 	}
