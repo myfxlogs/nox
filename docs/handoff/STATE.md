@@ -842,3 +842,4 @@ earn-io 裁定=PASS 带复审修：实施面（earnIOExtID 回执抽 se-<purchas
 **SG 部署验证**（10-19 13:3xZ，镜像 72aed33b→cac129d5、容器 healthy）：/totp/idcode 200 {"id_code":"dbb2c2"}（业主已绑 secret 热读在库未损、全程零触 /totp/setup）；无鉴权 POST GetActionBadge=401（服务端形态不变=循环系客户端放大，符合预期）；/readyz 200；docker logs --since 10m panic/fatal 计数 0；served bundle index-BZlXf1rs→index-0OxC7LzW（css index--O2-xb1O 不变=零 CSS 改动一致性旁证）。
 **坑处置**：循环修票=条目 pre-auth-rpc-401-interceptor-reload-loop 已入库+索引同 commit（实施侧完成，复核在案）；退出钮票=无坑。
 -->
+> 决策席注记（10-20 晨巡·三毕业批落账）：carry_graduations #276/277/278（JP225 long_cfd_short_perp，MT 三户×okx，龄 6.1-6.3d，accrued 6.18-8.27 均盖费 1.95-3.95×）全批准——pct 档 funding_pct=0.05 原样落表（precedent #48 同款），armed 径活池折算兜底，okx:unified=0 由 JitSweep armed 判定点自动归集（earn→funding→unified 链在案）。combo #21/#22/#23 生成 enabled。**附带处置**：`110660304:mt5`（XM 真户）autotrade 放行+敞口闸双行补建（cap=1000=1×净值保守档——同档 15032313 系 D-443 旧迁 6000 偏宽未动）。
