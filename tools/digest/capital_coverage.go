@@ -49,8 +49,9 @@ func loadTRXPoolRow(ctx context.Context, pool *pgxpool.Pool) (CapitalCoverageRow
 		ORDER BY fetched_at DESC LIMIT 1`).Scan(&balanceSun, &tronPower, &energyDelegated); err != nil {
 		return CapitalCoverageRow{}, false
 	}
-	row := CapitalCoverageRow{Pool: "TRX 质押+投票+能量", BalanceCcy: "USD", Status: "在赚",
-		Productive: true, RealMoney: true}
+	// D-629 业绩口径剔 TRX：业绩外行（不入总资金/在产/加权年化），行保留可见。
+	row := CapitalCoverageRow{Pool: "TRX 质押+投票+能量", BalanceCcy: "USD", Status: "业绩外·自营盘",
+		Productive: false, RealMoney: false}
 	// 年化成分 1：投票
 	voteAPR, hasVote := 0.0, false
 	if err := pool.QueryRow(ctx, `
@@ -60,19 +61,12 @@ func loadTRXPoolRow(ctx context.Context, pool *pgxpool.Pool) (CapitalCoverageRow
 	}
 	// 年化成分 2：能量租金（D-258 30d 口径；样本不足/零在押/无样本 → 不猜不记）
 	energyAPR, energyOK, energyWhy := trxEnergyAPRPct(ctx, pool, energyDelegated, time.Now().UTC(), 30)
-	aprNote := ""
+	aprNote := "业绩外·自营盘（D-629：不入总资金/在产/加权年化）"
 	if hasVote {
-		aprNote = fmt.Sprintf("投票 %.2f%%", voteAPR)
-		row.APRPct = &voteAPR
+		aprNote += fmt.Sprintf("；投票 %.2f%%", voteAPR)
 	}
 	if energyOK {
 		aprNote += fmt.Sprintf("+能量租赁 %.2f%%", energyAPR)
-		if row.APRPct != nil {
-			v := *row.APRPct + energyAPR
-			row.APRPct = &v
-		} else {
-			row.APRPct = &energyAPR
-		}
 	} else if hasVote {
 		aprNote += "（能量" + energyWhy + "未计）"
 	}

@@ -77,21 +77,29 @@ func TestGetCapitalCoverage_TrxBalanceAnchor(t *testing.T) {
 	if !trx.HasBalance || trx.BalanceUsd != 15000 {
 		t.Errorf("TRX balance_usd = %f (has=%v), want 15000 = (20000+10000)/1e6×0.5", trx.BalanceUsd, trx.HasBalance)
 	}
-	if !trx.HasApr || trx.AprPct != 4.0 {
-		t.Errorf("TRX apr = %f (has=%v), want 4.0（能量冷启动 0 样本不计）", trx.AprPct, trx.HasApr)
+	// D-629 断代：TRX 翻业绩外·自营盘——行保留可见（余额/口径原样）但不入汇总，
+	// APR 仅落 note 文本（HasApr=false 不入加权年化）。
+	if trx.HasApr || trx.AprPct != 0 {
+		t.Errorf("TRX apr 应不入加权（HasApr=false）, got %f has=%v", trx.AprPct, trx.HasApr)
 	}
-	// 汇总：单行真金在产 → total=productive=15000，覆盖率 100%
-	if !resp.HasSummary || resp.TotalUsd != 15000 || resp.ProductiveUsd != 15000 || resp.CoveragePct != 100 {
-		t.Errorf("summary = total %f productive %f coverage %f (has=%v), want 15000/15000/100",
-			resp.TotalUsd, resp.ProductiveUsd, resp.CoveragePct, resp.HasSummary)
+	if trx.Status != "业绩外·自营盘" || trx.RealMoney || trx.Productive {
+		t.Fatalf("TRX 行应业绩外: status=%s real=%v prod=%v", trx.Status, trx.RealMoney, trx.Productive)
+	}
+	if !strings.Contains(trx.Note, "业绩外·自营盘") || !strings.Contains(trx.Note, "投票 4.00%") {
+		t.Errorf("TRX note 应含业绩外标+投票 APR 文本: %s", trx.Note)
+	}
+	// 汇总：单行业绩外行 → 不入总资金/在产（D-629 断代；旧口径 15000/15000/100 留档）
+	if resp.TotalUsd != 0 || resp.ProductiveUsd != 0 || resp.HasSummary {
+		t.Errorf("业绩外单行不入汇总: total %f productive %f has=%v",
+			resp.TotalUsd, resp.ProductiveUsd, resp.HasSummary)
 	}
 }
 
-// TestGetCapitalCoverage_SummaryWeights 汇总两数锚（D-127 新口径，与 digest T1 同源数值）：
-// TRX 30000@4.0 在产 + venue binance·永续 8000（fm=7500→占用 500）
+// TestGetCapitalCoverage_SummaryWeights 汇总两数锚（D-629 断代口径，与 digest T1 同源数值；
+// 旧口径 TRX 30000 入双 numerator/denominator：38000/30500/80.3%/4.0164 断代留档）：
+// TRX 30000 业绩外仅展示 + venue binance·永续 8000（fm=7500→占用 500）
 // + live 仓名义 10000（降 note 参考，不入合计）+ demo 50000 不入面板（CMC 行随族件剔除）。
-// 总资金=Σ净值+TRX=38000（名义额退出分母）；在产=30000+占用500=30500 → 覆盖率 80.3%；
-// 加权=(30000×4+占用500×5)/(30000+500)=4.0164（占用行按占用额加权，venue 无年化不进）。
+// 总资金=Σvenue 净值=8000；在产=占用500 → 覆盖率 6.25%；加权=占用独算 (500×5)/500=5.0。
 func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 	s := covTestStore(t)
 	ctx := context.Background()
@@ -178,16 +186,16 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 		t.Errorf("venue 行 status = %q, want 部分占用（occ=500>0）", venRow.Status)
 	}
 	// 汇总两数：总=Σ净值+TRX=38000（占用行 RealMoney=false 不入分母）；在产=30000+占用500=30500
-	if !resp.HasSummary || resp.TotalUsd != 38000 || resp.ProductiveUsd != 30500 {
+	if !resp.HasSummary || resp.TotalUsd != 8000 || resp.ProductiveUsd != 500 {
 		t.Errorf("total=%f productive=%f (has=%v), want 38000/30500",
 			resp.TotalUsd, resp.ProductiveUsd, resp.HasSummary)
 	}
-	if cov := resp.ProductiveUsd / resp.TotalUsd * 100; cov < 80.2 || cov > 80.4 {
+	if cov := resp.ProductiveUsd / resp.TotalUsd * 100; cov < 6.2 || cov > 6.3 {
 		t.Errorf("coverage = %f, want ~80.3", cov)
 	}
-	// 加权年化=(30000×4+占用500×5)/30500=4.0164（占用行按占用额加权；venue 无年化不进）
-	if !resp.HasWeighted || resp.WeightedApr < 4.0163 || resp.WeightedApr > 4.0165 {
-		t.Errorf("weighted_apr = %f (has=%v), want ~4.0164", resp.WeightedApr, resp.HasWeighted)
+	// 加权年化=占用独算 (500×5)/500=5.0（D-629 断代；TRX APR 落 note 不进加权）
+	if !resp.HasWeighted || resp.WeightedApr < 4.9999 || resp.WeightedApr > 5.0001 {
+		t.Errorf("weighted_apr = %f (has=%v), want ~5.0", resp.WeightedApr, resp.HasWeighted)
 	}
 }
 
