@@ -31,11 +31,6 @@ func (c *retentionCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	if err := c.st.PruneCexDCIQuote(ctx, 30); err != nil {
 		log.Printf("[retention] cex_dci_quote prune: %v", err)
 	}
-	if n, err := c.st.PruneTicks(ctx); err != nil {
-		log.Printf("[retention] ticks prune: %v", err)
-	} else if n > 0 {
-		log.Printf("[retention] ticks prune: dropped %d partitions (>90d)", n)
-	}
 	// D-152①：fin_cex_radar 14d（PruneCexRadar 接线——读侧只消费最新扫描）。
 	if err := c.st.PruneCexRadar(ctx, 14); err != nil {
 		log.Printf("[retention] cex_radar prune: %v", err)
