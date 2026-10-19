@@ -161,3 +161,5 @@ var Us500SpcxSQL string // cfd 保底 US500 类 asset_equiv 注册（combo#20 �
 var Spx500BinanceSQL string // cfd 保底订正：US500 幻影类撤销，binance SPCX 双腿归 SPX500 类
 //go:embed 1053_trial_tier.sql
 var TrialTierSQL string // D-625 P0：微额试单轨 tier+cost_model+晋级判据种子
+//go:embed 1054_regime_prec_cfg.sql
+var RegimePrecCfgSQL string // D-625 P2：regime/前提塌判据 app_config 种子（禁硬编码）

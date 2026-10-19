@@ -286,6 +286,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	hedgeScan(ctx, st)
 	// S2 桥：approved 假设→可跑参数入册（族→沉点映射；无面告警待立票）。
 	s2Bridge(ctx, st)
+	preconditionWatch(ctx, st) // D-625 P2：armed/trial 前提塌自盯+regime 标签读面
 	// live 策略退役闸（委任式——死角实证触发；零产/亏损硬线+零持仓前置）。
 	delegateRetire(ctx, st)
 	log.Printf("[oppmatch] scan done: %d templates, %d proposals, %d new gap requests",

@@ -246,4 +246,5 @@ var migrationFiles = []struct {
 	{1051, migrations.Us500SpcxSQL, false},               // cfd 保底 US500 类 asset_equiv 注册（combo#20 双告警根因）
 	{1052, migrations.Spx500BinanceSQL, false},           // cfd 保底订正：US500 幻影类撤销，binance SPCX 双腿归 SPX500 类
 	{1053, migrations.TrialTierSQL, false},               // D-625 P0：微额试单轨 tier+cost_model+晋级判据
+	{1054, migrations.RegimePrecCfgSQL, false},           // D-625 P2：regime/前提塌判据 app_config 种子
 }
