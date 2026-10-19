@@ -168,9 +168,17 @@ func (s *Store) UpdateExpectedEntrySpreadBps(ctx context.Context, id int64, bps 
 // realized_pnl 语义=净额（价差−fees_usd）；fees_usd/feeQuality 同原子写入
 // （feesUSD=nil+quality="none"=无费信息，NULL 不填 0）。
 func (s *Store) ClosePosition(ctx context.Context, id int64, realizedPnl float64, feesUSD *float64, feeQuality string) error {
+	// 事务弱点修（钱径原子性债）：status 翻转与 cost_model 累计同事务——
+	// 旧径分两提交，cost 写败=仓已平但重试撞 ErrTerminalState=账实断点。
+	// 现在任一步败=整 tx 回滚，重试走原守卫幂等重进。
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
 	// 修复：positions 表无 updated_at 列（D-060 同类 bug），去掉 updated_at = now()
 	q := `UPDATE positions SET status = 'CLOSED', realized_pnl = $1, fees_usd = $2, fee_quality = NULLIF($3,''), closed_at = now() WHERE id = $4 AND status NOT IN ('CLOSED','FAILED')`
-	ct, err := s.pool.Exec(ctx, q, realizedPnl, feesUSD, feeQuality, id)
+	ct, err := tx.Exec(ctx, q, realizedPnl, feesUSD, feeQuality, id)
 	if err != nil {
 		return err
 	}
@@ -185,15 +193,18 @@ func (s *Store) ClosePosition(ctx context.Context, id int64, realizedPnl float64
 	if feesUSD != nil {
 		fee = *feesUSD
 	}
-	if qerr := s.pool.QueryRow(ctx, `
+	if qerr := tx.QueryRow(ctx, `
 		SELECT p.type, COALESCE(l.venue,''), COALESCE(l.venue_type,'')
 		FROM positions p
 		LEFT JOIN LATERAL (SELECT venue, venue_type FROM position_legs
 			WHERE position_id=p.id AND phase='OPEN' ORDER BY leg_no LIMIT 1) l ON true
 		WHERE p.id=$1`, id).Scan(&posType, &legVenue, &legVtype); qerr == nil && legVenue != "" {
-		if werr := s.RecordCostModel(ctx, legVenue, legVtype, posType, fee, 0, 0, 0, 0); werr != nil {
+		if werr := recordCostModelTx(ctx, tx, legVenue, legVtype, posType, fee, 0, 0, 0, 0); werr != nil {
 			return fmt.Errorf("cost_model 写径: %w", werr)
 		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
 	}
 	s.notifyPositionChange() // D-469b S3
 	return nil
