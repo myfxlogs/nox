@@ -21,6 +21,10 @@ import (
 // maxLLMRows 单轮深挖行数上限（防 token 爆）。
 const maxLLMRows = 30
 
+// symdigLLMBatch 分批调用粒度（D-630 系提案噪面同族修——批内输出短天然
+// 不撞 max_tokens；30 picks → 3 批×10 行逐次调替代两轮续提上限）。
+const symdigLLMBatch = 10
+
 const symdigSystemPrompt = `你是 NOX 系统的 symbol 配对深挖员。用户消息给出 MT 经纪商未配对/疑似错配品种清单（JSON）。
 任务：对每个品种判断是否存在语义别名可配对（例：GOLD→XAU、GER40→DE30、PLATINUM→XPT、WS30→US30、NIKKEI↔JP225）或明显的映射漂移。
 只输出一个 ` + "```symdig-proposals" + ` fenced JSON 数组，每项 {"symbol","venue","proposed_canonical","evidence","confidence"}；
@@ -61,45 +65,42 @@ func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error
 	if len(picks) == 0 {
 		return nil
 	}
-	// max_tokens 且未闭合 → 剩余未覆盖子集再调一轮（上限两轮防循环，合并提案）；
-	// 坑2：malformed（截断与否）统一进第二轮，两轮耗尽才结案告警（文案分级不变）。
+	// 分批调用（替代两轮续提）：findings 分小批逐次调——批内输出短天然不撞
+	// max_tokens（原「30 行单轮+malformed 剩集再调」两轮上限病灶根治）；每批
+	// 独立解析合并提案，malformed 批不阻断后续批（降级面如实告警）。
 	var all []proposal
 	covered := map[string]bool{}
 	var lastMalformed bool
 	var lastStop string
-	for round := 0; round < 2 && len(picks) > 0; round++ {
-		payload, _ := json.Marshal(picks)
+	for bi := 0; bi < len(picks); bi += symdigLLMBatch {
+		end := bi + symdigLLMBatch
+		if end > len(picks) {
+			end = len(picks)
+		}
+		batch := picks[bi:end]
+		payload, _ := json.Marshal(batch)
 		var aiText strings.Builder
 		res, err := deps.Run(ctx, deps.Client, nil, nil, symdigSystemPrompt,
 			[]analyst.Message{analyst.TextContent("user", "未配对/错配品种清单：\n```json\n"+string(payload)+"\n```")},
 			analyst.LoopCallbacks{OnDelta: func(t string) { aiText.WriteString(t) }})
 		if err != nil {
-			return fmt.Errorf("analyst run: %w", err)
+			return fmt.Errorf("analyst run batch %d: %w", bi/symdigLLMBatch+1, err)
 		}
 		props, malformed := parseProposals(aiText.String())
 		all = append(all, props...)
 		for _, p := range props {
 			covered[p.Symbol] = true
 		}
-		lastMalformed, lastStop = malformed, res.StopReason
-		if !malformed {
-			break
+		if malformed {
+			lastMalformed, lastStop = malformed, res.StopReason
+			log.Printf("[symdig] 批 %d 输出异常（%s）——%d/%d 品种提案落空（续批照跑）",
+				bi/symdigLLMBatch+1, res.StopReason, len(batch)-countCovered(props, batch), len(batch))
 		}
-		var rest []pgstore.SymdigFinding
-		for _, r := range picks {
-			if !covered[r.Symbol] {
-				rest = append(rest, r)
-			}
-		}
-		if round+1 < 2 && len(rest) > 0 {
-			log.Printf("[symdig] 第 %d 轮输出异常（%s），剩余 %d 品种进第 %d 轮", round+1, res.StopReason, len(rest), round+2)
-		}
-		picks = rest
 	}
-	// 结案：最后一轮 max_tokens+malformed → error；其余 malformed → warn（两文案原文不动）。
+	// 结案：任一批 max_tokens+malformed → error；其余 malformed → warn（两文案分级不变）。
 	if lastMalformed {
 		if lastStop == "max_tokens" {
-			msg := fmt.Sprintf("[symdig] 提案 AI 输出两轮后仍被长度截断（仅覆盖 %d/%d 品种，提案集不完整）", len(covered), len(sum.Rows))
+			msg := fmt.Sprintf("[symdig] 提案 AI 输出批内被长度截断（覆盖 %d/%d 品种，提案集不完整）", len(covered), len(sum.Rows))
 			log.Print(msg)
 			if deps.Store != nil {
 				_ = deps.Store.InsertAlert(ctx, nil, "error", msg)
@@ -204,4 +205,19 @@ func appendInbox(path, date, source string, props []proposal) error {
 		})
 	}
 	return inboxfmt.Append(path, date, rows)
+}
+
+// countCovered 批内被提案覆盖品种数（异常批落空计数用）。
+func countCovered(props []proposal, batch []pgstore.SymdigFinding) int {
+	set := map[string]bool{}
+	for _, p := range props {
+		set[p.Symbol] = true
+	}
+	n := 0
+	for _, b := range batch {
+		if set[b.Symbol] {
+			n++
+		}
+	}
+	return n
 }
