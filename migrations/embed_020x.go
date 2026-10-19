@@ -153,5 +153,5 @@ var WatchRuleUpgradeSQL string // watch_rule 盯盘域升级（level/message—�
 
 //go:embed 1050_live_mode.sql
 var LiveModeSQL string // D-620：LIVE 授权链（mode 枚举+NOX_LIVE_TRADE 退役+live_gates active 部分唯一索引）
-//go:embed 1051_trial_tier.sql
+//go:embed 1053_trial_tier.sql
 var TrialTierSQL string // D-625 P0：微额试单轨 tier+cost_model+晋级判据种子

@@ -26,3 +26,6 @@ INSERT INTO app_config (key, value) VALUES
   ('trial_cost_dev_max_bps','50'),
   ('trial_tier_notional_usd','200')
 ON CONFLICT (key) DO NOTHING;
+-- 存量 s2_trial 组合回填 trial 阶级（桥写径已带 tier，历史行缺省 armed 须归位——
+-- combo#20 即首发标本，不回填则 trial 组合被当 armed 面消费）。
+UPDATE xasset_allow_combos SET tier='trial' WHERE source='s2_trial' AND tier='armed';
