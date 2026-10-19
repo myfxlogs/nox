@@ -131,7 +131,7 @@ export function TrxWatchCard() {
                   </td>
                   <td>
                     <a href="#" onClick={(e) => { e.preventDefault(); edit(r); }}>编辑</a>{" "}
-                    <a href="#" style={{ color: delArm === r.id ? "var(--critical)" : undefined }}
+                    <a href="#" className={delArm === r.id ? "u-err" : undefined}
                       onClick={(e) => { e.preventDefault(); void del(r.id); }}>
                       {delArm === r.id ? "确认删除？" : "删除"}
                     </a>

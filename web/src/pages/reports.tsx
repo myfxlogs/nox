@@ -102,7 +102,7 @@ export default function ReportsPage() {
             <a
               key={d}
               href="#"
-              style={{ marginRight: 10, color: d === date ? "#ddd" : "#888" }}
+              className={d === date ? undefined : "u-dim"} style={{ marginRight: 10 }}
               onClick={(e) => {
                 e.preventDefault();
                 void loadDept(d);

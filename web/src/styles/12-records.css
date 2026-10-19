@@ -1,0 +1,88 @@
+/* —— 记账（财务线工作项 2：结构化投资记录，决定/教训/观察） —— */
+.record-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.record-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.record-chip {
+  border: 1px solid var(--ring);
+  background: var(--page);
+  color: var(--ink);
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.record-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.record-searches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.record-search {
+  min-width: 180px;
+}
+/* 列表行：kind 徽标 + asset chip + 内容换行（td.wrap 复用 08 层通用规则）+ 时间 */
+.record-table th,
+.record-table td {
+  text-align: left;
+}
+.record-table td {
+  vertical-align: top; /* 内容列多行后徽标/时间靠顶对齐 */
+}
+.record-table .col-content {
+  max-width: 420px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.record-table td.muted {
+  color: var(--ink-3);
+}
+.record-asset {
+  display: inline-block;
+  font-size: 12px;
+  padding: 1px 8px;
+  border: 1px solid var(--ring);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+/* 添加 modal：内容多行输入 */
+.record-textarea {
+  flex: 1;
+  min-height: 72px;
+  resize: vertical;
+  font-family: inherit;
+}
+/* P2 修复⑧：月份过滤栏（默认当月，纯前端过滤不额外 RPC） */
+.record-month-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.record-month-label {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.record-month-select {
+  width: auto;
+  min-width: 120px;
+}
+.record-month-count {
+  font-size: 12px;
+}

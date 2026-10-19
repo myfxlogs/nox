@@ -11,6 +11,7 @@ export function StatTile({
   dot,
   onClick,
   active,
+  valueClass,
 }: {
   label: string;
   value: string;
@@ -19,6 +20,8 @@ export function StatTile({
   dot?: FreshDot;
   onClick?: () => void;
   active?: boolean;
+  // 值的语义色类（u-good/u-bad 等——20-semantic 件；呈现层映射非判据）
+  valueClass?: string;
 }) {
   return (
     <div
@@ -34,7 +37,7 @@ export function StatTile({
         {dot ? <FreshDotDot dot={dot} /> : null}
         {label}
       </div>
-      <div className="stat-value">{value}</div>
+      <div className={valueClass ? `stat-value ${valueClass}` : "stat-value"}>{value}</div>
       {sub ? <div className="stat-sub">{sub}</div> : null}
     </div>
   );

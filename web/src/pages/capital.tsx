@@ -142,7 +142,7 @@ export default function CapitalPage() {
 
   return (
     <main>
-      <h1>资金地图 <small style={{ fontSize: 12, color: "#777" }}>算于 {computedAt} · 各币种原值零换算</small></h1>
+      <h1>资金地图 <small className="u-dim" style={{ fontSize: 12 }}>算于 {computedAt} · 各币种原值零换算</small></h1>
       {err && <div className="err">{err}</div>}
       {stalePools.length > 0 && (
         <div className="warn">分母缺池（陈旧快照剔计）：{stalePools.join("、")}——合计为实有鲜池口径</div>
@@ -248,7 +248,7 @@ export default function CapitalPage() {
 
       {/* D-512 手工仓位只读段：src=manual——只进全景展示，不进敞口/分母/风控。 */}
       <section>
-        <h2>手工仓位 <small style={{ fontSize: 12, color: "#777" }}>只读台账（manual）· 不计敞口不分母</small></h2>
+        <h2>手工仓位 <small className="u-dim" style={{ fontSize: 12 }}>只读台账（manual）· 不计敞口不分母</small></h2>
         {manual.length > 0 && (
           <table>
             <thead><tr><th>来源</th><th>品种</th><th>量</th><th>录入价</th><th>注</th><th>更新</th><th></th></tr></thead>

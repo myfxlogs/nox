@@ -1,0 +1,243 @@
+/* —— 设置页（D-523 app_config 管理面）：工具条/分组条/键表/编辑弹窗/重启页脚 —— */
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.settings-search {
+  width: 260px;
+  flex: none;
+}
+.settings-groups {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.settings-groups .active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.settings-toast {
+  padding: 8px 14px;
+  border: 1px solid var(--good);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--good) 10%, var(--surface));
+  color: var(--ink);
+  font-size: 13px;
+}
+.settings-table code {
+  font-size: 12px;
+  word-break: break-all;
+}
+.settings-src {
+  margin-top: 4px;
+}
+.settings-empty {
+  text-align: center;
+  color: var(--ink-3);
+}
+.settings-footer {
+  position: sticky;
+  bottom: 0;
+  padding: 10px 0;
+  background: var(--page);
+  display: flex;
+  justify-content: flex-end;
+}
+.settings-edit-hint {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.settings-edit-hint code {
+  word-break: break-all;
+}
+
+/* D-452 移动端规范：≤767px 键表卡化（.resp + data-label 两步法） */
+@media (max-width: 767px) {
+  .settings-groups {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .settings-table.resp thead {
+    display: none;
+  }
+  .settings-table.resp,
+  .settings-table.resp tbody,
+  .settings-table.resp tr,
+  .settings-table.resp td {
+    display: block;
+    width: 100%;
+  }
+  .settings-table.resp tr {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    padding: 8px 10px;
+  }
+  .settings-table.resp td {
+    border: none;
+    padding: 4px 0;
+  }
+  .settings-table.resp td::before {
+    content: attr(data-label) "：";
+    display: block;
+    font-size: 11px;
+    color: var(--ink-3);
+  }
+  .settings-edit-modal {
+    width: 100%;
+    max-width: 100%;
+  }
+  .settings-search {
+    width: 100%;
+  }
+}
+
+/* D-526：中文说明主行/键名副行/组折叠头/分页条 */
+.settings-desc {
+  font-size: 13px;
+  color: var(--ink);
+}
+.settings-sub {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.settings-edit-key {
+  margin: -6px 0 8px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.settings-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+}
+.settings-group-head:hover {
+  border-color: var(--accent);
+}
+.settings-group-arrow {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.settings-group-label {
+  flex: 1;
+  font-weight: 600;
+}
+.settings-group-count {
+  font-size: 12px;
+  color: var(--ink-3);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 9px;
+}
+.settings-section .table-scroll {
+  margin-top: 6px;
+}
+.settings-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+.settings-pager-info {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 767px) {
+  .settings-pager {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* D-527：fixed 布局列宽 + 值两行 clamp + 值查看弹窗（桌面态；767px 媒体查询外） */
+.settings-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.settings-table .col-key { width: 24%; }
+.settings-table .col-cur { width: 22%; }
+.settings-table .col-pend { width: 15%; }
+.settings-table .col-note { width: 17%; }
+.settings-table .col-upd { width: 10%; }
+.settings-table .col-op { width: 8%; }
+.settings-table th,
+.settings-table td {
+  vertical-align: top;
+  text-align: left;
+}
+.settings-val,
+.settings-note,
+.settings-desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+.settings-sub code {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  word-break: break-all;
+}
+.settings-val {
+  cursor: pointer;
+}
+.settings-val:hover {
+  color: var(--accent);
+}
+.settings-view-modal {
+  max-width: 640px;
+  width: 90vw;
+}
+.settings-view-value {
+  max-height: 50vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: monospace;
+  font-size: 12px;
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+/* D-545：密钥管理卡——说明行复用 settings-edit-hint 形态 */
+.settings-secrets-hint {
+  margin: 4px 8px 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.settings-secrets-head { cursor: default; }
