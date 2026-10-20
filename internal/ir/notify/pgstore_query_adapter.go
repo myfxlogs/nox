@@ -12,6 +12,8 @@ import (
 // PgStoreQueryAdapter 包装 pgstore.Store 实现 notify.FeishuQueryStore 接口。
 type PgStoreQueryAdapter struct {
 	Store *pgstore.Store
+	// PriceNow D-633 现态价注入件（qbus 装配——venue+symbol→bid/ask/ok）。
+	PriceNow func(venue, symbol string) (bid, ask float64, ok bool)
 }
 
 func (a *PgStoreQueryAdapter) FeishuTarget(ctx context.Context) (chatID, openID string, err error) {
@@ -36,7 +38,13 @@ func (a *PgStoreQueryAdapter) LastTRXAccount(ctx context.Context) (TRXAccountSum
 }
 
 func (a *PgStoreQueryAdapter) TickMid(ctx context.Context, venue, symbol string) (float64, bool) {
-	return a.Store.LatestTickMid(ctx, venue, symbol)
+	// D-633 现态源注入优先（cmd/core 由 qbus 装配 PriceNow——nil 回落 DB 旧径）。
+	if a.PriceNow != nil {
+		if bid, ask, ok := a.PriceNow(venue, symbol); ok && bid > 0 && ask > 0 {
+			return (bid + ask) / 2, true
+		}
+	}
+	return a.Store.LatestTickMid(ctx, venue, symbol) // miss→持久末帧回退（D-162）
 }
 
 func (a *PgStoreQueryAdapter) SumTRXTxRentalAll(ctx context.Context) (float64, error) {

@@ -215,14 +215,16 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 			return kind, "息差环境未持续: " + r, 4, false
 		}
 	}
-	// 闸 4：双腿 tick 新鲜度（5min 窗，同档案判据；LatestTick(venue,venueType,symbol) 现成接口）。
+	// 闸 4：双腿 tick 新鲜度（5min 窗，同档案判据；qbus LatestLeg 现态源——D-633）。
 	for _, leg := range []struct{ venue, canon string }{{c.VenueBuy, c.CanonicalBuy}, {c.VenueSell, c.CanonicalSell}} {
 		vt, sym := legMarket(leg.venue, leg.canon)
 		if vt == "" {
 			continue // 未知市场形态不设 tick 闸（由后续闸兜底）
 		}
-		tr, ok, err := s.store.LatestTick(ctx, bareVenueKey(leg.venue), vt, sym)
-		if err != nil || !ok || time.Since(tr.Ts) > tickFreshWindow {
+		// D-633 现态切 qbus：LatestLeg(canonical, native, venueKey)——
+		// miss/陈值同判闸红（冷启动 qbus 空=fail-closed 如实红，禁回 PG）。
+		q, ok := quoteOrMiss(s.qbus, leg.canon, sym, keydomain.Join(bareVenueKey(leg.venue), vt))
+		if !ok || time.Since(q.Time) > tickFreshWindow {
 			return kind, fmt.Sprintf("行情报价过期: %s/%s（超过5分钟无更新）", bareVenueKey(leg.venue), sym), 5, false
 		}
 	}

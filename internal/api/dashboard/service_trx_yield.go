@@ -34,8 +34,10 @@ func (s *Service) GetTrxYieldCurve(ctx context.Context, req *connect.Request[v1.
 
 	// 2. 现价（ticks TRXUSDT mid——D-359 价锚；fin_cmc_prices 随族件剔除换源）
 	var currentPrice float64
-	if mid, ok := s.store.LatestTickMid(ctx, "binance", "TRXUSDT"); ok {
-		currentPrice = mid
+	// D-633 现态切 qbus（binance:spot 钉 venue_type——原 SQL 无型过滤脏锚修正）。
+	q, ok := quoteOrNil(s.qbus, "TRXUSDT", "binance:spot")
+	if ok && q.Bid > 0 && q.Ask > 0 {
+		currentPrice = (q.Bid + q.Ask) / 2
 	}
 
 	// 3. 构造日序列 + 滚动年化

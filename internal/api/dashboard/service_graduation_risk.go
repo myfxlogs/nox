@@ -9,12 +9,12 @@ import (
 	"context"
 	"fmt"
 	"nox/internal/data/keydomain"
+	"nox/internal/store/pgstore"
 	"strings"
 	"time"
 
 	"nox/internal/data/fact"
 	v1 "nox/internal/gen/dashboardv1"
-	"nox/internal/store/pgstore"
 )
 
 // riskTickMaxAge dossier 价格源 staleness 闸（B-012：与 paperCfdMonitorMaxAge 同口径 5min）。
@@ -54,15 +54,14 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 		bare, vt := k.Venue, k.Type
 		// 价格源：ticks 最新 mid，staleness ≤5min 超龄→NULL+gaps。
 		var mid float64
-		t, ok, err := s.gradDB().LatestTick(ctx, bare, vt, leg.symbol)
-		if err != nil {
-			gaps = append(gaps, vk+" tick 读取失败: "+err.Error())
-		} else if !ok {
+		// D-633 现态切 qbus（LatestLeg canonical+venueKey——冷启动 qbus 空=fail-closed gaps 如实）
+		q, ok := quoteOrMiss(s.qbus, leg.symbol, leg.symbol, vk)
+		if !ok {
 			gaps = append(gaps, vk+"/"+leg.symbol+" 无 tick")
-		} else if now.Sub(t.Ts) > riskTickMaxAge {
-			gaps = append(gaps, vk+"/"+leg.symbol+" 价格数据过期（"+now.Sub(t.Ts).Round(time.Second).String()+">5min）")
+		} else if now.Sub(q.Time) > riskTickMaxAge {
+			gaps = append(gaps, vk+"/"+leg.symbol+" 价格数据过期（"+now.Sub(q.Time).Round(time.Second).String()+">5min）")
 		} else {
-			mid = (t.Bid + t.Ask) / 2
+			mid = (q.Bid + q.Ask) / 2
 		}
 		var ct float64 = 1
 		if mid > 0 {

@@ -54,5 +54,10 @@ func trxPoolRow(ctx context.Context, s *Service) *v1.CapitalCoverageRow {
 
 // trxUSDPrice TRX USD 价（D-359：TRXUSD 价锚=binance 现货腿报价）。
 func trxUSDPrice(ctx context.Context, s *Service) (float64, bool) {
-	return s.store.LatestTickMid(ctx, "binance", "TRXUSDT")
+	// D-633 现态切 qbus（binance:spot）
+	q, ok := quoteOrNil(s.qbus, "TRXUSDT", "binance:spot")
+	if ok && q.Bid > 0 && q.Ask > 0 {
+		return (q.Bid + q.Ask) / 2, true
+	}
+	return 0, false
 }

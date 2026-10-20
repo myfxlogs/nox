@@ -3,6 +3,7 @@ package dashboard
 
 import (
 	"context"
+	"nox/internal/data/bus"
 	"testing"
 	"time"
 
@@ -22,6 +23,9 @@ func egOf(rep *v1.GraduationRiskReport, field string) v1.EvidenceGrade {
 
 func d476aSvc(f *fakeGradDB) *Service {
 	s := &Service{gradStore: f}
+	s.qbus = bus.New() // D-633 返修：判价现态源注假帧（gate4 判面）
+	s.qbus.Publish(bus.Quote{Symbol: "XAUUSDm", Venue: "3001157", VenueType: "mt5", Bid: 2400, Ask: 2400.5, Time: time.Now()})
+	s.qbus.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "binance", VenueType: "perp", Bid: 2400, Ask: 2400.5, Time: time.Now()})
 	// D-565 S2：venue 杠杆实读缝（夹具钉 5x=原口径）。
 	s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 5, nil }
 	s.SetCarryRegime(exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12})

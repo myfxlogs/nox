@@ -65,7 +65,12 @@ func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *
 	dashSvc.SetSwapDeviationGatePct(cfg.SwapDeviationGatePct)                   // D-182 S4：swap 偏差拦截手动入口同源
 	dashSvc.SetSwapFactMaxAge(cfg.MTData.SwapFactMaxAge)                        // D-604 N1：deviation 闸 facts 龄期（discover 同源键）
 	oppmatch.SetDelegateTickMaxAge(cfg.LegTickWindow)                           // D-604 N2：delegate 真金 sizing 判价窗（残腿窗同源）
-	dashSvc.SetLegMinLots(func(venueKey, venueSymbol string) (float64, bool) {  // D-061 量规格预检
+	// D-633：delegate 真金 sizing 判价现态源=qbus（DB LatestTickMidWithin 退役锚）
+	oppmatch.SetDelegatePriceNow(func(venue, venueType, symbol string) (float64, float64, time.Time, bool) {
+		q, ok := qbus.LatestLeg(symbol, symbol, keydomain.Join(venue, venueType))
+		return q.Bid, q.Ask, q.Time, ok
+	})
+	dashSvc.SetLegMinLots(func(venueKey, venueSymbol string) (float64, bool) { // D-061 量规格预检
 		venue := keydomain.BareOf(venueKey)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

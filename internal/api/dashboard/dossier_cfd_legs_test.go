@@ -3,6 +3,7 @@ package dashboard
 
 import (
 	"context"
+	"nox/internal/data/bus"
 	"strings"
 	"testing"
 	"time"
@@ -48,6 +49,9 @@ func d471Fixture() *fakeGradDB {
 func TestD471_Dossier_CfdLegs(t *testing.T) {
 	f := d471Fixture()
 	s := &Service{gradStore: f}
+	s.qbus = bus.New() // D-633：判价现态源——种两 legs 新鲜帧
+	s.qbus.Publish(bus.Quote{Symbol: "XAUUSDm", Venue: "3001157", VenueType: "mt5", Bid: 2400, Ask: 2400.5, Time: time.Now()})
+	s.qbus.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "binance", VenueType: "perp", Bid: 2400, Ask: 2400.5, Time: time.Now()})
 	// D-565 S2：venue 杠杆实读缝（夹具钉 5x=原硬编口径）。
 	s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 5, nil }
 	s.SetCarryRegime(exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12})
@@ -99,6 +103,9 @@ func TestD471_Dossier_Gaps(t *testing.T) {
 	f.ticks["binance|perp|XAUUSDT"] = pgstore.TickRow{Ts: time.Now().Add(-10 * time.Minute), Bid: 2400, Ask: 2401}
 	delete(f.facts, "3001157|") // imr 缺 → D-006 S1b 悲观档 20x 估
 	s := &Service{gradStore: f}
+	s.qbus = bus.New() // D-633：判价现态源——Gaps 测试种陈旧帧（价格数据过期断言面）
+	s.qbus.Publish(bus.Quote{Symbol: "XAUUSDm", Venue: "3001157", VenueType: "mt5", Bid: 2400, Ask: 2400.5, Time: time.Now()})
+	s.qbus.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "binance", VenueType: "perp", Bid: 2400, Ask: 2401, Time: time.Now().Add(-10 * time.Minute)})
 	// D-565 S2：venue 杠杆实读缝（夹具钉 5x=原硬编口径）。
 	s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 5, nil }
 	s.SetCarryRegime(exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12})
@@ -146,6 +153,9 @@ func TestD471_EntryWindow_SpotCarry(t *testing.T) {
 	grad := &pgstore.CarryGraduation{ID: 9, PaperID: 61, VenueA: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"}
 	f := &fakeGradDB{}
 	s := &Service{gradStore: f}
+	s.qbus = bus.New() // D-633：判价现态源——种两 legs 新鲜帧
+	s.qbus.Publish(bus.Quote{Symbol: "XAUUSDm", Venue: "3001157", VenueType: "mt5", Bid: 2400, Ask: 2400.5, Time: time.Now()})
+	s.qbus.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "binance", VenueType: "perp", Bid: 2400, Ask: 2400.5, Time: time.Now()})
 	// D-565 S2：venue 杠杆实读缝（夹具钉 5x=原硬编口径）。
 	s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 5, nil }
 	s.SetCarryRegime(exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12})

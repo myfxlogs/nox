@@ -32,7 +32,10 @@ func covTestStore(t *testing.T) *pgstore.Store {
 }
 
 func covTestService(s *pgstore.Store) *Service {
-	return &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005}
+	svc := &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005}
+	svc.qbus.Publish(bus.Quote{Symbol: "TRXUSDT", Venue: "binance", VenueType: "spot", Bid: 0.5, Ask: 0.5, Time: time.Now()})     // D-633：判价假帧
+	svc.qbus.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "binance", VenueType: "spot", Bid: 50000, Ask: 50002, Time: time.Now()}) // D-633：币本位折算假帧（mid=50001）
+	return svc
 }
 
 // covResponse 便捷取 response。

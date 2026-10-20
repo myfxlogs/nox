@@ -252,4 +252,5 @@ var migrationFiles = []struct {
 	{1057, migrations.TrialCostWiringSQL, false},         // P0 续件：positions.combo_id 归因列
 	{1058, migrations.SettleReflectionSQL, false},        // settle 单消费者：reflection/entry_expected_cost_bps 列
 	{1059, migrations.IncomeIsTransferSQL, false},        // D-630：income_events.is_transfer 划转伪影标
+	{1060, migrations.TicksKeyTsIdxSQL, false},           // D-633 §4：ticks 复合索引止血（级联 chunk）
 }

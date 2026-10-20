@@ -90,6 +90,13 @@ func TestD513_DelegateGraduation(t *testing.T) {
 	idFresh := mk("DELGTEXIST", 400, 12, 300, nil, 50, "spot_carry")         // pending<3d
 	idNoLive := mk("DELGTNO", 400, 12, 300, nil, 100, "spot_carry")          // 品种非 live 域
 
+	// D-633：判价现态源注入（qbus 适配形态——DB 读面已切）
+	old := delegatePriceNow
+	delegatePriceNow = func(venue, venueType, symbol string) (float64, float64, time.Time, bool) {
+		return 99.5, 100.5, time.Now(), true
+	}
+	defer func() { delegatePriceNow = old }()
+
 	delegateGraduations(ctx, st)
 
 	got, err := st.GetCarryGraduation(ctx, idOK)
