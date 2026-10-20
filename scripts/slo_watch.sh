@@ -61,7 +61,7 @@ else
   if [[ -z "$OK_TS" ]]; then
     emit critical "[SLO] backup.log 零 backup OK 行——备份从未成功域"
   else
-    OK_EPOCH=$(date -u -d "$OK_TS" +%s 2>/dev/null || echo 0)
+    OK_EPOCH=$(TZ=UTC date -d "$OK_TS" +%s 2>/dev/null || echo 0)
     AGE_S=$(( $(date -u +%s) - OK_EPOCH ))
     [[ "$AGE_S" -gt 108000 ]] && emit critical "[SLO] backup OK 龄 ${AGE_S}s >30h——备份死晨域"
   fi
