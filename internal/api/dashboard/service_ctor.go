@@ -63,3 +63,6 @@ type Settler interface {
 
 // setter 注入面（SetSettler/SetTradeModes/.../aliasForVenueKey——见 service_setters.go 全集）
 // 见 service_setters.go（从本文件拆出控行数 <300）。
+
+// SetMoneyStore D-633 拆票：钱径保底池句柄注入（probe-close PositionNetUSD 走保底池不被读面爆量拖）。
+func (s *Service) SetMoneyStore(st *pgstore.Store) { s.storeMoney = st }

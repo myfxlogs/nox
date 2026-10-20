@@ -22,9 +22,10 @@ import (
 
 // Service 实现 DashboardServiceHandler 接口。
 type Service struct {
-	store    *pgstore.Store
-	qbus     *bus.QuoteBus
-	pipeline *exec.Pipeline
+	store      *pgstore.Store
+	storeMoney *pgstore.Store // D-633 拆票：钱径保底池句柄（probe-close PositionNetUSD 走此——nil=回落 store）
+	qbus       *bus.QuoteBus
+	pipeline   *exec.Pipeline
 	// D-195-A：执行控制面检查器（避免 dashboard→autotrade 循环依赖，用接口注入）。
 	// D-620ⓑ：nil=控制面未接线 fail-closed（执行径 FAILED/展示径 kill=true）。
 	gateChecker GateChecker

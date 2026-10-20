@@ -139,7 +139,11 @@ func (s *Service) closeProbe(ctx context.Context, p pgstore.ProbeRow) error {
 // finalizeProbeClose 净额合成 + CLOSED + exit_kind='probe_expired' + settlement。
 // D-013：净额=PositionNetUSD 单源（价差腿差 + funding/swap + commission 现金流）。
 func (s *Service) finalizeProbeClose(ctx context.Context, posID int64) error {
-	net, err := s.store.PositionNetUSD(ctx, posID, nil)
+	mst := s.store
+	if s.storeMoney != nil { // D-633 拆票：钱径句柄优先（保底池——读面爆量不拖平仓净额）
+		mst = s.storeMoney
+	}
+	net, err := mst.PositionNetUSD(ctx, posID, nil)
 	if err != nil {
 		s.probeCritical(ctx, posID, fmt.Sprintf("净额合成失败（仓留 CLOSING）: %v", err))
 		return fmt.Errorf("pos=%d net pnl: %w", posID, err)
