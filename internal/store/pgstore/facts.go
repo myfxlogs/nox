@@ -12,10 +12,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// InsertFacts 批量写入 facts（§2.2）。
-// 键域宪法落地（R1/R2/R4）：venue 复合键拆 (venue,venue_type) 两列；
-// 裸 venue 按域推导类型（MT 账号号→注册处 venue_type 反解；CEX 名→perp；cmc→”非通道）；
-// symbol=” 或与 venue 同值（历史账号级挪用）→ NULL=非品种域。
+// InsertFacts 批量写入 facts（§2.2）。键域宪法：复合键拆 (venue,venue_type) 两列；
+// 裸 venue 按域推导型（MT 号→注册处反解/CEX→perp/cmc→非通道）；symbol=” 或同 venue→NULL。
 func (s *Store) InsertFacts(ctx context.Context, facts []fact.Fact) error {
 	if len(facts) == 0 {
 		return nil
@@ -78,13 +76,10 @@ func (s *Store) LatestFacts(ctx context.Context, kind, venue, symbol string) ([]
 	return out, rows.Err()
 }
 
-// FactsSince 返回某 (kind, venue, symbol) 自 since 起的 facts 历史行（ts 升序）。
-// 结算边界逐期实率取数面（funding_history / swap_long·short 窗内序列）。
-// factSymbolPred 参数化 symbol 谓词的 Go 侧分派（D-574 续段，EXPLAIN 实证）：
-// `symbol IS NOT DISTINCT FROM NULLIF($n,”)` 参数化形 planner 不可用索引
-// （66k 行 bitmap-or+heap 过滤 3.74s/次）——”→`symbol IS NULL`、非空→`symbol=$n`
-// 双字面查询，语义域=IS NOT DISTINCT FROM 的 NULL 精确匹配（” 非通配）。
-// 42P18 坑修（10-19）：空 symbol 时谓词不占参位——参绑定随谓词分派。
+// FactsSince 返回 (kind, venue, symbol) 自 since 起 facts 历史行（ts 升序——结算逐期实率取数面）。
+// factSymbolPred D-574：参数化 IS NOT DISTINCT FROM 形 planner 不可用索引（66k 行
+// bitmap-or 3.74s/次实证）——”→`symbol IS NULL`、非空→`symbol=$n` 双字面分派；
+// 42P18 坑修：空 symbol 谓词不占参位。
 func factSymbolPred(ph, symbol string) string {
 	if symbol == "" {
 		return `symbol IS NULL`
@@ -281,7 +276,7 @@ func (s *Store) FactsWindowStats(ctx context.Context, kind, venue, symbol string
 func (s *Store) TicksWindow(ctx context.Context, venue, symbol string, since time.Time) ([]TickRow, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT ts, venue, symbol, bid, ask, venue_type FROM ticks
-		WHERE (venue = $1 OR venue_key = $1) AND symbol = $2 AND ts >= $3 ORDER BY ts`, venue, symbol, since)
+		WHERE `+ticksVenuePred(venue)+` AND symbol = $2 AND ts >= $3 ORDER BY ts`, venue, symbol, since)
 	if err != nil {
 		return nil, fmt.Errorf("ticks window: %w", err)
 	}
@@ -295,4 +290,11 @@ func (s *Store) TicksWindow(ctx context.Context, venue, symbol string, since tim
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+func ticksVenuePred(venue string) string { // 键形分路（复合键→venue_key——planner 命中 ticks_key_ts_idx 前缀）
+	if keydomain.Parse(venue).Type != "" {
+		return "venue_key = $1"
+	}
+	return "venue = $1"
 }
