@@ -43,6 +43,15 @@ func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]Explore
 	// mt_frame=venue 原生推送真值优先），缺席/陈窗才落 la=全类型最新行
 	// （rest_calib/rest_poll/reconnect_resync=愈合补写非权威）。
 	// 键列 NOT NULL（实拍零 NULL，'' 残影行由 collapse 段处理）→等值用 `=`。
+	// 池纪律：liveEquityMapFn=acctMon.Refresh 全 venue poll（内部再取池连）
+	// 必须在任何 pool.Query 之前完成——占连跨 poll=池内自死锁（10-20 生产
+	// wedge 实证：conn 挂 idle+Client 15min，200 goroutine 堆 Acquire）。
+	var liveMap map[string]float64
+	if liveEquityMapFn != nil {
+		if m, err := liveEquityMapFn(ctx); err == nil {
+			liveMap = m
+		}
+	}
 	rows, err := s.pool.Query(ctx, `
 		WITH RECURSIVE keys AS (
 			(SELECT venue, venue_type, currency FROM fin_venue_account_snapshot
@@ -84,22 +93,12 @@ func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]Explore
 	if err != nil {
 		return nil, fmt.Errorf("explorer idle snapshots: %w", err)
 	}
-	defer rows.Close()
-	// 判定径快照清账：Equity=此刻权益实拉——map 单次扇出上提出行循环
-	// （D-604 「禁逐池 Refresh」纪律：liveEquityMapFn=acctMon.Refresh 全 venue
-	// poll，逐行调=~115 键×全量扇出=overview nav/perf 段撞 2m5s 死线实证）。
-	// 装配缺席/拉败=快照行值如实保（非清零）。
-	var liveMap map[string]float64
-	if liveEquityMapFn != nil {
-		if m, err := liveEquityMapFn(ctx); err == nil {
-			liveMap = m
-		}
-	}
 	var pools []ExplorerIdlePool
 	for rows.Next() {
 		var p ExplorerIdlePool
 		if err := rows.Scan(&p.Venue, &p.VenueType, &p.Balance, &p.Equity,
 			&p.FreeMargin, &p.Currency, &p.FetchedAt, &p.BufferMultiple); err != nil {
+			rows.Close()
 			return nil, fmt.Errorf("scan idle snapshot: %w", err)
 		}
 		if v, ok := liveMap[p.Venue+":"+p.VenueType+":"+p.Currency]; ok {
@@ -108,8 +107,12 @@ func (s *Store) ExplorerIdleFunds(ctx context.Context, now time.Time) ([]Explore
 		pools = append(pools, p)
 	}
 	if err := rows.Err(); err != nil {
+		rows.Close()
 		return nil, err
 	}
+	// 显式收连再放行后续查询——defer 会把连一直压到函数返回，下方三次
+	// Acquire 期间全持连=雪崩泵源（10-20 wedge 实证的同族形）。
+	rows.Close()
 	// '' 币残影行并入主币行（同池双计防稀释——敞口闸分母口径修）。
 	pools = collapseBlankCcyPool(pools,
 		func(p ExplorerIdlePool) (string, string, string) { return p.Venue, p.VenueType, p.Currency },
