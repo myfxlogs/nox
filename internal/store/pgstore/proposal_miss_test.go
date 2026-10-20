@@ -37,4 +37,25 @@ func TestProposalMissSticky(t *testing.T) {
 	if st1 != "proposed" || st2 != "expired" {
 		t.Fatalf("okx=%s（应 proposed）gate=%s（应 expired）", st1, st2)
 	}
+	// 恢复段锚：gate 提案死后 okx 转 miss→live 归（miss_count 清零）→再 miss 从头计——
+	// miss 间恢复不残留旧计数（「恢复清零」真锚非名存实亡）
+	id3, _, err := st.CreateProposal(ctx, &Proposal{TemplateID: "cash_mgmt", Venue: "okx2", ExecTrack: "auto"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 拍1 miss（liveVenues 不含 okx2）——miss_count=1
+	if _, _, err := st.BumpProposalMissOutsideVenues(ctx, "cash_mgmt", []string{"okx"}, thr); err != nil {
+		t.Fatal(err)
+	}
+	var mc1 int
+	_ = st.Pool().QueryRow(ctx, `SELECT miss_count FROM fin_proposal WHERE id=$1`, id3).Scan(&mc1)
+	// 拍2 live 归（okx2 入 liveVenues）——miss_count 清零
+	if _, _, err := st.BumpProposalMissOutsideVenues(ctx, "cash_mgmt", []string{"okx", "okx2"}, thr); err != nil {
+		t.Fatal(err)
+	}
+	var mc2 int
+	_ = st.Pool().QueryRow(ctx, `SELECT miss_count FROM fin_proposal WHERE id=$1`, id3).Scan(&mc2)
+	if mc1 != 1 || mc2 != 0 {
+		t.Fatalf("恢复段锚：mc1=%d（应1）mc2=%d（应0）", mc1, mc2)
+	}
 }
