@@ -21,12 +21,23 @@ else
 	[ -n "$NOX_PG_PORT" ] || { echo "[$(date -u +%FT%TZ)] backup FAIL: nox-postgres 端口解析失败（传 PG_DSN 显式旁路）" >&2; exit 1; }
 	PG_DSN="postgres://nox:nox@localhost:${NOX_PG_PORT}/nox?sslmode=disable"
 fi
-RETENTION_DAYS=7
+RETENTION_DAYS=13
 R2_KEEP=14
 STATUS=0
 
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
+
+# D-110 告警：alerts critical（系统级，rule_id NULL=D-027）；psql 不可达 → log 兜底，不带崩本地备份。
+# message 只用固定文案（阶段+原因），不含 DSN/凭据/外部输入，SQL 字面量注入面为零。
+emit_alert() {
+	if psql "$PG_DSN" -q -v ON_ERROR_STOP=1 \
+		-c "INSERT INTO alerts (ts, level, message, acked) VALUES (now(), 'critical', '$1', false);" >/dev/null 2>&1; then
+		echo "[$(date -u +%FT%TZ)] alert critical inserted: $1"
+	else
+		echo "[$(date -u +%FT%TZ)] ALERT(critical, psql 不可达兜底): $1" >&2
+	fi
+}
 
 # D-110：读 R2 外推配置。文件缺失/不可读/源失败/任一变量空 → 降级：跳过加密与上传，warn，本地照常。
 # 配置在而 age/rclone 不可用不算降级——走 critical（DR 缺口无声打开比降级更危险）。
@@ -39,18 +50,9 @@ if [ -f "$R2_ENV_FILE" ] && . "$R2_ENV_FILE" \
 	echo "[$(date -u +%FT%TZ)] r2 offload enabled: bucket=$R2_BUCKET keep=$R2_KEEP"
 else
 	echo "[$(date -u +%FT%TZ)] WARN: $R2_ENV_FILE missing/incomplete, degrade to local-only backup" >&2
+	emit_alert "[backup] R2 外推配置缺失→local-only 降级（三地备份实质单地——安全垫失守，需业主配给 backup-r2.env：AGE_PUBKEY/R2_REMOTE/R2_BUCKET）"
 fi
 
-# D-110 告警：alerts critical（系统级，rule_id NULL=D-027）；psql 不可达 → log 兜底，不带崩本地备份。
-# message 只用固定文案（阶段+原因），不含 DSN/凭据/外部输入，SQL 字面量注入面为零。
-emit_alert() {
-	if psql "$PG_DSN" -q -v ON_ERROR_STOP=1 \
-		-c "INSERT INTO alerts (ts, level, message, acked) VALUES (now(), 'critical', '$1', false);" >/dev/null 2>&1; then
-		echo "[$(date -u +%FT%TZ)] alert critical inserted: $1"
-	else
-		echo "[$(date -u +%FT%TZ)] ALERT(critical, psql 不可达兜底): $1" >&2
-	fi
-}
 
 # R2 侧滚动：nox_*.sql.gz.age 按对象时间序保留最新 R2_KEEP 份，删最旧（rclone lsl/deletefile）。
 r2_rotate() {
