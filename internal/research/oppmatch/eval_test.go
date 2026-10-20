@@ -243,3 +243,31 @@ func TestEvalCard_ThreeNewArms(t *testing.T) {
 		t.Fatalf("cfd_swap 缺源应如实 unevaluable+gross NULL: %+v", c3)
 	}
 }
+
+// TestEvalCard_DepthSlippage 深度源补票：fin_cex_depth 鲜行→slippage 真值；陈帧=missing。
+func TestEvalCard_DepthSlippage(t *testing.T) {
+	st, ctx := evalTestStore(t)
+	if _, err := st.Pool().Exec(ctx, `TRUNCATE fin_cex_depth`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_cex_depth
+		(venue, symbol, ts, bid1_usd, ask1_usd, bid1_qty, ask1_qty, mid_depth_usd)
+		VALUES ('okx','BTCUSDT',now(),100.0,100.2,1,1,1000),('okx','ETHUSDT',now(),50.0,50.1,1,1,500)`); err != nil {
+		t.Fatal(err)
+	}
+	pid, _, _ := st.CreateProposal(ctx, &pgstore.Proposal{TemplateID: "cross_venue_spot", ExecTrack: "proposal", Venue: "okx", Params: map[string]any{}})
+	g := 0.5
+	c := evalProposal(ctx, st, Result{TemplateID: "cross_venue_spot", APR: &g, Venue: "okx"}, pid)
+	if c.SlippageAPR == nil || *c.SlippageAPR < 0.1 || *c.SlippageAPR > 0.2 {
+		t.Fatalf("slippage 应≈0.15（中位半价差）: %+v", c.SlippageAPR)
+	}
+	// 陈帧径——老行不入窗=missing
+	if _, err := st.Pool().Exec(ctx, `UPDATE fin_cex_depth SET ts=now()-interval '1 hour'`); err != nil {
+		t.Fatal(err)
+	}
+	pid2, _, _ := st.CreateProposal(ctx, &pgstore.Proposal{TemplateID: "cross_venue_spot", ExecTrack: "proposal", Venue: "okx", Params: map[string]any{}})
+	c2 := evalProposal(ctx, st, Result{TemplateID: "cross_venue_spot", APR: &g, Venue: "okx"}, pid2)
+	if c2.SlippageAPR != nil {
+		t.Fatalf("陈帧径应 missing 不塞陈值: %+v", c2.SlippageAPR)
+	}
+}
