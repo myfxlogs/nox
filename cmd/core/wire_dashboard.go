@@ -51,9 +51,11 @@ func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *
 		return mode, ok
 	})
 	dashSvc.SetLegContractSize(legContractSizeResolver(st)) // D-060 实施修正②：MT 腿原生 CS（PriceActual 链）
-	dashSvc.SetLegUnitQty(legUnitQtyResolver(st))           // D-594：MT 腿 canonical 单位数/手（canonical 报价链）
-	dashSvc.SetPrimarySymbol(primarySymbolResolver(st))     // D-383 A2.4：执行解析 primary-only 闸（歧义 fail-closed）
-	dashSvc.SetCexContractSize(cexContractSizeResolver(st)) // D-311 S3：CEX perp 腿 ct_val 查 fin_cex_universe
+	mtWatch := &mtRPCFaceWatch{}
+	dashSvc.SetLegUnitQty(legUnitQtyResolver(st, mtWatch))                 // D-594：MT 腿 canonical 单位数/手（canonical 报价链）
+	safego.GoLoop("main:mt-rpc-watch", func() { mtWatchRun(st, mtWatch) }) // D-636：RPC 面看门狗
+	dashSvc.SetPrimarySymbol(primarySymbolResolver(st))                    // D-383 A2.4：执行解析 primary-only 闸（歧义 fail-closed）
+	dashSvc.SetCexContractSize(cexContractSizeResolver(st))                // D-311 S3：CEX perp 腿 ct_val 查 fin_cex_universe
 	dashSvc.SetMaxLegImbalancePct(cfg.MaxLegImbalancePct)
 	dashSvc.SetFreezeGuard(cfg.FreezeGuard)                                     // D-155：冻结腿预检窗口（≤0 禁用）
 	dashSvc.SetSwapArbComboAllow(swapArbAllowFromTableOnly(ctx, st))            // D-515 S5：表化同源热读

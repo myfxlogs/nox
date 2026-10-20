@@ -194,32 +194,11 @@ func (s *Service) prefetchOverview(ctx context.Context, now time.Time, resp *v1.
 		})
 		return nil
 	})
-	// §12 D-630 真实净盈利权威口径（Σ venue 权益差−Σ io 外部净流——
-	// 归因面降级解释层后的唯一判定口径；30d/全时双窗）。
+	// §12 D-630 真实净盈利权威口径（D-636 缓存化：每请求重算→5min 单赢家刷，
+	// 池饿定位修复见 service_overview_truenet.go）。
 	g.Go(func() error {
 		overviewSeg("true_net", func() {
-			r30, err := s.store.TrueNetProfitSince(ctx, now.Add(-30*24*time.Hour), now)
-			rall, aerr := s.store.TrueNetProfitSince(ctx, time.Unix(0, 0), now)
-			if err != nil || aerr != nil {
-				return // 读败=available 缺省 false 如实缺
-			}
-			resp.TrueNet_30DUsd = r30.NetUSD
-			resp.TrueNetAllUsd = rall.NetUSD
-			resp.TrueNetAvailable = len(rall.Covered) > 0
-			unc := append(append([]string{}, r30.Uncovered...), rall.Uncovered...)
-			for _, v := range rall.IoGap {
-				unc = append(unc, v+":io采集缺") // io 缺口 venue 如实标（gate 实证面）
-			}
-			if len(unc) > 8 {
-				unc = unc[:8]
-			}
-			for i, u := range unc {
-				if i > 0 {
-					resp.TrueNetUncovered += ";" + u
-				} else {
-					resp.TrueNetUncovered = u
-				}
-			}
+			s.trueNetSeg(resp, now)
 		})
 		return nil
 	})
