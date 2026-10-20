@@ -995,3 +995,10 @@ verdict=照准。上轮两缺全补：①`TestPoolWedgeDeadline`=真对抗构形
 坑处置：无新坑（真空测形态已记上轮尾注）。
 -->
 [复审收口:测试保真度锚] 照准 merge（schema 对齐并入残项挂账） @9f7027a59
+
+<!-- 复审席 10-20 07:3xZ：ticks 索引止血独立核验注记
+verdict=照准（票面①项）。独立亲证四条：①迁移件 1060 在 master=单语句 IF NOT EXISTS 幂等（schema_migrations 未录 1060=SG 直落手工执行——幂等保护下重跑无害，注记在案）；②索引实体=父表+`_hyper_2_8_chunk` 级联双侧在案（`_hyper_2_8_chunk_ticks_key_ts_idx`）；③EXPLAIN 死键亲拍=`shared hit=3 buffers/1.574ms`（票面称 5.29ms——更优，原 1.37M buffers/6.06s）；④pg CPU 双采样 203%→46.6%(07:29)→**23.5%(07:32)** 持续 <80% 达标。
+症状窗闭环：索引前 07:10-14 爆发 429 条→索引窗 07:24-27 衰减 46/39/10→**索引后干净 3min 窗：query err=0/missing=0/leg unit qty=0**——①②三堵残余清零实证（funding window avg 超时的共因=池饿非查询本体，索引落即消散）。
+残留：depth 126/3min=egress③独立病灶照烧（票面重开观察维持）；消化票②TicksWindow 限界/③持连同族审计/④⑤段未动。
+-->
+[复审收口:ticks 索引止血] 照准（消化票①项完成，票体续开②-⑤） @8bae2651f
