@@ -195,6 +195,7 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 	startEgressProbe(ctx, st, cfg) // 6g4 D-011 S1：出口直连链路健康探针（三域探活+聚合根因告警，wire_health.go）
 	dashSvc := dashboard.New(st, qbus, pipeline, brokerMgr, a.reviewRun, cfg.DetectorFreshnessTTL, cfg.LiqMMR, cfg.FundingDropRatio, cfg.SwapArbEquityUseRatio, cfg.SwapArbBareCap, cfg.SwapArbVenueExposureCap, a.oppTopic, a.alertTopic, bpMon, cfg.OpportunityNotionalUSD, acctMon, a.commResolver, cfg.SlippageBps, cfg.XAssetCexFeeBps, a.kickFn, cfg.CapitalBaseUSD)
 	// D-571 包A 事件载荷标注（D-009 S3 净估需 svc 的 cs/fx/费率链，故 svc 建成后接线）。
+	dashSvc.SetMoneyStore(stMoney) // D-633 拆票：probe-close 钱径句柄（usdPerNowFn 装面即保底池）
 	bpMon.SetAnnotator(func(ctx context.Context, bps []*dashv1.BrokerPosition) {
 		dashboard.AnnotateBrokerPositions(ctx, dashSvc, bps)
 	})
