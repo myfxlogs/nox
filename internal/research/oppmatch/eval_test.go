@@ -210,3 +210,36 @@ func TestEvalCard_SpreadKeyBase(t *testing.T) {
 		t.Fatalf("基名键应命中 slippage=0.015(1.5bps/100): %+v", card)
 	}
 }
+
+// TestEvalCard_ThreeNewArms D-637 序③：三族臂五词证源——term_basis fee 真算、
+// cross_venue per-turn 单位标、cfd_swap 缺源如实 missing。
+func TestEvalCard_ThreeNewArms(t *testing.T) {
+	st, ctx := evalTestStore(t)
+	if _, err := st.Pool().Exec(ctx, `TRUNCATE fin_cex_universe`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_cex_universe
+		(venue, symbol, base, status, contract_type, expiry_ts, last_basis_ann)
+		VALUES ('binance','BTCUSDT_261225','BTC','listed','FUTURES', now()+interval '90 days', 5.0)`); err != nil {
+		t.Fatal(err)
+	}
+	pid1, _, _ := st.CreateProposal(ctx, &pgstore.Proposal{TemplateID: "term_basis", ExecTrack: "proposal", Venue: "binance", Params: map[string]any{}})
+	g5 := 5.0
+	c1 := evalProposal(ctx, st, Result{TemplateID: "term_basis", APR: &g5}, pid1)
+	if c1.FeeAPR == nil {
+		t.Fatalf("term_basis fee 应算（taker×2/到期窗）: %+v", c1)
+	}
+	if ev, _ := c1.EvidenceRefs["terms"].(map[string]string); ev == nil || !strings.Contains(fmt.Sprint(ev["window"]), "basis_ann") {
+		t.Fatalf("term_basis window 应 mechanism 证据词: %+v", c1.EvidenceRefs)
+	}
+	pid2, _, _ := st.CreateProposal(ctx, &pgstore.Proposal{TemplateID: "cross_venue_spot", ExecTrack: "proposal", Venue: "binance", Params: map[string]any{}})
+	c2 := evalProposal(ctx, st, Result{TemplateID: "cross_venue_spot", APR: &g5}, pid2)
+	if ev, _ := c2.EvidenceRefs["terms"].(map[string]string); ev == nil || !strings.Contains(fmt.Sprint(ev["gross"]), "per-turn") {
+		t.Fatalf("cross_venue gross evidence 应带 per-turn 单位标: %+v", c2.EvidenceRefs)
+	}
+	pid3, _, _ := st.CreateProposal(ctx, &pgstore.Proposal{TemplateID: "cfd_swap_carry", ExecTrack: "proposal", Venue: "mt5", Params: map[string]any{}})
+	c3 := evalProposal(ctx, st, Result{TemplateID: "cfd_swap_carry"}, pid3)
+	if c3.Verdict != "unevaluable" || c3.GrossAPR != nil {
+		t.Fatalf("cfd_swap 缺源应如实 unevaluable+gross NULL: %+v", c3)
+	}
+}
