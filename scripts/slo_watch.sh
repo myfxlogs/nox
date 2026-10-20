@@ -10,13 +10,10 @@ PG_DB="${NOX_PG_DB:-nox}"
 STATE_DIR="${NOX_SLO_STATE_DIR:-/tmp/nox-slo}"
 mkdir -p "$STATE_DIR"
 
-emit() { # level message —— 24h 同文案 dedup 插 alerts（首发保留，窗内静默）
-  local level="$1" msg="$2"
-  docker exec "$DB_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -v ON_ERROR_STOP=1 -q <<SQL >/dev/null 2>&1
-INSERT INTO alerts (level, message, created_at)
-SELECT '$level', '$(printf '%s' "$msg" | sed "s/'/''/g")', now()
-WHERE NOT EXISTS (SELECT 1 FROM alerts WHERE message = '$(printf '%s' "$msg" | sed "s/'/''/g")' AND created_at > now() - interval '24 hours');
-SQL
+# emit 走 alert-emit 摄入件（pgstore.InsertAlertDedup 端点——裸 SQL 径已废：dedup 语义+键域一致性经摄入层单源）。
+ALERT_EMIT="${NOX_ALERT_EMIT:-/opt/nox/tools/alert-emit}"
+emit() { # level message —— InsertAlertDedup 24h 窗（首发保留窗内静默）
+  "$ALERT_EMIT" -level "$1" -msg "$2" -dedup 24h >/dev/null 2>&1 || echo "alert-emit 败: $2" >&2
 }
 streak() { # name → 当前连续超窗数
   local f="$STATE_DIR/$1"
