@@ -784,3 +784,10 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - 裁定：**现态读面（新鲜度闸/风险价/dossier 价格/展示）禁从 ticks/facts 时序表点查最新行**；tick 流→进程内 last-value 表（key=venue,venue_type,symbol）为现态唯一读面，PG 时序表仅服务历史访问（回放/p95/窗口统计/as-of 回溯——`LatestTickAsOf` 属历史语义保留）。四变体中三个现态语义变体收敛为一个内存读接口。此为 D-004「禁消费快照/缓存旧值」的镜像补充：**流数据落盘再查回=变相快照**，同禁。
 - 分期：止血=ticks 复合索引迁移（P1，消化票）；治本=现态/历史分层架构票（P2，闭环前完成）。两药同病——池域隔离管「炸了不陪葬」，分层管「不去炸」。微服务结论不变：进程边界不解数据分层病。
 - 伪证锚：内存现态表上线+ticks 点查读面清零后，pending 队列非空时 pg CPU 稳态仍 >80% 且 top 查询仍为 ticks 族——即本裁因果错，病在别处。
+
+### D-634（10-20 06:3xZ，决策席·分层方案补正 R1 裁定）FX 估值回退例外——USDPer 估值/敞口四处 miss 落 PG 末帧标 stale
+
+- 范围：仅 `service_probe.go:174`/`service_external_exposure.go:102`/`service_venue_system_exposure.go:125`/`broker_position_est.go:62`（持仓 USD 估值与 venue/系统敞口）；读序=qbus `USDPerNow`（MT 键域、优先本仓 venueKey、TTL 24h）→miss 落 `USDPer(preferVenueKey, now)` 末帧并标 stale。
+- 理由：重启/休市期 qbus 空时，敞口「算成零」=低估风险撞硬线（CEX≥35%·CFD≥25%），比用末帧更危险——与 D-162 c「ticks 末帧仅展示径兜底」同族；FX 主盘 24h 漂移对敞口帽判据的误差远小于「归零」。
+- 禁线：真金 sizing/结算（exec pipeline 五处+`PositionNetUSD`）**不在例外**——qbus miss=fail-closed，禁回落 PG；symbol-only 跨 venue 点查形态随本裁消失（PG 回退亦带 venue 键优先）。
+- 伪证锚：任一 D-634 四处在 qbus 有鲜值时仍走 PG（日志 stale 标记与 qbus 帧时戳矛盾）=切法错；或 exec 径出现 stale FX 落账=禁线破。
