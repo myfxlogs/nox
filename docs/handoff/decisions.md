@@ -777,3 +777,10 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - 级联=权限/配置面四表（allow_rules venue kind / combos venue_key 生成列 / venue exposure caps / 未决 fin_condition_gap）；gap 翻 waived+resolve_note 留痕非硬删（D-631 遵行）；exchange 删径须同 (venue,venue_type) sim/real 孪生行删尽才扫面（D-271 双行并存语义不破，键仍在册=面不动）。
 - waived 终态补：删径 waive 后同键重入册（owner 重加同名户/配置）撞 UNIQUE(template_id,kind,subject) 会静默吞复请——`ReopenConditionGap` 转移集扩 'fulfilled'|'waived'，唯 venueGapSweep 显式调用（oppmatch reconcile 上游 skip waived 行=模板面 waive 仍终态静默零变）。
 - 伪证锚：同键删户→重入册后，venue_onboard 缺口未复现于请求箱（无 requested 行+无推送）即本裁错。
+
+### D-633（10-20 05:4xZ，决策席·wedge 事故二轮根因裁定）现态禁从时序表点查——D-004 实时性纪律补充条款
+
+- 病灶实证：pg 200% CPU 持续 3.5h 不落底，真凶=`LatestTick`（`xasset_combo_admin.go:124`）对 ticks hypertable 裸 `ts DESC` 逆扫（单条 7.5s×12 并发），锤击源=pending 闸 4/毕业风险/broker adapter 逐行逐腿点查。表层缺复合索引（schema），**深层=「最新价」现态被当历史查询从时序表逐次拉**——`LatestTick/LatestTickMid/LatestTickMidWithin/LatestTickAsOf` 四变体同构；而流 tick 已在进程内存（`mt_orders.go:82 LastTickAnchor`）却绕 PG 问现态。一表两访问模式（时间分块归档 vs 键点查现态）必然互噬——索引只让互噬便宜，不消除。
+- 裁定：**现态读面（新鲜度闸/风险价/dossier 价格/展示）禁从 ticks/facts 时序表点查最新行**；tick 流→进程内 last-value 表（key=venue,venue_type,symbol）为现态唯一读面，PG 时序表仅服务历史访问（回放/p95/窗口统计/as-of 回溯——`LatestTickAsOf` 属历史语义保留）。四变体中三个现态语义变体收敛为一个内存读接口。此为 D-004「禁消费快照/缓存旧值」的镜像补充：**流数据落盘再查回=变相快照**，同禁。
+- 分期：止血=ticks 复合索引迁移（P1，消化票）；治本=现态/历史分层架构票（P2，闭环前完成）。两药同病——池域隔离管「炸了不陪葬」，分层管「不去炸」。微服务结论不变：进程边界不解数据分层病。
+- 伪证锚：内存现态表上线+ticks 点查读面清零后，pending 队列非空时 pg CPU 稳态仍 >80% 且 top 查询仍为 ticks 族——即本裁因果错，病在别处。
