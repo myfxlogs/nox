@@ -83,6 +83,12 @@ func quoteFor(ctx context.Context, st *pgstore.Store, tid string) (*float64, err
 		f, ok, err = st.MaxEarnAPR(ctx)
 	case tid == "funding_carry":
 		f, ok, err = st.MaxFactValue(ctx, "funding") // facts 永续 funding（pct_annualized）
+	case tid == "cfd_swap_carry":
+		f, ok, err = cfdSwapCarryQuote(ctx, st) // swap 收息−funding 对冲成本同源现值
+	case tid == "cross_venue_spot":
+		f, ok, err = crossVenueSpotQuote(ctx, st) // 同符号跨所 index_price 价差（单周转）
+	case tid == "term_basis":
+		f, ok, err = termBasisQuote(ctx, st) // universe FUTURES last_basis_ann 预计算面
 	}
 	if err != nil {
 		return nil, err
