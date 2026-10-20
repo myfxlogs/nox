@@ -98,6 +98,7 @@ var employeeRoster = []pgstore.Employee{
 	{Name: "main:sched", Role: "调度", Dept: "平台", Assembly: "main.go"},
 	{Name: "sched:runSource", Role: "调度源循环", Dept: "平台", Assembly: "sched.go"},
 	{Name: "main:feishu-push", Role: "飞书推送", Dept: "平台", Assembly: "wire_feishu.go"},
+	{Name: "main:alertFanoutSweep", Role: "告警扇出扫带", Dept: "运维", Assembly: "wire_alert_sweep.go"},
 	{Name: "feishu_query:handle", Role: "飞书查询处理", Dept: "平台", Assembly: "feishu_query.go"},
 	{Name: "main:deptreport", Role: "公司日报", Dept: "平台", Assembly: "wire_dashboard.go", CadenceSec: 86400},
 	{Name: "main:kbReport", Role: "KB 报告", Dept: "平台", Assembly: "wire_kbreport.go"},
