@@ -22,27 +22,30 @@ var ErrXAssetComboExists = errors.New("xasset allow combo: already exists")
 
 // CarryGraduation carry_graduations 一行（毕业建议+裁决态）。
 type CarryGraduation struct {
-	ID             int64
-	PaperID        int64
-	Venue          string // D-498：展示性配对投影（generated 列；语义键用 VenueA/VenueB）
-	VenueA         string
-	VenueB         string
-	VenueTypeA     string // D-555：A 臂 venue_type（源 paper 行透传；存量行=''）
-	VenueTypeB     string // D-555：B 臂 venue_type（同上）
-	Symbol         string
-	Structure      string
-	MtVenue        *string // cfd 行 MT 腿 venue（raw id）；非 cfd NULL
-	AgeDays        float64
-	AccruedUSD     float64
-	LastFundingAnn *float64
-	NetAllInUSD    *float64 // D-410 S5：建议时点全账净额（accrued−est_fee+convergence；NULL=缺账行不该产生，防御性指针）
-	Status         string   // pending / approved / rejected
-	CreatedAt      time.Time
-	DecidedAt      *time.Time
-	DecidedNote    string
-	ComboID        *int64  // approve 写入的白名单行 id；NULL=无写入
-	FlagWarn       *string // D-463 S2：warn 旗标命中透出（拼接 reason 短串；NULL=无旗）
-	DecidedBy      string  // D-513：裁决主体——''=人工委员会 RPC；'delegate:D-513'=委任规则自动批
+	ID               int64
+	PaperID          int64
+	Venue            string // D-498：展示性配对投影（generated 列；语义键用 VenueA/VenueB）
+	VenueA           string
+	VenueB           string
+	VenueTypeA       string // D-555：A 臂 venue_type（源 paper 行透传；存量行=''）
+	VenueTypeB       string // D-555：B 臂 venue_type（同上）
+	Symbol           string
+	Structure        string
+	MtVenue          *string // cfd 行 MT 腿 venue（raw id）；非 cfd NULL
+	AgeDays          float64
+	AccruedUSD       float64
+	LastFundingAnn   *float64
+	NetAllInUSD      *float64 // D-410 S5：建议时点全账净额（accrued−est_fee+convergence；NULL=缺账行不该产生，防御性指针）
+	FamilyN          *int
+	FamilyWinRate    *float64 // B.12 胜率置信下界族证据（D-637 序③判据持久化）
+	FamilyLowerBound *float64
+	Status           string // pending / approved / rejected
+	CreatedAt        time.Time
+	DecidedAt        *time.Time
+	DecidedNote      string
+	ComboID          *int64  // approve 写入的白名单行 id；NULL=无写入
+	FlagWarn         *string // D-463 S2：warn 旗标命中透出（拼接 reason 短串；NULL=无旗）
+	DecidedBy        string  // D-513：裁决主体——''=人工委员会 RPC；'delegate:D-513'=委任规则自动批
 }
 
 // ListPaperForGraduation D-403 S2：毕业判定候选全集——active 行 + 近 14 天 exited 行
@@ -57,11 +60,11 @@ func (s *Store) ListPaperForGraduation(ctx context.Context) ([]PaperSpotCarry, e
 // 返回是否新插（false=已存在建议行，调用方不计 newCount）。
 func (s *Store) InsertCarryGraduation(ctx context.Context, g *CarryGraduation) (bool, error) {
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO carry_graduations (paper_id, venue_a, venue_b, venue_type_a, venue_type_b, symbol, structure, mt_venue, age_days, accrued_usd, last_funding_ann, net_all_in_usd, flag_warn)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+		INSERT INTO carry_graduations (paper_id, venue_a, venue_b, venue_type_a, venue_type_b, symbol, structure, mt_venue, age_days, accrued_usd, last_funding_ann, net_all_in_usd, flag_warn, family_n, family_win_rate, family_lower_bound)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
 		ON CONFLICT (paper_id) DO NOTHING
 		RETURNING id`,
-		g.PaperID, g.VenueA, g.VenueB, g.VenueTypeA, g.VenueTypeB, g.Symbol, g.Structure, g.MtVenue, g.AgeDays, g.AccruedUSD, g.LastFundingAnn, g.NetAllInUSD, g.FlagWarn).Scan(&g.ID)
+		g.PaperID, g.VenueA, g.VenueB, g.VenueTypeA, g.VenueTypeB, g.Symbol, g.Structure, g.MtVenue, g.AgeDays, g.AccruedUSD, g.LastFundingAnn, g.NetAllInUSD, g.FlagWarn, g.FamilyN, g.FamilyWinRate, g.FamilyLowerBound).Scan(&g.ID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil
