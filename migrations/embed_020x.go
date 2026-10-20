@@ -180,3 +180,6 @@ var TicksKeyTsIdxSQL string // D-633 §4：ticks (venue,symbol,venue_type,ts DES
 
 //go:embed 1061_alerts_fanout_pending.sql
 var AlertsFanoutPendingSQL string // SLO ⑤：alerts.fanout_pending 列（进程外摄入件扇出判据）
+
+//go:embed 1062_proposal_miss_count.sql
+var ProposalMissCountSQL string // expire 粘性修：fin_proposal.miss_count 列

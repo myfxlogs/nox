@@ -216,11 +216,21 @@ func (s *Store) ExpireProposalsOverAge(ctx context.Context, age time.Duration) (
 	return ids, rows.Err()
 }
 
-// ExpireProposalsOutsideVenues D-523⑥：提案目标款已消失（cash_mgmt 闲池被申购/划转
-// 吃掉）→拍内翻 expired 不挂 SLA。liveVenues=本轮仍达标的 venue 集；空集=该模板
-// proposed 行全过期（同 ExpireProposalsExcept 空集语义）。CAS 仅 proposed 态动。
-func (s *Store) ExpireProposalsOutsideVenues(ctx context.Context, template string, liveVenues []string) (int, error) {
-	q := `UPDATE fin_proposal SET status='expired', decided_at=now()
+// BumpProposalMissOutsideVenues expire 判据粘性修（491 定性病灶——单拍瞬态 miss
+// 集体判死改连 N 拍）：live 集内 miss_count 清零→面外 proposed 行 miss_count+1→
+// miss_count≥threshold 判 expired（真消失 N 拍后仍死；阈值=app_config
+// cash_mgmt_miss_threshold 缺省 3，DB 列持久=重启计数不丢［保守多杀选型明写］）。
+// CAS 仅 proposed 态动；bumped/expired 两数返供日志锚。
+func (s *Store) BumpProposalMissOutsideVenues(ctx context.Context, template string, liveVenues []string, threshold int) (bumped, expired int, err error) {
+	// ①live venue 行 miss_count 清零（瞬态 miss 恢复即解绑——不死锁提案）
+	if len(liveVenues) > 0 {
+		if _, err = s.pool.Exec(ctx, `UPDATE fin_proposal SET miss_count=0
+			WHERE status='proposed' AND template_id=$1 AND venue = ANY($2)`, template, liveVenues); err != nil {
+			return 0, 0, fmt.Errorf("miss reset: %w", err)
+		}
+	}
+	// ②面外行 miss_count+1（liveVenues 空集=全行 bump——同原 expire 空集语义）
+	q := `UPDATE fin_proposal SET miss_count=miss_count+1
 		WHERE status='proposed' AND template_id=$1`
 	args := []any{template}
 	if len(liveVenues) > 0 {
@@ -229,7 +239,14 @@ func (s *Store) ExpireProposalsOutsideVenues(ctx context.Context, template strin
 	}
 	res, err := s.pool.Exec(ctx, q, args...)
 	if err != nil {
-		return 0, err
+		return 0, 0, fmt.Errorf("miss bump: %w", err)
 	}
-	return int(res.RowsAffected()), nil
+	bumped = int(res.RowsAffected())
+	// ③连 N 拍 miss→expired（threshold<=0 保 fail-closed=立即杀语义不松）
+	res, err = s.pool.Exec(ctx, `UPDATE fin_proposal SET status='expired', decided_at=now()
+		WHERE status='proposed' AND template_id=$1 AND miss_count >= $2`, template, threshold)
+	if err != nil {
+		return bumped, 0, fmt.Errorf("miss expire: %w", err)
+	}
+	return bumped, int(res.RowsAffected()), nil
 }
