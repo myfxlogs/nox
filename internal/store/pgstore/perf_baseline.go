@@ -61,40 +61,49 @@ func (s *Store) PerfBaseline(ctx context.Context) (*PerfBaseline, error) {
 // 内部划转不计——本金池总量不因内部移动变）。ccy 只认 USDT/USD（D-534 本金口径）；
 // skipped=非 U 币种充提行数（披露面——BTC 提币不进本金流不算损益）。
 func (s *Store) NetExternalFlowSince(ctx context.Context, since time.Time) (net float64, skipped int, err error) {
-	err = s.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(CASE WHEN direction='deposit' THEN amount ELSE -amount END)
+	// D-633 归一化：单扫 venue 分组+FILTER 一次出 net/skipped/byVenue（原双查询同表重扫合流）。
+	byVenue, net, skipped, err := s.externalFlowScan(ctx, since)
+	_ = byVenue
+	return net, skipped, err
+}
+
+// externalFlowScan 单扫 fin_venue_io——GROUP BY venue 行内 FILTER 拆
+// U 币种净额/非 U 行数/byVenue map（三调用面共用底扫，谓词单源）。
+func (s *Store) externalFlowScan(ctx context.Context, since time.Time) (map[string]float64, float64, int, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT venue,
+		       COALESCE(SUM(CASE WHEN direction='deposit' THEN amount ELSE -amount END)
 		                FILTER (WHERE ccy IN ('USDT','USD')), 0),
 		       COUNT(*) FILTER (WHERE ccy NOT IN ('USDT','USD'))
 		FROM fin_venue_io
-		WHERE ts >= $1 AND direction <> 'transfer'`, since).Scan(&net, &skipped)
+		WHERE ts >= $1 AND direction <> 'transfer'
+		GROUP BY venue`, since)
 	if err != nil {
-		return 0, 0, fmt.Errorf("net external flow: %w", err)
+		return nil, 0, 0, fmt.Errorf("external flow scan: %w", err)
 	}
-	return net, skipped, nil
+	defer rows.Close()
+	byVenue := map[string]float64{}
+	var net float64
+	var skipped int
+	for rows.Next() {
+		var v string
+		var amt float64
+		var sk int
+		if err := rows.Scan(&v, &amt, &sk); err != nil {
+			return nil, 0, 0, err
+		}
+		byVenue[v] = amt
+		net += amt
+		skipped += sk
+	}
+	return byVenue, net, skipped, rows.Err()
 }
 
 // NetExternalFlowByVenueSince 外部充提净额按 venue 拆（同 NetExternalFlowSince 口径——
 // deposit 正 / withdraw 负 / transfer 不计 / 只认 USDT+USD；总览「总投入」卡组成明细）。
 func (s *Store) NetExternalFlowByVenueSince(ctx context.Context, since time.Time) (map[string]float64, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT venue, COALESCE(SUM(CASE WHEN direction='deposit' THEN amount ELSE -amount END), 0)
-		FROM fin_venue_io
-		WHERE ts >= $1 AND direction <> 'transfer' AND ccy IN ('USDT','USD')
-		GROUP BY venue`, since)
-	if err != nil {
-		return nil, fmt.Errorf("net external flow by venue: %w", err)
-	}
-	defer rows.Close()
-	out := map[string]float64{}
-	for rows.Next() {
-		var v string
-		var amt float64
-		if err := rows.Scan(&v, &amt); err != nil {
-			return nil, fmt.Errorf("net external flow by venue scan: %w", err)
-		}
-		out[v] = amt
-	}
-	return out, rows.Err()
+	byVenue, _, _, err := s.externalFlowScan(ctx, since)
+	return byVenue, err
 }
 
 // PerfReport 基线后业绩（本金口径单源结果——财务页/日报/总览共读）。
