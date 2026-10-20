@@ -807,3 +807,7 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **补正方向**（归决策席重稿，复审不代写）：撬板一改「quoteFor 补三模板 gross 源+fee 兜底口径裁量」（小票非引擎）；撬板二族序按纸面证据排=term_basis/cfd_swap_carry 优先、CROSS_VENUE 须先回答「−$512 后边从何来」、FUNDING_HEDGE 须先回答「3.7h 归一化下如何持到 funding 结算」；撬板三先出 491 expired 定性。
 - **伪证锚**：若 SG `fin_opp_eval` cross_venue_spot 另有 viable 行、或 paper perp_perp 存在 accrued>0 行、或 fin_proposal executed 中 cash_mgmt 实为 0——则本裁取证错须重核。
 - **D-637 改判附注（11:5xZ，复审席自纠）**：D5「term_basis 纸面最大正值」复核=**单行独撑**（ETH-USD_UM-261127 +$260/5000 基差 724→204bps；余 7 行 ±20、24 退出全 data_lost 实现 −$3）非族级证据；cfd_swap_carry 50 退费后净 ≈ **−$48**（accrued 60.8−收敛 11.5−往返费 97.8，23/50 胜）；perp_perp 零；XASSET_CARRY live pnl −63。**全部已跑构型费后无一正边**→问题性质改判：positions=0=系统 fail-closed 如实报「当前枚举面无边」，「扩族」非杠杆。最优序：①≥8% 目标分解（闲资地板 earn APR 实值 vs 交易 alpha 缺口——现无人算）②quoteFor 三模板补源=10 模板全诚实评估③纸面轨「费后净」一等指标+策略评估与仓位置信界裁定（淘汰 perp_perp/定向续样 term_basis 远月 ETH 先修 data_lost 轨）④491 expired 定性。扩族=③的产出非前提。
+### D-638（10-20 12:0xZ，业主令·定名收尾）品牌三层钉死——**名=NOX / 神=夜枭 / 语=money never sleeps**
+- **裁定**：①公司名=NOX（拉丁「夜」原形词，非缩写）——名管「何时干活」；②emblem=**夜枭猎手**（业主亲申「夜枭猎手才是本意」——神管「谁在干活」：落登录页/投资人页 emblem、报告落款章、名册 goroutine「夜班枭编制」称呼——名册 beat_ts 心跳=枭眼，语义自洽零成本）；③副标 money never sleeps（立名主题=D-286 业主令同源）。④改名票不翻案（D-231/232 改名税两裁负收益+金融域猫头鹰基金撞名面）。
+- **落地成本**：emblem 层=前端 v1 页（M2.5b 在建面）+报告模板文字面——随在建件顺手落零专票；公司架构.md 标题残留「ARB Capital」同 commit 修正。
+- **伪证锚**：若业主后续明令换名（注册需要/品牌不满），三层以新令为准、本裁只作谱系注。
