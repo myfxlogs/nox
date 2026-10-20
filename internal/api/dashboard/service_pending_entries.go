@@ -215,7 +215,7 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 			return kind, "息差环境未持续: " + r, 4, false
 		}
 	}
-	// 闸 4：双腿 tick 新鲜度（5min 窗，同档案判据；LatestTick(venue,venueType,symbol) 现成接口）。
+	// 闸 4：双腿 tick 新鲜度（5min 窗，同档案判据；qbus LatestLeg 现态源——D-633）。
 	for _, leg := range []struct{ venue, canon string }{{c.VenueBuy, c.CanonicalBuy}, {c.VenueSell, c.CanonicalSell}} {
 		vt, sym := legMarket(leg.venue, leg.canon)
 		if vt == "" {

@@ -111,17 +111,15 @@ func delegatePaperEligible(p *pgstore.PaperSpotCarry, now time.Time) bool {
 
 // delegateApprove 写白名单组合（qty=QtyUSD/现价——现价缺→fail-closed 不批）+委任落账+warn 留痕。
 func delegateApprove(ctx context.Context, st *pgstore.Store, g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry) bool {
-	// D-633 现态判价=qbus 注入件优先（装配即 DB 读面切断）；未装配回 DB 窗径。
+	// D-633 现态判价=qbus 注入件（装配即 DB 读面切断）；nil=装配缺回 DB 窗径，装配后 miss=fail-closed 不批。
 	var px float64
 	var ok bool
-	var got bool
-	if delegatePriceNow != nil {
-		if bid, ask, ts, qok := delegatePriceNow(g.VenueA, "perp", g.Symbol); qok && (delegateTickMaxAge <= 0 || time.Since(ts) <= delegateTickMaxAge) && bid > 0 && ask > 0 {
-			px, ok, got = (bid+ask)/2, true, true
-		}
-	}
-	if !got {
+	if delegatePriceNow == nil {
+		// 装配缺=测试/离线径回 DB 窗径（生产恒装配——D-633）
 		px, ok = st.LatestTickMidWithin(ctx, g.VenueA, g.Symbol, delegateTickMaxAge)
+	} else if bid, ask, ts, qok := delegatePriceNow(g.VenueA, "perp", g.Symbol); qok && (delegateTickMaxAge <= 0 || time.Since(ts) <= delegateTickMaxAge) && bid > 0 && ask > 0 {
+		// 装配后 miss/陈=fail-closed 不批（A 档禁 PG 回——D-633 判词）
+		px, ok = (bid+ask)/2, true
 	}
 	if !ok || px <= 0 {
 		log.Printf("[delegate] grad#%d %s@%s 现价缺/陈旧→不批（fail-closed·D-604 N2 判价窗）", g.ID, g.Symbol, g.VenueA)
