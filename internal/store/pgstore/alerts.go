@@ -145,6 +145,28 @@ func (s *Store) ListAlerts(ctx context.Context, limit, offset int) ([]Alert, err
 	return out, rows.Err()
 }
 
+// ListAlertsLevelSince 级+窗过滤读（总览 crit24h 明细专用——旧径 ListAlerts(500)
+// 全级拉回 Go 内过滤，告警风暴期 500 行/刷搬运 vs 实际只用 24h critical 几十行；
+// 过滤下沉 SQL 只取所需）。
+func (s *Store) ListAlertsLevelSince(ctx context.Context, level string, since time.Time) ([]Alert, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT a.id, NULL::bigint, a.position_id, '', a.ts, a.level, a.message, a.acked
+		 FROM alerts a WHERE a.level = $1 AND a.ts >= $2 ORDER BY a.ts DESC`, level, since)
+	if err != nil {
+		return nil, fmt.Errorf("list alerts level/since: %w", err)
+	}
+	defer rows.Close()
+	var out []Alert
+	for rows.Next() {
+		var a Alert
+		if err := rows.Scan(&a.ID, &a.RuleID, &a.PositionID, &a.RuleName, &a.Ts, &a.Level, &a.Message, &a.Acked); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 // AckAlert 确认单条告警（幂等）。
 func (s *Store) AckAlert(ctx context.Context, id int64) error {
 	_, err := s.pool.Exec(ctx, `UPDATE alerts SET acked = true WHERE id = $1`, id)

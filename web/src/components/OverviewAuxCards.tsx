@@ -21,8 +21,12 @@ export function PnlOverviewCard() {
       try { setR(await client.getPnlAnchor({})); } catch (e) { setErr(errText(e)); }
     };
     void re();
-    const offs = pnlRefreshCases.map((c) => onCase(c, () => void re()));
-    return () => offs.forEach((f) => f());
+    // 2s 拖尾合突发帧（与父页 overview load 同节拍——原零防抖每事件直发，
+    // 告警/持仓事件风暴期 RPC 连发）。
+    let t: number | undefined;
+    const deb = () => { window.clearTimeout(t); t = window.setTimeout(() => void re(), 2000); };
+    const offs = pnlRefreshCases.map((c) => onCase(c, deb));
+    return () => { window.clearTimeout(t); offs.forEach((f) => f()); };
   }, []);
   if (err) return <div className="err">{err}</div>;
   if (!r) return null;

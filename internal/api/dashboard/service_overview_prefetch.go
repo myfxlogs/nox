@@ -111,7 +111,8 @@ func (s *Service) prefetchOverview(ctx context.Context, now time.Time, resp *v1.
 	})
 	g.Go(func() error {
 		overviewSeg("alerts", func() {
-			if a, err := s.store.ListAlerts(ctx, 500, 0); err == nil {
+			// 级+窗下沉 SQL（原 ListAlerts(500) 全级拉取 Go 过滤——风暴期搬运浪费）。
+			if a, err := s.store.ListAlertsLevelSince(ctx, "critical", now.Add(-24*time.Hour)); err == nil {
 				pf.alerts = a
 			}
 		})

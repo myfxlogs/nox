@@ -57,73 +57,57 @@ type OverviewFunnelRow struct {
 
 // OverviewFunnel 闭环八环节点 48h 计数（发现→评估→沙箱→执行→持仓→平仓→账本→复盘→淘汰）。
 // 各环节点表实读（COUNT 非投影——决策席工作流审计注记同口径窗）。
+// 九环并单 round-trip（UNION ALL）：旧版 9 条串行 COUNT 挤 10 连接池，
+// prefetch 并发期实测 8s+；合一后一跳出齐（环序=labels 表序非 SQL 序——
+// UNION ALL 不保序，按 labels 键回排）。
 func (s *Store) OverviewFunnel(ctx context.Context, since time.Time) ([]OverviewFunnelRow, error) {
-	count := func(q string, args ...any) (int, error) {
-		var n int
-		if err := s.pool.QueryRow(ctx, q, args...).Scan(&n); err != nil {
-			return 0, err
-		}
-		return n, nil
+	rows, err := s.pool.Query(ctx, `
+		SELECT 'discovery', COUNT(*) FROM fin_opp_hypothesis WHERE first_seen >= $1
+		UNION ALL SELECT 'eval', COUNT(*) FROM fin_opp_eval WHERE computed_at >= $1
+		UNION ALL SELECT 'sandbox', COUNT(*) FROM paper_spot_carry WHERE entry_ts >= $1
+		UNION ALL SELECT 'execution', COUNT(*) FROM fin_proposal WHERE status='executed' AND decided_at >= $1
+		UNION ALL SELECT 'holding', COUNT(*) FROM positions WHERE opened_at >= $1
+		UNION ALL SELECT 'exit', COUNT(*) FROM positions WHERE closed_at >= $1
+		UNION ALL SELECT 'ledger', COUNT(*) FROM position_settlements WHERE settled_at >= $1
+		UNION ALL SELECT 'review', COUNT(*) FROM fin_decision_outcomes WHERE decided_at >= $1
+		UNION ALL SELECT 'elimination', COUNT(*) FROM fin_strategy WHERE state='retired'`, since)
+	if err != nil {
+		return nil, fmt.Errorf("overview funnel: %w", err)
 	}
-	get := func(stage, label, q string, args ...any) (OverviewFunnelRow, error) {
-		n, err := count(q, args...)
-		return OverviewFunnelRow{Stage: stage, Label: label, Count48h: n}, err
+	defer rows.Close()
+	counts := map[string]int{}
+	for rows.Next() {
+		var stage string
+		var n int
+		if err := rows.Scan(&stage, &n); err != nil {
+			return nil, err
+		}
+		counts[stage] = n
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	out := make([]OverviewFunnelRow, 0, 9)
-	// 发现：新品类假设行产出。
-	if r, err := get("discovery", "发现", `SELECT COUNT(*) FROM fin_opp_hypothesis WHERE first_seen >= $1`, since); err != nil {
-		return nil, err
-	} else {
-		out = append(out, r)
+	for _, st := range funnelStages {
+		out = append(out, OverviewFunnelRow{
+			Stage: st.key, Label: st.label, Count48h: counts[st.key], Cumulative: st.cumulative,
+		})
 	}
-	// 评估：机会评估卡（computed_at）。
-	if r, err := get("eval", "评估", `SELECT COUNT(*) FROM fin_opp_eval WHERE computed_at >= $1`, since); err != nil {
-		return nil, err
-	} else {
-		out = append(out, r)
-	}
-	// 沙箱：纸面轨新开行（entry_ts）。
-	if r, err := get("sandbox", "沙箱", `SELECT COUNT(*) FROM paper_spot_carry WHERE entry_ts >= $1`, since); err != nil {
-		return nil, err
-	} else {
-		out = append(out, r)
-	}
-	// 执行：提案放行（executed+decided_at——dciexec/earn 双轨推进产物）。
-	if r, err := get("execution", "执行", `SELECT COUNT(*) FROM fin_proposal WHERE status='executed' AND decided_at >= $1`, since); err != nil {
-		return nil, err
-	} else {
-		out = append(out, r)
-	}
-	// 持仓：真金开仓。
-	if r, err := get("holding", "持仓", `SELECT COUNT(*) FROM positions WHERE opened_at >= $1`, since); err != nil {
-		return nil, err
-	} else {
-		out = append(out, r)
-	}
-	// 平仓：关仓。
-	if r, err := get("exit", "平仓", `SELECT COUNT(*) FROM positions WHERE closed_at >= $1`, since); err != nil {
-		return nil, err
-	} else {
-		out = append(out, r)
-	}
-	// 账本：结算行（net_realized 归账）。
-	if r, err := get("ledger", "账本", `SELECT COUNT(*) FROM position_settlements WHERE settled_at >= $1`, since); err != nil {
-		return nil, err
-	} else {
-		out = append(out, r)
-	}
-	// 复盘：裁定归因刷新（decided_at——物化裁定行）。
-	if r, err := get("review", "复盘", `SELECT COUNT(*) FROM fin_decision_outcomes WHERE decided_at >= $1`, since); err != nil {
-		return nil, err
-	} else {
-		out = append(out, r)
-	}
-	// 淘汰：fin_strategy 无生命周期事件时戳（decided_at=末次裁定）→ retired 累计数如实标注。
-	var elim int
-	if err := s.pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM fin_strategy WHERE state='retired'`).Scan(&elim); err != nil {
-		return nil, fmt.Errorf("overview funnel elimination: %w", err)
-	}
-	out = append(out, OverviewFunnelRow{Stage: "elimination", Label: "淘汰", Count48h: elim, Cumulative: true})
 	return out, nil
+}
+
+// funnelStages 环序+标签+累计标（环序=业务闭环序由调用方消费——SQL 序无关）。
+var funnelStages = []struct {
+	key, label string
+	cumulative bool
+}{
+	{"discovery", "发现", false},
+	{"eval", "评估", false},
+	{"sandbox", "沙箱", false},
+	{"execution", "执行", false},
+	{"holding", "持仓", false},
+	{"exit", "平仓", false},
+	{"ledger", "账本", false},
+	{"review", "复盘", false},
+	{"elimination", "淘汰", true},
 }

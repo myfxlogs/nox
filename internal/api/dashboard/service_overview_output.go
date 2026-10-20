@@ -128,34 +128,42 @@ const overviewFundingFresh = 24 * time.Hour
 func (s *Service) appendOverviewWaiting(ctx context.Context, resp *v1.GetOverviewBundleResponse) {
 	now := time.Now()
 	const perKind = 5
-	if grads, err := filterGraduations(ctx, s, "pending", perKind); err == nil {
-		for _, g := range grads {
-			// D-604 顺手件：funding_ann 改读 facts 现值（快照列脱钩——展示面同型如实缺）。
-			// P2 票④龄期标（nogate-3 残余注记）：行龄>24h（funding 8h×3 窗）视作
-			// 陈值不采用——展示面如实缺（禁陈值当现值渲染）。
-			var liveAnn *float64
-			if frows, ferr := s.store.LatestFacts(ctx, fact.KindFunding, g.Venue, g.Symbol); ferr == nil && len(frows) > 0 {
-				if now.Sub(frows[0].Ts) <= overviewFundingFresh {
-					liveAnn = &frows[0].Value
-				}
+	// 单扫全表一次两态分桶（原 filterGraduations 逐态各全扫一遍=双倍往返）。
+	var pendingGrads, watchGrads []pgstore.CarryGraduation
+	if all, err := s.store.ListCarryGraduations(ctx); err == nil {
+		for _, g := range all {
+			switch {
+			case g.Status == "pending" && len(pendingGrads) < perKind:
+				pendingGrads = append(pendingGrads, g)
+			case g.Status == "unqualified" && len(watchGrads) < perKind:
+				watchGrads = append(watchGrads, g)
 			}
-			resp.Waiting = append(resp.Waiting, &v1.OverviewWaitingRow{
-				Kind:      "graduation_pending",
-				Label:     fmt.Sprintf("毕业#%d %s %s", g.ID, g.Symbol, g.Venue),
-				Detail:    fmt.Sprintf("待批·资金费年化 %s", floatOrDash(liveAnn, "%.2f%%")),
-				SinceUnix: g.CreatedAt.Unix(),
-			})
 		}
 	}
-	if grads, err := filterGraduations(ctx, s, "unqualified", perKind); err == nil {
-		for _, g := range grads {
-			resp.Waiting = append(resp.Waiting, &v1.OverviewWaitingRow{
-				Kind:      "graduation_watch",
-				Label:     fmt.Sprintf("观察#%d %s %s", g.ID, g.Symbol, g.Venue),
-				Detail:    fmt.Sprintf("摘牌待复活·%s", truncateRunes(g.DecidedNote, 40)),
-				SinceUnix: g.CreatedAt.Unix(),
-			})
+	for _, g := range pendingGrads {
+		// D-604 顺手件：funding_ann 改读 facts 现值（快照列脱钩——展示面同型如实缺）。
+		// P2 票④龄期标（nogate-3 残余注记）：行龄>24h（funding 8h×3 窗）视作
+		// 陈值不采用——展示面如实缺（禁陈值当现值渲染）。
+		var liveAnn *float64
+		if frows, ferr := s.store.LatestFacts(ctx, fact.KindFunding, g.Venue, g.Symbol); ferr == nil && len(frows) > 0 {
+			if now.Sub(frows[0].Ts) <= overviewFundingFresh {
+				liveAnn = &frows[0].Value
+			}
 		}
+		resp.Waiting = append(resp.Waiting, &v1.OverviewWaitingRow{
+			Kind:      "graduation_pending",
+			Label:     fmt.Sprintf("毕业#%d %s %s", g.ID, g.Symbol, g.Venue),
+			Detail:    fmt.Sprintf("待批·资金费年化 %s", floatOrDash(liveAnn, "%.2f%%")),
+			SinceUnix: g.CreatedAt.Unix(),
+		})
+	}
+	for _, g := range watchGrads {
+		resp.Waiting = append(resp.Waiting, &v1.OverviewWaitingRow{
+			Kind:      "graduation_watch",
+			Label:     fmt.Sprintf("观察#%d %s %s", g.ID, g.Symbol, g.Venue),
+			Detail:    fmt.Sprintf("摘牌待复活·%s", truncateRunes(g.DecidedNote, 40)),
+			SinceUnix: g.CreatedAt.Unix(),
+		})
 	}
 	if props, err := s.store.ListProposals(ctx, "proposed", perKind); err == nil {
 		for _, pr := range props {
@@ -171,25 +179,6 @@ func (s *Service) appendOverviewWaiting(ctx context.Context, resp *v1.GetOvervie
 			})
 		}
 	}
-}
-
-// filterGraduations 按态取前 N（ListCarryGraduations 全量读+内存过滤——表行数百级，
-// 专用读口不值得；per-kind 限流在缩览面折断）。
-func filterGraduations(ctx context.Context, s *Service, status string, limit int) ([]pgstore.CarryGraduation, error) {
-	all, err := s.store.ListCarryGraduations(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var out []pgstore.CarryGraduation
-	for _, g := range all {
-		if g.Status == status {
-			out = append(out, g)
-			if len(out) >= limit {
-				break
-			}
-		}
-	}
-	return out, nil
 }
 
 func floatOrDash(v *float64, format string) string {
