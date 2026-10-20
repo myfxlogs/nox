@@ -81,12 +81,15 @@ func (s *Store) insertAlert(ctx context.Context, ruleID, posID *int64, level, me
 		suppressPush = true
 	}
 	// rules/rule_id 已删——ruleID 参数保留签名兼容、恒不落库。
-	q := `INSERT INTO alerts (position_id, level, message) VALUES ($1, $2, $3)
+	// fanout_pending=进程外摄入判据（SLO 票⑤）：hook 在库内径已推/抑→false；
+	// hook=nil（alert-emit 族进程外件）→true 留 core 扫带扇出——外源唯一推内源单推幂等。
+	pending := s.alertHook == nil
+	q := `INSERT INTO alerts (position_id, level, message, fanout_pending) VALUES ($1, $2, $3, $4)
 		RETURNING id, ts, level, message, acked`
 	var a Alert
 	a.RuleID = ruleID
 	a.PositionID = posID
-	err := s.pool.QueryRow(ctx, q, posID, level, message).Scan(&a.ID, &a.Ts, &a.Level, &a.Message, &a.Acked)
+	err := s.pool.QueryRow(ctx, q, posID, level, message, pending).Scan(&a.ID, &a.Ts, &a.Level, &a.Message, &a.Acked)
 	if err != nil {
 		return fmt.Errorf("insert alert: %w", err)
 	}
@@ -247,4 +250,32 @@ func (s *Store) ListUnacked(ctx context.Context) ([]Alert, int, error) {
 		return nil, 0, err
 	}
 	return out, len(out), nil
+}
+
+// AlertsPending 扇出扫带数据面（SLO 票⑤：fanout_pending 判据列——进程外摄入件
+// 落 true 待扫带；内插径 hook 推/抑落 false 不入扫）。扫带捞→fn 后 Clear 封口幂等。
+func (s *Store) AlertsPending(ctx context.Context) ([]Alert, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, ts, level, message, acked, position_id FROM alerts
+		  WHERE fanout_pending ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("alerts pending: %w", err)
+	}
+	defer rows.Close()
+	var out []Alert
+	for rows.Next() {
+		var a Alert
+		if err := rows.Scan(&a.ID, &a.Ts, &a.Level, &a.Message, &a.Acked, &a.PositionID); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// ClearAlertFanout 扫带扇出后清位（pending→false——幂等：崩溃中漏清=重扫重推
+// 至多一倍兜底比漏推强）。
+func (s *Store) ClearAlertFanout(ctx context.Context, id int64) error {
+	_, err := s.pool.Exec(ctx, `UPDATE alerts SET fanout_pending=false WHERE id=$1`, id)
+	return err
 }
