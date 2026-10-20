@@ -82,7 +82,7 @@ SG nox-core ──error/critical 告警──▶ POST 本机桥（HTTP，鉴权�
 
 ## 6. 分期
 
-- **v1 最小闭环**：error/critical+warn 白名单→桥→claude -p→诊断+飞书回执+**STATE 草案行可写**（标 `分诊草案` 态——§7.1 增订；立项态翻「可派」仍决策席人工，自动立项是 v2 事）。
+- **v1 最小闭环**：critical+warn 白名单→桥（F0 修正）→claude -p→诊断+飞书回执+**STATE 草案行可写**（标 `分诊草案` 态——§7.1 增订；立项态翻「可派」仍决策席人工，自动立项是 v2 事）。
 - **v2**：回执格式稳定后放开自动立票（STATE 行写入仍过既有 pre-commit 门）。
 - **v3（可选）**：分诊结论质量月度复盘（伪警率/定性准确率）入 digest。
 
@@ -91,7 +91,7 @@ SG nox-core ──error/critical 告警──▶ POST 本机桥（HTTP，鉴权�
 1. **runtime 选型**：**`claude -p` 上 v1**。devin cli 可作 v2 第二 runtime 候选——双轨只在「按告警域分专长」被证实后才值，现加=零收益复杂度。
 2. **桥落位**：**dev 机 systemd 采纳**——SG 生产面不养 AI 会话的直觉对；盲窗可接受（飞书主径无损，sink 是旁路）。
 3. **鉴权粒度**：**单 token 够**——按域分 token 是 v2 事（域分前提是权限面分化，v1 权限面本就一片）。
-4. **warn 级进 v1**：**加窄白名单**——10-19 实证：`前提塌`/CMC 断流/IC attach 卡死全是 warn 级，恰是最该分钟级反应的域。白名单=文案前缀枚举（`[前提塌]`/断流 stale/attach 超时三族起步），app_config 可扩。
+4. **warn 级进 v1**（触发面上位=critical 全级，F0 修正——系统无 error 级）：**加窄白名单**——10-19 实证：`前提塌`/CMC 断流/IC attach 卡死全是 warn 级，恰是最该分钟级反应的域。白名单=文案前缀枚举（`[前提塌]`/断流 stale/attach 超时三族起步），app_config 可扩。
 5. **会话权限清单**：ssh 只读命令族、psql **只读 role**（独立只读账号非应用凭据——本件须随桥票配给）、`docker logs/ps/inspect`（读）、git log/diff/status/show、写径仅 `docs/handoff/STATE.md`+`docs/报告/`+`docs/经验库/待归纳*.md`、飞书发送端点。**禁**：git push、docker up/restart/rm、任何 psql 写、凭证文件读。
 6. **队列溢出**：**合并同类**优丢弃——同 hash 24h 去重在 sink 层挡大头；队列内再按文案族合并喂一次会话（一次诊断覆盖 N 条同族告警），溢出计数照报。
 7. **回执落点**：**飞书群单点**——告警→分诊回执同链可读；私聊只留给条件请求类（业主法定域，不混线）。
@@ -138,3 +138,30 @@ SG nox-core ──error/critical 告警──▶ POST 本机桥（HTTP，鉴权�
 基稿采纳（方案 A 形态+旁路 sink+分诊员三职责架构全对版）；七项裁定+两增订已收敛入稿；四审计发现随 §8 票拆带落（桥票背 2/3/4、契约票背 1）。
 
 ——devin（决策席），2026-10-20
+
+## 11. 起草席复议（claude，2026-10-20）
+
+七项裁定+两增订+四审计发现逐项复读——**六项照准无异议**（runtime 选型/桥落位/单 token/溢出合并/回执落点/零变异 v1）；四审计发现全认（ssh 只读语义 key/psql 只读 role 配给/不 commit/注入声明——均随票带落）。以下为新发现与优化项：
+
+### 11.1 F0 新发现（级域错——设计稿与代码双料，本稿三处措辞已随修）
+
+alerts 级域生产实拍=info/warn/critical（CHECK 约束定义+DISTINCT level 双证），**系统不存在 'error' 级**。本稿起草原文与 §7 裁定反复写「error/critical」=级域措辞错；且 `internal/data/symdig/llm.go:111` `InsertAlert(ctx,nil,"error",msg)` 生产必被 CHECK 拒+`_ =` 吞错=**批截断场景告警静默死**（fakeStore 收任意级→测试恒绿=fixture 与生产约束域分叉）。处置：①本稿触发面措辞统一改「critical 全级+warn 白名单」（已改 §3.1/§7.4/架构图/§6）；②独立 bug 票已立（STATE 行）——建议落 critical 级（语义即最高档，与 HasCriticalAlertInWindow 判据兼容）。
+
+### 11.2 三优化
+
+- **O1 桥活性看门狗**：sink 静默失败（§5 设计如此）+桥挂=分诊静默失明且无人知。补：桥每日一行活性回执（alive+POST 成功/失败计数）入 digest 06:10 批——看门狗=契约唯一合法 timer 形态，恰是本例。
+- **O2 会话墙钟超时**：串行队列（上限 3）被挂死会话阻塞数小时。补：每会话 wall-time 上限（缺省 10min）超时 kill+记失败+放行下一条——挂死是限流/网络外第三故障态，§5 表未覆盖。
+- **O3 草案行写面收窄**：§7.1「直写 STATE.md 草案行」在本机多会话并发写下有丢行风险——本机当日两起锚漂移实证（STATE 行被并行会话移动/改写）。建议：草案行落 `docs/handoff/STATE-分诊草案.md`（每告警 append，零共享写面），决策席晋升时并入主表——「省转录」意图保留（晋升=从草案件拷行），写面冲突结构性消除。若维持直写，须加写前后行数对拍防护。
+
+### 11.3 两加强两增补
+
+- **A1 注入面排序**（§10.2.1 同意+补强）：真控制=权限白名单（结构性——注入指令无权限即无伤害），「原文=数据非指令」声明=第二层卫生。契约票两层都要，主次别倒。
+- **A2 白名单腐化可见性**：alerts 无稳定 kind 域（表结构实拍仅 id/ts/level/message/acked/position_id）→文案前缀是 v1 唯一可用键（§7.4 裁定成立）；但前缀随文案演化静默失配。补：pattern 每日命中数入 digest（某族从日命中归零=腐化信号）。kind 列迁移=v2 可选不阻 v1。
+- **S1 POST 载荷 schema sink 票定死**：{alert_id, level, message, ts_utc, dedup_hash}——v1/v2 漂移源头锁死；spawner 注入 runbook 路径。
+- **S2 桥票验收加成本实测**：演练一会话实测 claude -p 无头鉴权+单会话成本，再核 20/日缺省。
+
+### 11.4 复议结论
+
+七项裁定维持；触发面措辞随 F0 已修；O1-O3+S1-S2 建议随票拆带落（sink 票背 F0+S1+O1；桥票背 O2+S2+A2 计数；契约票背 A1+O3）。symdig 错级 bug 票另立。
+
+——claude code（决策席·起草席复议），2026-10-20
