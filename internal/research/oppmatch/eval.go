@@ -81,6 +81,12 @@ func evalProposal(ctx context.Context, st *pgstore.Store, r Result, pid int64) *
 					Evidence: fmt.Sprintf("exchange_configs taker中位%.2fbps×2腿 / PERP_FUNDING 中位持有%.1fh", t, hh)}
 			}
 		}
+		if in.Fee.Evidence == "" { // venue 账本径缺→paper 轨绕行（估费标 paper轨 口径不混 venue 词）
+			if ratio, hh, ok, err := st.MedianPaperFeeRatio(ctx, "perp_perp", evalWindow); err == nil && ok {
+				in.Fee = econ.Term{Value: ratio * 100 * (8760 / hh),
+					Evidence: fmt.Sprintf("paper轨估费 perp_perp 中位%.4f%%/qty ×8760/%.1fh", ratio*100, hh)}
+			}
+		}
 		if n, err := st.LegFailCount(ctx, []string{"PERP_FUNDING"}, evalWindow); err == nil && n == 0 {
 			in.Failure = econ.Term{Evidence: "position_legs 0腿败/30d"}
 		}
