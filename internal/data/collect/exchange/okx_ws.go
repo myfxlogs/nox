@@ -49,7 +49,7 @@ func NewOKXWebSocket(cfg Config) *OKXWebSocket {
 	return &OKXWebSocket{cfg: cfg, dialer: d, header: h,
 		wsURLs:   wsViaProxyURLs("/okxws/ws/v5/public", okxPublicWSURL),
 		readIdle: quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff,
-		dataIdle: quoteWSDataIdle,
+		dataIdle: mktWSDataIdle, // 2762/2825 案：静默停帧谱——10min 阈送盲窗（mt-health 5m 先于骨架检出=检出延迟反超），3min 对齐 mkt-ws 降档先例（okx tickers ≥1/s 频谱，3min 零帧=订阅态丢非静默期）
 		catalog:  newOKXInstCatalog(cfg)}
 }
 
