@@ -1,6 +1,6 @@
 package usdnotional
 
-// D-633 USDPer A 档：计价币→USD 现态换算=qbus MT 键域（禁 PG——fail-closed）。
+// D-633 USDPer A/B 档：计价币→USD 现态换算=qbus MT 键域（禁 PG——fail-closed）。
 import (
 	"context"
 	"log"
@@ -14,17 +14,20 @@ import (
 // FxFreshTTL A 档鲜度窗（与 tickFreshWindow 同档 5min）。
 const FxFreshTTL = 5 * time.Minute
 
-// USDPerNow A 档：qbus Snapshot→MT 键域（IsType mt4/mt5）→preferVenueKey 优先
-// →miss 择 LatestQuote(fxFreshTTL) 最新鲜一家+venueKey 留痕→全 miss=fail-closed。
+// USDPerNow A 档：TTL=FxFreshTTL（5min）调单实现。
 func USDPerNow(ctx context.Context, qbus *bus.QuoteBus, quoteCcy, preferVenueKey string) (float64, bool) {
+	return USDPerNowTTL(ctx, qbus, quoteCcy, preferVenueKey, FxFreshTTL)
+}
+
+// USDPerNowTTL 单实现：qbus Snapshot→MT 键域（IsType mt4/mt5）→preferVenueKey
+// 优先（须鲜度达标——陈帧落择鲜径，D1 返修）→miss 择 LatestQuote(ttl) 最新鲜
+// 一家+venueKey 留痕→全 miss=fail-closed。
+func USDPerNowTTL(ctx context.Context, qbus *bus.QuoteBus, quoteCcy, preferVenueKey string, ttl time.Duration) (float64, bool) {
 	if quoteCcy == "USD" {
 		return 1.0, true
 	}
 	pair, invert, ok := notional.FXPair(quoteCcy)
-	if !ok {
-		return 0, false
-	}
-	if qbus == nil {
+	if !ok || qbus == nil {
 		return 0, false
 	}
 	venues := qbus.Snapshot(ctx, []string{pair})[pair]
@@ -36,7 +39,7 @@ func USDPerNow(ctx context.Context, qbus *bus.QuoteBus, quoteCcy, preferVenueKey
 		}
 	}
 	if preferVenueKey != "" {
-		if q, ok := mt[preferVenueKey]; ok && q.Bid > 0 {
+		if q, ok := mt[preferVenueKey]; ok && q.Bid > 0 && time.Since(q.Time) <= ttl {
 			log.Printf("[fx] USDPerNow %s prefer %s bid=%v", pair, preferVenueKey, q.Bid)
 			if invert {
 				return 1.0 / q.Bid, true
@@ -44,7 +47,7 @@ func USDPerNow(ctx context.Context, qbus *bus.QuoteBus, quoteCcy, preferVenueKey
 			return q.Bid, true
 		}
 	}
-	if q, ok := bus.LatestQuote(mt, FxFreshTTL, time.Now()); ok && q.Bid > 0 {
+	if q, ok := bus.LatestQuote(mt, ttl, time.Now()); ok && q.Bid > 0 {
 		log.Printf("[fx] USDPerNow %s 择鲜 venueKey=%s bid=%v", pair, q.VenueKey(), q.Bid)
 		if invert {
 			return 1.0 / q.Bid, true
@@ -54,40 +57,7 @@ func USDPerNow(ctx context.Context, qbus *bus.QuoteBus, quoteCcy, preferVenueKey
 	return 0, false
 }
 
-// USDPerNowTTL B 档同构：TTL 参数化（B 档 24h=A 档 5min 共用读面）。
-func USDPerNowTTL(ctx context.Context, qbus *bus.QuoteBus, quoteCcy, preferVenueKey string, ttl time.Duration) (float64, bool) {
-	if quoteCcy == "USD" {
-		return 1.0, true
-	}
-	pair, invert, ok := notional.FXPair(quoteCcy)
-	if !ok || qbus == nil {
-		return 0, false
-	}
-	venues := qbus.Snapshot(ctx, []string{pair})[pair]
-	mt := make(map[string]bus.Quote)
-	for vk, q := range venues {
-		if keydomain.IsMTKey(vk) {
-			mt[vk] = q
-		}
-	}
-	if preferVenueKey != "" {
-		if q, ok := mt[preferVenueKey]; ok && q.Bid > 0 && time.Since(q.Time) <= ttl {
-			if invert {
-				return 1.0 / q.Bid, true
-			}
-			return q.Bid, true
-		}
-	}
-	if q, ok := bus.LatestQuote(mt, ttl, time.Now()); ok && q.Bid > 0 {
-		if invert {
-			return 1.0 / q.Bid, true
-		}
-		return q.Bid, true
-	}
-	return 0, false
-}
-
-// FxLive exec.FxResolver 实现（A 档——USDPerNow 唯一径，USDPer 旧签名转调）。
+// FxLive exec.FxResolver 实现（A 档——USDPerNow 唯一径）。
 type FxLive struct{ Bus *bus.QuoteBus }
 
 func NewFxLive(qbus *bus.QuoteBus) *FxLive { return &FxLive{Bus: qbus} }

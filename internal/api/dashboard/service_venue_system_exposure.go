@@ -10,6 +10,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -122,7 +123,10 @@ func (s *Service) venueLegUSD(ctx context.Context, r pgstore.OpenVenueLegRow, ca
 	}
 	fx := 1.0
 	if q := notional.QuoteCcy(canonical); q != "" && q != "USD" {
-		rate, _, ok := s.usdPerOrStale(ctx, q, "", now)
+		rate, fxStale, ok := s.usdPerOrStale(ctx, q, r.VenueKey, now)
+		if fxStale {
+			log.Printf("[fx] %s 系统敞口 fx=stale 末帧计入", q)
+		}
 		if !ok || rate <= 0 {
 			return 0
 		}

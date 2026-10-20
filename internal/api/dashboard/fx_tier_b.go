@@ -4,6 +4,7 @@ package dashboard
 // qbus USDPerNowTTL 24h→miss 落 PG 末帧标 stale（禁静默顶替：stale 注记如实）。
 import (
 	"context"
+	"log"
 	"time"
 
 	"nox/internal/platform/usdnotional"
@@ -17,6 +18,7 @@ func (s *Service) usdPerOrStale(ctx context.Context, ccy, preferVenueKey string,
 		return rate, false, true
 	}
 	if rate, ok := s.store.USDPer(ctx, ccy, at, preferVenueKey); ok && rate > 0 {
+		log.Printf("[fx] %s 估值/敞口 fx=stale 末帧（D-634 例外——qbus miss）", ccy)
 		return rate, true, true // PG 末帧=stale（D-634 例外域）
 	}
 	return 0, false, false

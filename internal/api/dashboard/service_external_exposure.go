@@ -99,7 +99,7 @@ func (s *Service) externalNotionalUSD(ctx context.Context, venueBare string, now
 		}
 		fx := 1.0
 		if q := notional.QuoteCcy(canonical); q != "" && q != "USD" {
-			rate, _, ok := s.usdPerOrStale(ctx, q, "", now)
+			rate, _, ok := s.usdPerOrStale(ctx, q, bp.VenueKey, now)
 			if !ok || rate <= 0 {
 				continue
 			}
