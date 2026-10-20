@@ -12,6 +12,10 @@ StartLimitBurst=5
 Type=simple
 User=mluser
 EnvironmentFile=/etc/alert-bridge.env
+# systemd 环境 PATH 不含用户 npm-global——claude 装在 ~/.npm-global/bin，显式补；
+# WorkingDirectory=/opt/nox 使分诊会话落仓库根（skills/草案径全可及）。
+Environment="PATH=/home/mluser/.npm-global/bin:/home/mluser/.local/bin:/usr/local/bin:/usr/bin:/bin"
+WorkingDirectory=/opt/nox
 ExecStart=/usr/bin/python3 /opt/nox/tools/alert-bridge/bridge.py
 Restart=always
 RestartSec=10

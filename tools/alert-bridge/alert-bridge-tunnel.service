@@ -9,8 +9,11 @@ Wants=network-online.target
 Type=simple
 User=mluser
 # 专用只读 key（command= 前缀可再收；ssh -R 只开远端转发禁本机口）
+# %h 陷阱：系统 unit 中 %h=/root（User= 不参与展开）——必须用绝对径 +
+# IdentitiesOnly 焊死，否则回落默认 id_ed25519 全权 key，permitlisten 空设。
 ExecStart=/usr/bin/ssh -NT -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
-    -o ExitOnForwardFailure=yes -i %h/.ssh/alert_bridge_tunnel \
+    -o ExitOnForwardFailure=yes -o IdentitiesOnly=yes \
+    -i /home/mluser/.ssh/alert_bridge_tunnel \
     -R 127.0.0.1:8099:localhost:8099 root@192.229.85.35
 Restart=always
 RestartSec=15

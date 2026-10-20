@@ -47,7 +47,7 @@ fi
 PUB_KEY=$(cat ~/.ssh/alert_bridge_tunnel.pub)
 ssh -i "$SG_KEY" "$SG_HOST" "mkdir -p /root/.ssh && chmod 700 /root/.ssh &&
   grep -qF 'alert-bridge-tunnel' /root/.ssh/authorized_keys ||
-  echo 'restrict,permitlisten=127.0.0.1:8099' '$PUB_KEY' >> /root/.ssh/authorized_keys"
+  echo 'no-agent-forwarding,no-pty,no-user-rc,no-X11-forwarding,permitlisten=\"127.0.0.1:8099\"' '$PUB_KEY' >> /root/.ssh/authorized_keys"
 sudo cp tools/alert-bridge/alert-bridge-tunnel.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now alert-bridge-tunnel
 systemctl status alert-bridge-tunnel --no-pager | head -6
