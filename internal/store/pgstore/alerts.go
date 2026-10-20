@@ -248,3 +248,36 @@ func (s *Store) ListUnacked(ctx context.Context) ([]Alert, int, error) {
 	}
 	return out, len(out), nil
 }
+
+// AlertsAfterID 扇出扫带数据面（SLO 票⑤——alert-emit 等进程外摄入径绕
+// SetAlertHook 内 hook 链，core 侧按 id 游标扫增量喂同一扇出 fn）。
+func (s *Store) AlertsAfterID(ctx context.Context, afterID int64) ([]Alert, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, ts, level, message, acked, position_id FROM alerts
+		  WHERE id > $1 ORDER BY id`, afterID)
+	if err != nil {
+		return nil, fmt.Errorf("alerts after %d: %w", afterID, err)
+	}
+	defer rows.Close()
+	var out []Alert
+	for rows.Next() {
+		var a Alert
+		if err := rows.Scan(&a.ID, &a.Ts, &a.Level, &a.Message, &a.Acked, &a.PositionID); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// AlertsMaxID 游标播种（启动取 max(id)——防冷启把存量全量回放成告警风暴）。
+func (s *Store) AlertsMaxID(ctx context.Context) (int64, error) {
+	var v *int64
+	if err := s.pool.QueryRow(ctx, `SELECT max(id) FROM alerts`).Scan(&v); err != nil {
+		return 0, err
+	}
+	if v == nil {
+		return 0, nil
+	}
+	return *v, nil
+}

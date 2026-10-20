@@ -191,11 +191,7 @@ func main() {
 	// D-508 S5：feishu 扇出改 worker 池（非阻塞投递，满丢弃留痕），chatID 60s 缓存。
 	feishuPush := wireFeishuPush(st, feishu)
 	bridgePush := bridgePushFor(wireBridgePush(ctx, st, secRes)) // §8.1 告警桥 sink 旁路
-	st.SetAlertHook(func(a pgstore.Alert) {
-		alertTopic.Publish(a)
-		feishuPush(a)
-		bridgePush(a)
-	})
+	wireAlertFanout(ctx, st, alertTopic, feishuPush, bridgePush) // SLO 票⑤：内插 hook+扇出扫带共喂
 	// D-115：safego panic 全局告警口——任何协程 panic 落 alerts critical（30min 同键去重），
 	// 经 SetAlertHook→feishu 同管道扇出；GoLoop 域附「退避重启」、Go 域附「协程终止」。
 	safego.SetOnPanic(func(name string, r any, willRestart bool) {
