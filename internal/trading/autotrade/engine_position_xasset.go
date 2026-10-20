@@ -135,7 +135,17 @@ func (e *Engine) fundingRateMeanForVenue(ctx context.Context, bareVenue, canonic
 	if window <= 0 {
 		return e.fundingRateForVenue(ctx, bareVenue, canonical)
 	}
-	return fact.FundingMeanAnnual(ctx, e.store, bareVenue, canonical, window) // D-034：共享单实现
+	// err 分流：查询败 ≠ 缺行——静默吞成 missing 是「数据在而读不到」
+	// 假病灶形（读径错位票实证：SG 直查 5243 行在库却逐拍 missing）。
+	avg, maxTs, n, err := e.store.FundingWindowAvg(ctx, bareVenue, canonical, time.Now().Add(-window))
+	if err != nil {
+		log.Printf("[autotrade] carry: funding query err venue=%s canonical=%s: %v (fail-closed)", bareVenue, canonical, err)
+		return 0, time.Time{}, false
+	}
+	if n == 0 {
+		return 0, time.Time{}, false
+	}
+	return avg, maxTs, true
 }
 
 // xassetSpecFactFresh MT 腿 spec 源 swap fact 新鲜度检查（SwapFactMaxAge）。
