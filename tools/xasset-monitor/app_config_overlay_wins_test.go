@@ -71,31 +71,31 @@ func TestD558_FatalDedup30min(t *testing.T) {
 	ctx := context.Background()
 	fatal := errors.New("BINANCE_PROXY_URL 未配置（app_config 无行且 env 未设）")
 
-	// insertAlert 漏斗同键去重分级——critical 窗内重发仍落行（审计不丢），
-	// 仅跳飞书推送（同 key 对齐判定）；warn/info 维持全抑制。
+	// InsertAlertDedup 24h 窗（告警风暴 dedup 票）——首发保留落行，
+	// 窗内重发插行被抑制（1 行在档）；30min 同键判定仅影响飞书推送面。
 	mapped := "xasset-monitor " + fatal.Error() + alerttext.SeatDispatchLine("实施", "xasset 采集排障（读 STATE 本行）")
 	reportFatal(ctx, s, fatal) // 首发生：落行+推（凭据缺席只 log）
 	if !hasRecentSameKeyAlert(ctx, s, "critical", mapped) {
 		t.Fatal("首发生后 30min 内应有同键 critical 在档")
 	}
-	reportFatal(ctx, s, fatal) // 30min 内重发：critical 仍落行（审计）、飞书同 key 抑制
+	reportFatal(ctx, s, fatal) // 24h 窗内重发：InsertAlertDedup 抑制插行（首发保留）
 	var n int
 	if err := s.Pool().QueryRow(ctx,
-		`SELECT count(*) FROM alerts WHERE level='critical' AND message LIKE 'xasset-monitor%'`).Scan(&n); err != nil || n != 2 {
-		t.Fatalf("critical 同键重发应仍落行（2 行审计不丢）n=%d err=%v", n, err)
+		`SELECT count(*) FROM alerts WHERE level='critical' AND message LIKE 'xasset-monitor%'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("24h 窗内同键重发应被 dedup 抑制（首发保留=仍 1 行）n=%d err=%v", n, err)
 	}
-	// 超窗：把在档行 ts 拨回 31min 前 → 同键判否，重发落第二行。
+	// 超窗：把在档行 ts 拨回 25h 前 → dedup 窗与同键窗皆过期，重发落第二行。
 	if _, err := s.Pool().Exec(ctx,
-		`UPDATE alerts SET ts = now()-interval '31 minutes' WHERE level='critical'`); err != nil {
+		`UPDATE alerts SET ts = now()-interval '25 hours' WHERE level='critical'`); err != nil {
 		t.Fatalf("backdate: %v", err)
 	}
 	if hasRecentSameKeyAlert(ctx, s, "critical", mapped) {
-		t.Fatal("31min 前行应判为已超窗（非 dup）")
+		t.Fatal("25h 前行应判为已超 30min 同键窗（非 dup）")
 	}
 	reportFatal(ctx, s, fatal)
 	if err := s.Pool().QueryRow(ctx,
-		`SELECT count(*) FROM alerts WHERE level='critical' AND message LIKE 'xasset-monitor%'`).Scan(&n); err != nil || n != 3 {
-		t.Fatalf("超窗重发应落第三行（窗内重发已计第二行）n=%d err=%v", n, err)
+		`SELECT count(*) FROM alerts WHERE level='critical' AND message LIKE 'xasset-monitor%'`).Scan(&n); err != nil || n != 2 {
+		t.Fatalf("超 24h 窗重发应落第二行（新事件再告警）n=%d err=%v", n, err)
 	}
 }
 

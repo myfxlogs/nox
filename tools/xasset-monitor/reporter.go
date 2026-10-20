@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"nox/internal/ir/notify"
 	"nox/internal/platform/alerttext"
@@ -43,7 +44,7 @@ func reportFatal(ctx context.Context, st *pgstore.Store, err error) {
 	// （原前缀式对异型 fatal 过抑制；仅改查重，文案链不动）。
 	msg := "xasset-monitor " + alerttext.VenueErrCN(err.Error()) + alerttext.SeatDispatchLine("实施", "xasset 采集排障（读 STATE 本行）")
 	dup := hasRecentSameKeyAlert(ctx, st, "critical", msg)
-	if aerr := st.InsertAlert(ctx, nil, "critical", msg); aerr != nil {
+	if aerr := st.InsertAlertDedup(ctx, "critical", msg, 24*time.Hour); aerr != nil {
 		log.Printf("xasset-monitor: fatal alert 落库失败: %v", aerr)
 	}
 	if dup {

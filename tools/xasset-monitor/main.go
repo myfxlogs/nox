@@ -15,6 +15,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"time"
 
 	"nox/internal/data/keydomain"
 	"nox/internal/platform/httpx"
@@ -115,7 +116,7 @@ func runPairs(ctx context.Context, st *pgstore.Store, pairs []monitorPair) error
 	if firstErr == nil && len(stills) > 0 {
 		msg := "xasset-monitor 簿面静止（venue 活性锚成立）: " + strings.Join(stills, "; ")
 		if !hasRecentSameKeyAlert(ctx, st, "warn", msg) {
-			if aerr := st.InsertAlert(ctx, nil, "warn", msg); aerr != nil {
+			if aerr := st.InsertAlertDedup(ctx, "warn", msg, 24*time.Hour); aerr != nil {
 				log.Printf("xasset-monitor: still warn 落库失败: %v", aerr)
 			}
 		}
