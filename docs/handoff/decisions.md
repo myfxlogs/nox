@@ -796,3 +796,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - 连锁处置：a) 备份降级每日 critical 将成永久噪音——立降噪小票（改状态变迁单发：配置缺失首日 critical+marker，续日静默计数，恢复/再失切换再发）；b) VPS 迁移前置改写：R2 前置条款作废，若 egress 升格触发迁移，安全垫=迁移前新鲜全量快照直传新机+旧机 7 天热备（§5 框架内已含，补本条为正式口径）；c) 经验库 backup-r2-silent-degrade 条目补「业主弃配终态」注记防后席重提。
 - 伪证锚：若业主日后重配 R2（#541 回执）=本裁失效恢复三地径。
 
+### D-636（10-20 06:4xZ，施工席取证改判）开仓径三堵之二残面真身=PG 池饿——true_net 段缓存化+喂流看门狗
+
+- **改判**：leg unit qty 超时原归因「mtapi 网关 RPC 无响应」取证改判=**PG 池饿**——报错点为 `UnitQtyByBrokerSymbol` PG 点查（`context deadline exceeded` 文案 PG/RPC 同形归因偏层）；mtapi=托管服务无本地进程，adapter 断线自愈在案。池饿源=GetOverviewBundle 每请求重跑 TrueNetProfitSince 双窗（266 段/6h）×MaxConns=10 被 12+并发段吃满。
+- **裁定**：①true_net 段 5min TTL 缓存+单赢家刷（显示面历史台账聚合，D-604 合法域；TrueNetProfitSince 口径本体零动=D-630 领地）；②legUnitQty 超时计数+30s 轴 5min 滑窗看门狗（阈值 5 warn 去重、连续 3 窗 critical），executor 条件 gap 候立权归决策席、看门狗不代立（reconcile 会把外模板 gap 自动 fulfilled——mechanical gap 立即静默化风险在案）。
+- **伪证锚**：若部署后 leg unit qty 超时簇在 true_net 段频降至 ≤72/6h 后仍复现，则池饿非唯一根因，本裁错须续查。
