@@ -184,17 +184,17 @@ func main() {
 	}
 	orderTopic := bus.NewTopic[bus.OrderEvent]() // D-107 P1：订单事件总线（OnOrderUpdate → P2/P3 订阅，事件只含通知——前端零信任）
 	brokerMgr.OrderEventSink = func(e bus.OrderEvent) { orderTopic.Publish(e) }
-	// D-114：告警实时推送总线（InsertAlert → store.alertHook → alertTopic → case 3）。先于 InsertAlert 调用点设置，nil 安全。
-	// D-264：hook 链包装飞书推送（国内直连，warn/critical 才推，异步不阻断）。
+	// D-114/D-264：告警总线+飞书 hook（warn/critical 推，nil 安全）。
 	alertTopic := bus.NewTopic[pgstore.Alert]()
 	feishu := notify.NewFeishuClient(cfg.FeishuAppID, cfg.FeishuAppSecret)
 	startMacro(ctx, st, secRes, feishu) // D-528 S8：宏观采集层；D-168 ⑤ 日历日报直推恢复
-
 	// D-508 S5：feishu 扇出改 worker 池（非阻塞投递，满丢弃留痕），chatID 60s 缓存。
 	feishuPush := wireFeishuPush(st, feishu)
+	bridgePush := bridgePushFor(wireBridgePush(ctx, st, secRes)) // §8.1 告警桥 sink 旁路
 	st.SetAlertHook(func(a pgstore.Alert) {
 		alertTopic.Publish(a)
 		feishuPush(a)
+		bridgePush(a)
 	})
 	// D-115：safego panic 全局告警口——任何协程 panic 落 alerts critical（30min 同键去重），
 	// 经 SetAlertHook→feishu 同管道扇出；GoLoop 域附「退避重启」、Go 域附「协程终止」。

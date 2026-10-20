@@ -6,6 +6,7 @@ var appSecretDescs = map[string]string{
 	"NOX_FEISHU_APP_ID":       "飞书自建应用 App ID（报告/告警推送通道凭据）",
 	"NOX_FEISHU_APP_SECRET":   "飞书自建应用 App Secret（报告/告警推送通道凭据）",
 	"NOX_FEISHU_VERIFY_TOKEN": "飞书事件订阅 Verify Token（事件回调验签）",
+	"NOX_ALERT_BRIDGE_TOKEN":  "告警分诊桥鉴权 token（本机桥 X-Bridge-Token 头——app_secrets 密文域）",
 	"NOX_AI_BASE_URL":         "AI 分析 OpenAI 兼容端点地址（复盘/分析师调用）",
 	"NOX_AI_API_KEY":          "AI 分析 API Key（复盘/分析师调用凭据）",
 	"NOX_AI_MODEL":            "AI 分析模型名（复盘/分析师调用选型）",

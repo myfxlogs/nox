@@ -4,6 +4,8 @@ package config
 
 var appConfigDescs = map[string]string{
 	"NOX_ALERT_PAUSED":                           "true=暂停：全局告警静默（仅停通知，不停业务逻辑）",
+	"NOX_ALERT_BRIDGE_URL":                       "告警桥地址（AI 分诊席 POST 端——缺=功能静默关闭 fail-closed）",
+	"NOX_ALERT_BRIDGE_WARN_PATTERNS":             "warn 级白名单前缀（逗号分——critical 全级不过滤，warn 前缀枚举进桥）",
 	"NOX_ALERT_RESEND_INTERVAL":                  "告警重发间隔（同告警静默窗，如 30m/1h）",
 	"NOX_ANALYST_RATE_PER_HOUR":                  "分析模块 LLM 调用速率上限（次/小时）",
 	"NOX_AUTOTRADE_ENABLED":                      "true=开：自动交易总开关（发现机会自动执行下单）",
