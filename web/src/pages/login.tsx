@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { setToken } from "../api";
 import { NOX_TITLE } from "../nox";
-import { OwlEmblem } from "../components/OwlEmblem";
+import { NoxMark } from "../components/NoxMark";
 
 export default function LoginPage() {
   const [code, setCode] = useState("");
@@ -46,7 +46,7 @@ export default function LoginPage() {
 
   return (
     <div className="login-card">
-      <h1><OwlEmblem size={30} /> {NOX_TITLE}</h1>
+      <h1><NoxMark height={34} /> <span className="muted" style={{ fontSize: "0.6em", fontWeight: 400 }}>{NOX_TITLE}</span></h1>
       <div className="muted">运营看板 — 请输入 Authenticator 6 位验证码</div>
       {idCode && <div className="totp-id">Authenticator 条目 <b>Nox:{idCode}</b>（多条目时凭此对号）</div>}
       <form onSubmit={submit}>
