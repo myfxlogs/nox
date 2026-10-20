@@ -26,3 +26,5 @@ last_seen: 2026-10-20
 业主令弃配 R2 凭据（#541 不回执）——R2 外推永久放弃，DR=SG 本地滚动 14+GitHub 两地口径。本条目处方中「修复 R2 外推」半项随之终态；告警面（降级可见性）处方仍有效并由降噪小票精化（状态变迁单发）。后席勿据本条目再提 R2 修复票（伪证锚：业主重配即 D-635 失效恢复三地径）。
 
 **降噪后判定信号更新（D-635a 10-20，backup_pg.sh 状态变迁制上线后）**：降级告警改 marker 状态变迁单发——首失=critical 首报行（alerts 表）+落 `$BACKUP_DIR/.r2_degrade_state`；续日=log `INFO: r2 degrade ongoing day=N`（INFO 非 WARN：防 slo_watch 对 backup.log 尾窗 grep WARN/ERROR 的 warn 噪音换面复发）；恢复=marker 清除；再失=再首报。上文「判定信号」之 `grep WARN` 自此只捕异常变体（计数写败等）；稳态降级探查改用 `grep 'r2 degrade ongoing' /opt/nox-backups/backup.log`+`cat /opt/nox-backups/.r2_degrade_state`。
+
+**更正注记（10-20，实施席 D-635a 施工中考古）**：上文实证段「脚本 emit_alert 只覆盖 pg_dump 失败支」系当时误读——`git log -p` 全史考：emit_alert 自 D-110 起只挂 age/upload 两支，pg_dump 失败支**从未**有过告警调用（仅 `backup FAIL` log+exit 1）。即 pg_dump 失败（含 PG 不可达晨）至今零 alerts 行、且 `backup FAIL` 文案不含 WARN/ERROR——slo_watch 尾窗 grep 同样不捕，双重不可见，属遗留缺口非本票范围（降级支已闭环），待决策席另票裁是否接 emit_alert。
