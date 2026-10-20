@@ -10,6 +10,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -56,6 +59,11 @@ type Config struct {
 	Client             *http.Client
 	// AlertFn 可选告警通道（D-507 重连风暴 fail-loud）；nil=静默跳过（测试默认）。
 	AlertFn func(level, msg string)
+	// DepthTimeout per-venue depth REST 超时预算（egress 劣化带病工作面——
+	// 慢 venue 有界不拖整批；env NOX_CEX_DEPTH_TIMEOUT_<VENUE> 秒，缺省 8s
+	// 按 venue 实例化专 http.Client，未配面回退共享 Client）。
+	DepthTimeout map[string]time.Duration
+	depthClients map[string]*http.Client
 	// ADLPositionHit D-101：ADL 风险帧持仓关联探针——入参=帧内 venue 原生合约号，
 	// 返回=该 venue 我们的活跃仓（四态）OPEN 腿是否持有该合约（gate
 	// futures.adl_warning 帧用：合约级市场广播→持仓关联过滤）。false 仅在确证
@@ -66,13 +74,47 @@ type Config struct {
 
 // DefaultConfig 返回默认配置。
 func DefaultConfig(symbols []string) Config {
-	return Config{
+	c := Config{
 		Symbols:        symbols,
 		BinanceBaseURL: "https://fapi.binance.com",
 		GateBaseURL:    "https://api.gateio.ws",
 		OKXBaseURL:     "https://www.okx.com",
 		Client:         &http.Client{Timeout: 10 * time.Second},
+		DepthTimeout:   map[string]time.Duration{},
 	}
+	// NOX_CEX_DEPTH_TIMEOUT_<VENUE>=秒（venue 大写名——gate/okx/binance；
+	// 缺省 8s 带病工作预算，劣化面边界防拖批）。
+	for _, v := range []string{"binance", "gate", "okx"} {
+		d := 8 * time.Second
+		if raw := os.Getenv("NOX_CEX_DEPTH_TIMEOUT_" + strings.ToUpper(v)); raw != "" {
+			if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+				d = time.Duration(n) * time.Second
+			}
+		}
+		c.DepthTimeout[v] = d
+	}
+	return c
+}
+
+// depthClient venue 专超时客户端（缺省 8s 实例化一次缓存；DepthTimeout
+// 面未配=共享 Client 零行为变——带病工作径显式选）。
+func (c *Config) depthClient(venue string) *http.Client {
+	d, ok := c.DepthTimeout[venue]
+	if !ok || d <= 0 {
+		return c.Client
+	}
+	if c.depthClients == nil {
+		c.depthClients = map[string]*http.Client{}
+	}
+	if cl, ok := c.depthClients[venue]; ok {
+		return cl
+	}
+	cl := &http.Client{Timeout: d}
+	if c.Client != nil && c.Client.Transport != nil {
+		cl.Transport = c.Client.Transport // 代理面继承（mihomo/CF worker 径不丢）
+	}
+	c.depthClients[venue] = cl
+	return cl
 }
 
 // BinanceFunding/GateFunding/OKXFunding REST 轮询采集器已退役（D-518 S3：

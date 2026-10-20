@@ -69,7 +69,7 @@ func fetchDepth(ctx context.Context, cfg Config, venue, base string) (DepthQuote
 			Bids [][]string `json:"bids"`
 			Asks [][]string `json:"asks"`
 		}
-		if err := getJSONInto(ctx, cfg.Client, cfg.BinanceBaseURL+"/fapi/v1/depth?symbol="+sym+"&limit=5", &body); err != nil {
+		if err := getJSONInto(ctx, cfg.depthClient(venue), cfg.BinanceBaseURL+"/fapi/v1/depth?symbol="+sym+"&limit=5", &body); err != nil {
 			return DepthQuote{}, err
 		}
 		return depthRow(VenueBinance, sym, body.Bids, body.Asks)
@@ -79,7 +79,7 @@ func fetchDepth(ctx context.Context, cfg Config, venue, base string) (DepthQuote
 			Bids []gateOBEntry `json:"bids"`
 			Asks []gateOBEntry `json:"asks"`
 		}
-		if err := getJSONInto(ctx, cfg.Client, cfg.GateBaseURL+"/api/v4/futures/usdt/order_book?contract="+sym+"&limit=5", &body); err != nil {
+		if err := getJSONInto(ctx, cfg.depthClient(venue), cfg.GateBaseURL+"/api/v4/futures/usdt/order_book?contract="+sym+"&limit=5", &body); err != nil {
 			return DepthQuote{}, err
 		}
 		mult, err := gateContractMult(ctx, cfg, sym)
@@ -95,7 +95,7 @@ func fetchDepth(ctx context.Context, cfg Config, venue, base string) (DepthQuote
 				Asks [][]string `json:"asks"`
 			} `json:"data"`
 		}
-		if err := getJSONInto(ctx, cfg.Client, cfg.OKXBaseURL+"/api/v5/market/books?instId="+sym+"&sz=5", &body); err != nil {
+		if err := getJSONInto(ctx, cfg.depthClient(venue), cfg.OKXBaseURL+"/api/v5/market/books?instId="+sym+"&sz=5", &body); err != nil {
 			return DepthQuote{}, err
 		}
 		if len(body.Data) == 0 {
