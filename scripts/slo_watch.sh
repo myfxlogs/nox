@@ -51,6 +51,21 @@ else
 fi
 
 # ④ cron+备份 WARN——backup.log 尾 WARN/ERROR 行即 trigger
+# ④a 备份新鲜度死闸（cron 死/脚本哑/日志缺三型兜底——OK 龄>30h=critical；
+# AlertDedupKey 数值归一 <N> 天然 dedup 不手写等值）。
+BACKUP_LOG=/opt/nox-backups/backup.log
+if [[ ! -f "$BACKUP_LOG" ]]; then
+  emit critical "[SLO] backup.log 缺——备份链全灭不可见域"
+else
+  OK_TS=$(grep 'backup OK' "$BACKUP_LOG" | tail -1 | grep -oP '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}' | head -1)
+  if [[ -z "$OK_TS" ]]; then
+    emit critical "[SLO] backup.log 零 backup OK 行——备份从未成功域"
+  else
+    OK_EPOCH=$(TZ=UTC date -d "$OK_TS" +%s 2>/dev/null || echo 0)
+    AGE_S=$(( $(date -u +%s) - OK_EPOCH ))
+    [[ "$AGE_S" -gt 108000 ]] && emit critical "[SLO] backup OK 龄 ${AGE_S}s >30h——备份死晨域"
+  fi
+fi
 if [[ -f /opt/nox-backups/backup.log ]]; then
   LAST=$(tail -20 /opt/nox-backups/backup.log 2>/dev/null | grep -c 'WARN\|ERROR' || true)
   [[ "$LAST" -gt 0 ]] && emit warn "[SLO] backup.log WARN/ERROR 行在尾窗（${LAST} 条——备份降级面）"

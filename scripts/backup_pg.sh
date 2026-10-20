@@ -22,11 +22,21 @@
 set -euo pipefail
 
 BACKUP_DIR="${BACKUP_DIR:-/opt/nox-backups}"
+# D-110 告警：alerts critical（emit_alert 定义先置——两 FAIL 支调用在上方，bash 逐行解释须定义在前）。
+emit_alert() {
+	if psql "$PG_DSN" -q -v ON_ERROR_STOP=1 \
+		-c "INSERT INTO alerts (ts, level, message, acked) VALUES (now(), 'critical', '$1', false);" >/dev/null 2>&1; then
+		echo "[$(date -u +%FT%TZ)] alert critical inserted: $1"
+	else
+		echo "[$(date -u +%FT%TZ)] ERROR: ALERT(critical, psql 不可达兜底): $1" >&2
+	fi
+}
+
 if [ $# -ge 1 ]; then
 	PG_DSN="$1"
 else
 	NOX_PG_PORT="$(docker port nox-postgres 5432 2>/dev/null | head -n1 | awk -F: '{print $NF}')"
-	[ -n "$NOX_PG_PORT" ] || { echo "[$(date -u +%FT%TZ)] backup FAIL: nox-postgres 端口解析失败（传 PG_DSN 显式旁路）" >&2; exit 1; }
+	[ -n "$NOX_PG_PORT" ] || { echo "[$(date -u +%FT%TZ)] backup FAIL: nox-postgres 端口解析失败（传 PG_DSN 显式旁路）" >&2; emit_alert "[backup] nox-postgres 端口解析失败（pg_dump 前置死——D-110 全灭不可见修）"; exit 1; }
 	PG_DSN="postgres://nox:nox@localhost:${NOX_PG_PORT}/nox?sslmode=disable"
 fi
 RETENTION_DAYS=13
@@ -35,17 +45,6 @@ STATUS=0
 
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
-
-# D-110 告警：alerts critical（系统级，rule_id NULL=D-027）；psql 不可达 → log 兜底，不带崩本地备份。
-# message 只用固定文案（阶段+原因），不含 DSN/凭据/外部输入，SQL 字面量注入面为零。
-emit_alert() {
-	if psql "$PG_DSN" -q -v ON_ERROR_STOP=1 \
-		-c "INSERT INTO alerts (ts, level, message, acked) VALUES (now(), 'critical', '$1', false);" >/dev/null 2>&1; then
-		echo "[$(date -u +%FT%TZ)] alert critical inserted: $1"
-	else
-		echo "[$(date -u +%FT%TZ)] ALERT(critical, psql 不可达兜底): $1" >&2
-	fi
-}
 
 # D-635 连锁a 状态变迁降噪：marker（$BACKUP_DIR/.r2_degrade_state，值=连续降级第几日）缺=首失
 # →critical 必发+落 marker；在=续日→静默仅 log 计数；恢复（配置回在位，见下支）→清 marker；
@@ -125,6 +124,7 @@ echo "[$(date -u +%FT%TZ)] backup start: $DUMP_FILE"
 # pg_dump | gzip（管道避免明文落盘）
 if ! pg_dump "$PG_DSN" | gzip > "$DUMP_FILE"; then
 	echo "[$(date -u +%FT%TZ)] backup FAIL: pg_dump error" >&2
+	emit_alert "[backup] pg_dump error（本地备份链断——D-110 全灭不可见修）"
 	rm -f "$DUMP_FILE"
 # D-277 C5：备份保留 14 份轮转（~80MB/日无界增长实证，D-213 增长源硬顶原则）
 ls -1t "$BACKUP_DIR"/nox_*.sql.gz 2>/dev/null | tail -n +15 | xargs -r rm -f
