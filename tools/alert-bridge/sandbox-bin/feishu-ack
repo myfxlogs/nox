@@ -1,0 +1,40 @@
+#!/usr/bin/python3
+# feishu-ack —— 分诊回执唯一合法径：读 /var/lib/alert-bridge/feishu_cred
+# （app_id+secret+chat_id，600 mluser）→ tenant_access_token → im/v1/messages。
+# 凭据不落会话 env 不落码；会话只见 argv 文本。用法: feishu-ack "回执文本"
+import json, os, sys, urllib.request
+
+CRED = "/var/lib/alert-bridge/feishu_cred"
+BASE = "https://open.feishu.cn/open-apis"
+
+def load():
+    kv = {}
+    for line in open(CRED):
+        k, _, v = line.strip().partition("=")
+        kv[k] = v
+    return kv["APP_ID"], kv["APP_SECRET"], kv["CHAT_ID"]
+
+def post(url, body, token=None):
+    req = urllib.request.Request(url, json.dumps(body).encode(),
+                                 {"Content-Type": "application/json"})
+    if token:
+        req.add_header("Authorization", "Bearer " + token)
+    return json.loads(urllib.request.urlopen(req, timeout=10).read())
+
+def main():
+    if len(sys.argv) < 2 or not sys.argv[1].strip():
+        sys.exit("usage: feishu-ack <text>")
+    app_id, app_secret, chat_id = load()
+    tr = post(BASE + "/auth/v3/tenant_access_token/internal",
+              {"app_id": app_id, "app_secret": app_secret})
+    if tr.get("code") != 0:
+        sys.exit("feishu token: " + tr.get("msg", "?"))
+    content = json.dumps({"text": sys.argv[1][:1800]})
+    sr = post(BASE + "/im/v1/messages?receive_id_type=chat_id",
+              {"receive_id": chat_id, "msg_type": "text", "content": content},
+              tr["tenant_access_token"])
+    if sr.get("code") != 0:
+        sys.exit("feishu send: " + sr.get("msg", "?"))
+    print("ack sent:", sr["data"]["message_id"])
+
+main()

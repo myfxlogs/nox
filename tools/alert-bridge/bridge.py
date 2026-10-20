@@ -24,7 +24,7 @@ ALLOWED_TOOLS = os.environ.get(
     "Read,Grep,Glob,"
     "Bash(psql -h* -U nox_ro*),Bash(docker logs*),Bash(docker ps*),"
     "Bash(docker inspect*),Bash(git log*),Bash(git diff*),Bash(git status*),"
-    "Bash(git show*),Bash(curl -X POST*feishu*),"
+    "Bash(git show*),Bash(feishu-ack*),"
     # 范围化写面——草案件 append 唯二钉死（零外溢；删 skip-permissions
     # 后白名单外一律 deny=结构防生效）。
     "Edit(/opt/nox/docs/handoff/STATE-分诊草案.md),"
@@ -102,7 +102,8 @@ def spawn_session(alert: dict) -> bool:
         f"告警：{json.dumps(alert, ensure_ascii=False)}\n"
         f"职责（skills/告警分诊 runbook 在案）：①取证定性（只读：psql 只读户/"
         f"docker logs/git log 现状对拍）②分诊案落 {DRAFTS}（append，不 commit——"
-        f"git 推送/部署/写库/凭证读皆禁）③飞书回执（分诊结论一行）。\n"
+        f"git 推送/部署/写库/凭证读皆禁）③飞书回执：sandbox-bin/feishu-ack"
+        f" \"分诊结论一行\"（凭据由包装令持有，勿直接 curl 飞书）。\n"
         f"禁线：钱径零触碰、改码零触碰、业主授权类不碰；分不出=如实写"
         f"「待更深证据」不编造。"
     )
