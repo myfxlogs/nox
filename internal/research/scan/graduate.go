@@ -63,9 +63,9 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 		}
 		if pass, seen := famOK[p.Structure]; !seen { // 族闸：样本不足/下界≤0=证据不足不毕业
 			stats := familyGradStatsOf(rows, p.Structure)
-			ok, reason := FamilyGradGate(ctx, st, stats)
-			famOK[p.Structure] = ok
-			famStats[p.Structure] = stats
+			ok, lb, reason := FamilyGradGate(ctx, st, stats)
+			stats.LowerBound = lb
+			famOK[p.Structure], famStats[p.Structure] = ok, stats
 			if !ok {
 				log.Printf("[graduation] %s 族闸拒：%s", p.Structure, reason)
 				continue

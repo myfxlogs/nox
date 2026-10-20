@@ -23,11 +23,12 @@ type FamilyGradStats struct {
 }
 
 // FamilyGradGate 族级双轴判定——minN/Z 由 app_config 可调（行缺保缺省）。
-// 返回 (qualified, reason)；qualified=false=证据不足如实拒（非毕业不判死）。
+// 返回 (qualified, lb, reason)；lb=判点实算置信下界同源出闸（持久化取此值——
+// 禁两处重算漂移；拒径 lb 如实返算出值或 0，语义=未达闸）。
 func FamilyGradGate(ctx context.Context, st interface {
 	AppConfigInt64(context.Context, string) (int64, bool, error)
 	AppConfigFloat(context.Context, string) (float64, bool, error)
-}, stats FamilyGradStats) (bool, string) {
+}, stats FamilyGradStats) (bool, float64, string) {
 	minN := int64(5)
 	if v, ok, _ := st.AppConfigInt64(ctx, "grad_family_min_n"); ok && v > 0 {
 		minN = v
@@ -36,17 +37,20 @@ func FamilyGradGate(ctx context.Context, st interface {
 	if v, ok, _ := st.AppConfigFloat(ctx, "grad_family_z"); ok && v > 0 {
 		z = v
 	}
+	lb := stats.WinRate // N<=1 界=minN 闸管样本界（操作阈语义）——lb 如实返观测率非 NaN
+	if stats.N > 1 {
+		lb = stats.WinRate - z*math.Sqrt(stats.WinRate*(1-stats.WinRate)/float64(stats.N-1))
+	}
 	if stats.N < int(minN) {
-		return false, "族样本不足（N=" + strconv.Itoa(stats.N) + "<" + strconv.FormatInt(minN, 10) + "）"
+		return false, lb, "族样本不足（N=" + strconv.Itoa(stats.N) + "<" + strconv.FormatInt(minN, 10) + "）"
 	}
 	if stats.MeanNetUSD <= 0 {
-		return false, "族费后净均值非正"
+		return false, lb, "族费后净均值非正"
 	}
-	lb := stats.WinRate - z*math.Sqrt(stats.WinRate*(1-stats.WinRate)/float64(stats.N-1))
 	if lb <= 0 {
-		return false, "置信下界≤0（证据不足）"
+		return false, lb, "置信下界≤0（证据不足）"
 	}
-	return true, ""
+	return true, lb, ""
 }
 
 // familyGradStatsOf rows 内同 Structure 聚合（费后净可算行——NULL 行不入样本）。

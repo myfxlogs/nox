@@ -27,7 +27,7 @@ func TestFamilyGradGate_ThreeShapes(t *testing.T) {
 		{"正边大样本", FamilyGradStats{N: 30, Wins: 21, WinRate: 0.7, MeanNetUSD: 12.0}, true},
 	}
 	for _, c := range cases {
-		got, reason := FamilyGradGate(ctx, famCfgStub{}, c.stats)
+		got, _, reason := FamilyGradGate(ctx, famCfgStub{}, c.stats)
 		if got != c.want {
 			t.Fatalf("%s: got=%v want=%v（%s）", c.name, got, c.want, reason)
 		}
