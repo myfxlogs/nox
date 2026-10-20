@@ -62,7 +62,9 @@ func evalProposal(ctx context.Context, st *pgstore.Store, r Result, pid int64) *
 		// ——0 败=零损耗证据，>0=成本未计价 fail-closed 仍缺（不估单价）。
 		// D-277 G4 修复：fin_cex_spread.symbol 写侧存基础币形（BTC/SOL/TRX/ETH），
 		// 键须用基名——"BTCUSDT" 永不命中（8526 行/日鲜写侧键义不动）。
-		if b, ok, err := st.LatestSpreadBps(ctx, "BTC"); err == nil && ok {
+		if hs, ok, err := st.LatestDepthHalfSpread(ctx, r.Venue, ""); err == nil && ok {
+			in.Slippage = econ.Term{Value: hs, Evidence: fmt.Sprintf("fin_cex_depth %s 中位半价差", r.Venue)}
+		} else if b, ok, err := st.LatestSpreadBps(ctx, "BTC"); err == nil && ok {
 			in.Slippage = econ.Term{Value: b / 100, Evidence: "fin_cex_spread:BTC"}
 		}
 		if m, ok, err := st.MedianFactValue(ctx, "funding", evalWindow); err == nil && ok && r.APR != nil {
@@ -86,21 +88,26 @@ func evalProposal(ctx context.Context, st *pgstore.Store, r Result, pid int64) *
 		// D-637 序③：gross=BasisAnn 原生年化已在；fee=taker×2 按到期持有窗年化
 		// （universe FUTURES expiry_ts 中位——无到期行=缺不外推）；slippage=无每
 		// venue 盘口深源如实 missing；window=机理（basis_ann 已含收敛至到期）。
-		if t, ok, err := st.MedianTakerFeeBps(ctx); err == nil && ok {
-			if rows, err2 := st.ListCexUniverse(ctx); err2 == nil {
-				var dts []float64
-				for _, u := range rows {
-					if u.ContractType == "FUTURES" && u.ExpiryTS != nil {
-						if d := time.Until(*u.ExpiryTS).Hours(); d > 24 {
-							dts = append(dts, d)
-						}
+		// fee/slippage 同到期窗年化径（×8760/hh——dts 块内算；无到期行两词同 missing 不掺径）
+		if rows, err2 := st.ListCexUniverse(ctx); err2 == nil {
+			var dts []float64
+			for _, u := range rows {
+				if u.ContractType == "FUTURES" && u.ExpiryTS != nil {
+					if d := time.Until(*u.ExpiryTS).Hours(); d > 24 {
+						dts = append(dts, d)
 					}
 				}
-				if len(dts) > 0 {
-					sort.Float64s(dts)
-					hh := dts[len(dts)/2]
+			}
+			if len(dts) > 0 {
+				sort.Float64s(dts)
+				hh := dts[len(dts)/2]
+				if t, ok, err := st.MedianTakerFeeBps(ctx); err == nil && ok {
 					in.Fee = econ.Term{Value: t * 2 / 100 * (8760 / hh),
 						Evidence: fmt.Sprintf("exchange_configs taker中位%.2fbps×2腿 / universe 到期中位%.1fh", t, hh)}
+				}
+				if hs, ok, err := st.LatestDepthHalfSpread(ctx, r.Venue, ""); err == nil && ok {
+					in.Slippage = econ.Term{Value: hs * (8760 / hh),
+						Evidence: fmt.Sprintf("fin_cex_depth %s 中位半价差×到期窗年化(%.1fh)", r.Venue, hh)}
 				}
 			}
 		}
@@ -116,6 +123,9 @@ func evalProposal(ctx context.Context, st *pgstore.Store, r Result, pid int64) *
 		}
 		if t, ok, err := st.MedianTakerFeeBps(ctx); err == nil && ok {
 			in.Fee = econ.Term{Value: t * 2 / 100, Evidence: fmt.Sprintf("exchange_configs taker中位%.2fbps×2腿 per-turn", t)}
+		}
+		if hs, ok, err := st.LatestDepthHalfSpread(ctx, r.Venue, ""); err == nil && ok {
+			in.Slippage = econ.Term{Value: hs, Evidence: fmt.Sprintf("fin_cex_depth %s 中位半价差 per-turn", r.Venue)}
 		}
 		in.Failure = econ.Term{Evidence: "mechanism:per-turn 单周转无腿账本域"}
 		in.Window = econ.Term{Evidence: "mechanism:per-turn 单周转非年化口径"}

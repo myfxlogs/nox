@@ -199,6 +199,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 						}
 					}
 				}
+				rv.Venue = venue
 				card := evalProposal(ctx, st, rv, pid) // D-258 M4.1：一提案一卡（每扫一拍复算）
 				streak, uerr := st.UpsertOppEval(ctx, card)
 				if uerr != nil {

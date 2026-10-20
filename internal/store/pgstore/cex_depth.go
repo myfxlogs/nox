@@ -72,3 +72,34 @@ func (s *Store) DeleteCexDepthBefore(ctx context.Context, cutoff time.Time) (int
 	}
 	return ct.RowsAffected(), nil
 }
+
+// DepthFreshness 深度行鲜度阈——陈帧=missing 如实缺（D-004 同族，不塞陈帧）。
+const DepthFreshness = 15 * time.Minute
+
+// LatestDepthHalfSpread 深度面半价差滑点源——venue+symbol 最新行
+// (ask1−bid1)/mid×100 percent；symbol=""=venue 全符号最新行中位（提案无
+// symbol 域聚合径——跨 symbol 不凑数：venue 内最新行集合中位如实）。行陈/零行=ok=false。
+func (s *Store) LatestDepthHalfSpread(ctx context.Context, venue, symbol string) (float64, bool, error) {
+	if symbol != "" {
+		var v float64
+		err := s.pool.QueryRow(ctx, `
+			SELECT (ask1_usd-bid1_usd)/NULLIF((ask1_usd+bid1_usd)/2,0)*100
+			FROM fin_cex_depth WHERE venue=$1 AND symbol=$2
+			  AND ts > now() - $3::interval
+			ORDER BY ts DESC LIMIT 1`, venue, symbol, DepthFreshness).Scan(&v)
+		if err != nil {
+			return 0, false, err
+		}
+		return v, v > 0, nil
+	}
+	var v float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY hs) FROM (
+			SELECT DISTINCT ON (symbol) (ask1_usd-bid1_usd)/NULLIF((ask1_usd+bid1_usd)/2,0)*100 AS hs
+			FROM fin_cex_depth WHERE venue=$1 AND ts > now() - $2::interval
+			ORDER BY symbol, ts DESC) t`, venue, DepthFreshness).Scan(&v)
+	if err != nil {
+		return 0, false, err
+	}
+	return v, v > 0, nil
+}

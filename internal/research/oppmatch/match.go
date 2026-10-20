@@ -44,6 +44,7 @@ type Result struct {
 	TemplateID string
 	ExecTrack  string
 	APR        *float64
+	Venue      string // 提案 venue（eval 深度源键——run.go 填值）
 	// GrossEvidence gross 项证源覆盖（idle 产案等非报价径；空=默认 quoteFor 口径）。
 	GrossEvidence string
 	Missing       []Cond
