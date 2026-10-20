@@ -256,3 +256,12 @@
 - 全日弧线：零开仓追因→三堵全清部署验证→修复方案审计补正（R2 失守发现→业主弃配 D-635）→分层方案两轮核验放行→分诊桥上线实战（2993 首单质量高）→磁盘票晋升→emblem v2 并入→两轮部署执行。
 - 收工件：并行席 3 枚滞留提交补推（f8beb4574——eval slippage 返修，属四步序②件）；私忆两条落（分支构建验 cwd/STATE 行号漂移入 staging）；挂起任务零。
 - 开放面：磁盘 du 排查票待派、egress 观察态（升格判据 3 窗/24h）、闸门三票+机会面四步序在轨、491 定性票并行。
+
+## 2026-10-21 00:1xZ — 收工（决策/复审席）
+
+- 决策件：eval 五词补源票派单（三族 switch 臂缺=结构性 unevaluable）+per-turn 单位裁定钦定（APR 槽禁静默塞，后落 D-639）；okx 出口劣化票晋升分诊 2762/2825 案卷（池归因排、venue 侧劣化三形态）；slippage 深度源票立项转因（业主问新机会→实拍 fin_cex_depth 在产被误判「无源」）；funding fee 纸面轨绕行票（鸡生蛋缺词）。
+- 裁定件：arb-backups 2.4G 保留不删（唯一前代账本备份面·销毁=业主域请许可）；term_basis viable≠开仓放行（毕业闸 N≥5+净>0+下界>0 不豁免）；cfd_swap 结构性缺不立伪请求。
+- 审裁件：eval 五词票一轮退回（D# 缺+master 陈测债顺带修）→二轮照准；du 票一轮照准（snap 实释 6.8G）；okx 票一轮照准（dataIdle 3min）；slippage 票一轮退回（term_basis 年化不自洽低估成本）→二轮照准；fee 票一轮退回（锚测缺）→二轮照准。
+- 产验碑：**term_basis 首个 viable 真裁定 net +41.26%**／cross_venue reject−0.10／**funding reject −550**（paper 估费年化吃光 gross——诚实拒）——eval 链正反两向判别力全证，九模板全员真裁定。
+- 私忆升层：「复用未复用三袭」直入正典条目 eval-source-reuse-not-reused-triple（high——报「无源」前必查 fin_* 全谱+鲜度）；noxkb 顶第十次结构性上浮 98304→131072+maxLines 260→320。
+- 挂目：备份晨跑锚（03:00Z）/expire 外溢锚（~6 日）/funding 1383% 校值/MT5 s/m 龄；无在飞票件。
