@@ -241,12 +241,12 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 	recon.SetCloser(dashSvc)
 	recon.SetSettler(settleDeps) // D-087：替换 SetStatUpdater + SetVerificationUpdater
 	dashSvc.SetSettler(settleDeps)
-	pipeline.SetSettler(settleDeps)                              // D-193-A 扩包 S5：手动 ClosePosition/ResumeClose 路径也触发结算（修复 479 缺 settlement 行）
-	wireExecInjections(pipeline, st, recon, cfg, a.commResolver) // 修复⑫：exec 注入（PnL 校准+CS 复用+fx 换算+D-159 组合门禁+D-599 费率链）
-	wireReconKicks(ctx, a, recon, cexStreamMgr)                  // D-004 P1#6：对账事件化（kick 订阅+重连钩+事件循环）
-	wireReconFastRetry(ctx, recon, cfg)                          // D-407：残腿密集重试装配（拆 wire_posmon.go 保行数）
+	pipeline.SetSettler(settleDeps)                                    // D-193-A 扩包 S5：手动 ClosePosition/ResumeClose 路径也触发结算（修复 479 缺 settlement 行）
+	wireExecInjections(pipeline, st, recon, cfg, a.commResolver, qbus) // 修复⑫：exec 注入（PnL 校准+CS 复用+fx 换算+D-159 组合门禁+D-599 费率链）
+	wireReconKicks(ctx, a, recon, cexStreamMgr)                        // D-004 P1#6：对账事件化（kick 订阅+重连钩+事件循环）
+	wireReconFastRetry(ctx, recon, cfg)                                // D-407：残腿密集重试装配（拆 wire_posmon.go 保行数）
 	// dashSvc setter 注入（leg 查询/CS/frontConfig/analyst）提取至 wire_dashboard.go 保 main() ≤300 行。
-	wireDashboardSetters(ctx, dashSvc, cfg, st, brokerMgr, a.factCache, a.feishuClient)
+	wireDashboardSetters(ctx, dashSvc, cfg, st, brokerMgr, a.factCache, a.feishuClient, qbus)
 	if a.cmcWs != nil { // D-212：cmc ws LiveState/健康注入（nil=REST 兜底——freshLive 分域 DB 兜底径）
 		dashSvc.SetCmcLiveProvider(a.cmcWs.LiveState)
 		dashSvc.SetCmcWsHealth(a.cmcWs.IsHealthy)

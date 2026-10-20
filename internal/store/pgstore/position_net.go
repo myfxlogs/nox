@@ -59,7 +59,18 @@ func (s *Store) PositionLegPricePnlUSD(ctx context.Context, posID int64) (float6
 	}
 	fx := 1.0
 	if q := notional.QuoteCcy(canonicalFromOppIDLocal(pos.OpportunityID)); q != "" && q != "USD" {
-		rate, ok := s.USDPer(ctx, q, time.Now())
+		// D-633 A 档：usdPerNowFn 注入=fail-closed 报缺（禁回 PG）
+		if s.usdPerNowFn == nil {
+			return 0, fmt.Errorf("pos=%d usdPerNowFn 未装配（fail-closed·D-633）", posID)
+		}
+		prefVK := ""
+		for _, l := range legs {
+			if keydomain.IsMTKey(l.Venue) {
+				prefVK = l.Venue
+				break
+			}
+		}
+		rate, ok := s.usdPerNowFn(ctx, q, prefVK)
 		if !ok || rate <= 0 {
 			return 0, fmt.Errorf("pos=%d quote ccy %s fx unavailable", posID, q)
 		}
@@ -122,6 +133,12 @@ func (s *Store) legContractSize(ctx context.Context, leg PositionLeg) (float64, 
 // commission 去重：腿键行（event_key='leg:%'）存在则只计之（新单一事实源）；
 // 否则回落全部 commission 行（leg: 行未铺到的 legacy 仓——旧 exec:* 键是唯一记录）。
 // 幂等：纯查询，调用方在终态写点使用。
+
+// SetUSDPerNowFn cmd/core 装配注入（沿 liveEquityMapFn 函数注入形态）。
+func (s *Store) SetUSDPerNowFn(fn func(ctx context.Context, ccy, preferVenueKey string) (float64, bool)) {
+	s.usdPerNowFn = fn
+}
+
 func (s *Store) PositionNetUSD(ctx context.Context, posID int64, pricePnlOverride *float64) (float64, error) {
 	var pricePnl float64
 	if pricePnlOverride != nil {

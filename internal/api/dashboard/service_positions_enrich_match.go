@@ -178,7 +178,7 @@ func (s *Service) legUSDAt(ctx context.Context, l pgstore.PositionLeg, canonical
 		if s.store == nil {
 			return 0
 		}
-		rate, ok := s.store.USDPer(ctx, quoteCcy, l.Ts)
+		rate, ok := s.store.USDPer(ctx, quoteCcy, l.Ts, "")
 		if !ok {
 			return 0
 		}

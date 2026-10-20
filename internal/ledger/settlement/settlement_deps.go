@@ -17,7 +17,7 @@ type Deps interface {
 	// ContractSizeByCanonical 查 CS（已含 VenueAccount 归一）。
 	ContractSizeByCanonical(ctx context.Context, venue, canonical string) (float64, bool, error)
 	// USDPer 查计价币→USD 汇率（FXRateProvider）。
-	USDPer(ctx context.Context, quoteCcy string, at time.Time) (float64, bool)
+	USDPer(ctx context.Context, quoteCcy string, at time.Time, preferVenueKey string) (float64, bool)
 	// UpsertVerificationSample 增量验证统计。
 	UpsertVerificationSample(ctx context.Context, vkey string, expectedUsd, realizedUsd float64, closedAt time.Time) error
 	// UpdateStrategyStat 策略统计增量。

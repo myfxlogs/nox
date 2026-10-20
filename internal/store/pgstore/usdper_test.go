@@ -50,7 +50,7 @@ func TestUSDPer(t *testing.T) {
 		{"XYZ", 0}, // 未知→false
 	}
 	for _, c := range cases {
-		got, ok := s.USDPer(ctx, c.quoteCcy, at)
+		got, ok := s.USDPer(ctx, c.quoteCcy, at, "")
 		if c.quoteCcy == "" || c.quoteCcy == "XYZ" {
 			if ok {
 				t.Errorf("USDPer(%q) ok=true, want false", c.quoteCcy)

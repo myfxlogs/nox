@@ -168,8 +168,9 @@ type PnLCalibrator interface {
 // FxResolver 计价币→USD 汇率查询（D-105 T2 平仓 PnL 计价币换算）。
 // 实现者：*pgstore.Store（USDPer 方法同款）。nil = 未接线（非 USD 计价腿 fx 不可得 → 0+alert）。
 type FxResolver interface {
-	// USDPer 返回 1 单位 quoteCcy 折 USD 的汇率。ok=false = 换算不可得（调用方 fail-closed）。
-	USDPer(ctx context.Context, quoteCcy string, at time.Time) (float64, bool)
+	// USDPerNow 返回 1 单位 quoteCcy 折 USD 的现态汇率（D-633 A 档=qbus MT 键域）。
+	// ok=false = 换算不可得（调用方 fail-closed——禁回 PG 顶替现态）。
+	USDPerNow(ctx context.Context, quoteCcy, preferVenueKey string) (float64, bool)
 }
 
 // Registry 按 Key 路由执行器。动态启停（Broker 管理器）后并发读写，须加锁。

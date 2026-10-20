@@ -11,15 +11,19 @@ import (
 	"nox/internal/ledger/reconcile"
 	"nox/internal/platform/config"
 	"nox/internal/platform/safego"
+	"nox/internal/platform/usdnotional"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/exec"
 )
 
-func wireExecInjections(pipeline *exec.Pipeline, st *pgstore.Store, recon *reconcile.Reconciler, cfg *config.Config, commResolver func(venueKey string) float64) {
+func wireExecInjections(pipeline *exec.Pipeline, st *pgstore.Store, recon *reconcile.Reconciler, cfg *config.Config, commResolver func(venueKey string) float64, qbus *bus.QuoteBus) {
 	pipeline.SetPnLCalibrator(execPnLCalibrator{r: recon})
-	pipeline.SetFeeBpsResolver(exec.FeeBpsResolver(commResolver))                                                  // D-599 S2：净额核算估算费率链（同 commissionResolver）
-	pipeline.SetContractSizeResolver(execCSResolver(pipelineCSResolver(st)))                                       // D-311 R2：复合分派（:perp→ct_val/:mt4/:mt5→broker_symbol_map/:spot→1.0）
-	pipeline.SetFxResolver(st)                                                                                     // D-105 T2：平仓 PnL 计价币→USD 换算（*pgstore.Store 满足 FxResolver）
+	pipeline.SetFeeBpsResolver(exec.FeeBpsResolver(commResolver))            // D-599 S2：净额核算估算费率链（同 commissionResolver）
+	pipeline.SetContractSizeResolver(execCSResolver(pipelineCSResolver(st))) // D-311 R2：复合分派（:perp→ct_val/:mt4/:mt5→broker_symbol_map/:spot→1.0）
+	pipeline.SetFxResolver(usdnotional.NewFxLive(qbus))                      // D-105 T2：平仓 PnL 计价币→USD 换算（D-633 A 档=qbus MT 键域）
+	st.SetUSDPerNowFn(func(ctx context.Context, ccy, vk string) (float64, bool) {
+		return usdnotional.USDPerNow(ctx, qbus, ccy, vk)
+	}) // D-633 A 档：PositionNetUSD 现态 fx 注入
 	pipeline.SetSwapArbComboAllow(swapArbAllowFromTableOnly(context.Background(), st), cfg.OpportunityNotionalUSD) // D-515 S5：表化同源（env 停读）
 	pipeline.SetXAssetComboAllow(xassetAllowFromTable(context.Background(), st, cfg.Environment))                  // D-338 S3：同 slice 同源（manual 路径不分裂）
 }

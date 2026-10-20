@@ -5,7 +5,6 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
-	"time"
 )
 
 // fakeFxResolver 测试用 FxResolver（D-159 W1a R1 S2.3 返修）。
@@ -14,7 +13,7 @@ type fakeFxResolver struct {
 	ok    bool
 }
 
-func (f fakeFxResolver) USDPer(ctx context.Context, quoteCcy string, at time.Time) (float64, bool) {
+func (f fakeFxResolver) USDPerNow(ctx context.Context, quoteCcy string, preferVenueKey string) (float64, bool) {
 	if !f.ok {
 		return 0, false
 	}

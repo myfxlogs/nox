@@ -1,23 +1,8 @@
 // cmd/resettle —— D-422 §1.4/§5：pnl_estimated 仓位重结算工具。
-//
-// 语义：
-//   - 选仓：-pos=<id> 单仓；或 -all（note LIKE '%pnl_estimated%' 的全部仓位）。
-//   - 校准重试：MT 可校准腿（:mt4/:mt5 + OPEN+FILLED+OrderID）按 broker_accounts
-//     临时建 adapter→OrderHistoryQuerier 重查历史；任一腿 history 不可得 →
-//     "history unreachable, keep"（不清 note、不动 settlement）——历史不可得不是
-//     放行凭据（诚实语义，D-422：不可静默把不可得当成功）。
-//   - 全部可校准腿命中（或无可校准腿=纯 CEX 仓公式价即权威）→ 重写 realized_pnl=
-//     混合权威值（MT Profit×fx + CEX 公式价）、清 note、skipped→pending、调 SettleAt。
-//   - -dry-run：只判定+报告，不写库不调结算。
-//   - 幂等可重跑：SettleAt 自身 applied/skipped 短路；清 note 与 stats_status 更新幂等。
-//
-// 安全闸（§5）：数据库名必须含 _test（解析 DSN path 尾部，不做整体字符串匹配——
-// "nox" 出现在用户名/主机不算数）；否则必须显式 -allow-live。首跑目标 pos=498。
-//
-// 用法：
-//
-//	NOX_PG_DSN="postgres://nox:nox@host:5432/nox_test?sslmode=disable" go run ./cmd/resettle -pos=498 -dry-run
-//	NOX_PG_DSN="postgres://nox:nox@host:5432/nox?sslmode=disable"     go run ./cmd/resettle -pos=498 -allow-live
+// 选仓 -pos/-all→MT 可校准腿 OrderHistoryQuerier 重查→任一不可得="history unreachable,
+// keep"（诚实语义不可静默当成功）→全中则重写 realized_pnl=混合权威（MT Profit×fx
+// +CEX 公式价）+清 note+skipped→pending+调 SettleAt；-dry-run 只判不写；幂等可重跑。
+// 安全闸：库名须含 _test 或显式 -allow-live（首跑目标 pos=498）。
 package main
 
 import (
@@ -146,7 +131,14 @@ func (t *resettler) run(ctx context.Context, posID int64, dry bool) {
 	quoteCcy := canonicalQuoteCcy(pos.OpportunityID)
 	fx := 1.0
 	if quoteCcy != "" && quoteCcy != "USD" {
-		rate, ok := t.deps.USDPer(ctx, quoteCcy, time.Now())
+		at := pos.OpenedAt // as-of 结算时戳（D-633：禁 time.Now() 今汇结旧账；nil→跳过 fx 查询）
+		if pos.ClosedAt != nil {
+			at = pos.ClosedAt
+		}
+		rate, ok := 0.0, false
+		if at != nil {
+			rate, ok = t.deps.USDPer(ctx, quoteCcy, *at, "")
+		}
 		if !ok || rate <= 0 {
 			fmt.Printf("pos=%d: fx unavailable quote=%s, keep\n", posID, quoteCcy)
 			return

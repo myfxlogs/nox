@@ -10,7 +10,6 @@ package exec
 import (
 	"context"
 	"log"
-	"time"
 
 	"nox/internal/platform/notional"
 )
@@ -29,7 +28,7 @@ func (p *Pipeline) writeOpenNotional(ctx context.Context, posType, opportunityID
 			log.Printf("[exec] pos %d notional: fx resolver 未接线（%s）→ 不写", posID, quoteCcy)
 			return
 		}
-		rate, ok := p.fxResolver.USDPer(ctx, quoteCcy, time.Now())
+		rate, ok := p.fxResolver.USDPerNow(ctx, quoteCcy, mtLegVenueKeyOf(legs))
 		if !ok || rate <= 0 {
 			log.Printf("[exec] pos %d notional: fx 不可得（%s）→ 不写", posID, quoteCcy)
 			return

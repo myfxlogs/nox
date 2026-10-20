@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"sort"
-	"time"
 
 	"nox/internal/platform/notional"
 	"nox/internal/store/pgstore"
@@ -46,7 +45,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 	fxMissing := false
 	if quoteCcy != "" && quoteCcy != "USD" {
 		if p.fxResolver != nil {
-			rate, ok := p.fxResolver.USDPer(ctx, quoteCcy, time.Now())
+			rate, ok := p.fxResolver.USDPerNow(ctx, quoteCcy, mtLegVenueKeyOfPos(legs))
 			if !ok || rate <= 0 {
 				fxMissing = true
 				fx = 0
