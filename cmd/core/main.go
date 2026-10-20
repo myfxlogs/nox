@@ -36,14 +36,14 @@ func main() {
 	// 1. DB 连接 + migrations 自跑（§11.2）
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	startPprof(ctx) // 本机诊断面（127.0.0.1:6060 / NOX_PPROF_ADDR；不入公网 mux）
-
 	st, err := pgstore.New(ctx, dsn)
 	if err != nil {
 		log.Fatalf("db: %v", err)
 	}
 	defer st.Close()
+	stMoney := mustMoneyStore(ctx, dsn) // D-633 拆票：钱径保底池（exec/settle/position 独占——读面爆量不饿钱径）
+	defer stMoney.Close()
 
 	if err := st.Migrate(ctx); err != nil {
 		log.Fatalf("migrate: %v", err)
@@ -237,7 +237,7 @@ func main() {
 	startDisabledStrategiesListener(ctx, st, eng)
 	safego.Go("main:eng", func() { eng.Run(ctx) })
 	// 5e. 持仓监控（§13.4）+ 个人持仓价格阈值监控（财务线 TRX 持仓接入，D-046）
-	posMon := position.New(qbus, st, cfg.CloseBpsThr, cfg.AlertResendInterval)
+	posMon := position.New(qbus, stMoney, cfg.CloseBpsThr, cfg.AlertResendInterval)
 	persMon := position.NewPersonalMonitor(qbus, st) // D-063：现价广播面拆（渲染退役），仅保留阈值告警
 	wirePositionKicks(st, posMon, posChange)         // D-469b S3
 	safego.Go("main:posMon", func() { posMon.Run(ctx) })
@@ -264,7 +264,7 @@ func main() {
 	safego.GoPlain("main:ruleBackfill", func() { runRuleBackfill(ctx, st, brokerMgr) })
 
 	// 7. 执行管线（§13.1）—— D-072 同源：env 驱动，不再硬编码
-	pipeline := newExecPipeline(execReg, st, qbus, cfg, pv)
+	pipeline := newExecPipeline(execReg, stMoney, qbus, cfg, pv)
 
 	// 8. Dashboard RPC（§8.2）
 	// 复盘触发闭包（§13.6，D-034）：平仓后 fire-and-forget 跑统计复盘；boot 也触发一次补齐存量
@@ -283,7 +283,7 @@ func main() {
 	// 6d~6g 监控器 + dashboard 服务 + auth + runServices 装配提取至 main_monitors.go 保 main() ≤300 行。
 	setupMonitorsAndServices(monitorsSetupArgs{
 		cexCfg: cexCfg, liveGate: liveGate, cp: cp,
-		ctx: ctx, cancel: cancel, cfg: cfg, st: st, qbus: qbus, execReg: execReg, acDefaults: acDefaults, acEnvSnap: acEnvSnap, secRes: secRes,
+		ctx: ctx, cancel: cancel, cfg: cfg, st: st, stMoney: stMoney, qbus: qbus, execReg: execReg, acDefaults: acDefaults, acEnvSnap: acEnvSnap, secRes: secRes,
 		brokerMgr: brokerMgr, pipeline: pipeline, recon: recon, factCache: factCache,
 		oppTopic: oppTopic, orderTopic: orderTopic,
 		alertTopic: alertTopic, hedgeTopic: hedgeTopic, refreshTopic: refreshTopic, reviewRun: reviewRun,

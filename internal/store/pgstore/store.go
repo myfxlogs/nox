@@ -69,6 +69,29 @@ func New(ctx context.Context, dsn string) (*Store, error) {
 	return &Store{pool: pool}, nil
 }
 
+// NewMoneyStore 钱径保底池（D-633 拆票·池域隔离——exec/settle/position 写读
+// 独占小池，读面爆量不再饿钱径）。
+// 禁线：MinConns 硬编码 ≥2 保底——禁配置归零饿死（PG 池域隔离票禁线）。
+func NewMoneyStore(ctx context.Context, dsn string) (*Store, error) {
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse dsn: %w", err)
+	}
+	cfg.MinConns = 2 // 硬下限保底（钱径不可被读面饿死——禁线硬编）
+	cfg.MaxConns = 4 // 小钱径域上限（exec/settle/position 面窄——伪证锚缩单连域等价件）
+	cfg.MaxConnLifetime = time.Hour
+	cfg.MaxConnIdleTime = 30 * time.Minute
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("create money pool: %w", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("ping money db: %w", err)
+	}
+	return &Store{pool: pool}, nil
+}
+
 // Close 关闭连接池。
 func (s *Store) Close() {
 	s.pool.Close()
