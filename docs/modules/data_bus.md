@@ -18,6 +18,7 @@
 
 ## 观察（只记事实）
 - 搬迁纯移动+import 路径改写+文件名去票号；语义零改动。
+- TickSampler 写径带 ticks 表 venue_type 白名单滤（`ticksVenueTypes`=ticks_venue_type_chk 代码侧镜像）——非通道型帧（如 cmc:cfd）不落库只记首见一条；写失败日志同键同文案 10min 冷却。qbus 现态面不截。
 
 ## 判定（决策席）
 | 项 | 判定 | 理由 |
