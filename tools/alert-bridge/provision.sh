@@ -40,4 +40,24 @@ ssh -i "$SG_KEY" "$SG_HOST" 'test -f /root/.ssh/bridge_ro_key.pub ||
 command="docker exec nox-postgres psql -U nox_ro -d nox -c \"$SSH_ORIGINAL_COMMAND\" 2>/dev/null || docker logs nox-core --tail ${SSH_ORIGINAL_COMMAND#logs }",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <pubkey>
 KEYEOF
 
+echo "=== ④ 隧道 key+unit（dev→SG ssh -R 反向隧道=SG localhost:8099 可达）"
+if [[ ! -f ~/.ssh/alert_bridge_tunnel ]]; then
+    ssh-keygen -t ed25519 -f ~/.ssh/alert_bridge_tunnel -N "" -C "alert-bridge-tunnel"
+fi
+ssh -i "$SG_KEY" "$SG_HOST" "mkdir -p /root/.ssh && chmod 700 /root/.ssh &&
+  grep -qF 'alert-bridge-tunnel' /root/.ssh/authorized_keys ||
+  echo '$(cat ~/.ssh/alert_bridge_tunnel.pub)' >> /root/.ssh/authorized_keys"
+sudo cp tools/alert-bridge/alert-bridge-tunnel.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now alert-bridge-tunnel
+systemctl status alert-bridge-tunnel --no-pager | head -6
+# SG 侧 sink 配置键（桥地址=SG 本机 127.0.0.1:8099 走隧道）
+ssh -i "$SG_KEY" "$SG_HOST" "docker exec nox-postgres psql -U nox -d nox -c \
+  INSERT INTO app_config (key,value,note) VALUES
+    ('NOX_ALERT_BRIDGE_URL','http://127.0.0.1:8099','告警桥地址=SG localhost:8099 走 dev→SG 反向隧道')
+  ON CONFLICT (key) DO UPDATE SET value='http://127.0.0.1:8099';
+  INSERT INTO app_config (key,value,note) VALUES
+    ('NOX_ALERT_BRIDGE_WARN_PATTERNS','[前提塌],[stale],[attach]','warn 白名单三族起手')
+  ON CONFLICT (key) DO NOTHING;
+  SELECT key,value FROM app_config WHERE key LIKE 'NOX_ALERT_BRIDGE%';\" | tail -4
+
 echo "=== 配给毕——验收三件（S2 成本实测/health/穿通）见 README"

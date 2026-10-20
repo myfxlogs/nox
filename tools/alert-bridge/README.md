@@ -10,8 +10,12 @@
   信号，digest 06:10 批消费）。
 - `alert-bridge.service` —— systemd 单元（systemd 255 核过：NoNewPrivileges
   +ProtectSystem=strict+ReadWritePaths 收窄写面+Restart=always）。
-- `provision.sh` —— 一键配给（本机：unit 安装+env 文件模板+hits 目录；
-  SG：psql 只读 role `nox_ro`+ssh 只读 key 注入）。
+- `alert-bridge-tunnel.service` —— **SG→dev 连通径**（返修③：桥绑
+  127.0.0.1 无外口——dev→SG `ssh -R 127.0.0.1:8099:localhost:8099`
+  反向隧道，SG sink POST 本机口经隧道达 dev 桥；专用 key
+  `~/.ssh/alert_bridge_tunnel` 随 provision 生成注入 SG authorized_keys）。
+- `provision.sh` —— 一键配给四段（本机 unit/env/hits+SG psql 只读 role
+  `nox_ro`+ssh 只读 key+隧道 key/unit+SG sink 配置键两键落 app_config）。
 
 凭据纪律（设计稿 §10.2 审计发现对位）：ssh 取证=独立只读 key
 （command= 前缀限只读令集）；psql=独立只读 role 非应用凭据借。

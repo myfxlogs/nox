@@ -16,3 +16,4 @@ tools/mtprobe/mtprobe
 tools/bnprobe/bnprobe
 /bnprobe
 docs/能力账/mt5-rpc-raw-*.json
+__pycache__/
