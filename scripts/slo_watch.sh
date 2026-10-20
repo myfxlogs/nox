@@ -26,21 +26,23 @@ reset() { rm -f "$STATE_DIR/$1"; }
 CPU=$(docker stats "$DB_CONTAINER" --no-stream --format '{{.CPUPerc}}' 2>/dev/null | tr -d '%')
 if [[ -n "$CPU" ]] && awk "BEGIN{exit !($CPU>150)}" <<<"$CPU"; then
   n=$(($(streak pg_cpu) + 1)); bump pg_cpu "$n"
-  [[ "$n" -ge 1 ]] && emit critical "[SLO] pg CPU ${CPU}% >150%（持续窗达标——docker stats 宿主径）"
+  [[ "$n" -ge 2 ]] && emit critical "[SLO] pg CPU 持续 >150%（docker stats 宿主径——${CPU}%）"
 else
   reset pg_cpu
 fi
 
 # ② 单查询 >5s（pg_stat_statements 均值/max——慢查询面）
 SLOW=$(docker exec "$DB_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tA -c "
-  SELECT COALESCE(max(mean_exec_time),0) FROM pg_stat_statements WHERE mean_exec_time > 5000" 2>/dev/null)
-if [[ -n "$SLOW" ]] && awk "BEGIN{exit !($SLOW>0)}" <<<"$SLOW"; then
-  emit warn "[SLO] 单查询均值 >5s（pg_stat_statements 实测 mean_exec_time=${SLOW}ms）"
+  SELECT count(*) FROM pg_stat_activity
+   WHERE state='active' AND now()-query_start > interval '5 seconds'
+     AND query NOT LIKE '%pg_stat_activity%'" 2>/dev/null)
+if [[ -n "$SLOW" ]] && [[ "$SLOW" -gt 0 ]]; then
+  emit warn "[SLO] 活查询 >5s 在跑（pg_stat_activity 实测 ${SLOW} 条）"
 fi
 
 # ③ RPC p95>10s 持续 5min（Connect 面——pprof/mux 侧无内建直读；以 /healthz RTT 代理
 # 样本持久高+查询慢并发时收为 proxy——实测锚=2 条连续）
-RPC_MS=$(curl -s -o /dev/null -w '%{time_total}' --max-time 15 http://localhost:50051/healthz 2>/dev/null | awk '{print int($1*1000)}')
+RPC_MS=$(curl -s -o /dev/null -w '%{time_total}' --max-time 15 http://localhost:50051/health 2>/dev/null | awk '{print int($1*1000)}')
 if [[ -n "$RPC_MS" ]] && [[ "$RPC_MS" -gt 10000 ]]; then
   n=$(($(streak rpc_p95) + 1)); bump rpc_p95 "$n"
   [[ "$n" -ge 2 ]] && emit critical "[SLO] RPC p95 代理面 ${RPC_MS}ms >10s（持续 2 拍）"

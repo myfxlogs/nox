@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 OUT="${NOX_BIN_DIR:-./bin}"
 mkdir -p "$OUT"
 SHA="$(git rev-parse --short HEAD 2>/dev/null || echo nogit)"
-for t in tools/xasset-monitor tools/universe-radar tools/credread tools/state-audit; do
+for t in tools/xasset-monitor tools/universe-radar tools/credread tools/state-audit tools/alert-emit; do
   n="$(basename "$t")"
   go build -ldflags "-s -w -X main.buildSHA=$SHA" -o "$OUT/$n" "./$t"
   echo "built $OUT/$n @$SHA"
