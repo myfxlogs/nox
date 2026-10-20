@@ -56,6 +56,10 @@ type Config struct {
 	Client             *http.Client
 	// AlertFn 可选告警通道（D-507 重连风暴 fail-loud）；nil=静默跳过（测试默认）。
 	AlertFn func(level, msg string)
+	// DepthTimeout per-venue depth REST 每请求预算（egress 劣化带病工作面——
+	// 慢 venue 有界不拖整批；app_config NOX_CEX_DEPTH_TIMEOUT_<VENUE> 秒级
+	// 装配期读，缺省 8s；未配=回退共享 poll ctx 零行为变）。
+	DepthTimeout map[string]time.Duration
 	// ADLPositionHit D-101：ADL 风险帧持仓关联探针——入参=帧内 venue 原生合约号，
 	// 返回=该 venue 我们的活跃仓（四态）OPEN 腿是否持有该合约（gate
 	// futures.adl_warning 帧用：合约级市场广播→持仓关联过滤）。false 仅在确证
@@ -66,13 +70,19 @@ type Config struct {
 
 // DefaultConfig 返回默认配置。
 func DefaultConfig(symbols []string) Config {
-	return Config{
+	c := Config{
 		Symbols:        symbols,
 		BinanceBaseURL: "https://fapi.binance.com",
 		GateBaseURL:    "https://api.gateio.ws",
 		OKXBaseURL:     "https://www.okx.com",
 		Client:         &http.Client{Timeout: 10 * time.Second},
+		// 缺省 8s/venue 带病预算（装配期可被 app_config 键覆写——
+		// NOX_CEX_DEPTH_TIMEOUT_<VENUE> 秒，业务配置唯一真相=PG 契约遵行）。
+		DepthTimeout: map[string]time.Duration{
+			"binance": 8 * time.Second, "gate": 8 * time.Second, "okx": 8 * time.Second,
+		},
 	}
+	return c
 }
 
 // BinanceFunding/GateFunding/OKXFunding REST 轮询采集器已退役（D-518 S3：
