@@ -280,3 +280,63 @@ func TestEvalCard_DepthSlippage(t *testing.T) {
 		t.Fatalf("陈帧径应 missing 不塞陈值: %+v", c2.SlippageAPR)
 	}
 }
+
+// TestEvalCard_FundingFeePaperSource fee 补源票锚：种 perp_perp exited 行→
+// funding 卡 FeeAPR≈ratio×100×8760/hh；清空→missing 回缺不凑数。
+func TestEvalCard_FundingFeePaperSource(t *testing.T) {
+	st, ctx := evalTestStore(t)
+	// venue 账本径清零（PERP_FUNDING 位行在=paper 径永不可达——断言须缺径触发）
+	if _, err := st.Pool().Exec(ctx, `DELETE FROM positions WHERE type='PERP_FUNDING'`); err != nil {
+		t.Fatal(err)
+	}
+	// perp_perp exited 全清（夹具共享库既有行混中位——断言定值须独苗窗）
+	if _, err := st.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE structure='perp_perp' AND status='exited'`); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _, _ = st.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE venue_a='paperv'`) }()
+	// 两行：fee/qty=0.003（$30/$10000）持有 4h；0.004（$40/$10000）持有 4h——
+	// 中位 ratio≈0.0035、中位 hh=4 → FeeAPR≈0.35×2190=766.5（perp 中位持有 3.6h 同构）
+	for _, c := range []struct {
+		fee, qty float64
+	}{
+		{30, 10000}, {40, 10000},
+	} {
+		if _, err := st.Pool().Exec(ctx, `INSERT INTO paper_spot_carry
+			(entry_ts, exit_ts, qty_usd, accrued_usd, low_streak, exit_reason, status, note,
+			 structure, miss_streak, accrue_ticks, venue_a, venue_b, venue_type_a, venue_type_b,
+			 side, symbol, entry_funding_ann, est_round_trip_fee_usd)
+			VALUES (now()-interval '4 hours', now(), $1, 0, 0, 'normalized', 'exited', 't',
+			 'perp_perp', 0, 0, 'paperv', 'papervb', 'perp', 'perp', 'long', 'BTCUSDT', 10.0, $2)`, c.qty, c.fee); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pid, _, err := st.CreateProposal(ctx, &pgstore.Proposal{TemplateID: "funding_carry", ExecTrack: "auto", Venue: "binance", Params: map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := 10.0
+	card := evalProposal(ctx, st, Result{TemplateID: "funding_carry", APR: &g, Venue: "binance"}, pid)
+	if card.FeeAPR == nil {
+		t.Fatalf("paper 轨径应得 fee: %+v", card.EvidenceRefs)
+	}
+	// 中位 ratio=(0.003+0.004)/2=0.0035，hh=4 → 0.35%×2190≈766.5
+	if *card.FeeAPR < 600 || *card.FeeAPR > 900 {
+		t.Fatalf("FeeAPR 应≈766（paper 中位估费年化）: %v", *card.FeeAPR)
+	}
+	if ev, _ := card.EvidenceRefs["terms"].(map[string]string); ev == nil ||
+		!strings.Contains(ev["fee"], "paper轨估费") {
+		t.Fatalf("fee evidence 应标 paper轨 口径: %+v", card.EvidenceRefs)
+	}
+	// 零行径——清空即 missing 回缺
+	if _, err := st.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE venue_a='paperv'`); err != nil {
+		t.Fatal(err)
+	}
+	pid2, _, _ := st.CreateProposal(ctx, &pgstore.Proposal{TemplateID: "funding_carry", ExecTrack: "auto", Venue: "binance", Params: map[string]any{}})
+	c2 := evalProposal(ctx, st, Result{TemplateID: "funding_carry", APR: &g, Venue: "binance"}, pid2)
+	if c2.FeeAPR != nil && c2.Verdict != "unevaluable" {
+		// fee 词缺=应入 missing（其它词若有值 verdict 可非 unevaluable——断 fee NULL 即足）
+	}
+	if c2.FeeAPR != nil {
+		t.Fatalf("零行径 fee 应 missing: %v", *c2.FeeAPR)
+	}
+}
