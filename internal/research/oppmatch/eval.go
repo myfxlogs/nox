@@ -88,26 +88,28 @@ func evalProposal(ctx context.Context, st *pgstore.Store, r Result, pid int64) *
 		// D-637 序③：gross=BasisAnn 原生年化已在；fee=taker×2 按到期持有窗年化
 		// （universe FUTURES expiry_ts 中位——无到期行=缺不外推）；slippage=无每
 		// venue 盘口深源如实 missing；window=机理（basis_ann 已含收敛至到期）。
-		if t, ok, err := st.MedianTakerFeeBps(ctx); err == nil && ok {
-			if rows, err2 := st.ListCexUniverse(ctx); err2 == nil {
-				var dts []float64
-				for _, u := range rows {
-					if u.ContractType == "FUTURES" && u.ExpiryTS != nil {
-						if d := time.Until(*u.ExpiryTS).Hours(); d > 24 {
-							dts = append(dts, d)
-						}
+		// fee/slippage 同到期窗年化径（×8760/hh——dts 块内算；无到期行两词同 missing 不掺径）
+		if rows, err2 := st.ListCexUniverse(ctx); err2 == nil {
+			var dts []float64
+			for _, u := range rows {
+				if u.ContractType == "FUTURES" && u.ExpiryTS != nil {
+					if d := time.Until(*u.ExpiryTS).Hours(); d > 24 {
+						dts = append(dts, d)
 					}
 				}
-				if len(dts) > 0 {
-					sort.Float64s(dts)
-					hh := dts[len(dts)/2]
+			}
+			if len(dts) > 0 {
+				sort.Float64s(dts)
+				hh := dts[len(dts)/2]
+				if t, ok, err := st.MedianTakerFeeBps(ctx); err == nil && ok {
 					in.Fee = econ.Term{Value: t * 2 / 100 * (8760 / hh),
 						Evidence: fmt.Sprintf("exchange_configs taker中位%.2fbps×2腿 / universe 到期中位%.1fh", t, hh)}
 				}
+				if hs, ok, err := st.LatestDepthHalfSpread(ctx, r.Venue, ""); err == nil && ok {
+					in.Slippage = econ.Term{Value: hs * (8760 / hh),
+						Evidence: fmt.Sprintf("fin_cex_depth %s 中位半价差×到期窗年化(%.1fh)", r.Venue, hh)}
+				}
 			}
-		}
-		if hs, ok, err := st.LatestDepthHalfSpread(ctx, r.Venue, ""); err == nil && ok {
-			in.Slippage = econ.Term{Value: hs, Evidence: fmt.Sprintf("fin_cex_depth %s 中位半价差", r.Venue)}
 		}
 		if n, err := st.LegFailCount(ctx, []string{"TERM_BASIS"}, evalWindow); err == nil && n == 0 {
 			in.Failure = econ.Term{Evidence: "position_legs 0腿败/30d"}

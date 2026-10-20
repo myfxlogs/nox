@@ -224,10 +224,19 @@ func TestEvalCard_ThreeNewArms(t *testing.T) {
 		t.Fatal(err)
 	}
 	pid1, _, _ := st.CreateProposal(ctx, &pgstore.Proposal{TemplateID: "term_basis", ExecTrack: "proposal", Venue: "binance", Params: map[string]any{}})
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_cex_depth
+		(venue, symbol, ts, bid1_usd, ask1_usd, bid1_qty, ask1_qty, mid_depth_usd)
+		VALUES ('binance','BTCUSDT',now(),100.0,100.2,1,1,1000)`); err != nil {
+		t.Fatal(err)
+	}
 	g5 := 5.0
-	c1 := evalProposal(ctx, st, Result{TemplateID: "term_basis", APR: &g5}, pid1)
+	c1 := evalProposal(ctx, st, Result{TemplateID: "term_basis", APR: &g5, Venue: "binance"}, pid1)
 	if c1.FeeAPR == nil {
 		t.Fatalf("term_basis fee 应算（taker×2/到期窗）: %+v", c1)
+	}
+	// slippage 同 fee 年化径：hs≈0.2 → ×8760/(90×24)=×4.06 ≈0.81
+	if c1.SlippageAPR == nil || *c1.SlippageAPR < 0.7 || *c1.SlippageAPR > 0.9 {
+		t.Fatalf("term_basis slippage 应≈0.2×4.06≈0.81（同 fee 年化径）: %+v", c1.SlippageAPR)
 	}
 	if ev, _ := c1.EvidenceRefs["terms"].(map[string]string); ev == nil || !strings.Contains(fmt.Sprint(ev["window"]), "basis_ann") {
 		t.Fatalf("term_basis window 应 mechanism 证据词: %+v", c1.EvidenceRefs)
