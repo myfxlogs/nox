@@ -44,20 +44,38 @@ echo "=== ④ 隧道 key+unit（dev→SG ssh -R 反向隧道=SG localhost:8099 �
 if [[ ! -f ~/.ssh/alert_bridge_tunnel ]]; then
     ssh-keygen -t ed25519 -f ~/.ssh/alert_bridge_tunnel -N "" -C "alert-bridge-tunnel"
 fi
+PUB_KEY=$(cat ~/.ssh/alert_bridge_tunnel.pub)
 ssh -i "$SG_KEY" "$SG_HOST" "mkdir -p /root/.ssh && chmod 700 /root/.ssh &&
   grep -qF 'alert-bridge-tunnel' /root/.ssh/authorized_keys ||
-  echo '$(cat ~/.ssh/alert_bridge_tunnel.pub)' >> /root/.ssh/authorized_keys"
+  echo 'restrict,permitlisten=127.0.0.1:8099' '$PUB_KEY' >> /root/.ssh/authorized_keys"
 sudo cp tools/alert-bridge/alert-bridge-tunnel.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now alert-bridge-tunnel
 systemctl status alert-bridge-tunnel --no-pager | head -6
-# SG 侧 sink 配置键（桥地址=SG 本机 127.0.0.1:8099 走隧道）
-ssh -i "$SG_KEY" "$SG_HOST" "docker exec nox-postgres psql -U nox -d nox -c \
+# ⑥容器边界：SG nox-core 容器 127.0.0.1≠host——socat 同网转发件
+# （172.20.0.1:8099→127.0.0.1:8099 隧道口；GatewayPorts 免动 sshd=最小面）
+ssh -i "$SG_KEY" "$SG_HOST" 'cat > /etc/systemd/system/alert-bridge-socat.service <<UNIT
+[Unit]
+Description=alert-bridge socat (docker gw 172.20.0.1:8099 -> tunnel 127.0.0.1:8099)
+After=network.target
+[Service]
+ExecStart=/usr/bin/socat TCP-LISTEN:8099,bind=172.20.0.1,fork,reuseaddr TCP:127.0.0.1:8099
+Restart=always
+RestartSec=10
+[Install]
+WantedBy=multi-user.target
+UNIT
+command -v socat >/dev/null || apt-get install -y socat >/dev/null 2>&1
+systemctl daemon-reload && systemctl enable --now alert-bridge-socat
+systemctl is-active alert-bridge-socat'
+# SG 侧 sink 配置键（桥地址=容器可达 gw 口走 socat→隧道；WARN 真前缀三族）
+ssh -i "$SG_KEY" "$SG_HOST" 'docker exec nox-postgres psql -U nox -d nox <<'SQL'
   INSERT INTO app_config (key,value,note) VALUES
-    ('NOX_ALERT_BRIDGE_URL','http://127.0.0.1:8099','告警桥地址=SG localhost:8099 走 dev→SG 反向隧道')
-  ON CONFLICT (key) DO UPDATE SET value='http://127.0.0.1:8099';
+    ('NOX_ALERT_BRIDGE_URL','http://172.20.0.1:8099','告警桥=容器 gw 口→socat→dev 隧道')
+  ON CONFLICT (key) DO UPDATE SET value='http://172.20.0.1:8099';
   INSERT INTO app_config (key,value,note) VALUES
-    ('NOX_ALERT_BRIDGE_WARN_PATTERNS','[前提塌],[stale],[attach]','warn 白名单三族起手')
+    ('NOX_ALERT_BRIDGE_WARN_PATTERNS','[前提塌],CMC 报价断流,MT5 数据监控','warn 真前缀三族（master sink 缺省同版）')
   ON CONFLICT (key) DO NOTHING;
-  SELECT key,value FROM app_config WHERE key LIKE 'NOX_ALERT_BRIDGE%';\" | tail -4
+  SELECT key,value FROM app_config WHERE key LIKE 'NOX_ALERT_BRIDGE%';
+SQL' | tail -4
 
 echo "=== 配给毕——验收三件（S2 成本实测/health/穿通）见 README"

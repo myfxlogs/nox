@@ -28,11 +28,11 @@ ALLOWED_TOOLS = os.environ.get(
 )
 
 # A2 白名单模式——warn 级文案前缀分族（命中数入 hits.jsonl，腐化=日归零）。
+# 真实前缀三族（master wire_bridge.go 缺省同版——regime/CMC 断流/MT5 断流）
 WARN_PATTERNS = [
-    re.compile(r"^\[symdig\]"),
-    re.compile(r"^\[oppmatch\]"),
-    re.compile(r"^\[venue-gap\]"),
-    re.compile(r"^\[triage\]|提案"),
+    re.compile(r"^\[前提塌\]"),
+    re.compile(r"^CMC 报价断流"),
+    re.compile(r"^MT5 数据监控"),
 ]
 
 q = queue.Queue(maxsize=Q_MAX)
