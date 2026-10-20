@@ -41,7 +41,11 @@ func cfdSwapCarryQuote(ctx context.Context, st *pgstore.Store) (float64, bool, e
 			if err != nil || canon == "" {
 				continue
 			}
-			if net := f.Value*365/100 - fundMin[canon]; net > best {
+			cost, ok2 := fundMin[canon]
+			if !ok2 {
+				continue // canonical 无 funding 配对=对冲成本缺证 fail-closed（非零成本放行）
+			}
+			if net := f.Value*365/100 - cost; net > best {
 				best, anyOK = net, true
 			}
 		}
@@ -49,39 +53,18 @@ func cfdSwapCarryQuote(ctx context.Context, st *pgstore.Store) (float64, bool, e
 	return best, anyOK, nil
 }
 
-// crossVenueSpotQuote 同符号跨所 index_price 价差（最新行按 symbol 分组，
-// spread=(max−min)/min——单周转收益如实低估不年化；单一 venue 行=无价差面跳）。
+// crossVenueSpotQuote 跨所价差现值——fin_cex_spread 每 symbol 最新行
+// spread_bps/100=percent（单周转如实标不年化；无行=ok=false unevaluable）。
 func crossVenueSpotQuote(ctx context.Context, st *pgstore.Store) (float64, bool, error) {
-	rows, err := st.LatestFactsByKind(ctx, "index_price")
+	rows, err := st.LatestCexSpreads(ctx)
 	if err != nil {
 		return 0, false, err
 	}
-	type mm struct{ min, max float64 }
-	bySym := map[string]*mm{}
-	for _, f := range rows {
-		if f.Value <= 0 {
-			continue
-		}
-		m := bySym[f.Symbol]
-		if m == nil {
-			m = &mm{min: f.Value, max: f.Value}
-			bySym[f.Symbol] = m
-			continue
-		}
-		if f.Value < m.min {
-			m.min = f.Value
-		}
-		if f.Value > m.max {
-			m.max = f.Value
-		}
-	}
 	var best float64
 	var ok bool
-	for _, m := range bySym {
-		if m.max > m.min && m.min > 0 {
-			if sp := (m.max - m.min) / m.min; sp > best {
-				best, ok = sp, true
-			}
+	for _, r := range rows {
+		if r.SpreadBps > 0 && r.SpreadBps/100 > best {
+			best, ok = r.SpreadBps/100, true
 		}
 	}
 	return best, ok, nil
