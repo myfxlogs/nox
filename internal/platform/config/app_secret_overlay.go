@@ -21,7 +21,8 @@ func IsAppSecretKey(k string) bool {
 		return true
 	}
 	switch k {
-	case "TRX_VOTE_PRIVATE_KEY", "TRONGRID_API_KEY", "NOX_AUTH_TOKEN", "NOX_BINANCE_PROXY_TOKEN", "NOX_TOTP_SECRET": // 业主令 10-19：TOTP secret 入通道（漏列=resolver Get/Set 静默 no-op→login 恒 501）
+	case "TRX_VOTE_PRIVATE_KEY", "TRONGRID_API_KEY", "NOX_AUTH_TOKEN", "NOX_BINANCE_PROXY_TOKEN", "NOX_TOTP_SECRET", // 业主令 10-19：TOTP secret 入通道（漏列=resolver Get/Set 静默 no-op→login 恒 501）
+		"NOX_ALERT_BRIDGE_TOKEN": // 告警桥 sink→桥 POST 鉴权（漏列=secRes.Get 恒空→POST 恒 401）
 		return true
 	}
 	return false
@@ -37,6 +38,7 @@ var appSecretSeedKeys = []string{
 	"NOX_AUTH_TOKEN",          // D-095：auth 令牌迁 PG（首启空表播种写回；PG 无值时 resolver env 回落仍可用）
 	"NOX_TOTP_SECRET",         // 业主令 10-19：TOTP 登录 secret（漏列同键两处=白名单/播种集双拦，descs 有而 config 无=展示副本假象）
 	"NOX_BINANCE_PROXY_TOKEN", // D-145：cex-proxy bearer 迁 PG（secrets 白名单补齐）
+	"NOX_ALERT_BRIDGE_TOKEN",  // 告警桥 sink 鉴权（白名单+播种双列同族坑防复发）
 }
 
 // AppSecretSeedKeys 返回播种密钥键表。
