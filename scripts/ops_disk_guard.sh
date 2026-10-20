@@ -37,6 +37,9 @@ docker image prune -f >/dev/null 2>&1
 journalctl --vacuum-size=200M >/dev/null 2>&1
 find /tmp -maxdepth 1 -type f \( -name '*.tgz' -o -name '*.tar.gz' \) -mtime +1 -delete 2>/dev/null
 find /tmp -maxdepth 1 -type d -name 'go-build*' -mtime +1 -exec rm -rf {} + 2>/dev/null
+# 2026-10-20 增：snap 失效版清收（disabled 修订版=可再下载件，安全径；桌面 snap 集
+# chromium/cups/gnome/mesa 在 headless 上 ~5G 闲置在案——整体删除属系统级裁定另票）。
+command -v snap >/dev/null 2>&1 && snap list --all 2>/dev/null | awk '/disabled/{print $1,$3}' | while read n r; do snap remove "$n" --revision="$r" >/dev/null 2>&1; done
 
 P2=$(pct)
 if [ "$P2" -ge "$THRESH" ]; then
