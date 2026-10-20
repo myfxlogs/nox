@@ -38,10 +38,22 @@ func (d DepthQuote) MidDepthUSD() float64 {
 
 // FetchCexDepths 白名单基名×三所顶档采样（单 venue×symbol 失败跳过）。
 func FetchCexDepths(ctx context.Context, cfg Config, bases []string) []DepthQuote {
-	var out []DepthQuote
+	// venue 并行（R3 复审：串行批共享 poll ctx=健康 venue 被慢 venue 拖死
+	// 病灶——goroutine 分所同 ctx，行序收敛前原序保）。
+	var mu sync.Mutex
+	out := make([]DepthQuote, 0, len(bases)*3)
+	var wg sync.WaitGroup
 	for _, venue := range []string{VenueBinance, VenueGate, VenueOKX} {
-		out = append(out, FetchCexDepthsVenue(ctx, cfg, venue, bases)...)
+		wg.Add(1)
+		go func(v string) {
+			defer wg.Done()
+			dq := FetchCexDepthsVenue(ctx, cfg, v, bases)
+			mu.Lock()
+			out = append(out, dq...)
+			mu.Unlock()
+		}(venue)
 	}
+	wg.Wait()
 	return out
 }
 
@@ -62,6 +74,13 @@ func FetchCexDepthsVenue(ctx context.Context, cfg Config, venue string, bases []
 
 // fetchDepth 单 venue×base 顶档（各所 instrument 命名差异在构造处收口）。
 func fetchDepth(ctx context.Context, cfg Config, venue, base string) (DepthQuote, error) {
+	// 带病工作面：per-request 预算（app_config 装配值，缺省 8s）——
+	// 慢 venue 单请求有界，不烧共享 poll ctx（R3 复审：绑约束真源）。
+	if d := cfg.DepthTimeout[venue]; d > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, d)
+		defer cancel()
+	}
 	switch venue {
 	case VenueBinance:
 		sym := base + "USDT"
@@ -69,7 +88,7 @@ func fetchDepth(ctx context.Context, cfg Config, venue, base string) (DepthQuote
 			Bids [][]string `json:"bids"`
 			Asks [][]string `json:"asks"`
 		}
-		if err := getJSONInto(ctx, cfg.depthClient(venue), cfg.BinanceBaseURL+"/fapi/v1/depth?symbol="+sym+"&limit=5", &body); err != nil {
+		if err := getJSONInto(ctx, cfg.Client, cfg.BinanceBaseURL+"/fapi/v1/depth?symbol="+sym+"&limit=5", &body); err != nil {
 			return DepthQuote{}, err
 		}
 		return depthRow(VenueBinance, sym, body.Bids, body.Asks)
@@ -79,7 +98,7 @@ func fetchDepth(ctx context.Context, cfg Config, venue, base string) (DepthQuote
 			Bids []gateOBEntry `json:"bids"`
 			Asks []gateOBEntry `json:"asks"`
 		}
-		if err := getJSONInto(ctx, cfg.depthClient(venue), cfg.GateBaseURL+"/api/v4/futures/usdt/order_book?contract="+sym+"&limit=5", &body); err != nil {
+		if err := getJSONInto(ctx, cfg.Client, cfg.GateBaseURL+"/api/v4/futures/usdt/order_book?contract="+sym+"&limit=5", &body); err != nil {
 			return DepthQuote{}, err
 		}
 		mult, err := gateContractMult(ctx, cfg, sym)
@@ -95,7 +114,7 @@ func fetchDepth(ctx context.Context, cfg Config, venue, base string) (DepthQuote
 				Asks [][]string `json:"asks"`
 			} `json:"data"`
 		}
-		if err := getJSONInto(ctx, cfg.depthClient(venue), cfg.OKXBaseURL+"/api/v5/market/books?instId="+sym+"&sz=5", &body); err != nil {
+		if err := getJSONInto(ctx, cfg.Client, cfg.OKXBaseURL+"/api/v5/market/books?instId="+sym+"&sz=5", &body); err != nil {
 			return DepthQuote{}, err
 		}
 		if len(body.Data) == 0 {

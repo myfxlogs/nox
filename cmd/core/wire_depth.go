@@ -82,9 +82,19 @@ func (c *cexDepthCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 // buildDepthCollector D-420 S2 装配（5min 节奏与 funding 同槽；静态白名单=SSOT
 // SPX500/XPT/XPD/XAU/CLU + extraBases 动态补采位，D-057 universe canonical 注入点）。
 func buildDepthCollector(cfg exchange.Config, st *pgstore.Store, extraBases func(venue string) []string) collect.Named {
+	// per-venue depth REST 预算装配期读 app_config（NOX_CEX_DEPTH_TIMEOUT_<VENUE>
+	// 秒——业务配置唯一真相=PG 契约；行缺保 8s 缺省，值坏留痕不接管）。
+	for _, v := range []string{"binance", "gate", "okx"} {
+		if n, ok, err := st.AppConfigInt64(context.Background(), "NOX_CEX_DEPTH_TIMEOUT_"+strings.ToUpper(v)); err == nil && ok && n > 0 {
+			cfg.DepthTimeout[v] = time.Duration(n) * time.Second
+		}
+	}
 	return collect.Named{
 		Name:     "cex_depth",
 		Interval: 5 * time.Minute,
+		// PollTimeout 提额 90s（venue 并行后单轮面=最慢 venue 非求和——
+		// 35s 缺省在 gate 劣化窗仍不足，R3 复审硬约束落）。
+		PollTimeout: 90 * time.Second,
 		Collector: &cexDepthCollector{
 			cfg:        cfg,
 			st:         st,
