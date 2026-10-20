@@ -6,6 +6,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"nox/internal/data/keydomain"
 	"time"
 )
 
@@ -28,7 +29,15 @@ func (s *Store) TicksPriceChanged(ctx context.Context, venue, symbol string, win
 // ok=false=该 venue 零行（无证据，不等同死——由调用方语义裁定）。
 func (s *Store) VenueTickLatestAt(ctx context.Context, venue string) (time.Time, bool, error) {
 	var t *time.Time
-	err := s.pool.QueryRow(ctx, `SELECT max(ts) FROM ticks WHERE venue = $1 OR venue_key = $1`, venue).Scan(&t)
+	// venue_key=生成列零索引——键形拆 (venue,venue_type) 双参/裸 venue 单参（同族形）。
+	k := keydomain.Parse(venue)
+	q := `SELECT max(ts) FROM ticks WHERE venue = $1`
+	args := []any{k.Venue}
+	if k.Type != "" {
+		q += ` AND venue_type = $2`
+		args = append(args, k.Type)
+	}
+	err := s.pool.QueryRow(ctx, q, args...).Scan(&t)
 	if err != nil {
 		return time.Time{}, false, fmt.Errorf("venue tick latest %s: %w", venue, err)
 	}

@@ -8,6 +8,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"nox/internal/data/keydomain"
 	"time"
 )
 
@@ -16,16 +17,19 @@ import (
 // 无对齐样本→(0,false,nil)（与 XAssetMonitorSpreadP95 同约）。
 func (s *Store) TickAdverseBasisP95(ctx context.Context, buyVenueKey, buySym, sellVenueKey, sellSym string, since time.Time) (float64, bool, error) {
 	var p95 *float64
+	// venue_key=生成列零索引——复合键拆 (venue,venue_type) 双参（D-633 返修同族形：
+	// ticks_key_ts_idx 三前缀全中 venue+venue_type+symbol+ts 非 ts 位图）。
+	bk, sk := keydomain.Parse(buyVenueKey), keydomain.Parse(sellVenueKey)
 	err := s.pool.QueryRow(ctx, `
 		SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY (a.ask - s.bid)/a.mid*1e4)
 		FROM (SELECT ts, ask, (bid+ask)/2 AS mid
-		        FROM ticks WHERE venue_key=$1 AND symbol=$2 AND ts>=$3) a
+		        FROM ticks WHERE venue=$1 AND venue_type=$2 AND symbol=$3 AND ts>=$4) a
 		JOIN LATERAL (
 		      SELECT bid FROM ticks
-		       WHERE venue_key=$4 AND symbol=$5
+		       WHERE venue=$5 AND venue_type=$6 AND symbol=$7
 		         AND ts<=a.ts AND ts>=a.ts - interval '60 seconds'
 		       ORDER BY ts DESC LIMIT 1) s ON true`,
-		buyVenueKey, buySym, since, sellVenueKey, sellSym).Scan(&p95)
+		bk.Venue, bk.Type, buySym, since, sk.Venue, sk.Type, sellSym).Scan(&p95)
 	if err != nil {
 		return 0, false, fmt.Errorf("tick adverse basis p95: %w", err)
 	}
