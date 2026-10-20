@@ -1,0 +1,6 @@
+#!/bin/bash
+# docker 只读子令面：logs/ps/inspect 白名单放行，其余 deny
+case "$1" in
+  logs|ps|inspect) exec /usr/bin/docker "$@" ;;
+  *) echo "[sandbox] docker $1 deny（白名单=logs|ps|inspect）" >&2; exit 126 ;;
+esac

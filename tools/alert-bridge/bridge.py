@@ -24,11 +24,29 @@ ALLOWED_TOOLS = os.environ.get(
     "Read,Grep,Glob,"
     "Bash(psql -h* -U nox_ro*),Bash(docker logs*),Bash(docker ps*),"
     "Bash(docker inspect*),Bash(git log*),Bash(git diff*),Bash(git status*),"
-    "Bash(git show*),Bash(curl -X POST*feishu*)",
+    "Bash(git show*),Bash(curl -X POST*feishu*),"
+    # 范围化写面——草案件 append 唯二钉死（零外溢；删 skip-permissions
+    # 后白名单外一律 deny=结构防生效）。
+    "Edit(/opt/nox/docs/handoff/STATE-分诊草案.md),"
+    "Write(/opt/nox/docs/handoff/STATE-分诊草案.md),"
+    "Edit(/opt/nox/docs/报告/告警分诊/*),Write(/opt/nox/docs/报告/告警分诊/*),"
+    "Edit(/opt/nox/docs/经验库/待归纳*.md),Write(/opt/nox/docs/经验库/待归纳*.md)",
 )
 
 # A2 白名单模式——warn 级文案前缀分族（命中数入 hits.jsonl，腐化=日归零）。
 # 真实前缀三族（master wire_bridge.go 缺省同版——regime/CMC 断流/MT5 断流）
+# DENIED_TOOLS 高危工具族 deny（实证生效层——Bash 仍须留取证族，
+# deny 面=写库/部署/外传三径结构性闭口）
+DENIED_TOOLS = os.environ.get(
+    "DENIED_TOOLS",
+    "Bash(git push*),Bash(docker rm*),Bash(docker up*),Bash(docker restart*),"
+    "Bash(docker stop*),Bash(docker kill*),Bash(psql -U nox *),"
+    "Bash(curl*hooks.slack*),Bash(scp*),Bash(ssh*),Bash(wget*)",
+)
+
+# sandbox-bin=Bash 工具 PATH 收窄件（白名单令包装器目录）
+SANDBOX_BIN = os.environ.get("SANDBOX_BIN", "/opt/nox/tools/alert-bridge/sandbox-bin")
+
 WARN_PATTERNS = [
     re.compile(r"^\[前提塌\]"),
     re.compile(r"^CMC 报价断流"),
@@ -88,11 +106,25 @@ def spawn_session(alert: dict) -> bool:
         f"禁线：钱径零触碰、改码零触碰、业主授权类不碰；分不出=如实写"
         f"「待更深证据」不编造。"
     )
+    # 权限模式修：删 --dangerously-skip-permissions——该旗使 allowedTools
+    # 形同虚设（草案 02Z d 实证：journalctl/systemctl/cat 白名单外全通）。
+    # headless -p 无 TTY=白名单外 auto-deny fail-closed=设计真收窄。
+    # 白名单残差如实记：GLM sdk 后端实测 --allowedTools 不 enforce+
+    # 绝对路径可绕 PATH sandbox（Bash 白名单=卫生层非硬闸）——真防线=
+    # --disallowedTools 高危工具族 deny（实证生效）+systemd 沙箱写面。
     cmd = ["claude", "-p", prompt, "--allowedTools", ALLOWED_TOOLS,
-           "--dangerously-skip-permissions", "--output-format", "text"]
+           "--disallowedTools", DENIED_TOOLS,
+           "--output-format", "text"]
+    # 权限模式修②：GLM 后端实测 allowedTools 不 enforce（Bash 白名单语法
+    # 全通=草案 d 实证续）——真结构控=sandbox PATH：Bash 工具只见
+    # tools/alert-bridge/sandbox-bin 包装令（docker logs|ps|inspect /
+    # git log|diff|status|show / psql nox_ro / curl 飞书 POST——
+    # 白名单外令直接 command not found=系统层 deny）。
+    env = dict(os.environ)
+    env["PATH"] = SANDBOX_BIN
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                                stderr=subprocess.STDOUT)
+                                stderr=subprocess.STDOUT, env=env)
     except FileNotFoundError:
         print("[bridge] claude not on PATH", file=sys.stderr)
         return False
