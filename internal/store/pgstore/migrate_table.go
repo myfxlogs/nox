@@ -253,4 +253,5 @@ var migrationFiles = []struct {
 	{1058, migrations.SettleReflectionSQL, false},        // settle 单消费者：reflection/entry_expected_cost_bps 列
 	{1059, migrations.IncomeIsTransferSQL, false},        // D-630：income_events.is_transfer 划转伪影标
 	{1060, migrations.TicksKeyTsIdxSQL, false},           // D-633 §4：ticks 复合索引止血（级联 chunk）
+	{1061, migrations.AlertsFanoutPendingSQL, false},     // SLO ⑤：alerts.fanout_pending 列（进程外摄入件扇出判据）
 }

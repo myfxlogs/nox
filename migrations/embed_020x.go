@@ -177,3 +177,6 @@ var IncomeIsTransferSQL string // D-630：income_events.is_transfer 划转伪影
 
 //go:embed 1060_ticks_key_ts_idx.sql
 var TicksKeyTsIdxSQL string // D-633 §4：ticks (venue,symbol,venue_type,ts DESC) 复合索引止血
+
+//go:embed 1061_alerts_fanout_pending.sql
+var AlertsFanoutPendingSQL string // SLO ⑤：alerts.fanout_pending 列（进程外摄入件扇出判据）
