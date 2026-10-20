@@ -11,7 +11,7 @@ STATE_DIR="${NOX_SLO_STATE_DIR:-/tmp/nox-slo}"
 mkdir -p "$STATE_DIR"
 
 # emit 走 alert-emit 摄入件（pgstore.InsertAlertDedup 端点——裸 SQL 径已废：dedup 语义+键域一致性经摄入层单源）。
-ALERT_EMIT="${NOX_ALERT_EMIT:-/opt/nox/tools/alert-emit}"
+ALERT_EMIT="${NOX_ALERT_EMIT:-/opt/nox/bin/alert-emit}"
 emit() { # level message —— InsertAlertDedup 24h 窗（首发保留窗内静默）
   "$ALERT_EMIT" -level "$1" -msg "$2" -dedup 24h >/dev/null 2>&1 || echo "alert-emit 败: $2" >&2
 }
