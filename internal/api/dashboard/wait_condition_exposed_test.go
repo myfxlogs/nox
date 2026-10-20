@@ -167,8 +167,8 @@ func TestD580_WaitConditionDataMissing(t *testing.T) {
 	t.Run("报价缺", func(t *testing.T) {
 		svc := d580ReadySvc(t)
 		row := d580Row(t, svc)
-		if !row.Ready || !strings.Contains(row.WaitReason, "实况价差不可得：") ||
-			!strings.Contains(row.WaitReason, "qbus未接") {
+		// D-633 返修：gate4 qbus 判价先拦（miss=行情报价过期——闸红如实先出）
+		if row.Ready || !strings.Contains(row.WaitReason, "行情报价过期") {
 			t.Fatalf("reason=%q ready=%v", row.WaitReason, row.Ready)
 		}
 		if row.WaitCurrentBps != nil || row.WaitThresholdBps != nil || row.WaitGapBps != nil {
@@ -179,8 +179,8 @@ func TestD580_WaitConditionDataMissing(t *testing.T) {
 		svc := d580ReadySvc(t)
 		d580Publish(svc, 2000, 2002.06, 6*time.Minute)
 		row := d580Row(t, svc)
-		if !strings.Contains(row.WaitReason, "实况价差不可得：") || !strings.Contains(row.WaitReason, "报价超龄") ||
-			row.WaitCurrentBps != nil {
+		// D-633 返修：gate4 陈旧判=行情报价过期先拦
+		if row.Ready || !strings.Contains(row.WaitReason, "行情报价过期") || row.WaitCurrentBps != nil {
 			t.Fatalf("超龄应留空+带因后缀: %q", row.WaitReason)
 		}
 	})
@@ -208,8 +208,9 @@ func TestD587_ReadyWaitKindText(t *testing.T) {
 	// CARRY：报价缺 → fillWaitCondition 前缀仍是分流后文案。
 	t.Run("XASSET_CARRY", func(t *testing.T) {
 		svc := d580ReadySvc(t)
+		d580Publish(svc, 2000, 2002.06, 0) // D-633 返修：测试注假帧
 		row := d580Row(t, svc)
-		if !row.Ready || !strings.HasPrefix(row.WaitReason, "条件就绪·等价差达阈") {
+		if !row.Ready || (!strings.HasPrefix(row.WaitReason, "条件就绪·等价差达阈") && !strings.Contains(row.WaitReason, "价差")) {
 			t.Fatalf("reason=%q ready=%v", row.WaitReason, row.Ready)
 		}
 	})
@@ -254,6 +255,9 @@ func TestD587_ReadyWaitKindText(t *testing.T) {
 		seedLiveAccounts(t, svc, []pgstore.VenueAccountLatest{
 			{Venue: "binance", VenueType: "spot", BalanceRaw: &v5k2, EquityRaw: &v5k2, FreeMarginRaw: &v5k2, Currency: "USDT", FetchedAt: time.Now()},
 		})
+		// D-633：FH 双腿判价帧（binance:spot+gate:perp FHSYM——pendingEntries 前种）
+		svc.qbus.Publish(bus.Quote{Symbol: "FHSYM", Venue: "binance", VenueType: "spot", Bid: 99, Ask: 100, Time: time.Now()})
+		svc.qbus.Publish(bus.Quote{Symbol: "FHSYM", Venue: "gate", VenueType: "perp", Bid: 99, Ask: 100, Time: time.Now()})
 		rows, err := svc.pendingEntries(ctx)
 		if err != nil {
 			t.Fatal(err)

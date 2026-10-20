@@ -8,14 +8,13 @@ package dashboard
 import (
 	"context"
 	"fmt"
-	"nox/internal/data/bus"
 	"nox/internal/data/keydomain"
+	"nox/internal/store/pgstore"
 	"strings"
 	"time"
 
 	"nox/internal/data/fact"
 	v1 "nox/internal/gen/dashboardv1"
-	"nox/internal/store/pgstore"
 )
 
 // riskTickMaxAge dossier 价格源 staleness 闸（B-012：与 paperCfdMonitorMaxAge 同口径 5min）。
@@ -57,12 +56,6 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 		var mid float64
 		// D-633 现态切 qbus（LatestLeg canonical+venueKey——冷启动 qbus 空=fail-closed gaps 如实）
 		q, ok := quoteOrMiss(s.qbus, leg.symbol, leg.symbol, vk)
-		if !ok { // 测试兼容回落（同上注释）
-			if t, tok, terr := s.gradDB().LatestTick(ctx, bare, vt, leg.symbol); tok && terr == nil {
-				q = bus.Quote{Bid: t.Bid, Ask: t.Ask, Time: t.Ts}
-				ok = true
-			}
-		}
 		if !ok {
 			gaps = append(gaps, vk+"/"+leg.symbol+" 无 tick")
 		} else if now.Sub(q.Time) > riskTickMaxAge {

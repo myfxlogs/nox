@@ -5,8 +5,6 @@ package dashboard
 
 import (
 	"context"
-	"nox/internal/data/bus"
-	"nox/internal/store/pgstore"
 	"time"
 
 	v1 "nox/internal/gen/dashboardv1"
@@ -38,17 +36,6 @@ func (s *Service) GetTrxYieldCurve(ctx context.Context, req *connect.Request[v1.
 	var currentPrice float64
 	// D-633 现态切 qbus（binance:spot 钉 venue_type——原 SQL 无型过滤脏锚修正）。
 	q, ok := quoteOrNil(s.qbus, "TRXUSDT", "binance:spot")
-	if !ok {
-		var t pgstore.TickRow
-		var tok bool
-		var terr error
-		if t, tok, terr = s.store.LatestTick(ctx, "binance", "spot", "TRXUSDT"); !tok || terr != nil {
-			t, tok, terr = s.store.LatestTick(ctx, "binance", "perp", "TRXUSDT")
-		}
-		if tok && terr == nil {
-			q, ok = bus.Quote{Bid: t.Bid, Ask: t.Ask, Time: t.Ts}, true
-		}
-	}
 	if ok && q.Bid > 0 && q.Ask > 0 {
 		currentPrice = (q.Bid + q.Ask) / 2
 	}

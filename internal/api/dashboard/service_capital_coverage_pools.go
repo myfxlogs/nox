@@ -5,8 +5,6 @@ package dashboard
 import (
 	"context"
 	"fmt"
-	"nox/internal/data/bus"
-	"nox/internal/store/pgstore"
 
 	v1 "nox/internal/gen/dashboardv1"
 )
@@ -58,17 +56,6 @@ func trxPoolRow(ctx context.Context, s *Service) *v1.CapitalCoverageRow {
 func trxUSDPrice(ctx context.Context, s *Service) (float64, bool) {
 	// D-633 现态切 qbus（binance:spot）
 	q, ok := quoteOrNil(s.qbus, "TRXUSDT", "binance:spot")
-	if !ok {
-		var t pgstore.TickRow
-		var tok bool
-		var terr error
-		if t, tok, terr = s.store.LatestTick(ctx, "binance", "spot", "TRXUSDT"); !tok || terr != nil {
-			t, tok, terr = s.store.LatestTick(ctx, "binance", "perp", "TRXUSDT")
-		}
-		if tok && terr == nil {
-			q, ok = bus.Quote{Bid: t.Bid, Ask: t.Ask, Time: t.Ts}, true
-		}
-	}
 	if ok && q.Bid > 0 && q.Ask > 0 {
 		return (q.Bid + q.Ask) / 2, true
 	}

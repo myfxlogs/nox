@@ -143,6 +143,7 @@ func TestD007_GateWatch_AllowRulesTrigger(t *testing.T) {
 // 死键回归锚不变）。
 func TestD007_VenueCapGateTypedKey(t *testing.T) {
 	svc := d580ReadySvc(t)
+	d580Publish(svc, 2000, 2002.06, 0) // D-633：gate4 判价=qbus——种新鲜帧过闸
 	if _, err := svc.store.Pool().Exec(context.Background(),
 		`UPDATE fin_venue_exposure_caps SET cap_usd=1 WHERE venue_key='3001157:mt5'`); err != nil {
 		t.Fatal(err)
