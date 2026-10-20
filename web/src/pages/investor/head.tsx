@@ -4,6 +4,7 @@ import { useState } from "react";
 import { StatTile } from "../../components/StatTile";
 import { fmtUsd } from "../../components/fmt";
 import { NOX_NAME } from "../../nox";
+import { OwlEmblem } from "../../components/OwlEmblem";
 
 export interface PerfLine {
   baseline: number; at: Date | null; principal: number;
@@ -29,7 +30,7 @@ export function InvestorHead(p: {
   return (
     <>
       <div className="investor-head">
-        <h1>{NOX_NAME} 投资人报告</h1>
+        <h1><OwlEmblem size={26} /> {NOX_NAME} 投资人报告</h1>
         <div className="muted">只读摘要 · 净值与收益由后端账本口径算定</div>
       </div>
       {/* D-535：业绩基线面（本金口径 USDT+USD——后端算定，前端零算） */}

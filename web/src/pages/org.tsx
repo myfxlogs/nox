@@ -55,6 +55,7 @@ export default function OrgPage() {
   return (
     <div>
       <h1>运行面</h1>
+      <div className="muted">夜班枭编制——心跳=枭眼（beat_ts 拍即当班证）</div>
       {err && <div className="err">{err}</div>}
       <div className="muted">daemon 运行态由后端算定（在职/滞跳/离线/离职）；共 {emps.length} 项。</div>
       {depts.length === 0 && <EmptyState>零 daemon 行</EmptyState>}
