@@ -37,3 +37,5 @@ CA+token 组合。裸 curl 三路（IP 直连/换 UA/--resolve SNI）都不满�
 1. 优先查本机库 `fin_cex_universe` 等实采表（venue API 拉取，last_seen 新鲜）；
 2. 需直连验证时打 venue 主网域名（okx 直连通；binance 451 地域封锁打不通属预期）；
 3. 不要试图用 curl 穿透 cex-proxy——它的准入面不是给你调试用的。
+
+> 2026-10-20 归档（复审席·D-440 顶格退役）：cex-proxy 按 M3 业主令不落生产=死基建，条目随基建退役；触发=backup-r2 条目入册需腾位（索引 98363>98304）。
