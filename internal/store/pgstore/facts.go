@@ -274,9 +274,16 @@ func (s *Store) FactsWindowStats(ctx context.Context, kind, venue, symbol string
 
 // TicksWindow ticks 窗口读面（信号计算与回放门数据源；ts 升序）。
 func (s *Store) TicksWindow(ctx context.Context, venue, symbol string, since time.Time) ([]TickRow, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT ts, venue, symbol, bid, ask, venue_type FROM ticks
-		WHERE `+ticksVenuePred(venue)+` AND symbol = $2 AND ts >= $3 ORDER BY ts`, venue, symbol, since)
+	// venue_key=生成列零索引——键形拆 (venue,venue_type) 双参分派（D-574 同族）。
+	k := keydomain.Parse(venue)
+	q := `SELECT ts, venue, symbol, bid, ask, venue_type FROM ticks
+		WHERE venue = $1 AND symbol = $2 AND ts >= $3`
+	args := []any{k.Venue, symbol, since}
+	if k.Type != "" {
+		q += ` AND venue_type = $4`
+		args = append(args, k.Type)
+	}
+	rows, err := s.pool.Query(ctx, q+` ORDER BY ts`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("ticks window: %w", err)
 	}
@@ -290,11 +297,4 @@ func (s *Store) TicksWindow(ctx context.Context, venue, symbol string, since tim
 		out = append(out, r)
 	}
 	return out, rows.Err()
-}
-
-func ticksVenuePred(venue string) string { // 键形分路（复合键→venue_key——planner 命中 ticks_key_ts_idx 前缀）
-	if keydomain.Parse(venue).Type != "" {
-		return "venue_key = $1"
-	}
-	return "venue = $1"
 }
