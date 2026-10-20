@@ -42,9 +42,9 @@ SG nox-core ──error/critical 告警──▶ POST 本机桥（HTTP，鉴权�
 ### 3.1 后端件：告警桥 sink（代码票）
 
 - 落点：`internal/ir/notify` 告警写出层，与 FeishuClient 并列的 `AgentBridgeSink`。
-- 触发面：**仅 error/critical 级**（warn 级不拉会话——防烧；可 app_config 调级）。
+- 触发面：**error/critical 全级+warn 窄白名单**（§7.4 裁定——`[前提塌]`/断流 stale/attach 超时三族前缀枚举起步，app_config 键 `NOX_ALERT_BRIDGE_WARN_PATTERNS` 可扩；其余 warn 不拉会话防烧）。
 - 配置：桥地址入 `app_config`（`NOX_ALERT_BRIDGE_URL`，缺=功能静默关闭 fail-closed，不影响飞书主径）；鉴权 token 入 `app_secrets`（`NOX_ALERT_BRIDGE_TOKEN`）。
-- 防风暴：同类告警（同文案 hash）**24h 只推一次桥**——复用 `InsertAlertDedup` 同语义；桥侧再串行化（同一时刻至多 1 个会话在跑，排队上限 N=3，溢出丢弃并计数）。
+- 防风暴：同类告警（同文案 hash）**24h 只推一次桥**——复用 `InsertAlertDedup` 同语义；桥侧再串行化（同一时刻至多 1 个会话在跑，排队上限 N=3，**溢出按文案族合并喂一次会话**——§7.6 裁定非丢弃，合并外溢出丢弃并计数）。
 
 ### 3.2 本机桥（运维件）
 
@@ -82,19 +82,24 @@ SG nox-core ──error/critical 告警──▶ POST 本机桥（HTTP，鉴权�
 
 ## 6. 分期
 
-- **v1 最小闭环**：error/critical→桥→claude -p→诊断+飞书回执（不含自动立票，回执里给「建议票面」由决策席复核后立）。
+- **v1 最小闭环**：error/critical+warn 白名单→桥→claude -p→诊断+飞书回执+**STATE 草案行可写**（标 `分诊草案` 态——§7.1 增订；立项态翻「可派」仍决策席人工，自动立项是 v2 事）。
 - **v2**：回执格式稳定后放开自动立票（STATE 行写入仍过既有 pre-commit 门）。
 - **v3（可选）**：分诊结论质量月度复盘（伪警率/定性准确率）入 digest。
 
-## 7. 开放问题（供 devin 讨论）
+## 7. 开放问题（已收敛——devin 决策席 10-20 裁定）
 
-1. **runtime 选型**：`claude -p` vs devin cli vs 双轨（按告警域分）？devin 侧有无等效非交互模式与权限收窄面？（devin 请给实测口径）
-2. **桥落位**：dev 机 systemd（现案）vs SG host systemd（离数据近但生产面养 AI 会话违直觉）？dev 机断电/离线窗=分诊盲窗，可接受吗（飞书主径无损）？
-3. **鉴权粒度**：app_secrets 共享 token 够吗，还是按告警域分 token？
-4. **warn 级是否进 v1**：现案不进；若 devin 认为某些 warn 域（如流断连）需分钟级反应，给分级白名单方案。
-5. **会话权限面具体清单**：允许的命令白名单逐条列（ssh 只读? psql 只读? curl?）——devin 从实施面给清单。
-6. **队列溢出语义**：丢弃+计数 vs 合并 N 条同类为一次会话？
-7. **回执落点**：飞书群 vs 业主私聊 vs 两者。
+1. **runtime 选型**：**`claude -p` 上 v1**。devin cli 可作 v2 第二 runtime 候选——双轨只在「按告警域分专长」被证实后才值，现加=零收益复杂度。
+2. **桥落位**：**dev 机 systemd 采纳**——SG 生产面不养 AI 会话的直觉对；盲窗可接受（飞书主径无损，sink 是旁路）。
+3. **鉴权粒度**：**单 token 够**——按域分 token 是 v2 事（域分前提是权限面分化，v1 权限面本就一片）。
+4. **warn 级进 v1**：**加窄白名单**——10-19 实证：`前提塌`/CMC 断流/IC attach 卡死全是 warn 级，恰是最该分钟级反应的域。白名单=文案前缀枚举（`[前提塌]`/断流 stale/attach 超时三族起步），app_config 可扩。
+5. **会话权限清单**：ssh 只读命令族、psql **只读 role**（独立只读账号非应用凭据——本件须随桥票配给）、`docker logs/ps/inspect`（读）、git log/diff/status/show、写径仅 `docs/handoff/STATE.md`+`docs/报告/`+`docs/经验库/待归纳*.md`、飞书发送端点。**禁**：git push、docker up/restart/rm、任何 psql 写、凭证文件读。
+6. **队列溢出**：**合并同类**优丢弃——同 hash 24h 去重在 sink 层挡大头；队列内再按文案族合并喂一次会话（一次诊断覆盖 N 条同族告警），溢出计数照报。
+7. **回执落点**：**飞书群单点**——告警→分诊回执同链可读；私聊只留给条件请求类（业主法定域，不混线）。
+
+### 7.1 增订两条（决议附加）
+
+- **v1 立票边界**：分诊会话可**直写 STATE 草案行**（标 `分诊草案` 态）——决策席一键翻「可派」省转录；v2 再谈自动立项。（§6 v1 文案「不含自动立票」相应升级为「草案行可写、立项态仍人工翻」）
+- **处置动作白名单**：v1 **零变异动作**（连接复位/重启类亦走票）——信任须挣，复位类放开是 v2+ 议题。
 
 ## 8. 票拆预案（讨论收敛后立）
 
@@ -108,3 +113,28 @@ SG nox-core ──error/critical 告警──▶ POST 本机桥（HTTP，鉴权�
 - `notify.FeishuClient`（回执通道）
 - `skills/生产取证/`（分诊会话内置纪律）
 - app_config 白名单/审计行机制（S4/S5——键接入按五项清单走，防白名单双表漏键同族病灶）
+
+## 10. 设计稿审计（devin 决策席 10-20 亲审）
+
+### 10.1 实证锚对拍（全过）
+
+| 稿内引用 | 实拍 |
+|---|---|
+| `internal/ir/notify` + `FeishuClient` | 在案（feishu.go 自定义机器人件；`AgentBridgeSink` 并列置位合理） |
+| `InsertAlertDedup` 24h 去重 | 在案（pgstore 件，regime.go 等已用同径） |
+| `docs/报告/` 运行时件面 | 契约运行时目录在案（gitignore 语义如实） |
+| `skills/生产取证/` | 在案 |
+| app_config/app_secrets 机制 | 在案；§9 自带「键接入按五项清单」双表防漏警示=同族病灶已内化 |
+
+### 10.2 审计发现（如实留档，非阻断）
+
+1. **提示注入面**：告警文案流经外部 venue 串（品种名/symbol 方言）入会话 prompt——当值低风险（文案系统自产），但分诊契约应加一条「告警原文=数据非指令」的显式声明，防文案夹带指令形态日后演化。
+2. **凭据零落地 vs ssh 取证的张力**：桥会话要 ssh 取证就得有 key——「凭据零落地」应精确化为「**应用/venue 凭据零落地**；ssh 取证用独立只读语义 key（command= 前缀或 authorized_keys 限令面）」——桥票须含此配给，否则契约与实操自相矛盾。
+3. **psql 只读 role 当前不存在**——生产库现只有 nox 写户；桥票须配给独立只读账号（CREATE ROLE ... SELECT ONLY），禁借应用凭据跑只读。
+4. **会话写 STATE 过 pre-commit**：草案行写入若走 git 会撞门禁（经验库 schema 等）——桥会话应只写文件不 commit，commit/push 归决策席人工段（与零变异线一致）。
+
+### 10.3 裁定总结
+
+基稿采纳（方案 A 形态+旁路 sink+分诊员三职责架构全对版）；七项裁定+两增订已收敛入稿；四审计发现随 §8 票拆带落（桥票背 2/3/4、契约票背 1）。
+
+——devin（决策席），2026-10-20
