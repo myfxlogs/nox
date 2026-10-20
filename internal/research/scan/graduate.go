@@ -34,6 +34,9 @@ type GraduationStore interface {
 	// D-576：pending↔unqualified 重校验翻转+快照刷新（机修径，终态不动）。
 	RevalidateCarryGraduation(ctx context.Context, id int64, status, note string,
 		accrued float64, fundingAnn *float64, netAllIn *float64, ageDays float64, flagWarn *string) error
+	// D-637 序③：族级双轴闸阈值读面（app_config——pgstore 原生实现）。
+	AppConfigInt64(ctx context.Context, key string) (int64, bool, error)
+	AppConfigFloat(ctx context.Context, key string) (float64, bool, error)
 }
 
 // StepCarryGraduation 每轮 carry 扫描后调用（wire_scan 同轮串行单写者）：
@@ -58,9 +61,20 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 	newCount := 0
 	qualified := 0
 	var labels []string
+	famOK := map[string]bool{} // D-637 序③：族级双轴缓存（同 structure 一次判）
 	for _, p := range rows {
 		if !graduationQualified(p, now) {
 			continue
+		}
+		// 族级双轴闸（费后净+置信界——样本不足/下界≤0=证据不足不毕业；判据叠加非替代）
+		if q, seen := famOK[p.Structure]; !seen || !q {
+			stats := familyGradStatsOf(rows, p.Structure)
+			pass, reason := FamilyGradGate(ctx, st, stats)
+			famOK[p.Structure] = pass
+			if !pass {
+				log.Printf("[graduation] %s 族闸拒：%s", p.Structure, reason)
+				continue
+			}
 		}
 		qualified++
 		net := netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, effectiveConvergenceUSD(p))
