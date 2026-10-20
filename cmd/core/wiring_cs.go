@@ -39,12 +39,16 @@ func legContractSizeResolver(st *pgstore.Store) func(venueKey, venueSymbol strin
 // legUnitQtyResolver MT 腿 canonical 单位数/手查询（D-594 S3）：venueKey 剥 venue 段 →
 // broker_symbol_map contract_size × qty_scale。单位敏感 canonical 未标定行 → ok=false
 // fail-closed；非敏感 NULL → cs×1.0。仅配 canonical 报价用（原生 PriceActual 链勿用）。
-func legUnitQtyResolver(st *pgstore.Store) func(venueKey, venueSymbol string) (float64, bool) {
+// w 非 nil 时超时计数（D-636 喂流看门狗 RPC 面哨兵征——超时簇=接入层劣化信号）。
+func legUnitQtyResolver(st *pgstore.Store, w *mtRPCFaceWatch) func(venueKey, venueSymbol string) (float64, bool) {
 	return func(venueKey, venueSymbol string) (float64, bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		u, ok, err := st.UnitQtyByBrokerSymbol(ctx, venueKey, venueSymbol)
 		if err != nil {
+			if w != nil {
+				w.timeouts.Add(1)
+			}
 			log.Printf("[exec] leg unit qty %s %s: %v", venueKey, venueSymbol, err)
 			return 0, false
 		}

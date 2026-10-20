@@ -130,6 +130,8 @@ type Service struct {
 	// legUnitQty D-594：MT 腿 canonical 单位数/手 = contract_size × qty_scale。
 	// 配 canonical 报价链（legContractSizeOf/名义额/sizing）；敏感 canonical 未标定 → ok=false。
 	legUnitQty func(venueKey, venueSymbol string) (float64, bool)
+	// tnCache D-636：true_net 段 TTL 缓存（池饿定位修复——每请求重算→5min 单赢家刷）。
+	tnCache trueNetCache
 	// primarySymbol D-383 A2.4：执行解析 primary-only 闸（venueKey+canonical → 合格 broker_symbol）。
 	// 多行组零 primary → 含 "symbol resolution ambiguous" 的错误（fail-closed 拒单）。
 	primarySymbol func(venueKey, canonical string) (string, error)
