@@ -170,13 +170,17 @@ func (w *pendingGateWatcher) flush(ctx context.Context) {
 
 	changed := false
 	seen := map[int64]bool{}
+	// 行级死期：eval 内多查询持连链不可无界——watch ctx 是 root 裸传，
+	// 再现池 wedge 时持连永久（10-20 事故实证形态）。每行 20s 熔断放行。
 	for _, c := range combos {
 		if !dirtyAll {
 			if _, hit := dirty[c.ID]; !hit {
 				continue
 			}
 		}
-		row, _, ok := s.evalPendingRow(ctx, c, in)
+		rctx, rcancel := context.WithTimeout(ctx, 20*time.Second)
+		row, _, ok := s.evalPendingRow(rctx, c, in)
+		rcancel()
 		w.mu.Lock()
 		if !ok {
 			// 退出待入场集（disabled/在持仓）→ 展示集成员变化=也要推。

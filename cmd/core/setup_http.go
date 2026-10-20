@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	_ "net/http/pprof" // 取证端点（127.0.0.1:6060 容器内环——goroutine dump/heap，10-20 wedge 取证教训：SIGQUIT 杀鸡取 dump 不如常驻只读探针）
 	"nox/internal/api/auth"
 	"os"
 	"os/signal"
@@ -80,6 +81,14 @@ func serveHTTP(cancel context.CancelFunc, cfg *config.Config, st *pgstore.Store,
 		Addr:    ":50051",
 		Handler: mux,
 	}
+
+	// pprof 取证端点：容器回环 127.0.0.1:6060（不 publish——docker exec wget
+	// 直取；DefaultServeMux 由 net/http/pprof 注册）。只读探针禁绑 0.0.0.0。
+	safego.GoLoop("setup:pprof", func() {
+		if err := http.ListenAndServe("127.0.0.1:6060", nil); err != nil {
+			log.Printf("pprof listener: %v", err)
+		}
+	})
 
 	safego.GoLoop("setup:httpServer", func() {
 		log.Printf("core listening on %s (dsn=%s)", srv.Addr, maskDSN(dsn))
