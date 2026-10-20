@@ -108,7 +108,9 @@ func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error
 			msg := fmt.Sprintf("[symdig] 提案 AI 输出批内被长度截断（覆盖 %d/%d 品种，提案集不完整）", len(covered), len(sum.Rows))
 			log.Print(msg)
 			if deps.Store != nil {
-				_ = deps.Store.InsertAlert(ctx, nil, "error", msg)
+				if aerr := deps.Store.InsertAlert(ctx, nil, "critical", msg); aerr != nil {
+					log.Printf("[symdig] alert insert: %v", aerr)
+				}
 			}
 		} else {
 			log.Printf("[symdig] proposals fenced 未闭合（EOF 容忍解析）")

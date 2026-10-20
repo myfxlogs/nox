@@ -52,7 +52,7 @@ func TestD530ClosedSingleRound(t *testing.T) {
 		t.Fatalf("闭合输出应单轮，calls=%d", calls.Load())
 	}
 	for _, a := range st.alerts {
-		if strings.HasPrefix(a, "error:") || strings.HasPrefix(a, "warn:") {
+		if strings.HasPrefix(a, "critical:") || strings.HasPrefix(a, "warn:") {
 			t.Fatalf("闭合输出不应告警: %v", st.alerts)
 		}
 	}
@@ -88,12 +88,12 @@ func TestD530TruncatedSecondRound(t *testing.T) {
 	}
 	var errs int
 	for _, a := range st.alerts {
-		if strings.HasPrefix(a, "error:") {
+		if strings.HasPrefix(a, "critical:") {
 			errs++
 		}
 	}
 	if errs != 1 {
-		t.Fatalf("批内截断应 error 告警一条: %v", st.alerts)
+		t.Fatalf("批内截断应 critical 告警一条: %v", st.alerts)
 	}
 }
 
@@ -115,12 +115,12 @@ func TestD530DoubleTruncatedError(t *testing.T) {
 	}
 	found := false
 	for _, a := range st.alerts {
-		if strings.HasPrefix(a, "error:") {
+		if strings.HasPrefix(a, "critical:") {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("批内截断应 error 告警: %v", st.alerts)
+		t.Fatalf("批内截断应 critical 告警: %v", st.alerts)
 	}
 }
 
@@ -195,8 +195,8 @@ func TestD589DoubleMalformedWarnsOnce(t *testing.T) {
 		if strings.HasPrefix(a, "warn:") && strings.Contains(a, "提案 AI 输出格式异常（已按截断内容容忍解析，提案集可能不完整）") {
 			warns++
 		}
-		if strings.HasPrefix(a, "error:") {
-			t.Fatalf("非截断 malformed 不应 error: %v", st.alerts)
+		if strings.HasPrefix(a, "critical:") {
+			t.Fatalf("非截断 malformed 不应 critical: %v", st.alerts)
 		}
 	}
 	if warns != 1 {
@@ -237,7 +237,7 @@ func TestSymdigBatchAdversarial(t *testing.T) {
 	}
 	var errs, warns int
 	for _, a := range st.alerts {
-		if strings.HasPrefix(a, "error:") {
+		if strings.HasPrefix(a, "critical:") {
 			errs++
 		}
 		if strings.HasPrefix(a, "warn:") {
@@ -245,6 +245,6 @@ func TestSymdigBatchAdversarial(t *testing.T) {
 		}
 	}
 	if errs != 1 || warns != 0 {
-		t.Fatalf("混合序应 error 恰一条零 warn: %v", st.alerts)
+		t.Fatalf("混合序应 critical 恰一条零 warn: %v", st.alerts)
 	}
 }
