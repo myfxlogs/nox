@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# backup_pg.sh D-159 W6a S3：PostgreSQL 每日备份（pg_dump + gzip + sha256 + retention 7 天）。
+# backup_pg.sh D-159 W6a S3：PostgreSQL 每日备份（pg_dump + gzip + sha256 + 滚动 14 份）。
 # D-161 补偿措施⑤：仓库外目录+权限 600+checksum+不进 git/docs/LOG/聊天输出。
 # D-110 第三落点：age 加密 → rclone 上传 R2 → R2 侧滚动 14 份，消除双机同灭 DR 缺口。
-#   配置缺失=降级「仅本地+warn」；加密/上传失败=alerts critical（D-033 自盯）+本地全保留；
+#   配置缺失=降级「仅本地」；加密/上传失败=alerts critical（D-033 自盯）+本地全保留；
 #   fail-open 只许在上传段，本地链路任何情况下不阻不断。
+# D-635 连锁a（10-20）：R2 弃配终态后配置缺失=永久常态，降级 critical 改状态变迁单发——
+#   首失必发+落 marker，续日静默仅 log 计数，恢复清 marker，再失按首失再发（禁线：首报义务不省）。
 #
 # 用法：scripts/backup_pg.sh [PG_DSN]
 # 默认 PG_DSN 端口取 nox-postgres 运行容器发布值（D-114：宿主拓扑权威源；5433=化石端口勿写死）。
 # 备份目录：/opt/nox-backups/（权限 600，仓库外；env BACKUP_DIR 可覆盖——仅测试/演练用，cron 不设=生产路径）
 # R2 外推配置：$BACKUP_DIR/backup-r2.env（仓库外 600，含 AGE_PUBKEY/R2_REMOTE/R2_BUCKET；私钥业主离线持有）
+#   D-635：R2 凭据业主弃配终态——本文件生产上永久缺席，降级=已知常态非事故。
 # crontab：0 3 * * * /opt/nox/scripts/backup_pg.sh >> /opt/nox-backups/backup.log 2>&1
 
 set -euo pipefail
@@ -39,7 +42,34 @@ emit_alert() {
 	fi
 }
 
-# D-110：读 R2 外推配置。文件缺失/不可读/源失败/任一变量空 → 降级：跳过加密与上传，warn，本地照常。
+# D-635 连锁a 状态变迁降噪：marker（$BACKUP_DIR/.r2_degrade_state，值=连续降级第几日）缺=首失
+# →critical 必发+落 marker；在=续日→静默仅 log 计数；恢复（配置回在位，见下支）→清 marker；
+# 再失→marker 已清按首失再发。发/不发只在调用点判一次——emit_alert 内 psql 插入与「psql 不可达」
+# stderr 兜底径同一决定（禁线：兜底径同制）。marker 读写失败一律放行告警向（写败=次日按首失重发，
+# 宁重复勿漏报），且绝不带崩本地备份。
+R2_DEGRADE_MARKER="$BACKUP_DIR/.r2_degrade_state"
+notify_r2_degrade() {
+	if [ -f "$R2_DEGRADE_MARKER" ]; then
+		local day
+		day="$(cat "$R2_DEGRADE_MARKER" 2>/dev/null || true)"
+		case "$day" in ''|*[!0-9]*) day=0 ;; esac
+		day=$((day + 1))
+		if echo "$day" > "$R2_DEGRADE_MARKER" 2>/dev/null; then
+			# INFO 而非 WARN：D-635 后稳态降级=已知常态——slo_watch 对 backup.log 尾窗 grep WARN/ERROR，
+			# 常态行不得再触其 warn（否则噪音换面复发）；异常变体（写败）仍 WARN。
+			echo "[$(date -u +%FT%TZ)] INFO: r2 degrade ongoing day=$day, critical suppressed (state-transition dedup, D-635a)" >&2
+		else
+			echo "[$(date -u +%FT%TZ)] WARN: r2 degrade ongoing (day write failed), critical suppressed (state-transition dedup, D-635a)" >&2
+		fi
+	else
+		emit_alert "[backup] R2 外推降级 critical 首报：config missing→local-only（三地失守单地 DR 在案——D-635 弃配常态或 marker 复位后首失）"
+		if ! echo 1 > "$R2_DEGRADE_MARKER" 2>/dev/null; then
+			echo "[$(date -u +%FT%TZ)] WARN: r2 degrade marker write failed — next run re-alerts (fail-noisy)" >&2
+		fi
+	fi
+}
+
+# D-110：读 R2 外推配置。文件缺失/不可读/源失败/任一变量空 → 降级：跳过加密与上传，本地照常。
 # 配置在而 age/rclone 不可用不算降级——走 critical（DR 缺口无声打开比降级更危险）。
 R2_ENV_FILE="$BACKUP_DIR/backup-r2.env"
 R2_CONFIGURED=0
@@ -48,9 +78,12 @@ if [ -f "$R2_ENV_FILE" ] && . "$R2_ENV_FILE" \
 	&& [ -n "$AGE_PUBKEY" ] && [ -n "$R2_REMOTE" ] && [ -n "$R2_BUCKET" ]; then
 	R2_CONFIGURED=1
 	echo "[$(date -u +%FT%TZ)] r2 offload enabled: bucket=$R2_BUCKET keep=$R2_KEEP"
+	# D-635a 恢复清除：降级期结束，清 marker——下次再失配按首失重报
+	if [ -f "$R2_DEGRADE_MARKER" ] && ! rm -f "$R2_DEGRADE_MARKER"; then
+		echo "[$(date -u +%FT%TZ)] WARN: r2 degrade marker clear failed" >&2
+	fi
 else
-	echo "[$(date -u +%FT%TZ)] WARN: $R2_ENV_FILE missing/incomplete, degrade to local-only backup" >&2
-	emit_alert "[backup] R2 外推配置缺失→local-only 降级（三地备份实质单地——安全垫失守，需业主配给 backup-r2.env：AGE_PUBKEY/R2_REMOTE/R2_BUCKET）"
+	notify_r2_degrade
 fi
 
 
@@ -99,7 +132,7 @@ chmod 600 "$DUMP_FILE"
 sha256sum "$DUMP_FILE" > "$SHA_FILE"
 chmod 600 "$SHA_FILE"
 
-# retention 7 天
+# 滚动 14 份（RETENTION_DAYS=13+当日，D-277 C5）
 find "$BACKUP_DIR" -name "nox_*.sql.gz" -mtime +${RETENTION_DAYS} -delete
 find "$BACKUP_DIR" -name "nox_*.sql.gz.sha256" -mtime +${RETENTION_DAYS} -delete
 # D-110：本地密文同窗滚动（上传段产物不无界落盘，D-213 同源）
