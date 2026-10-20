@@ -933,7 +933,7 @@ verdict=对席退回补正成立——四错全亲证属实：E1 7 行（#17-23�
 架构：测试库 ticks=声明式分区 vs 生产=hypertable（schema 分叉——本席方案稿 §4 初稿即被此骗）；无预发环境；容器 unless-stopped 却 Exited(2) 未自愈（未查明）。
 韧性：备份单地 8 份、零还原演练记录；外部单点四处（mtapi/egress/cex-proxy/cloudflared）。
 纪律：键域错位第 8 例=一类病；自审「零 Fail」三日内两份文档失信（对席 5 错/本席分区断言）。
-新立：①观测 SLO 票 P1 ②还原演练票 P1（随 R2 票）③测试/生产 schema 对齐 P2（并闸门②）④凭据轮换请求 fin_condition_gap kind=credential（对话面曾现 app secret——业主域）。
+新立：①观测 SLO 票 P1 ②还原演练票 P1（随 R2 票）③测试/生产 schema 对齐 P2（并闸门②）④凭据轮换请求已落 fin_condition_gap#515（kind=credential subject=feishu-app-secret-rotate，status=requested）+alerts#2831——业主后台重置 App Secret→feishu_cred 文件径替换→feishu-ack 验发收口。
 -->
 | **观测 SLO 票（P1）——四条系统告警：RPC p95 >10s 持续 5min / pg CPU >150% 持续 5min / 单查询 >5s / cron+备份结果上报（backup.log WARN 即 trigger）** | 可派·P1 | 全局缺陷登记——本周三事故（死锁/pg200%/R2 断腿）均零告警由人眼发现 | 实施席 | **范围**：pprof/pg_stat_statements/docker stats 三源→InsertAlert 既有径；dedup 同族（告警 dedup 票先行或并票）。**禁线**：告警不携业务数据（D-004 看门狗语义）。**验收**：模拟 pg 高载 5min 内告警落 alerts 表+飞书。**开工指令**：`[角色:实施] 观测 SLO 四告警（读 STATE 本行——三源接 InsertAlert/dedup 并票；无 skills 域）` |
 | **还原演练票（P1，随 R2 票）——从 /opt/nox-backups 最新 .sql.gz 拉起空库实测 restore 全程（nox-postgres-test 容器可借）** | 可派·P1 | 全局缺陷登记——备份零还原演练记录=备份未证可用 | 实施席 | **验收**：restore 耗时+行数对账（facts/ticks/positions 三表 count 与生产差≤采样窗）入报审；pg_dump 循环外键 warning 处置写明。**禁线**：只读生产，还原目标=测试实例。**开工指令**：`[角色:实施] 备份还原演练（读 STATE 本行+R2 票——测试实例全程 restore 实拍；无 skills 域）` |
