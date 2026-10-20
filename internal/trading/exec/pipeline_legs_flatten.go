@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
 	"nox/internal/platform/notional"
 	"nox/internal/store/pgstore"
@@ -38,7 +37,7 @@ func (p *Pipeline) autoFlattenLEGGED(ctx context.Context, posID int64, legs []Le
 	fx := 1.0
 	if quoteCcy != "" && quoteCcy != "USD" {
 		if p.fxResolver != nil {
-			if rate, ok := p.fxResolver.USDPer(ctx, quoteCcy, time.Now()); ok && rate > 0 {
+			if rate, ok := p.fxResolver.USDPerNow(ctx, quoteCcy, mtLegVenueKeyOf(legs)); ok && rate > 0 {
 				fx = rate
 			} else {
 				fx = 0 // fx 缺失 → 0，宁缺勿虚增（对账兜底）

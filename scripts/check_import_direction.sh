@@ -128,6 +128,8 @@ internal/platform/notional -> internal/data/keydomain
 internal/platform/testutil/storetest -> internal/platform/testutil
 internal/platform/testutil/storetest -> internal/store/pgstore
 internal/platform/usdnotional -> internal/data/bus
+internal/platform/usdnotional -> internal/data/keydomain
+internal/platform/usdnotional -> internal/platform/notional
 internal/portfolio/budget -> internal/store/pgstore
 internal/portfolio/capitalview -> internal/data/bus
 internal/portfolio/capitalview -> internal/data/venue

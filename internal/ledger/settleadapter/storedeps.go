@@ -62,8 +62,8 @@ func (d *StoreDeps) ContractSizeByCanonical(ctx context.Context, venue, canonica
 	return d.store.ContractSizeByCanonical(ctx, venue, canonical)
 }
 
-func (d *StoreDeps) USDPer(ctx context.Context, quoteCcy string, at time.Time) (float64, bool) {
-	return d.store.USDPer(ctx, quoteCcy, at)
+func (d *StoreDeps) USDPer(ctx context.Context, quoteCcy string, at time.Time, preferVenueKey string) (float64, bool) {
+	return d.store.USDPer(ctx, quoteCcy, at, preferVenueKey)
 }
 
 func (d *StoreDeps) UpsertVerificationSample(ctx context.Context, vkey string, expectedUsd, realizedUsd float64, closedAt time.Time) error {

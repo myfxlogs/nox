@@ -65,7 +65,7 @@ func (f *fakeDeps) ContractSizeByCanonical(ctx context.Context, venue, canonical
 	return f.cs, f.csOk, nil
 }
 
-func (f *fakeDeps) USDPer(ctx context.Context, quoteCcy string, at time.Time) (float64, bool) {
+func (f *fakeDeps) USDPer(ctx context.Context, quoteCcy string, at time.Time, preferVenueKey string) (float64, bool) {
 	return f.fxRate, f.fxOk
 }
 

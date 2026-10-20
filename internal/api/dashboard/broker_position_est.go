@@ -59,7 +59,7 @@ func (s *Service) closeEstimateUSD(ctx context.Context, bp *v1.BrokerPosition) (
 		if s.store == nil {
 			return 0, false
 		}
-		rate, ok := s.store.USDPer(ctx, q, time.Now())
+		rate, _, ok := s.usdPerOrStale(ctx, q, "", time.Now())
 		if !ok || rate <= 0 {
 			return 0, false
 		}

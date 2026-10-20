@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"nox/internal/platform/combo"
 	"nox/internal/platform/notional"
@@ -163,7 +162,7 @@ func (p *Pipeline) checkSwapArbComboAllow(ctx context.Context, opportunityID str
 			fx := 1.0
 			if quoteCcy != "" && quoteCcy != "USD" {
 				if p.fxResolver != nil {
-					rate, ok := p.fxResolver.USDPer(ctx, quoteCcy, time.Now())
+					rate, ok := p.fxResolver.USDPerNow(ctx, quoteCcy, mtLegVenueKeyOf(legs))
 					if !ok || rate <= 0 {
 						return fmt.Errorf("%w: fx missing for %s (fail-closed)", ErrComboNotAllowed, quoteCcy)
 					}
@@ -240,7 +239,7 @@ func (p *Pipeline) checkXAssetComboAllow(ctx context.Context, opportunityID stri
 				if p.fxResolver == nil {
 					return fmt.Errorf("%w: fxResolver not wired for non-USD quote ccy %s (fail-closed)", ErrComboNotAllowed, quoteCcy)
 				}
-				rate, ok := p.fxResolver.USDPer(ctx, quoteCcy, time.Now())
+				rate, ok := p.fxResolver.USDPerNow(ctx, quoteCcy, mtLegVenueKeyOf(legs))
 				if !ok || rate <= 0 {
 					return fmt.Errorf("%w: fx missing for %s (fail-closed)", ErrComboNotAllowed, quoteCcy)
 				}

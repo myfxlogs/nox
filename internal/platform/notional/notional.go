@@ -63,3 +63,15 @@ func LegUSD(qty, cs, price, fx float64) float64 {
 	}
 	return qty * cs * price * fx
 }
+
+// FXPair D-633：计价币→七直盘对+换算方向单源（pgstore.USDPer/usdnotional.USDPerNow 共用）。
+// 返回 (直盘 symbol, invert=true 时 rate=1/px 〔USD-base〕, ok=false=非七直盘/USD)。
+func FXPair(quoteCcy string) (pair string, invert bool, ok bool) {
+	switch quoteCcy {
+	case "JPY", "CHF", "CAD":
+		return "USD" + quoteCcy, true, true
+	case "EUR", "GBP", "AUD", "NZD":
+		return quoteCcy + "USD", false, true
+	}
+	return "", false, false
+}

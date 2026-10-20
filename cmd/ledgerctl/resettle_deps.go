@@ -27,8 +27,8 @@ func (d *settleDeps) ListPositionLegs(ctx context.Context, posID int64) ([]pgsto
 func (d *settleDeps) ContractSizeByCanonical(ctx context.Context, venue, canonical string) (float64, bool, error) {
 	return d.store.ContractSizeByCanonical(ctx, venue, canonical)
 }
-func (d *settleDeps) USDPer(ctx context.Context, quoteCcy string, at time.Time) (float64, bool) {
-	return d.store.USDPer(ctx, quoteCcy, at)
+func (d *settleDeps) USDPer(ctx context.Context, quoteCcy string, at time.Time, preferVenueKey string) (float64, bool) {
+	return d.store.USDPer(ctx, quoteCcy, at, preferVenueKey)
 }
 func (d *settleDeps) UpsertVerificationSample(ctx context.Context, vkey string, expectedUsd, realizedUsd float64, closedAt time.Time) error {
 	return d.store.UpsertVerificationSample(ctx, vkey, expectedUsd, realizedUsd, closedAt)

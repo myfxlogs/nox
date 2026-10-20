@@ -27,7 +27,7 @@ func computeNotionalUSD(ctx context.Context, deps Deps, legs []pgstore.PositionL
 		}
 		fx := 1.0
 		if quoteCcy != "" && quoteCcy != "USD" {
-			rate, ok := deps.USDPer(ctx, quoteCcy, l.Ts)
+			rate, ok := deps.USDPer(ctx, quoteCcy, l.Ts, "")
 			if !ok {
 				skipped = true
 				continue

@@ -171,7 +171,8 @@ func (s *Service) OpenProbe(ctx context.Context, req *connect.Request[v1.OpenPro
 	}
 	fx := 1.0
 	if ccy := notional.QuoteCcy(r.GetCanonical()); ccy != "" && ccy != "USD" {
-		rate, fxOK := s.store.USDPer(ctx, ccy, now)
+		rate, fxStale, fxOK := s.usdPerOrStale(ctx, ccy, "", now)
+		_ = fxStale
 		if !fxOK || rate <= 0 {
 			return s.probeReject(ctx, r, fmt.Sprintf("%s 计价币 %s fx 不可得", r.GetCanonical(), ccy))
 		}

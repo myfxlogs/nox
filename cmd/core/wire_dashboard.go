@@ -40,7 +40,7 @@ func wireAuthIntercept(secRes *config.SecretResolver, cfg *config.Config) *auth.
 }
 
 // wireDashboardSetters 注入 dashSvc 的 setter 依赖（leg 查询/CS/frontConfig/analyst）。
-func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *config.Config, st *pgstore.Store, brokerMgr *dashboard.BrokerManager, factCache *engine.FactCache, feishu *notify.FeishuClient) {
+func wireDashboardSetters(ctx context.Context, dashSvc *dashboard.Service, cfg *config.Config, st *pgstore.Store, brokerMgr *dashboard.BrokerManager, factCache *engine.FactCache, feishu *notify.FeishuClient, qbus *bus.QuoteBus) {
 	fundingNeedTopic := bus.NewTopic[dashboard.FundingNeedNotice]()
 	dashSvc.SetFundingNeedTopic(fundingNeedTopic)
 	// D-060 F5：手动预检单腿 trade_mode——D-004 P1#2 删 FactCache.TradeMode 单查法后，

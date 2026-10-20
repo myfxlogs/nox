@@ -12,6 +12,7 @@ import (
 
 // Store 封装 pgx 连接池，所有数据库操作共享同一池。
 type Store struct {
+	usdPerNowFn func(ctx context.Context, ccy, preferVenueKey string) (float64, bool) // D-633 A 档 fx 现态注入
 	pool        *pgxpool.Pool
 	alertPaused bool // D-069：暂停全部告警写入（demo 阶段避免刷屏）
 	// 同键去重窗（0=缺省 30min；env NOX_ALERT_DEDUP_WINDOW 装配层解析注入——D-412 F4 形态）。

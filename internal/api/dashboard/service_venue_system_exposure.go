@@ -122,7 +122,7 @@ func (s *Service) venueLegUSD(ctx context.Context, r pgstore.OpenVenueLegRow, ca
 	}
 	fx := 1.0
 	if q := notional.QuoteCcy(canonical); q != "" && q != "USD" {
-		rate, ok := s.store.USDPer(ctx, q, now)
+		rate, _, ok := s.usdPerOrStale(ctx, q, "", now)
 		if !ok || rate <= 0 {
 			return 0
 		}
