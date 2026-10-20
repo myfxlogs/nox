@@ -1,0 +1,6 @@
+#!/bin/bash
+# curl 飞书回执面：仅 -X POST 飞书域放行
+if [[ "$*" == *"-X POST"* ]] && [[ "$*" == *"feishu"* ]]; then
+  exec /usr/bin/curl "$@"
+fi
+echo "[sandbox] curl 非飞书 POST deny" >&2; exit 126

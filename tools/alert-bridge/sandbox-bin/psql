@@ -1,0 +1,6 @@
+#!/bin/bash
+# psql 只读户面：仅 -U nox_ro 调用放行（role 域双重防线）
+if [[ "$*" == *"-U nox_ro"* ]] || [[ "$*" == *"nox_ro"* ]]; then
+  exec /usr/bin/psql "$@"
+fi
+echo "[sandbox] psql 非 nox_ro 调用 deny（只读户 role 白名单）" >&2; exit 126
