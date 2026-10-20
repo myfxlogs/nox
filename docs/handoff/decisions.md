@@ -811,3 +811,6 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：①公司名=NOX（拉丁「夜」原形词，非缩写）——名管「何时干活」；②emblem=**夜枭猎手**（业主亲申「夜枭猎手才是本意」——神管「谁在干活」：落登录页/投资人页 emblem、报告落款章、名册 goroutine「夜班枭编制」称呼——名册 beat_ts 心跳=枭眼，语义自洽零成本）；③副标 money never sleeps（立名主题=D-286 业主令同源）。④改名票不翻案（D-231/232 改名税两裁负收益+金融域猫头鹰基金撞名面）。
 - **落地成本**：emblem 层=前端 v1 页（M2.5b 在建面）+报告模板文字面——随在建件顺手落零专票；公司架构.md 标题残留「ARB Capital」同 commit 修正。
 - **伪证锚**：若业主后续明令换名（注册需要/品牌不满），三层以新令为准、本裁只作谱系注。
+### D-639（10-20 23:4xZ，实施席·eval 五词票附带裁定）cross_venue_spot 评估词单位=**per-turn percent** 钦定
+- **裁定**：`cross_venue_spot` 评估卡全词走 per-turn 单周转口径（gross=fin_cex_spread spread_bps/100=fee 后单周转毛利百分；fee=taker×2 单周转非年化；failure/window=mechanism）——**APR 槽位禁静默塞 per-turn 值**，evidence 串一律带 `per-turn` 单位标；下游消费面（毕业闸按 USD 净非 APR）不受误导。APR 槽单位纪律=硬线（同型 100× 谎病灶 D-637 返修已记）。
+- **伪证锚**：若消费面出现把 cross_venue 卡 APR 当年化读数的下游（毕业闸/报表），本裁单位语义被违须即修。
