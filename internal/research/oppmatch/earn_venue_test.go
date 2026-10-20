@@ -98,7 +98,8 @@ func TestEarnRailVenues_IdleProposal(t *testing.T) {
 	}
 }
 
-// D-523⑥：cash_mgmt 提案目标款消失（池不再闲）→同拍 expired 不挂 SLA。
+// D-523⑥+expire 粘性修：cash_mgmt 提案目标款消失→miss_count 累积连 3 拍
+// miss 才 expired（单拍瞬态 miss 不再判死——491 病灶修法语义锚）。
 func TestCashMgmtTargetGone_ExpiresInScan(t *testing.T) {
 	st, ctx := d514Store(t)
 	for _, q := range []string{
@@ -117,6 +118,18 @@ func TestCashMgmtTargetGone_ExpiresInScan(t *testing.T) {
 		 VALUES ('cash_mgmt','auto','xgdead','proposed',now())`); err != nil {
 		t.Fatal(err)
 	}
+	// 拍1：单拍 miss=存活（miss_count=1——粘性修语义锚）
+	idleGapScan(ctx, st)
+	var st1, mc1 string
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT status, miss_count::text FROM fin_proposal WHERE venue='xgdead' AND template_id='cash_mgmt'`).Scan(&st1, &mc1); err != nil {
+		t.Fatal(err)
+	}
+	if st1 != "proposed" || mc1 != "1" {
+		t.Fatalf("单拍 miss 应存活 miss_count=1, got %s/%s", st1, mc1)
+	}
+	// 拍2/3：连 3 拍 miss=expired
+	idleGapScan(ctx, st)
 	idleGapScan(ctx, st)
 	var st2 string
 	if err := st.Pool().QueryRow(ctx,
@@ -124,6 +137,6 @@ func TestCashMgmtTargetGone_ExpiresInScan(t *testing.T) {
 		t.Fatal(err)
 	}
 	if st2 != "expired" {
-		t.Fatalf("target 消失提案应同拍 expired, got %s", st2)
+		t.Fatalf("target 消失连 3 拍应 expired, got %s", st2)
 	}
 }

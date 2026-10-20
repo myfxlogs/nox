@@ -6,6 +6,7 @@ package oppmatch
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -79,6 +80,49 @@ func evalProposal(ctx context.Context, st *pgstore.Store, r Result, pid int64) *
 			}
 		}
 		if n, err := st.LegFailCount(ctx, []string{"PERP_FUNDING"}, evalWindow); err == nil && n == 0 {
+			in.Failure = econ.Term{Evidence: "position_legs 0腿败/30d"}
+		}
+	case r.TemplateID == "term_basis":
+		// D-637 序③：gross=BasisAnn 原生年化已在；fee=taker×2 按到期持有窗年化
+		// （universe FUTURES expiry_ts 中位——无到期行=缺不外推）；slippage=无每
+		// venue 盘口深源如实 missing；window=机理（basis_ann 已含收敛至到期）。
+		if t, ok, err := st.MedianTakerFeeBps(ctx); err == nil && ok {
+			if rows, err2 := st.ListCexUniverse(ctx); err2 == nil {
+				var dts []float64
+				for _, u := range rows {
+					if u.ContractType == "FUTURES" && u.ExpiryTS != nil {
+						if d := time.Until(*u.ExpiryTS).Hours(); d > 24 {
+							dts = append(dts, d)
+						}
+					}
+				}
+				if len(dts) > 0 {
+					sort.Float64s(dts)
+					hh := dts[len(dts)/2]
+					in.Fee = econ.Term{Value: t * 2 / 100 * (8760 / hh),
+						Evidence: fmt.Sprintf("exchange_configs taker中位%.2fbps×2腿 / universe 到期中位%.1fh", t, hh)}
+				}
+			}
+		}
+		if n, err := st.LegFailCount(ctx, []string{"TERM_BASIS"}, evalWindow); err == nil && n == 0 {
+			in.Failure = econ.Term{Evidence: "position_legs 0腿败/30d"}
+		}
+		in.Window = econ.Term{Evidence: "mechanism:basis_ann 年化已含收敛至到期"}
+	case r.TemplateID == "cross_venue_spot":
+		// D-637 序③ 单位裁定钦定：本族全部词=per-turn 单周转口径（非 APR——
+		// APR 槽禁静默塞 per-turn 值故 evidence 串一律带 per-turn 单位标）。
+		if in.Gross.Evidence != "" {
+			in.Gross.Evidence += " per-turn"
+		}
+		if t, ok, err := st.MedianTakerFeeBps(ctx); err == nil && ok {
+			in.Fee = econ.Term{Value: t * 2 / 100, Evidence: fmt.Sprintf("exchange_configs taker中位%.2fbps×2腿 per-turn", t)}
+		}
+		in.Failure = econ.Term{Evidence: "mechanism:per-turn 单周转无腿账本域"}
+		in.Window = econ.Term{Evidence: "mechanism:per-turn 单周转非年化口径"}
+	case r.TemplateID == "cfd_swap_carry":
+		// D-637 序③：gross 现 nil=canonical 无配对 fail-closed 如实；MT 腿成本
+		// 无账本面=missing（mt5-quotes-history 域无费率端点在案——不凑数）。
+		if n, err := st.LegFailCount(ctx, []string{"XASSET_CARRY", "XASSET"}, evalWindow); err == nil && n == 0 {
 			in.Failure = econ.Term{Evidence: "position_legs 0腿败/30d"}
 		}
 	}
