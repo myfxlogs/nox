@@ -128,10 +128,16 @@ func idleGapScan(ctx context.Context, st *pgstore.Store) {
 	for v := range cashLive {
 		liveVenues = append(liveVenues, v)
 	}
-	if n, err := st.ExpireProposalsOutsideVenues(ctx, "cash_mgmt", liveVenues); err != nil {
+	// expire 粘性修：连 N 拍 miss 才杀（app_config cash_mgmt_miss_threshold 缺省 3——
+	// 单拍瞬态 miss 不再灭提案=491 病灶修法；真消失 N 拍后仍死）
+	missThr := 3
+	if v, ok, err := st.AppConfigInt64(ctx, "cash_mgmt_miss_threshold"); err == nil && ok && v > 0 {
+		missThr = int(v)
+	}
+	if _, n, err := st.BumpProposalMissOutsideVenues(ctx, "cash_mgmt", liveVenues, missThr); err != nil {
 		log.Printf("[oppmatch] cash target expire: %v", err)
 	} else if n > 0 {
-		log.Printf("[oppmatch] cash_mgmt target gone → expired %d proposals", n)
+		log.Printf("[oppmatch] cash_mgmt target gone %d 拍连 miss → expired %d proposals", missThr, n)
 	}
 }
 

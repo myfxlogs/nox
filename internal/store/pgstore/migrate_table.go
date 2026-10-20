@@ -254,4 +254,5 @@ var migrationFiles = []struct {
 	{1059, migrations.IncomeIsTransferSQL, false},        // D-630：income_events.is_transfer 划转伪影标
 	{1060, migrations.TicksKeyTsIdxSQL, false},           // D-633 §4：ticks 复合索引止血（级联 chunk）
 	{1061, migrations.AlertsFanoutPendingSQL, false},     // SLO ⑤：alerts.fanout_pending 列（进程外摄入件扇出判据）
+	{1062, migrations.ProposalMissCountSQL, false},       // expire 粘性修：miss_count 列（连 N 拍 miss 才杀）     // SLO ⑤：alerts.fanout_pending 列（进程外摄入件扇出判据）
 }
