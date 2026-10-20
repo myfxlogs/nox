@@ -8,7 +8,7 @@
 # O2 墙钟：会话 10min kill+放行下一条（挂死=第三故障态不堵串行队列）。
 # A2 白名单腐化可见性：pattern 日命中计数→/var/lib/alert-bridge/hits.jsonl
 #   追加（digest 06:10 批消费面）。
-import json, os, re, shlex, subprocess, sys, threading, time, datetime, queue
+import json, os, re, shlex, shutil, subprocess, sys, threading, time, datetime, queue
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", "8099"))
@@ -122,6 +122,10 @@ def spawn_session(alert: dict) -> bool:
     # 白名单外令直接 command not found=系统层 deny）。
     env = dict(os.environ)
     env["PATH"] = SANDBOX_BIN
+    # 阻断修：Popen 按子 env PATH 解析 claude——sandbox-bin 无 claude=
+    # FileNotFoundError 必发（同「claude not on PATH」坑变体）；先解
+    # 绝对径入 cmd 再传收窄 env（复审 6d76b2e73 亲证 FATAL）。
+    cmd[0] = shutil.which("claude") or cmd[0]
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
                                 stderr=subprocess.STDOUT, env=env)
