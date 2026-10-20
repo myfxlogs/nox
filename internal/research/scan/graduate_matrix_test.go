@@ -397,3 +397,13 @@ func TestD576_EngineAliveGate(t *testing.T) {
 		t.Fatalf("摘牌因应落 flag_warn: %+v", fs3.grads[0].FlagWarn)
 	}
 }
+
+func (f *fakeGradStore) AppConfigInt64(_ context.Context, key string) (int64, bool, error) {
+	if key == "grad_family_min_n" {
+		return 1, true, nil // 矩阵测夹具单值域——族闸样本阈放宽（判据链走通径非语义锁）
+	}
+	return 0, false, nil
+}
+func (f *fakeGradStore) AppConfigFloat(context.Context, string) (float64, bool, error) {
+	return 0, false, nil
+}

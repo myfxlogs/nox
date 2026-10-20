@@ -1,4 +1,4 @@
-// graduate.go D-403 S2：验证毕业链判定器——纸面行验证达标 → 产生授权建议（carry_graduations 行）
+// graduate.go D-403 S2：毕业链判定器——纸面行验证达标 → 授权建议（carry_graduations 行）
 // +聚合 info 告警一条（非逐行刷屏）。毕业=「扫描→验证→实盘」链的授权建议源头；
 // 授权动作在 dashboard service approve（业主显式三 cap），本文件只产出建议零授权。
 package scan
@@ -22,8 +22,7 @@ const GradMinAgeDays = 5.0
 const gradWindowExited = 14 * 24 * time.Hour
 
 // GraduationStore 毕业判定存储依赖（*pgstore.Store 原生实现；scan 不 import store 连接层）。
-// pending 自动过期回查面（ListCarryGraduations+GetPaperSpotCarryByID+
-// UpdateCarryGraduationDecision——store 既有方法，接口扩列零新 SQL）。
+// pending 自动过期回查面（List+GetByID+UpdateDecision——store 既有方法，扩列零新 SQL）。
 type GraduationStore interface {
 	ListPaperForGraduation(ctx context.Context) ([]pgstore.PaperSpotCarry, error)
 	InsertCarryGraduation(ctx context.Context, g *pgstore.CarryGraduation) (bool, error)
@@ -34,22 +33,20 @@ type GraduationStore interface {
 	// D-576：pending↔unqualified 重校验翻转+快照刷新（机修径，终态不动）。
 	RevalidateCarryGraduation(ctx context.Context, id int64, status, note string,
 		accrued float64, fundingAnn *float64, netAllIn *float64, ageDays float64, flagWarn *string) error
+	// D-637 序③：族级双轴闸阈值读面（app_config——pgstore 原生实现）。
+	AppConfigInt64(ctx context.Context, key string) (int64, bool, error)
+	AppConfigFloat(ctx context.Context, key string) (float64, bool, error)
 }
 
-// StepCarryGraduation 每轮 carry 扫描后调用（wire_scan 同轮串行单写者）：
-// 合格判据（双路径，D-403 S2/D-410 S5/D-468 §1 写死）——
-//
-//	active：age≥GradMinAgeDays ∧ accrued>0 ∧ low_streak==0（在轨持续盈利），
-//	        收敛账=entry/last basis 现算（convergence_usd 列仅退出时写，active 不读列）；
-//	exited：exit_reason∈{normalized,age_7d,adverse}（D-474a 加 adverse 排 data_lost）∧ accrued>0 ∧ 持仓时长≥GradMinAgeDays ∧ 在 14d 窗口
-//	        （满龄正常退出且盈利=最强证据；promoted_demo/异常退出不算），收敛账=退出冻结列值。
-//
+// StepCarryGraduation 每轮 carry 扫描后调用（wire_scan 同轮串行单写者）。
+// 合格判据（D-403 S2/D-410 S5/D-468 §1 写死）：active=age≥阈∧accrued>0∧low_streak==0
+// （收敛账 entry/last basis 现算）；exited=exit_reason∈{normalized,age_7d,adverse}∧
+// accrued>0∧持时≥阈∧14d 窗（满龄正常退=最强证据），收敛账=退出冻结列值。
 // 缺账闸（D-468 §1 语义）：「该有而没有」=拒（est_fee NULL/exited 列 NULL/basis 缺）；
 // 「尚未到产生时点」=按该时点口径现算（active 收敛）。demo 行=default 拒=人工域。
 // 每合格行插建议（paper_id UNIQUE 幂等，同行二次扫描不重复）；newCount>0 发一条聚合 info。
 // 每轮一行 scanned/qualified/new 拒绝遥测（零产出不再无声，D-468 S3）。
-// flags：D-463 S2 KB→pipeline 投影——venue 段（×拆分含全串）任一 warn 命中 →
-// 建议行 flag_warn=拼接 reason 短串透出（blocked 理论到不了此层=纸面已拦，不另处理）。
+// flags：D-463 S2 KB→pipeline 投影——venue 段 warn 命中→flag_warn 透出（blocked 到不了此层）。
 func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time, flags map[string]pgstore.VenueSymbolFlag) (int, error) {
 	rows, err := st.ListPaperForGraduation(ctx)
 	if err != nil {
@@ -58,10 +55,26 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 	newCount := 0
 	qualified := 0
 	var labels []string
+	famOK := map[string]bool{}               // D-637 序③：族闸缓存（判过/判拒同缓存——fail 径不重算）
+	famStats := map[string]FamilyGradStats{} // 判据三值持久化同源
 	for _, p := range rows {
 		if !graduationQualified(p, now) {
 			continue
 		}
+		if pass, seen := famOK[p.Structure]; !seen { // 族闸：样本不足/下界≤0=证据不足不毕业
+			stats := familyGradStatsOf(rows, p.Structure)
+			ok, lb, reason := FamilyGradGate(ctx, st, stats)
+			stats.LowerBound = lb
+			famOK[p.Structure], famStats[p.Structure] = ok, stats
+			if !ok {
+				log.Printf("[graduation] %s 族闸拒：%s", p.Structure, reason)
+				continue
+			}
+		} else if !pass {
+			continue
+		}
+		gs := famStats[p.Structure]
+		n, wr, lb := gs.N, gs.WinRate, gs.LowerBound
 		qualified++
 		net := netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, effectiveConvergenceUSD(p))
 		g := &pgstore.CarryGraduation{
@@ -79,6 +92,7 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 			NetAllInUSD:    &net, // D-410 S5/D-468 S1：建议行透出全账净额（qualified 行 effective 收敛非 nil 已达）
 			FlagWarn:       graduationFlagWarn(p, flags),
 		}
+		g.FamilyN, g.FamilyWinRate, g.FamilyLowerBound = &n, &wr, &lb // 判据三值持久化（SG 查账径）
 		inserted, err := st.InsertCarryGraduation(ctx, g)
 		if err != nil {
 			// 单行失败不炸整轮（同 paper 轨惯例），WP1 禁静默：日志留痕续跑。

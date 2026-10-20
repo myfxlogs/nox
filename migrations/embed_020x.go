@@ -183,3 +183,6 @@ var AlertsFanoutPendingSQL string // SLO ⑤：alerts.fanout_pending 列（进�
 
 //go:embed 1062_proposal_miss_count.sql
 var ProposalMissCountSQL string // expire 粘性修：fin_proposal.miss_count 列
+
+//go:embed 1063_grad_family_evidence.sql
+var GradFamilyEvidenceSQL string // 毕业判据三值持久化列
