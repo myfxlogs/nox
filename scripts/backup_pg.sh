@@ -10,6 +10,11 @@
 # 备份目录：/opt/nox-backups/（权限 600，仓库外；env BACKUP_DIR 可覆盖——仅测试/演练用，cron 不设=生产路径）
 # R2 外推配置：$BACKUP_DIR/backup-r2.env（仓库外 600，含 AGE_PUBKEY/R2_REMOTE/R2_BUCKET；私钥业主离线持有）
 # crontab：0 3 * * * /opt/nox/scripts/backup_pg.sh >> /opt/nox-backups/backup.log 2>&1
+# 还原 runbook（10-20 演练实证——裸容器还原=hypertable 数据静默全丢，勿裸 psql 还到 postgres 镜像）：
+#   ①目标实例=tsdb 镜像+ -c shared_preload_libraries=timescaledb,pg_stat_statements
+#     （生产 nox-postgres 命令行同配；裸 postgres:16 容器 _timescaledb_* schema 零、_hyper_* COPY 全败）
+#   ②角色预建：psql -c "CREATE ROLE nox_ro LOGIN"（dump 含 nox_ro GRANT——不建=135+ 角色错噪音非数据错）
+#   ③对账锚：restore 后 facts/ticks/positions count vs 生产差≤采样窗增量；scratch 清收 docker rm -v <ctr>
 
 set -euo pipefail
 
