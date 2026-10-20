@@ -27,6 +27,7 @@ type monitorsSetupArgs struct {
 	acEnvSnap    map[string]string      // D-523：overlay 前 env 快照（键视图 envValue 源）
 	secRes       *config.SecretResolver // D-545：密钥热读缓存（dashSvc.SetSecretResolver 注入）
 	st           *pgstore.Store
+	stMoney      *pgstore.Store // D-633 拆票：钱径保底池（exec/settle/position 独占）
 	qbus         *bus.QuoteBus
 	execReg      *exec.Registry
 	liveGate     *gate.LiveGateChecker // D-620⑦：真金单闸检查器单实例（main 早建下穿）

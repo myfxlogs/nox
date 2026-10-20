@@ -257,3 +257,12 @@ func newExecPipeline(execReg *exec.Registry, st *pgstore.Store, qbus *bus.QuoteB
 	pipeline.SetMTFirst(cfg.XAssetMTFirst)                                         // D-084：XASSET/FH 双腿 MT 先行（缺省 true；false=并发旧路径）
 	return pipeline
 }
+
+// mustMoneyStore D-633 拆票：钱径保底池（exec/settle/position 写读独占——通用池读面爆量不饿钱径）。
+func mustMoneyStore(ctx context.Context, dsn string) *pgstore.Store {
+	st, err := pgstore.NewMoneyStore(ctx, dsn)
+	if err != nil {
+		log.Fatalf("db money pool: %v", err)
+	}
+	return st
+}
