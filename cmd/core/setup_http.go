@@ -60,7 +60,10 @@ func serveHTTP(cancel context.CancelFunc, cfg *config.Config, st *pgstore.Store,
 	// D-284 S4 → D-139：ReplyRouter 随 repo 面摘除（OK/SKIP 指令面退役），直连 FeishuQueryHandler。
 	if cfg.FeishuAppID != "" {
 		queryHandler := notify.NewFeishuQueryHandler(
-			&notify.PgStoreQueryAdapter{Store: st},
+			&notify.PgStoreQueryAdapter{Store: st, PriceNow: func(venue, symbol string) (float64, float64, bool) {
+				q, ok := qbus.LatestLeg(symbol, symbol, venue)
+				return q.Bid, q.Ask, ok && q.Bid > 0 && q.Ask > 0
+			}},
 			st, // *pgstore.Store 实现 AISettingsReader（GetAiSettings 已存在）
 			feishuClient,
 			cfg.AIBaseURL, cfg.AIModel, cfg.AIAPIKey,

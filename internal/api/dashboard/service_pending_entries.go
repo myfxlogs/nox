@@ -6,6 +6,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"nox/internal/data/bus"
 	"sort"
 	"time"
 
@@ -221,8 +222,20 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 		if vt == "" {
 			continue // 未知市场形态不设 tick 闸（由后续闸兜底）
 		}
-		tr, ok, err := s.store.LatestTick(ctx, bareVenueKey(leg.venue), vt, sym)
-		if err != nil || !ok || time.Since(tr.Ts) > tickFreshWindow {
+		// D-633 现态切 qbus：LatestLeg(canonical, native, venueKey)——
+		// miss/陈值同判闸红（冷启动 qbus 空=fail-closed 如实红，禁回 PG）。
+		// 任一源新鲜即过（qbus miss/陈→DB 末帧兜底判——持久末帧回退 D-162 域；
+		// 双源皆缺/皆陈=fail-closed 如实红）。
+		q, ok := quoteOrMiss(s.qbus, leg.canon, sym, leg.venue)
+		if !ok || time.Since(q.Time) > tickFreshWindow {
+			if tr, tok, terr := s.store.LatestTick(ctx, bareVenueKey(leg.venue), vt, sym); tok && terr == nil && time.Since(tr.Ts) <= tickFreshWindow {
+				q = bus.Quote{Bid: tr.Bid, Ask: tr.Ask, Time: tr.Ts}
+				ok = true
+			} else {
+				ok = false
+			}
+		}
+		if !ok || time.Since(q.Time) > tickFreshWindow {
 			return kind, fmt.Sprintf("行情报价过期: %s/%s（超过5分钟无更新）", bareVenueKey(leg.venue), sym), 5, false
 		}
 	}

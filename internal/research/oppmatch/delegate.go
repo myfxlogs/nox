@@ -35,6 +35,16 @@ var delegateTickMaxAge time.Duration
 // SetDelegateTickMaxAge cmd/core 装配注入（同 exec.SetLegTickWindow 先例）。
 func SetDelegateTickMaxAge(d time.Duration) { delegateTickMaxAge = d }
 
+// delegatePriceNow D-633：真金 sizing 判价现态源（cmd/core 由 qbus 装配——
+// 返回 bid/ask/ts/ok；nil=未装配回落 DB 窗径保旧行为，fail-closed 不动）。
+var delegatePriceNow func(venue, venueType, symbol string) (bid, ask float64, ts time.Time, ok bool)
+
+// SetDelegatePriceNow cmd/core 装配注入（qbus.LatestLeg 适配——D-514 分层
+// 用函数型不 import bus）。
+func SetDelegatePriceNow(fn func(venue, venueType, symbol string) (float64, float64, time.Time, bool)) {
+	delegatePriceNow = fn
+}
+
 // delegateGraduations 委任放行主件（runLifecycle 尾挂）。
 func delegateGraduations(ctx context.Context, st *pgstore.Store) {
 	if GradDelegateReload == nil {
@@ -101,7 +111,18 @@ func delegatePaperEligible(p *pgstore.PaperSpotCarry, now time.Time) bool {
 
 // delegateApprove 写白名单组合（qty=QtyUSD/现价——现价缺→fail-closed 不批）+委任落账+warn 留痕。
 func delegateApprove(ctx context.Context, st *pgstore.Store, g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry) bool {
-	px, ok := st.LatestTickMidWithin(ctx, g.VenueA, g.Symbol, delegateTickMaxAge)
+	// D-633 现态判价=qbus 注入件优先（装配即 DB 读面切断）；未装配回 DB 窗径。
+	var px float64
+	var ok bool
+	var got bool
+	if delegatePriceNow != nil {
+		if bid, ask, ts, qok := delegatePriceNow(g.VenueA, "perp", g.Symbol); qok && (delegateTickMaxAge <= 0 || time.Since(ts) <= delegateTickMaxAge) && bid > 0 && ask > 0 {
+			px, ok, got = (bid+ask)/2, true, true
+		}
+	}
+	if !got {
+		px, ok = st.LatestTickMidWithin(ctx, g.VenueA, g.Symbol, delegateTickMaxAge)
+	}
 	if !ok || px <= 0 {
 		log.Printf("[delegate] grad#%d %s@%s 现价缺/陈旧→不批（fail-closed·D-604 N2 判价窗）", g.ID, g.Symbol, g.VenueA)
 		return false

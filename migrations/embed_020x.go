@@ -174,3 +174,6 @@ var TrialCostWiringSQL string // P0 续件：positions.combo_id 归因列
 var SettleReflectionSQL string // settle 单消费者：reflection+entry_expected_cost_bps 列
 //go:embed 1059_income_is_transfer.sql
 var IncomeIsTransferSQL string // D-630：income_events.is_transfer 划转伪影标
+
+//go:embed 1060_ticks_key_ts_idx.sql
+var TicksKeyTsIdxSQL string // D-633 §4：ticks (venue,symbol,venue_type,ts DESC) 复合索引止血

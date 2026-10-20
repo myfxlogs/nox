@@ -12,6 +12,7 @@ import (
 	"nox/internal/data/bus"
 	v1 "nox/internal/gen/dashboardv1"
 	"nox/internal/ledger/reconcile"
+	"nox/internal/store/pgstore"
 )
 
 // capitalGaps 三缺口缓存读口：60s 窗口内复用上次实拉（A4：连开页面第二次零 REST）；
@@ -99,7 +100,24 @@ func capConvertTick(ctx context.Context, s *Service, n *v1.CapitalMapNode) {
 	if n.HasUsd {
 		return
 	}
-	price, ok := s.store.LatestTickMid(ctx, "binance", n.Currency+"USDT")
+	// D-633 现态切 qbus（binance:spot——原 SQL 无 venue_type 过滤脏锚修正）
+	var price float64
+	var ok bool
+	q, qok := quoteOrNil(s.qbus, n.Currency+"USDT", "binance:spot")
+	if !qok {
+		var t pgstore.TickRow
+		var tok bool
+		var terr error
+		if t, tok, terr = s.store.LatestTick(ctx, "binance", "spot", n.Currency+"USDT"); !tok || terr != nil {
+			t, tok, terr = s.store.LatestTick(ctx, "binance", "perp", n.Currency+"USDT")
+		}
+		if tok && terr == nil {
+			q, qok = bus.Quote{Bid: t.Bid, Ask: t.Ask, Time: t.Ts}, true
+		}
+	}
+	if qok && q.Bid > 0 && q.Ask > 0 {
+		price, ok = (q.Bid+q.Ask)/2, true
+	}
 	if !ok {
 		n.HasUsd = false
 		n.Note += "；未折算（无 " + n.Currency + "USDT 价，不猜）"
