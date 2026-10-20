@@ -27,8 +27,9 @@ func wireBridgePush(ctx context.Context, st *pgstore.Store, secRes *config.Secre
 		func() []string {
 			v, ok, err := st.AppConfigString(ctx, "NOX_ALERT_BRIDGE_WARN_PATTERNS")
 			if err != nil || !ok || v == "" {
-				// 缺省三族起手（设计稿 §7.4）——[前提塌]/断流 stale/attach 超时
-				return []string{"[前提塌]", "[stale]", "[attach]"}
+				// 缺省三族（§7.4）前缀对拍真实告警文案——断流=CMC 报价断流、
+				// attach=MT5 数据监控族（原 [stale]/[attach] 永不命中=哑缺省实证）
+				return []string{"[前提塌]", "CMC 报价断流", "MT5 数据监控"}
 			}
 			return strings.Split(v, ",")
 		},
