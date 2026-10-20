@@ -1,0 +1,28 @@
+# dev 机 systemd 用户/系统单元——NOX 告警分诊本机桥（spawner 串行 claude -p）
+# 部署件：cp tools/alert-bridge/alert-bridge.service /etc/systemd/system/alert-bridge.service
+# systemctl daemon-reload && systemctl enable --now alert-bridge
+# 环境：BRIDGE_TOKEN 走 /etc/alert-bridge.env（600 root；app_secrets 同源值）
+[Unit]
+Description=NOX alert triage local bridge (serial claude -p spawner)
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=mluser
+EnvironmentFile=/etc/alert-bridge.env
+ExecStart=/usr/bin/python3 /opt/nox/tools/alert-bridge/bridge.py
+Restart=always
+RestartSec=10
+# O2 墙钟兜底：单桥进程整挂死超 3min 未出日志由 watchdog 兜（会话级 10min
+# 墙钟杀在 bridge.py 内）。
+WatchdogSec=0
+# 沙箱面：禁能力族（只回环绑口，防火墙规则挡外源=部署件径）
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/alert-bridge /opt/nox/docs/handoff /opt/nox/docs/报告 /opt/nox/docs/经验库
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

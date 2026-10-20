@@ -1,0 +1,19 @@
+# dev 机 systemd——SG↔dev 反向隧道（SG nox-core POST localhost:8099→dev 桥）
+# 部署件：cp alert-bridge-tunnel.service /etc/systemd/system/ && enable --now
+[Unit]
+Description=NOX alert-bridge reverse tunnel (SG localhost:8099 -> dev bridge)
+After=network-online.target alert-bridge.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mluser
+# 专用只读 key（command= 前缀可再收；ssh -R 只开远端转发禁本机口）
+ExecStart=/usr/bin/ssh -NT -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+    -o ExitOnForwardFailure=yes -i %h/.ssh/alert_bridge_tunnel \
+    -R 127.0.0.1:8099:localhost:8099 root@192.229.85.35
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target
