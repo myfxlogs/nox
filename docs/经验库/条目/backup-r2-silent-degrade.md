@@ -24,3 +24,5 @@ last_seen: 2026-10-20
 ## 终态（D-635 10-20）
 
 业主令弃配 R2 凭据（#541 不回执）——R2 外推永久放弃，DR=SG 本地滚动 14+GitHub 两地口径。本条目处方中「修复 R2 外推」半项随之终态；告警面（降级可见性）处方仍有效并由降噪小票精化（状态变迁单发）。后席勿据本条目再提 R2 修复票（伪证锚：业主重配即 D-635 失效恢复三地径）。
+
+**降噪后判定信号更新（D-635a 10-20，backup_pg.sh 状态变迁制上线后）**：降级告警改 marker 状态变迁单发——首失=critical 首报行（alerts 表）+落 `$BACKUP_DIR/.r2_degrade_state`；续日=log `INFO: r2 degrade ongoing day=N`（INFO 非 WARN：防 slo_watch 对 backup.log 尾窗 grep WARN/ERROR 的 warn 噪音换面复发）；恢复=marker 清除；再失=再首报。上文「判定信号」之 `grep WARN` 自此只捕异常变体（计数写败等）；稳态降级探查改用 `grep 'r2 degrade ongoing' /opt/nox-backups/backup.log`+`cat /opt/nox-backups/.r2_degrade_state`。
