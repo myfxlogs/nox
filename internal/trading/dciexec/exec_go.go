@@ -131,10 +131,13 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	share, tenorCap := gate.TenorCapOf(cons)
+	_, tenorCap := gate.TenorCapOf(cons)
+	// D-644：share=venue 粒度读面（custody_share@<venue> 优先，无键回落全局——
+	// okx 池=纯托管钱 ×1.0，binance 共享池 ×0.34）。
+	share := gate.CustodyShareOf(cons, p.Venue)
 	if share == nil {
 		return "", e.gap(ctx, gate.CallLeg, "constraint", "custody_share",
-			"请喂约束 custody_share（托管可动份额上限）")
+			"请喂约束 custody_share 或 custody_share@%s（托管可动份额上限）", p.Venue)
 	}
 	spot, err := e.spotPrice(ctx, "BTCUSDT")
 	if err != nil {

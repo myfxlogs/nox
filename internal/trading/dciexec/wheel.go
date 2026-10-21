@@ -19,7 +19,8 @@ func (e *Executor) GoWheel(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	share, tenorCap := gate.TenorCapOf(cons)
+	_, tenorCap := gate.TenorCapOf(cons)
+	share := gate.CustodyShareOf(cons, "binance") // D-644 venue 粒度（binance 共享池域）
 	if share == nil {
 		return "", e.gap(ctx, gate.CallLeg, "constraint", "custody_share",
 			"请喂约束 custody_share（托管可动份额上限）")

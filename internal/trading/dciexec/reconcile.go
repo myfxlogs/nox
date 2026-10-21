@@ -27,7 +27,7 @@ func (e *Executor) ReconcilePoolOnce(ctx context.Context) (ledger, live float64,
 	if err != nil {
 		return 0, 0, false, err
 	}
-	share, _ := gate.TenorCapOf(cons)
+	share := gate.CustodyShareOf(cons, "binance") // D-644：对账池=binance 共享池域
 	if share == nil {
 		return 0, 0, false, fmt.Errorf("custody_share 约束缺（托管池对账不可行）")
 	}

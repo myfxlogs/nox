@@ -1133,3 +1133,10 @@ verdict=退回。独立复核：diff 全读+分支机检复跑（go build+TestOv
 坑处置：无新坑（覆盖缺口归测试锚，修单②已含）。
 -->
 [复审收口:earn瓦片快照桶] 退回① @未merge（分支 wip/earn-snap-amt 停留待返修→复审席）
+
+<!-- 实施席 10-21：custody_share venue 粒度修 施工完候复审（D-644 前置阻塞件）
+病灶：TenorCapOf 全局单键 custody_share=0.34（binance 共享池=自营+托管混存上限）被 okx 径同读——托管份额整笔划 okx 后 qty 再×0.34→0.0065 BTC 破 okx dcd 最小申购档=转了也开不了。
+修件（wip/custody-share-venue）：①gate.CustodyShareOf(cons,venue) 双键查序——`custody_share@<venue>` 优先、无键回落全局（subject 并 venue 后缀与 dormant:<t>@<v> 惯例对齐）；②消费面分域接线——exec_go GoProposal 按 p.Venue 取、wheel/reconcile 钉 "binance" 共享池域；③TenorCapOf 缩为 redeemable cap+全局 share（向后兼容零漂移）；④share=nil 缺口文案带 venue 键形。
+机检：TestCustodyShareOf_VenueGranularity 五态锚（@okx=1.0 优先/binance 回落 0.34/空 venue=全局/仅 venue 键 binance=nil/@okx 无数值回落）+TestTenorCapOf_GlobalOnly；gate+dciexec 236 测+race 全绿。
+SG 验收锚（复审席）：okx 资金户 BTC 到位+约束行 `custody_share@okx=1.0` 落库后，sell_high@okx 提案 GoProposal qty=余额×1.0 过最小档（或如实下段拒因）；约束行落库=fin_capability_constraint 写径业主/决策席侧，本票只修读面。
+-->
