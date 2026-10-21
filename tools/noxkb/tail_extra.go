@@ -29,6 +29,8 @@ func main() {
 		}
 	case "induct":
 		err = inductCmd()
+	case "econ-verdict":
+		err = econVerdictCmd()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		os.Exit(2)
@@ -57,6 +59,7 @@ func resolvePaths() error {
 			entriesDir = filepath.Join(base, "条目")
 			indexFile = filepath.Join(base, "索引.md")
 			skillsIndexFile = filepath.Join(base, "技能清单.md")
+			econDirConst = filepath.Join(dir, "docs", "经济经验库") // 同锚防 cwd 绑死
 			return nil
 		}
 		parent := filepath.Dir(dir)

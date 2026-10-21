@@ -77,6 +77,16 @@ func (s *Store) econPendingForSettlement(ctx context.Context, posID int64) {
 		Scan(&net, &incident, &key); err != nil || net == nil || incident || key == "" || *net >= 0 {
 		return
 	}
+	// 消化链②裁定消费点：键已裁 → canon/merge 静默跳过（行已消化）；
+	// dismiss 重报=同因病灶信号（理由防垃圾桶的对偶面——教训未挡住再犯）→ warn。
+	if v, ok, verr := s.EconVerdictByKey(ctx, key); verr == nil && ok {
+		if v.Verdict == "dismiss" {
+			_ = s.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
+				"经济库裁定 dismiss 同因重报：key=%s pos=%d（裁定理由=%s——教训未挡住再犯=病灶信号）",
+				key, posID, v.Reason), 24*time.Hour)
+		}
+		return
+	}
 	line := fmt.Sprintf("- pos=%d net=%.2f settled=%s key=%s",
 		posID, *net, time.Now().UTC().Format("2006-01-02"), key)
 	if err := econPendingAppend(econKBDir(), key, line); err != nil {

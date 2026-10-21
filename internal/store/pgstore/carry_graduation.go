@@ -214,7 +214,7 @@ type XAssetComboInsert struct {
 // InsertXAssetAllowCombo approve 写组合白名单（simulated=false=真仓白名单；venue env 门
 // 仍是实际真钱闸，双层不矛盾）。撞唯一键 → ErrXAssetComboExists（调用方报「已在白名单」）。
 // 非 fixed 档腿帽写 NULL（CHECK 钉死 sizing_caps_check），armed 径按活池折算。
-func (s *Store) InsertXAssetAllowCombo(ctx context.Context, r *XAssetComboInsert) (int64, error) {
+func (s *Store) insertXAssetAllowCombo(ctx context.Context, r *XAssetComboInsert) (int64, error) {
 	var id int64
 	vb, vs := keydomain.Parse(r.VenueBuy), keydomain.Parse(r.VenueSell) // D-496 复合键拆两列
 	mode := r.SizingMode

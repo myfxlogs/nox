@@ -205,6 +205,9 @@ func run(commitFlag bool) error {
 		log.Printf("digest: backlog gate fired rows=%d maxCount=%d", rows, maxCount)
 	}
 
+	// 消化链建制①：经济库待归纳积压闸（D-172 同机制——行>0 且最老>3天→warn）。
+	econBacklogGate(ctx, pool, kbDir, now)
+
 	// 8. 更新水位
 	newState := &digestState{
 		AutotradeLogsMaxID: state.AutotradeLogsMaxID,

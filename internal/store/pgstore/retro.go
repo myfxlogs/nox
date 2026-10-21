@@ -88,6 +88,10 @@ type RetroWeekly struct {
 	// DepSeq D-180：每策略按 settled_at 序的净 PNL 符号序列（转折点检验输入，
 	// 与 AggregateStrategyStats 同排除口径；纯证据字段）。
 	DepSeq map[string][]float64
+	// 消化链建制①：经济库消化态——未裁定机械积压行数/最老天数 + 窗口裁定分布。
+	EconPendingN      int
+	EconPendingOldest int
+	EconVerdicts      map[string]int
 }
 
 // RetroDailyStats 日报数据面。
@@ -268,5 +272,13 @@ func (s *Store) RetroWeeklyStats(ctx context.Context, since, until time.Time) (*
 		return nil, err
 	}
 	w.DepSeq = depSeq
+	// 经济库消化态（消化链建制①）：表缺/读败如实降空表——段缺失不炸周报。
+	w.EconVerdicts = map[string]int{}
+	if n, d, eerr := s.EconPendingBacklog(ctx); eerr == nil {
+		w.EconPendingN, w.EconPendingOldest = n, d
+	}
+	if vd, verr := s.EconVerdictDist(ctx, since, until); verr == nil {
+		w.EconVerdicts = vd
+	}
 	return w, nil
 }

@@ -33,6 +33,11 @@ type Hit struct {
 // MatchHits 读条目目录→逐条 match 段解析→输入对拍→命中集。
 // 库缺/读败=空集透出非阻塞（禁线：不拦闸）。
 func MatchHits(dir string, in Input) []Hit {
+	// 消化链建制：条目迁 条目/ 子目（根目回落=迁移期兼容——与 noxkb
+	// econEntriesDir 同口径双形态）。
+	if st, err := os.Stat(filepath.Join(dir, "条目")); err == nil && st.IsDir() {
+		dir = filepath.Join(dir, "条目")
+	}
 	fis, err := os.ReadDir(dir)
 	if err != nil {
 		return nil

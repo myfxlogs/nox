@@ -193,7 +193,15 @@ func renderWeeklyStats(w *pgstore.RetroWeekly, kb string, zSigma, zLim float64) 
 	}
 	fmt.Fprintf(&b, "evals_7d: %s\n", joinDist(w.EvalDist))
 	b.WriteString("== KB 增量 ==\n" + kb)
+	b.WriteString(econDigestTable(w))
 	return b.String()
+}
+
+// econDigestTable 经济库消化态栏（消化链建制①）：未裁定积压+窗口裁定分布，
+// 积压零行如实写 backlog=0——死文本病灶的可见性锚。
+func econDigestTable(w *pgstore.RetroWeekly) string {
+	return fmt.Sprintf("== 经济库消化态 ==\nbacklog: %d 行（最老 %d 天）\nverdicts_7d: %s\n",
+		w.EconPendingN, w.EconPendingOldest, joinDist(w.EconVerdicts))
 }
 
 // assembleWeekly 五节契约拼装：Go 表 fenced + AI 叙事（按节标题抽取，缺节回退尾部整段）。
@@ -207,7 +215,7 @@ func assembleWeekly(date, model string, w *pgstore.RetroWeekly, kb, aiText strin
 	writeSection("交易成败归因", weeklyTradeTable(w))
 	writeSection("纸面交易复盘", weeklyPaperTable(w))
 	writeSection("策略生死状", weeklyStrategyTable(w, zSigma, zLim))
-	writeSection("踩坑与经验", kb+alertClusterTable(w))
+	writeSection("踩坑与经验", kb+alertClusterTable(w)+econDigestTable(w))
 	// §5：AI 全文中的建议节（含 fenced 块原文）。
 	sugg := strings.TrimSpace(aiSections["改进建议"])
 	if sugg == "" {
