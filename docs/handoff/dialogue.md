@@ -291,3 +291,7 @@
 ## 2026-10-21 约束漂移修实施纪要（wip/cg-type-drift @e36d10f+92acbc8）
 - 漂移侦测锚选型裁定（实施域）：票面给「部署 runbook 或启动自检」二选——定启动自检（cmd/core 迁移后跑 SchemaCheckDrift，warn 告警 dedup 24h 不阻断 boot）：runbook 靠人肉=同病灶复发温床，自检件随进程必跑。
 - 对拍口径裁定：按表内规范化定义多重集对拍（名不参与）——列级裸 CHECK pg 自动命名 vs 生产手工名不属语义漂移；分区表（PARTITION OF/ATTACH）+继承约束（conparentid>0）双向豁免；deparse/源码形态差经 normalizeCheckDef 归一（IN→ANY、LIKE→~~、cast 脱壳、括号全剥、单元素 ANY→=）。
+
+## 2026-10-21 okx 429 修实施纪要（wip/okx-429 @5318e414c）
+- 定性锚（实施域裁定）：文档档 order-history=1req/s（User ID）vs 生产 0.028/s——连败真凶=kick drain 批内同秒连发非超频；故修在「间距序列化」而非「降频」——minInterval 间距+429 倍增退避双层，consume-point 拉性质与事件驱动拍不动（票面禁线合规）。
+- 退避期 skip=如实返 ErrOkxThrottled（error+log 照走=禁线「429 留痕」合规；不占位=罚窗自然到期解封）。

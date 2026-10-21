@@ -160,8 +160,11 @@ func Load() *Config {
 		TrxVoteMinIntervalMin:  envInt("NOX_TRX_VOTE_MIN_INTERVAL_MINUTES", 120), // D-293 S3：防抖 2h
 		TrxVoteSpreadThreshold: envFloat("NOX_TRX_VOTE_SPREAD_THRESHOLD", 0.001), // D-297：价差触发改投阈值 0.001pp
 		// === D-271 CEX 只读扫描器 ===
-		CexScanInterval: envDur("NOX_CEX_SCAN_INTERVAL", 5*time.Minute),
-		CexScanSymbols:  cexScanSymbolsDefault(),
+		CexScanInterval:   envDur("NOX_CEX_SCAN_INTERVAL", 5*time.Minute),
+		CexScanSymbols:    cexScanSymbolsDefault(),
+		OkxGetMinInterval: envDur("NOX_OKX_GET_MIN_INTERVAL", 1100*time.Millisecond), // sfp/dcd order-history 1req/s 档+容差
+		OkxGetBackoff:     envDur("NOX_OKX_GET_429_BACKOFF", 2*time.Second),
+		OkxGetBackoffMax:  envDur("NOX_OKX_GET_429_BACKOFF_MAX", 60*time.Second),
 		// === D-405 账户资金三档监控 ===
 		MarginUrgentCooldown: envDur("NOX_MARGIN_URGENT_COOLDOWN", 30*time.Minute),
 		MarginWarnCooldown:   envDur("NOX_MARGIN_WARN_COOLDOWN", 6*time.Hour),
