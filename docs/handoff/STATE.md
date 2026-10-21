@@ -1219,3 +1219,16 @@ SG 验收锚（复审席）：部署后 earn/DCI 申购成交推一次，24h 零
 机检：TestOkxDCI_InvestCcyCallBase 三态（notionalCcy=BTC 透传/缺省兜底 baseCcy/USDT 行透传）；cexscan 全量绿。
 SG 验收锚（复审席）：下拍采集 CALL 行 invest_ccy=BTC→σ 界内档被闸看见（含 91500 族 net 闸实判或如实拒）；PUT 面 USDT 零回归。
 -->
+
+<!-- 决策席 10-21：dciexec 定价基准 venue 化 P1（现货参考价+σ源+交割估值 venue 路由）
+病灶（全谱审计在案）：spotPrice/settle.usdOf/sigmaDaily/disposal_sweep 五处
+硬调 binance——okx 产品选档边界/轮档/交割估值全拿跨所价，settle 口径差=
+账本 vs 实收定时弹（#1827 12-25 交割撞此径）。
+修向：spotPrice 按 p.Venue 路由（okx→index-tickers idxPx 交割锚同径、
+binance→现径、gate→自家 ticker）；sigmaDaily 同源路由禁 binance 先兜；
+usdOf 按持仓 venue 取价；空 base→fail-closed 凭证缺口告警禁裸网络错。
+验收：okx 提案日志价源=okx；空 base 拒因=凭证缺口；settle 估值价源=持仓
+venue 自家价。连带排：dci_leg/okx_dci/bnapi BTC 裸钉+jit/earn USDT 钉+
+DCIExecVenues/EarnExecVenues map=D-619/644 约束以字面量散落——整改归能力
+账本喂入，同票或紧随票实施裁。skills 域：协议面取证。
+-->
