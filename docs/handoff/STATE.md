@@ -1098,3 +1098,9 @@ verdict=照准。亲证：①diff 全读——NoxMark（O=枭面字标，current
 机检：TestSummarizeIdleStreak 四态锚+TestOverviewBundleAvailFlags 接线锚（空库→NO_DATA 达 RPC 面）；dashboard 820 测全绿+race 绿+npm build 绿。
 顺带实证（SG psql）：idle_floor_streak 现 17 行、last_check_day=2026-10-21、max(consecutive_below_days)=0——读模有行全零=健康零，部署后瓦片应显「0 · 无眠钱」（非断供——D-612 动窗写径已活）。
 -->
+<!-- 复审席 10-21：眠钱瓦片状态分显示修 收口注记
+verdict=照准。三亲证：①四态锚=TestSummarizeIdleStreak 四分支全覆盖（err/零行→NO_DATA、days=0 有行→HEALTHY_ZERO、days>0→STREAK 携最长池）+TestOverviewBundleAvailFlags 空库→NO_DATA 达 RPC 面；②接线锚=summarizeIdleStreak 无条件置 IdleStreakState（旧病=available 门内才置字段致陈旧泄漏），前端 overview.tsx 按枚举分显零算零猜（NO_DATA=u-amber 警示态）③SG 健康零实证亲查：idle_floor_streak 17 行全 consecutive_below_days=0/alerted=f/last_check_day=10-21=读模有行全零→HEALTHY_ZERO 应然态，部署后瓦片显「0 · 无眠钱」。
+机检独立复跑：build/vet/gofmt 净+dashboard 820 测绿+race 复跑 820 绿（首跑 D466×2 红=okxleg fixture httpmock 端口争用 flake——单跑 -run TestD466 全绿+全包复跑全绿，非带病）+buf generate+npm build 绿。
+坑处置：无坑（flake 录痕待归纳面可查）。
+-->
+[复审收口:眠钱瓦片状态分显] 照准 merge @7a656214e——部署后瓦片应显「0 · 无眠钱」=终验锚
