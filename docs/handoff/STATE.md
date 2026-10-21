@@ -1082,3 +1082,10 @@ verdict=照准。亲证：①diff 全读——NoxMark（O=枭面字标，current
 坑处置：无坑（纯前端观感件）；工树 live-layer 疑为分层票（815）备用——清理权留属席，本席不动。
 -->
 [复审收口:emblem-v2-字标] 照准 @f29c2b5ea
+
+<!-- 实施席 10-21：dormant 键作用域泄漏修 施工完候复审
+病灶：run.go 枚举前 `dormant[tid@binance]` 模板级短路——生产种子 dormant:dci_sell_high_covered_call@binance（D-204）把 binance 休眠误扩全 venue，okx 提案面被掐。
+修件（wip/dormant-venue-scope）：①判定 venue 粒度化——`venueSetFor` 枚举面逐 venue 查 dormant，命中 venue 无条件 defer+留痕，全 venue 休眠才整模板短路；②预检休眠写面同粒度——feas 不过逐 venue 落 dormant 键（原只写 @binance，粒度化后将对其他 venue 失效）；③cash_mgmt 豁免——产制归 idleGapScan 独域（vs=nil），防 match 环 dormant defer 误伤其提案（TestCashMgmtKeepalive 咬出）。
+验收锚：TestDormantVenueGranularity（binance 存量 deferred+零新 binance proposed+okx 提案照产）；机检 51 包测试+race 绿、vet/gofmt 净。
+遗留如实记：auto 轨无执行器处置块（run.go ~140）defer 仍硬编码 @binance——同族作用域嫌疑，本票未动（票面范围只钉 dormant）；sell_high okx 提案恢复待部署后扫描拍实证（能力达标面以生产为准）。
+-->

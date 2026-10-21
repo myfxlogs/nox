@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"nox/internal/platform/testutil"
+	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 )
 
@@ -520,4 +521,73 @@ func TestRotateScan_Proposal(t *testing.T) {
 	if n != 0 {
 		t.Fatalf("陈 APR 行不应产提案: %d", n)
 	}
+}
+
+// TestDormantVenueGranularity 休眠键 venue 粒度锚（dormant 键作用域泄漏修）：
+// dormant:tz_venue@binance 只压 binance 面——binance 存量翻 deferred+零新
+// binance 提案；okx 面照常产提案（修前 @binance 键在枚举前短路掐死全 venue）。
+func TestDormantVenueGranularity(t *testing.T) {
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
+	st, err := pgstore.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// tz_venue 入 dci 腿族（ExecTemplates 成员→枚举面=dciProposalVenues{binance,okx}）。
+	gate.ExecTemplates["tz_venue"] = nil
+	defer delete(gate.ExecTemplates, "tz_venue")
+	if _, err := st.Pool().Exec(ctx, `
+		DELETE FROM fin_proposal WHERE template_id='tz_venue';
+		DELETE FROM fin_capability_constraint WHERE subject LIKE 'dormant:tz_venue%';
+		DELETE FROM fin_opp_template_cond WHERE template_id='tz_venue';
+		DELETE FROM fin_opp_template WHERE id='tz_venue';
+		INSERT INTO fin_opp_template (id, mechanism, net_apr, exec_track, risk_level, enabled, payoff_class)
+			VALUES ('tz_venue','x','x','proposal','low',true,'other');
+		INSERT INTO fin_opp_template_cond (template_id, seq, kind, subject, qualifier, min_val)
+			VALUES ('tz_venue',1,'holding','BTC','min_qty',0);
+		INSERT INTO fin_proposal (template_id, exec_track, venue, params, status)
+			VALUES ('tz_venue','proposal','binance','{}','proposed')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertCapabilityConstraint(ctx,
+		DormantConstraint("tz_venue", "binance", "测试休眠")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := RunOnce(ctx, st, 10000, 1000); err != nil {
+		t.Fatal(err)
+	}
+	// binance 面：存量翻 deferred+零新 proposed。
+	var stt string
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT status FROM fin_proposal WHERE template_id='tz_venue' AND venue='binance'`).Scan(&stt); err != nil {
+		t.Fatal(err)
+	}
+	if stt != "deferred" {
+		t.Fatalf("binance 休眠存量应翻 deferred, got %s", stt)
+	}
+	var n int
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM fin_proposal WHERE template_id='tz_venue' AND venue='binance' AND status='proposed'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("binance 休眠不应产 proposed 行: %d", n)
+	}
+	// okx 面：dormant@binance 不得外溢——提案照产。
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM fin_proposal WHERE template_id='tz_venue' AND venue='okx' AND status='proposed'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("dormant@binance 掐死 okx 提案面（作用域泄漏未修）: %d", n)
+	}
+	// 尾部自清。
+	st.Pool().Exec(ctx, `DELETE FROM fin_capability_constraint WHERE subject='dormant:tz_venue@binance';
+		DELETE FROM fin_proposal WHERE template_id='tz_venue';
+		DELETE FROM fin_opp_template_cond WHERE template_id='tz_venue';
+		DELETE FROM fin_opp_template WHERE id='tz_venue'`)
 }
