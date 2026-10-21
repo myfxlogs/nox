@@ -18,6 +18,7 @@
 
 ## 观察（只记事实）
 - 搬迁纯移动+import 路径改写+文件名去票号；语义零改动。
+- 10-21 D-643 步①：eval 卡词源轨标注（live/replay/point-query/prior 四值钉死，evidence 串带（track=X）+evidence_refs tracks 摘要面零迁移）+串轨 warn 闸（point-query 源喂 live-轨语义→InsertAlertDedup warn 24h 侦测立账不拒——拒级归 D-633 开口）。
 
 ## 判定（决策席）
 | 项 | 判定 | 理由 |

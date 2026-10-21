@@ -178,7 +178,7 @@ func TestEvalCard_FundingFeeSrc(t *testing.T) {
 	if ev["fee"] == "" || !strings.Contains(ev["fee"], "taker中位5.00bps") {
 		t.Fatalf("fee 证据缺: %+v", ev)
 	}
-	if ev["failure"] != "position_legs 0腿败/30d" {
+	if !strings.HasPrefix(ev["failure"], "position_legs 0腿败/30d") {
 		t.Fatalf("failure 证据: %q", ev["failure"])
 	}
 	if card.FeeAPR == nil || *card.FeeAPR <= 0 {
@@ -343,5 +343,126 @@ func TestEvalCard_FundingFeePaperSource(t *testing.T) {
 	c2 := evalProposal(ctx, st, Result{TemplateID: "funding_carry", APR: &g, Venue: "binance"}, pid2)
 	if c2.FeeAPR != nil {
 		t.Fatalf("先验缺径 fee 应 missing（探针中位禁顶分母）: %v", *c2.FeeAPR)
+	}
+}
+
+// TestEvalTrack_Labels D-643 步①：每词 evidence 串带 track= 标+evidence_refs
+// tracks 摘要面在案；正常径（live/replay/prior 源）零串轨 warn 误报。
+func TestEvalTrack_Labels(t *testing.T) {
+	st, ctx := evalTestStore(t)
+	if _, err := st.Pool().Exec(ctx, `TRUNCATE positions, position_legs, fin_cex_spread RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx, `UPDATE exchange_configs SET taker_fee_bps=5.0 WHERE venue_type='perp'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO positions (opportunity_id, type, status, opened_at, closed_at)
+		VALUES ('trk1','PERP_FUNDING','CLOSED', now()-interval '25 hours', now()-interval '1 hour')`); err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range []float64{8, 10, 12} {
+		if _, err := st.Pool().Exec(ctx,
+			`INSERT INTO facts (kind, venue, symbol, value, unit, ts)
+			 VALUES ('funding','tbinance','BTCUSDT',$1,'pct_annualized',now()-$2::interval)`,
+			v, "96 hours"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pid, _, err := st.CreateProposal(ctx, &pgstore.Proposal{
+		TemplateID: "funding_carry", ExecTrack: "auto", Venue: "binance",
+		Params: map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gross := 788.619
+	card := evalProposal(ctx, st, Result{TemplateID: "funding_carry", APR: &gross}, pid)
+	terms, _ := card.EvidenceRefs["terms"].(map[string]string)
+	if len(terms) == 0 {
+		t.Fatalf("terms 面缺: %+v", card.EvidenceRefs)
+	}
+	for name, ev := range terms {
+		if !strings.Contains(ev, "track=") {
+			t.Fatalf("词 %s evidence 缺 track 标: %q", name, ev)
+		}
+	}
+	tr, _ := card.EvidenceRefs["tracks"].(map[string]string)
+	if tr["gross"] != "live" || tr["window"] != "replay" || tr["failure"] != "replay" {
+		t.Fatalf("tracks 摘要轨错: %+v", tr)
+	}
+	// 正常径（live/replay/prior 源）零串轨 warn。
+	var warnN int
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM alerts WHERE level='warn' AND message LIKE '%串轨侦测%'`).Scan(&warnN); err != nil {
+		t.Fatal(err)
+	}
+	if warnN != 0 {
+		t.Fatalf("正常径不应出串轨 warn: %d", warnN)
+	}
+}
+
+// TestEvalTrack_PointQueryWarn D-643 串轨闸：paper 轨估费绕行径（point-query
+// 源直喂 fee 年化 live-轨语义）→warn 侦测立账不拒+dedup 不刷+fee evidence
+// 带 point-query 标；复评同卡 24h 窗内不重复行。
+func TestEvalTrack_PointQueryWarn(t *testing.T) {
+	st, ctx := evalTestStore(t)
+	if _, err := st.Pool().Exec(ctx, `DELETE FROM positions WHERE type='PERP_FUNDING'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx, `UPDATE exchange_configs SET taker_fee_bps=NULL WHERE venue_type='perp'`); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_, _ = st.Pool().Exec(ctx, `UPDATE exchange_configs SET taker_fee_bps=5.0 WHERE venue_type='perp'`)
+	}()
+	if _, err := st.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE structure='perp_perp' AND status='exited'`); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_, _ = st.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE venue_a='paperv'`)
+		_, _ = st.Pool().Exec(ctx, `UPDATE fin_opp_template SET hold_hours_prior=168 WHERE id='funding_carry'`)
+	}()
+	for _, c := range []struct{ fee, qty float64 }{{30, 10000}, {40, 10000}} {
+		if _, err := st.Pool().Exec(ctx, `INSERT INTO paper_spot_carry
+			(entry_ts, exit_ts, qty_usd, accrued_usd, low_streak, exit_reason, status, note,
+			 structure, miss_streak, accrue_ticks, venue_a, venue_b, venue_type_a, venue_type_b,
+			 side, symbol, entry_funding_ann, est_round_trip_fee_usd)
+			VALUES (now()-interval '4 hours', now(), $1, 0, 0, 'normalized', 'exited', 't',
+			 'perp_perp', 0, 0, 'paperv', 'papervb', 'perp', 'perp', 'long', 'BTCUSDT', 10.0, $2)`, c.qty, c.fee); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pid, _, err := st.CreateProposal(ctx, &pgstore.Proposal{TemplateID: "funding_carry", ExecTrack: "auto", Venue: "binance", Params: map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := 10.0
+	card := evalProposal(ctx, st, Result{TemplateID: "funding_carry", APR: &g, Venue: "binance"}, pid)
+	if card.FeeAPR == nil {
+		t.Fatalf("paper 轨径应得 fee: %+v", card.EvidenceRefs)
+	}
+	tr, _ := card.EvidenceRefs["tracks"].(map[string]string)
+	if tr["fee"] != "point-query" {
+		t.Fatalf("fee 轨应 point-query: %+v", tr)
+	}
+	terms, _ := card.EvidenceRefs["terms"].(map[string]string)
+	if !strings.Contains(terms["fee"], "track=point-query") {
+		t.Fatalf("fee evidence 缺 point-query 标: %q", terms["fee"])
+	}
+	var warnN int
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM alerts WHERE level='warn' AND message LIKE '%串轨侦测%'`).Scan(&warnN); err != nil {
+		t.Fatal(err)
+	}
+	if warnN != 1 {
+		t.Fatalf("point-query 喂 live-轨应出 1 条串轨 warn: %d", warnN)
+	}
+	// 复评同卡→dedup 窗内不重复行（侦测立账不刷屏）。
+	evalProposal(ctx, st, Result{TemplateID: "funding_carry", APR: &g, Venue: "binance"}, pid)
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM alerts WHERE level='warn' AND message LIKE '%串轨侦测%'`).Scan(&warnN); err != nil {
+		t.Fatal(err)
+	}
+	if warnN != 1 {
+		t.Fatalf("dedup 窗内复评不应重复 warn: %d", warnN)
 	}
 }
