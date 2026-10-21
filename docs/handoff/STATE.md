@@ -1178,3 +1178,10 @@ SG 验收锚（复审席）：重启/部署后 boot 日志无 ticks_old 漂移�
 机检：TestAlertReceipt_OnePushNoRemind——回执首推 Push+Remind 永不发+needs_ack 缺省照 Remind；migrate_empty_dbfull 含 1068 由注册闸覆盖。
 SG 验收锚（复审席）：部署后 earn/DCI 成交回执推一次，24h 零「告警超时未确认·重推」。
 -->
+
+<!-- 实施席 10-21：告警两级语义修 退回返修完候复审
+退回伤：isReceiptAlert HasPrefix 全哑——生产真文案带「EARN /DCI 」前缀，种子前缀形永假。
+返修：①匹配语义改 strings.Contains（退回注记钦定前者更优）；②种子校真——申购成交/已交割/已结清/已平仓/划转完成/接货已处置（「申购成交」钉真文案不吞「申购失败」）；③测试补生产真文案三形断言（EARN/DCI 申购成交+已交割）+「申购失败」不误中锚+needs_ack 缺省照 Remind。
+机检：TestAlertReceipt_OnePushNoRemind 六断言绿、pgstore 族测绿、vet/gofmt 净。
+SG 验收锚（复审席）：部署后 earn/DCI 申购成交推一次，24h 零「告警超时未确认·重推」。
+-->

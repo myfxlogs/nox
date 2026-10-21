@@ -9,7 +9,7 @@ var appConfigDescs = map[string]string{
 	"NOX_CEX_DEPTH_TIMEOUT_BINANCE":              "binance depth REST 每请求预算秒（装配期 store 直读非 overlay 绑定——缺省 8s 带病工作面）",
 	"NOX_CEX_DEPTH_TIMEOUT_GATE":                 "gate depth REST 每请求预算秒（装配期 store 直读非 overlay 绑定——缺省 8s 带病工作面）",
 	"NOX_CEX_DEPTH_TIMEOUT_OKX":                  "okx depth REST 每请求预算秒（装配期 store 直读非 overlay 绑定——缺省 8s 带病工作面）",
-	"alert_receipt_patterns":                     "回执类告警消息前缀（逗分——命中者推一次即闭不进「仍待确认」24h 重推）",
+	"alert_receipt_patterns":                     "回执类告警消息子串（逗分 Contains——命中者推一次即闭不进「仍待确认」24h 重推；真文案带 EARN/DCI 前缀）",
 	"NOX_ALERT_RESEND_INTERVAL":                  "告警重发间隔（同告警静默窗，如 30m/1h）",
 	"NOX_ANALYST_RATE_PER_HOUR":                  "分析模块 LLM 调用速率上限（次/小时）",
 	"NOX_AUTOTRADE_ENABLED":                      "true=开：自动交易总开关（发现机会自动执行下单）",

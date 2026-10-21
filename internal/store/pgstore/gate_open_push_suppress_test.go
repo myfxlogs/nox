@@ -179,29 +179,40 @@ func TestD168_GateConcurrentOnce(t *testing.T) {
 	}
 }
 
-// TestAlertReceipt_OnePushNoRemind 两级语义锚：回执类（alert_receipt_patterns 命中）
-// 推一次即闭——>24h 新行零 Remind；needs_ack 缺省照 Remind；判据读败=非回执。
+// TestAlertReceipt_OnePushNoRemind 两级语义锚：回执类（alert_receipt_patterns 子串
+// 命中）推一次即闭——>24h 新行零 Remind；needs_ack 缺省照 Remind；判据读败=非回执。
+// 生产真文案形「EARN/DCI x 申购成交」「已交割（A → B）」对拍（退回注记锚）。
 func TestAlertReceipt_OnePushNoRemind(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	if _, err := s.pool.Exec(ctx, `INSERT INTO app_config (key,value) VALUES
-		('alert_receipt_patterns','已申购,成交') ON CONFLICT (key) DO UPDATE SET value=excluded.value`); err != nil {
+		('alert_receipt_patterns','申购成交,已交割,已结清,已平仓,划转完成,接货已处置')
+		ON CONFLICT (key) DO UPDATE SET value=excluded.value`); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	// 回执级：首推 Push，>remind 阈续发=Suppress（Reminded 已置位）。
-	act, _, err := s.AlertEpisodeGate(ctx, "warn", "已申购 okx USDT 100", now)
-	if err != nil || act != EpisodePush {
-		t.Fatalf("回执首推=%v err=%v", act, err)
+	// 回执级：首推 Push，>remind 阈续发=Suppress（Reminded 已置位）——真文案三形。
+	for _, msg := range []string{
+		"EARN earn_apr_lending 申购成交：1420.5000 USDT→okx APR 3.65%（单号 1687）",
+		"DCI dci_sell_high_covered_call 申购成交：0.010000 BTC strike 120000 apy 0.3391（单号 42）",
+		"DCI 订单#11 已交割（BTC-USDT-261225 → BTC）",
+	} {
+		act, _, err := s.AlertEpisodeGate(ctx, "warn", msg, now)
+		if err != nil || act != EpisodePush {
+			t.Fatalf("回执首推=%v err=%v msg=%q", act, err, msg)
+		}
+		if act, _, _ = s.AlertEpisodeGate(ctx, "warn", msg, now.Add(25*time.Hour)); act == EpisodeRemind {
+			t.Fatalf("回执类不应产 Remind: %q", msg)
+		}
 	}
-	act, _, _ = s.AlertEpisodeGate(ctx, "warn", "已申购 okx USDT 100", now.Add(25*time.Hour))
-	// 注：>24h 无新行=新集再推（惰性关闭），但 Remind 永不发——断言无 Remind。
-	if act == EpisodeRemind {
-		t.Fatal("回执类不应产 Remind")
+	// 「申购失败」形不误中（子串「申购成交」不吞）。
+	s.AlertEpisodeGate(ctx, "warn", "EARN earn_apr_lending 申购失败：余额不足", now)
+	if act, _, _ := s.AlertEpisodeGate(ctx, "warn", "EARN earn_apr_lending 申购失败：余额不足", now.Add(25*time.Hour)); act != EpisodePush && act != EpisodeRemind {
+		t.Fatalf("非回执告警应进常规集/Remind 径: %v", act)
 	}
 	// needs_ack 缺省照 Remind（同键 >24h 有新行）。先建 open 集。
 	s.AlertEpisodeGate(ctx, "warn", "venue=z gap", now)
-	act, _, _ = s.AlertEpisodeGate(ctx, "warn", "venue=z gap", now.Add(25*time.Hour))
+	act, _, _ := s.AlertEpisodeGate(ctx, "warn", "venue=z gap", now.Add(25*time.Hour))
 	if act != EpisodeRemind && act != EpisodePush {
 		t.Fatalf("needs_ack 缺省级应可 Remind/新集: %v", act)
 	}
