@@ -281,21 +281,30 @@ func TestEvalCard_DepthSlippage(t *testing.T) {
 	}
 }
 
-// TestEvalCard_FundingFeePaperSource fee 补源票锚：种 perp_perp exited 行→
-// funding 卡 FeeAPR≈ratio×100×8760/hh；清空→missing 回缺不凑数。
+// TestEvalCard_FundingFeePaperSource fee 补源票锚（hh 病灶修后语义）：种 perp_perp
+// exited 行→funding 卡 FeeAPR≈ratio×100×8760/hh_prior——持有窗=模板持有先验
+// （fin_opp_template.hold_hours_prior=168h 种子），paper 探针退出中位（4h）
+// 禁作分母；先验置 NULL→fee missing（探针中位不顶分母）不凑数。
 func TestEvalCard_FundingFeePaperSource(t *testing.T) {
 	st, ctx := evalTestStore(t)
 	// venue 账本径清零（PERP_FUNDING 位行在=paper 径永不可达——断言须缺径触发）
 	if _, err := st.Pool().Exec(ctx, `DELETE FROM positions WHERE type='PERP_FUNDING'`); err != nil {
 		t.Fatal(err)
 	}
+	// taker 中位径置空——断言钉 paper 轨绕行径（venue 账本径在则先中）
+	if _, err := st.Pool().Exec(ctx, `UPDATE exchange_configs SET taker_fee_bps=NULL WHERE venue_type='perp'`); err != nil {
+		t.Fatal(err)
+	}
 	// perp_perp exited 全清（夹具共享库既有行混中位——断言定值须独苗窗）
 	if _, err := st.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE structure='perp_perp' AND status='exited'`); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _, _ = st.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE venue_a='paperv'`) }()
+	defer func() {
+		_, _ = st.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE venue_a='paperv'`)
+		_, _ = st.Pool().Exec(ctx, `UPDATE fin_opp_template SET hold_hours_prior=168 WHERE id='funding_carry'`)
+	}()
 	// 两行：fee/qty=0.003（$30/$10000）持有 4h；0.004（$40/$10000）持有 4h——
-	// 中位 ratio≈0.0035、中位 hh=4 → FeeAPR≈0.35×2190=766.5（perp 中位持有 3.6h 同构）
+	// 中位 ratio≈0.0035；hh=先验 168h（探针 4h 禁入分母）→ FeeAPR≈0.35×52.14≈18.25
 	for _, c := range []struct {
 		fee, qty float64
 	}{
@@ -319,24 +328,20 @@ func TestEvalCard_FundingFeePaperSource(t *testing.T) {
 	if card.FeeAPR == nil {
 		t.Fatalf("paper 轨径应得 fee: %+v", card.EvidenceRefs)
 	}
-	// 中位 ratio=(0.003+0.004)/2=0.0035，hh=4 → 0.35%×2190≈766.5
-	if *card.FeeAPR < 600 || *card.FeeAPR > 900 {
-		t.Fatalf("FeeAPR 应≈766（paper 中位估费年化）: %v", *card.FeeAPR)
+	if *card.FeeAPR < 12 || *card.FeeAPR > 30 {
+		t.Fatalf("FeeAPR 应≈18.25（paper 估费×8760/168h 先验——探针 4h 不入分母）: %v", *card.FeeAPR)
 	}
 	if ev, _ := card.EvidenceRefs["terms"].(map[string]string); ev == nil ||
-		!strings.Contains(ev["fee"], "paper轨估费") {
-		t.Fatalf("fee evidence 应标 paper轨 口径: %+v", card.EvidenceRefs)
+		!strings.Contains(ev["fee"], "paper轨估费") || !strings.Contains(ev["fee"], "先验168h") {
+		t.Fatalf("fee evidence 应标 paper轨+先验口径: %+v", card.EvidenceRefs)
 	}
-	// 零行径——清空即 missing 回缺
-	if _, err := st.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE venue_a='paperv'`); err != nil {
+	// 先验置 NULL→hh 全径缺→fee missing（paper 探针中位不顶分母）
+	if _, err := st.Pool().Exec(ctx, `UPDATE fin_opp_template SET hold_hours_prior=NULL WHERE id='funding_carry'`); err != nil {
 		t.Fatal(err)
 	}
 	pid2, _, _ := st.CreateProposal(ctx, &pgstore.Proposal{TemplateID: "funding_carry", ExecTrack: "auto", Venue: "binance", Params: map[string]any{}})
 	c2 := evalProposal(ctx, st, Result{TemplateID: "funding_carry", APR: &g, Venue: "binance"}, pid2)
-	if c2.FeeAPR != nil && c2.Verdict != "unevaluable" {
-		// fee 词缺=应入 missing（其它词若有值 verdict 可非 unevaluable——断 fee NULL 即足）
-	}
 	if c2.FeeAPR != nil {
-		t.Fatalf("零行径 fee 应 missing: %v", *c2.FeeAPR)
+		t.Fatalf("先验缺径 fee 应 missing（探针中位禁顶分母）: %v", *c2.FeeAPR)
 	}
 }

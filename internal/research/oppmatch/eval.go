@@ -74,17 +74,25 @@ func evalProposal(ctx context.Context, st *pgstore.Store, r Result, pid int64) *
 			}
 			in.Window = econ.Term{Value: w, Evidence: "facts:funding 30d中位"}
 		}
-		if t, ok, err := st.MedianTakerFeeBps(ctx); err == nil && ok {
-			if hh, ok2, err2 := st.MedianHoldHours(ctx, []string{"PERP_FUNDING"}, evalWindow); err2 == nil && ok2 && hh > 0 {
-				// fee_apr = 双腿 taker%×（8760h/中位持有h）年化
-				in.Fee = econ.Term{Value: t * 2 / 100 * (8760 / hh),
-					Evidence: fmt.Sprintf("exchange_configs taker中位%.2fbps×2腿 / PERP_FUNDING 中位持有%.1fh", t, hh)}
-			}
+		// hh 持有窗三序取径（D-642 发现一病灶修）：realized 账本 → 模板持有先验
+		// （fin_opp_template.hold_hours_prior，1057 迁移判据落表）→ missing。
+		// paper 探针退出中位（perp_perp exited ~3h）=探针纪律非策略持有语义，
+		// 禁作 fee 年化分母——用之即 3h 复利化假费假拒（1383%→−550 实证）。
+		hh, hhSrc := 0.0, ""
+		if v, ok, err := st.MedianHoldHours(ctx, []string{"PERP_FUNDING"}, evalWindow); err == nil && ok && v > 0 {
+			hh, hhSrc = v, fmt.Sprintf("PERP_FUNDING 中位持有%.1fh", v)
+		} else if v, ok2, err2 := st.HoldHoursPrior(ctx, r.TemplateID); err2 == nil && ok2 {
+			hh, hhSrc = v, fmt.Sprintf("模板持有先验%.0fh", v)
 		}
-		if in.Fee.Evidence == "" { // venue 账本径缺→paper 轨绕行（估费标 paper轨 口径不混 venue 词）
-			if ratio, hh, ok, err := st.MedianPaperFeeRatio(ctx, "perp_perp", evalWindow); err == nil && ok {
+		if t, ok, err := st.MedianTakerFeeBps(ctx); err == nil && ok && hh > 0 {
+			// fee_apr = 双腿 taker%×（8760h/持有h）年化
+			in.Fee = econ.Term{Value: t * 2 / 100 * (8760 / hh),
+				Evidence: fmt.Sprintf("exchange_configs taker中位%.2fbps×2腿 / %s", t, hhSrc)}
+		}
+		if in.Fee.Evidence == "" && hh > 0 { // venue 账本径缺→paper 轨绕行（估费标 paper轨 口径不混 venue 词；hh 同三序径）
+			if ratio, _, ok, err := st.MedianPaperFeeRatio(ctx, "perp_perp", evalWindow); err == nil && ok {
 				in.Fee = econ.Term{Value: ratio * 100 * (8760 / hh),
-					Evidence: fmt.Sprintf("paper轨估费 perp_perp 中位%.4f%%/qty ×8760/%.1fh", ratio*100, hh)}
+					Evidence: fmt.Sprintf("paper轨估费 perp_perp 中位%.4f%%/qty ×8760/%.1fh（%s）", ratio*100, hh, hhSrc)}
 			}
 		}
 		if n, err := st.LegFailCount(ctx, []string{"PERP_FUNDING"}, evalWindow); err == nil && n == 0 {
