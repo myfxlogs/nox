@@ -1254,7 +1254,7 @@ WHERE venue=v.venue)——有户才插无户幂等跳过；注释钉「户缺席
 | a) venue 适配器注册表 | **设计核验照准（D-653 附补正六）→移交决策席派工**——VenueAdapter(Pricer/Sigma/Disposal) map[venue]+exchange_configs 行驱动；spotPriceVenue 收敛为入口，sigmaDaily/usdOf/disposal_sweep 同消费 |
 | b) 评估卡绑定纪律 | 已立待派——APR 修已并（f21a58f31）；余面=gross 之外字段（params/strike/tenor）同绑 product_ref 指针+「快照与判定异源」KB high 条目+评估卡审项进 review 清单 |
 | c) 闸收口账 | 已立待派（取证型）——sellHighGate/dciPremiumGate/FundingRegimeOK/custody_share/TailCostAnn 五闸现域盘点→risk.Check 单入口归编路线 |
-| d) 多席并发协议 | **设计核验照准（D-653 附补正六）→移交决策席派工**——部署树写禁 worktree 强制+票文广播件+测试库逐席隔离；先设计稿后施工 |
+| d) 多席并发协议 | B①③ **施工完成待复审 @68ae4692e（wip/seat-protocol）**——check-deploy-tree.sh 闸+NOX_TEST_SEAT 逐席库锚（件已在产，补锚）+漏提交桩修；B②④ 归落文票待派 |
 | e) 投资人接触面犬哨 | 已立待派——入站命令径（webhook/WS/RPC）入 dephealth；「通道应活而长零命中=死径嫌疑」标报径 |
 -->
 
