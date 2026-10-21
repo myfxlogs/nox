@@ -201,3 +201,6 @@ var VenueTypeFuturesSweepSQL string // venue_type 'futures' 全谱 CHECK 修（D
 
 //go:embed 1068_alert_receipt_patterns.sql
 var AlertReceiptPatternsSQL string // 告警两级语义：回执类前缀判据 app_config 种子
+
+//go:embed 1070_exec_venue_capability.sql
+var ExecVenueCapabilitySQL string // D-651 A 段：venue 执行面归能力账本投影种子

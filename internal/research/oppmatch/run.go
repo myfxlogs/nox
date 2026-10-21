@@ -21,7 +21,7 @@ var AutoexecHook func(ctx context.Context, proposalID int64) (string, error)
 
 // dciProposalVenues dci 族提案 venue 枚举——执行轨覆盖集各出独立提案
 // （fin_cex_dci_quote venue 维度；gate.DCIExecVenues 单源衍生排序定序）。
-var dciProposalVenues = sortedVenues(gate.DCIExecVenues)
+// dciProposalVenues → execVenueList 投影化（D-651——静态兜底经 execVenueSets）
 
 // sortedVenues venue 集→排序切片（提案枚举/保活键确定性——map 序不定）。
 func sortedVenues(set map[string]bool) []string {
@@ -97,7 +97,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	}
 	feas := NewFeasibility(led, capitalBase, perStrategyCap) // D-247 可行性预检面
 	for _, r := range Match(in, view) {
-		vs := venueSetFor(r.TemplateID)
+		vs := venueSetFor(ctx, st, r.TemplateID)
 		if r.TemplateID == "cash_mgmt" {
 			vs = nil // cash_mgmt 产制归 idleGapScan 独域（自有 miss 阈值过期机制）——
 			// match 环 dormant 判定/写面对其零消费，defer 反伤其存量提案。
@@ -125,7 +125,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 			venues := []string{"binance"}
 			var venueAPR map[string]float64
 			if _, ok := gate.ExecTemplates[r.TemplateID]; ok {
-				venues = dciProposalVenues
+				venues = execVenueList(ctx, st, r.TemplateID)
 			} else if gate.EarnTemplates[r.TemplateID] {
 				if r.TemplateID == "cash_mgmt" {
 					continue // cash_mgmt 产制归 idleGapScan 独域（APR 闸同源——扇出不过闸=绕闸径）
@@ -164,7 +164,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 				// 旧语义（cash_mgmt 分 venue 由 idleGapScan 产/过期自管）。
 				liveVenues := venues
 				if gate.EarnTemplates[r.TemplateID] {
-					liveVenues = sortedVenues(gate.EarnExecVenues)
+					liveVenues = execVenueList(ctx, st, r.TemplateID)
 				}
 				for _, lv := range liveVenues {
 					liveTmpls = append(liveTmpls, r.TemplateID+"@"+lv)
@@ -264,7 +264,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	checkVenueFloat(ctx, st, in)
 	reconcileGaps(ctx, st, in, view)
 	// cash_mgmt 保活键无条件追（返修 a：产制点唯一、保活面不变）。
-	for _, lv := range sortedVenues(gate.EarnExecVenues) {
+	for _, lv := range execVenueList(ctx, st, "cash_mgmt") {
 		liveTmpls = append(liveTmpls, "cash_mgmt@"+lv)
 	}
 	// 过期并入扫描拍——当轮不再达标的 pending 提案→expired。

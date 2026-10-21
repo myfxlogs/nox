@@ -10,6 +10,27 @@ import (
 	"nox/internal/store/pgstore"
 )
 
+// execVenueSets D-651：venue 可执行面=fin_capability_constraint exec_venue:
+// 投影（DB 驱动）；表空/读败回落 gate 静态集（迁移未至不臆断）。
+func execVenueSets(ctx context.Context, st *pgstore.Store) map[string]map[string]bool {
+	if rows, err := st.ExecVenueSets(ctx); err == nil && len(rows) > 0 {
+		return rows
+	}
+	return gate.ExecTemplateVenueSets()
+}
+
+// execVenueList 模板执行轨 venue 集（投影优先——空回落静态集）。
+func execVenueList(ctx context.Context, st *pgstore.Store, tid string) []string {
+	if m, ok := execVenueSets(ctx, st)[tid]; ok {
+		return sortedVenues(m)
+	}
+	// 投影无该模板行（未种子/新模板）→静态集兜底同族；再缺=nil 交调方。
+	if m, ok := gate.ExecTemplateVenueSets()[tid]; ok {
+		return sortedVenues(m)
+	}
+	return nil
+}
+
 // earnQuoteVenues earn_apr_lending 提案 venue 枚举：rail 覆盖集内有 USDT
 // 报价行的 venue 各出独立提案（报价所取 venue 如实写提案 venue——旧单 binance
 // venue+跨所顶档价=「okx 利率被 binance 轨执行」错 venue 错价面）。报价读败
@@ -17,7 +38,7 @@ import (
 func earnQuoteVenues(ctx context.Context, st *pgstore.Store) ([]string, map[string]float64) {
 	var venues []string
 	aprs := map[string]float64{}
-	for _, v := range sortedVenues(gate.EarnExecVenues) {
+	for _, v := range execVenueList(ctx, st, "earn_apr_lending") {
 		apr, ok, err := st.LatestEarnAPR(ctx, v, "USDT")
 		if err != nil {
 			log.Printf("[oppmatch] earn_apr %s 报价读败（本 venue 不产）: %v", v, err)

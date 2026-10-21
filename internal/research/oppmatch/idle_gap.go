@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 )
 
@@ -55,7 +54,8 @@ func idleGapScan(ctx context.Context, st *pgstore.Store) {
 		p.Balance = eq
 		// 有执行径的闲池（earnExecVenues 面）→直接产 cash_mgmt 提案（pending 唯一锚
 		// 1024 含 venue——同模板异所各行其位幂等）。USDT 先行域（earn 提案定值域）。
-		if gate.EarnExecVenues[p.Venue] {
+		if execVenueSets(ctx, st)["cash_mgmt"][p.Venue] { // D-651 投影
+
 			if p.Currency != "USDT" {
 				continue
 			}

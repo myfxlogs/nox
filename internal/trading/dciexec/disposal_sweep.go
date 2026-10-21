@@ -32,12 +32,29 @@ func (e *Executor) SweepPendingDisposals(ctx context.Context) (int, error) {
 			continue
 		}
 		qty, ccy := *p.Qty, strings.ToUpper(p.Asset)
-		if e.BnKey == "" {
-			continue // 凭据缺=无卖径，静默留行（首败已告警）
+		// D-651 A 段：venue 先锚后卖——处置卖出按所得所在 venue 路由
+		// （原钉 binance=okx 所得不可达病灶）。锚缺行保 binance 旧径
+		// （10-15 事故遗留行全 binance 域）。锚读败=本轮留行非静默卖错所。
+		ordID := int64(0)
+		if m := pendingDisposalOrderRE.FindStringSubmatch(p.Note); m != nil {
+			ordID, _ = strconv.ParseInt(m[1], 10, 64)
 		}
-		proceeds, err := e.spotMarketSell(ctx, ccy+"USDT", qty)
+		invest, uly := 0.0, ccy+"USDT"
+		anchored := false
+		venue := "binance"
+		if ordID > 0 {
+			if o, lerr := e.Store.DCIOrderByID(ctx, ordID); lerr != nil {
+				log.Printf("[dci-sweep] order %d anchor: %v", ordID, lerr)
+			} else if o != nil {
+				invest, uly, anchored = o.Qty, o.Underlying, true
+				if o.Venue != "" {
+					venue = o.Venue
+				}
+			}
+		}
+		proceeds, err := e.venueSpotSell(ctx, venue, ccy, qty)
 		if err != nil {
-			msg := fmt.Sprintf("pending_disposal 行#%d 接货 %.8f %s 卖回仍败: %v", p.ID, qty, ccy, err)
+			msg := fmt.Sprintf("pending_disposal 行#%d 接货 %.8f %s@%s 卖回仍败: %v", p.ID, qty, ccy, venue, err)
 			if aerr := e.Store.InsertAlertDedup(ctx, "warn", msg, 24*time.Hour); aerr != nil {
 				log.Printf("[dci-sweep] alert: %v", aerr)
 			}
@@ -47,28 +64,15 @@ func (e *Executor) SweepPendingDisposals(ctx context.Context) (int, error) {
 		// 有 >200→clamp20 静默截断，10-15 实证 id=11 被截致 invest=0、得额
 		// 351.94 被当净利 +351.94 虚增入账）。锚缺→不记 income（不编差值——
 		// 得额≠损益），行仍照关（卖回是真账）+ 告警明示人工补记。
-		ordID := int64(0)
-		if m := pendingDisposalOrderRE.FindStringSubmatch(p.Note); m != nil {
-			ordID, _ = strconv.ParseInt(m[1], 10, 64)
-		}
-		invest, uly := 0.0, ccy+"USDT"
-		anchored := false
-		if ordID > 0 {
-			if o, lerr := e.Store.DCIOrderByID(ctx, ordID); lerr != nil {
-				log.Printf("[dci-sweep] order %d anchor: %v", ordID, lerr)
-			} else if o != nil {
-				invest, uly, anchored = o.Qty, o.Underlying, true
-			}
-		}
 		pnl := proceeds - invest
 		if anchored {
-			cfgID, cerr := e.Store.ExchangeConfigID(ctx, "binance", "spot")
+			cfgID, cerr := e.Store.ExchangeConfigID(ctx, venue, "spot")
 			if cerr != nil || cfgID == 0 {
 				log.Printf("[dci-sweep] order %d exchange_config 跳收益账（fail-open）cerr=%v cfgID=%d", ordID, cerr, cfgID)
 			}
 			if cerr == nil && cfgID > 0 {
 				if _, ierr := e.Store.InsertIncomeEvents(ctx, []pgstore.IncomeEvent{{
-					Venue: "binance", VenueType: "spot", ConfigID: cfgID,
+					Venue: venue, VenueType: "spot", ConfigID: cfgID,
 					Symbol:     uly,
 					IncomeType: "dci_exercise_disposal",
 					AmountUSD:  pnl, TranID: ordID*10 + 7, Ts: e.Now()}}); ierr != nil {
@@ -96,4 +100,30 @@ func (e *Executor) SweepPendingDisposals(ctx context.Context) (int, error) {
 		done++
 	}
 	return done, nil
+}
+
+// venueSpotSell D-651 A 段：处置卖出按 venue 路由（所得所在所卖回——binance=
+// 现货市价卖旧径；okx=okxMarketSell rail 件；无 venue 卖径=如实错留行）。
+func (e *Executor) venueSpotSell(ctx context.Context, venue, ccy string, qty float64) (float64, error) {
+	if e.SpotSellFn != nil { // 测试注口语义钉 binance 径旧约（venue 形参不消费）
+		return e.SpotSellFn(ctx, ccy+"USDT", qty)
+	}
+	switch venue {
+	case "binance":
+		if e.BnKey == "" {
+			return 0, fmt.Errorf("binance 凭据缺=无卖径")
+		}
+		return e.spotMarketSell(ctx, ccy+"USDT", qty)
+	case "okx":
+		r, ok := e.earnRail("okx")
+		if !ok {
+			return 0, fmt.Errorf("okx rail 凭据缺=无卖径")
+		}
+		or, cast := r.(*okxEarnRail)
+		if !cast {
+			return 0, fmt.Errorf("okx rail 替身非真件（测试注 EarnRails 无法强转）")
+		}
+		return okxMarketSell(ctx, or, ccy, qty)
+	}
+	return 0, fmt.Errorf("%s 现货卖径未接（venue 卖面缺口）", venue)
 }

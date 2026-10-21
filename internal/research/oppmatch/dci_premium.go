@@ -65,7 +65,7 @@ func dciPremiumGate(ctx context.Context, st *pgstore.Store, venue string) (bool,
 		return false, "尾险约束缺（dci_open_notional_cap_usdt 行——fail-closed 不产提案）", nil
 	}
 	openN := 0.0
-	for _, v := range dciProposalVenues {
+	for _, v := range execVenueList(ctx, st, "dci_buy_low") {
 		q, qerr := st.OutstandingDCIQty(ctx, v, "USDT")
 		if qerr != nil {
 			return false, fmt.Sprintf("在仓名义读败 %s：%v", v, qerr), nil
