@@ -241,7 +241,7 @@ func (e *Executor) bookSettlement(ctx context.Context, o pgstore.FilledDCIOrder,
 				Venue: "binance", VenueType: "option", ConfigID: cfgID,
 				Symbol:     o.Underlying,
 				IncomeType: "dci_interest",
-				AmountUSD:  e.usdOf(ctx, o.InvestCcy, interest),
+				AmountUSD:  e.usdOf(ctx, "binance", o.InvestCcy, interest),
 				TranID:     o.ID*10 + 1, Ts: e.Now()})
 		}
 		if qty > 0 && ccy != "" {
@@ -249,7 +249,7 @@ func (e *Executor) bookSettlement(ctx context.Context, o pgstore.FilledDCIOrder,
 				Venue: "binance", VenueType: "option", ConfigID: cfgID,
 				Symbol:     o.Underlying,
 				IncomeType: "dci_exercise",
-				AmountUSD:  e.usdOf(ctx, ccy, qty),
+				AmountUSD:  e.usdOf(ctx, "binance", ccy, qty),
 				TranID:     o.ID*10 + 2, Ts: e.Now()})
 		}
 		if n, err := e.Store.InsertIncomeEvents(ctx, evs); err != nil {
@@ -285,13 +285,13 @@ func (e *Executor) bookSettlement(ctx context.Context, o pgstore.FilledDCIOrder,
 	return nil
 }
 
-// usdOf 原币→USD 换算（USD 族 1:1；其余走现货 ticker，读败=0 如实不入账）。
-func (e *Executor) usdOf(ctx context.Context, ccy string, qty float64) float64 {
+// usdOf 原币→USD 换算（USD 族 1:1；其余走 venue 现货 ticker，读败=0 如实不入账）。
+func (e *Executor) usdOf(ctx context.Context, venue, ccy string, qty float64) float64 {
 	switch strings.ToUpper(ccy) {
 	case "USD", "USDT", "USDC", "BUSD", "FDUSD":
 		return qty
 	}
-	px, err := e.spotPrice(ctx, strings.ToUpper(ccy)+"USDT")
+	px, err := e.spotPriceVenue(ctx, venue, strings.ToUpper(ccy)+"USDT")
 	if err != nil || px <= 0 {
 		return 0
 	}

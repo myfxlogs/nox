@@ -3,6 +3,7 @@ package dciexec
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"nox/internal/risk/gate"
 	"strings"
@@ -26,8 +27,12 @@ func (e *Executor) GoWheel(ctx context.Context) (string, error) {
 			"请喂约束 custody_share（托管可动份额上限）")
 	}
 	// 现货执行时实时读（strike %OTM 闸源）。
-	spot, err := e.spotPrice(ctx, "BTCUSDT")
+	spot, err := e.spotPriceVenue(ctx, "binance", "BTCUSDT")
 	if err != nil {
+		if errors.Is(err, errSpotNoBase) {
+			return "", e.gap(ctx, gate.CallLeg, "credential", "dual_quote",
+				"binance BTC 现货价读径 base 行缺——请配置 binance API base（%v）", err)
+		}
 		if venueErrKind(err) == "permission" {
 			return "", e.gap(ctx, gate.CallLeg, "permission", "dual_quote",
 				"binance BTC 现货价读取失败：%v", err)

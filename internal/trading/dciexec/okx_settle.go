@@ -109,14 +109,14 @@ func (e *Executor) bookSettlementOKX(ctx context.Context, o pgstore.FilledDCIOrd
 			evs = append(evs, pgstore.IncomeEvent{
 				Venue: "okx", VenueType: "option", ConfigID: cfgID,
 				Symbol: o.Underlying, IncomeType: "dci_interest",
-				AmountUSD: e.usdOf(ctx, st.YieldCcy, interest),
+				AmountUSD: e.usdOf(ctx, "okx", st.YieldCcy, interest),
 				TranID:    o.ID*10 + 1, Ts: e.Now()})
 		}
 		if qty > 0 && ccy != "" {
 			evs = append(evs, pgstore.IncomeEvent{
 				Venue: "okx", VenueType: "option", ConfigID: cfgID,
 				Symbol: o.Underlying, IncomeType: "dci_exercise",
-				AmountUSD: e.usdOf(ctx, ccy, qty),
+				AmountUSD: e.usdOf(ctx, "okx", ccy, qty),
 				TranID:    o.ID*10 + 2, Ts: e.Now()})
 		}
 		if n, err := e.Store.InsertIncomeEvents(ctx, evs); err != nil {

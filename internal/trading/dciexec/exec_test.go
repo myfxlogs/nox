@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -1441,4 +1442,43 @@ var fakeIOCaptures []pgstore.VenueIO
 func (f *fakeStore) InsertVenueIO(_ context.Context, rows []pgstore.VenueIO) (int64, error) {
 	fakeIOCaptures = append(fakeIOCaptures, rows...)
 	return int64(len(rows)), nil
+}
+
+// TestSpotPriceVenue 现货参考价 venue 分派锚（本票验收①）：
+// okx→index-tickers idxPx；gate→spot/tickers last；空 base→errSpotNoBase
+// （凭证缺口哨兵非裸 scheme 错——验收②）。
+func TestSpotPriceVenue(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "index-tickers"):
+			fmt.Fprint(w, `{"code":"0","data":[{"idxPx":"97123.5"}]}`)
+		case strings.Contains(r.URL.Path, "spot/tickers"):
+			fmt.Fprint(w, `[{"currency_pair":"BTC_USDT","last":"97001.0"}]`)
+		default:
+			fmt.Fprint(w, `{"symbol":"BTCUSDT","price":"96999.0"}`)
+		}
+	}))
+	defer srv.Close()
+	e := &Executor{Store: newFake(), Client: srv.Client(), APIBase: srv.URL + "/api",
+		EarnCreds: map[string]EarnCred{
+			"okx":  {Key: "k", Secret: "s", BaseURL: srv.URL},
+			"gate": {Key: "k", Secret: "s", BaseURL: srv.URL + "/api/v4"},
+		}}
+	if v, err := e.spotPriceVenue(context.Background(), "okx", "BTCUSDT"); err != nil || v != 97123.5 {
+		t.Fatalf("okx idxPx: %v %v", v, err)
+	}
+	if v, err := e.spotPriceVenue(context.Background(), "gate", "BTCUSDT"); err != nil || v != 97001.0 {
+		t.Fatalf("gate last: %v %v", v, err)
+	}
+	if v, err := e.spotPriceVenue(context.Background(), "binance", "BTCUSDT"); err != nil || v != 96999.0 {
+		t.Fatalf("binance price: %v %v", v, err)
+	}
+	// 空 base→errSpotNoBase（binance APIBase 空 / okx 凭据行缺两形）。
+	e2 := &Executor{Store: newFake(), Client: srv.Client()}
+	if _, err := e2.spotPriceVenue(context.Background(), "binance", "BTCUSDT"); !errors.Is(err, errSpotNoBase) {
+		t.Fatalf("空 APIBase 应 errSpotNoBase: %v", err)
+	}
+	if _, err := e2.spotPriceVenue(context.Background(), "okx", "BTCUSDT"); !errors.Is(err, errSpotNoBase) {
+		t.Fatalf("okx 凭据缺应 errSpotNoBase: %v", err)
+	}
 }

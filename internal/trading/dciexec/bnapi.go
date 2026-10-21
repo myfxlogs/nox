@@ -19,23 +19,9 @@ import (
 )
 
 // spotPrice 实时现货读（/v3/ticker/price 公开端点；base 含 /api 段从 /vN 起拼——earn.go 约定；测试注 PriceFn）。
+// venue 化包装=binance 径（兼容存量测试调用；生产调用点走 spotPriceVenue）。
 func (e *Executor) spotPrice(ctx context.Context, symbol string) (float64, error) {
-	if e.PriceFn != nil {
-		return e.PriceFn(ctx, symbol)
-	}
-	url := fmt.Sprintf("%s/v3/ticker/price?symbol=%s",
-		strings.TrimRight(e.APIBase, "/"), symbol)
-	b, err := e.get(ctx, url, false)
-	if err != nil {
-		return 0, err
-	}
-	var r struct {
-		Price string `json:"price"`
-	}
-	if err := json.Unmarshal(b, &r); err != nil {
-		return 0, err
-	}
-	return strconv.ParseFloat(r.Price, 64)
+	return e.spotPriceVenue(ctx, "binance", symbol)
 }
 
 // freeBalance 实时余额读（D-192：私有流资产级活缓存主源，闸=dephealth 流连接

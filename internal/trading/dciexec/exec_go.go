@@ -139,14 +139,18 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 		return "", e.gap(ctx, gate.CallLeg, "constraint", "custody_share",
 			"请喂约束 custody_share 或 custody_share@%s（托管可动份额上限）", p.Venue)
 	}
-	spot, err := e.spotPrice(ctx, "BTCUSDT")
+	spot, err := e.spotPriceVenue(ctx, p.Venue, "BTCUSDT")
 	if err != nil {
+		if errors.Is(err, errSpotNoBase) {
+			return "", e.gap(ctx, gate.CallLeg, "credential", "dual_quote",
+				"%s BTC 现货价读径 base/凭据行缺——请配置 %s API base（%v）", p.Venue, p.Venue, err)
+		}
 		if venueErrKind(err) == "permission" {
 			return "", e.gap(ctx, gate.CallLeg, "permission", "dual_quote",
-				"binance BTC 现货价读取失败：%v", err)
+				"%s BTC 现货价读取失败：%v", p.Venue, err)
 		}
 		return "", e.gap(ctx, gate.CallLeg, "runtime", "dual_quote",
-			"系统侧病灶：BTC 现货价读取失败：%v", err)
+			"系统侧病灶：%s BTC 现货价读取失败：%v", p.Venue, err)
 	}
 	var msgs []string
 	var succeeded bool
