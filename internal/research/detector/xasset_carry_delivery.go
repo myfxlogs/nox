@@ -26,13 +26,14 @@ type DeliveryPairHint struct {
 }
 
 // legQuote 腿行情快照查：先 canonical 原名键（futures 协定键/'ETH' 级归一名
-// 直接命中场景），miss 回退 canonical+USDT 行情键（'ETH'→'ETHUSDT'——CEX 帧
-// Symbol=instId 去 '-' 归一形；执行侧 venue symbol 解析同口径先例）。
+// 直接命中场景），miss 回退行情 canonical 键（'ETH'→'ETHUSDT'——CEX 帧
+// Symbol=instId 去 '-' 归一形；归一经 keydomain.MarketCanonical 单源，与
+// 交割帧发布键同规约——返修③异键永不同帧病灶修法）。
 func legQuote(snapshot map[string]map[string]bus.Quote, canonical, venueKey string) (bus.Quote, bool) {
 	if q, ok := snapshot[canonical][venueKey]; ok {
 		return q, true
 	}
-	if q, ok := snapshot[canonical+"USDT"][venueKey]; ok {
+	if q, ok := snapshot[keydomain.MarketCanonical(canonical)][venueKey]; ok {
 		return q, true
 	}
 	return bus.Quote{}, false

@@ -9,8 +9,9 @@ import (
 )
 
 // DeliverySub armed 交割订阅行：InstID=okx FUTURES instId verbatim（毕业档
-// 合约名本体——'ETH-USD_UM-261225'），Canonical=bus canonical（detector hint
-// 同键——armed 组合 canonical 腿名）。
+// 合约名本体——'ETH-USD_UM-261225'），Canonical=行情 canonical 发布键
+// （'ETHUSDT' 形——与 spot 帧同键；D-649续④返修③：快照域=q.Symbol，双腿
+// 异键永不同帧，发布键必须归行情键）。
 type DeliverySub struct {
 	InstID    string
 	Canonical string
