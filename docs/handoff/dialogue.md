@@ -309,3 +309,6 @@
 - oppAPR 口径裁定（实施域）：armed 组合机会年化取 `opp.NetBps/1e4`（armed 机会卡净 bps 年化原生字段——票面「本拍卡片 expected_apr」对应物）；earn 侧取 `LatestEarnAPR(venue,USDT)` 同币种在册现值——异币种/陈旧行销档不入基准（同 D-514 基准口径纪律）。
 - 净额账隔离裁定：闲置段用 `jit-idle:` 前缀独立记账——jit-ret/jit-swp 差分=jit 挪出净额口径，闲置回申非挪出金混入会冲负净额账（账目语义钉）。
 - armed 判定=enabled 且非模拟的 xasset_allow_combos 腿挂 venue；读败=fail-closed 不扩面（宁可不回申不扫荡）。
+
+## 2026-10-21 jit 返修纪要（wip/jit-yield @6aabfc2e6）
+- 双零触发器裁定（实施域）：触发条=同 venueKey 双腿皆零（池粒度等值判——venueKey=权益快照键即池键，裸名相等不够 vt 不同池）；锚序=NotionalUSD→MaxGrossUSD→MarginUSD（票面对象原值序，margin 兜底保 margin-mode 组合可达）；锚全缺=fail-closed 落箱不臆量。异 venueKey 双零不入此径（非本病灶面）。
