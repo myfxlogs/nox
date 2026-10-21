@@ -247,13 +247,14 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 			if seen && st_ != "open" { // requested/fulfilled/waived 行零重推
 				continue
 			}
-			id, err := st.OpenConditionGap(ctx, &pgstore.ConditionGap{
-				TemplateID: r.TemplateID, Kind: c.Kind, Subject: c.Subject,
-				Qualifier: c.Qualifier, RequestText: gapText(r.TemplateID, c)})
+			gap := &pgstore.ConditionGap{TemplateID: r.TemplateID, Kind: c.Kind, Subject: c.Subject,
+				Qualifier: c.Qualifier, RequestText: gapText(r.TemplateID, c)}
+			gap.TargetBucket, gap.TargetUSD = gapCapitalTarget(c)
+			id, err := st.OpenConditionGap(ctx, gap)
 			if err != nil {
 				return propN, gapN, err
 			}
-			if err := st.RequestConditionGap(ctx, id); err != nil {
+			if err = st.RequestConditionGap(ctx, id); err != nil {
 				return propN, gapN, err
 			}
 			gapByKey[key] = "requested"

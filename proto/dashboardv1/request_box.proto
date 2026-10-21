@@ -13,6 +13,7 @@ message RequestBoxItem {
   string subject = 4;
   string request_text = 5;  // 业主可见请求原文
   int64 age_seconds = 6;    // requested 龄（后端算——零信任前端不算时）
+  string status = 7;        // requested|marked（D-652-C：marked=已点击待到账核验）
 }
 
 message ListRequestBoxRequest {}

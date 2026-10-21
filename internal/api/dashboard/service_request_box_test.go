@@ -68,21 +68,28 @@ func TestM46_RequestBox(t *testing.T) {
 		Scan(&status, &note); err != nil {
 		t.Fatalf("read back: %v", err)
 	}
-	if status != "fulfilled" || note != "投资人页回执" {
+	// D-652-C：capital 行 fulfilled 回执只到 marked（到账实测翻 fulfilled=核验
+	// 环域非回执面）——非 capital kind 才直翻 fulfilled。
+	if status != "marked" || note != "投资人页回执" {
 		t.Fatalf("翻态/留痕错: %s %q", status, note)
 	}
 
-	// ④ 幂等：复按 applied=false + 出箱
+	// ④ 幂等：marked 行复按 applied=false（非 open/requested 转移域）。
 	rs2, _ := svc.ResolveRequest(ctx, connect.NewRequest(&v1.ResolveRequestRequest{
 		Id: id, State: v1.ResolveRequestState_RESOLVE_REQUEST_STATE_WAIVED,
 	}))
 	if rs2.Msg.Applied {
-		t.Fatal("已收口行复按不应 applied")
+		t.Fatal("marked 行复按不应 applied")
 	}
+	// marked 行留箱面显「待到账核验」——消费面非 fulfilled 终态。
 	resp2, _ := svc.ListRequestBox(ctx, connect.NewRequest(&v1.ListRequestBoxRequest{}))
+	seen := false
 	for _, i := range resp2.Msg.Items {
-		if i.Id == id {
-			t.Fatal("fulfilled 行滞留箱面")
+		if i.Id == id && i.Status == "marked" {
+			seen = true
 		}
+	}
+	if !seen {
+		t.Fatal("marked 行应在箱面显待到账")
 	}
 }

@@ -19,11 +19,13 @@ import (
 func (s *Store) OpenConditionGap(ctx context.Context, g *ConditionGap) (int64, error) {
 	var id int64
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO fin_condition_gap (template_id, kind, subject, qualifier, request_text)
-		VALUES ($1,$2,$3,$4,$5)
+		INSERT INTO fin_condition_gap (template_id, kind, subject, qualifier, request_text,
+		                               target_bucket, target_usd)
+		VALUES ($1,$2,$3,$4,$5,NULLIF($6,''),$7)
 		ON CONFLICT (template_id, kind, subject) DO NOTHING
 		RETURNING id`,
-		g.TemplateID, g.Kind, g.Subject, g.Qualifier, g.RequestText).Scan(&id)
+		g.TemplateID, g.Kind, g.Subject, g.Qualifier, g.RequestText,
+		g.TargetBucket, g.TargetUSD).Scan(&id)
 	if err == pgx.ErrNoRows { // 幂等命中：返既有行 id
 		err = s.pool.QueryRow(ctx, `
 			SELECT id FROM fin_condition_gap
@@ -119,12 +121,14 @@ func (s *Store) RequestConditionGap(ctx context.Context, id int64) error {
 	return s.pushGapAlert(ctx, id, g)
 }
 
-// FulfillConditionGap D-193② 自动收口：open/requested→fulfilled+resolve_note
+// FulfillConditionGap D-193② 自动收口：open/requested/marked→fulfilled+resolve_note
 // （条件满足自动收口 / 「需求已变更」收口——条件行被删场景）。
+// D-652-C：marked 集入转移域——实测核验（oppmatch reconcile 条件复评 /
+// idle_capital_monitor 桶值锚）满足时 marked→fulfilled，人工点击不再直跳终态。
 func (s *Store) FulfillConditionGap(ctx context.Context, id int64, note string) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE fin_condition_gap SET status='fulfilled', resolved_at=now(), resolve_note=$2
-		WHERE id=$1 AND status IN ('open','requested')`, id, note)
+		WHERE id=$1 AND status IN ('open','requested','marked')`, id, note)
 	return err
 }
 
@@ -169,7 +173,22 @@ func (s *Store) reopenConditionGap(ctx context.Context, id int64, cond string) e
 // ResolveConditionGap 收口（fulfilled=业主已喂条件 / waived=放弃该机会线；
 // note=回执留痕如「投资人页回执」——D-268 M4.6 补参）。
 // applied=false=行已收口/不存在（幂等——双击/重发不炸）。
+// D-652-C：fulfilled 回执按 kind 分轨——capital=资金行人工点击只能到
+// 'marked'（resolved_at 留空待实测核验翻 fulfilled）；非资金 kind 原径不动。
+// note 由调用方内嵌 mark_base_usd=X.XX（marked_at 时点桶值基线）供核验判据。
 func (s *Store) ResolveConditionGap(ctx context.Context, id int64, fulfilled bool, note string) (bool, error) {
+	if fulfilled {
+		tag, err := s.pool.Exec(ctx, `
+			UPDATE fin_condition_gap SET status='marked', marked_at=now(), resolve_note=$2
+			WHERE id=$1 AND kind='capital' AND status IN ('open','requested')`, id, note)
+		if err != nil {
+			return false, err
+		}
+		if tag.RowsAffected() > 0 {
+			return true, nil
+		}
+		// 非 capital 行回落 fulfilled 原径（双语句幂等——capital 上支未命中即此径）。
+	}
 	st := "waived"
 	if fulfilled {
 		st = "fulfilled"
@@ -186,12 +205,13 @@ type RequestBoxRow struct {
 	RequestedAt *time.Time
 }
 
-// ListRequestedGaps 请求箱集：status='requested' 按请求龄最老在前
-// （§4.3 指标④最老请求 age 同源口径）。
+// ListRequestedGaps 请求箱集：status='requested'∪'marked'（D-652-C marked=已点击
+// 待到账核验中行仍属未决挂账——前端显「待到账」态）按请求龄最老在前。
 func (s *Store) ListRequestedGaps(ctx context.Context) ([]RequestBoxRow, error) {
 	rows, err := s.pool.Query(ctx, `SELECT id, template_id, kind, subject, qualifier,
-		request_text, status, created_at, requested_at
-		FROM fin_condition_gap WHERE status='requested'
+		request_text, status, created_at, requested_at, marked_at,
+		COALESCE(target_bucket,''), target_usd
+		FROM fin_condition_gap WHERE status IN ('requested','marked')
 		ORDER BY COALESCE(requested_at, created_at) ASC`)
 	if err != nil {
 		return nil, err
@@ -201,10 +221,50 @@ func (s *Store) ListRequestedGaps(ctx context.Context) ([]RequestBoxRow, error) 
 	for rows.Next() {
 		var r RequestBoxRow
 		if err := rows.Scan(&r.ID, &r.TemplateID, &r.Kind, &r.Subject, &r.Qualifier,
-			&r.RequestText, &r.Status, &r.CreatedAt, &r.RequestedAt); err != nil {
+			&r.RequestText, &r.Status, &r.CreatedAt, &r.RequestedAt,
+			&r.MarkedAt, &r.TargetBucket, &r.TargetUSD); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// GetConditionGap 单行读（ResolveRequest 基线桶值锚需 kind/target_bucket——
+// List 面按集查不合用，补单点径）。
+func (s *Store) GetConditionGap(ctx context.Context, id int64) (*ConditionGap, error) {
+	var g ConditionGap
+	err := s.pool.QueryRow(ctx, `SELECT id, template_id, kind, subject, qualifier,
+		request_text, status, created_at, COALESCE(target_bucket,''), target_usd,
+		marked_at, COALESCE(resolve_note,'')
+		FROM fin_condition_gap WHERE id=$1`, id).
+		Scan(&g.ID, &g.TemplateID, &g.Kind, &g.Subject, &g.Qualifier,
+			&g.RequestText, &g.Status, &g.CreatedAt, &g.TargetBucket, &g.TargetUSD,
+			&g.MarkedAt, &g.ResolveNote)
+	if err != nil {
+		return nil, err
+	}
+	return &g, nil
+}
+
+// ListMarkedCapitalGaps capital 悬空核验集：kind=capital 且 status='marked'
+// （idle_capital_monitor 30min 拍消费——桶值锚核验/24h 悬空告警）。
+func (s *Store) ListMarkedCapitalGaps(ctx context.Context) ([]ConditionGap, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id, template_id, kind, subject,
+		COALESCE(target_bucket,''), target_usd, marked_at, COALESCE(resolve_note,'')
+		FROM fin_condition_gap WHERE kind='capital' AND status='marked' ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ConditionGap
+	for rows.Next() {
+		var g ConditionGap
+		if err := rows.Scan(&g.ID, &g.TemplateID, &g.Kind, &g.Subject,
+			&g.TargetBucket, &g.TargetUSD, &g.MarkedAt, &g.ResolveNote); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
 	}
 	return out, rows.Err()
 }

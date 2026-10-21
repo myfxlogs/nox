@@ -80,6 +80,9 @@ func (m *IdleCapitalMonitor) poll(ctx context.Context) {
 		}
 		m.transition(ctx, v, IdleCapitalIdle(transfer, avail), transfer, avail)
 	}
+	// D-652-C 搭车核验：capital marked 行桶值锚→fulfilled / 24h 悬空 warn
+	// （同 30min 拍零新定时器——读败该支 fail-closed 不影响闲置判据主径）。
+	m.verifyMarkedCapital(ctx)
 }
 
 // realVenues 监控 venue 集=real 配置行中 venue∈{okx,gate} 去重（sim 行 fail-closed 不入）。

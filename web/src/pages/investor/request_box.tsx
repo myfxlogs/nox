@@ -27,11 +27,19 @@ export function RequestBox(p: {
                 <td className="muted">{r.requestText}</td>
                 <td>{fmtAge(Number(r.ageSeconds))}</td>
                 <td>
-                  <button disabled={p.busy === Number(r.id)}
-                    onClick={() => p.resolve(Number(r.id), ResolveRequestState.FULFILLED)}>已喂条件</button>
-                  {" "}
-                  <button disabled={p.busy === Number(r.id)}
-                    onClick={() => p.resolve(Number(r.id), ResolveRequestState.WAIVED)}>放弃</button>
+                  {r.status === "marked" ? (
+                    // D-652-C：capital 回执 marked=已点击·到账核验中——
+                    // 实测桶值达标自动收 fulfilled，悬空超 24h 系统告警，不再可点。
+                    <span className="muted">待到账核验</span>
+                  ) : (
+                    <>
+                      <button disabled={p.busy === Number(r.id)}
+                        onClick={() => p.resolve(Number(r.id), ResolveRequestState.FULFILLED)}>已喂条件</button>
+                      {" "}
+                      <button disabled={p.busy === Number(r.id)}
+                        onClick={() => p.resolve(Number(r.id), ResolveRequestState.WAIVED)}>放弃</button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}

@@ -52,6 +52,11 @@ type graduationStore interface {
 	ListRecentFailedAutotradeLogs(ctx context.Context, window time.Duration) ([]pgstore.AutotradeLog, error)
 	// D-544：非 mt×cex 结构 ticks 簿锚（ASOF 双腿对齐 adverse 成本 p95）。
 	TickAdverseBasisP95(ctx context.Context, buyVenueKey, buySym, sellVenueKey, sellSym string, since time.Time) (float64, bool, error)
+	// D-652-C：capital marked 回执核验面（idle_capital_monitor 搭车消费）。
+	ListMarkedCapitalGaps(ctx context.Context) ([]pgstore.ConditionGap, error)
+	CapitalPoolSnapshots(ctx context.Context) ([]pgstore.CapitalPoolRow, error)
+	FulfillConditionGap(ctx context.Context, id int64, note string) error
+	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
 }
 
 // gradDB 存储取用：测试可注入 gradStore 替身，生产回落 s.store（单一真源）。

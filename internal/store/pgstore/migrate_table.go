@@ -261,4 +261,5 @@ var migrationFiles = []struct {
 	{1066, migrations.CgVenueTypeFuturesSQL, false},      // cg venue_type 漂移修：活约束回补 'futures'（基线就地改不回流生产）
 	{1067, migrations.VenueTypeFuturesSweepSQL, false},   // venue_type 'futures' 全谱 CHECK 修（D-648——8 表+ticks 族）
 	{1068, migrations.AlertReceiptPatternsSQL, false},    // 告警两级语义：回执类前缀判据种子
+	{1069, migrations.GapCapitalMarkedSQL, false},        // D-652-C：capital 回执核验环（marked+核验锚列+legacy 降标）
 }

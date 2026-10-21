@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"connectrpc.com/connect"
@@ -29,7 +30,7 @@ func (s *Service) ListRequestBox(ctx context.Context, _ *connect.Request[v1.List
 		}
 		out.Items = append(out.Items, &v1.RequestBoxItem{
 			Id: r.ID, TemplateId: r.TemplateID, Kind: r.Kind, Subject: r.Subject,
-			RequestText: r.RequestText, AgeSeconds: age,
+			RequestText: r.RequestText, AgeSeconds: age, Status: r.Status,
 		})
 	}
 	return connect.NewResponse(out), nil
@@ -48,7 +49,21 @@ func (s *Service) ResolveRequest(ctx context.Context, req *connect.Request[v1.Re
 	default:
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("state 必填 fulfilled|waived"))
 	}
-	applied, err := s.store.ResolveConditionGap(ctx, m.Id, fulfilled, "投资人页回执")
+	// D-652-C：capital 行 fulfilled 只到 marked——note 内嵌标时点桶值基线
+	// （mark_base_usd=X）供 idle_capital_monitor 核验锚；基线读败不阻塞落标
+	// （核验径退绝对额判据，fail-closed 不自动 fulfilled）。
+	note := "投资人页回执"
+	if fulfilled {
+		if g, gerr := s.store.GetConditionGap(ctx, m.Id); gerr == nil &&
+			g.Kind == "capital" && g.TargetBucket != "" {
+			if snaps, serr := s.store.CapitalPoolSnapshots(ctx); serr == nil {
+				if base, ok := bucketValueUSD(snaps, g.TargetBucket); ok {
+					note = fmt.Sprintf("投资人页回执 mark_base_usd=%.4f", base)
+				}
+			}
+		}
+	}
+	applied, err := s.store.ResolveConditionGap(ctx, m.Id, fulfilled, note)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

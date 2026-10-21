@@ -201,3 +201,6 @@ var VenueTypeFuturesSweepSQL string // venue_type 'futures' 全谱 CHECK 修（D
 
 //go:embed 1068_alert_receipt_patterns.sql
 var AlertReceiptPatternsSQL string // 告警两级语义：回执类前缀判据 app_config 种子
+
+//go:embed 1069_gap_capital_marked.sql
+var GapCapitalMarkedSQL string // D-652-C：capital 回执核验环（marked 态+核验锚三列）

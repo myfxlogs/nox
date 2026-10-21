@@ -153,11 +153,22 @@ func (e *Engine) resolveXAssetSizing(ctx context.Context, opp pgstore.Opportunit
 		if jitGapKind == "permission" {
 			gapKind = "permission" // jit 归集败因=授权面→permission 型请求箱（票面②）
 		}
-		if id, err := e.store.OpenConditionGap(ctx, &pgstore.ConditionGap{
+		gap := &pgstore.ConditionGap{
 			TemplateID: "xasset_combo", Kind: gapKind,
 			Subject: spec.VenueBuy + "|" + spec.VenueSell,
 			RequestText: fmt.Sprintf("毕业组合 armed 腿池缺资（%s=%.2f/%s=%.2f，sizing_mode=%s）——注资/装配后活池折算自动生效",
-				spec.VenueBuy, eqB, spec.VenueSell, eqS, spec.SizingMode)}); err == nil {
+				spec.VenueBuy, eqB, spec.VenueSell, eqS, spec.SizingMode)}
+		if gapKind == "capital" { // D-652-C：核验锚=缺资腿 venue:vt 桶 + 名义锚额
+			tb := spec.VenueBuy
+			if eqS < eqB {
+				tb = spec.VenueSell
+			}
+			gap.TargetBucket = tb
+			if a := jitNotionalAnchor(spec); a > 0 {
+				gap.TargetUSD = &a
+			}
+		}
+		if id, err := e.store.OpenConditionGap(ctx, gap); err == nil {
 			_ = e.store.RequestConditionGap(ctx, id)
 		}
 		log.Printf("[autotrade] skip %s: sizing %s 池净值非正（%.2f/%.2f，条件请求已落）", opp.ID, spec.SizingMode, eqB, eqS)

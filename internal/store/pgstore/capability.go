@@ -73,6 +73,11 @@ type ConditionGap struct {
 	RequestText string    `json:"request_text"`
 	Status      string    `json:"status"`
 	CreatedAt   time.Time `json:"created_at"`
+	// D-652-C capital 核验锚（kind=capital 作曲器必填；他 kind 零值存 NULL）。
+	TargetBucket string     `json:"target_bucket,omitempty"` // 目标桶 venue:venue_type:ccy（可 venue:vt 前缀/裸币种）
+	TargetUSD    *float64   `json:"target_usd,omitempty"`    // 诉求目标额（核验判据 cur≥base+target×0.95）
+	MarkedAt     *time.Time `json:"marked_at,omitempty"`
+	ResolveNote  string     `json:"resolve_note,omitempty"`
 }
 
 // ListCapabilityLedger 聚合四源+两新表（任一面缺行=该面空非错）。

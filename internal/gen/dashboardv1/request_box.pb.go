@@ -78,6 +78,7 @@ type RequestBoxItem struct {
 	Subject       string                 `protobuf:"bytes,4,opt,name=subject,proto3" json:"subject,omitempty"`
 	RequestText   string                 `protobuf:"bytes,5,opt,name=request_text,json=requestText,proto3" json:"request_text,omitempty"` // 业主可见请求原文
 	AgeSeconds    int64                  `protobuf:"varint,6,opt,name=age_seconds,json=ageSeconds,proto3" json:"age_seconds,omitempty"`   // requested 龄（后端算——零信任前端不算时）
+	Status        string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`                              // requested|marked（D-652-C：marked=已点击待到账核验）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -152,6 +153,13 @@ func (x *RequestBoxItem) GetAgeSeconds() int64 {
 		return x.AgeSeconds
 	}
 	return 0
+}
+
+func (x *RequestBoxItem) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
 }
 
 type ListRequestBoxRequest struct {
@@ -416,7 +424,7 @@ var File_dashboardv1_request_box_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_request_box_proto_rawDesc = "" +
 	"\n" +
-	"\x1ddashboardv1/request_box.proto\x12\x10nox.dashboard.v1\"\xb3\x01\n" +
+	"\x1ddashboardv1/request_box.proto\x12\x10nox.dashboard.v1\"\xcb\x01\n" +
 	"\x0eRequestBoxItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1f\n" +
 	"\vtemplate_id\x18\x02 \x01(\tR\n" +
@@ -425,7 +433,8 @@ const file_dashboardv1_request_box_proto_rawDesc = "" +
 	"\asubject\x18\x04 \x01(\tR\asubject\x12!\n" +
 	"\frequest_text\x18\x05 \x01(\tR\vrequestText\x12\x1f\n" +
 	"\vage_seconds\x18\x06 \x01(\x03R\n" +
-	"ageSeconds\"\x17\n" +
+	"ageSeconds\x12\x16\n" +
+	"\x06status\x18\a \x01(\tR\x06status\"\x17\n" +
 	"\x15ListRequestBoxRequest\"P\n" +
 	"\x16ListRequestBoxResponse\x126\n" +
 	"\x05items\x18\x01 \x03(\v2 .nox.dashboard.v1.RequestBoxItemR\x05items\"d\n" +

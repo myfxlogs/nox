@@ -89,6 +89,15 @@ func EvalCond(l LedgerView, c Cond) bool {
 	return false // 未知 kind=不满足 fail-closed
 }
 
+// gapCapitalTarget D-652-C：capital 缺口的核验锚投影（裸币种 target+MinVal 额——
+// target_bucket=subject 币种、target_usd=cond 下限；非 capital 零值不填）。
+func gapCapitalTarget(c Cond) (string, *float64) {
+	if c.Kind != "capital" {
+		return "", nil
+	}
+	return c.Subject, c.MinVal
+}
+
 // EvalCondTri D-193② 三态求值（缺口自动收口哨用）："ok"|"miss"|"unknown"——
 // permission kind 行缺（探针未就绪）或 state=unknown（传输层败）→unknown 不收不复开；
 // 其余 kind=账本断言面确定性二态。
