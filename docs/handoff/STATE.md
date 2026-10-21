@@ -1224,9 +1224,12 @@ SG 验收锚（复审席）：下拍采集 CALL 行 invest_ccy=BTC→σ 界内�
 病灶（全谱审计在案）：spotPrice/settle.usdOf/sigmaDaily/disposal_sweep 五处
 硬调 binance——okx 产品选档边界/轮档/交割估值全拿跨所价，settle 口径差=
 账本 vs 实收定时弹（#1827 12-25 交割撞此径）。
-修向：spotPrice 按 p.Venue 路由（okx→index-tickers idxPx 交割锚同径、
-binance→现径、gate→自家 ticker）；sigmaDaily 同源路由禁 binance 先兜；
-usdOf 按持仓 venue 取价；空 base→fail-closed 凭证缺口告警禁裸网络错。
+修向（决策席 10-21 精化——禁 switch 散修）：venue 定价适配器注册表——
+VenuePricer 接口（SpotPrice/Sigma 二面）+map[venue]注册，装配从
+exchange_configs 行驱动；spotPriceVenue（已在施）收敛为注册表入口，
+sigmaDaily/usdOf/disposal_sweep 同消费一表；新增 CEX=加一个适配器文件
+自注册零改共享径。端点 path/JSON 形属码面不入表；在册与否/base_url/
+凭据/符号格式归 DB+能力账本。空 base→fail-closed 凭证缺口告警禁裸网络错。
 验收：okx 提案日志价源=okx；空 base 拒因=凭证缺口；settle 估值价源=持仓
 venue 自家价。连带排：dci_leg/okx_dci/bnapi BTC 裸钉+jit/earn USDT 钉+
 DCIExecVenues/EarnExecVenues map=D-619/644 约束以字面量散落——整改归能力
