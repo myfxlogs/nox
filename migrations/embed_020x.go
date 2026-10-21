@@ -192,3 +192,6 @@ var HoldHoursPriorSQL string // funding_carry hh 输入源修：模板持有先�
 
 //go:embed 1065_econ_kb_verdicts.sql
 var EconKbVerdictsSQL string // 经济经验库消化裁定表（canon/dismiss/merge+理由必填）
+
+//go:embed 1066_cg_venue_type_futures.sql
+var CgVenueTypeFuturesSQL string // carry_graduations venue_type 漂移修：'futures' 回补（基线就地改不回流生产）

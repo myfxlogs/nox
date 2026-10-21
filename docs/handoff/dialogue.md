@@ -287,3 +287,7 @@
 ## 2026-10-21 03:0xZ — DCI 复活票三段定谳（实施席）
 
 业主令「DCI 未能再开单」追因施工毕。A 段翻盘：qty=1.15e-9 非 sizing 算错——可装配额面当时缺 savings 第三源+零量界闸+零尘划转阈值，尘额直打 venue 51000；三修早已在 master，本票补生产复现锚钉回退。B 段账缺实证：#7/#8 income_events 欠息 2.8028 USDT（D-243「tran_id=71 已落」声明未落地），静默跳账面四面补 log 钉。C 段定谳=结构性断线：binance 休眠键前置短路连坐 okx 枚举面，非「正常无候选」；解封裁定归决策席。
+
+## 2026-10-21 约束漂移修实施纪要（wip/cg-type-drift @e36d10f+92acbc8）
+- 漂移侦测锚选型裁定（实施域）：票面给「部署 runbook 或启动自检」二选——定启动自检（cmd/core 迁移后跑 SchemaCheckDrift，warn 告警 dedup 24h 不阻断 boot）：runbook 靠人肉=同病灶复发温床，自检件随进程必跑。
+- 对拍口径裁定：按表内规范化定义多重集对拍（名不参与）——列级裸 CHECK pg 自动命名 vs 生产手工名不属语义漂移；分区表（PARTITION OF/ATTACH）+继承约束（conparentid>0）双向豁免；deparse/源码形态差经 normalizeCheckDef 归一（IN→ANY、LIKE→~~、cast 脱壳、括号全剥、单元素 ANY→=）。
