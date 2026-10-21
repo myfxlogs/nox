@@ -85,7 +85,7 @@ func TestD646_NoHoldingBlocks(t *testing.T) {
 	st, ctx := d646Store(t)
 	d646Cons(t, st, ctx)
 	d646Quote(t, st, ctx, 0.30)
-	ok, why := sellHighGate(ctx, st, "okx")
+	ok, why, _ := sellHighGate(ctx, st, "okx")
 	if ok {
 		t.Fatalf("无券应拒: %s", why)
 	}
@@ -98,9 +98,13 @@ func TestD646_HoldingAndStructPass(t *testing.T) {
 	d646Cons(t, st, ctx)
 	d646Pool(t, st, ctx, 0.5)
 	d646Quote(t, st, ctx, 0.30)
-	ok, why := sellHighGate(ctx, st, "okx")
+	ok, why, sel := sellHighGate(ctx, st, "okx")
 	if !ok {
 		t.Fatalf("券足+达标档应放行: %s", why)
+	}
+	// 脱节修锚：闸实选档回传——prem=该档 apy、row=实选行（提案 APR 按此记）。
+	if sel == nil || sel.row == nil || sel.row.ProductRef != "D646P" || sel.prem != 0.30 {
+		t.Fatalf("实选档回传不符: %+v", sel)
 	}
 	t.Logf("注记=%s", why)
 }
@@ -111,7 +115,7 @@ func TestD646_BelowMinQtyBlocks(t *testing.T) {
 	d646Cons(t, st, ctx)
 	d646Pool(t, st, ctx, 0.005)
 	d646Quote(t, st, ctx, 0.30)
-	if ok, why := sellHighGate(ctx, st, "okx"); ok {
+	if ok, why, _ := sellHighGate(ctx, st, "okx"); ok {
 		t.Fatalf("券 0.005<0.01 应拒: %s", why)
 	}
 }
@@ -126,7 +130,7 @@ func TestD646_MinQtyTableOverride(t *testing.T) {
 	}
 	d646Pool(t, st, ctx, 0.005)
 	d646Quote(t, st, ctx, 0.30)
-	if ok, why := sellHighGate(ctx, st, "okx"); !ok {
+	if ok, why, _ := sellHighGate(ctx, st, "okx"); !ok {
 		t.Fatalf("表控 minQty=0.001 后 0.005 券应放行: %s", why)
 	}
 }
@@ -136,7 +140,7 @@ func TestD646_NoStructQuoteBlocks(t *testing.T) {
 	st, ctx := d646Store(t)
 	d646Cons(t, st, ctx)
 	d646Pool(t, st, ctx, 0.5)
-	if ok, why := sellHighGate(ctx, st, "okx"); ok {
+	if ok, why, _ := sellHighGate(ctx, st, "okx"); ok {
 		t.Fatalf("无报价档应拒: %s", why)
 	}
 }
@@ -160,7 +164,7 @@ func TestD646_GlobalShareFallback(t *testing.T) {
 	if share == nil {
 		t.Skip("共享库无全局 custody_share 行——回落语义无锚可验")
 	}
-	ok, why := sellHighGate(ctx, st, "okx")
+	ok, why, _ := sellHighGate(ctx, st, "okx")
 	want := 0.5*(*share) >= 0.01
 	if ok != want {
 		t.Fatalf("全局回落语义错: ok=%v want=%v why=%s", ok, want, why)

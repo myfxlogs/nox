@@ -3,6 +3,7 @@ package oppmatch
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"nox/internal/risk/gate"
@@ -30,12 +31,35 @@ func earnQuoteVenues(ctx context.Context, st *pgstore.Store) ([]string, map[stri
 	return venues, aprs
 }
 
+// applyDciSel dci 脱节修：expected_apr/eval 卡 gross=闸实选档 venue 原生 apy
+// （非 MaxDCIAPY 全表 30d 极值——#1827 卡 33.9% vs 实买 8.57% 病灶）。
+func applyDciSel(rv *Result, dsel *dciSel) {
+	if dsel == nil {
+		return
+	}
+	rv.APR = &dsel.prem
+	rv.GrossEvidence = fmt.Sprintf("fin_cex_dci_quote %s（闸实选档）", dsel.row.ProductRef)
+}
+
 // proposalParams 提案快照参数（审计锚非钉价）：dci 模板补最优档 product/strike/tenor
 // 快照；其余仅 apr——执行时实时闸复验为准（禁区：禁按提案时 strike 硬执行）。
-func proposalParams(ctx context.Context, st *pgstore.Store, r Result, venue string) map[string]any {
+func proposalParams(ctx context.Context, st *pgstore.Store, r Result, venue string, dsel *dciSel) map[string]any {
 	p := map[string]any{"venue": venue}
 	if r.APR != nil {
 		p["apr"] = *r.APR
+	}
+	// dci 脱节修：闸实选行三字段/apr 直接钉（快照与闸判定同档——
+	// qs[0] 重查会取异档；执行时实时闸复验径不变）。
+	if dsel != nil {
+		p["apr"] = dsel.prem
+		p["product_ref"] = dsel.row.ProductRef
+		if dsel.row.Strike != nil {
+			p["strike"] = *dsel.row.Strike
+		}
+		if dsel.row.TenorDays != nil {
+			p["tenor_days"] = *dsel.row.TenorDays
+		}
+		return p
 	}
 	var opt, inv string
 	switch r.TemplateID {

@@ -52,44 +52,44 @@ func custodyBTCAvail(ctx context.Context, st *pgstore.Store, share float64) (flo
 }
 
 // sellHighGate 双闸判定：返回过闸与否+拒因注记（注记带券/σ/界/净额要素可审计）。
-func sellHighGate(ctx context.Context, st *pgstore.Store, venue string) (bool, string) {
+func sellHighGate(ctx context.Context, st *pgstore.Store, venue string) (bool, string, *dciSel) {
 	cons, cerr := st.ListCapabilityConstraints(ctx)
 	if cerr != nil {
-		return false, fmt.Sprintf("约束表读败：%v", cerr)
+		return false, fmt.Sprintf("约束表读败：%v", cerr), nil
 	}
 	k, tmax, ok := gate.SigmaTailParams(cons, "CALL")
 	if !ok {
-		return false, "尾险约束缺（dci_call_otm_k/dci_tenor_max_days 行——fail-closed 不产提案）"
+		return false, "尾险约束缺（dci_call_otm_k/dci_tenor_max_days 行——fail-closed 不产提案）", nil
 	}
 	share := gate.CustodyShareOf(cons, venue)
 	if share == nil {
-		return false, fmt.Sprintf("custody_share 约束缺（custody_share@%s 行——券定界不可判 fail-closed）", venue)
+		return false, fmt.Sprintf("custody_share 约束缺（custody_share@%s 行——券定界不可判 fail-closed）", venue), nil
 	}
 	minQty := sellHighMinQty(ctx, st)
 	avail, err := custodyBTCAvail(ctx, st, *share)
 	if err != nil {
-		return false, err.Error()
+		return false, err.Error(), nil
 	}
 	// 持仓闸：可动券<下限=无券不产（执行即裸 call——yield_on_holdings 前提破）。
 	if avail < minQty {
-		return false, fmt.Sprintf("无券：BTC 池份额×share=%.6f<min %.4f（缺持仓——covered_call 前提破不产卡）", avail, minQty)
+		return false, fmt.Sprintf("无券：BTC 池份额×share=%.6f<min %.4f（缺持仓——covered_call 前提破不产卡）", avail, minQty), nil
 	}
 	// 结构闸：σ 界内达标档 net>0 且结构三字段齐。
 	sigma, src, serr := fetchSigma(ctx, st)
 	if serr != nil {
-		return false, serr.Error()
+		return false, serr.Error(), nil
 	}
 	spot, err := st.LatestSpreadSpotRef(ctx, "BTC")
 	if err != nil || spot <= 0 {
-		return false, "BTC 现货参照缺（界不可算不臆放）"
+		return false, "BTC 现货参照缺（界不可算不臆放）", nil
 	}
 	bound := gate.StrikeBound(spot, gate.SigmaBoundRatio("CALL", sigma, k, tmax))
 	qs, err := st.ListDCIQuotes(ctx, venue, "BTC", "CALL", "BTC", int(tmax), bound)
 	if err != nil {
-		return false, fmt.Sprintf("%s CALL 报价读败：%v", venue, err)
+		return false, fmt.Sprintf("%s CALL 报价读败：%v", venue, err), nil
 	}
 	if len(qs) == 0 {
-		return false, fmt.Sprintf("%s CALL 达标档报价缺（σ 界 %.0f 上无档）", venue, bound)
+		return false, fmt.Sprintf("%s CALL 达标档报价缺（σ 界 %.0f 上无档）", venue, bound), nil
 	}
 	var best *pgstore.CexDCIQuote
 	var bestNet, bestPrem, bestTail float64
@@ -108,27 +108,28 @@ func sellHighGate(ctx context.Context, st *pgstore.Store, venue string) (bool, s
 		}
 	}
 	if best == nil {
-		return false, fmt.Sprintf("%s CALL 达标档 strike/tenor/product_ref 缺（不可评不臆放）", venue)
+		return false, fmt.Sprintf("%s CALL 达标档 strike/tenor/product_ref 缺（不可评不臆放）", venue), nil
 	}
 	if bestNet <= 0 {
 		return false, fmt.Sprintf(
 			"尾损盖溢价：premium_ann %.2f%%−tail %.2f%%=net %.2f%%≤0（σ=%.2f%% 界=%.0f strike=%.0f tenor=%dd）",
-			bestPrem*100, bestTail*100, bestNet*100, sigma*100, bound, *best.Strike, *best.TenorDays)
+			bestPrem*100, bestTail*100, bestNet*100, sigma*100, bound, *best.Strike, *best.TenorDays), nil
 	}
 	// 券覆盖申购档（MinAmount 在案时钉——缺案不臆放沿用 fail-closed 侧）。
 	if best.MinAmount != nil && avail < *best.MinAmount {
-		return false, fmt.Sprintf("券不足：avail %.6f<申购档 minAmount %.6f（%s）", avail, *best.MinAmount, best.ProductRef)
+		return false, fmt.Sprintf("券不足：avail %.6f<申购档 minAmount %.6f（%s）", avail, *best.MinAmount, best.ProductRef), nil
 	}
 	return true, fmt.Sprintf("券=%.6f BTC（×share %.2f≥min %.4f）；σ=%.2f%%（%s）界=%.0f strike=%.0f tenor=%dd tail=%.2f%% net=%.2f%%",
-		avail, *share, minQty, sigma*100, src, bound, *best.Strike, *best.TenorDays, bestTail*100, bestNet*100)
+			avail, *share, minQty, sigma*100, src, bound, *best.Strike, *best.TenorDays, bestTail*100, bestNet*100),
+		&dciSel{row: best, prem: bestPrem}
 }
 
 // sellHighGateEnforce 闸+处置件：不过=存量 proposed 翻 deferred 如实（#1687
 // 处置——券到自动复产）+dedup 告警留痕；过=注记交 gate_note。
-func sellHighGateEnforce(ctx context.Context, st *pgstore.Store, tmpl, venue string) (bool, string) {
-	ok, why := sellHighGate(ctx, st, venue)
+func sellHighGateEnforce(ctx context.Context, st *pgstore.Store, tmpl, venue string) (bool, string, *dciSel) {
+	ok, why, sel := sellHighGate(ctx, st, venue)
 	if ok {
-		return true, why
+		return true, why, sel
 	}
 	if n, derr := st.DeferProposalsByPair(ctx, tmpl, venue); derr == nil && n > 0 {
 		log.Printf("[oppmatch] sell_high 闸不过 %s@%s 存量提案翻 deferred %d 行", tmpl, venue, n)
@@ -137,7 +138,7 @@ func sellHighGateEnforce(ctx context.Context, st *pgstore.Store, tmpl, venue str
 		"sell_high 双闸：%s@%s %s——本拍不产提案（存量 proposed 已翻 deferred）", tmpl, venue, why), 6*time.Hour); aerr != nil {
 		log.Printf("[oppmatch] sell_high 闸 alert: %v", aerr)
 	}
-	return false, why
+	return false, why, nil
 }
 
 // sellHighStructBelt 结构闸 belt：covered_call params 三字段缺一→卡面强制

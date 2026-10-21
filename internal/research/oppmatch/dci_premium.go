@@ -35,16 +35,24 @@ func dciStrikeBound(ctx context.Context, st *pgstore.Store, opt string, sigma fl
 	return gate.StrikeBound(spot, gate.SigmaBoundRatio(opt, sigma, k, tmax))
 }
 
-// dciPremiumGate 溢价闸+尾险闸判定：返回过闸与否+拒因注记。
+// dciSel 闸实选档回传（dci 提案 APR 脱节修——expected_apr/params/eval 按
+// 闸实选 product_ref 那档 apy 记，非 MaxDCIAPY 全表 30d 极值）。prem=venue
+// 原生年化归一小数（binance apy=%已 /100）；row=闸内 net 最优行指针。
+type dciSel struct {
+	row  *pgstore.CexDCIQuote
+	prem float64
+}
+
+// dciPremiumGate 溢价闸+尾险闸判定：返回过闸与否+拒因注记+实选档。
 // 注记带 σ/界/尾损三要素可审计（票面⑤）。
-func dciPremiumGate(ctx context.Context, st *pgstore.Store, venue string) (bool, string) {
+func dciPremiumGate(ctx context.Context, st *pgstore.Store, venue string) (bool, string, *dciSel) {
 	cons, cerr := st.ListCapabilityConstraints(ctx)
 	if cerr != nil {
-		return false, fmt.Sprintf("约束表读败：%v", cerr)
+		return false, fmt.Sprintf("约束表读败：%v", cerr), nil
 	}
 	k, tmax, ok := gate.SigmaTailParams(cons, "PUT")
 	if !ok {
-		return false, "尾险约束缺（dci_put_otm_k/dci_tenor_max_days 行——fail-closed 不产提案）"
+		return false, "尾险约束缺（dci_put_otm_k/dci_tenor_max_days 行——fail-closed 不产提案）", nil
 	}
 	// 在仓名义帽：跨 venue 未到期 PUT 名义合计≥cap→不产提案（票面④）。
 	var capRow *float64
@@ -54,34 +62,34 @@ func dciPremiumGate(ctx context.Context, st *pgstore.Store, venue string) (bool,
 		}
 	}
 	if capRow == nil {
-		return false, "尾险约束缺（dci_open_notional_cap_usdt 行——fail-closed 不产提案）"
+		return false, "尾险约束缺（dci_open_notional_cap_usdt 行——fail-closed 不产提案）", nil
 	}
 	openN := 0.0
 	for _, v := range dciProposalVenues {
 		q, qerr := st.OutstandingDCIQty(ctx, v, "USDT")
 		if qerr != nil {
-			return false, fmt.Sprintf("在仓名义读败 %s：%v", v, qerr)
+			return false, fmt.Sprintf("在仓名义读败 %s：%v", v, qerr), nil
 		}
 		openN += q
 	}
 	if openN >= *capRow {
-		return false, fmt.Sprintf("在仓名义帽：open=%.0f≥cap=%.0f USDT", openN, *capRow)
+		return false, fmt.Sprintf("在仓名义帽：open=%.0f≥cap=%.0f USDT", openN, *capRow), nil
 	}
 	sigma, src, serr := fetchSigma(ctx, st)
 	if serr != nil {
-		return false, serr.Error()
+		return false, serr.Error(), nil
 	}
 	spot, err := st.LatestSpreadSpotRef(ctx, "BTC")
 	if err != nil || spot <= 0 {
-		return false, "BTC 现货参照缺（界不可算不臆放）"
+		return false, "BTC 现货参照缺（界不可算不臆放）", nil
 	}
 	bound := gate.StrikeBound(spot, gate.SigmaBoundRatio("PUT", sigma, k, tmax))
 	qs, err := st.ListDCIQuotes(ctx, venue, "BTC", "PUT", "USDT", int(tmax), bound)
 	if err != nil {
-		return false, fmt.Sprintf("%s PUT 报价读败：%v", venue, err)
+		return false, fmt.Sprintf("%s PUT 报价读败：%v", venue, err), nil
 	}
 	if len(qs) == 0 {
-		return false, fmt.Sprintf("%s PUT 达标档报价缺（σ 界 %.0f 内无档）", venue, bound)
+		return false, fmt.Sprintf("%s PUT 达标档报价缺（σ 界 %.0f 内无档）", venue, bound), nil
 	}
 	// 选档目标=net(premium_ann−tail_cost_ann) 最优（票面③）；tenor 用档实值。
 	var best *pgstore.CexDCIQuote
@@ -101,18 +109,18 @@ func dciPremiumGate(ctx context.Context, st *pgstore.Store, venue string) (bool,
 		}
 	}
 	if best == nil {
-		return false, fmt.Sprintf("%s PUT 达标档 strike/tenor 缺（尾损不可算不臆放）", venue)
+		return false, fmt.Sprintf("%s PUT 达标档 strike/tenor 缺（尾损不可算不臆放）", venue), nil
 	}
 	if bestNet <= 0 {
 		return false, fmt.Sprintf(
 			"尾损盖溢价：premium_ann %.2f%%−tail %.2f%%=net %.2f%%≤0（σ=%.2f%% 界=%.0f strike=%.0f tenor=%dd）",
-			bestPrem*100, bestTail*100, bestNet*100, sigma*100, bound, *best.Strike, *best.TenorDays)
+			bestPrem*100, bestTail*100, bestNet*100, sigma*100, bound, *best.Strike, *best.TenorDays), nil
 	}
 	// 基准=同币种（投入币 USDT）跨 venue 理财顶档——异币种营销档不入基准
 	// （BETH 365% 类 3× 地板虚高实证）；earn 面缺=退纯地板不臆放。
 	benchVenue, earnApr, benchTS, ok, err := st.MaxEarnAPRByCcy(ctx, "USDT")
 	if err != nil {
-		return false, fmt.Sprintf("earn_apr USDT 基准读败：%v", err)
+		return false, fmt.Sprintf("earn_apr USDT 基准读败：%v", err), nil
 	}
 	if !ok {
 		earnApr = 0 // earn 面缺≠无限额——闸退纯地板 8%
@@ -123,8 +131,9 @@ func dciPremiumGate(ctx context.Context, st *pgstore.Store, venue string) (bool,
 	}
 	if bestPrem < thr {
 		return false, fmt.Sprintf("溢价低于闸：premium_ann %.2f%% < max(3×USDT_earn %s %.2f%%@%s, 8%%)=%.2f%%",
-			bestPrem*100, benchVenue, earnApr*100, benchTS.Format("01-02 15:04"), thr*100)
+			bestPrem*100, benchVenue, earnApr*100, benchTS.Format("01-02 15:04"), thr*100), nil
 	}
 	return true, fmt.Sprintf("基准=USDT earn_apr %s %.2f%% @%s；σ=%.2f%%（%s）界=%.0f tail=%.2f%% net=%.2f%%",
-		benchVenue, earnApr*100, benchTS.Format("01-02 15:04"), sigma*100, src, bound, bestTail*100, bestNet*100)
+			benchVenue, earnApr*100, benchTS.Format("01-02 15:04"), sigma*100, src, bound, bestTail*100, bestNet*100),
+		&dciSel{row: best, prem: bestPrem}
 }
