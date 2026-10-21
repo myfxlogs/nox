@@ -304,3 +304,8 @@
 - 券源裁定（实施域）：票面「能力账本/快照桶」——快照桶（fin_venue_account_snapshot）无 ccy 粒度，券源取托管池份额行 personal_positions BTC/other OPEN（D-191 池表象口径）×custody_share@<venue>（D-644 venue 粒度读面，无 venue 键回落全局不 fail-closed）；判据下限 app_config `sell_high_min_qty` 热读（行缺→0.01 兜底）。
 - 存量卡处置选型：闸不过→DeferProposalsByPair 翻 deferred（如实非删——券到自动复产，#1687 随首拍闸判自然翻态）。
 - flake 二分纪律实证：两红（TestD526 无提案/TestD135 kick 时序）经「无改动基线复跑+单跑」双法定性=座库 stale/时序环境伤，非票伤。
+
+## 2026-10-21 jit 收益比对起仓环实施纪要（wip/jit-yield @65d59557d）
+- oppAPR 口径裁定（实施域）：armed 组合机会年化取 `opp.NetBps/1e4`（armed 机会卡净 bps 年化原生字段——票面「本拍卡片 expected_apr」对应物）；earn 侧取 `LatestEarnAPR(venue,USDT)` 同币种在册现值——异币种/陈旧行销档不入基准（同 D-514 基准口径纪律）。
+- 净额账隔离裁定：闲置段用 `jit-idle:` 前缀独立记账——jit-ret/jit-swp 差分=jit 挪出净额口径，闲置回申非挪出金混入会冲负净额账（账目语义钉）。
+- armed 判定=enabled 且非模拟的 xasset_allow_combos 腿挂 venue；读败=fail-closed 不扩面（宁可不回申不扫荡）。
