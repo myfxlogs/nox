@@ -1251,9 +1251,14 @@ WHERE venue=v.venue)——有户才插无户幂等跳过；注释钉「户缺席
 
 <!-- D-651 五修向立票（10-21 决策席——全谱运维缺陷同治，细文读 decisions.md D-651）
 | 票 | 状态 |
-| a) venue 适配器注册表 | 已立待派——VenueAdapter(Pricer/Sigma/Disposal) map[venue]+exchange_configs 行驱动；spotPriceVenue 收敛为入口，sigmaDaily/usdOf/disposal_sweep 同消费 |
+| a) venue 适配器注册表 | **设计核验照准（D-653 附补正六）→移交决策席派工**——VenueAdapter(Pricer/Sigma/Disposal) map[venue]+exchange_configs 行驱动；spotPriceVenue 收敛为入口，sigmaDaily/usdOf/disposal_sweep 同消费 |
 | b) 评估卡绑定纪律 | 已立待派——APR 修已并（f21a58f31）；余面=gross 之外字段（params/strike/tenor）同绑 product_ref 指针+「快照与判定异源」KB high 条目+评估卡审项进 review 清单 |
 | c) 闸收口账 | 已立待派（取证型）——sellHighGate/dciPremiumGate/FundingRegimeOK/custody_share/TailCostAnn 五闸现域盘点→risk.Check 单入口归编路线 |
-| d) 多席并发协议 | 已立待派（设计型）——部署树写禁 worktree 强制+票文广播件+测试库逐席隔离；先设计稿后施工 |
+| d) 多席并发协议 | **设计核验照准（D-653 附补正六）→移交决策席派工**——部署树写禁 worktree 强制+票文广播件+测试库逐席隔离；先设计稿后施工 |
 | e) 投资人接触面犬哨 | 已立待派——入站命令径（webhook/WS/RPC）入 dephealth；「通道应活而长零命中=死径嫌疑」标报径 |
 -->
+
+<!-- 复审席 D-651 设计稿核验注记（10-21，D-653）——对象=docs/D651-venue适配层与多席并发协议设计.md @master 09fece411（grep+全文读对拍）
+判词=照准（附补正六进施工票面，非结构性返工）。亲证点：①A.1 五病灶全数在码面实证——dci_sigma.go:2「源序 binance fapi→okx」binance 优先兜序实锤、disposal_sweep.go:65 硬编码 ("binance","spot") 实锤、settle.go:289 usdOf 已带 venue 参、spot_price_venue.go:27 今日并的过渡态、Venues 裸 map 实证（一处定位修正：实在 risk/gate/dci_templates.go:34-38 非 dciexec）；②对拍架构 §4-6 全合——平台横切归属/§5 DB 驱动装配（exchange_configs 行 Register=D-162 禁 env 装配正面兑现）/§6 G2 σ 口径换「尾险界随动」如实申报/consume-point 拉取属 D-604 合法域（票面须引）；③写面留 executor 不进本包=钱径写面纪律保持。补正六（票面必载）：㊀B①闸谓词改可执行形——「只容 merge/deploy 产生的 M」不可归因，改=MERGE_HEAD 存在或纯 docs 路径外拦+branch≠master 拦；㊁B②不治病根——TICKETS.md 与 STATE 同库同 pull，补 boot 远端对拍探针（fetch+rev-list HEAD..nox/master>0=warn）；㊂B③席库清扫面——nox_test_<seat> 须进 test_db_gc.sh 模式（SG 根盘 75% 临界带敏感）+CREATE DATABASE 权限票内核；㊃A 频控——三适配器 REST 必须接 platform/okxrate 共额闸（0115392d4 今日并，不接=绕闸回退）+binance 权重同律；㊄A 端点形禁凭记忆——okx index-tickers/gate tickers okx·gate 能力账未建（skills 仅 bn-*），施工前探针实证捕获落 docs/能力账/；㊅A.3 迁移表修正+完备性——Venues map 实位 risk/gate（risk 读能力账本投影 import 红线核过✔）+票内附全仓 venue 盲写面 grep 清点（五处=已知数非完备证明）。轻项二（可选）：B④ pre-push fail-open 红查；exec_venue 投影种源（迁移 vs 装配同步）票内定。机检=文档面核验零码检（设计稿无码）；D-651 反证锚③「STATE 未见」验收面承㊁补正后方可生效。
+坑处置: 无坑（设计稿自身病灶已转补正条目入票面；B①闸谓词不可执行形如落产=潜在坑，补正㊀已堵）。 -->
+
