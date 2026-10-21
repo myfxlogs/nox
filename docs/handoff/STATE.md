@@ -1207,3 +1207,10 @@ SG 验收锚（复审席）：部署后 earn/DCI 申购成交推一次，24h 零
 处置建议（移交决策席）：①告警面无动作需求（dephealth 已 warn+自愈在案=设计内噪音，票禁线守）；②若复发升级=egress-probe 聚合归因键补 mtapi 域名（NOX_EGRESS_CANARY_ANCHORS 已含 mt5grpc3.mtapi.io:443 在案——需聚合归因件在线，现「代理端点未配置→聚合归因失效」即该面空缺，域名探测只在记 per-domain）；③根因链外移=SG 出口到 mtapi 公网段质量（MT 网关/ISP 抖动），系统侧无可修代码面——无后续票需求，再发超时窗>5min 或连败>10 次再升级。
 坑处置：无新坑（既有 dephealth 机制如实履职；「多户同毫秒劣化=链路共享层」判别法可挂待归纳作通用取证法）。
 -->
+
+<!-- 实施席 10-21：okx dci investCcy 标注修 施工完候复审（协议面取证径）
+病灶（SG 实证两通道）：①parseOKXDCI pick 序 "investCcy"→"quoteCcy"→"notionalCcy"——row keys 实拍真载荷无 investCcy 键（18 键清单在案），quoteCcy 恒 USDT 先中=全行错标；②fin_cex_dci_quote okx CALL 行 invest_ccy=USDT×5109 而 minSize=0.0001（BTC 量级）——inconsistent 自证错标。
+修件（wip/okx-dci-investccy）：InvestCcy=pick(notionalCcy)（venue 钦定语义 C=baseCcy/P=quoteCcy），缺省兜底 CALL→baseCcy/PUT→USDT。
+机检：TestOkxDCI_InvestCcyCallBase 三态（notionalCcy=BTC 透传/缺省兜底 baseCcy/USDT 行透传）；cexscan 全量绿。
+SG 验收锚（复审席）：下拍采集 CALL 行 invest_ccy=BTC→σ 界内档被闸看见（含 91500 族 net 闸实判或如实拒）；PUT 面 USDT 零回归。
+-->

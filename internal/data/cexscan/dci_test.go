@@ -103,3 +103,25 @@ func TestD183_CollectIsolation(t *testing.T) {
 		t.Fatalf("三所错误面应齐, got %v", errs)
 	}
 }
+
+// TestOkxDCI_InvestCcyCallBase 退回锚：真载荷 investCcy 键缺（row keys 实拍）——
+// CALL 申购币种=notionalCcy（C=baseCcy），缺省兜底 baseCcy；PUT=USDT。
+func TestOkxDCI_InvestCcyCallBase(t *testing.T) {
+	body := []byte(`{"code":"0","data":[
+		{"productId":"p1","strike":"91500","annualizedYield":"0.5","notionalCcy":"BTC","optType":"C","minSize":"0.0001","expTime":"1792563200000"},
+		{"productId":"p2","strike":"92000","annualizedYield":"0.4","optType":"C","expTime":"1792563200000"},
+		{"productId":"p3","strike":"80000","annualizedYield":"0.3","notionalCcy":"USDT","optType":"P","minSize":"10","expTime":"1792563200000"}]}`)
+	rows, err := parseOKXDCI(body, "BTC", "C", time.Now())
+	if err != nil || len(rows) != 3 {
+		t.Fatalf("C 面行数: %d %v", len(rows), err)
+	}
+	if rows[0].InvestCcy != "BTC" {
+		t.Fatalf("CALL notionalCcy=BTC 应透传: %q", rows[0].InvestCcy)
+	}
+	if rows[1].InvestCcy != "BTC" {
+		t.Fatalf("CALL notionalCcy 缺省应兜底 baseCcy: %q", rows[1].InvestCcy)
+	}
+	if rows[2].InvestCcy != "USDT" {
+		t.Fatalf("notionalCcy=USDT 行应透传: %q", rows[2].InvestCcy)
+	}
+}
