@@ -18,7 +18,7 @@ import (
 func TestJitSweep_AmountBounds(t *testing.T) {
 	ex, _ := railFixture("gate", &fakeRail{positions: []EarnPosition{{ProductID: "p", Amount: 1e4}}})
 	for _, bad := range []float64{0, -5, 1e-12} {
-		if err := ex.JitSweep(context.Background(), "gate:perp", bad); err == nil ||
+		if err := ex.JitSweep(context.Background(), "gate:perp", bad, 1.0); err == nil ||
 			!strings.Contains(err.Error(), "缺口额非法") {
 			t.Fatalf("amount bound %.10f 未拒: %v", bad, err)
 		}
@@ -29,7 +29,7 @@ func TestJitSweep_AmountBounds(t *testing.T) {
 func TestJitSweep_VenueWhitelist(t *testing.T) {
 	ex, _ := railFixture("gate", &fakeRail{})
 	for _, vk := range []string{"account:mt5", "bybit:perp", "gate", ""} {
-		if err := ex.JitSweep(context.Background(), vk, 100); err == nil ||
+		if err := ex.JitSweep(context.Background(), vk, 100, 1.0); err == nil ||
 			!strings.Contains(err.Error(), "白名单外/未分型") {
 			t.Fatalf("venue %q 未拒: %v", vk, err)
 		}
@@ -40,7 +40,7 @@ func TestJitSweep_VenueWhitelist(t *testing.T) {
 func TestJitSweep_EarnInsufficient(t *testing.T) {
 	rail := &fakeRail{positions: []EarnPosition{{ProductID: "p", Amount: 50}}}
 	ex, _ := railFixture("gate", rail)
-	if err := ex.JitSweep(context.Background(), "gate:perp", 100); err == nil ||
+	if err := ex.JitSweep(context.Background(), "gate:perp", 100, 1.0); err == nil ||
 		!strings.Contains(err.Error(), "不足归集") {
 		t.Fatalf("earn 不足未拒: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestJitSweep_GateHappy(t *testing.T) {
 	ex.Client = srv.Client()
 	fakeIOCaptures = nil
 
-	if err := ex.JitSweep(context.Background(), "gate:perp", 998); err != nil {
+	if err := ex.JitSweep(context.Background(), "gate:perp", 998, 1.0); err != nil {
 		t.Fatalf("jit sweep: %v", err)
 	}
 	if !strings.Contains(gotBody, `"from":"spot"`) || !strings.Contains(gotBody, `"to":"futures"`) ||
@@ -110,7 +110,7 @@ func TestJitSweep_SpotLegNoHop(t *testing.T) {
 	rail := &fakeRail{positions: []EarnPosition{{ProductID: "p", Amount: 500}}}
 	ex, _ := railFixture("binance", rail)
 	fakeIOCaptures = nil
-	if err := ex.JitSweep(context.Background(), "binance:spot", 100); err != nil {
+	if err := ex.JitSweep(context.Background(), "binance:spot", 100, 1.0); err != nil {
 		t.Fatalf("jit sweep spot: %v", err)
 	}
 	if rail.redeemN != 1 {
@@ -202,7 +202,7 @@ func TestJitSweep_HalfRevert(t *testing.T) {
 		return errors.New("transfer 403")
 	}
 	fakeIOCaptures = nil
-	if err := ex.JitSweep(context.Background(), "gate:perp", 100); err == nil ||
+	if err := ex.JitSweep(context.Background(), "gate:perp", 100, 1.0); err == nil ||
 		!strings.Contains(err.Error(), "划转") {
 		t.Fatalf("二跳败应如实返 err: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestJitSweep_HalfRevert(t *testing.T) {
 		return errors.New("transfer 403")
 	}
 	fakeIOCaptures = nil
-	_ = ex2.JitSweep(context.Background(), "gate:perp", 100)
+	_ = ex2.JitSweep(context.Background(), "gate:perp", 100, 1.0)
 	var sawWarn bool
 	for _, a := range st2.alerts {
 		if strings.Contains(a, "JIT 归集半程残留") {

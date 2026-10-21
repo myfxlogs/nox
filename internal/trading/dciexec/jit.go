@@ -30,9 +30,11 @@ func JitErrKind(err error) string {
 }
 
 // JitSweep 缺资归集：venue earn 桶赎 shortfall（缺口额非全额）→交易户划转。
-// 闸序：venue 白名单→rail→活期在册足（<shortfall=err 调用方落箱）→逐仓赎→
-// 交易户划转（spot 腿免二跳）→io 记账。返回 err=如实败因（permission 可判）。
-func (e *Executor) JitSweep(ctx context.Context, venueKey string, shortfall float64) error {
+// 闸序：venue 白名单→rail→**收益比对闸**（D-647：oppAPR>earn 在册 APR 才赎——
+// 机会≤活期=资金躺 earn 更优如实拒；APR 读败/缺=fail-closed 不赎落箱）→
+// 活期在册足（<shortfall=err 调用方落箱）→逐仓赎→交易户划转（spot 腿免二跳）
+// →io 记账。返回 err=如实败因（permission 可判）。
+func (e *Executor) JitSweep(ctx context.Context, venueKey string, shortfall, oppAPR float64) error {
 	venue, vt := keydomain.BareOf(venueKey), keydomain.TypeOf(venueKey)
 	if !jitVenues[venue] || vt == "" {
 		return fmt.Errorf("jit venue 白名单外/未分型 %s（如实不归集）", venueKey)
@@ -43,6 +45,18 @@ func (e *Executor) JitSweep(ctx context.Context, venueKey string, shortfall floa
 	rail, ok := e.earnRail(venue)
 	if !ok {
 		return fmt.Errorf("%s earn rail 缺席（凭据行未配——credential 面）", venue)
+	}
+	// D-647 收益比对闸：本拍机会年化 vs earn 桶在册 APR——机会≤活期=赎
+	// 不如不赎（资金躺 earn 已更优）；在册 APR 读败/缺=比对不可行不臆放。
+	apr, aok, aerr := e.Store.LatestEarnAPR(ctx, venue, jitCcy)
+	if aerr != nil {
+		return fmt.Errorf("%s earn 在册 APR 读败: %w", venue, aerr)
+	}
+	if !aok {
+		return fmt.Errorf("%s earn 在册 APR 缺（比对不可行——fail-closed 不赎）", venue)
+	}
+	if oppAPR <= apr {
+		return fmt.Errorf("%s 机会 %.2f%%≤活期 %.2f%%——收益比对拒赎（落箱面）", venue, oppAPR*100, apr*100)
 	}
 	positions, err := rail.Positions(ctx, jitCcy)
 	if err != nil {
@@ -111,13 +125,23 @@ func (e *Executor) JitReturnForPosition(ctx context.Context, posID int64) {
 	}
 }
 
-// jitReturn 单所回转：净额 outstanding=min(交易户可动)→划转回 funding/spot→earn 回申。
+// jitReturn 单所回转（两段）：
+// 段A 净额回转：outstanding=min(交易户可动)→划转回 funding/spot→earn 回申
+// （jit-ret 前缀记账——jit-swp 差分净额账语义不动）。
+// 段B 闲置回申（D-647 平仓回申购）：该 venue 零 armed 组合（下拍无接手机会）
+// →交易户剩余可动全回申 earn（jit-idle 前缀记账——非 jit 挪出金，不混净额
+// 差分账）。armed>0=机会在途不扫荡（禁线：不动持仓腿在途金——free=可动
+// 读数天然已剔保证金占用）。armed 读败=段B 不跑如实报（扩面不可臆放）。
 func (e *Executor) jitReturn(ctx context.Context, venue, vt string) error {
 	outstanding, err := e.Store.JitNetOutstanding(ctx, venue)
 	if err != nil {
 		return fmt.Errorf("jit 净额读败: %w", err)
 	}
-	if outstanding <= 1e-6 {
+	armed, aerr := e.Store.JitArmedComboCount(ctx, venue)
+	if aerr != nil {
+		return fmt.Errorf("armed 组合面读败（闲置回申面不可判 fail-closed）: %w", aerr)
+	}
+	if outstanding <= 1e-6 && armed > 0 {
 		return nil
 	}
 	rail, ok := e.earnRail(venue)
@@ -129,16 +153,32 @@ func (e *Executor) jitReturn(ctx context.Context, venue, vt string) error {
 		return fmt.Errorf("%s 交易户可动读败: %w", venue, err)
 	}
 	amt := math.Min(outstanding, free)
+	if armed == 0 {
+		amt = free // 零 armed=闲置全回申（outstanding 段并入——净额账分段记账保差分）
+	}
 	if amt <= 1e-6 {
 		return nil // 交易户无可动=无金可回（如实静默——下仓结算再试）
 	}
 	nonce := e.nowOr().UnixNano()
+	prefix := "jit-ret"
+	idleAmt := 0.0
+	if armed == 0 {
+		idleAmt = math.Max(0, amt-outstanding) // 超净额段=闲置金（jit-idle 记）
+		prefix = "jit-ret"                     // 净额段仍 jit-ret；闲置段另键
+	}
 	if from := jitTradingWallet(venue, vt); from != "" {
 		if err := e.jitDoTransfer(ctx, venue, jitCcy, amt, from, jitFundingWallet(venue)); err != nil {
 			return fmt.Errorf("%s %s→%s 回转 %.4f 败: %w", venue, from, jitFundingWallet(venue), amt, err)
 		}
-		e.ioTransfer(ctx, venue, jitCcy, amt, from, jitFundingWallet(venue),
-			fmt.Sprintf("jit-ret:%s:%d:trx", venue, nonce), "")
+		if idleAmt > 1e-6 {
+			e.ioTransfer(ctx, venue, jitCcy, math.Min(outstanding, amt), from, jitFundingWallet(venue),
+				fmt.Sprintf("jit-ret:%s:%d:trx", venue, nonce), "")
+			e.ioTransfer(ctx, venue, jitCcy, idleAmt, from, jitFundingWallet(venue),
+				fmt.Sprintf("jit-idle:%s:%d:trx", venue, nonce), "")
+		} else {
+			e.ioTransfer(ctx, venue, jitCcy, amt, from, jitFundingWallet(venue),
+				fmt.Sprintf("jit-ret:%s:%d:trx", venue, nonce), "")
+		}
 	}
 	// earn 回申：产品面首个可购档（gate/okx rail Subscribe 参面固定 USDT 族；
 	// binance 需真 productId——无可购=资金留 funding/spot 如实 warn）。
@@ -160,9 +200,17 @@ func (e *Executor) jitReturn(ctx context.Context, venue, vt string) error {
 	if err != nil {
 		return fmt.Errorf("%s earn 回申 %.4f 败: %w", venue, amt, err)
 	}
-	e.ioTransfer(ctx, venue, jitCcy, amt, jitFundingWallet(venue), "earn",
-		fmt.Sprintf("jit-ret:%s:%d:sub", venue, nonce), body)
-	log.Printf("[dciexec] jit return %s %.4f %s→earn 成（outstanding %.4f）", venue, amt, jitCcy, outstanding)
+	if idleAmt > 1e-6 {
+		e.ioTransfer(ctx, venue, jitCcy, math.Min(outstanding, amt), jitFundingWallet(venue), "earn",
+			fmt.Sprintf("%s:%s:%d:sub", prefix, venue, nonce), body)
+		e.ioTransfer(ctx, venue, jitCcy, idleAmt, jitFundingWallet(venue), "earn",
+			fmt.Sprintf("jit-idle:%s:%d:sub", venue, nonce), body)
+	} else {
+		e.ioTransfer(ctx, venue, jitCcy, amt, jitFundingWallet(venue), "earn",
+			fmt.Sprintf("jit-ret:%s:%d:sub", venue, nonce), body)
+	}
+	log.Printf("[dciexec] jit return %s %.4f %s→earn 成（outstanding %.4f idle %.4f armed=%d）",
+		venue, amt, jitCcy, outstanding, idleAmt, armed)
 	return nil
 }
 

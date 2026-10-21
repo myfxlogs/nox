@@ -104,7 +104,7 @@ func (e *Engine) resolveXAssetSizing(ctx context.Context, opp pgstore.Opportunit
 			if lg.eq > 0 || lg.other <= 0 {
 				continue
 			}
-			kind, err := e.JitSweepFn(ctx, lg.vk, lg.other-lg.eq)
+			kind, err := e.JitSweepFn(ctx, lg.vk, lg.other-lg.eq, opp.NetBps/10000)
 			if err != nil {
 				log.Printf("[autotrade] jit 归集 %s 缺口 %.2f 败（%s 落箱面）: %v", lg.vk, lg.other-lg.eq, kind, err)
 				jitGapKind = kind

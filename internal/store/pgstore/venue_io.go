@@ -181,6 +181,16 @@ func (s *Store) ClosedPositionPnLBetween(ctx context.Context, venue string, from
 // JitNetOutstanding venue 内 JIT 归集净额：fin_venue_io 账 external_id
 // jit-swp:（earn→交易户）正号 − jit-ret:（回转）负号差分——挪多少回多少的
 // 权威锚（无独立状态表，账本自洽）。返回值<0 钳零（账异如实不虚报可回额）。
+// JitArmedComboCount venue 腿上 armed（enabled 且非模拟）组合数——jit 回转
+// 「下拍零 armed 机会」判定（D-647：零 armed=交易户闲置全回申 earn）。
+func (s *Store) JitArmedComboCount(ctx context.Context, venue string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM xasset_allow_combos
+		 WHERE enabled AND COALESCE(simulated,false)=false AND (venue_buy=$1 OR venue_sell=$1)`, venue).Scan(&n)
+	return n, err
+}
+
 func (s *Store) JitNetOutstanding(ctx context.Context, venue string) (float64, error) {
 	var net float64
 	err := s.pool.QueryRow(ctx, `

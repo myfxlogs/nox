@@ -81,6 +81,9 @@ type Store interface {
 	// jit 划转执行件：回转腿 venue 读口+净额账读（jit-swp/jit-ret 差分）。
 	ListPositionLegs(ctx context.Context, posID int64) ([]pgstore.PositionLeg, error)
 	JitNetOutstanding(ctx context.Context, venue string) (float64, error)
+	// D-647：jit 收益比对闸读面（earn 桶在册 APR）+闲置回申 armed 面。
+	LatestEarnAPR(ctx context.Context, venue, ccy string) (float64, bool, error)
+	JitArmedComboCount(ctx context.Context, venue string) (int, error)
 }
 
 // Executor binance DCI 申购执行器（凭据由装配侧从 exchange_configs 注入）。

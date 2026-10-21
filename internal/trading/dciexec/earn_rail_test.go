@@ -45,6 +45,9 @@ func (r *fakeRail) Positions(context.Context, string) ([]EarnPosition, error) {
 
 func railFixture(venue string, rail EarnRail) (*Executor, *fakeStore) {
 	f := newFake()
+	f.armedN = 1       // 默认 armed=有——闲置回申段B 不跑（旧锚测净额语义）
+	f.earnAPROK = true // jit 比对闸 earn 在册 APR 默认低值（oppAPR 种子各测自控）
+	f.earnAPR = 0.02
 	f.poolRows = []pgstore.CapitalPoolRow{
 		{Venue: venue, VenueType: "unified", Equity: 1956, Currency: "USDT"},
 	}
