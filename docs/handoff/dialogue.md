@@ -265,3 +265,9 @@
 - 产验碑：**term_basis 首个 viable 真裁定 net +41.26%**／cross_venue reject−0.10／**funding reject −550**（paper 估费年化吃光 gross——诚实拒）——eval 链正反两向判别力全证，九模板全员真裁定。
 - 私忆升层：「复用未复用三袭」直入正典条目 eval-source-reuse-not-reused-triple（high——报「无源」前必查 fin_* 全谱+鲜度）；noxkb 顶第十次结构性上浮 98304→131072+maxLines 260→320。
 - 挂目：备份晨跑锚（03:00Z）/expire 外溢锚（~6 日）/funding 1383% 校值/MT5 s/m 龄；无在飞票件。
+
+## 2026-10-21 00:2xZ — armed 开仓前置处置（实施席）
+
+- 取证定谳：EXR `ADAUSDm/DOTUSDm/FILUSDm` 同名符号异底层（价比 1.5-4.1x，quoteGuard 实删）——映射缺口的真相不全是"表未喂"，补映射前必 SymbolParams+价比双核。
+- 移交件：SPCXUSDT(binance)×SPX500 组合腿配对存疑（entry_spread −9793bps+universe hedge_canonical 不指向 SPX500）——monitor 覆盖缺是表象，组合本体裁定属决策席。
+- 坑沉淀：补映射裸 SQL 只改 DB 不热载 adapter symMap/订阅——SaveSymbolMapping RPC 才是完整径（KB 条目在案）。
