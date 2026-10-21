@@ -6,20 +6,21 @@ package exchange
 import (
 	"context"
 	"log"
-	"strings"
 )
 
-// DeliverySub armed 交割订阅行：InstID=okx FUTURES instId（'ETH-USD-261225'
-// 形），Canonical=bus canonical（detector hint 同键——armed 组合 canonical_sell）。
+// DeliverySub armed 交割订阅行：InstID=okx FUTURES instId verbatim（毕业档
+// 合约名本体——'ETH-USD_UM-261225'），Canonical=bus canonical（detector hint
+// 同键——armed 组合 canonical 腿名）。
 type DeliverySub struct {
 	InstID    string
 	Canonical string
 }
 
-// DelivInstID 毕业档合约名→okx FUTURES instId（'ETH-USD_UM-261225'→
-// 'ETH-USD-261225'；_UM=USD 本位标记剥离，非 _UM 形原样透传）。装配层单源。
+// DelivInstID 毕业档合约名→okx FUTURES instId（恒等透传——'_UM' 是 instId
+// 本体构件：ETH-USD-261225（币本位）与 ETH-USD_UM-261225（USD 本位）目录并存
+// 两张合约，剥尾=静默订错腿。退回②伤①锚）。
 func DelivInstID(sym string) string {
-	return strings.ReplaceAll(sym, "_UM-", "-")
+	return sym
 }
 
 // deliverySubArgs armed 交割腿订阅 args：instId 目录裁决（FUTURES 类并入目录

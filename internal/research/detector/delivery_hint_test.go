@@ -100,3 +100,24 @@ func TestDeliveryHint_AllowGate(t *testing.T) {
 		t.Fatalf("白名单外仍产候选 %d", len(out))
 	}
 }
+
+// TestDeliveryHint_CanonKeyResolve 退回②伤②锚：hint canonical=品种归一名
+// 'ETH'（combo#25 实形），spot 快照键=行情 canonical 'ETHUSDT'——原名键 miss
+// 回退 +USDT 拼装命中；futures 协定键（delivCanon 同 hint 名）原名直中。
+func TestDeliveryHint_CanonKeyResolve(t *testing.T) {
+	d := &XAssetCarryDetector{
+		MinNetAnnualPct: 1, TrackingMaxBps: 50, FreshnessTTL: time.Minute,
+		DeliveryHints: &fakeDelivHints{pairs: []DeliveryPairHint{{
+			BuyCanonical: "ETH", SellCanonical: "ETH",
+			BuyVenueKey: "okx:spot", SellVenueKey: "okx:futures", SellTenorDays: 30,
+		}}},
+	}
+	snap := map[string]map[string]bus.Quote{
+		"ETHUSDT": {"okx:spot": delivQuote("ETH-USDT", "okx:spot", 3999, 4000)},
+		"ETH":     {"okx:futures": delivQuote("ETH-USD_UM-261225", "okx:futures", 4200, 4201)},
+	}
+	out := d.Scan(context.Background(), snap, nil)
+	if len(out) != 1 {
+		t.Fatalf("canonical 键解析应中——候选 %d≠1", len(out))
+	}
+}

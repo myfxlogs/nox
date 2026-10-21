@@ -15,7 +15,8 @@ import (
 // ticksVenueTypes ticks 表 venue_type 白名单——DB CHECK（ticks_venue_type_chk，
 // migration 1000_baseline）的代码侧镜像：非通道型帧（cmc:cfd 等）写径前置滤除，
 // 不再撞 CHECK 拒写每 interval 刷错日志。新通道型入库须先扩 CHECK 再入本表。
-var ticksVenueTypes = []string{"mt4", "mt5", "perp", "spot"}
+// D-649续④退回②伤③：futures 入白名单（交割腿帧落库——基差历史面随订阅成活）。
+var ticksVenueTypes = []string{"mt4", "mt5", "perp", "spot", "futures"}
 
 // writeErrLogCooldown 同键同文案写失败日志冷却窗（恒真错每 interval 刷屏降噪）。
 const writeErrLogCooldown = 10 * time.Minute
