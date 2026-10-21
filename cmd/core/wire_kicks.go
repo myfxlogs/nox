@@ -49,9 +49,14 @@ func newKickTopics() (configKick, posChange *bus.Topic[struct{}]) {
 }
 
 // wirePositionKicks D-469b S3：positions 写点统一回调+两 monitor kick 订阅。
-func wirePositionKicks(st *pgstore.Store, posMon *position.Monitor, posChange *bus.Topic[struct{}]) {
+// D-633 钱径池同接（money-pool-store-no-poschange-kick 坑件）：pipeline 全量
+// positions 写点走 stMoney——不接则 ClosePosition/CreatePositionLeg 等提交
+// 零 kick，posreview/posMon 对钱径写盲（空仓段 pos#1 平仓 25min 零 review 实证）。
+func wirePositionKicks(st, stMoney *pgstore.Store, posMon *position.Monitor, posChange *bus.Topic[struct{}]) {
 	posMon.SetKickTopic(posChange)
-	st.OnPositionChange = func() { posChange.Publish(struct{}{}) }
+	kick := func() { posChange.Publish(struct{}{}) }
+	st.OnPositionChange = kick
+	stMoney.OnPositionChange = kick
 }
 
 // mustSub D-469b：topic 订阅端简写（cancel 由订阅方 goroutine 生命周期托管——服务级常驻订阅不取消）。
