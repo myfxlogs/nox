@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -162,4 +163,33 @@ func (c *armedDeliveryHintSource) load(ctx context.Context) ([]detector.Delivery
 		out = append(out, h)
 	}
 	return out, nil
+}
+
+// fundingAbsentFn funding_absent 账本查闭包（STATE 行50——60s TTL 缓存约束行集
+// 防每帧扫描逐对查库；nil store=无标注面）。
+func fundingAbsentFn(st *pgstore.Store) func(canonical, venue string) bool {
+	if st == nil {
+		return nil
+	}
+	var mu sync.Mutex
+	var set map[string]bool
+	var at time.Time
+	return func(canonical, venue string) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		if time.Since(at) > time.Minute {
+			rows, err := st.ListCapabilityConstraints(context.Background())
+			if err == nil {
+				next := map[string]bool{}
+				for _, c := range rows {
+					if c.Scope == "global" && c.ValueNum != nil && *c.ValueNum == 1 &&
+						strings.HasPrefix(c.Subject, "funding_absent:") {
+						next[c.Subject] = true
+					}
+				}
+				set, at = next, time.Now()
+			}
+		}
+		return set[pgstore.FundingAbsentSubject(canonical, venue)]
+	}
 }

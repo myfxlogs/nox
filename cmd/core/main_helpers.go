@@ -65,6 +65,7 @@ func buildDetectors(cfg *config.Config, equiv *pgstore.AssetEquivProvider, st *p
 			BaselinePct:      cfg.FundingBaselinePct, // D-084 同所基准费率扣除
 			FreshnessTTL:     cfg.DetectorFreshnessTTL,
 			Allow:            xassetAllow,
+			AbsentFn:         fundingAbsentFn(st), // STATE 行50：venue 无 funding 面在册不产候选
 		},
 		// D-187：CarryDetector 已删除——CARRY 候选由 autotrade.discoverSwapCombos 统一产出。
 		&detector.PerpFundingDetector{
