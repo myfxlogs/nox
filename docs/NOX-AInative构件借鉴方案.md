@@ -1,0 +1,53 @@
+# NOX AI-native 构件借鉴方案（决策席草案 · 待 D-251 设计核验）
+
+> 缘起：业主令（10-21）「什么是 AI native→有开源可学吗→出方案稿」。参照系=LangGraph/MetaGPT/Letta/Graphiti/Langfuse/OTel GenAI/Instructor。
+> 总原则：**借构件形态，不借治理哲学**（NOX 门禁严格度已超这些框架默认形态——它们没碰真钱）；**不为假想需求建机器**（业主令 10-14）；每件带触发条件与反证锚。
+> 禁线（全案）：不引入任何 agent 运行时框架（LangGraph/CrewAI 等——「DB 行是总线、agent 不互聊」是 D-246 钦定）；LLM 零进钱径不变；不自建 tracing 平台（Langfuse 形态只借属性命名）；方向锚零动。
+
+## 一、四轴对拍：NOX 已有 vs 开源参照 vs 真缺口
+
+| 轴 | NOX 已有 | 开源参照 | 判定 |
+|---|---|---|---|
+| 编排/状态机 | 核心对象全状态机（公司架构 §5）+毕业链/条件箱 | LangGraph 持久图+interrupt/resume | **等价已备**——状态行即 checkpoint；缺的只是完整性测试形态，不缺框架 |
+| 记忆/知识 | STATE/decisions/经验库/noxkb+四步私记忆清扫 | Letta 分层记忆/Graphiti 时间知识图 | **抽取式不缺**（D-172 自动归纳票在）；时间图=查询面升级，**暂缓带触发** |
+| 可观测 | alerts/dephealth/mt-health/fin_llm_call 逐调用账本 | Langfuse/Phoenix/OTel GenAI span | **真缺口**=判定路径拒因（D-652-A 已立票）——本方案补「属性命名对表」防自造方言 |
+| 结构化闸 | 四铁律（输出过 schema/数学归 Go）+pre-commit 10 道 | Instructor/Pydantic | 等价已备，零动作 |
+
+## 二、采纳三件（每件=既有票的增强条款或新票向）
+
+### A. 拒因计数器属性对表 OTel GenAI（D-652-A 票面增强条款——非新票）
+
+D-652-A 已定的 `Key{Face,Gate}`/`Row{N,First,Last}` 命名，施工前对表 OTel GenAI 语义约定（[opentelemetry semantic-conventions-genai](https://github.com/open-telemetry/semantic-conventions/tree/main/docs/gen-ai)）：
+- Face→`gen_ai.agent.name` 语义位；Gate→`gen_ai.decision.rule` 形；N/First/Last→metric 属性三件套。
+- **采纳深度=命名对表**（注释引约定条目），**不引 OTel SDK 不发 OTLP**——等将来有第二消费者（如投资人页判定透明化）再升格导出面（P2 触发：任何外部系统要消费拒因流）。
+- 理由：自造方言=将来接生态要翻译一遍；对表成本=零（只是命名）。
+
+### B. fin_llm_call 升最小链路 trace（新票向·P1·平台域）
+
+现状=逐调用孤行（role/model/tokens/usd_est/ms/ok）。借 Langfuse span 树形的最小形态：加 `trace_id/parent_id` 两列（迁移）+判断工作者调用处透传——一次多步推理（如分析员→研究员级联）可回放为链。
+- **不做**：prompt/response 载荷入库（体积+脱敏面）、UI 树形可视化（日志 grep 够用）、评估面（D-172 已有归纳管线消费）。
+- 价值锚：复盘员死因分类/听证对辩的「当时推理链」可回放——现在只看到结论行。
+- 反证锚：3 个月无一次消费 trace_id 的复盘/审计 → 列降级冻结。
+
+### C. 证据链时间图查询面（P2 评估票·暂缓带触发条件）
+
+Graphiti 思想：D#→提案→仓→账→判决书本质是时间边实体图。**现在 PG 行+外键已可回放**（两方契约「每笔钱可回放」条款已兑现），升级价值只在**跨链自由查询**（如「D-647 影响过哪些仓的哪些腿」）。
+- 触发条件（满足其一才立票）：①复盘/听证出现≥2 次「跨链查询手工拼 SQL>30min」实证；②D# 数过千、手工追链开始出错。
+- 不触发不建。禁为「图数据库好看」引入 Neo4j 类新存储面。
+
+## 三、否决三件（如实记否决理由，防将来重提）
+
+1. **引 LangGraph/CrewAI 运行时**——否决：与「DB 行是总线」冲突；框架的图编排价值在多 agent 协作路由，NOX 席间协作走表行走票据，运行时层是负资产。
+2. **自建/部署 Langfuse**——否决：运维面（ClickHouse+服务）换来的 UI 是给「人盯 agent」的场景；NOX 是系统自盯（D-033）+告警分级，Langfuse 面板与飞书/面板重复。属性命名（件 A）已取其精华。
+3. **Mem0 抽取式记忆层**——否决：经验库待归纳→条目→索引管线（D-172 自动归纳）已是同构且更严（人审 verified 态）；再叠一层=双真相源。
+
+## 四、分期与票面
+
+| 件 | 票 | 时点 |
+|---|---|---|
+| A 属性对表条款 | 并入 D-652-A 拒因计数器票（票面加一句+注释引用） | 随原票 |
+| B trace 两列 | 新票（平台域：迁移+调用处透传+复盘消费锚） | P1 |
+| C 时间图查询面 | 不立票，触发条件记本方案+STATE 锚 | P2 暂缓 |
+
+**本方案反证锚**：A/B 落地后 3 个月窗——若拒因/trace 数据零消费（无复盘、无审计引用）=借错了构件，回议砍面；若期间发生「若有序名对表本可避免」的集成返工=对表深度不足回议。
+**业主合作项**：无。
