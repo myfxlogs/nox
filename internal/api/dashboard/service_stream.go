@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"nox/internal/data/bus"
+	"nox/internal/infra/dephealth"
 	"nox/internal/store/pgstore"
 
 	v1 "nox/internal/gen/dashboardv1"
@@ -16,6 +17,7 @@ import (
 // --- 实时推送（§8.2 D-026） ---
 
 func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.StreamUpdatesRequest], stream *connect.ServerStream[v1.StreamUpdatesResponse]) error {
+	dephealth.ContactHit("rpc_stream") // 接触面犬哨：前端会话流命中
 	// 实时推送报价：订阅 QuoteBus 全量（wildcard ""），亚秒级行情走推流。
 	ch, cancel := s.qbus.Subscribe("")
 	defer cancel()

@@ -96,6 +96,7 @@ internal/data/symdig -> internal/research/scan
 internal/data/symdig -> internal/store/pgstore
 internal/gen/dashboardv1/dashboardv1connect -> internal/gen/dashboardv1
 internal/ir/notify -> internal/data/macro
+internal/ir/notify -> internal/infra/dephealth
 internal/ir/notify -> internal/platform/analyst
 internal/ir/notify -> internal/platform/safego
 internal/ir/notify -> internal/store/pgstore

@@ -26,6 +26,7 @@ func egressAggregated(msg string) bool {
 // 同指纹冷却收口，镜像 cexAlertFn 装配形态）。D-104②：红窗内「面判定劣化」聚合进
 // canary 单条 critical（恢复 info 不受闸影响——恢复与红窗并存时仍如实记档）。
 func wireDephealth(st *pgstore.Store, cooler *alertcool.Cooler) {
+	dephealth.ContactRegister("feishu_webhook", "rpc_stream", "command") // 接触面犬哨三通道（STATE e 行——「应活」集）
 	dephealth.Init(cooler.Wrap1(func(level, msg string) {
 		if egressAggregated(msg) {
 			log.Printf("[egress] canary 红窗聚合告警: %.80s", msg)

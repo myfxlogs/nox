@@ -2,10 +2,14 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"time"
 
 	"nox/internal/data/keydomain"
 	"nox/internal/data/marketstate"
+	"nox/internal/infra/dephealth"
+	"nox/internal/platform/rejects"
 )
 
 // classifyAge 按阈值分类三态。age<=0（无数据）→ crit（从未采集=异常）。
@@ -147,3 +151,34 @@ func (m *MTHealthMonitor) classifyWithFlashMiss(venue string, raw mtHealthMetric
 }
 
 // collectFactAges 从 store 查 swap/margin facts，按 Venue 分组取 max(Ts)，返回 venue→age。
+
+// auxWatchDump D-652+e 行：拒因 Top10+接触面犬哨——自 poll 拆出（棘轮；语义零改）。
+func (m *MTHealthMonitor) auxWatchDump(ctx context.Context) {
+	// D-652 dump 搭车①：拒因 Top10（30min 既有周期——Δ 语义见 rejects.Format）。
+	log.Printf("[mt-health] 拒因Top10 Δ30min: %s", rejects.Format(10))
+	// 接触面犬哨（STATE e 行）：三通道「应活」零命中>72h→warn 嫌疑标报
+	// （dedup 24h；命中即清态——last_hit 由 ContactHit 刷新）。
+	for _, r := range dephealth.ContactSuspects(72 * time.Hour) {
+		var lastHit string
+		if r.LastHitUnix == 0 {
+			lastHit = "从未命中"
+		} else {
+			lastHit = fmt.Sprintf("末次命中 %s 前", time.Since(time.Unix(r.LastHitUnix, 0)).Round(time.Hour))
+		}
+		msg := fmt.Sprintf("接触面死径嫌疑：通道 %s 零命中（%s，累计 %d 次——业主不手动试则死径永不被发现）",
+			r.Channel, lastHit, r.Hits)
+		// dedup 24h 经接口断言（HealthFactStore 零动——fake 面不破）。
+		type dedupper interface {
+			InsertAlertDedup(context.Context, string, string, time.Duration) error
+		}
+		var aerr error
+		if d, ok := m.store.(dedupper); ok {
+			aerr = d.InsertAlertDedup(ctx, "warn", msg, 24*time.Hour)
+		} else {
+			aerr = m.store.InsertAlert(ctx, nil, "warn", msg)
+		}
+		if aerr != nil {
+			log.Printf("[mt-health] contact suspect alert: %v", aerr)
+		}
+	}
+}
