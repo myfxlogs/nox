@@ -11,6 +11,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+
+	"nox/internal/platform/okxrate"
 	"strings"
 )
 
@@ -21,6 +23,12 @@ var okxDirectBase = "https://www.okx.com"
 // arrived=true=HTTP 已到达（任何状态码——链路通，后续错误属 venue 语义）；
 // false=传输层失败（回落唯一触发条件）。hdr 回调每次尝试现调（earn 签名 ts 每试新鲜）。
 func okxGet(ctx context.Context, client *http.Client, base, path string, hdr func(*http.Request)) ([]byte, bool, error) {
+	// 429 共额闸（balance/earn/dci 收敛票）：全 okx REST 面同过——罚窗内
+	// 直返 ErrThrottled（arrived=false 触发回落语义不妥——节流≠传输层败，
+	// 回落到代理再撞同 IP 预算=罚窗被穿透，故 arrived=true 拦回落）。
+	if err := okxrate.Wait(ctx, path); err != nil {
+		return nil, true, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+path, nil)
 	if err != nil {
 		return nil, false, err
@@ -30,6 +38,7 @@ func okxGet(ctx context.Context, client *http.Client, base, path string, hdr fun
 	}
 	resp, err := client.Do(req)
 	if err != nil {
+		okxrate.Result(err)
 		return nil, false, err
 	}
 	defer resp.Body.Close()
@@ -38,8 +47,11 @@ func okxGet(ctx context.Context, client *http.Client, base, path string, hdr fun
 		return body, true, fmt.Errorf("read body: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, true, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+		err := fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+		okxrate.Result(err)
+		return nil, true, err
 	}
+	okxrate.Result(nil)
 	return body, true, nil
 }
 

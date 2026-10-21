@@ -17,6 +17,7 @@ import (
 	"nox/internal/data/venue"
 	v1 "nox/internal/gen/dashboardv1"
 	"nox/internal/platform/httpx"
+	"nox/internal/platform/okxrate"
 	"nox/internal/platform/signutil"
 )
 
@@ -93,7 +94,12 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 		"OK-ACCESS-PASSPHRASE": {q.passphrase},
 		"Content-Type":         {"application/json"},
 	}
+	gkey := q.apiKey + "|" + path // 共额闸同族键（凭据×端点——429 收敛票）
+	if err := okxrate.Wait(ctx, gkey); err != nil {
+		return nil, fmt.Errorf("okx balance: %w", err)
+	}
 	body, err := q.get(ctx, q.baseURL+path, headers)
+	okxrate.Result(err)
 	if err != nil {
 		return nil, fmt.Errorf("okx balance: %w", err)
 	}
