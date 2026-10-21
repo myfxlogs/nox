@@ -1122,3 +1122,10 @@ verdict=照准收口。亲证三通道：①镜像通道——SG nox-core 在跑
 附带取证两发现（均已立票）：SG carry_graduations 活约束缺 'futures'（基线就地改漂移——paper#67191 毕业插行被拒）+okx dcd order-history http 429 限频（account-mon 首拉 22 次/13min）。
 -->
 [决策收口:sell_high实证] 照准 @bc1d60359——C 段遗留锚闭，DCI 复活票全段收口
+
+<!-- 实施席 10-21：earn 瓦片金额改读快照桶 施工完候复审
+病灶（票面实证）：earn 聚合卡金额=Σ fin_dci_order filled 申购行——赎回/轮动不翻态→虚高（gate Σ2999.92 vs 快照 2000.55；binance Σ2292.75 vs 1592.68）；locked 同病灶（earn filled 全进锁定档）。
+修件（wip/earn-snap-amt）：①earnAgg→earnMeta 只留订单行派生（笔数/首笔申购日）；金额=快照 earn 桶 equity（venue_type='earn'×币种 label=venue+" 活期 "+ccy——与 PrincipalEarningUsd 同源）；②快照桶缺的订单组=Status「缺快照」如实标缺禁回落订单Σ；③locked 剔 earn filled（活期=流动非锁定，移至 kind 判定后累加）；④sortedEarnAgg 死函数删。前端 orders_fmt/orderTone 加「缺快照」→「快照缺」warn 态（零判定）。
+机检：TestOverviewBundleOrdersNonEmptyAndAggregated 重写=快照额断言（订单Σ1500 vs 快照1420.5）+缺桶标缺+locked=700 剔 earn；dashboard 820 测+race 绿、npm build 绿。
+SG 验收锚（复审席）：gate 卡显≈2000.55、binance 卡显≈1592.7 与快照对拍；okx PENGU 币等 alt earn 池若出卡=币种如实标。
+-->
