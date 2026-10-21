@@ -154,7 +154,7 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	}
 	var msgs []string
 	var succeeded bool
-	sigma, serr := e.sigmaDaily(ctx) // D-526：σ_daily 实算（读败=fail-closed 全腿拒）
+	sigma, serr := e.sigmaDaily(ctx, p.Venue) // D-526+D-651：提案 venue σ 实算（禁 binance 兜）
 	for _, l := range legs {
 		k, tmax, ok := gate.SigmaTailParams(cons, l.OptType)
 		if !ok || serr != nil { // 界参/σ 缺=constraint 缺口拒单（同 custody_share 例）

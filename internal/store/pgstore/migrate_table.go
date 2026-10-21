@@ -262,4 +262,5 @@ var migrationFiles = []struct {
 	{1067, migrations.VenueTypeFuturesSweepSQL, false},   // venue_type 'futures' 全谱 CHECK 修（D-648——8 表+ticks 族）
 	{1068, migrations.AlertReceiptPatternsSQL, false},    // 告警两级语义：回执类前缀判据种子
 	{1069, migrations.GapCapitalMarkedSQL, false},        // D-652-C：capital 回执核验环（marked+核验锚列+legacy 降标）
+	{1070, migrations.ExecVenueCapabilitySQL, false},     // D-651：venue 执行面归能力账本投影（1069=symmap-4 支占用避号）
 }

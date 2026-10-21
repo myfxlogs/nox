@@ -8,19 +8,15 @@ import (
 	"fmt"
 	"log"
 
-	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 )
 
 // venueSetFor 模板提案 venue 枚举面（dormant 判定与休眠写面同尺）：
 // dci 腿族=DCIExecVenues 覆盖集；earn 族=EarnExecVenues（达标径内再按
 // 有报价行 rail 细化）；其余模板=binance 单 venue 旧语义。
-func venueSetFor(tid string) []string {
-	if _, ok := gate.ExecTemplates[tid]; ok {
-		return dciProposalVenues
-	}
-	if gate.EarnTemplates[tid] {
-		return sortedVenues(gate.EarnExecVenues)
+func venueSetFor(ctx context.Context, st *pgstore.Store, tid string) []string {
+	if vs := execVenueList(ctx, st, tid); vs != nil {
+		return vs // D-651：能力账本投影（exec_venue:<tmpl>@<venue> 行集）
 	}
 	return []string{"binance"}
 }

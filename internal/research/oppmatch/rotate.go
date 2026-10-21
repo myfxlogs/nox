@@ -11,7 +11,6 @@ import (
 	"log"
 	"time"
 
-	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 )
 
@@ -50,7 +49,7 @@ func rotateScan(ctx context.Context, st *pgstore.Store) {
 	}
 	for _, p := range pools {
 		if p.Ghost || p.VenueType != "earn" || p.Currency != "USDT" ||
-			p.Equity < minUSD || !gate.EarnExecVenues[p.Venue] {
+			p.Equity < minUSD || !execVenueSets(ctx, st)["earn_rotation"][p.Venue] { // D-651 投影
 			continue
 		}
 		apr, ok := fresh[p.Venue]

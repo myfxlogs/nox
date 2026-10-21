@@ -1,18 +1,16 @@
-// dci_sigma.go —— D-526：执行层 σ_daily 取件（venue 日 K REST，统计参考用途；
-// 源序 binance fapi klines→okx history-candles，全败→err fail-closed 不打 venue）。
+// dci_sigma.go —— D-526：执行层 σ_daily 取件（D-651 A 段收敛 venuepricer：
+// 按提案 venue 取该所适配器——禁 binance 先兜，okx 产品用 binance σ=跨所
+// 波动率口径差病灶；venue 无 σ 径/读败=fail-closed 如实）。
 // 窗口期 app_config `dci_sigma_window_days`（缺省 28d；<3 按缺省）。
 package dciexec
 
 import (
 	"context"
 	"fmt"
-	"strings"
-
-	"nox/internal/data/collect/exchange"
 )
 
-// sigmaDaily 标的 BTC σ_daily 实算；SigmaFn 测试注口（nil=venue 实读）。
-func (e *Executor) sigmaDaily(ctx context.Context) (float64, error) {
+// sigmaDaily 提案 venue 的 σ_daily 实算；SigmaFn 测试注口（nil=venue 实读）。
+func (e *Executor) sigmaDaily(ctx context.Context, venue string) (float64, error) {
 	if e.SigmaFn != nil {
 		return e.SigmaFn(ctx)
 	}
@@ -22,27 +20,16 @@ func (e *Executor) sigmaDaily(ctx context.Context) (float64, error) {
 			days = v
 		}
 	}
-	type src struct{ venue, base, sym string }
-	var srcs []src
-	// binance：spot api 基址→fapi（采集同法 replace 先例——baseURL fapi↔api 对换约定）。
-	if b := strings.Replace(e.APIBase, "api.", "fapi.", 1); b != e.APIBase {
-		srcs = append(srcs, src{"binance", b, "BTCUSDT"})
+	a, err := e.venuePricer(venue)
+	if err != nil {
+		return 0, fmt.Errorf("σ 源 %s 凭证缺口：%v", venue, err)
 	}
-	if c, ok := e.EarnCreds["okx"]; ok && c.BaseURL != "" {
-		srcs = append(srcs, src{"okx", c.BaseURL, "BTC-USDT"})
+	sig, err := a.SigmaDaily(ctx, "BTC", int(days))
+	if err != nil {
+		return 0, fmt.Errorf("%s σ 读败：%v", venue, err)
 	}
-	var fails []string
-	for _, s := range srcs {
-		sig, err := exchange.SigmaDaily(ctx, e.Client, s.base, s.venue, s.sym, int(days))
-		if err != nil {
-			fails = append(fails, fmt.Sprintf("%s:%v", s.venue, err))
-			continue
-		}
-		if sig <= 0 {
-			fails = append(fails, s.venue+":σ=0")
-			continue
-		}
-		return sig, nil
+	if sig <= 0 {
+		return 0, fmt.Errorf("%s σ=0", venue)
 	}
-	return 0, fmt.Errorf("σ 源全败（%s）", strings.Join(fails, "；"))
+	return sig, nil
 }

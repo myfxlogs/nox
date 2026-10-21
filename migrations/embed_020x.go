@@ -204,3 +204,6 @@ var AlertReceiptPatternsSQL string // 告警两级语义：回执类前缀判据
 
 //go:embed 1069_gap_capital_marked.sql
 var GapCapitalMarkedSQL string // D-652-C：capital 回执核验环（marked 态+核验锚三列）
+
+//go:embed 1070_exec_venue_capability.sql
+var ExecVenueCapabilitySQL string // D-651 A 段：venue 执行面归能力账本投影种子

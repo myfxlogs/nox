@@ -245,6 +245,7 @@ internal/trading/dciexec -> internal/risk/gate
 internal/trading/dciexec -> internal/platform/alerttext
 internal/trading/dciexec -> internal/platform/errclass
 internal/trading/dciexec -> internal/platform/httpx
+internal/trading/dciexec -> internal/platform/venuepricer
 internal/trading/dciexec -> internal/platform/signutil
 internal/trading/dciexec -> internal/store/pgstore
 internal/trading/engine -> internal/data/bus

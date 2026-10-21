@@ -41,7 +41,7 @@ func (e *Executor) GoWheel(ctx context.Context) (string, error) {
 			"系统侧病灶：BTC 现货价读取失败：%v", err)
 	}
 	var msgs []string
-	sigma, serr := e.sigmaDaily(ctx) // D-526：σ_daily 实算（读败=fail-closed 全腿拒）
+	sigma, serr := e.sigmaDaily(ctx, "binance") // D-526+D-651：binance 轨（binance 单品种件）
 	for _, l := range []gate.DCILeg{gate.CallLeg, gate.PutLeg} {
 		k, tmax, ok := gate.SigmaTailParams(cons, l.OptType)
 		if !ok || serr != nil {
