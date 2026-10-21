@@ -814,3 +814,8 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 ### D-639（10-20 23:4xZ，实施席·eval 五词票附带裁定）cross_venue_spot 评估词单位=**per-turn percent** 钦定
 - **裁定**：`cross_venue_spot` 评估卡全词走 per-turn 单周转口径（gross=fin_cex_spread spread_bps/100=fee 后单周转毛利百分；fee=taker×2 单周转非年化；failure/window=mechanism）——**APR 槽位禁静默塞 per-turn 值**，evidence 串一律带 `per-turn` 单位标；下游消费面（毕业闸按 USD 净非 APR）不受误导。APR 槽单位纪律=硬线（同型 100× 谎病灶 D-637 返修已记）。
 - **伪证锚**：若消费面出现把 cross_venue 卡 APR 当年化读数的下游（毕业闸/报表），本裁单位语义被违须即修。
+
+### D-640（10-21 00:4xZ，决策席·armed 前置票移交件裁定）xasset_allow_combos#20 即时禁用——SPCXUSDT×SPX500 异资产错配对
+- **裁定**：combo#20 `SPCXUSDT(binance:perp)×SPX500(15032313:mt5)` enabled=t→f。实证：binance universe `SPCXUSDT` base=SPCX **underlying_class=EQUITY**（股权类，现价 ~$160）vs MT5 SPX500=S&P500 指数（~$6700）——**非单位缩放是异底层错配对**（簿行 entry_spread −9793bps 实证）。该组合 simulated=f 挂真钱径，价差恒 ~−9760bps 远超阈带——monitor 簿行一复活即可能按失真价差真钱开仓，禁用为零成本风险排除。
+- **衍生**：gate `SPX500_USDT` hedge_canonical=SPX500 在册=SPX500 腿正确 CEX 侧候选——换腿重组属新票候选（先走 eval+paper 链不入 armed）。
+- **伪证锚**：若 SPCX 底层被 venue 实锤即 S&P500 追踪器且价差模型按合约乘数归一（非现货价比），本裁定性翻转须重审——当前四源（universe class/depth 价/簿行 spread/gate SPX500_USDT 并存）一致指异资产。
