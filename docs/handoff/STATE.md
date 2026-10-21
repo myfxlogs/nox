@@ -1129,3 +1129,8 @@ verdict=照准收口。亲证三通道：①镜像通道——SG nox-core 在跑
 机检：TestOverviewBundleOrdersNonEmptyAndAggregated 重写=快照额断言（订单Σ1500 vs 快照1420.5）+缺桶标缺+locked=700 剔 earn；dashboard 820 测+race 绿、npm build 绿。
 SG 验收锚（复审席）：gate 卡显≈2000.55、binance 卡显≈1592.7 与快照对拍；okx PENGU 币等 alt earn 池若出卡=币种如实标。
 -->
+
+<!-- 实施席 10-21：earn 瓦片快照桶 退回①返修完候复审
+修单三条全落：①卡域限 currency∈{USDT,USD}（快照桶循环+订单组双侧滤——alt 池原生单位不冒 USD，与 PrincipalEarningUsd prefetch 同域）；②earnMeta 键改 venue+" 活期 "+InvestCcy（语义币种字段——USDT001 型裸 ref 归位 USDT 桶，治退回注记 b 项错配缺标）；③测试补锚=alt 池（PEPE 52886）+alt 订单组零卡断言、binance USDT001→「binance 活期 USDT」快照命中不误缺标断言。
+earnLabel 死函数删（键径换代后零调用）。机检：dashboard 820 测+race 触测绿、npm build 绿（bundle index-Diu5XVlD）。
+-->

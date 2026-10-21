@@ -35,6 +35,12 @@ func TestOverviewBundleOrdersNonEmptyAndAggregated(t *testing.T) {
 			Underlying: "USDT", OptType: "EARN", InvestCcy: "USDT", Qty: 800, Status: "filled"},
 		{RequestID: "ovt5", Venue: "binance", TemplateID: "dci_buy_low", ProductRef: "BTC-USDT-1",
 			Underlying: "BTC", OptType: "P", InvestCcy: "USDT", Qty: 700, Status: "filled"},
+		// USDT001 型产品编号（binance 活期裸 ref——label 须归位 USDT 桶不错配缺标）。
+		{RequestID: "ovt6", Venue: "binance", TemplateID: "earn_apr_lending", ProductRef: "USDT001",
+			Underlying: "USDT", OptType: "EARN", InvestCcy: "USDT", Qty: 400, Status: "filled"},
+		// alt 币订单组+alt 快照池——域滤外不产卡不标缺（退回①伤①锚）。
+		{RequestID: "ovt7", Venue: "okx", TemplateID: "earn_apr_lending", ProductRef: "okx-uni-PEPE",
+			Underlying: "PEPE", OptType: "EARN", InvestCcy: "PEPE", Qty: 46155, Status: "filled"},
 	}
 	for i := range seed {
 		if _, _, err := st.CreateDCIOrder(ctx, &seed[i]); err != nil {
@@ -43,10 +49,12 @@ func TestOverviewBundleOrdersNonEmptyAndAggregated(t *testing.T) {
 	}
 	// CreateDCIOrder 不落 status 列（默认 pending）——状态按场景直设后对拍。
 	if _, err := st.Pool().Exec(ctx,
-		`UPDATE fin_dci_order SET status='filled' WHERE request_id IN ('ovt1','ovt2','ovt4','ovt5');
+		`UPDATE fin_dci_order SET status='filled' WHERE request_id IN ('ovt1','ovt2','ovt4','ovt5','ovt6','ovt7');
 		 INSERT INTO fin_venue_account_snapshot
 		 	(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at)
-		 	VALUES ('okx','earn',1420.5,1420.5,0,'USDT',now())`); err != nil {
+		 	VALUES ('okx','earn',1420.5,1420.5,0,'USDT',now()),
+		 	       ('binance','earn',1592.7,1592.7,0,'USDT',now()),
+		 	       ('okx','earn',52886,52886,0,'PEPE',now())`); err != nil {
 		t.Fatal(err)
 	}
 	cresp, err := s.GetOverviewBundle(ctx, nil)
@@ -59,16 +67,22 @@ func TestOverviewBundleOrdersNonEmptyAndAggregated(t *testing.T) {
 		t.Fatalf("库有 filled 单但订单面空（反转条件回归）db=%d", len(db))
 	}
 	// ②okx 聚合卡金额=快照桶 1420.5 非订单Σ 1500（failed 300/赎回残留不计）。
-	var okxCard, gateCard *v1.OverviewOrderRow
+	var okxCard, gateCard, bnbCard *v1.OverviewOrderRow
+	altN := 0
 	for _, o := range resp.Orders {
 		if o.Kind != "earn" {
 			continue
 		}
-		if strings.HasPrefix(o.Label, "okx 活期") {
+		switch {
+		case strings.HasPrefix(o.Label, "okx 活期"):
 			okxCard = o
-		}
-		if strings.HasPrefix(o.Label, "gate 活期") {
+		case strings.HasPrefix(o.Label, "gate 活期"):
 			gateCard = o
+		case strings.HasPrefix(o.Label, "binance 活期"):
+			bnbCard = o
+		}
+		if strings.Contains(o.Label, "PEPE") || strings.Contains(o.Label, "DOGE") {
+			altN++
 		}
 	}
 	if okxCard == nil {
@@ -84,7 +98,16 @@ func TestOverviewBundleOrdersNonEmptyAndAggregated(t *testing.T) {
 	if gateCard == nil || gateCard.Status != "缺快照" || gateCard.AmountUsd != 0 {
 		t.Fatalf("快照桶缺应标缺非回落Σ: %+v", gateCard)
 	}
-	// ④locked=DCI 700（earn filled 1000+500+800 剔——活期流动非锁定）。
+	// USDT001 型 ref 归位 USDT 桶——快照 1592.7 命中不误标缺，笔数=1。
+	if bnbCard == nil || bnbCard.Status != "LIVE" || bnbCard.AmountUsd != 1592.7 ||
+		!strings.Contains(bnbCard.Label, "binance 活期 USDT") {
+		t.Fatalf("USDT001 型 ref 应归位 binance 活期 USDT 桶: %+v", bnbCard)
+	}
+	// ⑤alt 币订单组+alt 快照池皆零卡（域滤外原生单位不冒 USD）。
+	if altN != 0 {
+		t.Fatalf("alt 币池不应产卡: %d 张", altN)
+	}
+	// ④locked=DCI 700（earn filled 1000+500+800+400+46155 剔——活期流动非锁定）。
 	if resp.PrincipalLockedUsd != 700 {
 		t.Fatalf("locked=%v want 700（earn 行应剔）", resp.PrincipalLockedUsd)
 	}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -28,6 +27,8 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 	var earliest *time.Time
 	// 活期聚合桶只留订单行派生元数据（笔数/首笔申购日）——金额源=快照 earn 桶
 	// （fin_dci_order filled 行=申购事件日志非持仓，赎回/轮动不翻态→Σ 虚高）。
+	// 键=venue+" 活期 "+InvestCcy（语义币种字段——USDT001 型产品编号归位 USDT
+	// 桶，与快照桶 currency 键对拍不错配）。
 	earnMeta := map[string]struct {
 		n     int
 		first time.Time
@@ -45,9 +46,12 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 			switch {
 			case o.OptType == "EARN" || o.TemplateID == "cash_mgmt" || o.TemplateID == "earn_apr_lending" || o.TemplateID == "earn_rotation":
 				kind = "earn"
-				label = earnLabel(o.Venue, o.ProductRef)
+				label = o.Venue + " 活期 " + o.InvestCcy // 键=币种域（与快照桶同尺）
 			}
 			if kind == "earn" {
+				if o.InvestCcy != "USDT" && o.InvestCcy != "USD" {
+					continue // 卡域限 USDT/USD（alt 池原生单位不冒 USD——退回①伤①）
+				}
 				g := earnMeta[label]
 				g.n++
 				if g.first.IsZero() || o.CreatedAt.Before(g.first) {
@@ -76,7 +80,9 @@ func (s *Service) GetOverviewBundle(ctx context.Context, _ *connect.Request[v1.G
 	// label——与 PrincipalEarningUsd 同源真值）；快照桶缺=如实标缺禁回落订单Σ。
 	snapAmt := map[string]float64{}
 	for _, p := range navPools {
-		if p.VenueType == "earn" && !p.Ghost {
+		// 卡域限 USDT/USD（与 PrincipalEarningUsd 同域滤——alt 池原生单位
+		// 数量直塞 AmountUsd=单位错显，退回①伤①：PEPE 46155 霸榜首实证）。
+		if p.VenueType == "earn" && !p.Ghost && (p.Currency == "USDT" || p.Currency == "USD") {
 			snapAmt[p.Venue+" 活期 "+p.Currency] += p.Equity
 		}
 	}
@@ -231,16 +237,4 @@ func derefInt(p *int) int {
 		return 0
 	}
 	return *p
-}
-
-// earnLabel 理财单 label 友好化（显示层）：剥 venue 前缀的产品名（okx-saving-USDT→
-// USDT、gate-uni-USDT→USDT、USDT001→USDT001 原样——binance 产品编号无前缀）。
-func earnLabel(venue, ref string) string {
-	if c := strings.TrimPrefix(ref, venue+"-saving-"); c != ref {
-		return venue + " 活期 " + c
-	}
-	if c := strings.TrimPrefix(ref, venue+"-uni-"); c != ref {
-		return venue + " 活期 " + c
-	}
-	return venue + " 活期 " + ref
 }
