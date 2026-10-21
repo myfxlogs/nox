@@ -112,8 +112,19 @@ func parseOKXDCI(body []byte, baseCcy, optType string, now time.Time) ([]pgstore
 		if err != nil {
 			continue
 		}
+		// investCcy 键真载荷缺（row keys 实拍）——申购币种=notionalCcy
+		// （venue 语义 C=baseCcy/P=quoteCcy；quoteCcy 恒 USDT 先中=全标错，
+		// SG 实证 CALL 行 invest_ccy=USDT 而 minSize=0.0001 BTC 量级）。
+		// notionalCcy 缺/空值按 optType 兜底：CALL→baseCcy，PUT→USDT。
+		investCcy := pick(d, "notionalCcy")
+		if investCcy == "" {
+			investCcy = "USDT"
+			if optType == "C" {
+				investCcy = baseCcy // baseCcy=采集路径钦定参（products?baseCcy=）
+			}
+		}
 		row := pgstore.CexDCIQuote{Venue: "okx", Underlying: baseCcy, OptType: optFull,
-			InvestCcy: firstNonEmpty(pick(d, "investCcy", "quoteCcy", "notionalCcy"), "USDT"), APY: apy,
+			InvestCcy: investCcy, APY: apy,
 			ProductRef: pick(d, "productId", "id", "instId")}
 		// 申购量界落库（row keys 实证 minSize/maxSize/stepSz 在响应；
 		// stepSz→purchase_decimal 小数位——下单 floor 步进口径同 binance 径）。
