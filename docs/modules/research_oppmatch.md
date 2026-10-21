@@ -18,6 +18,7 @@
 
 ## 观察（只记事实）
 - 搬迁纯移动+import 路径改写+文件名去票号；语义零改动。
+- dormant:<tmpl>@<venue> 判定=venue 粒度（10-21 修）：@binance 键只压 binance 面，全 venue 休眠才整模板短路；预检休眠写面逐 venue 落键。cash_mgmt 产制归 idleGapScan 独域，match 环 dormant 面对其零消费（vs=nil 豁免）。
 
 ## 判定（决策席）
 | 项 | 判定 | 理由 |

@@ -97,15 +97,13 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 	}
 	feas := NewFeasibility(led, capitalBase, perStrategyCap) // D-247 可行性预检面
 	for _, r := range Match(in, view) {
-		if dormant[r.TemplateID+"@binance"] {
-			if n, derr := st.DeferProposalsByPair(ctx, r.TemplateID, "binance"); derr == nil && n > 0 {
-				log.Printf("[oppmatch] 休眠轨 %s@binance 翻 deferred %d 行", r.TemplateID, n)
-			}
-			if err := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
-				"休眠轨（D-191R7）%s@binance 达标但跳过提案", r.TemplateID)); err != nil {
-				log.Printf("[oppmatch] dormant alert %s: %v", r.TemplateID, err)
-			}
-			continue // 零新提案（info 级=台账留痕零推送）
+		vs := venueSetFor(r.TemplateID)
+		if r.TemplateID == "cash_mgmt" {
+			vs = nil // cash_mgmt 产制归 idleGapScan 独域（自有 miss 阈值过期机制）——
+			// match 环 dormant 判定/写面对其零消费，defer 反伤其存量提案。
+		}
+		if dormantAll(ctx, st, dormant, r.TemplateID, vs) {
+			continue // 全 venue 休眠=零新提案零请求（命中 venue 已翻 deferred）
 		}
 		// auto 轨无执行器（IsExecTemplate 外族）→ 永不翻态的僵尸源：
 		// 不产提案+存量 proposed 翻 deferred（D-204 同径复用）+info 留痕。
@@ -137,7 +135,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 			}
 			for _, venue := range venues {
 				if dormant[r.TemplateID+"@"+venue] {
-					continue
+					continue // 半休眠：只压本 venue 面（存量翻 deferred 已在枚举前做）
 				}
 				// D-514+D-526 DCI 选档闸：venue 维度判——本 venue 无达标档只压本
 				// venue 提案（权利金坍缩期不卖 tail 险；闸只挡 DCI 不碰 earn）。
@@ -229,18 +227,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 		}
 		// D-247 可行性预检：缺口请求前先判能不能投——不过→模板休眠+原因留痕零请求。
 		if ok, reason := feas.Check(r); !ok {
-			if uerr := st.UpsertCapabilityConstraint(ctx,
-				DormantConstraint(r.TemplateID, "binance", reason)); uerr != nil {
-				log.Printf("[oppmatch] dormant constraint %s: %v", r.TemplateID, uerr)
-				continue
-			}
-			if n, derr := st.DeferProposalsByPair(ctx, r.TemplateID, "binance"); derr == nil && n > 0 {
-				log.Printf("[oppmatch] 预检休眠 %s 翻 deferred %d 行", r.TemplateID, n)
-			}
-			if err := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
-				"可行性预检不过（D-247）%s@binance 休眠：%s", r.TemplateID, reason)); err != nil {
-				log.Printf("[oppmatch] precheck alert %s: %v", r.TemplateID, err)
-			}
+			dormantWritePrecheck(ctx, st, r.TemplateID, vs, reason)
 			continue
 		}
 		for _, c := range r.Missing {
