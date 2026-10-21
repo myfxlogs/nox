@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"nox/internal/infra/dephealth"
 )
 
 // TargetStore 推送目标存储接口（pgstore 实现，避免 notify→pgstore 依赖）。
@@ -84,6 +86,7 @@ func FeishuWebhookHandler(store TargetStore, verifyToken string, feishu *FeishuC
 		}
 		// im.message.receive_v1 事件处理。
 		if ev.Header.EventType == "im.message.receive_v1" && ev.Event.Message.ChatID != "" {
+			dephealth.ContactHit("feishu_webhook") // 接触面犬哨：入站命令径命中
 			// 查推送目标是否已绑定。
 			chatID, _, err := store.FeishuTarget(r.Context())
 			if err != nil {

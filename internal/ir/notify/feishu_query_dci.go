@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"nox/internal/infra/dephealth"
 )
 
 // DCIGoRunner D-191/D-189：DCI 申购执行回调（cmd/core 装配 dciexec.Executor；
@@ -60,6 +62,7 @@ func parseGoCmd(text string) (id int64, decline bool, ok bool) {
 
 // handleGoCmd 执行/拒批 DCI 提案（回执=executor 原文；缺口以 err 文回显）。
 func (h *FeishuQueryHandler) handleGoCmd(ctx context.Context, id int64, decline bool) (string, error) {
+	dephealth.ContactHit("command") // 接触面犬哨：go 命令径命中
 	if h.dciGo == nil {
 		return "DCI 申购执行面未接线（dciGo 未装配）", nil
 	}
