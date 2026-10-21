@@ -17,6 +17,9 @@ type FundingHedgeDetector struct {
 	// (canonical, venue 对) 不在 xasset_allow_combos.enabled 内则静默不发射
 	// （零候选零日志，评估省略；执行闸=autotrade 即时 specs 仍为权威）。
 	Allow func(canonical, canonicalSell, venueBuy, venueSell string) bool
+	// AbsentFn funding_absent 能力账本查（STATE 行50——venue 无 funding 面品种
+	// 在册即跳过不产候选；nil=无标注面）。venue 参=裸 venue。
+	AbsentFn func(canonical, venue string) bool
 }
 
 func (d *FundingHedgeDetector) Type() OppType { return TypeFundingHedge }
@@ -60,6 +63,10 @@ func (d *FundingHedgeDetector) scan(_ context.Context, snapshot map[string]map[s
 		}
 		// is_real 配对检查（fail-open，gate 层兜底）。
 		if !isRealPair(realMap, spot.VenueKey(), perp.VenueKey()) {
+			continue
+		}
+		// funding_absent 在册=venue 无 funding 面——如实不产候选（非 worst 撞拒）。
+		if d.AbsentFn != nil && d.AbsentFn(canonical, perp.Venue) {
 			continue
 		}
 		funding, ok := lookupFunding(fundingFacts, canonical, perp.Venue)
