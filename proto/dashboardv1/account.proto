@@ -297,7 +297,7 @@ message GetOverviewBundleResponse {
 enum IdleStreakState {
   IDLE_STREAK_STATE_UNSPECIFIED = 0;
   IDLE_STREAK_STATE_STREAK = 1;       // 有在册破地板池（days>0 携最长连破天数+池名）
-  IDLE_STREAK_STATE_HEALTHY_ZERO = 2; // 读模有行·在册零破地板池=健康零（显「0 · 无眠钱」）
+  IDLE_STREAK_STATE_HEALTHY_ZERO = 2; // 读模有行·在册零破地板池=健康零（显「0」，副行注在册零破地板池）
   IDLE_STREAK_STATE_NO_DATA = 3;      // 读模零行或读败=断供（显「—」警示态）
 }
 

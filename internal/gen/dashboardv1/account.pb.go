@@ -28,7 +28,7 @@ type IdleStreakState int32
 const (
 	IdleStreakState_IDLE_STREAK_STATE_UNSPECIFIED  IdleStreakState = 0
 	IdleStreakState_IDLE_STREAK_STATE_STREAK       IdleStreakState = 1 // 有在册破地板池（days>0 携最长连破天数+池名）
-	IdleStreakState_IDLE_STREAK_STATE_HEALTHY_ZERO IdleStreakState = 2 // 读模有行·在册零破地板池=健康零（显「0 · 无眠钱」）
+	IdleStreakState_IDLE_STREAK_STATE_HEALTHY_ZERO IdleStreakState = 2 // 读模有行·在册零破地板池=健康零（显「0」，副行注在册零破地板池）
 	IdleStreakState_IDLE_STREAK_STATE_NO_DATA      IdleStreakState = 3 // 读模零行或读败=断供（显「—」警示态）
 )
 
