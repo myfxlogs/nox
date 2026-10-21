@@ -228,6 +228,10 @@ message GetFinanceOverviewResponse {
   bool perf_available = 15;               // false=锚缺/读败（前端显缺不显 0）
   bool perf_flow_provisional = 16;        // 净流扣减 provisional 标（perf_flow_provisional 键）
   bool equity_available = 17;             // false=NAV 读败/未接线（断供≠零，前端显「—」非 $0.00）
+  // 总览瓦片审计②：NAV 族陈值标注——快照龄>36h 池仍计 NAV 但显式打标（D-604 不冒当前）。
+  int32 nav_stale_pools = 18;             // 陈值池计数（USD/USDT 桶内非幽灵池）
+  double nav_stale_usd = 19;              // 陈值池 equity 合计
+  string nav_stale_detail = 20;           // 陈池清单（venue:vt·龄——下钻可见）
 }
 
 // === D-536 总览页聚合面（本金分档/业绩/在仓订单/风险心跳/待办一次下发） ===
@@ -292,6 +296,10 @@ message GetOverviewBundleResponse {
   double true_net_all_usd = 33;     // 全时窗
   bool true_net_available = 34;     // 全池缺盖→false（显「—」不冒数）
   string true_net_uncovered = 35;   // 缺基线池清单（如实标缺面）
+  // 总览瓦片审计②：NAV 族陈值标注（本金/可动用/在息/业绩/真实净盈利五瓦片同染）。
+  int32 nav_stale_pools = 37;       // 陈值池计数（USD/USDT 桶内非幽灵池，快照龄>36h）
+  double nav_stale_usd = 38;        // 陈值池 equity 合计
+  string nav_stale_detail = 39;     // 陈池清单（venue:vt·龄——下钻可见）
 }
 
 // IdleStreakState 眠钱瓦片分态（前端零算零猜——断供与健康零可判读）。

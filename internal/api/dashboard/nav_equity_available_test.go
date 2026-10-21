@@ -16,7 +16,7 @@ func TestNavEquityAvailable_ReadFail(t *testing.T) {
 	s := &Service{computeNavFn: func(context.Context, time.Time) (*pgstore.NavReport, error) {
 		return nil, errors.New("pg conn refused")
 	}}
-	total, _, byCcy, ok := s.equityTotalUSD(context.Background())
+	total, _, byCcy, _, ok := s.equityTotalUSD(context.Background())
 	if ok {
 		t.Fatalf("读败应 available=false，got true（total=%v）", total)
 	}
@@ -32,7 +32,7 @@ func TestNavEquityAvailable_ReadOK(t *testing.T) {
 			"USDT": {Nav: 50.5},
 		}}, nil
 	}}
-	total, _, byCcy, ok := s.equityTotalUSD(context.Background())
+	total, _, byCcy, _, ok := s.equityTotalUSD(context.Background())
 	if !ok {
 		t.Fatal("读通应 available=true")
 	}

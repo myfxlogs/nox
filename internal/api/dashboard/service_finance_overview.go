@@ -53,6 +53,7 @@ func (s *Service) buildFinanceOverview(ctx context.Context) (*v1.GetFinanceOverv
 		byCcy       map[string]float64
 		skipped     int
 		equityAvail bool
+		navPools    []pgstore.ExplorerIdlePool
 		perf        *pgstore.PerfReport
 	)
 	var g errgroup.Group
@@ -70,7 +71,9 @@ func (s *Service) buildFinanceOverview(ctx context.Context) (*v1.GetFinanceOverv
 		return nil
 	})
 	g.Go(func() error {
-		overviewSeg("fin_equity_nav", func() { equity, skipped, byCcy, equityAvail = s.equityTotalUSD(ctx) })
+		overviewSeg("fin_equity_nav", func() {
+			equity, skipped, byCcy, navPools, equityAvail = s.equityTotalUSD(ctx)
+		})
 		return nil
 	})
 	g.Go(func() error {
@@ -97,6 +100,10 @@ func (s *Service) buildFinanceOverview(ctx context.Context) (*v1.GetFinanceOverv
 		TotalEquityUsd:  equity,
 		EquityByCcy:     byCcy,       // D-522④：投资人页 NAV 分币种双行
 		EquityAvailable: equityAvail, // 读败/未接线=false——前端显「—」非 $0.00（断供≠零）
+	}
+	// 审计②：NAV 族陈值标注——池含冻结快照行时计数+金额+清单透传前端。
+	if sn, su, sd := navStaleNote(navPools, time.Now()); sn > 0 {
+		resp.NavStalePools, resp.NavStaleUsd, resp.NavStaleDetail = sn, su, sd
 	}
 	var totalRealized float64
 	for _, r := range pnls {
@@ -146,18 +153,18 @@ func (s *Service) perfSinceBaseline(ctx context.Context) (*pgstore.PerfReport, e
 // equityTotalUSD —— D-264 M4.4②：改读 pgstore.ComputeNav 单函数（NAV 口径单源，
 // deptreport/fin_nav_daily/配置器同径）。快照表写口已过滤 real-only（D-006 径——
 // cex=!Simulated / cfd=venue∈is_real 键集），本层不重复筛；非 USD 池跳过+计数透传。
-func (s *Service) equityTotalUSD(ctx context.Context) (total float64, skippedNonUSD int, byCcy map[string]float64, available bool) {
+func (s *Service) equityTotalUSD(ctx context.Context) (total float64, skippedNonUSD int, byCcy map[string]float64, pools []pgstore.ExplorerIdlePool, available bool) {
 	fn := s.computeNavFn
 	if fn == nil {
 		if s.store == nil {
-			return 0, 0, nil, false // 未接线（测试）→ 如实缺（断供≠零）
+			return 0, 0, nil, nil, false // 未接线（测试）→ 如实缺（断供≠零）
 		}
 		fn = s.store.ComputeNav
 	}
 	nav, err := fn(ctx, time.Now())
 	if err != nil {
 		log.Printf("[finance] overview: nav 读取失败，权益显缺不假数（available=false）: %v", err)
-		return 0, 0, nil, false
+		return 0, 0, nil, nil, false
 	}
 	byCcy = map[string]float64{}
 	for c, b := range nav.ByCcy {
@@ -166,5 +173,5 @@ func (s *Service) equityTotalUSD(ctx context.Context) (total float64, skippedNon
 	// D-630 返修⑤：总权益=USDT+USD 两桶合（本金口径——原 NavUSD=USD 桶
 	// 单读致 earn USDT 1592.43 漏计=10777 错值实证；非 U 币桶 ByCcy 可见不入）。
 	total = nav.ByCcy["USD"].Nav + nav.ByCcy["USDT"].Nav
-	return total, nav.SkippedNonUSD, byCcy, true
+	return total, nav.SkippedNonUSD, byCcy, nav.Pools, true
 }

@@ -12,6 +12,7 @@ import type { XAssetPendingEntryRow } from "../gen/dashboardv1/graduation_pb";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { NOX_REPORT_FOOTER } from "../nox";
 import { Collapse } from "../components/collapse";
+import { fmtUsd } from "../components/fmt";
 import { onCase } from "../stream";
 import GraduationPanel from "../components/graduation";
 import { InvestorHead, type PerfLine } from "./investor/head";
@@ -24,6 +25,7 @@ import { IncomeLog } from "./investor/income";
 export default function InvestorPage() {
   const [nav, setNav] = useState<number | null>(null);
   const [navCcy, setNavCcy] = useState<Record<string, number>>({}); // D-522④：NAV 分币种
+  const [navStale, setNavStale] = useState(""); // NAV 族陈值标注（审计②）
   const [realized, setRealized] = useState<number | null>(null);
   const [today, setToday] = useState<number | null>(null);
   const [floatNet, setFloatNet] = useState<number | null>(null);
@@ -49,6 +51,7 @@ export default function InvestorPage() {
       ]);
       setNav(fin.equityAvailable ? fin.totalEquityUsd : null); // 读败=显「—」非 $0.00
       setNavCcy(fin.equityAvailable ? (fin.equityByCcy ?? {}) : {});
+      setNavStale(fin.navStalePools > 0 ? `含 ${fin.navStalePools} 陈池 ${fmtUsd(fin.navStaleUsd)}（${fin.navStaleDetail}）` : "");
       // D-535：业绩基线面（本金口径 USDT+USD——后端算定，前端零算）。
       if (fin.perfAvailable) {
         setPerf({
@@ -109,7 +112,7 @@ export default function InvestorPage() {
       {/* 第一眼层级段序（D-046 原则·业主第一眼=多少钱→该我做的→系统在等什么）：
           ①健康 NAV/业绩卡阵 ②行动 请求箱 ③裁决 毕业授权+观察中
           ④持仓 一策略一格 ⑤下钻 收益轨/日收益折叠 */}
-      <InvestorHead nav={nav} navCcy={navCcy} realized={realized} today={today}
+      <InvestorHead nav={nav} navCcy={navCcy} navStale={navStale} realized={realized} today={today}
         floatNet={floatNet} ann30={ann30} perf={perf} posCount={positions.length} />
       {err && <div className="err">{err}</div>}
       <RequestBox items={box} busy={busy} resolve={resolve} />

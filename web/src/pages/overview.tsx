@@ -45,9 +45,14 @@ const TILE_GROUP: Record<string, string> = {
   earning: "在息", perf: "基线后业绩",
 };
 
+// NAV 族陈值注脚（总览瓦片审计②——五瓦片同染共用串）。
+const bStaleSub = (b: GetOverviewBundleResponse | null | undefined) =>
+  b && b.navStalePools > 0 ? `含 ${b.navStalePools} 陈池 ${fmtUsd(b.navStaleUsd)}` : undefined;
+
 export default function OverviewPage() {
   const [b, setB] = useState<GetOverviewBundleResponse | null>(null);
   const [nav, setNav] = useState<number | null>(null);
+  const [navStale, setNavStale] = useState(""); // NAV 族陈值标注（审计②）
   const [box, setBox] = useState<RequestBoxItem[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState("");
@@ -61,7 +66,9 @@ export default function OverviewPage() {
         client.listRequestBox({}),
         client.getFinanceOverview({}), // NAV/敞口顶壳瓦片（既有 RPC 复用零新增）
       ]);
-      setB(bd); setBox(bx.items); setNav(fin.equityAvailable ? fin.totalEquityUsd : null); setErr("");
+      setB(bd); setBox(bx.items); setNav(fin.equityAvailable ? fin.totalEquityUsd : null);
+      setNavStale(fin.navStalePools > 0 ? `含 ${fin.navStalePools} 陈池 ${fmtUsd(fin.navStaleUsd)}（${fin.navStaleDetail}）` : "");
+      setErr("");
     } catch (e) { setErr(errText(e)); }
   };
   // D-536 复审收口：首载 RPC + 事件流驱动重取——账户事件/域刷新/持仓事件/告警
@@ -125,16 +132,19 @@ export default function OverviewPage() {
       <h2>盘面</h2>
       <div className="stats">
         <StatTile label="NAV 总权益" value={nav != null ? fmtUsd(nav) : "—"}
+          sub={navStale || undefined}
           active={tile === "nav"} onClick={() => setTile(tile === "nav" ? null : "nav")} />
         <StatTile label="总投入（基线+注资）" value={b?.investedAvailable ? fmtUsd(b.netInvestedUsd) : "—"}
           sub={b?.perfFlowProvisional ? "净流 provisional" : undefined}
           active={tile === "invested"} onClick={() => setTile(tile === "invested" ? null : "invested")} />
         <StatTile label="本金合计（USDT+USD）" value={b?.principalAvailable ? fmtUsd(b.principalTotalUsd) : "—"}
+          sub={bStaleSub(b)}
           active={tile === "principal"} onClick={() => setTile(tile === "principal" ? null : "principal")} />
         <StatTile label="可动用" value={b?.principalAvailable ? fmtUsd(b.principalIdleUsd) : "—"}
+          sub={bStaleSub(b)}
           active={tile === "idle"} onClick={() => setTile(tile === "idle" ? null : "idle")} />
         <StatTile label="在息" value={b?.principalAvailable ? fmtUsd(b.principalEarningUsd) : "—"}
-          sub={b?.principalAvailable && b.principalLockedUsd > 0 ? `含锁定 ${fmtUsd(b.principalLockedUsd)}${b.earliestRelease ? "·最早回笼 " + utc(timestampDate(b.earliestRelease)) : ""}` : undefined}
+          sub={[b?.principalAvailable && b.principalLockedUsd > 0 ? `含锁定 ${fmtUsd(b.principalLockedUsd)}${b.earliestRelease ? "·最早回笼 " + utc(timestampDate(b.earliestRelease)) : ""}` : "", bStaleSub(b)].filter(Boolean).join("｜") || undefined}
           active={tile === "earning"} onClick={() => setTile(tile === "earning" ? null : "earning")} />
         {/* 眠钱时长：后端 idle_streak_state 显式分态全信——healthy_zero=「0」常志态
             （10-21 判据修后=真量过的零：Idle 收益域+鲜度闸）vs no_data=「—」警示态
@@ -148,12 +158,12 @@ export default function OverviewPage() {
           title={b?.idleStreakState === IdleStreakState.NO_DATA
             ? "idle_floor_streak 零行/读败/无鲜行=断供（D-612 首轮动窗前零行为预期）" : undefined} />
         <StatTile label="基线后业绩" value={b?.perfAvailable ? (b.perfUsd >= 0 ? "+" : "") + fmtUsd(b.perfUsd) : "—"}
-          sub={b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%｜目标≥8%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"}
+          sub={[(b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%｜目标≥8%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"), bStaleSub(b)].filter(Boolean).join("｜")}
           active={tile === "perf"} onClick={() => setTile(tile === "perf" ? null : "perf")} />
         {/* D-630 权威口径：权益差−io 净流（穿透归因层；缺盖池如实标注） */}
         <StatTile label="真实净盈利（权威口径）"
           value={b?.trueNetAvailable ? `30d ${(b.trueNet30dUsd >= 0 ? "+" : "")}${fmtUsd(b.trueNet30dUsd)}｜全时 ${(b.trueNetAllUsd >= 0 ? "+" : "")}${fmtUsd(b.trueNetAllUsd)}` : "—"}
-          sub={b?.trueNetUncovered ? `缺基线池: ${b.trueNetUncovered}` : "权益差−io 净流"} />
+          sub={[(b?.trueNetUncovered ? `缺基线池: ${b.trueNetUncovered}` : "权益差−io 净流"), bStaleSub(b)].filter(Boolean).join("｜")} />
       </div>
 
       <PnlOverviewCard />
