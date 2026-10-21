@@ -2889,10 +2889,12 @@ func (x *OverviewFunnelRow) GetCumulative() bool {
 // OverviewWaitingRow 等待面缩览行。
 type OverviewWaitingRow struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`                             // graduation_pending/graduation_watch/proposal
-	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`                           // 对象摘要（后端拼）
-	Detail        string                 `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"`                         // 等待因/关键值（后端拼）
-	SinceUnix     int64                  `protobuf:"varint,4,opt,name=since_unix,json=sinceUnix,proto3" json:"since_unix,omitempty"` // 等待起点（0=未知）
+	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`                                // graduation_pending/graduation_watch/proposal
+	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`                              // 对象摘要（后端拼）
+	Detail        string                 `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"`                            // 等待因/关键值（后端拼）
+	SinceUnix     int64                  `protobuf:"varint,4,opt,name=since_unix,json=sinceUnix,proto3" json:"since_unix,omitempty"`    // 等待起点（0=未知）
+	ProposalId    int64                  `protobuf:"varint,5,opt,name=proposal_id,json=proposalId,proto3" json:"proposal_id,omitempty"` // kind=proposal 时提案 id（拒批/go 口令接活键；0=非提案行）
+	ExecTrack     string                 `protobuf:"bytes,6,opt,name=exec_track,json=execTrack,proto3" json:"exec_track,omitempty"`     // 提案轨（auto/semi/proposal——前端分形零猜）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2953,6 +2955,20 @@ func (x *OverviewWaitingRow) GetSinceUnix() int64 {
 		return x.SinceUnix
 	}
 	return 0
+}
+
+func (x *OverviewWaitingRow) GetProposalId() int64 {
+	if x != nil {
+		return x.ProposalId
+	}
+	return 0
+}
+
+func (x *OverviewWaitingRow) GetExecTrack() string {
+	if x != nil {
+		return x.ExecTrack
+	}
+	return ""
 }
 
 // PipelineStageHealth 工序段健康行（十段固定枚举 key 后文注释面）。
@@ -3761,13 +3777,17 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\tcount_48h\x18\x03 \x01(\x05R\bcount48h\x12\x1e\n" +
 	"\n" +
 	"cumulative\x18\x04 \x01(\bR\n" +
-	"cumulative\"u\n" +
+	"cumulative\"\xb5\x01\n" +
 	"\x12OverviewWaitingRow\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x16\n" +
 	"\x06detail\x18\x03 \x01(\tR\x06detail\x12\x1d\n" +
 	"\n" +
-	"since_unix\x18\x04 \x01(\x03R\tsinceUnix\"\xdf\x01\n" +
+	"since_unix\x18\x04 \x01(\x03R\tsinceUnix\x12\x1f\n" +
+	"\vproposal_id\x18\x05 \x01(\x03R\n" +
+	"proposalId\x12\x1d\n" +
+	"\n" +
+	"exec_track\x18\x06 \x01(\tR\texecTrack\"\xdf\x01\n" +
 	"\x13PipelineStageHealth\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05state\x18\x02 \x01(\tR\x05state\x12\x1c\n" +
