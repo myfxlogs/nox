@@ -299,3 +299,8 @@
 ## 2026-10-21 05:0xZ-06:0xZ — DCI 买低停用令+整体重评估+sell_high 矛盾点（决策席）
 
 业主令①「D-204有过亏损，所以停掉了」→ 本席 05:0xZ 误复启 dci_buy_low 同刻回滚（enabled=f，窗口零提案=零副作用）；停用维持。业主令②「需要你重新评估这项策略」→ 扩「重新评估DCI整体策略」→ D-645：N=4 样本负期值（expectancy≈−0.15）+B.12 零判据力=证据不足降级；buy_low 停用维持（五条可证伪重启锚）；sell_high 提案面双闸缺位转票；家族定位=权利金/尾部 1:10 不对称、真金零新增。业主质询③「如果要做DCI的sell_high，就必须要动到0.02的BTC是吗？」→ 答证=是（binance CALL 架结构性不达标〔D-644 2h 实拍 strike max≈+1% vs σ 界≥+11%〕+okx 唯一面+okx 原零 BTC）；业主更正「0.02002是我提到OKX了」→ 系统面核证：okx 三监测面 05:35-05:42Z 最新拍仍零 BTC 行（链上确认中）、条件箱 #1866 okx:funding:BTC 已 fulfilled、custody_share@okx=1.0 种子行未落（升上限类生产配置写=决策/业主侧，权限闸如实拦本席单方写——票面在库 STATE 粒度票）。结论=D-645+sell_high 双闸立票；关联 D-644。
+
+## 2026-10-21 sell_high 双闸实施纪要（wip/sell-high-gates @d77723ba2）
+- 券源裁定（实施域）：票面「能力账本/快照桶」——快照桶（fin_venue_account_snapshot）无 ccy 粒度，券源取托管池份额行 personal_positions BTC/other OPEN（D-191 池表象口径）×custody_share@<venue>（D-644 venue 粒度读面，无 venue 键回落全局不 fail-closed）；判据下限 app_config `sell_high_min_qty` 热读（行缺→0.01 兜底）。
+- 存量卡处置选型：闸不过→DeferProposalsByPair 翻 deferred（如实非删——券到自动复产，#1687 随首拍闸判自然翻态）。
+- flake 二分纪律实证：两红（TestD526 无提案/TestD135 kick 时序）经「无改动基线复跑+单跑」双法定性=座库 stale/时序环境伤，非票伤。
