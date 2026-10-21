@@ -186,6 +186,9 @@ type Service struct {
 	stepMeta *cexStepMeta
 	// openVenueLegsFn D-009 S4 测试 seam：venue 实占行集注入（nil=store.OpenVenueSystemLegs）。
 	openVenueLegsFn func(ctx context.Context, venueBare string) ([]pgstore.OpenVenueLegRow, error)
+	// computeNavFn NAV 读面测试 seam（nil=store.ComputeNav）——读败注入锚用，
+	// equity_available 旗断供语义可测（production 路径不改）。
+	computeNavFn func(ctx context.Context, now time.Time) (*pgstore.NavReport, error)
 	// D-311 R4：okx:perp 腿最小张数 lotSz 查询（instId→lotSz，instruments 同源缓存）。
 	// nil = 未接线 → okx:perp step=0 fail-closed。
 	okxLotSz func(instID string) (float64, bool)
