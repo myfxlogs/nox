@@ -68,3 +68,51 @@ description: 策略评估与仓位——策略统计判据（置信界/依赖性
 ## 豁免清单
 
 纯文档措辞、历史设计解释、非策略相关的运营查询不强制本卡流程。
+
+## freqtrade edge 对拍（开源借鉴批次3 · 2026-10-21）
+
+> 源码面：`freqtrade/edge/edge_positioning.py`（tag 2022.9——edge 模块 2023.9 弃用、
+> 2025.6 上游移除/PR#11867，移除本身即证据：零售场景 expectancydriven 分仓无人
+> 维护活下去）+ `plugins/protections/*`（stable 现役）。
+
+### 算法笔记（读码实证非文档转述）
+
+- **期值链**：每笔按固定 stake=0.015 折算 profit_abs（全相对量）→(pair,stoploss)
+  分组聚合：winrate=W、risk_reward_ratio=avg_win/avg_loss、expectancy=RRR·W−(1−W)、
+  required_risk_reward=1/W−1（盈亏平衡 RRR）。stoploss 网格扫描每对取期值最优档。
+- **小样本处理=纯计数地板**：`min_trade_number`（缺省 10）滤样本——**无置信界、
+  无 Wilson/二项下界**，10 笔 60% 胜率与 100 笔 60% 胜率同权。差异直面：我方
+  B.12 二项置信下界是显著更严的证据口径。
+- **离群剔除**：`remove_pumps` 滤 profit_abs > mean+2σ 行（只滤正侧——正偏剃头
+  会高估期值，引用其数值时须知此偏差方向）。
+- **仓位=固定分数风险法**：position_size = allowed_risk×available_capital/|stoploss|
+  ——每笔风险敞口定比，止损距离反比定仓（Vince「1 单位」思想的零售实现）；
+  要求 max_open_trades=-1+unlimited stake（仓数由仓位尺寸内生产生）。
+- **准入闸**：expectancy>0.2 ∧ winrate>0.60（零售默认阈——禁照搬）。
+- **protections 枚举**（IProtection：lookback_period + stop_duration/unlock_at
+  时间锁；has_global_stop/has_local_stop 双粒度）：
+  CooldownPeriod（每笔平仓后对锁）、StoplossGuard（窗内 N 次止损型退出且
+  profit<阈→锁，可按腿向）、MaxDrawdown（窗内回撤>阈→全局锁，ratios/equity
+  双口径）、LowProfitPairs（窗内累计 close_profit<阈→对锁）。
+
+### 与我方判据面差异表
+
+| 面 | freqtrade | 我方 | 评 |
+|---|---|---|---|
+| 小样本 | 计数地板 N>10 | B.12 置信下界+依赖性检验 | 我方严，不搬 |
+| 仓位 | allowed_risk/|SL| 定比风险 | 分数 f/几何阈/保证金上限+硬线 | 同族不同粒度 |
+| 冷却 | protections 时间锁枚举 | kill_net_pnl/kill_loss_streak+30d −3% 硬线 | 我方=永久摘，彼=时间锁 |
+
+### 可搬点清单（回改点标注）
+
+- **回改点 eval：expectancy/RRR 对**——周报策略表可加 expectancy 列旁证
+  （RRR·W−(1−W) 一行公式，纯证据字段）；required_risk_reward=1/W−1 给
+  「当前盈亏结构还差多少及格」直观读数。
+- **回改点 kill_trigger：冷却时间锁形态**——StoplossGuard 的「窗内 N 次止损
+  +profit 阈」双条件组合可参考为组合级软停（暂停非摘牌）判据候选；
+  unlock_at 定点解锁（日界）值得借——永久摘前加时间锁中间档。
+- **回改点 semantic：正侧离群剔除偏差**——remove_pumps 教训：凡聚合期值
+  先声明离群处理口径（单侧剔除高估方向）；我方 strategy_stats 聚合面
+  若引入离群剔除须双侧或如实标注方向。
+- **不搬**：N>10 计数地板（我方置信界全面占优）、0.2/0.60 零售阈、
+  unlimited stake 前提（我方硬线优先）。
