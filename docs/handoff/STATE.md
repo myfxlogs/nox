@@ -1236,3 +1236,12 @@ venue 自家价。连带排：dci_leg/okx_dci/bnapi BTC 裸钉+jit/earn USDT 钉
 DCIExecVenues/EarnExecVenues map=D-619/644 约束以字面量散落——整改归能力
 账本喂入，同票或紧随票实施裁。skills 域：协议面取证。
 -->
+
+<!-- 复审 10-21：wip/symmap-4 退回修单（merge 未推已回退，master 不含此票）
+病灶：migrations/1069 INSERT 直写 broker_symbol_map——FK broker_symbol_map_venue_fk
+→broker_accounts(venue)；新装/测试库账户表空→迁移必炸（pgstore 312 测全挂实证；
+生产两户在册故 SG 可过）。账户=运行时数据非 schema 种子。
+修向：VALUES 行改 INSERT…SELECT…WHERE EXISTS(SELECT 1 FROM broker_accounts
+WHERE venue=v.venue)——有户才插无户幂等跳过；注释钉「户缺席=跳过非错」。
+余同原票（canonical 对拍/CS 来源/primary 惯例四件复审已验对版）。
+-->
