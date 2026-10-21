@@ -235,6 +235,7 @@ type ArmedDeliveryPair struct {
 	BuyCanonical, SellCanonical string
 	BuyVenueKey, SellVenueKey   string
 	BuyVT, SellVT               string
+	GradSymbol                  string // carry_graduations.symbol（合约名锚；空=非毕业源）
 	BuyExpiry, SellExpiry       *time.Time
 }
 
@@ -244,12 +245,17 @@ type ArmedDeliveryPair struct {
 func (s *Store) ListArmedDeliveryPairs(ctx context.Context) ([]ArmedDeliveryPair, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.canonical_buy, c.canonical_sell, c.venue_key_buy, c.venue_key_sell,
-		       c.venue_type_buy, c.venue_type_sell, ub.expiry_ts, us.expiry_ts
+		       c.venue_type_buy, c.venue_type_sell, COALESCE(g.symbol,''), ub.expiry_ts, us.expiry_ts
 		  FROM xasset_allow_combos c
+		  -- D-649续④：合约锚=provenance→carry_graduations.symbol（'ETH-USD_UM-261225'
+		  -- 合约名）非 canonical（'ETH' 品种归一名）——universe 精确对毕业档键。
+		  LEFT JOIN carry_graduations g ON g.id=c.provenance_id
 		  LEFT JOIN fin_cex_universe ub
-		    ON ub.venue=c.venue_buy AND ub.symbol=c.canonical_buy AND ub.contract_type='FUTURES'
+		    ON ub.venue=c.venue_buy AND ub.contract_type='FUTURES'
+		   AND ub.symbol=CASE WHEN c.venue_type_buy='futures' THEN COALESCE(NULLIF(g.symbol,''),c.canonical_buy) ELSE c.canonical_buy END
 		  LEFT JOIN fin_cex_universe us
-		    ON us.venue=c.venue_sell AND us.symbol=c.canonical_sell AND us.contract_type='FUTURES'
+		    ON us.venue=c.venue_sell AND us.contract_type='FUTURES'
+		   AND us.symbol=CASE WHEN c.venue_type_sell='futures' THEN COALESCE(NULLIF(g.symbol,''),c.canonical_sell) ELSE c.canonical_sell END
 		 WHERE c.enabled AND COALESCE(c.simulated,false)=false
 		   AND (c.venue_type_buy='futures' OR c.venue_type_sell='futures')`)
 	if err != nil {
@@ -260,7 +266,7 @@ func (s *Store) ListArmedDeliveryPairs(ctx context.Context) ([]ArmedDeliveryPair
 	for rows.Next() {
 		var p ArmedDeliveryPair
 		if err := rows.Scan(&p.BuyCanonical, &p.SellCanonical, &p.BuyVenueKey, &p.SellVenueKey,
-			&p.BuyVT, &p.SellVT, &p.BuyExpiry, &p.SellExpiry); err != nil {
+			&p.BuyVT, &p.SellVT, &p.GradSymbol, &p.BuyExpiry, &p.SellExpiry); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

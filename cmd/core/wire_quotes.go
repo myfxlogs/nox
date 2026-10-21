@@ -53,6 +53,9 @@ func startQuoteStreams(ctx context.Context, cexCfg exchange.Config, qbus *bus.Qu
 	okxWs.OnInstrumentChange = exec.OKXSpecInvalidate
 	okxWs.SetFactEmit(emitFacts)
 	okxWs.SetPulseFn(qbus.Touch) // D-155 方案A：mark-price/index-tickers 活性脉冲打点
+	// D-649续④：armed 交割腿订阅源——毕业档 symbol→okx FUTURES instId，
+	// canonical=hint 同键（detector snapshot 精确对；读败=不订静默下一拍重试）。
+	okxWs.DeliverySymbolsFn = okxDeliverySubs(st)
 	safego.GoLoop("main:okx-ws", func() { okxWs.Run(ctx, qbus.Publish) })
 	gateWs := exchange.NewGateWebSocket(cexCfg)
 	gateWs.SetFactEmit(emitFacts)
@@ -223,3 +226,29 @@ func wireFundingDoneBridge(factsDone *bus.Topic[string]) {
 
 // fundingEmitThrottle D-518 S2：WS funding emit → factsDone 发布最小间隔。
 const fundingEmitThrottle = 60 * time.Second
+
+// okxDeliverySubs armed 交割订阅源：futures 腿 venue=okx 且毕业档 symbol 在
+// → DeliverySub{instId, canonical=combos 面 canonical}；其他 venue/无毕业档
+// symbol=跳过不臆造。
+func okxDeliverySubs(st *pgstore.Store) func(ctx context.Context) []exchange.DeliverySub {
+	return func(ctx context.Context) []exchange.DeliverySub {
+		rows, err := st.ListArmedDeliveryPairs(ctx)
+		if err != nil {
+			log.Printf("[quotes] delivery subs 读败: %v", err)
+			return nil
+		}
+		var out []exchange.DeliverySub
+		for _, r := range rows {
+			if r.GradSymbol == "" {
+				continue
+			}
+			if r.SellVT == "futures" && keydomain.BareOf(r.SellVenueKey) == "okx" {
+				out = append(out, exchange.DeliverySub{InstID: exchange.DelivInstID(r.GradSymbol), Canonical: r.SellCanonical})
+			}
+			if r.BuyVT == "futures" && keydomain.BareOf(r.BuyVenueKey) == "okx" {
+				out = append(out, exchange.DeliverySub{InstID: exchange.DelivInstID(r.GradSymbol), Canonical: r.BuyCanonical})
+			}
+		}
+		return out
+	}
+}

@@ -40,6 +40,13 @@ type OKXWebSocket struct {
 	// pulseFn D-155 方案A：活性脉冲打点口（qbus.Touch 接线；nil=不记录）。
 	// mark-price（SWAP）/index-tickers（spot uly）帧到即调——只证订阅活不写报价值。
 	pulseFn func(symbol, venueKey string)
+	// DeliverySymbolsFn D-649续④：armed 交割腿订阅源（okx USD_UM 面——watchlist
+	// 方言件只产 spot/perp 候选，交割 instId 由 armed 组合毕业档 provenance 注入；
+	// nil=不订）。返回 instId→报价 canonical（hint.SellCanonical 同键归一）。
+	DeliverySymbolsFn func(ctx context.Context) []DeliverySub
+	// delivCanon instId→canonical 映射（subscribeArgs 每次重建；读侧在
+	// handleMessage tickers 分流）。
+	delivCanon map[string]string
 }
 
 // NewOKXWebSocket 创建 OKX WS 采集器（NOX_CEX_WS_BASE 置位→经 cex-proxy /okxws 前缀）。
@@ -100,6 +107,8 @@ func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms []string, subscri
 			args = append(args, map[string]string{"channel": "instruments", "instType": instType})
 		}
 	}
+	// armed 交割腿订阅（D-649续④；实现面折 okx_ws_delivery.go——行数门禁）。
+	args = append(args, o.deliverySubArgs(ctx, subscribed, quarantined)...)
 	for _, sym := range syms {
 		spotID, perpID := okxSubCandidates(sym)
 		if spotID == "" {
@@ -190,6 +199,11 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 		instID = strings.TrimSuffix(instID, "-SWAP")
 	}
 	canonical := strings.ReplaceAll(instID, "-", "")
+	// 交割腿分流：订阅面注入的 instId→canonical 映射命中即 futures 帧——
+	// canonical 归 hint.SellCanonical 同键（detector snapshot 精确对）。
+	if dc, ok := o.delivCanon[venueSymbol]; ok {
+		venueType, canonical = "futures", dc
+	}
 
 	item := msg.Data[0]
 	bidS, _ := item["bidPx"].(string)
@@ -218,26 +232,6 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 		VenueType:   venueType,
 	})
 	return true
-}
-
-// handlePulse D-155：脉冲帧→pulseFn(canonical, venueKey)——mark-price 帧按
-// SWAP 归 okx:perp，index-tickers 帧归 okx:spot（订阅面已定档不混）。data[]
-// 逐项打点（聚合帧多项各刷各键）；pulseFn nil=静默跳过。
-func (o *OKXWebSocket) handlePulse(msg wsMsg) {
-	if o.pulseFn == nil {
-		return
-	}
-	venueType := "spot"
-	if msg.Arg.Channel == "mark-price" {
-		venueType = "perp"
-	}
-	for _, it := range msg.Data {
-		instID, _ := it["instId"].(string)
-		if instID == "" {
-			continue
-		}
-		o.pulseFn(bus.CexSymbolKey(instID), VenueOKX+":"+venueType)
-	}
 }
 
 func parseOKXTS(s string) (time.Time, error) {
