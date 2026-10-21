@@ -257,4 +257,5 @@ var migrationFiles = []struct {
 	{1062, migrations.ProposalMissCountSQL, false},       // expire 粘性修：miss_count 列（连 N 拍 miss 才杀）
 	{1063, migrations.GradFamilyEvidenceSQL, false},      // 毕业判据三值持久化（family_n/win_rate/lower_bound）       // expire 粘性修：miss_count 列（连 N 拍 miss 才杀）
 	{1064, migrations.HoldHoursPriorSQL, false},          // funding_carry hh 输入源修：hold_hours_prior 列+种子168h
+	{1065, migrations.EconKbVerdictsSQL, false},          // 经济经验库消化裁定表（canon/dismiss/merge+理由必填）
 }
