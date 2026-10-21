@@ -191,11 +191,15 @@ func (d *XAssetCarryDetector) tryPair(
 		rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "allow"})
 		return nil
 	}
-	if stale(bq, now, d.FreshnessTTL) {
+	// 交割腿新鲜度分档（STATE 行44）：futures 腿 venue tickers 帧距天然稀疏
+	// （远月 16-35min 实测——非断流；上游归因已核：deliverySubArgs 订阅/发布
+	// 径无截流缺订=venue 天然节拍），与 perp/spot 120s 共阈=结构性必杀。
+	// perp/spot 阈零动；真断流仍 <1h 检出。
+	if stale(bq, now, legFreshTTL(d.FreshnessTTL, be.VenueType)) {
 		rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "stale_buy"})
 		return nil
 	}
-	if stale(sq, now, d.FreshnessTTL) {
+	if stale(sq, now, legFreshTTL(d.FreshnessTTL, se.VenueType)) {
 		rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "stale_sell"})
 		return nil
 	}
