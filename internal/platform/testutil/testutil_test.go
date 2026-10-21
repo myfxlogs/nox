@@ -304,3 +304,18 @@ func TestPerPkgDSN_SeatSegment(t *testing.T) {
 		t.Fatalf("截断后应保基名前缀: %s", u.Path)
 	}
 }
+
+// TestSeatTag_DSNAssembly D-651 B③ 验收锚：NOX_TEST_SEAT 经 SeatTag→tag 组装→
+// perPkgDSN 产逐席库名（两席不同 env→异库名零互踩；缺省回落=worktree 目录段）。
+func TestSeatTag_DSNAssembly(t *testing.T) {
+	setEnv(t, "NOX_TEST_SEAT", "seatB")
+	tagB := "pgstore_" + SeatTag()
+	setEnv(t, "NOX_TEST_SEAT", "seatC")
+	tagC := "pgstore_" + SeatTag()
+	dsnB, _ := perPkgDSN("postgres://u:p@h:5432/nox_test", tagB)
+	dsnC, _ := perPkgDSN("postgres://u:p@h:5432/nox_test", tagC)
+	if !strings.HasSuffix(dsnB, "nox_test_pgstore_seatb") ||
+		!strings.HasSuffix(dsnC, "nox_test_pgstore_seatc") {
+		t.Fatalf("逐席库名组装错: B=%s C=%s", dsnB, dsnC)
+	}
+}

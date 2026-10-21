@@ -672,3 +672,15 @@ func TestPitHits_Passthrough(t *testing.T) {
 		t.Fatalf("miss pit_hits=%v", miss.PitHits)
 	}
 }
+
+// D-652-C 核验面桩（fakeGradDB→graduationStore 完备性）。
+func (f *fakeGradDB) ListMarkedCapitalGaps(context.Context) ([]pgstore.ConditionGap, error) {
+	return nil, nil
+}
+func (f *fakeGradDB) CapitalPoolSnapshots(context.Context) ([]pgstore.CapitalPoolRow, error) {
+	return nil, nil
+}
+func (f *fakeGradDB) FulfillConditionGap(context.Context, int64, string) error { return nil }
+func (f *fakeGradDB) InsertAlertDedup(context.Context, string, string, time.Duration) error {
+	return nil
+}
