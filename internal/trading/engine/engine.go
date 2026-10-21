@@ -8,11 +8,17 @@ import (
 	"time"
 
 	"nox/internal/data/bus"
-	"nox/internal/data/keydomain"
+	"nox/internal/platform/rejects"
 	"nox/internal/research/detector"
 	"nox/internal/research/evaluator"
 	"nox/internal/store/pgstore"
 )
+
+// rejects 注册：engine_onquote 面门集（D-652 拒因可观测——注册了不挂/挂了没注册由对拍锚防）。
+func init() {
+	rejects.Register("engine_onquote", "frame_stale")
+	rejects.Register("engine_evaluate", "eval_nil", "rating_trap", "exclude", "disabled", "store_min")
+}
 
 // AssetEquivView 引擎侧标的等价类消费口（D-300 裁 5：与 detector 共享同一
 // pgstore.AssetEquivProvider 实例）。Partners 反查快照扩展；MaybeRefresh TTL 节流重载。
@@ -144,6 +150,7 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 
 	// 新鲜度检查（§5.0）
 	if time.Since(q.Time) > e.evalCfg.DetectorFreshnessTTL {
+		rejects.Inc(rejects.Key{Face: "engine_onquote", Gate: "frame_stale"})
 		return
 	}
 
@@ -160,26 +167,31 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 	for _, c := range candidates {
 		result := e.evaluate(ctx, c, snapshot)
 		if result == nil {
+			rejects.Inc(rejects.Key{Face: "engine_evaluate", Gate: "eval_nil"})
 			continue
 		}
 		if result.Rating == evaluator.RatingTrap {
+			rejects.Inc(rejects.Key{Face: "engine_evaluate", Gate: "rating_trap"})
 			continue
 		}
 		o := resultToOpp(result)
 		// 资金提醒弹窗提示词 B1：检测层排除 BRENT/WTI 等假机会（复用 NOX_AUTOTRADE_EXCLUDE_CANONICALS，
 		// 执行层+检测层双用途，P3 单一真相）。命中 → 不入库（从源头消除，TTL 自然过期不适用）。
 		if len(e.excludeCanonicals) > 0 && e.excludeCanonicals[o.Canonical] {
+			rejects.Inc(rejects.Key{Face: "engine_evaluate", Gate: "exclude"})
 			continue
 		}
 		// §1 自动淘汰闭环：strategy_stats.disabled=true 的策略产出不入库——系统已自证亏损，
 		// 展示假机会误导。与 gate 层 disabled 检查呼应（gate 阻执行，此处阻产出+展示）。
 		if e.isStrategyDisabled(o.Type) && !e.trialComboExempt(ctx, o) {
+			rejects.Inc(rejects.Key{Face: "engine_evaluate", Gate: "disabled"})
 			continue
 		}
 		// round-trip 入库门槛：CROSS_VENUE net 为一次性 bps，低于门槛不入库（从源头消除垃圾）。
 		// 息差家族净门槛：门槛作用在 evaluator 扣成本后的 NetBps（年化百分点），
 		// 面板亮灯=净口径真过线；检测器门槛保留为前置过滤（双保险无害）。零值=不过滤（测试默认）。
 		if !netStoreGate(o, e) {
+			rejects.Inc(rejects.Key{Face: "engine_evaluate", Gate: "store_min"})
 			continue
 		}
 		// 实施修正① + 修复⑭ S3：oppTopic 双用途（D-050 站内推送 + autotrade 事件流）。
@@ -249,49 +261,4 @@ func (e *Engine) trialComboExempt(ctx context.Context, o *pgstore.Opportunity) b
 		return false
 	}
 	return ok
-}
-
-func findQuote(snapshot map[string]map[string]bus.Quote, canonical, venueKey string) *bus.Quote {
-	venues, ok := snapshot[canonical]
-	if !ok {
-		return nil
-	}
-	// venueKey 格式 "{venue}:{venueType}"
-	for _, q := range venues {
-		if keydomain.Join(q.Venue, q.VenueType) == venueKey {
-			return &q
-		}
-	}
-	return nil
-}
-
-func resultToOpp(r *evaluator.Result) *pgstore.Opportunity {
-	// 跨标的配对列——空串转 NULL（非 XASSET_CARRY 不留空串）。
-	var canonicalSell, assetClass *string
-	if r.CanonicalSell != "" {
-		canonicalSell = &r.CanonicalSell
-	}
-	if r.AssetClass != "" {
-		assetClass = &r.AssetClass
-	}
-	return &pgstore.Opportunity{
-		ID:             r.ID,
-		Type:           r.Type,
-		Canonical:      r.Canonical,
-		CanonicalSell:  canonicalSell,
-		AssetClass:     assetClass,
-		VenueBuy:       r.VenueBuy,
-		VenueSell:      r.VenueSell,
-		PriceBuy:       r.PriceBuy,
-		PriceSell:      r.PriceSell,
-		GrossBps:       r.GrossBps,
-		SpreadCost:     r.SpreadCost,
-		CommissionCost: r.CommissionCost,
-		SlippageCost:   r.SlippageCost,
-		SwapCost:       r.SwapCost,
-		NetBps:         r.NetBps,
-		BreakevenDays:  r.BreakevenDays,
-		QuoteTime:      r.QuoteTime,
-		ExpiresAt:      r.ExpiresAt,
-	}
 }

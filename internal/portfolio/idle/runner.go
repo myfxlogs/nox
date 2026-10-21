@@ -20,8 +20,12 @@ import (
 	"time"
 
 	"nox/internal/ir/inboxfmt"
+	"nox/internal/platform/rejects"
 	"nox/internal/store/pgstore"
 )
+
+// rejects 注册：sleepmon_day 面门集（D-652 拒因可观测——注册了不挂/挂了没注册由对拍锚防）。
+func init() { rejects.Register("sleepmon_day", "snap_stale_skip") }
 
 // Store 依赖面（pgstore.Store 实现；测试 fake）。
 type Store interface {
@@ -97,6 +101,7 @@ func checkDay(ctx context.Context, deps Deps, day string, loc *time.Location) er
 	}
 	for _, p := range pools {
 		if time.Since(p.FetchedAt) > idleSnapFreshMax {
+			rejects.Inc(rejects.Key{Face: "sleepmon_day", Gate: "snap_stale_skip"})
 			continue // 陈行池不判不写——断供面不冒健康（读面鲜度闸兜底）
 		}
 		key := p.Venue + "\x00" + p.VenueType

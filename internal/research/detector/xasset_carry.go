@@ -7,7 +7,13 @@ import (
 	"time"
 
 	"nox/internal/data/bus"
+	"nox/internal/platform/rejects"
 )
+
+// rejects 注册：xasset_trypair 面门集（D-652 拒因可观测——注册了不挂/挂了没注册由对拍锚防）。
+func init() {
+	rejects.Register("xasset_trypair", "allow", "stale_buy", "stale_sell", "leg_tradable", "is_real", "mid_nonpos", "tracking", "entry_min", "funding_absent", "net_min", "tenor")
+}
 
 // AssetEquivEntry 标的等价类行（detector 本地视图；pgstore.AssetEquivEntry
 // 经装配层适配进来——detector 不 import store 层）。
@@ -182,15 +188,23 @@ func (d *XAssetCarryDetector) tryPair(
 	// 发现域收口：白名单外组合在评估前静默剔除（不产候选不刷日志；
 	// 等价类路与 hint 路两径同经此单点）。
 	if d.Allow != nil && !d.Allow(bc, sc, bq.VenueKey(), sq.VenueKey()) {
+		rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "allow"})
 		return nil
 	}
-	if stale(bq, now, d.FreshnessTTL) || stale(sq, now, d.FreshnessTTL) {
+	if stale(bq, now, d.FreshnessTTL) {
+		rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "stale_buy"})
+		return nil
+	}
+	if stale(sq, now, d.FreshnessTTL) {
+		rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "stale_sell"})
 		return nil
 	}
 	if !legTradable(modes, bc, bq.VenueKey(), true) || !legTradable(modes, sc, sq.VenueKey(), false) {
+		rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "leg_tradable"})
 		return nil
 	}
 	if !isRealPair(realMap, bq.VenueKey(), sq.VenueKey()) {
+		rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "is_real"})
 		return nil
 	}
 	// 跟踪误差（§5.3）：分母=卖腿 mid（canonical_b 对应 sc）。
@@ -199,17 +213,21 @@ func (d *XAssetCarryDetector) tryPair(
 	isDeliv := be.VenueType == "futures" || se.VenueType == "futures"
 	bm, sm := bq.Mid(), sq.Mid()
 	if bm <= 0 || sm <= 0 {
+		rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "mid_nonpos"})
 		return nil
 	}
 	if !isDeliv && math.Abs(bm-sm)/sm*10000 > d.TrackingMaxBps {
+		rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "tracking"})
 		return nil
 	}
 	// 进场价差（一次性 bps）：与 evaluator S5 同口径 mid=(PriceBuy+PriceSell)/2。
 	mid := (bq.Ask + sq.Bid) / 2
 	if mid <= 0 {
+		rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "mid_nonpos"})
 		return nil
 	}
 	if (sq.Bid-bq.Ask)/mid*10000 < d.EntryMinBps {
+		rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "entry_min"})
 		return nil
 	}
 	// 净息差年化 pp：funding（perp 卖腿收/买腿付，缺 fact 不评估）+ MT 腿 swap（bps_daily→%/年=×365/100）。
@@ -217,6 +235,7 @@ func (d *XAssetCarryDetector) tryPair(
 	if se.VenueType == "perp" {
 		f, ok := lookupFunding(funding, sc, se.Venue)
 		if !ok {
+			rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "funding_absent"})
 			return nil
 		}
 		net += f // 空腿收 funding（负 funding 自然变负项）
@@ -224,6 +243,7 @@ func (d *XAssetCarryDetector) tryPair(
 	if be.VenueType == "perp" {
 		f, ok := lookupFunding(funding, bc, be.Venue)
 		if !ok {
+			rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "funding_absent"})
 			return nil
 		}
 		net -= f // 多腿付 funding
@@ -234,17 +254,20 @@ func (d *XAssetCarryDetector) tryPair(
 	// tenor）；买 futures 付溢价对称扣。tenor 缺=fail-closed（年化分母不可臆）。
 	if se.VenueType == "futures" {
 		if se.TenorDays <= 0 {
+			rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "tenor"})
 			return nil
 		}
 		net += (sq.Bid - bq.Ask) / bq.Ask * 365 / se.TenorDays * 100
 	}
 	if be.VenueType == "futures" {
 		if be.TenorDays <= 0 {
+			rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "tenor"})
 			return nil
 		}
 		net -= (sq.Bid - bq.Ask) / bq.Ask * 365 / be.TenorDays * 100
 	}
 	if net < d.MinNetAnnualPct {
+		rejects.Inc(rejects.Key{Face: "xasset_trypair", Gate: "net_min"})
 		return nil
 	}
 	qt := bq.Time
@@ -263,20 +286,4 @@ func (d *XAssetCarryDetector) tryPair(
 		GrossBps:      net,
 		QuoteTime:     qt.UnixMilli(),
 	}
-}
-
-// swapAnnualPct MT 腿 swap 年化百分点：long=true 取 swap_long[0]，false 取 swap_short[1]；
-// bps_daily × 365 / 100 → 年化 %（负值=付息自然为净息差负项）。非 MT 腿/无 fact → 0。
-func swapAnnualPct(swap map[string]map[string][2]float64, canonical string, e AssetEquivEntry, long bool) float64 {
-	if e.VenueType != "mt4" && e.VenueType != "mt5" {
-		return 0
-	}
-	pair, ok := lookupSwap(swap, canonical, e.Venue)
-	if !ok {
-		return 0
-	}
-	if long {
-		return pair[0] * 365 / 100
-	}
-	return pair[1] * 365 / 100
 }

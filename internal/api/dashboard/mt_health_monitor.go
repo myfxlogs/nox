@@ -15,6 +15,7 @@ import (
 	"nox/internal/data/bus"
 	"nox/internal/data/fact"
 	"nox/internal/ledger/reconcile"
+	"nox/internal/platform/rejects"
 )
 
 // HealthFactStore 健康监控所需的 fact 查询接口（pgstore.Store 满足）。
@@ -240,9 +241,10 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 
 	// 每 tick 一行可观测性日志（WP1 禁静默）
 	log.Printf("[mt-health] %s", strings.Join(logParts, " "))
+	// D-652 dump 搭车①：拒因 Top10（30min 既有周期——Δ 语义见 rejects.Format）。
+	log.Printf("[mt-health] 拒因Top10 Δ30min: %s", rejects.Format(10))
 }
 
-// collectFactAges 从 store 查 swap/margin facts，按 Venue 分组取 max(Ts)，返回 venue→age。
 func (m *MTHealthMonitor) collectFactAges(ctx context.Context, now time.Time) (swapAges, marginAges map[string]time.Duration) {
 	swapAges = make(map[string]time.Duration)
 	marginAges = make(map[string]time.Duration)
