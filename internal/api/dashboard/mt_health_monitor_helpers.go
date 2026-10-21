@@ -156,6 +156,15 @@ func (m *MTHealthMonitor) classifyWithFlashMiss(venue string, raw mtHealthMetric
 func (m *MTHealthMonitor) auxWatchDump(ctx context.Context) {
 	// D-652 dump 搭车①：拒因 Top10（30min 既有周期——Δ 语义见 rejects.Format）。
 	log.Printf("[mt-health] 拒因Top10 Δ30min: %s", rejects.Format(10))
+	// 接触面 last_hit 面透出（e 行返修——last_hit 可见非仅嫌疑告警）：
+	// 全通道快照行 dump（hits+末次命中；0 命中显「从未」如实）。
+	for _, r := range dephealth.ContactSnapshot() {
+		lastHit := "从未"
+		if r.LastHitUnix > 0 {
+			lastHit = fmt.Sprintf("%s 前", time.Since(time.Unix(r.LastHitUnix, 0)).Round(time.Minute))
+		}
+		log.Printf("[mt-health] 接触面 %s hits=%d last_hit=%s", r.Channel, r.Hits, lastHit)
+	}
 	// 接触面犬哨（STATE e 行）：三通道「应活」零命中>72h→warn 嫌疑标报
 	// （dedup 24h；命中即清态——last_hit 由 ContactHit 刷新）。
 	for _, r := range dephealth.ContactSuspects(72 * time.Hour) {
