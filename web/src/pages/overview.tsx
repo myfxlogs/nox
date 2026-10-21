@@ -61,7 +61,7 @@ export default function OverviewPage() {
         client.listRequestBox({}),
         client.getFinanceOverview({}), // NAV/敞口顶壳瓦片（既有 RPC 复用零新增）
       ]);
-      setB(bd); setBox(bx.items); setNav(fin.totalEquityUsd); setErr("");
+      setB(bd); setBox(bx.items); setNav(fin.equityAvailable ? fin.totalEquityUsd : null); setErr("");
     } catch (e) { setErr(errText(e)); }
   };
   // D-536 复审收口：首载 RPC + 事件流驱动重取——账户事件/域刷新/持仓事件/告警

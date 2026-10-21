@@ -227,6 +227,7 @@ message GetFinanceOverviewResponse {
   double perf_ann_pct = 14;               // 年化=perf/天数×365/基线×100（days>0）
   bool perf_available = 15;               // false=锚缺/读败（前端显缺不显 0）
   bool perf_flow_provisional = 16;        // 净流扣减 provisional 标（perf_flow_provisional 键）
+  bool equity_available = 17;             // false=NAV 读败/未接线（断供≠零，前端显「—」非 $0.00）
 }
 
 // === D-536 总览页聚合面（本金分档/业绩/在仓订单/风险心跳/待办一次下发） ===

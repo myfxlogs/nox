@@ -1961,6 +1961,7 @@ type GetFinanceOverviewResponse struct {
 	PerfAnnPct          float64                `protobuf:"fixed64,14,opt,name=perf_ann_pct,json=perfAnnPct,proto3" json:"perf_ann_pct,omitempty"`                           // 年化=perf/天数×365/基线×100（days>0）
 	PerfAvailable       bool                   `protobuf:"varint,15,opt,name=perf_available,json=perfAvailable,proto3" json:"perf_available,omitempty"`                     // false=锚缺/读败（前端显缺不显 0）
 	PerfFlowProvisional bool                   `protobuf:"varint,16,opt,name=perf_flow_provisional,json=perfFlowProvisional,proto3" json:"perf_flow_provisional,omitempty"` // 净流扣减 provisional 标（perf_flow_provisional 键）
+	EquityAvailable     bool                   `protobuf:"varint,17,opt,name=equity_available,json=equityAvailable,proto3" json:"equity_available,omitempty"`               // false=NAV 读败/未接线（断供≠零，前端显「—」非 $0.00）
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -2089,6 +2090,13 @@ func (x *GetFinanceOverviewResponse) GetPerfAvailable() bool {
 func (x *GetFinanceOverviewResponse) GetPerfFlowProvisional() bool {
 	if x != nil {
 		return x.PerfFlowProvisional
+	}
+	return false
+}
+
+func (x *GetFinanceOverviewResponse) GetEquityAvailable() bool {
+	if x != nil {
+		return x.EquityAvailable
 	}
 	return false
 }
@@ -3599,7 +3607,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"amount_usd\x18\x05 \x01(\x01R\tamountUsd\x12\x1f\n" +
 	"\vposition_id\x18\x06 \x01(\x03R\n" +
 	"positionId\x12\x12\n" +
-	"\x04note\x18\a \x01(\tR\x04note\"\xd9\x06\n" +
+	"\x04note\x18\a \x01(\tR\x04note\"\x84\a\n" +
 	"\x1aGetFinanceOverviewResponse\x12(\n" +
 	"\x10total_equity_usd\x18\x02 \x01(\x01R\x0etotalEquityUsd\x12?\n" +
 	"\n" +
@@ -3618,7 +3626,8 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\fperf_ann_pct\x18\x0e \x01(\x01R\n" +
 	"perfAnnPct\x12%\n" +
 	"\x0eperf_available\x18\x0f \x01(\bR\rperfAvailable\x122\n" +
-	"\x15perf_flow_provisional\x18\x10 \x01(\bR\x13perfFlowProvisional\x1a>\n" +
+	"\x15perf_flow_provisional\x18\x10 \x01(\bR\x13perfFlowProvisional\x12)\n" +
+	"\x10equity_available\x18\x11 \x01(\bR\x0fequityAvailable\x1a>\n" +
 	"\x10EquityByCcyEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01J\x04\b\x01\x10\x02J\x04\b\x03\x10\x04R\rdeposited_usdR\vnet_pnl_usd\"\xa5\x01\n" +

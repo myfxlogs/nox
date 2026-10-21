@@ -47,8 +47,8 @@ export default function InvestorPage() {
         client.listRequestBox({}),
         client.listXAssetPendingEntries({}),
       ]);
-      setNav(fin.totalEquityUsd);
-      setNavCcy(fin.equityByCcy ?? {});
+      setNav(fin.equityAvailable ? fin.totalEquityUsd : null); // 读败=显「—」非 $0.00
+      setNavCcy(fin.equityAvailable ? (fin.equityByCcy ?? {}) : {});
       // D-535：业绩基线面（本金口径 USDT+USD——后端算定，前端零算）。
       if (fin.perfAvailable) {
         setPerf({
