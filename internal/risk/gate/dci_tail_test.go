@@ -46,3 +46,29 @@ func TestSigmaTailGate(t *testing.T) {
 		t.Fatal("参数缺应 +Inf fail-closed")
 	}
 }
+
+// TestTailCostAnn_CallSign 尾损数学核正锚（covered_call tail=-4492% 病灶）：
+// CALL 式原误书 −K·N(−d2)（应 −K·N(d2)）——深虚值 N(−d2)≈1 →
+// price≈S·N(d1)−K 大额负值=符号翻负+量级爆。95000C@65d 重算须正且合理。
+func TestTailCostAnn_CallSign(t *testing.T) {
+	// 95000C@65d（sell_high 验收锚形：spot=81800 σ=3.5%）——BS call≈4669 →
+	// tail≈4669/81800×365/65≈0.32（32% ann）；旧错号得 −293% 量级负值。
+	tail := TailCostAnn("CALL", 81800, 95000, 0.035, 65)
+	if tail <= 0 {
+		t.Fatalf("CALL 尾损应正: %.4f（错号回归）", tail)
+	}
+	if tail < 0.15 || tail > 0.60 {
+		t.Fatalf("CALL 尾损量级异常: %.4f（期望 ~0.32）", tail)
+	}
+	// 深虚值衰减：strike 更高 tail 更小（同 PUT 侧惯例）。
+	deep := TailCostAnn("CALL", 81800, 110000, 0.035, 65)
+	if !(deep < tail) {
+		t.Fatalf("深档 CALL 尾损未衰减: %v vs %v", deep, tail)
+	}
+	// 非负不变量：OTM CALL 尾损永非负（卖方条件损失）。
+	for _, k := range []float64{95000, 100000, 120000, 150000} {
+		if v := TailCostAnn("CALL", 81800, k, 0.035, 65); v < 0 {
+			t.Fatalf("OTM CALL tail 负值: strike=%.0f tail=%.4f", k, v)
+		}
+	}
+}

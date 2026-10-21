@@ -64,7 +64,7 @@ func TailCostAnn(opt string, spot, strike, sigma float64, tenorDays int) float64
 	d2 := d1 - s
 	var price float64
 	if opt == "CALL" {
-		price = spot*normCDF(d1) - strike*normCDF(-d2)
+		price = spot*normCDF(d1) - strike*normCDF(d2)
 	} else {
 		price = strike*normCDF(-d2) - spot*normCDF(-d1)
 	}
