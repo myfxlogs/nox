@@ -236,8 +236,8 @@ func main() {
 	safego.Go("main:eng", func() { eng.Run(ctx) })
 	// 5e. 持仓监控（§13.4）+ 个人持仓价格阈值监控（财务线 TRX 持仓接入，D-046）
 	posMon := position.New(qbus, stMoney, cfg.CloseBpsThr, cfg.AlertResendInterval)
-	persMon := position.NewPersonalMonitor(qbus, st) // D-063：现价广播面拆（渲染退役），仅保留阈值告警
-	wirePositionKicks(st, posMon, posChange)         // D-469b S3
+	persMon := position.NewPersonalMonitor(qbus, st)  // D-063：现价广播面拆（渲染退役），仅保留阈值告警
+	wirePositionKicks(st, stMoney, posMon, posChange) // D-469b S3+D-633 钱径池同接
 	safego.Go("main:posMon", func() { posMon.Run(ctx) })
 	safego.Go("main:persMon", func() { persMon.Run(ctx) })
 
