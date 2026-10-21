@@ -1182,6 +1182,7 @@ SG 验收锚（复审席）：重启/部署后 boot 日志无 ticks_old 漂移�
 三伤全落：①DelivInstID 恒等透传（'_UM' 是 instId 本体构件——目录并存 ETH-USD-261225 币本位/ETH-USD_UM-261225 UM 本位，剥尾=订币本位错腿）；②legQuote 腿行情键解析——combo canonical='ETH'（#25 实拍双名同）原名键 miss 回退 +USDT 拼装（'ETH'→'ETHUSDT'，CEX 帧 Symbol=instId 去'-'归一形）；futures 协定键（delivCanon=hint 名 verbatim）原名直中；③ticks sampler 白名单补 'futures'（活库 CHECK 已含——1067 级联在案）。
 机检：TestDeliveryHint_CanonKeyResolve（'ETH'→'ETHUSDT' spot+futures 协定键双腿中）、okx_deliv 三锚 verbatim 化；detector+exchange+bus 318 测绿。
 SG 验收锚（复审席）：ticks 出 okx/futures/ETH-USD_UM-261225 verbatim 键+opportunities 出 ETH okx×okx 行→jit 链。
+-->
 <!-- 实施席 10-21：告警两级语义修 施工完候复审
 病灶：EpisodeRemind 对所有未 ack warn 告警 24h 重推「仍待确认」——成交回执类终态知会被误读为待办。
 修件（wip/alert-twolevel）：①`alert_receipt_patterns` app_config 逗分前缀判据（迁移 1068 种子：申购已提交/已申购/成交/已结清/已平仓/划转完成/接货已处置；descs 册登记）；②`isReceiptAlert` 前缀命中→episode Reminded 置位=推一次即闭免重推；读败=非回执 fail-open 不吞推；③needs_ack 缺省域零动。
