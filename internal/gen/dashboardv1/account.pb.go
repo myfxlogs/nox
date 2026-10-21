@@ -1962,8 +1962,12 @@ type GetFinanceOverviewResponse struct {
 	PerfAvailable       bool                   `protobuf:"varint,15,opt,name=perf_available,json=perfAvailable,proto3" json:"perf_available,omitempty"`                     // false=锚缺/读败（前端显缺不显 0）
 	PerfFlowProvisional bool                   `protobuf:"varint,16,opt,name=perf_flow_provisional,json=perfFlowProvisional,proto3" json:"perf_flow_provisional,omitempty"` // 净流扣减 provisional 标（perf_flow_provisional 键）
 	EquityAvailable     bool                   `protobuf:"varint,17,opt,name=equity_available,json=equityAvailable,proto3" json:"equity_available,omitempty"`               // false=NAV 读败/未接线（断供≠零，前端显「—」非 $0.00）
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 总览瓦片审计②：NAV 族陈值标注——快照龄>36h 池仍计 NAV 但显式打标（D-604 不冒当前）。
+	NavStalePools  int32   `protobuf:"varint,18,opt,name=nav_stale_pools,json=navStalePools,proto3" json:"nav_stale_pools,omitempty"`   // 陈值池计数（USD/USDT 桶内非幽灵池）
+	NavStaleUsd    float64 `protobuf:"fixed64,19,opt,name=nav_stale_usd,json=navStaleUsd,proto3" json:"nav_stale_usd,omitempty"`        // 陈值池 equity 合计
+	NavStaleDetail string  `protobuf:"bytes,20,opt,name=nav_stale_detail,json=navStaleDetail,proto3" json:"nav_stale_detail,omitempty"` // 陈池清单（venue:vt·龄——下钻可见）
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GetFinanceOverviewResponse) Reset() {
@@ -2099,6 +2103,27 @@ func (x *GetFinanceOverviewResponse) GetEquityAvailable() bool {
 		return x.EquityAvailable
 	}
 	return false
+}
+
+func (x *GetFinanceOverviewResponse) GetNavStalePools() int32 {
+	if x != nil {
+		return x.NavStalePools
+	}
+	return 0
+}
+
+func (x *GetFinanceOverviewResponse) GetNavStaleUsd() float64 {
+	if x != nil {
+		return x.NavStaleUsd
+	}
+	return 0
+}
+
+func (x *GetFinanceOverviewResponse) GetNavStaleDetail() string {
+	if x != nil {
+		return x.NavStaleDetail
+	}
+	return ""
 }
 
 // === D-536 总览页聚合面（本金分档/业绩/在仓订单/风险心跳/待办一次下发） ===
@@ -2268,8 +2293,12 @@ type GetOverviewBundleResponse struct {
 	TrueNetAllUsd    float64 `protobuf:"fixed64,33,opt,name=true_net_all_usd,json=trueNetAllUsd,proto3" json:"true_net_all_usd,omitempty"`       // 全时窗
 	TrueNetAvailable bool    `protobuf:"varint,34,opt,name=true_net_available,json=trueNetAvailable,proto3" json:"true_net_available,omitempty"` // 全池缺盖→false（显「—」不冒数）
 	TrueNetUncovered string  `protobuf:"bytes,35,opt,name=true_net_uncovered,json=trueNetUncovered,proto3" json:"true_net_uncovered,omitempty"`  // 缺基线池清单（如实标缺面）
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 总览瓦片审计②：NAV 族陈值标注（本金/可动用/在息/业绩/真实净盈利五瓦片同染）。
+	NavStalePools  int32   `protobuf:"varint,37,opt,name=nav_stale_pools,json=navStalePools,proto3" json:"nav_stale_pools,omitempty"`   // 陈值池计数（USD/USDT 桶内非幽灵池，快照龄>36h）
+	NavStaleUsd    float64 `protobuf:"fixed64,38,opt,name=nav_stale_usd,json=navStaleUsd,proto3" json:"nav_stale_usd,omitempty"`        // 陈值池 equity 合计
+	NavStaleDetail string  `protobuf:"bytes,39,opt,name=nav_stale_detail,json=navStaleDetail,proto3" json:"nav_stale_detail,omitempty"` // 陈池清单（venue:vt·龄——下钻可见）
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GetOverviewBundleResponse) Reset() {
@@ -2536,6 +2565,27 @@ func (x *GetOverviewBundleResponse) GetTrueNetAvailable() bool {
 func (x *GetOverviewBundleResponse) GetTrueNetUncovered() string {
 	if x != nil {
 		return x.TrueNetUncovered
+	}
+	return ""
+}
+
+func (x *GetOverviewBundleResponse) GetNavStalePools() int32 {
+	if x != nil {
+		return x.NavStalePools
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetNavStaleUsd() float64 {
+	if x != nil {
+		return x.NavStaleUsd
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetNavStaleDetail() string {
+	if x != nil {
+		return x.NavStaleDetail
 	}
 	return ""
 }
@@ -3607,7 +3657,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"amount_usd\x18\x05 \x01(\x01R\tamountUsd\x12\x1f\n" +
 	"\vposition_id\x18\x06 \x01(\x03R\n" +
 	"positionId\x12\x12\n" +
-	"\x04note\x18\a \x01(\tR\x04note\"\x84\a\n" +
+	"\x04note\x18\a \x01(\tR\x04note\"\xfa\a\n" +
 	"\x1aGetFinanceOverviewResponse\x12(\n" +
 	"\x10total_equity_usd\x18\x02 \x01(\x01R\x0etotalEquityUsd\x12?\n" +
 	"\n" +
@@ -3627,7 +3677,10 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"perfAnnPct\x12%\n" +
 	"\x0eperf_available\x18\x0f \x01(\bR\rperfAvailable\x122\n" +
 	"\x15perf_flow_provisional\x18\x10 \x01(\bR\x13perfFlowProvisional\x12)\n" +
-	"\x10equity_available\x18\x11 \x01(\bR\x0fequityAvailable\x1a>\n" +
+	"\x10equity_available\x18\x11 \x01(\bR\x0fequityAvailable\x12&\n" +
+	"\x0fnav_stale_pools\x18\x12 \x01(\x05R\rnavStalePools\x12\"\n" +
+	"\rnav_stale_usd\x18\x13 \x01(\x01R\vnavStaleUsd\x12(\n" +
+	"\x10nav_stale_detail\x18\x14 \x01(\tR\x0enavStaleDetail\x1a>\n" +
 	"\x10EquityByCcyEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01J\x04\b\x01\x10\x02J\x04\b\x03\x10\x04R\rdeposited_usdR\vnet_pnl_usd\"\xa5\x01\n" +
@@ -3638,7 +3691,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"amount_usd\x18\x03 \x01(\x01R\tamountUsd\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x120\n" +
 	"\x05until\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x05until\"\x1a\n" +
-	"\x18GetOverviewBundleRequest\"\xac\r\n" +
+	"\x18GetOverviewBundleRequest\"\xa2\x0e\n" +
 	"\x19GetOverviewBundleResponse\x12)\n" +
 	"\x10pending_requests\x18\x01 \x01(\x05R\x0fpendingRequests\x12.\n" +
 	"\x13principal_total_usd\x18\x02 \x01(\x01R\x11principalTotalUsd\x12,\n" +
@@ -3681,7 +3734,10 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\x10true_net_30d_usd\x18  \x01(\x01R\rtrueNet30dUsd\x12'\n" +
 	"\x10true_net_all_usd\x18! \x01(\x01R\rtrueNetAllUsd\x12,\n" +
 	"\x12true_net_available\x18\" \x01(\bR\x10trueNetAvailable\x12,\n" +
-	"\x12true_net_uncovered\x18# \x01(\tR\x10trueNetUncovered\"\xa6\x01\n" +
+	"\x12true_net_uncovered\x18# \x01(\tR\x10trueNetUncovered\x12&\n" +
+	"\x0fnav_stale_pools\x18% \x01(\x05R\rnavStalePools\x12\"\n" +
+	"\rnav_stale_usd\x18& \x01(\x01R\vnavStaleUsd\x12(\n" +
+	"\x10nav_stale_detail\x18' \x01(\tR\x0enavStaleDetail\"\xa6\x01\n" +
 	"\x11OverviewCritAlert\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12*\n" +
 	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x14\n" +

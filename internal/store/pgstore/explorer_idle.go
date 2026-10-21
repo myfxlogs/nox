@@ -26,6 +26,10 @@ type ExplorerIdlePool struct {
 	// 已不在 broker_accounts（账户移除后残行——NAV 虚计；stopped 户仍在册不受影响）。
 	// 写侧不动（快照保留=历史真值）；读面打标由 SumNav/展示层剔计。
 	Ghost bool
+	// Stale 陈值池标（总览瓦片审计②）：FetchedAt 超 PoolStaleMax=真——冻结值
+	// 仍计 NAV 但显式打标（D-604：stale 显式标记不冒当前）。SumNav 统一重判，
+	// fake/直产池集同标。
+	Stale bool
 	// D-516 共享持有归属：Balance/Equity/FreeMargin 已乘 Share=归属份；
 	// Custodial=代管余量（equity_raw×(1−share)——展示标用，不进判据）。
 	Share     float64

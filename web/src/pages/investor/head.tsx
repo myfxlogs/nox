@@ -15,7 +15,7 @@ export interface PerfLine {
 const STABLE = new Set(["USD", "USDT", "USDC"]);
 
 export function InvestorHead(p: {
-  nav: number | null; navCcy: Record<string, number>;
+  nav: number | null; navCcy: Record<string, number>; navStale?: string;
   realized: number | null; today: number | null; floatNet: number | null;
   ann30: number | null; perf: PerfLine | null; posCount: number;
 }) {
@@ -37,6 +37,7 @@ export function InvestorHead(p: {
         <div className="card">
           <div className="k">NAV 总权益</div>
           <div className="v">{fmtUsd(p.nav)}</div>
+          {p.navStale && <div className="muted" style={{ fontSize: "12px" }}>{p.navStale}</div>}
           {stable.map(([c, v]) => (
             <div key={c} className="muted" style={{ fontSize: "12px" }}>NAV {c} = {fmtUsd(v)} {c}</div>
           ))}

@@ -9,7 +9,9 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -34,6 +36,43 @@ func overviewSeg(name string, f func()) {
 	t0 := time.Now()
 	f()
 	log.Printf("[overview] seg %s: %s", name, time.Since(t0).Round(time.Millisecond))
+}
+
+// navStaleNote NAV 族陈值标注（总览瓦片审计②）：USD/USDT 桶内非幽灵 Stale 池
+// 计数+Σequity+清单（venue:vt·xh——下钻可见）。Stale 旗由 SumNav 打
+// （FetchedAt 超 PoolStaleMax=36h）。
+func navStaleNote(pools []pgstore.ExplorerIdlePool, now time.Time) (n int32, usd float64, detail string) {
+	var names []string
+	for _, p := range pools {
+		if p.Ghost || !p.Stale || (p.Currency != "USD" && p.Currency != "USDT") {
+			continue
+		}
+		n++
+		usd += p.Equity
+		names = append(names, fmt.Sprintf("%s:%s·%dh", p.Venue, p.VenueType,
+			int(now.Sub(p.FetchedAt).Hours())))
+	}
+	return n, usd, strings.Join(names, "、")
+}
+
+// poolDeployableUSD 可动用单池口径（总览瓦片审计③）：
+//   - MT（mt4/mt5）=FreeMargin（equity−已占保证金后的可动额；Balance 含
+//     浮动盈亏+保证金占用，实仓开启日高估）；
+//   - CEX 有 margin 面池（buffer_multiple>0）=equity−MMR（MMR=equity/buffer，
+//     同 service_margin 隐含率口径——buffer 是快照面保证金倍数元数据）；
+//   - 无 margin 概念池（spot 现货/earn 或 buffer 未采）=Balance 原口径兜底。
+func poolDeployableUSD(p pgstore.ExplorerIdlePool) float64 {
+	switch {
+	case p.VenueType == "mt4" || p.VenueType == "mt5":
+		return p.FreeMargin
+	case p.BufferMultiple > 0:
+		if a := p.Equity - p.Equity/p.BufferMultiple; a > 0 {
+			return a
+		}
+		return 0
+	default:
+		return p.Balance
+	}
 }
 
 // prefetchOverview 全独立读并发（resp 内直填段=PendingRequests/本金两档/
@@ -66,12 +105,16 @@ func (s *Service) prefetchOverview(ctx context.Context, now time.Time, resp *v1.
 					if p.VenueType == "earn" {
 						earning += p.Equity
 					} else {
-						idle += p.Balance
+						// 审计③：可动用口径=MT free_margin / CEX equity−MMR
+						// （原 ΣBalance 高估保证金占用——MT5 实仓开启日失真）。
+						idle += poolDeployableUSD(p)
 					}
 				}
 				resp.PrincipalIdleUsd = idle
 				resp.PrincipalEarningUsd = earning
 				resp.PrincipalAvailable = true // F1：读成才真（读败=缺省 false→前端显「—」不冒 $0）
+				// 审计②：NAV 族陈值标注（五瓦片同染——本金/可动用/在息/业绩/真实净盈利）。
+				resp.NavStalePools, resp.NavStaleUsd, resp.NavStaleDetail = navStaleNote(nav.Pools, now)
 			}
 		})
 		return nil

@@ -32,6 +32,11 @@ type NavReport struct {
 	ComputedAt    time.Time
 }
 
+// PoolStaleMax 池快照陈值闸（总览瓦片审计②）：行龄超此=Stale 打标不冒当前
+// （D-604 显示面纪律）。钉值同 sleepmon idleSnapFreshMax（36h 快照闸）惯例——
+// 本闸管「现值含陈池标注」非「判定剔出」，剔/标取舍=标（口径透明 NAV 数不变）。
+const PoolStaleMax = 36 * time.Hour
+
 // SumNav 池集→NAV 聚合规则唯一实现（ComputeNav/测试 fake 同径复用）。
 // D-522：USD/USDT 各归其桶（USDⓈ=同一记帐单位族不混桶——USD 桶只收 currency='USD' 池，
 // USDT 桶只收 'USDT' 池，二者从不相加）。
@@ -39,6 +44,9 @@ type NavReport struct {
 // 各桶原生单位零换算，跨币永不加总）；SkippedNonUSD 留=非 USD/USDT 池计数（审计面）。
 func SumNav(pools []ExplorerIdlePool, now time.Time) *NavReport {
 	r := &NavReport{Pools: pools, ByCcy: map[string]NavBucket{}, ComputedAt: now}
+	for i := range pools {
+		pools[i].Stale = now.Sub(pools[i].FetchedAt) > PoolStaleMax
+	}
 	for _, p := range pools {
 		if p.Ghost {
 			r.SkippedGhost++
