@@ -420,6 +420,32 @@ func TestOkxDCILeg_SavingsReadFailClosed(t *testing.T) {
 	}
 }
 
+// TestOkxDCILeg_DustQtyMagnitude 生产 #27-29 复现锚：unified/funding/savings
+// 三户全尘（sum≈3.4e-9→qty=1.15e-9）→notional 闸拒+零 venue 写面+零订单行。
+// 病灶史：6463aa249 版无量界闸+尘划转阈值——尘 qty 直发 asset/transfer 被
+// venue 51000 拒连落三行 failed；89f448dbe 量界闸+05983a96d 尘跳+18a7ca8c9
+// savings 第三源三件修毕，本锚钉死回退。
+func TestOkxDCILeg_DustQtyMagnitude(t *testing.T) {
+	var calls []string
+	srv := d549Srv(t, &calls, "0.000000002", "0.0000000014", "0", false)
+	defer srv.Close()
+	st := newFake()
+	ex := d549Exec(srv, st)
+	propID := int64(445)
+	// sum=3.4e-9×share0.34→qty≈1.16e-9，floor(dec0)=0<min10 → 拒。
+	if _, err := ex.tryLegOKX(context.Background(), gate.PutLeg, 0.34, 90, 100000, 90000, 0.02, &propID); err == nil {
+		t.Fatal("尘级 qty 应撞 notional 闸如实败")
+	}
+	if len(st.orders) != 0 {
+		t.Fatalf("闸前拒不应落订单行: %v", st.orders)
+	}
+	for _, c := range calls {
+		if strings.Contains(c, "asset/transfer") || strings.Contains(c, "dcd/") || strings.Contains(c, "purchase-redempt") {
+			t.Fatalf("尘级 qty 不应打 venue 写面: %v", calls)
+		}
+	}
+}
+
 // TestOkxDCILeg_NotionalGapDedup 「约束不达标」gap 去重锚：同提案同签名走
 // InsertAlertDedup（键含提案#id+okx_notional_sz），不走每拍 critical 裸刷。
 func TestOkxDCILeg_NotionalGapDedup(t *testing.T) {

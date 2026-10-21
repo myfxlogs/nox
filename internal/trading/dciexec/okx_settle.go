@@ -33,10 +33,7 @@ func okxDeliveryReached(productRef string, now time.Time) bool {
 		return true
 	}
 	d, err := time.Parse("060102", parts[2])
-	if err != nil {
-		return true
-	}
-	return !now.Before(d)
+	return err != nil || !now.Before(d) // 解析败=如实轮（venue order-status 才是终态真相）
 }
 
 // settleOKXOrder okx 单到期对账：order-status 轮询 state——非 settled 如实
@@ -102,7 +99,11 @@ func (e *Executor) bookSettlementOKX(ctx context.Context, o pgstore.FilledDCIOrd
 			log.Printf("[dci-settle] okx order %d eval actual apr: %v", o.ID, uerr)
 		}
 	}
-	if cfgID, cerr := e.okxConfigID(ctx); cerr == nil && cfgID > 0 {
+	cfgID, cerr := e.okxConfigID(ctx)
+	if cerr != nil || cfgID == 0 { // 读败/行缺静默跳账面补钉（binance 径同型实证）
+		log.Printf("[dci-settle] okx order %d exchange_config 跳收益账（fail-open）cerr=%v cfgID=%d", o.ID, cerr, cfgID)
+	}
+	if cerr == nil && cfgID > 0 {
 		var evs []pgstore.IncomeEvent
 		if interest > 0 {
 			evs = append(evs, pgstore.IncomeEvent{
@@ -178,7 +179,11 @@ func (e *Executor) disposeExerciseOKX(ctx context.Context, o pgstore.FilledDCIOr
 		proceeds, err := okxMarketSell(ctx, rail, ccy, qty)
 		if err == nil {
 			pnl := proceeds - o.Qty
-			if cfgID, cerr := e.okxConfigID(ctx); cerr == nil && cfgID > 0 {
+			cfgID, cerr := e.okxConfigID(ctx)
+			if cerr != nil || cfgID == 0 {
+				log.Printf("[dci-dispose] okx order %d exchange_config 跳收益账（fail-open）cerr=%v cfgID=%d", o.ID, cerr, cfgID)
+			}
+			if cerr == nil && cfgID > 0 {
 				if n, ierr := e.Store.InsertIncomeEvents(ctx, []pgstore.IncomeEvent{{
 					Venue: "okx", VenueType: "spot", ConfigID: cfgID,
 					Symbol: o.Underlying, IncomeType: "dci_exercise_disposal",

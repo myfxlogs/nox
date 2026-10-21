@@ -47,6 +47,9 @@ func (e *Executor) disposeExercise(ctx context.Context, o pgstore.FilledDCIOrder
 			// 损益=卖回得额−申购付额（USDT 同币直接差，亏如实负值落账）。
 			pnl := proceeds - o.Qty
 			cfgID, cerr := e.Store.ExchangeConfigID(ctx, "binance", "spot")
+			if cerr != nil || cfgID == 0 {
+				log.Printf("[dci-dispose] order %d exchange_config 跳收益账（fail-open）cerr=%v cfgID=%d", o.ID, cerr, cfgID)
+			}
 			if cerr == nil && cfgID > 0 {
 				if n, ierr := e.Store.InsertIncomeEvents(ctx, []pgstore.IncomeEvent{{
 					Venue: "binance", VenueType: "spot", ConfigID: cfgID,

@@ -231,6 +231,9 @@ func (e *Executor) bookSettlement(ctx context.Context, o pgstore.FilledDCIOrder,
 	// income_events：利息与行权接货分 kind 如实记（exchange_configs 缺=id 空，
 	// NULL 下唯一键不生效会重灌——缺配置则跳账并在推送中文备注）。
 	cfgID, cerr := e.Store.ExchangeConfigID(ctx, "binance", "spot")
+	if cerr != nil || cfgID == 0 { // 读败/行缺静默跳账面补钉（#7/#8 收益欠账实证）
+		log.Printf("[dci-settle] order %d exchange_config 跳收益账（fail-open）cerr=%v cfgID=%d", o.ID, cerr, cfgID)
+	}
 	if cerr == nil && cfgID > 0 {
 		var evs []pgstore.IncomeEvent
 		if interest > 0 {
