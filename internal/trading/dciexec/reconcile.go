@@ -12,6 +12,7 @@ import (
 	"log"
 	"math"
 	"nox/internal/risk/gate"
+	"strings"
 )
 
 // 漂移阈值：相对 1% 或绝对 1e-4 BTC（防余额浮点噪声误警）。
@@ -53,7 +54,12 @@ func (e *Executor) ReconcilePoolOnce(ctx context.Context) (ledger, live float64,
 	var poolQty float64
 	var poolID int64
 	for i := range poss {
-		if poss[i].Asset == "BTC" && poss[i].Kind == "other" {
+		// 托管池 venue 归因（STATE 行45）：池行=binance 域专格——okx DCI 回执
+		// 同写 BTC other（venue 盲病灶，okx_dci.go:188）须剔出 ledger 口径，
+		// 否则 live(binance)×share vs 账(binance+okx 锁仓) 往复对打 ping-pong
+		// （10-21 14:12/15:01 两 warn 同值实证 #41 0.0207）。归因=note venue
+		// 词解析（personal_positions 无 venue 列——schema 列=后续票余量）。
+		if poss[i].Asset == "BTC" && poss[i].Kind == "other" && dciPoolVenue(poss[i].Note) == "binance" {
 			if poss[i].Qty != nil {
 				poolQty += *poss[i].Qty
 			}
@@ -93,9 +99,23 @@ func (e *Executor) ReconcilePoolOnce(ctx context.Context) (ledger, live float64,
 		return ledger, live, true, err
 	}
 	if err := e.Store.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
-		"托管池对账漂移：BTC 账 %.8f vs 币安实有×share %.8f（Δ%+.8f），份额行已自动修正（池外增量不计策略损益）",
+		"托管池对账漂移：BTC 账 %.8f vs 币安实有×share %.8f（Δ%+.8f），binance 池行已自动修正（池外增量不计策略损益；okx 域行另格不算本池）",
 		ledger, live, delta)); err != nil {
 		return ledger, live, true, err
 	}
 	return ledger, live, true, nil
+}
+
+// dciPoolVenue BTC other 池行 venue 归因：note 载「申购回执：<venue>」词解
+// （okx/binance 回执双写入面 venue 词钉死）；无 venue 词行=binance（存量
+// 池行向后兼容——venue 盲时代行默认归 binance 域如实）。
+func dciPoolVenue(note string) string {
+	if i := strings.Index(note, "申购回执："); i >= 0 {
+		tok := note[i+len("申购回执："):]
+		if j := strings.IndexAny(tok, " \t"); j > 0 {
+			return tok[:j]
+		}
+		return tok
+	}
+	return "binance"
 }
