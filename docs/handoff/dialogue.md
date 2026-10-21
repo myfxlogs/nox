@@ -331,3 +331,9 @@
 ## 2026-10-21 合约锚+订阅面实施纪要（wip/perp-deliv @5180859a9）
 - 合约身份裁定（实施域）：canonical（'ETH'）=品种归一名非合约名——universe.expiry 精确对改道 provenance_id→carry_graduations.symbol（'ETH-USD_UM-261225'）；canonical 回退兜底非毕业源组合。报价侧同钉：delivCanon instId→combos canonical=hint.SellCanonical 同键（detector snapshot 键精确对）。
 - 订阅注入裁定：DeliverySymbolsFn 不读表直连装配（wire_quotes fn 内 ListArmedDeliveryPairs 直查——订阅面变动经每 ping tick subscribeArgs 重建自然生效，无 TTL 层）；instId=DelivInstID 单源归一（_UM=USD 本位标记剥离）。
+
+## 2026-10-21 09:5xZ — 空仓段预演+MT5 对称检两票施工收口（实施席）
+
+- **探针全链（病灶③票）**：explorer_proposals#95 走 D-047 PROBE 通道（ApproveProbe decision_ref 借号 D-650——本票无 D#，STATE 行已记对账锚）。候选两弃：JP225 0.1lot 实算名义 $6461 超 $50 帽（QuoteCcy→fx 未折 JPY，JP225 在帽内结构性不可行）；TRXUSD@15032313 无报价流。终选 ETHUSD SELL 0.01lot@15032313 名义≈$24.6。**结果：execution→legs✅（ticket 1824543463 实仓对拍）→09:46 manual_rpc 提前平（非 auto_close，到期自平径未验）→settlement✅（skipped 行设计语义）→review 断点=D-633 stMoney 未接 OnPositionChange，pipeline 钱径写点零 posChange kick，posreview/posMon 写盲；重启 boot 扫补齐 review id=1。**坑条目 money-pool-store-no-poschange-kick（high）已落+索引重建。
+- **MT5 死因链（病灶④票）**：mt5×okx:perp opp 史上 5 行全追——armed 匹配全过；三主死因 a) JP225USDT funding regime worst=0<floor2.0（venue 原播 0 值 374/887 样本，~90% skip 归此=结构性永拒）b) okx:perp 权益读缺间歇拒（okx REST 429/cooldown）c) netBps<1。10-14~18 老 opp 日志随容器重启灭失=如实断点。**共性缺口=regime 闸×0 值 caliber（收益闸如实拒非管线哑）；脉冲品种判据口径=决策席域修票向。**
+- **如实记**：pos#1 realized=−$0.014（真亏真记）；探针提案 #95 closed；D-650 借号引用悬空风险已记（分诊席 09:50Z 条目同见）；manual_rpc 平仓者非本席（疑业主/他席现场）未查明归属=如实记。
