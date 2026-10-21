@@ -228,3 +228,42 @@ func (s *Store) VenueIOTxIDExists(ctx context.Context, configID int64, txid stri
 		configID, txid).Scan(&ok)
 	return ok, err
 }
+
+// ArmedDeliveryPair armed 交割配对行（D-649续③ 机会喂入环——xasset_allow_combos
+// 含 futures 腿行+universe expiry 联查 tenor；symbol 按 futures 腿 canonical 对）。
+type ArmedDeliveryPair struct {
+	BuyCanonical, SellCanonical string
+	BuyVenueKey, SellVenueKey   string
+	BuyVT, SellVT               string
+	BuyExpiry, SellExpiry       *time.Time
+}
+
+// ListArmedDeliveryPairs armed（enabled 且非模拟）且任一端 vt=futures 的组合行——
+// detector 交割配对枚举源；universe.expiry_ts 联查供 tenor 年化（无 expiry=tenor
+// 未知 fail-closed）。
+func (s *Store) ListArmedDeliveryPairs(ctx context.Context) ([]ArmedDeliveryPair, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT c.canonical_buy, c.canonical_sell, c.venue_key_buy, c.venue_key_sell,
+		       c.venue_type_buy, c.venue_type_sell, ub.expiry_ts, us.expiry_ts
+		  FROM xasset_allow_combos c
+		  LEFT JOIN fin_cex_universe ub
+		    ON ub.venue=c.venue_buy AND ub.symbol=c.canonical_buy AND ub.contract_type='FUTURES'
+		  LEFT JOIN fin_cex_universe us
+		    ON us.venue=c.venue_sell AND us.symbol=c.canonical_sell AND us.contract_type='FUTURES'
+		 WHERE c.enabled AND COALESCE(c.simulated,false)=false
+		   AND (c.venue_type_buy='futures' OR c.venue_type_sell='futures')`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ArmedDeliveryPair
+	for rows.Next() {
+		var p ArmedDeliveryPair
+		if err := rows.Scan(&p.BuyCanonical, &p.SellCanonical, &p.BuyVenueKey, &p.SellVenueKey,
+			&p.BuyVT, &p.SellVT, &p.BuyExpiry, &p.SellExpiry); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}

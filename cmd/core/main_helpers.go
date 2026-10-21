@@ -78,7 +78,8 @@ func buildDetectors(cfg *config.Config, equiv *pgstore.AssetEquivProvider, st *p
 			TrackingMaxBps:  cfg.XassetTrackingMaxBps,
 			FreshnessTTL:    cfg.DetectorFreshnessTTL,
 			AssetEquiv:      assetEquivSource{equiv},
-			CfdHints:        newCfdHintSource(st), // D-403 S4：universe-hint 配对源
+			CfdHints:        newCfdHintSource(st),           // D-403 S4：universe-hint 配对源
+			DeliveryHints:   newArmedDeliveryHintSource(st), // D-649续③：armed 交割配对源
 			Allow:           xassetAllow,
 		},
 	}

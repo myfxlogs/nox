@@ -105,6 +105,8 @@ func (e *Engine) xassetLegCarryAnnual(ctx context.Context, venueKey, canonical, 
 		return bps * 3.65, true
 	case keydomain.IsType(venueKey, "spot"):
 		return 0, true // D-014：现货腿无 funding/swap——carry=0 是事实非缺数据（FUNDING_HEDGE 正构型）
+	case keydomain.IsType(venueKey, "futures"):
+		return 0, true // 交割腿无 funding/swap——carry=0 是结构事实同 spot 档（perp_delivery 归事实域，不再 fail-closed 刷屏）
 	default:
 		log.Printf("[autotrade] carry: unknown venue type %s (fail-closed)", venueKey)
 		return 0, false

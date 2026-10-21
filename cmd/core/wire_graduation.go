@@ -99,3 +99,67 @@ func (c *cfdHintSource) load(ctx context.Context) ([]detector.CfdPairHint, error
 	}
 	return out, nil
 }
+
+// armedDeliveryHintSource D-649续③：armed 交割配对提示源——xasset_allow_combos
+// 含 futures 腿行枚举 DeliveryPairHint（perp_delivery 机会断供修：毕业批放行≠
+// 发现层扫）。tenor=universe.expiry_ts−now（年化分母；过期/缺=行剔除 fail-closed）。
+// TTL 缓存同 cfdHintSource。
+type armedDeliveryHintSource struct {
+	store  *pgstore.Store
+	ttl    time.Duration
+	mu     sync.Mutex
+	hints  []detector.DeliveryPairHint
+	loaded time.Time
+}
+
+func newArmedDeliveryHintSource(st *pgstore.Store) *armedDeliveryHintSource {
+	return &armedDeliveryHintSource{store: st, ttl: 15 * time.Minute}
+}
+
+func (c *armedDeliveryHintSource) DeliveryPairs(ctx context.Context) []detector.DeliveryPairHint {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.loaded.IsZero() && time.Since(c.loaded) < c.ttl {
+		return c.hints
+	}
+	hints, err := c.load(ctx)
+	if err != nil {
+		log.Printf("[graduation] delivery hint load: %v（保持上次快照）", err)
+		return c.hints
+	}
+	c.hints, c.loaded = hints, time.Now()
+	return c.hints
+}
+
+func (c *armedDeliveryHintSource) load(ctx context.Context) ([]detector.DeliveryPairHint, error) {
+	rows, err := c.store.ListArmedDeliveryPairs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []detector.DeliveryPairHint
+	for _, r := range rows {
+		h := detector.DeliveryPairHint{
+			BuyCanonical: r.BuyCanonical, SellCanonical: r.SellCanonical,
+			BuyVenueKey: r.BuyVenueKey, SellVenueKey: r.SellVenueKey,
+		}
+		if r.BuyVT == "futures" {
+			if r.BuyExpiry == nil {
+				log.Printf("[graduation] delivery hint %s expiry 缺（universe 无 FUTURES 行）——剔除", r.BuyCanonical)
+				continue
+			}
+			h.BuyTenorDays = time.Until(*r.BuyExpiry).Hours() / 24
+		}
+		if r.SellVT == "futures" {
+			if r.SellExpiry == nil {
+				log.Printf("[graduation] delivery hint %s expiry 缺——剔除", r.SellCanonical)
+				continue
+			}
+			h.SellTenorDays = time.Until(*r.SellExpiry).Hours() / 24
+		}
+		if (r.BuyVT == "futures" && h.BuyTenorDays <= 0) || (r.SellVT == "futures" && h.SellTenorDays <= 0) {
+			continue // 已过期=tenor 非正剔除（年化分母不可负）
+		}
+		out = append(out, h)
+	}
+	return out, nil
+}
