@@ -25,6 +25,19 @@ type DeliveryPairHint struct {
 	SellTenorDays float64 // sell 腿 vt=futures 时填
 }
 
+// legQuote 腿行情快照查：先 canonical 原名键（futures 协定键/'ETH' 级归一名
+// 直接命中场景），miss 回退 canonical+USDT 行情键（'ETH'→'ETHUSDT'——CEX 帧
+// Symbol=instId 去 '-' 归一形；执行侧 venue symbol 解析同口径先例）。
+func legQuote(snapshot map[string]map[string]bus.Quote, canonical, venueKey string) (bus.Quote, bool) {
+	if q, ok := snapshot[canonical][venueKey]; ok {
+		return q, true
+	}
+	if q, ok := snapshot[canonical+"USDT"][venueKey]; ok {
+		return q, true
+	}
+	return bus.Quote{}, false
+}
+
 // DeliveryHintSource 交割配对提示读取口（照 AssetEquivSource/CfdPairHintSource
 // 模式：单实例注入禁 Scan 内查库；nil=跳过）。
 type DeliveryHintSource interface {
@@ -44,11 +57,14 @@ func (d *XAssetCarryDetector) scanDeliveryHints(
 	}
 	var out []Candidate
 	for _, h := range d.DeliveryHints.DeliveryPairs(ctx) {
-		bq, ok := snapshot[h.BuyCanonical][h.BuyVenueKey]
+		// 退回②伤②：组合 canonical=品种归一名（'ETH'）非行情 canonical
+		// （'ETHUSDT' 形——CEX 帧 Symbol=instId 去 '-'）；futures 腿 canonical
+		// 为协定键（delivCanon 注入同 hint 名）。逐腿按键序查：原名→USDT 拼装。
+		bq, ok := legQuote(snapshot, h.BuyCanonical, h.BuyVenueKey)
 		if !ok {
 			continue
 		}
-		sq, ok := snapshot[h.SellCanonical][h.SellVenueKey]
+		sq, ok := legQuote(snapshot, h.SellCanonical, h.SellVenueKey)
 		if !ok {
 			continue
 		}

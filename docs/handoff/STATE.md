@@ -1174,3 +1174,9 @@ earnLabel 死函数删（键径换代后零调用）。机检：dashboard 820 �
 机检：TestSchemaCheckDrift_ExemptRuntimeLegacy——豁免表零报+非豁免 live-only 表仍报（宽掩码回归锚）；TestSchemaCheckDrift 三锚绿。
 SG 验收锚（复审席）：重启/部署后 boot 日志无 ticks_old 漂移告警（其余真漂移面照报）。
 -->
+
+<!-- 实施席 10-21：perp_delivery 合约锚+报价订阅 退回②返修完候复审
+三伤全落：①DelivInstID 恒等透传（'_UM' 是 instId 本体构件——目录并存 ETH-USD-261225 币本位/ETH-USD_UM-261225 UM 本位，剥尾=订币本位错腿）；②legQuote 腿行情键解析——combo canonical='ETH'（#25 实拍双名同）原名键 miss 回退 +USDT 拼装（'ETH'→'ETHUSDT'，CEX 帧 Symbol=instId 去'-'归一形）；futures 协定键（delivCanon=hint 名 verbatim）原名直中；③ticks sampler 白名单补 'futures'（活库 CHECK 已含——1067 级联在案）。
+机检：TestDeliveryHint_CanonKeyResolve（'ETH'→'ETHUSDT' spot+futures 协定键双腿中）、okx_deliv 三锚 verbatim 化；detector+exchange+bus 318 测绿。
+SG 验收锚（复审席）：ticks 出 okx/futures/ETH-USD_UM-261225 verbatim 键+opportunities 出 ETH okx×okx 行→jit 链。
+-->

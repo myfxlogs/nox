@@ -10,9 +10,10 @@ import (
 )
 
 func TestOkxDeliv_InstIDNormalize(t *testing.T) {
-	// 毕业档 'ETH-USD_UM-261225'→okx instId 'ETH-USD-261225'（_UM 剥离）。
-	if got := DelivInstID("ETH-USD_UM-261225"); got != "ETH-USD-261225" {
-		t.Fatalf("instId 归一错: %s", got)
+	// 退回②伤①：instId 恒等透传——'_UM' 是 instId 本体构件（目录并存
+	// ETH-USD-261225 币本位/ETH-USD_UM-261225 UM 本位两张约），剥尾=订错腿。
+	if got := DelivInstID("ETH-USD_UM-261225"); got != "ETH-USD_UM-261225" {
+		t.Fatalf("instId 应 verbatim 透传: %s", got)
 	}
 	if got := DelivInstID("ETH-USD-261225"); got != "ETH-USD-261225" {
 		t.Fatalf("非 _UM 形被误改: %s", got)
@@ -21,16 +22,16 @@ func TestOkxDeliv_InstIDNormalize(t *testing.T) {
 
 // futures 帧分流：delivCanon 命中 → publish canonical=hint 键+venueType=futures。
 func TestOkxDeliv_FuturesFrameDispatch(t *testing.T) {
-	o := &OKXWebSocket{delivCanon: map[string]string{"ETH-USD-261225": "ETH-USD_UM-261225"}}
+	o := &OKXWebSocket{delivCanon: map[string]string{"ETH-USD_UM-261225": "ETH-USD_UM-261225"}}
 	var got bus.Quote
-	frame := []byte(`{"arg":{"channel":"tickers","instId":"ETH-USD-261225"},"data":[{"bidPx":"4200","askPx":"4201","ts":"1792563200000"}]}`)
+	frame := []byte(`{"arg":{"channel":"tickers","instId":"ETH-USD_UM-261225"},"data":[{"bidPx":"4200","askPx":"4201","ts":"1792563200000"}]}`)
 	if !o.handleMessage(context.Background(), frame, func(q bus.Quote) { got = q }) {
 		t.Fatal("futures tickers 帧未走 publish 径")
 	}
 	if got.VenueType != "futures" || got.Symbol != "ETH-USD_UM_261225" && got.Symbol != "ETH-USD_UM-261225" {
 		t.Fatalf("futures 帧分流错: %+v", got)
 	}
-	if got.VenueType != "futures" || got.Symbol != "ETH-USD_UM-261225" || got.Venue != VenueOKX || got.VenueSymbol != "ETH-USD-261225" {
+	if got.VenueType != "futures" || got.Symbol != "ETH-USD_UM-261225" || got.Venue != VenueOKX || got.VenueSymbol != "ETH-USD_UM-261225" {
 		t.Fatalf("futures 帧 canonical/venue 错: %+v", got)
 	}
 	if got.Bid != 4200 || got.Ask != 4201 {
@@ -40,7 +41,7 @@ func TestOkxDeliv_FuturesFrameDispatch(t *testing.T) {
 
 // 非交割 instId（spot/perp）不受 delivCanon 影响——原分派不变。
 func TestOkxDeliv_SpotUnaffected(t *testing.T) {
-	o := &OKXWebSocket{delivCanon: map[string]string{"ETH-USD-261225": "ETH-USD_UM-261225"}}
+	o := &OKXWebSocket{delivCanon: map[string]string{"ETH-USD_UM-261225": "ETH-USD_UM-261225"}}
 	var got bus.Quote
 	frame := []byte(`{"arg":{"channel":"tickers","instId":"ETH-USDT"},"data":[{"bidPx":"4000","askPx":"4001","ts":"1792563200000"}]}`)
 	if !o.handleMessage(context.Background(), frame, func(q bus.Quote) { got = q }) {
