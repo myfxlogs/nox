@@ -862,3 +862,12 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **D-645 放行**：提案面持仓闸（无券不产 viable 卡）+结构闸（params 必带 strike/tenor/product_ref 且过 σ 界）——从「外观修」升级为「0.02 BTC@okx 已到位后唯一放行证」：无它提案不核券不核价，首单出来无法对账复盘。
 - **反证锚**：①sell_high 首 5 单任一行权损吃 ≥2 单息（buy_low 同型病灶再生）→sell_high 亦入 naked 类停板重审；②连续 60 天零达标档=okx 架对该界结构性枯水 → 提案频降档或模板休眠重裁；③okx dcd CALL 产品下架率>50%（refreshOrderRef 连败）→采集面病灶另立票。
 - **失效自查**：本裁定 expiry=首个 sell_high 行权事件发生或 2026-11-20——届时按 income_events+处置账复核口径重审。
+
+## D-647（2026-10-21 决策席·carry_graduation #387 ETH-USD_UM-261225 perp_delivery 批准裁定）
+
+- **裁定=有条件批准（dry_run 已过 sizing，正式写被 venue_type 'futures' CHECK 拦停——待 D-648 迁移落地后重发）**。上限档：maxLongQty=maxShortQty=140 张、maxGrossUsd=1400/notionalUsd=1400——取 okx:spot 保证金帽 1500 内（$2000 首试被「实占$0+本次$2000>cap$1500」拒，压档后过）。
+- **证据链**：paper#67191 perp_delivery okx×okx qty_usd=5000、entry 10-15、5.71d、accrued_usd=159.31、net_all_in_usd=303.62、last_funding_ann=14.7%（entry 30%）、flag_warn 空、still active——D-593 纸面先行不变量满足，首个 perp_delivery 家族毕业行（perp_perp/JP225 之外新 payoff 家族）。
+- **拦停物（决策落账三件）**：①`fin_venue_exposure_caps` 补行 `okx:futures=1400` enabled（OKX 交付期货腿无敞口闸——INSERT 已落）；②`xasset_allow_combos.venue_type CHECK` 缺 'futures'（autotrade_logs/fin_opp 同型全谱缺——非漂移=迁链活库同缺的设计缺口，侦测器不告警型）→**D-648 迁移修票**（STATE 在队）；③`fin_venue_account_snapshot` okx unified 净值=3.38e-9≈0（USDT 2128.64 全在 earn 池）→**条件请求 #1937** 业主划转 ~1500 USDT 至 okx 交易户。
+- **反证锚**：①真仓首 3 拍 funding 转负 or 基差收敛不足 paper 口径→复盘降档/退役；②#1937 回执后 72h 仍无成交→执行径断链另立案；③1400 档若打满基差仍正→下批放量（业主域报数不批）。
+- **失效自查**：expiry=真仓首 3 拍（~72h）或 2026-11-04。
+
