@@ -819,3 +819,9 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：combo#20 `SPCXUSDT(binance:perp)×SPX500(15032313:mt5)` enabled=t→f。实证：binance universe `SPCXUSDT` base=SPCX **underlying_class=EQUITY**（股权类，现价 ~$160）vs MT5 SPX500=S&P500 指数（~$6700）——**非单位缩放是异底层错配对**（簿行 entry_spread −9793bps 实证）。该组合 simulated=f 挂真钱径，价差恒 ~−9760bps 远超阈带——monitor 簿行一复活即可能按失真价差真钱开仓，禁用为零成本风险排除。
 - **衍生**：gate `SPX500_USDT` hedge_canonical=SPX500 在册=SPX500 腿正确 CEX 侧候选——换腿重组属新票候选（先走 eval+paper 链不入 armed）。
 - **伪证锚**：若 SPCX 底层被 venue 实锤即 S&P500 追踪器且价差模型按合约乘数归一（非现货价比），本裁定性翻转须重审——当前四源（universe class/depth 价/簿行 spread/gate SPX500_USDT 并存）一致指异资产。
+
+### D-641（10-21 01:3xZ，决策席·hermes-agent 机制评估衍生）私忆持久化双点化+skill 用中修订钩
+- **背景**：业主引评 NousResearch/hermes-agent「越用越聪明」机制——对拍结论：其用户关系记忆面与 NOX 领域学习面非同构，auto-skill 生成/推断式用户模型判定禁搬（KB 防污染+账本钦定纪律优先）；两机制有真增量采纳。
+- **裁定**：①私忆清扫从 check-out 单点扩为**用中+收尾双点**——可持久化事实产生即写共享层（session 中途蒸发=事实丢失是实证病灶，check-out 才扫留丢窗）；②**skill 用中修订钩**——开工所带 skills/KB 条目用中实证错/缺面时，同票修补为正典义务（同级 severity tiering，非可选）。
+- **弃搬面**：auto-skill 免审生成、推断式用户模型（USER.md）、跨 session FTS——污染风险/违反钦定纪律/边际低。
+- **伪证锚**：若后续 session 出现「check-out 前已有持久价值事实因中道蒸发而未入库」且用中写义务未触发，或 skill 用中错面未同票修——本裁被违即计数。
