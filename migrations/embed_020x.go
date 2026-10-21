@@ -195,3 +195,6 @@ var EconKbVerdictsSQL string // 经济经验库消化裁定表（canon/dismiss/m
 
 //go:embed 1066_cg_venue_type_futures.sql
 var CgVenueTypeFuturesSQL string // carry_graduations venue_type 漂移修：'futures' 回补（基线就地改不回流生产）
+
+//go:embed 1067_venue_type_futures_sweep.sql
+var VenueTypeFuturesSweepSQL string // venue_type 'futures' 全谱 CHECK 修（D-648——8 表+ ticks 族，broker_accounts MT 域不涉）
