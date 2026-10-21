@@ -62,7 +62,11 @@ func (e *Executor) SweepPendingDisposals(ctx context.Context) (int, error) {
 		}
 		pnl := proceeds - invest
 		if anchored {
-			if cfgID, cerr := e.Store.ExchangeConfigID(ctx, "binance", "spot"); cerr == nil && cfgID > 0 {
+			cfgID, cerr := e.Store.ExchangeConfigID(ctx, "binance", "spot")
+			if cerr != nil || cfgID == 0 {
+				log.Printf("[dci-sweep] order %d exchange_config 跳收益账（fail-open）cerr=%v cfgID=%d", ordID, cerr, cfgID)
+			}
+			if cerr == nil && cfgID > 0 {
 				if _, ierr := e.Store.InsertIncomeEvents(ctx, []pgstore.IncomeEvent{{
 					Venue: "binance", VenueType: "spot", ConfigID: cfgID,
 					Symbol:     uly,

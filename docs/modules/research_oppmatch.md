@@ -18,6 +18,7 @@
 
 ## 观察（只记事实）
 - 搬迁纯移动+import 路径改写+文件名去票号；语义零改动。
+- 10-21 取证：dormant:<tmpl>@binance 前置短路在 venue 枚举之前（run.go）——dci 族 binance 休眠键会连带掐死 okx 提案枚举（dci_sell_high 十天零提案根因；venue 粒度须循环内判定，修法归后续票）。
 
 ## 判定（决策席）
 | 项 | 判定 | 理由 |
