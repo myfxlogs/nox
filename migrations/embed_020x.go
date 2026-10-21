@@ -186,3 +186,6 @@ var ProposalMissCountSQL string // expire 粘性修：fin_proposal.miss_count �
 
 //go:embed 1063_grad_family_evidence.sql
 var GradFamilyEvidenceSQL string // 毕业判据三值持久化列
+
+//go:embed 1064_hold_hours_prior.sql
+var HoldHoursPriorSQL string // funding_carry hh 输入源修：模板持有先验列（D-642 发现一病灶）
