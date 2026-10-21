@@ -16,7 +16,8 @@ type XAssetCoverageRow struct {
 	MtVenue    string
 	Rows24h    int
 	LastTs     time.Time
-	NoiseNulls int // 24h 内 noise_bps NULL 行数（衍生轴缺计）
+	FirstTs    time.Time // 簿首行（全表 min(ts)——新键爬坡窗判据）
+	NoiseNulls int       // 24h 内 noise_bps NULL 行数（衍生轴缺计）
 }
 
 // ListXAssetCoverage 全三元组覆盖报表（24h 窗 GROUP BY；零行=簿全缺席——
@@ -26,6 +27,7 @@ func (s *Store) ListXAssetCoverage(ctx context.Context) ([]XAssetCoverageRow, er
 		SELECT pair, cex_venue, mt_venue,
 		       count(*) FILTER (WHERE ts > now()-interval '24 hours') AS rows_24h,
 		       max(ts) AS last_ts,
+		       min(ts) AS first_ts,
 		       count(*) FILTER (WHERE ts > now()-interval '24 hours' AND noise_bps IS NULL) AS noise_nulls
 		FROM fin_xasset_monitor
 		GROUP BY 1,2,3 ORDER BY 1,2,3`)
@@ -36,7 +38,7 @@ func (s *Store) ListXAssetCoverage(ctx context.Context) ([]XAssetCoverageRow, er
 	var out []XAssetCoverageRow
 	for rows.Next() {
 		var r XAssetCoverageRow
-		if err := rows.Scan(&r.Pair, &r.CexVenue, &r.MtVenue, &r.Rows24h, &r.LastTs, &r.NoiseNulls); err != nil {
+		if err := rows.Scan(&r.Pair, &r.CexVenue, &r.MtVenue, &r.Rows24h, &r.LastTs, &r.FirstTs, &r.NoiseNulls); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

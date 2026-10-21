@@ -93,9 +93,9 @@ func TestCoverageAudit(t *testing.T) {
 	s := d335r1Store(t)
 	ctx := context.Background()
 	covClean(t, s)
-	// 饥饿对：3 行陈旧（>15min）→两型各一发。
+	// 饥饿对：3 行陈旧（>15min）且簿龄>warmup（爬坡豁免不吞老键饿警）→两型各一发。
 	for i := 0; i < 3; i++ {
-		covInsertRow(t, s, "COVTEST", time.Duration(60+i)*time.Minute)
+		covInsertRow(t, s, "COVTEST", time.Duration(180+i)*time.Minute)
 	}
 	coverageAudit(ctx, s, []monitorPair{{cexVenue: "binance:perp", pair: "COVTEST", mtVenueKey: "3001157:mt5"}})
 	var hungry, stale bool
@@ -192,7 +192,10 @@ func TestCoverageAuditSessionWindow(t *testing.T) {
 			} else {
 				covSession(t, s, "COVCAP", 0, 0, int(now.Weekday()), start, end)
 			}
-			covInsertRow(t, s, "COVCEX-COVCAP", 5*time.Minute) // 新鲜→只涉饿型
+			// 簿龄须>warmup：3h 前开簿 + 5min 前新鲜末行——
+			// 行龄新鲜不触断供、簿龄过窗不享豁免→只剩饿型受折算阈支配。
+			covInsertRow(t, s, "COVCEX-COVCAP", 3*time.Hour)
+			covInsertRow(t, s, "COVCEX-COVCAP", 5*time.Minute)
 			coverageAudit(ctx, s, []monitorPair{{cexVenue: "binance:perp", pair: "COVCEX-COVCAP", mtVenueKey: "3001157:mt5"}})
 			got := len(covAlerts(t, s, "COVCAP"))
 			if tc.wantAlert && got == 0 {
@@ -201,6 +204,46 @@ func TestCoverageAuditSessionWindow(t *testing.T) {
 			if !tc.wantAlert && got != 0 {
 				t.Fatalf("%s: 期望豁免实际 %d 条: %v", tc.name, got, covAlerts(t, s, "COVCAP"))
 			}
+		}
+	})
+}
+
+// TestCoverageAuditNewbornWarmup 新键爬坡窗豁免锚（10-21 ALGOUSDT-ALGO
+// 开簿 5min 即饿警实证）：簿龄<warmup 的初生键 rows_24h<12 是节律未凑满非饥饿
+// →饥饿型不报。对抗锚：删 coverageWarmup 门此测必红。
+// ②爬坡豁免不得吞断供：同龄键末行停更 >15min 照报断供（豁免面只限饥饿型）。
+func TestCoverageAuditNewbornWarmup(t *testing.T) {
+	s := d335r1Store(t)
+	ctx := context.Background()
+
+	t.Run("初生键不报饿", func(t *testing.T) {
+		covClean(t, s)
+		covInsertRow(t, s, "COVNEW", 30*time.Minute)
+		covInsertRow(t, s, "COVNEW", 5*time.Minute)
+		coverageAudit(ctx, s, []monitorPair{{cexVenue: "binance:perp", pair: "COVNEW", mtVenueKey: "3001157:mt5"}})
+		for _, m := range covAlerts(t, s, "COVNEW") {
+			if strings.Contains(m, "饥饿") {
+				t.Fatalf("初生键（簿龄 30min<warmup）误报饥饿: %s", m)
+			}
+		}
+	})
+
+	t.Run("初生键断供照报", func(t *testing.T) {
+		covClean(t, s)
+		covInsertRow(t, s, "COVNEW", 30*time.Minute)
+		covInsertRow(t, s, "COVNEW", 20*time.Minute) // 末行龄 20min>15min=断供，簿龄仍在爬坡窗
+		coverageAudit(ctx, s, []monitorPair{{cexVenue: "binance:perp", pair: "COVNEW", mtVenueKey: "3001157:mt5"}})
+		var stale bool
+		for _, m := range covAlerts(t, s, "COVNEW") {
+			if strings.Contains(m, "饥饿") {
+				t.Fatalf("初生键误报饥饿: %s", m)
+			}
+			if strings.Contains(m, "断供") {
+				stale = true
+			}
+		}
+		if !stale {
+			t.Fatal("爬坡豁免吞掉了断供（豁免面只限饥饿型）")
 		}
 	})
 }

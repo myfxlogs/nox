@@ -8,6 +8,11 @@
 // 误报成断供）：断供=停更窗 (lastTs,now] 曾开市而簿未写才报（全落闭市内=静默
 // 由闭市解释）；饥饿=12 行/24h 阈按窗内开市分钟折算（全开日=原阈不变、全闭窗
 // 阈 0 恒豁免）。会话表缺席=无证据不误赦，原阈直判。
+// 新键爬坡窗豁免（10-21 增补，同族伪警第三形态）：初生簿键（首行<warmup）按 5min
+// 节律凑满 12 行需 60min——开簿首小时必然 rows_24h<12，无豁免=每新键必发一次
+// 饥饿伪警并空派实施席（实证 10-21：ALGOUSDT-ALGO|binance:perp|15032313:mt5
+// 纸面仓 05:35:31Z 开→簿 05:40:03Z 首行→05:45 拍即派单；两腿供源全程在流）。
+// 仅豁免饥饿型：断供型（15min 行龄闸）自首行起值守——爬坡窗内真断供照报。
 package main
 
 import (
@@ -27,6 +32,7 @@ const (
 	coverageHungryRows = 12               // 行数/全开日<12=饥饿（noise 阈同源）
 	coverageStaleMax   = 15 * time.Minute // 最新行龄>采集周期(5min)×3=断供
 	coverageDayMin     = 24 * 60          // 全开日分钟数（饥饿阈折算分母）
+	coverageWarmup     = 2 * time.Hour    // 新键爬坡窗（24 拍节律——12 行阈+跳拍余量；仅豁免饥饿型）
 )
 
 // coverageAudit 每拍覆盖自盯（runPairs 前搭车——零新定时器；pairs=同拍派生清单）。
@@ -63,6 +69,12 @@ func coverageAudit(ctx context.Context, st *pgstore.Store, pairs []monitorPair) 
 				alerttext.SeatDispatchLine("实施", fmt.Sprintf("覆盖账本断供排查 %s（读 STATE 本行）", r.Pair))), 24*time.Hour); aerr != nil {
 				log.Printf("[coverage] stale alert: %v", aerr)
 			}
+		}
+		// 新键爬坡窗豁免：初生键 rows_24h<12 是节律未凑满非供源饥饿
+		// ——断供型已在上方值守，此处跳过饥饿判定（对抗锚：删此门新生键必饿警）。
+		if now.Sub(r.FirstTs) < coverageWarmup {
+			log.Printf("[coverage] 新键爬坡窗饥饿豁免: %s 簿龄 %s rows_24h=%d", key, now.Sub(r.FirstTs).Round(time.Minute), r.Rows24h)
+			continue
 		}
 		// 饥饿阈开市折算：全开日=12 行原阈；窗内开市 openMin 分钟→阈=12×openMin/1440；
 		// 表缺席（known=false）→原阈直判（无证据不误赦）。
