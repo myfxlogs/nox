@@ -81,11 +81,13 @@ func NewBinanceMarketWS(cfg Config) *BinanceMarketWS {
 	var publicURLs, marketURLs, spotURLs []string
 	proxyHosts := map[string]bool{}
 	if isNativeBinance(u.Host) {
-		// 修补：原生域派生 live-subscribe 端点（SUBSCRIBE 方言）——/public|market|spotws
-		// 是 cex-proxy 路由形制，币安原生域不存在该路径（拨号 bad handshake 风暴源）；
-		// 且 proxyHosts 不得含原生 host（否则 X-Proxy-Token 随握手漏给币安）。
+		// 修补：原生域 live-subscribe 端点——/public|spotws 是 cex-proxy 路由形制；
+		// proxyHosts 不得含原生 host（否则 X-Proxy-Token 随握手漏给币安）。
+		// 10-21 直探实锤（死循环取证票）：原生 /ws 对 !markPrice@arr/!ticker@arr
+		// ack 收讫但零帧停推（venue 端点迁移/选择性强拆——!bookTicker 同端点仍活），
+		// fstream 原生 /market/ws 实测产帧（biz>0）——markPrice/ticker 候选改 /market/ws。
 		publicURLs = []string{"wss://fstream.binance.com/ws"}
-		marketURLs = []string{"wss://fstream.binance.com/ws"}
+		marketURLs = []string{"wss://fstream.binance.com/market/ws"}
 		spotURLs = []string{"wss://stream.binance.com:9443/ws"}
 	} else {
 		publicURLs = []string{scheme + "://" + u.Host + "/public/ws"}
