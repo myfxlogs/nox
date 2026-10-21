@@ -337,3 +337,8 @@
 - **探针全链（病灶③票）**：explorer_proposals#95 走 D-047 PROBE 通道（ApproveProbe decision_ref 借号 D-650——本票无 D#，STATE 行已记对账锚）。候选两弃：JP225 0.1lot 实算名义 $6461 超 $50 帽（QuoteCcy→fx 未折 JPY，JP225 在帽内结构性不可行）；TRXUSD@15032313 无报价流。终选 ETHUSD SELL 0.01lot@15032313 名义≈$24.6。**结果：execution→legs✅（ticket 1824543463 实仓对拍）→09:46 manual_rpc 提前平（非 auto_close，到期自平径未验）→settlement✅（skipped 行设计语义）→review 断点=D-633 stMoney 未接 OnPositionChange，pipeline 钱径写点零 posChange kick，posreview/posMon 写盲；重启 boot 扫补齐 review id=1。**坑条目 money-pool-store-no-poschange-kick（high）已落+索引重建。
 - **MT5 死因链（病灶④票）**：mt5×okx:perp opp 史上 5 行全追——armed 匹配全过；三主死因 a) JP225USDT funding regime worst=0<floor2.0（venue 原播 0 值 374/887 样本，~90% skip 归此=结构性永拒）b) okx:perp 权益读缺间歇拒（okx REST 429/cooldown）c) netBps<1。10-14~18 老 opp 日志随容器重启灭失=如实断点。**共性缺口=regime 闸×0 值 caliber（收益闸如实拒非管线哑）；脉冲品种判据口径=决策席域修票向。**
 - **如实记**：pos#1 realized=−$0.014（真亏真记）；探针提案 #95 closed；D-650 借号引用悬空风险已记（分诊席 09:50Z 条目同见）；manual_rpc 平仓者非本席（疑业主/他席现场）未查明归属=如实记。
+
+## 2026-10-21 运维架构审计令（业主——D-651/D-652 两线）
+- 业主原话：「搞来搞去，都搞不好，还是回到公司架构上来吧，检查和审计公司架构，运维有没有缺陷」——当日多轮点修（眠钱/瓦片/管线/部署竞态）后的方向性纠偏：从修病灶转向修架构。
+- 双决策席并行接令（devin 席 D-651 七缺陷+五修向；本席 D-652 三缺口+残余项，互去重零重判）。业主追加问「devin 在部署会不会冲突」=并发意识入题（部署互斥已入 D-651④/D-652 实证链）。
+- 业主合作项：无。审计结论=运维层缺陷系统性存在但方向层（G0-G11）无缺陷——修复走 D# 案+票，不动方向锚。
