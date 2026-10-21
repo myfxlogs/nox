@@ -63,7 +63,8 @@ func main() {
 	cfg := config.Load()
 	// D-368 S3 + D-515 S4：app_config overlay（DB>env>default）——必须在 engine/组件构造前。
 	config.ApplyAppConfigOverlay(cfg, acRows)
-	secRes := newSecretResolver(secrets, cfg) // D-545 S5：密钥热读缓存（DB∪env 种子+热闸标量）
+	reconcile.ConfigureOkxRateGate(cfg.OkxGetMinInterval, cfg.OkxGetBackoff, cfg.OkxGetBackoffMax) // okx 签名 GET 节流闸（429 修——须在 querier 使用前注入，与 overlay 同序约束）
+	secRes := newSecretResolver(secrets, cfg)                                                      // D-545 S5：密钥热读缓存（DB∪env 种子+热闸标量）
 	log.Printf("config: cross_cex_bps=%.2f cross_cfd_bps=%.2f funding_min=%.1f%% carry_min=%.1f%% grab_min=%.1f%% slippage=%.1fbps margin=%.1f%% comm_cfd=%.2f comm_cex=%.1f gate_taker=%.1f close_bps=%.1f freshness=%v opp_ttl=%v opp_pub_delta=%.2f swap_refresh=%v trademode_ttl=%v symbols_ttl=%v",
 		cfg.CrossVenueMinGrossBpsCEX, cfg.CrossVenueMinGrossBpsCFD, cfg.FundingMinNetAnnualized, cfg.CarryMinNetAnnualized, cfg.GrabMinNetAnnualized,
 		cfg.SlippageBps, cfg.MarginRateAnnual, cfg.CommissionCFDBps, cfg.CommissionCEXTakerBps, cfg.CommissionTaker["gate"],

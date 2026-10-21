@@ -39,7 +39,17 @@ func (q *CEXAccountQuerier) okxSubaccountSignedGet(ctx context.Context, pathWith
 	if base == "" {
 		base = okxSubaccountBase
 	}
-	return q.get(ctx, base+pathWithQuery, headers)
+	path := pathWithQuery
+	if i := strings.IndexByte(path, '?'); i >= 0 {
+		path = path[:i]
+	}
+	gkey := q.apiKey + "|" + path // venue 限频档=User ID 规则——凭据×端点键
+	if err := okxGateWait(ctx, gkey); err != nil {
+		return nil, err
+	}
+	body, err := q.get(ctx, base+pathWithQuery, headers)
+	okxGateResult(gkey, err)
+	return body, err
 }
 
 // accountOkxFunding okx 资金账户：GET /api/v5/asset/balances 全币枚举（D-528 同型

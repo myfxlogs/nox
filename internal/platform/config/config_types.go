@@ -273,6 +273,9 @@ type Config struct {
 	// === D-271 CEX 只读扫描器 ===
 	CexScanInterval time.Duration // 扫描间隔（NOX_CEX_SCAN_INTERVAL，默认 5m）
 	CexScanSymbols  []string      // 价差扫描币种（NOX_CEX_SCAN_SYMBOLS，默认 BTC/ETH/TRX/SOL/USDT/USDC）
+	// okx 签名 GET 节流闸（429 修——order-history 文档档 1req/s/User ID）：
+	// MinInterval=同 path 最小间隔；Backoff 初罚/翻倍基数；BackoffMax 封顶。
+	OkxGetMinInterval, OkxGetBackoff, OkxGetBackoffMax time.Duration
 	// urgent/warn 档告警冷却（默认 30m/6h，env NOX_MARGIN_URGENT/WARN_COOLDOWN）。
 	MarginUrgentCooldown, MarginWarnCooldown time.Duration // 同上行注释
 
