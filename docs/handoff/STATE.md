@@ -1091,3 +1091,12 @@ verdict=照准。亲证：①diff 全读——NoxMark（O=枭面字标，current
 验收锚：TestDormantVenueGranularity（binance 存量 deferred+零新 binance proposed+okx 提案照产）；机检 51 包测试+race 绿、vet/gofmt 净。
 遗留如实记：auto 轨无执行器处置块（run.go ~140）defer 仍硬编码 @binance——同族作用域嫌疑，本票未动（票面范围只钉 dormant）；sell_high okx 提案恢复待部署后扫描拍实证（能力达标面以生产为准）。
 -->
+
+<!-- 实施席 10-21：sell_high 提案恢复实证（DCI 复活票 C 段——部署后扫描拍）
+前置发现：merge @939d1edd8 在库但 SG 镜像建于 merge 前 15min（02:40Z）——在跑旧码，本席按 runbook 重建部署（镜像 94ff19d6→compose up）。
+实证（SG 03:26:18 扫描拍「9 templates, 8 proposals」）：
+①dci_sell_high_covered_call@okx 提案 #1687 落库 proposed（apy=33.91 venue 原生口径，评估卡=viable）——dormant@binance 不再掐 okx 面；
+②粒度生效留痕：休眠轨 sell_high@binance/earn_rotation@binance/option_spread@binance 各只压本 venue；
+③earn_rotation 预检休眠写面扩为 3 venue 键（binance/okx/gate 逐键——新写径实证）。
+结论=C 段达成：sell_high okx 面提案恢复（A/B 段属 DCI 复活票本体）。
+-->
