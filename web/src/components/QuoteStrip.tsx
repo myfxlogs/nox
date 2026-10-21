@@ -33,11 +33,17 @@ export function QuoteStrip() {
   // F5：渲染序=watchlist 后端配置序（「排序全后端」——禁前端 sort）；
   // canonical→序位映射，外帧按到达序插尾。
   const [orderIdx, setOrderIdx] = useState<Map<string, number>>(new Map());
+  // 渲染域收窄票：orderRef=watchlist 成员制集（ref 供订阅闭包读最新，
+  // 避免 watchlist 保存后重订阅）；非成员帧不建瓦片（渲染域收窄，
+  // 订阅面/采集域零动——885 symbol 帧仍到达只不渲）。
+  const orderRef = useRef<Map<string, number>>(new Map());
   const seqRef = useRef<Map<string, number>>(new Map());
   const seqNext = useRef(0);
   const loadWatchlist = () => {
     void client.getWatchlist({}).then((w) => {
-      setOrderIdx(new Map(w.items.map((x, i) => [x.canonical, i] as const)));
+      const m = new Map(w.items.map((x, i) => [x.canonical, i] as const));
+      orderRef.current = m;
+      setOrderIdx(m);
     }).catch(() => {});
   };
   useEffect(loadWatchlist, []);
@@ -46,6 +52,7 @@ export function QuoteStrip() {
       onCase("quote", (v) => {
         const f = v as Quote;
         if (!f.venue || !f.symbol) return;
+        if (!orderRef.current.has(f.symbol)) return; // watchlist 成员制闸
         setQ((m) => {
           const k = `${f.venue}|${f.symbol}`;
           if (!seqRef.current.has(k)) seqRef.current.set(k, seqNext.current++);
