@@ -1162,3 +1162,10 @@ earnLabel 死函数删（键径换代后零调用）。机检：dashboard 820 �
 ③提案面双闸立票（表首 sell_high 提案面双闸行）——无券+无 strike 卡禁出世。
 -->
 [决策收口:D-645-DCI整体重评估] 裁定毕 @buy_low停用维持+sell_high双闸立票
+
+<!-- 实施席 10-21：漂移侦测器 ticks_old 白名单修 施工完候复审
+病灶（SG 实拍）：自检报「活库存在而迁移链无声明」2 处——ticks_old.ticks_venue_bare_chk/ticks_venue_type_chk；ticks_old=D-626 阶段 C 钦定观察期回滚件（rename 表体自带 CHECK=运行时产物非漂移）。
+修件（wip/drift-ticksold）：`driftExemptTables` 精确表名豁免集（只 ticks_old，禁宽掩码——裁弃 ticks_old 后行随删注在案）；豁免面只作用于 live-only 表分支（expected/parts 声明面不受影响）。
+机检：TestSchemaCheckDrift_ExemptRuntimeLegacy——豁免表零报+非豁免 live-only 表仍报（宽掩码回归锚）；TestSchemaCheckDrift 三锚绿。
+SG 验收锚（复审席）：重启/部署后 boot 日志无 ticks_old 漂移告警（其余真漂移面照报）。
+-->

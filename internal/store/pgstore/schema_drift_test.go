@@ -113,3 +113,37 @@ func TestExpectedCheckDefs_Chain(t *testing.T) {
 		t.Fatalf("status_check 末次定义胜出失败: %q", st)
 	}
 }
+
+// TestSchemaCheckDrift_ExemptRuntimeLegacy 运行时遗留表豁免锚（ticks_old 白名单修）：
+// ①豁免表 live-only 不报告；②非豁免 live-only 表仍报「无声明」——禁宽掩码不松口。
+func TestSchemaCheckDrift_ExemptRuntimeLegacy(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	defer func() {
+		s.pool.Exec(ctx, `DROP TABLE IF EXISTS ticks_old`)
+		s.pool.Exec(ctx, `DROP TABLE IF EXISTS zdrift_noexempt`)
+	}()
+	if _, err := s.pool.Exec(ctx, `CREATE TABLE ticks_old (id int CHECK (id > 0));
+		CREATE TABLE zdrift_noexempt (id int CHECK (id > 0))`); err != nil {
+		t.Fatal(err)
+	}
+	drift, err := s.SchemaCheckDrift(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var exemptHit, noexemptHit bool
+	for _, d := range drift {
+		if d.Table == "ticks_old" {
+			exemptHit = true
+		}
+		if d.Table == "zdrift_noexempt" {
+			noexemptHit = true
+		}
+	}
+	if exemptHit {
+		t.Fatal("ticks_old 豁免表被误报漂移")
+	}
+	if !noexemptHit {
+		t.Fatal("非豁免 live-only 表未报——豁免面过宽（宽掩码回归）")
+	}
+}
