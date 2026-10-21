@@ -271,3 +271,7 @@
 - 取证定谳：EXR `ADAUSDm/DOTUSDm/FILUSDm` 同名符号异底层（价比 1.5-4.1x，quoteGuard 实删）——映射缺口的真相不全是"表未喂"，补映射前必 SymbolParams+价比双核。
 - 移交件：SPCXUSDT(binance)×SPX500 组合腿配对存疑（entry_spread −9793bps+universe hedge_canonical 不指向 SPX500）——monitor 覆盖缺是表象，组合本体裁定属决策席。
 - 坑沉淀：补映射裸 SQL 只改 DB 不热载 adapter symMap/订阅——SaveSymbolMapping RPC 才是完整径（KB 条目在案）。
+
+## 2026-10-21 00:5xZ — 晨问三假说裁定
+
+业主问：「无行情/面窄/方向错？」晨检裁定：①非无行情——term_basis 晨拍 viable 净 41.28%（gross 42/fee 0.56）真基差错位在案；②面窄昨夜已在解——补源上线三模板苏醒（24h 7 行评估 vs 全史 1 行）+并行席连夜把②③判据票部署；③方向未到判死时——「全负边」结论被 funding_carry hh=3h 假费伪影污染（一次性费复利 2920 次=−550% 假拒，P2 小票已立），尺子修好前不下方向结论；term_basis 41%=修尺后首个过闸候选，它过真费+置信界则方向自证。
