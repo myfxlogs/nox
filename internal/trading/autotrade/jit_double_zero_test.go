@@ -23,27 +23,28 @@ func (s *jitDblSvc) AccountEquityUSDAt(vk string) (float64, string, time.Time, b
 }
 func (s *jitDblSvc) RefreshAccountEquity(_ context.Context, vk string) { s.eq[vk] = 1500 }
 
-// 双零同池+票面锚在场 → 单次扫（vk=pool venue，need=票面锚，oppAPR=NetBps/1e4）
+// 双零同池（okx:spot×okx:futures=异键同 unified 池，combo#25 本尊）+票面锚
+// 在场 → 单次扫（vk=交易户腿 okx:futures，need=票面锚，oppAPR=NetBps/1e4）
 // →权益重读>0→sizing 放行。
 func TestJitDoubleZero_SingleSweepNotionalAnchor(t *testing.T) {
 	var gotVK string
 	var gotNeed, gotAPR float64
 	calls := 0
-	e := &Engine{service: &jitDblSvc{eq: map[string]float64{"okx:perp": 0}}}
+	e := &Engine{service: &jitDblSvc{eq: map[string]float64{"okx:spot": 0, "okx:futures": 0}}}
 	e.JitSweepFn = func(_ context.Context, vk string, need, apr float64) (string, error) {
 		calls++
 		gotVK, gotNeed, gotAPR = vk, need, apr
 		return "", nil
 	}
 	spec := &exec.XAssetComboAllowSpec{
-		VenueBuy: "okx:perp", VenueSell: "okx:perp",
+		VenueBuy: "okx:spot", VenueSell: "okx:futures",
 		SizingMode: "pct", FundingPct: f64p(0.5), MaxGrossUSD: 1500,
 	}
 	opp := pgstore.Opportunity{ID: "o1", NetBps: 1470}
 	if !e.resolveXAssetSizing(context.Background(), opp, spec) {
 		t.Fatal("sizing 应放行")
 	}
-	if calls != 1 || gotVK != "okx:perp" || gotNeed != 1500 || gotAPR != 0.147 {
+	if calls != 1 || gotVK != "okx:futures" || gotNeed != 1500 || gotAPR != 0.147 {
 		t.Fatalf("归集调用错: n=%d vk=%s need=%.0f apr=%.4f", calls, gotVK, gotNeed, gotAPR)
 	}
 }
@@ -63,7 +64,8 @@ func TestJitDoubleZero_NotionalFirst(t *testing.T) {
 	}
 }
 
-// 异 venue 键双零 → 不触双零径（逐腿循环 0−0 跳过语义保），落箱面不扫。
+// 异键异池（okx:spot×binance:perp）双零 → 不触双零径（逐腿循环 0−0 跳过
+// 语义保），落箱面不扫。
 func TestJitDoubleZero_DiffKeysNoSweep(t *testing.T) {
 	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
 	st, err := pgstore.New(context.Background(), dsn)
@@ -75,10 +77,10 @@ func TestJitDoubleZero_DiffKeysNoSweep(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := 0
-	e := &Engine{store: st, service: &jitDblSvc{eq: map[string]float64{"okx:perp": 0, "gate:perp": 0}}}
+	e := &Engine{store: st, service: &jitDblSvc{eq: map[string]float64{"okx:spot": 0, "binance:perp": 0}}}
 	e.JitSweepFn = func(_ context.Context, _ string, _, _ float64) (string, error) { calls++; return "", nil }
 	spec := &exec.XAssetComboAllowSpec{
-		VenueBuy: "okx:perp", VenueSell: "gate:perp",
+		VenueBuy: "okx:spot", VenueSell: "binance:perp",
 		SizingMode: "pct", FundingPct: f64p(0.5), MaxGrossUSD: 1500,
 	}
 	if e.resolveXAssetSizing(context.Background(), pgstore.Opportunity{ID: "o1"}, spec) {
@@ -90,3 +92,45 @@ func TestJitDoubleZero_DiffKeysNoSweep(t *testing.T) {
 }
 
 func f64p(v float64) *float64 { return &v }
+
+// 交易户腿取向：买腿 futures/卖腿 spot → 归集落买腿 trading 户（保证金域）。
+func TestJitDoubleZero_TradingLegPreferred(t *testing.T) {
+	var gotVK string
+	e := &Engine{service: &jitDblSvc{eq: map[string]float64{"okx:futures": 0, "okx:spot": 0}}}
+	e.JitSweepFn = func(_ context.Context, vk string, _, _ float64) (string, error) {
+		gotVK = vk
+		return "", nil
+	}
+	spec := &exec.XAssetComboAllowSpec{
+		VenueBuy: "okx:futures", VenueSell: "okx:spot",
+		SizingMode: "pct", FundingPct: f64p(0.5), MaxGrossUSD: 1000,
+	}
+	_ = e.resolveXAssetSizing(context.Background(), pgstore.Opportunity{ID: "o1", NetBps: 1470}, spec)
+	if gotVK != "okx:futures" {
+		t.Fatalf("交易户腿取向错 vk=%s", gotVK)
+	}
+}
+
+// binance 非 unified 池：spot×perp 异 vt=异池 → 不入双零径。
+func TestJitDoubleZero_BinanceVTDiffNoSweep(t *testing.T) {
+	dsn := testutil.TestDSN(t, "NOX_TEST_PG_DSN")
+	st, err := pgstore.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(st.Close)
+	if err := st.Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	e := &Engine{store: st, service: &jitDblSvc{eq: map[string]float64{"binance:spot": 0, "binance:perp": 0}}}
+	e.JitSweepFn = func(_ context.Context, _ string, _, _ float64) (string, error) { calls++; return "", nil }
+	spec := &exec.XAssetComboAllowSpec{
+		VenueBuy: "binance:spot", VenueSell: "binance:perp",
+		SizingMode: "pct", FundingPct: f64p(0.5), MaxGrossUSD: 1000,
+	}
+	_ = e.resolveXAssetSizing(context.Background(), pgstore.Opportunity{ID: "o1"}, spec)
+	if calls != 0 {
+		t.Fatalf("binance 异 vt 误并池 %d 次", calls)
+	}
+}

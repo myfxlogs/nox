@@ -315,3 +315,6 @@
 
 ## 2026-10-21 jit 返修纪要（wip/jit-yield @6aabfc2e6）
 - 双零触发器裁定（实施域）：触发条=同 venueKey 双腿皆零（池粒度等值判——venueKey=权益快照键即池键，裸名相等不够 vt 不同池）；锚序=NotionalUSD→MaxGrossUSD→MarginUSD（票面对象原值序，margin 兜底保 margin-mode 组合可达）；锚全缺=fail-closed 落箱不臆量。异 venueKey 双零不入此径（非本病灶面）。
+
+## 2026-10-21 jit 双零池级判据实施纪要（wip/jit-yield @b9caee585）
+- 池身份裁定（实施域）：池键=livePoolQuerier 同口径——okx 任意交易 vt 钉 `okx:unified`（统一账户实证 combo#25 legPools）；binance/gate 按 vt 精确配腿（vt 相同才同池——spot 腿禁读 perp 池语义不破坏）；funding/earn 子账户不入双零域（精确池禁并——同 livePoolQuerier 禁线）。归集落腿=交易户腿优先（vt∈{perp,unified,futures}——spot 腿赎落 funding 即达无须二跳，futures 腿须落 trading 户抵保证金）。
