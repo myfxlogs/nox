@@ -60,6 +60,10 @@ type fakeStore struct {
 	hasEarnAt      bool
 	jitOutstanding float64               // jit 净额账种子（回转面）
 	legs           []pgstore.PositionLeg // jit 回转腿种子（pos 腿 venue 集）
+	earnAPR        float64               // D-647：jit 比对闸 earn 在册 APR 种子
+	earnAPROK      bool
+	earnAPRErr     error
+	armedN         int // jit 闲置回申 armed 组合数种子
 }
 
 // dciListJSON R14 重取产品面测试具——全候选品 canPurchase+orderId 齐帧。
@@ -1365,6 +1369,12 @@ func (f *fakeStore) ListPositionLegs(_ context.Context, _ int64) ([]pgstore.Posi
 	return f.legs, nil
 }
 
+func (f *fakeStore) LatestEarnAPR(_ context.Context, _, _ string) (float64, bool, error) {
+	return f.earnAPR, f.earnAPROK, f.earnAPRErr
+}
+func (f *fakeStore) JitArmedComboCount(_ context.Context, _ string) (int, error) {
+	return f.armedN, nil
+}
 func (f *fakeStore) JitNetOutstanding(_ context.Context, _ string) (float64, error) {
 	return f.jitOutstanding, nil
 }

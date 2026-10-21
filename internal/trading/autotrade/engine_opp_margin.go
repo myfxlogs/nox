@@ -97,25 +97,44 @@ func (e *Engine) resolveXAssetSizing(ctx context.Context, opp pgstore.Opportunit
 		// JIT 归集前置（划转执行件）：缺资腿 earn 桶赎缺口额→交易户→重读
 		// 权益原路 sizing；归集败/仍非正才落业主请求箱。败因 kind=落箱分类
 		// （permission=授权面 key scope 缺——票面②）。
-		for _, lg := range []struct {
-			vk        string
-			eq, other float64
-		}{{spec.VenueBuy, eqB, eqS}, {spec.VenueSell, eqS, eqB}} {
-			if lg.eq > 0 || lg.other <= 0 {
-				continue
-			}
-			kind, err := e.JitSweepFn(ctx, lg.vk, lg.other-lg.eq)
-			if err != nil {
-				log.Printf("[autotrade] jit 归集 %s 缺口 %.2f 败（%s 落箱面）: %v", lg.vk, lg.other-lg.eq, kind, err)
-				jitGapKind = kind
-				continue
-			}
-			e.service.RefreshAccountEquity(ctx, lg.vk)
-			if v, _, _, ok := e.service.AccountEquityUSDAt(lg.vk); ok && v > 0 {
-				if lg.vk == spec.VenueBuy {
-					eqB = v
+		if spec.VenueBuy == spec.VenueSell && eqB <= 0 && eqS <= 0 {
+			// 双零触发器（D-649 返修）：同池双腿皆零——缺口额=票面名义锚
+			// （NotionalUSD→MaxGrossUSD→MarginUSD 序，非对腿参照 0−0=0 空洞），
+			// venue 粒度单次归集非逐腿（combo#25 双腿同池皆零实证）。
+			if need := jitNotionalAnchor(spec); need > 0 {
+				if kind, err := e.JitSweepFn(ctx, spec.VenueBuy, need, opp.NetBps/10000); err != nil {
+					log.Printf("[autotrade] jit 双零归集 %s 票面名义 %.2f 败（%s 落箱面）: %v", spec.VenueBuy, need, kind, err)
+					jitGapKind = kind
 				} else {
-					eqS = v
+					e.service.RefreshAccountEquity(ctx, spec.VenueBuy)
+					if v, _, _, ok := e.service.AccountEquityUSDAt(spec.VenueBuy); ok && v > 0 {
+						eqB, eqS = v, v
+					}
+				}
+			} else {
+				log.Printf("[autotrade] jit 双零同池 %s 票面名义锚缺（fail-closed 落箱）", spec.VenueBuy)
+			}
+		} else {
+			for _, lg := range []struct {
+				vk        string
+				eq, other float64
+			}{{spec.VenueBuy, eqB, eqS}, {spec.VenueSell, eqS, eqB}} {
+				if lg.eq > 0 || lg.other <= 0 {
+					continue
+				}
+				kind, err := e.JitSweepFn(ctx, lg.vk, lg.other-lg.eq, opp.NetBps/10000)
+				if err != nil {
+					log.Printf("[autotrade] jit 归集 %s 缺口 %.2f 败（%s 落箱面）: %v", lg.vk, lg.other-lg.eq, kind, err)
+					jitGapKind = kind
+					continue
+				}
+				e.service.RefreshAccountEquity(ctx, lg.vk)
+				if v, _, _, ok := e.service.AccountEquityUSDAt(lg.vk); ok && v > 0 {
+					if lg.vk == spec.VenueBuy {
+						eqB = v
+					} else {
+						eqS = v
+					}
 				}
 			}
 		}
@@ -139,4 +158,19 @@ func (e *Engine) resolveXAssetSizing(ctx context.Context, opp pgstore.Opportunit
 	}
 	exec.XAssetSpecApplyPoolCaps(spec, base*pct)
 	return true
+}
+
+// jitNotionalAnchor 双零同池缺口额锚：票面名义序 NotionalUSD→MaxGrossUSD→
+// MarginUSD（票面对象原值——armed 卡名义/上限额，禁对腿权益参照）。
+func jitNotionalAnchor(spec *exec.XAssetComboAllowSpec) float64 {
+	if spec.NotionalUSD != nil && *spec.NotionalUSD > 0 {
+		return *spec.NotionalUSD
+	}
+	if spec.MaxGrossUSD > 0 {
+		return spec.MaxGrossUSD
+	}
+	if spec.MarginUSD != nil && *spec.MarginUSD > 0 {
+		return *spec.MarginUSD
+	}
+	return 0
 }

@@ -29,8 +29,8 @@ func wireJit(atEngine *autotrade.Engine, settleDeps settlement.Deps, ex *dciexec
 	}); ok {
 		h.SetPostSettleHook(ex.JitReturnForPosition)
 	}
-	atEngine.JitSweepFn = func(ctx context.Context, vk string, need float64) (string, error) {
-		err := ex.JitSweep(ctx, vk, need)
+	atEngine.JitSweepFn = func(ctx context.Context, vk string, need, oppAPR float64) (string, error) {
+		err := ex.JitSweep(ctx, vk, need, oppAPR)
 		if err != nil {
 			return dciexec.JitErrKind(err), err
 		}
