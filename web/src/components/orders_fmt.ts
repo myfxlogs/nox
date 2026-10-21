@@ -9,6 +9,8 @@ export const ORDER_STATUS_CN: Record<string, string> = {
   filled: "持仓中", settled: "已结清", failed: "未成交", pending: "下单中",
   live: "持仓中", LIVE: "持仓中", open: "持仓中", active: "持仓中",
   OPEN: "持仓中", CLOSED: "已平", proposed: "自动候执行",
+  // earn 聚合卡金额源=快照桶——订单行在而快照桶缺=断供/已清如实标（禁回落订单Σ）。
+  "缺快照": "快照缺",
 };
 
 // ORDER_KIND_CN 订单类别中文映射（kind 由后端 product_ref 派生）。

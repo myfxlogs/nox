@@ -14,7 +14,7 @@ function orderTone(s: string): "good" | "warn" | "critical" | "neutral" {
   switch (s) {
     case "open": case "filled": case "live": case "LIVE": case "active": case "proposed": case "OPEN":
       return "good";
-    case "pending": case "closing":
+    case "pending": case "closing": case "缺快照": // 快照桶缺=警示态
       return "warn";
     case "failed": case "error":
       return "critical";

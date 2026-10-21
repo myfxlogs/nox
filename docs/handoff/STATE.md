@@ -1124,6 +1124,7 @@ verdict=照准收口。亲证三通道：①镜像通道——SG nox-core 在跑
 -->
 [决策收口:sell_high实证] 照准 @bc1d60359——C 段遗留锚闭，DCI 复活票全段收口
 
+<<<<<<< HEAD
 <!-- 复审注记（决策席代审·观察面同级，10-21 04:45Z）：earn 瓦片快照桶 退回①
 verdict=退回。独立复核：diff 全读+分支机检复跑（go build+TestOverviewBundleOrders 1 过=绿——缺陷非红测面=覆盖缺口）+SG 生产实拍三面。
 伤①（高危·单位错显，生产实证）：新 earn 卡循环（service_overview_bundle.go @1827e73fb）无币种域滤——`Ghost` 语义=移除户残行（nav.go:31「broker_accounts 移除户快照残行」）非尘池；SG fin_venue_account_snapshot venue_type='earn' DISTINCT ON 实拍 91 池含 PEPE 46155 枚/DOGE 52886 枚/PENGU 28.9 枚等 alt 池（04:41Z 拍）→ 逐池出卡且原生币数量直塞 AmountUsd；金额降序排卡后尘币卡霸榜首（52886>okx USDT 2128.63）——本票收 USDT 虚高的同型病灶在 alt 面重开（原生单位冒 USD=D-616 禁线）。
@@ -1139,4 +1140,17 @@ verdict=退回。独立复核：diff 全读+分支机检复跑（go build+TestOv
 修件（wip/custody-share-venue）：①gate.CustodyShareOf(cons,venue) 双键查序——`custody_share@<venue>` 优先、无键回落全局（subject 并 venue 后缀与 dormant:<t>@<v> 惯例对齐）；②消费面分域接线——exec_go GoProposal 按 p.Venue 取、wheel/reconcile 钉 "binance" 共享池域；③TenorCapOf 缩为 redeemable cap+全局 share（向后兼容零漂移）；④share=nil 缺口文案带 venue 键形。
 机检：TestCustodyShareOf_VenueGranularity 五态锚（@okx=1.0 优先/binance 回落 0.34/空 venue=全局/仅 venue 键 binance=nil/@okx 无数值回落）+TestTenorCapOf_GlobalOnly；gate+dciexec 236 测+race 全绿。
 SG 验收锚（复审席）：okx 资金户 BTC 到位+约束行 `custody_share@okx=1.0` 落库后，sell_high@okx 提案 GoProposal qty=余额×1.0 过最小档（或如实下段拒因）；约束行落库=fin_capability_constraint 写径业主/决策席侧，本票只修读面。
+-->
+
+<!-- 实施席 10-21：earn 瓦片金额改读快照桶 施工完候复审
+病灶（票面实证）：earn 聚合卡金额=Σ fin_dci_order filled 申购行——赎回/轮动不翻态→虚高（gate Σ2999.92 vs 快照 2000.55；binance Σ2292.75 vs 1592.68）；locked 同病灶（earn filled 全进锁定档）。
+修件（wip/earn-snap-amt）：①earnAgg→earnMeta 只留订单行派生（笔数/首笔申购日）；金额=快照 earn 桶 equity（venue_type='earn'×币种 label=venue+" 活期 "+ccy——与 PrincipalEarningUsd 同源）；②快照桶缺的订单组=Status「缺快照」如实标缺禁回落订单Σ；③locked 剔 earn filled（活期=流动非锁定，移至 kind 判定后累加）；④sortedEarnAgg 死函数删。前端 orders_fmt/orderTone 加「缺快照」→「快照缺」warn 态（零判定）。
+机检：TestOverviewBundleOrdersNonEmptyAndAggregated 重写=快照额断言（订单Σ1500 vs 快照1420.5）+缺桶标缺+locked=700 剔 earn；dashboard 820 测+race 绿、npm build 绿。
+SG 验收锚（复审席）：gate 卡显≈2000.55、binance 卡显≈1592.7 与快照对拍；okx PENGU 币等 alt earn 池若出卡=币种如实标。
+-->
+
+<!-- 实施席 10-21：earn 瓦片快照桶 退回①返修完候复审
+修单三条全落：①卡域限 currency∈{USDT,USD}（快照桶循环+订单组双侧滤——alt 池原生单位不冒 USD，与 PrincipalEarningUsd prefetch 同域）；②earnMeta 键改 venue+" 活期 "+InvestCcy（语义币种字段——USDT001 型裸 ref 归位 USDT 桶，治退回注记 b 项错配缺标）；③测试补锚=alt 池（PEPE 52886）+alt 订单组零卡断言、binance USDT001→「binance 活期 USDT」快照命中不误缺标断言。
+earnLabel 死函数删（键径换代后零调用）。机检：dashboard 820 测+race 触测绿、npm build 绿（bundle index-Diu5XVlD）。
+>>>>>>> nox/wip/earn-snap-amt
 -->
