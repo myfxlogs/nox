@@ -7,8 +7,12 @@ import (
 	"time"
 
 	"nox/internal/data/fact"
+	"nox/internal/platform/rejects"
 	"nox/internal/store/pgstore"
 )
+
+// rejects 注册：swaparb_discover 面门集（D-652 拒因可观测——注册了不挂/挂了没注册由对拍锚防）。
+func init() { rejects.Register("swaparb_discover", "symbol_unmapped", "fact_stale") }
 
 // discoverSwapCombos 从 facts 表自动扫描所有跨账户 swap 组合。
 // minNetSwapBps 从 env 读取（NOX_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）。
@@ -96,6 +100,9 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 			filteredS = append(filteredS, f)
 		}
 		shortFacts = filteredS
+		for i := 0; i < staleLong+staleShort; i++ {
+			rejects.Inc(rejects.Key{Face: "swaparb_discover", Gate: "fact_stale"})
+		}
 		if staleLong > 0 || staleShort > 0 {
 			log.Printf("[autotrade] SWAPARB fact freshness gate: skipped %d long + %d short (maxAge=%s)",
 				staleLong, staleShort, maxAge)
@@ -219,6 +226,7 @@ func resolveSwapSymbols(facts []fact.Fact, m *pgstore.SymbolCanonMap) []fact.Fac
 	for _, f := range facts {
 		canon, ok := m.Resolve(f.Venue, f.Symbol)
 		if !ok {
+			rejects.Inc(rejects.Key{Face: "swaparb_discover", Gate: "symbol_unmapped"})
 			log.Printf("[autotrade] SWAPARB skip %s@%s: symbol unmapped (无 broker_symbol_map 行——促补映射)",
 				f.Symbol, f.Venue)
 			continue

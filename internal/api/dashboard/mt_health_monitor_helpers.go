@@ -145,3 +145,5 @@ func (m *MTHealthMonitor) classifyWithFlashMiss(venue string, raw mtHealthMetric
 	m.mu.Unlock()
 	return raw, 0, false
 }
+
+// collectFactAges 从 store 查 swap/margin facts，按 Venue 分组取 max(Ts)，返回 venue→age。

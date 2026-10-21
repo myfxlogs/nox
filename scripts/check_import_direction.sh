@@ -268,6 +268,14 @@ internal/trading/exec -> internal/platform/notional
 internal/trading/exec -> internal/platform/safego
 internal/trading/exec -> internal/platform/signutil
 internal/trading/exec -> internal/store/pgstore
+internal/api/dashboard -> internal/platform/rejects
+internal/portfolio/idle -> internal/platform/rejects
+internal/research/detector -> internal/platform/rejects
+internal/review/sysretro -> internal/platform/rejects
+internal/trading/autotrade -> internal/platform/rejects
+internal/trading/engine -> internal/platform/rejects
+internal/trading/exec -> internal/platform/rejects
+
 EOF
 )
 

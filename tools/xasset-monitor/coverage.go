@@ -20,8 +20,12 @@ import (
 	"nox/internal/data/keydomain"
 	"nox/internal/data/marketstate"
 	"nox/internal/platform/alerttext"
+	"nox/internal/platform/rejects"
 	"nox/internal/store/pgstore"
 )
+
+// rejects 注册：coverage_audit 面门集（D-652 拒因可观测——注册了不挂/挂了没注册由对拍锚防）。
+func init() { rejects.Register("coverage_audit", "dead_key", "closed_window", "stale", "hungry") }
 
 const (
 	coverageHungryRows = 12               // 行数/全开日<12=饥饿（noise 阈同源）
@@ -46,6 +50,7 @@ func coverageAudit(ctx context.Context, st *pgstore.Store, pairs []monitorPair) 
 	for _, r := range rows {
 		key := fmt.Sprintf("%s|%s|%s", r.Pair, r.CexVenue, r.MtVenue)
 		if !live[key] {
+			rejects.Inc(rejects.Key{Face: "coverage_audit", Gate: "dead_key"})
 			continue // 死键（组合退役/demand 缩编退场）——簿史不审计
 		}
 		// MT 腿 canonical=pair 尾段、venue=裸户号（与派生/会话表键同源）。
@@ -54,9 +59,11 @@ func coverageAudit(ctx context.Context, st *pgstore.Store, pairs []monitorPair) 
 		// 断供会话闸（窗口化）：停更窗内从未开市=静默由闭市解释，两型同豁免
 		// （窗内零开市则 24h 行数低同理非饿）。
 		if openSeen, known := sessTbl.OpenSince(mtBare, mtCanon, r.LastTs, now); known && !openSeen {
+			rejects.Inc(rejects.Key{Face: "coverage_audit", Gate: "closed_window"})
 			continue
 		}
 		if now.Sub(r.LastTs) > coverageStaleMax {
+			rejects.Inc(rejects.Key{Face: "coverage_audit", Gate: "stale"})
 			if aerr := st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
 				"数据覆盖断供：%s 最新行龄 %s（>%s——簿停更=判定径不可判）%s",
 				key, now.Sub(r.LastTs).Round(time.Minute), coverageStaleMax,
@@ -71,6 +78,7 @@ func coverageAudit(ctx context.Context, st *pgstore.Store, pairs []monitorPair) 
 			hungryThreshold = coverageHungryRows * openMin / coverageDayMin
 		}
 		if r.Rows24h < hungryThreshold {
+			rejects.Inc(rejects.Key{Face: "coverage_audit", Gate: "hungry"})
 			if aerr := st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
 				"数据覆盖饥饿：%s 24h 仅 %d 行（<%d——数据不可判，回放窗禁准入）%s",
 				key, r.Rows24h, hungryThreshold,

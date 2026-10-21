@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"nox/internal/platform/analyst"
+	"nox/internal/platform/rejects"
 	"nox/internal/store/pgstore"
 )
 
@@ -65,6 +66,8 @@ func GenerateDaily(ctx context.Context, deps Deps) (string, error) {
 // renderDailyStats §1-3 统计快照块（嵌 prompt + 报告附录的数字唯一源）。
 func renderDailyStats(d *pgstore.RetroDaily, now time.Time) string {
 	var b strings.Builder
+	// D-652 dump 搭车②：日节「判定拒因全景」（rejects 计数器快照——每面每门 N+首末时）。
+	fmt.Fprintf(&b, "rejects_snapshot:\n%s\n", rejects.Format(0))
 	fmt.Fprintf(&b, "open_positions: %d\n", len(d.OpenPos))
 	for _, p := range d.OpenPos {
 		fmt.Fprintf(&b, "  pos%d %s venue=%s age=%s carry=$%.4f\n",

@@ -10,11 +10,15 @@ import (
 	"context"
 	"fmt"
 	"nox/internal/data/keydomain"
+	"nox/internal/platform/rejects"
 	"sync"
 	"time"
 
 	"nox/internal/store/pgstore"
 )
+
+// rejects 注册：funding_absent 面门集（D-652 拒因可观测——注册了不挂/挂了没注册由对拍锚防）。
+func init() { rejects.Register("funding_absent", "absent_block") }
 
 // FundingWindowQuerier funding 预测流窗口查询（pgstore.Store 实现，D-328 S1）。
 type FundingWindowQuerier interface {
@@ -126,6 +130,7 @@ func CarryFundingRegimeCheck(ctx context.Context, q FundingWindowQuerier, venueB
 		if hit, herr := fundingAbsentHit(ctx, q, leg.symbol, keydomain.BareOf(leg.venueKey)); herr != nil {
 			return false, fmt.Sprintf("%s/%s funding_absent 查败: %v (fail-closed)", leg.venueKey, leg.symbol, herr)
 		} else if hit {
+			rejects.Inc(rejects.Key{Face: "funding_absent", Gate: "absent_block"})
 			return false, fmt.Sprintf("%s/%s funding_absent 在册（venue 无 funding 面）", leg.venueKey, leg.symbol)
 		}
 		rows, err := q.FundingPredWindow(ctx, keydomain.BareOf(leg.venueKey), leg.symbol, now.Add(-cfg.Window))
