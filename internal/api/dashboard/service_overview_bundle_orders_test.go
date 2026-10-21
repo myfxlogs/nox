@@ -266,4 +266,8 @@ func TestOverviewBundleAvailFlags(t *testing.T) {
 	if !r.IdleStreakAvailable {
 		t.Error("streaks 读径成功但 IdleStreakAvailable=false——眠钱瓦片将错显「—」")
 	}
+	// 分态字段接线锚：空库读模零行→NO_DATA（断供态须达 RPC 面非只单测件）。
+	if r.IdleStreakState != v1.IdleStreakState_IDLE_STREAK_STATE_NO_DATA {
+		t.Errorf("读模零行应 NO_DATA 断供态: %v", r.IdleStreakState)
+	}
 }

@@ -180,17 +180,12 @@ func (s *Service) prefetchOverview(ctx context.Context, now time.Time, resp *v1.
 	// §10 眠钱时长（idle_floor_streak 最长连破天数——D-286 计量呈现面）。
 	g.Go(func() error {
 		overviewSeg("idle_streak", func() {
-			if streaks, err := s.store.GetStreaks(ctx); err == nil {
-				bestDays, bestPool := 0, ""
-				for k, st := range streaks {
-					if st.Days > bestDays {
-						bestDays, bestPool = st.Days, k
-					}
-				}
-				resp.IdleStreakDays = int32(bestDays)
-				resp.IdleStreakPool = bestPool
-				resp.IdleStreakAvailable = true // F4/F1：读败（或真零）不再冒充「无在册破地板池」
-			}
+			streaks, err := s.store.GetStreaks(ctx)
+			state, days, pool := summarizeIdleStreak(streaks, err)
+			resp.IdleStreakState = state
+			resp.IdleStreakDays = days
+			resp.IdleStreakPool = pool
+			resp.IdleStreakAvailable = err == nil // F4/F1：读败不冒「无在册破地板池」
 		})
 		return nil
 	})
@@ -204,4 +199,23 @@ func (s *Service) prefetchOverview(ctx context.Context, now time.Time, resp *v1.
 	})
 	_ = g.Wait() // 段失败域各自吞——g 恒 nil
 	return pf
+}
+
+// summarizeIdleStreak 眠钱瓦片后端分态（10-21 修——前端零算零猜）：
+// 读败或读模零行=NO_DATA（断供，「—」警示态）；在册零破地板池=HEALTHY_ZERO
+// （健康零，「0 · 无眠钱」常志态）；有破地板池=STREAK（携最长天数+池名）。
+func summarizeIdleStreak(streaks map[string]pgstore.IdleStreak, err error) (v1.IdleStreakState, int32, string) {
+	if err != nil || len(streaks) == 0 {
+		return v1.IdleStreakState_IDLE_STREAK_STATE_NO_DATA, 0, ""
+	}
+	bestDays, bestPool := 0, ""
+	for k, st := range streaks {
+		if st.Days > bestDays {
+			bestDays, bestPool = st.Days, k
+		}
+	}
+	if bestDays == 0 {
+		return v1.IdleStreakState_IDLE_STREAK_STATE_HEALTHY_ZERO, 0, ""
+	}
+	return v1.IdleStreakState_IDLE_STREAK_STATE_STREAK, int32(bestDays), bestPool
 }
