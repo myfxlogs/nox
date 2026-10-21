@@ -9,6 +9,11 @@ if [ -f .kill_switch ]; then
   exit 1
 fi
 
+# 3a. 部署树写禁（D-651 B①——/opt/nox 只 pull/build/deploy，开发走 worktree）
+if [ -x scripts/hooks/check-deploy-tree.sh ]; then
+  scripts/hooks/check-deploy-tree.sh || exit 1
+fi
+
 # 3b. env 凭据直读门禁（D-564 S5）
 bash scripts/check-env-reads.sh || {
   echo "[pre-commit] D-564 S5：env 凭据直读门禁拒绝（见上）"
