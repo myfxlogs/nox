@@ -318,3 +318,7 @@
 
 ## 2026-10-21 jit 双零池级判据实施纪要（wip/jit-yield @b9caee585）
 - 池身份裁定（实施域）：池键=livePoolQuerier 同口径——okx 任意交易 vt 钉 `okx:unified`（统一账户实证 combo#25 legPools）；binance/gate 按 vt 精确配腿（vt 相同才同池——spot 腿禁读 perp 池语义不破坏）；funding/earn 子账户不入双零域（精确池禁并——同 livePoolQuerier 禁线）。归集落腿=交易户腿优先（vt∈{perp,unified,futures}——spot 腿赎落 funding 即达无须二跳，futures 腿须落 trading 户抵保证金）。
+
+## 2026-10-21 perp_delivery 机会喂入环实施纪要（wip/perp-deliv @968250865）
+- 断供定性（实施域）：armed 放行与发现产出两段分离——asset_equiv/cfd-hint 面均无 futures 腿配对（delivery canonical 非 perp/spot/mt 枚举面），故 `opportunities` 表零 ETH okx×okx 行；修法=armed 组合反查枚举（xasset_allow_combos vt=futures 行）非新造评估口径（tryPair 全门禁复用）。
+- basis 语义裁定：tracking 闸对 futures 腿豁免=价差即机会非跟踪误差（同 canonical 同 venue 的交割对，偏离即基差）；net 归 `premium×365/tenor` 年化 pp——与 term_basis BasisAnn 同收敛速率口径，不用 universe.last_basis_ann 存量值（扫帧实算同径鲜度）。
