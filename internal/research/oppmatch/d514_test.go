@@ -97,7 +97,7 @@ func TestD514_PremiumGate(t *testing.T) {
 	}
 	// 高溢价（闸×1.5；apy 列=binance %口径——闸小数×100 入库）→放行。
 	d514Put(t, st, ctx, thr*150)
-	if ok, why := dciPremiumGate(ctx, st, "binance"); !ok {
+	if ok, why, _ := dciPremiumGate(ctx, st, "binance"); !ok {
 		t.Fatalf("高溢价应放行: %s", why)
 	}
 	// 低溢价（闸×0.5）→拒「溢价低于闸」。
@@ -105,14 +105,14 @@ func TestD514_PremiumGate(t *testing.T) {
 		`UPDATE fin_cex_dci_quote SET apy=$1 WHERE product_ref='D514P'`, thr*50); err != nil {
 		t.Fatal(err)
 	}
-	if ok, why := dciPremiumGate(ctx, st, "binance"); ok || !strings.Contains(why, "溢价低于闸") {
+	if ok, why, _ := dciPremiumGate(ctx, st, "binance"); ok || !strings.Contains(why, "溢价低于闸") {
 		t.Fatalf("低溢价应拒: ok=%v why=%s", ok, why)
 	}
 	// 报价缺→fail-closed 拒。
 	if _, err := st.Pool().Exec(ctx, `DELETE FROM fin_cex_dci_quote WHERE product_ref='D514P'`); err != nil {
 		t.Fatal(err)
 	}
-	if ok, why := dciPremiumGate(ctx, st, "binance"); ok || !strings.Contains(why, "报价缺") {
+	if ok, why, _ := dciPremiumGate(ctx, st, "binance"); ok || !strings.Contains(why, "报价缺") {
 		t.Fatalf("报价缺应 fail-closed 拒: ok=%v why=%s", ok, why)
 	}
 }

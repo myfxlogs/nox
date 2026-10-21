@@ -140,8 +140,9 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 				// D-514+D-526 DCI 选档闸：venue 维度判——本 venue 无达标档只压本
 				// venue 提案（权利金坍缩期不卖 tail 险；闸只挡 DCI 不碰 earn）。
 				var gateNote string // D-526 返修①：过闸 σ/界/尾损注记落提案 params 可检索
+				var dsel *dciSel    // 闸实选档（dci APR 脱节修——best 行指针随闸回传）
 				if r.TemplateID == "dci_buy_low" {
-					ok, why := dciPremiumGate(ctx, st, venue)
+					ok, why, sel := dciPremiumGate(ctx, st, venue)
 					if !ok {
 						if aerr := st.InsertAlertDedup(ctx, "info", fmt.Sprintf(
 							"DCI 选档闸：dci_buy_low@%s %s——本拍「无达标档」不产提案", venue, why), 6*time.Hour); aerr != nil {
@@ -149,13 +150,13 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 						}
 						continue
 					}
-					gateNote = why
+					gateNote, dsel = why, sel
 				}
 				if r.TemplateID == "dci_sell_high_covered_call" {
-					if ok, why := sellHighGateEnforce(ctx, st, r.TemplateID, venue); !ok {
+					if ok, why, sel := sellHighGateEnforce(ctx, st, r.TemplateID, venue); !ok {
 						continue
 					} else {
-						gateNote = why
+						gateNote, dsel = why, sel
 					}
 				}
 				propN++
@@ -175,13 +176,15 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 					rv.APR = &va
 					rv.GrossEvidence = fmt.Sprintf("fin_cex_earn_apr %s USDT 最新行", venue)
 				}
+				applyDciSel(&rv, dsel) // dci 脱节修：APR/eval gross=闸实选档 apy
+
 				apr := "报价缺"
 				if rv.APR != nil {
 					apr = fmt.Sprintf("apy=%.4g（venue原生口径）", *rv.APR)
 				}
 				// 提案实体化——行即稳定 id（同模板 pending 复用），
 				// params=快照审计锚（执行时实时闸复验，非钉价）。
-				params := proposalParams(ctx, st, rv, venue)
+				params := proposalParams(ctx, st, rv, venue, dsel)
 				if gateNote != "" {
 					params["gate_note"] = gateNote
 				}
