@@ -65,3 +65,14 @@ type NativeSymbol string
 
 // Canonical 归一品种名（XAUUSD / XAUUSDT；只经 broker_symbol_map/归一函数产出）。
 type Canonical string
+
+// MarketCanonical 组合 canonical（品种归一名 'ETH'）→ 行情 canonical
+// （'ETHUSDT'——CEX 帧 Symbol=instId 去 '-' 归一形，bus 快照键域）。已带计价
+// 尾（…USDT/…USD）的原样透传。detector legQuote 回退与交割帧发布键同经本口
+// （D-649续④返修③：异键永不同帧病灶——发布键与快照查键必须同规约）。
+func MarketCanonical(c string) string {
+	if strings.HasSuffix(c, "USDT") || strings.HasSuffix(c, "USD") {
+		return c
+	}
+	return c + "USDT"
+}

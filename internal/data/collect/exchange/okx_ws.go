@@ -200,7 +200,8 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 	}
 	canonical := strings.ReplaceAll(instID, "-", "")
 	// 交割腿分流：订阅面注入的 instId→canonical 映射命中即 futures 帧——
-	// canonical 归 hint.SellCanonical 同键（detector snapshot 精确对）。
+	// canonical=行情 canonical（'ETHUSDT' 形，与 spot 帧同键；返修③：快照域=
+	// q.Symbol 异键永不同帧，发布键钉行情键）。
 	if dc, ok := o.delivCanon[venueSymbol]; ok {
 		venueType, canonical = "futures", dc
 	}

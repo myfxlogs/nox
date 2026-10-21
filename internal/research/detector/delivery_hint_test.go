@@ -121,3 +121,28 @@ func TestDeliveryHint_CanonKeyResolve(t *testing.T) {
 		t.Fatalf("canonical 键解析应中——候选 %d≠1", len(out))
 	}
 }
+
+// TestDeliveryHint_SameMarketKeyFrame 返修③锚：事件驱动快照域=q.Symbol——
+// futures 帧发布键归行情 canonical 'ETHUSDT'（keydomain.MarketCanonical 单源）
+// 后，双腿同帧 snapshot['ETHUSDT']{okx:spot,okx:futures}；hint canonical 保
+// 品种归一名 'ETH'（Allow 精确对 xasset_allow_combos 'ETH' 不断），legQuote
+// 回退同命中。
+func TestDeliveryHint_SameMarketKeyFrame(t *testing.T) {
+	d := &XAssetCarryDetector{
+		MinNetAnnualPct: 1, TrackingMaxBps: 50, FreshnessTTL: time.Minute,
+		DeliveryHints: &fakeDelivHints{pairs: []DeliveryPairHint{{
+			BuyCanonical: "ETH", SellCanonical: "ETH",
+			BuyVenueKey: "okx:spot", SellVenueKey: "okx:futures", SellTenorDays: 30,
+		}}},
+	}
+	snap := map[string]map[string]bus.Quote{
+		"ETHUSDT": {
+			"okx:spot":    delivQuote("ETH-USDT", "okx:spot", 3999, 4000),
+			"okx:futures": delivQuote("ETH-USD_UM-261225", "okx:futures", 4200, 4201),
+		},
+	}
+	out := d.Scan(context.Background(), snap, nil)
+	if len(out) != 1 {
+		t.Fatalf("同帧双腿应产候选 %d≠1", len(out))
+	}
+}
