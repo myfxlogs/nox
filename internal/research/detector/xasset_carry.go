@@ -17,6 +17,9 @@ type AssetEquivEntry struct {
 	Canonical  string
 	VenueType  string
 	Venue      string
+	// TenorDays 交割腿剩余天数（vt=futures 必填>0——basis 年化分母；0=未知
+	// fail-closed 不产候选）。非交割腿留零。
+	TenorDays float64
 }
 
 // AssetEquivSource 等价类映射读取口（D-300 裁 5：单实例注入，禁 Scan 内查库）。
@@ -41,6 +44,9 @@ type XAssetCarryDetector struct {
 	// (canonical, venue 对) 不在 xasset_allow_combos.enabled 内则静默不发射
 	// （零候选零日志，评估省略；执行闸=autotrade 即时 specs 仍为权威）。
 	Allow func(canonical, canonicalSell, venueBuy, venueSell string) bool
+	// DeliveryHints D-649续③：armed 交割配对提示源（perp_delivery 机会断供修——
+	// 毕业批放行≠发现层扫；按 xasset_allow_combos 含 futures 腿行枚举）。
+	DeliveryHints DeliveryHintSource
 }
 
 // CfdPairHint D-403 S4：universe-hint cfd×perp 配对提示——asset_equiv 之外的授权驱动
@@ -65,9 +71,9 @@ func (d *XAssetCarryDetector) Type() OppType { return TypeXAssetCarry }
 // 配对集合 = asset_equiv enabled 行按 canonical 分组后两两组合（同一 canonical 可有多 venue 行）。
 // 双腿 venue 组合各试双向（buy A sell B / buy B sell A），funding 只挂 perp 卖腿。
 func (d *XAssetCarryDetector) Scan(ctx context.Context, snapshot map[string]map[string]bus.Quote, fp FactProvider) []Candidate {
-	// AssetEquiv 与 CfdHints 各自独立可 nil（等价类路与 hint 路径解耦；
-	// hint 源可在 asset_equiv 零 crypto 的盲区独立产候选）。
-	if d.AssetEquiv == nil && d.CfdHints == nil {
+	// AssetEquiv 与 CfdHints/DeliveryHints 各自独立可 nil（等价类路与 hint
+	// 路径解耦；hint 源可在 asset_equiv 零 crypto 的盲区独立产候选）。
+	if d.AssetEquiv == nil && d.CfdHints == nil && d.DeliveryHints == nil {
 		return nil
 	}
 	now := time.Now()
@@ -146,6 +152,7 @@ func (d *XAssetCarryDetector) Scan(ctx context.Context, snapshot map[string]map[
 			}
 		}
 	}
+	out = append(out, d.scanDeliveryHints(ctx, snapshot, funding, swap, modes, realMap, now)...)
 	return out
 }
 
@@ -187,11 +194,14 @@ func (d *XAssetCarryDetector) tryPair(
 		return nil
 	}
 	// 跟踪误差（§5.3）：分母=卖腿 mid（canonical_b 对应 sc）。
+	// 交割配对豁免（D-649续③）：spot×futures 价差=基差机会本身非跟踪误差——
+	// 套 tracking 闸等于把机会本身拒掉。
+	isDeliv := be.VenueType == "futures" || se.VenueType == "futures"
 	bm, sm := bq.Mid(), sq.Mid()
 	if bm <= 0 || sm <= 0 {
 		return nil
 	}
-	if math.Abs(bm-sm)/sm*10000 > d.TrackingMaxBps {
+	if !isDeliv && math.Abs(bm-sm)/sm*10000 > d.TrackingMaxBps {
 		return nil
 	}
 	// 进场价差（一次性 bps）：与 evaluator S5 同口径 mid=(PriceBuy+PriceSell)/2。
@@ -220,6 +230,20 @@ func (d *XAssetCarryDetector) tryPair(
 	}
 	net += swapAnnualPct(swap, bc, be, true)
 	net += swapAnnualPct(swap, sc, se, false)
+	// 交割腿基差年化 pp：卖 futures 收溢价收敛（premium=ask/bid 价差×365/
+	// tenor）；买 futures 付溢价对称扣。tenor 缺=fail-closed（年化分母不可臆）。
+	if se.VenueType == "futures" {
+		if se.TenorDays <= 0 {
+			return nil
+		}
+		net += (sq.Bid - bq.Ask) / bq.Ask * 365 / se.TenorDays * 100
+	}
+	if be.VenueType == "futures" {
+		if be.TenorDays <= 0 {
+			return nil
+		}
+		net -= (sq.Bid - bq.Ask) / bq.Ask * 365 / be.TenorDays * 100
+	}
 	if net < d.MinNetAnnualPct {
 		return nil
 	}
