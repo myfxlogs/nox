@@ -304,3 +304,7 @@
 - 券源裁定（实施域）：票面「能力账本/快照桶」——快照桶（fin_venue_account_snapshot）无 ccy 粒度，券源取托管池份额行 personal_positions BTC/other OPEN（D-191 池表象口径）×custody_share@<venue>（D-644 venue 粒度读面，无 venue 键回落全局不 fail-closed）；判据下限 app_config `sell_high_min_qty` 热读（行缺→0.01 兜底）。
 - 存量卡处置选型：闸不过→DeferProposalsByPair 翻 deferred（如实非删——券到自动复产，#1687 随首拍闸判自然翻态）。
 - flake 二分纪律实证：两红（TestD526 无提案/TestD135 kick 时序）经「无改动基线复跑+单跑」双法定性=座库 stale/时序环境伤，非票伤。
+
+## 2026-10-21 venue_type futures 全谱修实施纪要（wip/vtype-futures @新推）
+- 域裁定（实施域）：8 表 9 值通道枚举全补 'futures'；ticks 族（4 值行情通道）同补——futures 行情腿在域内；**broker_accounts_venue_type_chk 不补**——MT 通道域（mt4|mt5）语义不含 futures，补之=放开错域。非漂移型缺口（链/库同缺）→上票自检器不报属设计内，谱系清扫靠枚举不靠告警。
+- ticks 分区处理裁定为父表 DROP+ADD 级联传播（分区约束 PG 自动全子同步+新建 PARTITION OF 承父）；首版 ONLY+DO 枚举误用（分区存在时父约束不可 ONLY 删）已纠——实测锁死点。
