@@ -201,3 +201,6 @@ var VenueTypeFuturesSweepSQL string // venue_type 'futures' 全谱 CHECK 修（D
 
 //go:embed 1068_alert_receipt_patterns.sql
 var AlertReceiptPatternsSQL string // 告警两级语义：回执类前缀判据 app_config 种子
+
+//go:embed 1069_broker_symbol_map_4sym.sql
+var BrokerSymbolMap4SymSQL string // broker_symbol_map 补 4 行（WTI_V6_CFD/ADAUSDm/ADAUSDT/FILUSDT——CS NULL 走 D-042 启动回填）

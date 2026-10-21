@@ -261,4 +261,5 @@ var migrationFiles = []struct {
 	{1066, migrations.CgVenueTypeFuturesSQL, false},      // cg venue_type 漂移修：活约束回补 'futures'（基线就地改不回流生产）
 	{1067, migrations.VenueTypeFuturesSweepSQL, false},   // venue_type 'futures' 全谱 CHECK 修（D-648——8 表+ticks 族）
 	{1068, migrations.AlertReceiptPatternsSQL, false},    // 告警两级语义：回执类前缀判据种子
+	{1069, migrations.BrokerSymbolMap4SymSQL, false},     // broker_symbol_map 补 4 行（开仓管线通查促补映射——CS NULL 走 D-042 启动回填）
 }
