@@ -22,6 +22,59 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// IdleStreakState 眠钱瓦片分态（前端零算零猜——断供与健康零可判读）。
+type IdleStreakState int32
+
+const (
+	IdleStreakState_IDLE_STREAK_STATE_UNSPECIFIED  IdleStreakState = 0
+	IdleStreakState_IDLE_STREAK_STATE_STREAK       IdleStreakState = 1 // 有在册破地板池（days>0 携最长连破天数+池名）
+	IdleStreakState_IDLE_STREAK_STATE_HEALTHY_ZERO IdleStreakState = 2 // 读模有行·在册零破地板池=健康零（显「0 · 无眠钱」）
+	IdleStreakState_IDLE_STREAK_STATE_NO_DATA      IdleStreakState = 3 // 读模零行或读败=断供（显「—」警示态）
+)
+
+// Enum value maps for IdleStreakState.
+var (
+	IdleStreakState_name = map[int32]string{
+		0: "IDLE_STREAK_STATE_UNSPECIFIED",
+		1: "IDLE_STREAK_STATE_STREAK",
+		2: "IDLE_STREAK_STATE_HEALTHY_ZERO",
+		3: "IDLE_STREAK_STATE_NO_DATA",
+	}
+	IdleStreakState_value = map[string]int32{
+		"IDLE_STREAK_STATE_UNSPECIFIED":  0,
+		"IDLE_STREAK_STATE_STREAK":       1,
+		"IDLE_STREAK_STATE_HEALTHY_ZERO": 2,
+		"IDLE_STREAK_STATE_NO_DATA":      3,
+	}
+)
+
+func (x IdleStreakState) Enum() *IdleStreakState {
+	p := new(IdleStreakState)
+	*p = x
+	return p
+}
+
+func (x IdleStreakState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (IdleStreakState) Descriptor() protoreflect.EnumDescriptor {
+	return file_dashboardv1_account_proto_enumTypes[0].Descriptor()
+}
+
+func (IdleStreakState) Type() protoreflect.EnumType {
+	return &file_dashboardv1_account_proto_enumTypes[0]
+}
+
+func (x IdleStreakState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use IdleStreakState.Descriptor instead.
+func (IdleStreakState) EnumDescriptor() ([]byte, []int) {
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{0}
+}
+
 type KnowledgeEntry struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Id             int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -2199,6 +2252,9 @@ type GetOverviewBundleResponse struct {
 	// F1 显缺旗标（同族病灶第 5 例修——读败≠真值 0；perf_available/invested_available 同型范式）。
 	PrincipalAvailable  bool `protobuf:"varint,30,opt,name=principal_available,json=principalAvailable,proto3" json:"principal_available,omitempty"`      // nav 段读败→false（四瓦片显「—」不冒 $0）
 	IdleStreakAvailable bool `protobuf:"varint,31,opt,name=idle_streak_available,json=idleStreakAvailable,proto3" json:"idle_streak_available,omitempty"` // streaks 读败→false（眠钱瓦片显「—」不冒「无在册破地板池」)
+	// 眠钱瓦片状态分显（10-21 修）：healthy_zero（在册零破地板池=健康零）与
+	// no_data（读模零行/读败=断供）后端显式分态——前端零算零猜全信本字段。
+	IdleStreakState IdleStreakState `protobuf:"varint,36,opt,name=idle_streak_state,json=idleStreakState,proto3,enum=nox.dashboard.v1.IdleStreakState" json:"idle_streak_state,omitempty"`
 	// D-630 真实净盈利权威口径=Σ venue 权益差−Σ io 外部净流（归因面降级解释层后的唯一判定口径）。
 	TrueNet_30DUsd   float64 `protobuf:"fixed64,32,opt,name=true_net_30d_usd,json=trueNet30dUsd,proto3" json:"true_net_30d_usd,omitempty"`       // 30d 窗（快照基线有盖池才计）
 	TrueNetAllUsd    float64 `protobuf:"fixed64,33,opt,name=true_net_all_usd,json=trueNetAllUsd,proto3" json:"true_net_all_usd,omitempty"`       // 全时窗
@@ -2439,6 +2495,13 @@ func (x *GetOverviewBundleResponse) GetIdleStreakAvailable() bool {
 		return x.IdleStreakAvailable
 	}
 	return false
+}
+
+func (x *GetOverviewBundleResponse) GetIdleStreakState() IdleStreakState {
+	if x != nil {
+		return x.IdleStreakState
+	}
+	return IdleStreakState_IDLE_STREAK_STATE_UNSPECIFIED
 }
 
 func (x *GetOverviewBundleResponse) GetTrueNet_30DUsd() float64 {
@@ -3566,7 +3629,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"amount_usd\x18\x03 \x01(\x01R\tamountUsd\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x120\n" +
 	"\x05until\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x05until\"\x1a\n" +
-	"\x18GetOverviewBundleRequest\"\xdd\f\n" +
+	"\x18GetOverviewBundleRequest\"\xac\r\n" +
 	"\x19GetOverviewBundleResponse\x12)\n" +
 	"\x10pending_requests\x18\x01 \x01(\x05R\x0fpendingRequests\x12.\n" +
 	"\x13principal_total_usd\x18\x02 \x01(\x01R\x11principalTotalUsd\x12,\n" +
@@ -3604,7 +3667,8 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\vcrit_alerts\x18\x1d \x03(\v2#.nox.dashboard.v1.OverviewCritAlertR\n" +
 	"critAlerts\x12/\n" +
 	"\x13principal_available\x18\x1e \x01(\bR\x12principalAvailable\x122\n" +
-	"\x15idle_streak_available\x18\x1f \x01(\bR\x13idleStreakAvailable\x12'\n" +
+	"\x15idle_streak_available\x18\x1f \x01(\bR\x13idleStreakAvailable\x12M\n" +
+	"\x11idle_streak_state\x18$ \x01(\x0e2!.nox.dashboard.v1.IdleStreakStateR\x0fidleStreakState\x12'\n" +
 	"\x10true_net_30d_usd\x18  \x01(\x01R\rtrueNet30dUsd\x12'\n" +
 	"\x10true_net_all_usd\x18! \x01(\x01R\rtrueNetAllUsd\x12,\n" +
 	"\x12true_net_available\x18\" \x01(\bR\x10trueNetAvailable\x12,\n" +
@@ -3681,7 +3745,12 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\n" +
 	"decided_by\x18\x03 \x01(\tR\tdecidedBy\x129\n" +
 	"\n" +
-	"decided_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tdecidedAtB*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"decided_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tdecidedAt*\x95\x01\n" +
+	"\x0fIdleStreakState\x12!\n" +
+	"\x1dIDLE_STREAK_STATE_UNSPECIFIED\x10\x00\x12\x1c\n" +
+	"\x18IDLE_STREAK_STATE_STREAK\x10\x01\x12\"\n" +
+	"\x1eIDLE_STREAK_STATE_HEALTHY_ZERO\x10\x02\x12\x1d\n" +
+	"\x19IDLE_STREAK_STATE_NO_DATA\x10\x03B*Z(nox/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_account_proto_rawDescOnce sync.Once
@@ -3695,100 +3764,103 @@ func file_dashboardv1_account_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_account_proto_rawDescData
 }
 
+var file_dashboardv1_account_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
 var file_dashboardv1_account_proto_goTypes = []any{
-	(*KnowledgeEntry)(nil),                  // 0: nox.dashboard.v1.KnowledgeEntry
-	(*ListKnowledgeEntriesRequest)(nil),     // 1: nox.dashboard.v1.ListKnowledgeEntriesRequest
-	(*ListKnowledgeEntriesResponse)(nil),    // 2: nox.dashboard.v1.ListKnowledgeEntriesResponse
-	(*PositionDailyIncome)(nil),             // 3: nox.dashboard.v1.PositionDailyIncome
-	(*AddDailyIncomeRequest)(nil),           // 4: nox.dashboard.v1.AddDailyIncomeRequest
-	(*AddDailyIncomeResponse)(nil),          // 5: nox.dashboard.v1.AddDailyIncomeResponse
-	(*GetPnlAnchorRequest)(nil),             // 6: nox.dashboard.v1.GetPnlAnchorRequest
-	(*GetPnlAnchorResponse)(nil),            // 7: nox.dashboard.v1.GetPnlAnchorResponse
-	(*ResetPnlAnchorRequest)(nil),           // 8: nox.dashboard.v1.ResetPnlAnchorRequest
-	(*ResetPnlAnchorResponse)(nil),          // 9: nox.dashboard.v1.ResetPnlAnchorResponse
-	(*KBEntry)(nil),                         // 10: nox.dashboard.v1.KBEntry
-	(*ListKBEntriesRequest)(nil),            // 11: nox.dashboard.v1.ListKBEntriesRequest
-	(*ListKBEntriesResponse)(nil),           // 12: nox.dashboard.v1.ListKBEntriesResponse
-	(*GetKBEntryRequest)(nil),               // 13: nox.dashboard.v1.GetKBEntryRequest
-	(*GetKBEntryResponse)(nil),              // 14: nox.dashboard.v1.GetKBEntryResponse
-	(*ListDailyIncomeRequest)(nil),          // 15: nox.dashboard.v1.ListDailyIncomeRequest
-	(*ListDailyIncomeResponse)(nil),         // 16: nox.dashboard.v1.ListDailyIncomeResponse
-	(*AccountInfo)(nil),                     // 17: nox.dashboard.v1.AccountInfo
-	(*ListAccountMarginStatusRequest)(nil),  // 18: nox.dashboard.v1.ListAccountMarginStatusRequest
-	(*AccountMarginStatus)(nil),             // 19: nox.dashboard.v1.AccountMarginStatus
-	(*ListAccountMarginStatusResponse)(nil), // 20: nox.dashboard.v1.ListAccountMarginStatusResponse
-	(*Holding)(nil),                         // 21: nox.dashboard.v1.Holding
-	(*ListAccountsRequest)(nil),             // 22: nox.dashboard.v1.ListAccountsRequest
-	(*ListAccountsResponse)(nil),            // 23: nox.dashboard.v1.ListAccountsResponse
-	(*Keepalive)(nil),                       // 24: nox.dashboard.v1.Keepalive
-	(*GetFinanceOverviewRequest)(nil),       // 25: nox.dashboard.v1.GetFinanceOverviewRequest
-	(*FinancePnlByEnv)(nil),                 // 26: nox.dashboard.v1.FinancePnlByEnv
-	(*FinanceIncomeRow)(nil),                // 27: nox.dashboard.v1.FinanceIncomeRow
-	(*FinanceFlowRow)(nil),                  // 28: nox.dashboard.v1.FinanceFlowRow
-	(*GetFinanceOverviewResponse)(nil),      // 29: nox.dashboard.v1.GetFinanceOverviewResponse
-	(*OverviewOrderRow)(nil),                // 30: nox.dashboard.v1.OverviewOrderRow
-	(*GetOverviewBundleRequest)(nil),        // 31: nox.dashboard.v1.GetOverviewBundleRequest
-	(*GetOverviewBundleResponse)(nil),       // 32: nox.dashboard.v1.GetOverviewBundleResponse
-	(*OverviewCritAlert)(nil),               // 33: nox.dashboard.v1.OverviewCritAlert
-	(*OverviewBreakdownRow)(nil),            // 34: nox.dashboard.v1.OverviewBreakdownRow
-	(*OverviewAttribRow)(nil),               // 35: nox.dashboard.v1.OverviewAttribRow
-	(*OverviewFunnelRow)(nil),               // 36: nox.dashboard.v1.OverviewFunnelRow
-	(*OverviewWaitingRow)(nil),              // 37: nox.dashboard.v1.OverviewWaitingRow
-	(*PipelineStageHealth)(nil),             // 38: nox.dashboard.v1.PipelineStageHealth
-	(*ExecutionModeView)(nil),               // 39: nox.dashboard.v1.ExecutionModeView
-	(*GetExecutionModeRequest)(nil),         // 40: nox.dashboard.v1.GetExecutionModeRequest
-	(*GetExecutionModeResponse)(nil),        // 41: nox.dashboard.v1.GetExecutionModeResponse
-	(*SetExecutionModeRequest)(nil),         // 42: nox.dashboard.v1.SetExecutionModeRequest
-	(*SetExecutionModeResponse)(nil),        // 43: nox.dashboard.v1.SetExecutionModeResponse
-	(*DecideHypothesisRequest)(nil),         // 44: nox.dashboard.v1.DecideHypothesisRequest
-	(*DecideHypothesisResponse)(nil),        // 45: nox.dashboard.v1.DecideHypothesisResponse
-	nil,                                     // 46: nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
-	(*timestamppb.Timestamp)(nil),           // 47: google.protobuf.Timestamp
+	(IdleStreakState)(0),                    // 0: nox.dashboard.v1.IdleStreakState
+	(*KnowledgeEntry)(nil),                  // 1: nox.dashboard.v1.KnowledgeEntry
+	(*ListKnowledgeEntriesRequest)(nil),     // 2: nox.dashboard.v1.ListKnowledgeEntriesRequest
+	(*ListKnowledgeEntriesResponse)(nil),    // 3: nox.dashboard.v1.ListKnowledgeEntriesResponse
+	(*PositionDailyIncome)(nil),             // 4: nox.dashboard.v1.PositionDailyIncome
+	(*AddDailyIncomeRequest)(nil),           // 5: nox.dashboard.v1.AddDailyIncomeRequest
+	(*AddDailyIncomeResponse)(nil),          // 6: nox.dashboard.v1.AddDailyIncomeResponse
+	(*GetPnlAnchorRequest)(nil),             // 7: nox.dashboard.v1.GetPnlAnchorRequest
+	(*GetPnlAnchorResponse)(nil),            // 8: nox.dashboard.v1.GetPnlAnchorResponse
+	(*ResetPnlAnchorRequest)(nil),           // 9: nox.dashboard.v1.ResetPnlAnchorRequest
+	(*ResetPnlAnchorResponse)(nil),          // 10: nox.dashboard.v1.ResetPnlAnchorResponse
+	(*KBEntry)(nil),                         // 11: nox.dashboard.v1.KBEntry
+	(*ListKBEntriesRequest)(nil),            // 12: nox.dashboard.v1.ListKBEntriesRequest
+	(*ListKBEntriesResponse)(nil),           // 13: nox.dashboard.v1.ListKBEntriesResponse
+	(*GetKBEntryRequest)(nil),               // 14: nox.dashboard.v1.GetKBEntryRequest
+	(*GetKBEntryResponse)(nil),              // 15: nox.dashboard.v1.GetKBEntryResponse
+	(*ListDailyIncomeRequest)(nil),          // 16: nox.dashboard.v1.ListDailyIncomeRequest
+	(*ListDailyIncomeResponse)(nil),         // 17: nox.dashboard.v1.ListDailyIncomeResponse
+	(*AccountInfo)(nil),                     // 18: nox.dashboard.v1.AccountInfo
+	(*ListAccountMarginStatusRequest)(nil),  // 19: nox.dashboard.v1.ListAccountMarginStatusRequest
+	(*AccountMarginStatus)(nil),             // 20: nox.dashboard.v1.AccountMarginStatus
+	(*ListAccountMarginStatusResponse)(nil), // 21: nox.dashboard.v1.ListAccountMarginStatusResponse
+	(*Holding)(nil),                         // 22: nox.dashboard.v1.Holding
+	(*ListAccountsRequest)(nil),             // 23: nox.dashboard.v1.ListAccountsRequest
+	(*ListAccountsResponse)(nil),            // 24: nox.dashboard.v1.ListAccountsResponse
+	(*Keepalive)(nil),                       // 25: nox.dashboard.v1.Keepalive
+	(*GetFinanceOverviewRequest)(nil),       // 26: nox.dashboard.v1.GetFinanceOverviewRequest
+	(*FinancePnlByEnv)(nil),                 // 27: nox.dashboard.v1.FinancePnlByEnv
+	(*FinanceIncomeRow)(nil),                // 28: nox.dashboard.v1.FinanceIncomeRow
+	(*FinanceFlowRow)(nil),                  // 29: nox.dashboard.v1.FinanceFlowRow
+	(*GetFinanceOverviewResponse)(nil),      // 30: nox.dashboard.v1.GetFinanceOverviewResponse
+	(*OverviewOrderRow)(nil),                // 31: nox.dashboard.v1.OverviewOrderRow
+	(*GetOverviewBundleRequest)(nil),        // 32: nox.dashboard.v1.GetOverviewBundleRequest
+	(*GetOverviewBundleResponse)(nil),       // 33: nox.dashboard.v1.GetOverviewBundleResponse
+	(*OverviewCritAlert)(nil),               // 34: nox.dashboard.v1.OverviewCritAlert
+	(*OverviewBreakdownRow)(nil),            // 35: nox.dashboard.v1.OverviewBreakdownRow
+	(*OverviewAttribRow)(nil),               // 36: nox.dashboard.v1.OverviewAttribRow
+	(*OverviewFunnelRow)(nil),               // 37: nox.dashboard.v1.OverviewFunnelRow
+	(*OverviewWaitingRow)(nil),              // 38: nox.dashboard.v1.OverviewWaitingRow
+	(*PipelineStageHealth)(nil),             // 39: nox.dashboard.v1.PipelineStageHealth
+	(*ExecutionModeView)(nil),               // 40: nox.dashboard.v1.ExecutionModeView
+	(*GetExecutionModeRequest)(nil),         // 41: nox.dashboard.v1.GetExecutionModeRequest
+	(*GetExecutionModeResponse)(nil),        // 42: nox.dashboard.v1.GetExecutionModeResponse
+	(*SetExecutionModeRequest)(nil),         // 43: nox.dashboard.v1.SetExecutionModeRequest
+	(*SetExecutionModeResponse)(nil),        // 44: nox.dashboard.v1.SetExecutionModeResponse
+	(*DecideHypothesisRequest)(nil),         // 45: nox.dashboard.v1.DecideHypothesisRequest
+	(*DecideHypothesisResponse)(nil),        // 46: nox.dashboard.v1.DecideHypothesisResponse
+	nil,                                     // 47: nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
+	(*timestamppb.Timestamp)(nil),           // 48: google.protobuf.Timestamp
 }
 var file_dashboardv1_account_proto_depIdxs = []int32{
-	47, // 0: nox.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
-	47, // 1: nox.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
-	0,  // 2: nox.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> nox.dashboard.v1.KnowledgeEntry
-	47, // 3: nox.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	47, // 4: nox.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	10, // 5: nox.dashboard.v1.ListKBEntriesResponse.entries:type_name -> nox.dashboard.v1.KBEntry
-	3,  // 6: nox.dashboard.v1.ListDailyIncomeResponse.items:type_name -> nox.dashboard.v1.PositionDailyIncome
-	47, // 7: nox.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
-	21, // 8: nox.dashboard.v1.AccountInfo.holdings:type_name -> nox.dashboard.v1.Holding
-	47, // 9: nox.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
-	19, // 10: nox.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> nox.dashboard.v1.AccountMarginStatus
-	17, // 11: nox.dashboard.v1.ListAccountsResponse.accounts:type_name -> nox.dashboard.v1.AccountInfo
-	47, // 12: nox.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
-	47, // 13: nox.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
-	26, // 14: nox.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> nox.dashboard.v1.FinancePnlByEnv
-	27, // 15: nox.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> nox.dashboard.v1.FinanceIncomeRow
-	28, // 16: nox.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> nox.dashboard.v1.FinanceFlowRow
-	46, // 17: nox.dashboard.v1.GetFinanceOverviewResponse.equity_by_ccy:type_name -> nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
-	47, // 18: nox.dashboard.v1.GetFinanceOverviewResponse.baseline_at:type_name -> google.protobuf.Timestamp
-	47, // 19: nox.dashboard.v1.OverviewOrderRow.until:type_name -> google.protobuf.Timestamp
-	47, // 20: nox.dashboard.v1.GetOverviewBundleResponse.earliest_release:type_name -> google.protobuf.Timestamp
-	47, // 21: nox.dashboard.v1.GetOverviewBundleResponse.baseline_at:type_name -> google.protobuf.Timestamp
-	30, // 22: nox.dashboard.v1.GetOverviewBundleResponse.orders:type_name -> nox.dashboard.v1.OverviewOrderRow
-	38, // 23: nox.dashboard.v1.GetOverviewBundleResponse.stages:type_name -> nox.dashboard.v1.PipelineStageHealth
-	34, // 24: nox.dashboard.v1.GetOverviewBundleResponse.breakdowns:type_name -> nox.dashboard.v1.OverviewBreakdownRow
-	35, // 25: nox.dashboard.v1.GetOverviewBundleResponse.attribution:type_name -> nox.dashboard.v1.OverviewAttribRow
-	36, // 26: nox.dashboard.v1.GetOverviewBundleResponse.funnel:type_name -> nox.dashboard.v1.OverviewFunnelRow
-	37, // 27: nox.dashboard.v1.GetOverviewBundleResponse.waiting:type_name -> nox.dashboard.v1.OverviewWaitingRow
-	33, // 28: nox.dashboard.v1.GetOverviewBundleResponse.crit_alerts:type_name -> nox.dashboard.v1.OverviewCritAlert
-	47, // 29: nox.dashboard.v1.OverviewCritAlert.ts:type_name -> google.protobuf.Timestamp
-	47, // 30: nox.dashboard.v1.OverviewCritAlert.first_ts:type_name -> google.protobuf.Timestamp
-	47, // 31: nox.dashboard.v1.ExecutionModeView.gate_confirmed_at:type_name -> google.protobuf.Timestamp
-	47, // 32: nox.dashboard.v1.ExecutionModeView.gate_expires_at:type_name -> google.protobuf.Timestamp
-	39, // 33: nox.dashboard.v1.GetExecutionModeResponse.view:type_name -> nox.dashboard.v1.ExecutionModeView
-	47, // 34: nox.dashboard.v1.SetExecutionModeRequest.expires_at:type_name -> google.protobuf.Timestamp
-	39, // 35: nox.dashboard.v1.SetExecutionModeResponse.view:type_name -> nox.dashboard.v1.ExecutionModeView
-	47, // 36: nox.dashboard.v1.DecideHypothesisResponse.decided_at:type_name -> google.protobuf.Timestamp
-	37, // [37:37] is the sub-list for method output_type
-	37, // [37:37] is the sub-list for method input_type
-	37, // [37:37] is the sub-list for extension type_name
-	37, // [37:37] is the sub-list for extension extendee
-	0,  // [0:37] is the sub-list for field type_name
+	48, // 0: nox.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
+	48, // 1: nox.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
+	1,  // 2: nox.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> nox.dashboard.v1.KnowledgeEntry
+	48, // 3: nox.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	48, // 4: nox.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	11, // 5: nox.dashboard.v1.ListKBEntriesResponse.entries:type_name -> nox.dashboard.v1.KBEntry
+	4,  // 6: nox.dashboard.v1.ListDailyIncomeResponse.items:type_name -> nox.dashboard.v1.PositionDailyIncome
+	48, // 7: nox.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
+	22, // 8: nox.dashboard.v1.AccountInfo.holdings:type_name -> nox.dashboard.v1.Holding
+	48, // 9: nox.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
+	20, // 10: nox.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> nox.dashboard.v1.AccountMarginStatus
+	18, // 11: nox.dashboard.v1.ListAccountsResponse.accounts:type_name -> nox.dashboard.v1.AccountInfo
+	48, // 12: nox.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
+	48, // 13: nox.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
+	27, // 14: nox.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> nox.dashboard.v1.FinancePnlByEnv
+	28, // 15: nox.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> nox.dashboard.v1.FinanceIncomeRow
+	29, // 16: nox.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> nox.dashboard.v1.FinanceFlowRow
+	47, // 17: nox.dashboard.v1.GetFinanceOverviewResponse.equity_by_ccy:type_name -> nox.dashboard.v1.GetFinanceOverviewResponse.EquityByCcyEntry
+	48, // 18: nox.dashboard.v1.GetFinanceOverviewResponse.baseline_at:type_name -> google.protobuf.Timestamp
+	48, // 19: nox.dashboard.v1.OverviewOrderRow.until:type_name -> google.protobuf.Timestamp
+	48, // 20: nox.dashboard.v1.GetOverviewBundleResponse.earliest_release:type_name -> google.protobuf.Timestamp
+	48, // 21: nox.dashboard.v1.GetOverviewBundleResponse.baseline_at:type_name -> google.protobuf.Timestamp
+	31, // 22: nox.dashboard.v1.GetOverviewBundleResponse.orders:type_name -> nox.dashboard.v1.OverviewOrderRow
+	39, // 23: nox.dashboard.v1.GetOverviewBundleResponse.stages:type_name -> nox.dashboard.v1.PipelineStageHealth
+	35, // 24: nox.dashboard.v1.GetOverviewBundleResponse.breakdowns:type_name -> nox.dashboard.v1.OverviewBreakdownRow
+	36, // 25: nox.dashboard.v1.GetOverviewBundleResponse.attribution:type_name -> nox.dashboard.v1.OverviewAttribRow
+	37, // 26: nox.dashboard.v1.GetOverviewBundleResponse.funnel:type_name -> nox.dashboard.v1.OverviewFunnelRow
+	38, // 27: nox.dashboard.v1.GetOverviewBundleResponse.waiting:type_name -> nox.dashboard.v1.OverviewWaitingRow
+	34, // 28: nox.dashboard.v1.GetOverviewBundleResponse.crit_alerts:type_name -> nox.dashboard.v1.OverviewCritAlert
+	0,  // 29: nox.dashboard.v1.GetOverviewBundleResponse.idle_streak_state:type_name -> nox.dashboard.v1.IdleStreakState
+	48, // 30: nox.dashboard.v1.OverviewCritAlert.ts:type_name -> google.protobuf.Timestamp
+	48, // 31: nox.dashboard.v1.OverviewCritAlert.first_ts:type_name -> google.protobuf.Timestamp
+	48, // 32: nox.dashboard.v1.ExecutionModeView.gate_confirmed_at:type_name -> google.protobuf.Timestamp
+	48, // 33: nox.dashboard.v1.ExecutionModeView.gate_expires_at:type_name -> google.protobuf.Timestamp
+	40, // 34: nox.dashboard.v1.GetExecutionModeResponse.view:type_name -> nox.dashboard.v1.ExecutionModeView
+	48, // 35: nox.dashboard.v1.SetExecutionModeRequest.expires_at:type_name -> google.protobuf.Timestamp
+	40, // 36: nox.dashboard.v1.SetExecutionModeResponse.view:type_name -> nox.dashboard.v1.ExecutionModeView
+	48, // 37: nox.dashboard.v1.DecideHypothesisResponse.decided_at:type_name -> google.protobuf.Timestamp
+	38, // [38:38] is the sub-list for method output_type
+	38, // [38:38] is the sub-list for method input_type
+	38, // [38:38] is the sub-list for extension type_name
+	38, // [38:38] is the sub-list for extension extendee
+	0,  // [0:38] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_account_proto_init() }
@@ -3801,13 +3873,14 @@ func file_dashboardv1_account_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_account_proto_rawDesc), len(file_dashboardv1_account_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   47,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_dashboardv1_account_proto_goTypes,
 		DependencyIndexes: file_dashboardv1_account_proto_depIdxs,
+		EnumInfos:         file_dashboardv1_account_proto_enumTypes,
 		MessageInfos:      file_dashboardv1_account_proto_msgTypes,
 	}.Build()
 	File_dashboardv1_account_proto = out.File

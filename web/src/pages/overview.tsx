@@ -6,6 +6,7 @@ import { client, errText } from "../api";
 import { onCase } from "../stream";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import type { GetOverviewBundleResponse } from "../gen/dashboardv1/account_pb";
+import { IdleStreakState } from "../gen/dashboardv1/account_pb";
 import type { RequestBoxItem } from "../gen/dashboardv1/request_box_pb";
 import { ResolveRequestState } from "../gen/dashboardv1/request_box_pb";
 import { fmtUsd } from "../components/fmt";
@@ -135,8 +136,16 @@ export default function OverviewPage() {
         <StatTile label="在息" value={b?.principalAvailable ? fmtUsd(b.principalEarningUsd) : "—"}
           sub={b?.principalAvailable && b.principalLockedUsd > 0 ? `含锁定 ${fmtUsd(b.principalLockedUsd)}${b.earliestRelease ? "·最早回笼 " + utc(timestampDate(b.earliestRelease)) : ""}` : undefined}
           active={tile === "earning"} onClick={() => setTile(tile === "earning" ? null : "earning")} />
-        <StatTile label="眠钱时长" value={b?.idleStreakAvailable && b.idleStreakDays > 0 ? `${b.idleStreakDays} 天` : "—"}
-          sub={b?.idleStreakAvailable ? (b.idleStreakPool ? `最长池 ${b.idleStreakPool}` : "读模零行或在册零破地板池") : undefined} />
+        {/* 眠钱时长：后端 idle_streak_state 显式分态全信——
+            healthy_zero=「0 · 无眠钱」常志态 vs no_data=「—」警示态（断供≠无眠钱） */}
+        <StatTile label="眠钱时长"
+          value={b?.idleStreakState === IdleStreakState.STREAK ? `${b.idleStreakDays} 天`
+            : b?.idleStreakState === IdleStreakState.HEALTHY_ZERO ? "0 · 无眠钱" : "—"}
+          valueClass={b?.idleStreakState === IdleStreakState.NO_DATA ? "u-amber" : undefined}
+          sub={b?.idleStreakState === IdleStreakState.STREAK ? `最长池 ${b.idleStreakPool}`
+            : b?.idleStreakState === IdleStreakState.HEALTHY_ZERO ? "在册零破地板池" : undefined}
+          title={b?.idleStreakState === IdleStreakState.NO_DATA
+            ? "idle_floor_streak 读模零行/读败=断供（D-612 首轮动窗前零行为预期）" : undefined} />
         <StatTile label="基线后业绩" value={b?.perfAvailable ? (b.perfUsd >= 0 ? "+" : "") + fmtUsd(b.perfUsd) : "—"}
           sub={b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%｜目标≥8%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"}
           active={tile === "perf"} onClick={() => setTile(tile === "perf" ? null : "perf")} />

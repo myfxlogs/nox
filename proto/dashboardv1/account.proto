@@ -283,11 +283,22 @@ message GetOverviewBundleResponse {
   // F1 显缺旗标（同族病灶第 5 例修——读败≠真值 0；perf_available/invested_available 同型范式）。
   bool principal_available = 30;    // nav 段读败→false（四瓦片显「—」不冒 $0）
   bool idle_streak_available = 31;  // streaks 读败→false（眠钱瓦片显「—」不冒「无在册破地板池」)
+  // 眠钱瓦片状态分显（10-21 修）：healthy_zero（在册零破地板池=健康零）与
+  // no_data（读模零行/读败=断供）后端显式分态——前端零算零猜全信本字段。
+  IdleStreakState idle_streak_state = 36;
   // D-630 真实净盈利权威口径=Σ venue 权益差−Σ io 外部净流（归因面降级解释层后的唯一判定口径）。
   double true_net_30d_usd = 32;     // 30d 窗（快照基线有盖池才计）
   double true_net_all_usd = 33;     // 全时窗
   bool true_net_available = 34;     // 全池缺盖→false（显「—」不冒数）
   string true_net_uncovered = 35;   // 缺基线池清单（如实标缺面）
+}
+
+// IdleStreakState 眠钱瓦片分态（前端零算零猜——断供与健康零可判读）。
+enum IdleStreakState {
+  IDLE_STREAK_STATE_UNSPECIFIED = 0;
+  IDLE_STREAK_STATE_STREAK = 1;       // 有在册破地板池（days>0 携最长连破天数+池名）
+  IDLE_STREAK_STATE_HEALTHY_ZERO = 2; // 读模有行·在册零破地板池=健康零（显「0 · 无眠钱」）
+  IDLE_STREAK_STATE_NO_DATA = 3;      // 读模零行或读败=断供（显「—」警示态）
 }
 
 // OverviewCritAlert 24h critical 告警明细行（全行 level 恒=critical 不复列）。

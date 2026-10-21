@@ -1091,3 +1091,10 @@ verdict=照准。亲证：①diff 全读——NoxMark（O=枭面字标，current
 验收锚：TestDormantVenueGranularity（binance 存量 deferred+零新 binance proposed+okx 提案照产）；机检 51 包测试+race 绿、vet/gofmt 净。
 遗留如实记：auto 轨无执行器处置块（run.go ~140）defer 仍硬编码 @binance——同族作用域嫌疑，本票未动（票面范围只钉 dormant）；sell_high okx 提案恢复待部署后扫描拍实证（能力达标面以生产为准）。
 -->
+
+<!-- 实施席 10-21：眠钱瓦片状态分显示修 施工完候复审
+病灶：眠钱瓦片只靠 idle_streak_available+days 判——「在册零破地板池（健康零）」与「读模零行（断供）」同显「—」不可判读（D-286 闲置列=失眠计定位失效）。
+修件（wip/idle-streak-state）：①proto `IdleStreakState` 枚举+`idle_streak_state=36`（UNSPECIFIED/STREAK/HEALTHY_ZERO/NO_DATA）buf generate Go+TS 双再生成；②后端 `summarizeIdleStreak` 纯函数分态——读败或读模零行=NO_DATA、在册零破地板=HEALTHY_ZERO、有破地板=STREAK；③前端按枚举直渲零算零猜（STREAK=「N 天·最长池」/HEALTHY_ZERO=「0 · 无眠钱·在册零破地板池」/NO_DATA=「—」+u-amber 警示+title 注断供）。
+机检：TestSummarizeIdleStreak 四态锚+TestOverviewBundleAvailFlags 接线锚（空库→NO_DATA 达 RPC 面）；dashboard 820 测全绿+race 绿+npm build 绿。
+顺带实证（SG psql）：idle_floor_streak 现 17 行、last_check_day=2026-10-21、max(consecutive_below_days)=0——读模有行全零=健康零，部署后瓦片应显「0 · 无眠钱」（非断供——D-612 动窗写径已活）。
+-->
