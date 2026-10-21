@@ -8,9 +8,16 @@
 -- ADA 双行组（ADAUSDm/ADAUSDT→同 canonical）：D-383 多行组须显式 primary——
 -- 按 3001157 全表 m 尾惯例（AAVEUSDm→AAVEUSDT 族）标 ADAUSDm primary，
 -- 唯一索引 broker_symbol_map_primary_unq（baseline:4451）护一行。
+-- 返修（symmap-4 退回）：账户=运行时数据非 schema 种子——新装/测试库
+-- broker_accounts 空则 FK broker_symbol_map_venue_fk 必炸。INSERT…SELECT…
+-- WHERE EXISTS 守卫：户在册才插、户缺席=幂等跳过非错（映射随户补种）。
 INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, contract_size, source, is_primary)
-VALUES ('15032313', 'WTI_V6_CFD', 'WTI',   NULL, 'rule', false),
+SELECT v.venue, v.broker_symbol, v.canonical, v.contract_size, v.source, v.is_primary
+FROM (VALUES
+       ('15032313', 'WTI_V6_CFD', 'WTI',   NULL, 'rule', false),
        ('3001157',  'ADAUSDm',    'ADAUSDT', 1000, 'meta', true),
        ('3001157',  'ADAUSDT',    'ADAUSDT', NULL, 'rule', false),
        ('3001157',  'FILUSDT',    'FILUSDT', NULL, 'rule', false)
+     ) AS v(venue, broker_symbol, canonical, contract_size, source, is_primary)
+WHERE EXISTS (SELECT 1 FROM broker_accounts WHERE venue = v.venue)
 ON CONFLICT (venue, broker_symbol) DO NOTHING;
