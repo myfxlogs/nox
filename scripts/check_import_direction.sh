@@ -62,6 +62,7 @@ internal/data/cexscan -> internal/data/venue
 internal/data/cexscan -> internal/gen/dashboardv1
 internal/data/cexscan -> internal/platform/config
 internal/data/cexscan -> internal/platform/httpx
+internal/data/cexscan -> internal/platform/okxrate
 internal/data/cexscan -> internal/store/pgstore
 internal/data/collect -> internal/data/bus
 internal/data/collect -> internal/data/fact
@@ -104,6 +105,7 @@ internal/ledger/reconcile -> internal/data/keydomain
 internal/ledger/reconcile -> internal/data/venue
 internal/ledger/reconcile -> internal/gen/dashboardv1
 internal/ledger/reconcile -> internal/platform/httpx
+internal/ledger/reconcile -> internal/platform/okxrate
 internal/ledger/reconcile -> internal/platform/signutil
 internal/ledger/reconcile -> internal/store/pgstore
 internal/ledger/reconcile -> internal/trading/exec

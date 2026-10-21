@@ -15,6 +15,7 @@ import (
 	"time"
 
 	v1 "nox/internal/gen/dashboardv1"
+	"nox/internal/platform/okxrate"
 )
 
 // okxSubaccountBase okx 资金/理财端点兜底基址：config base_url 为空才直连 www.okx.com。
@@ -44,11 +45,11 @@ func (q *CEXAccountQuerier) okxSubaccountSignedGet(ctx context.Context, pathWith
 		path = path[:i]
 	}
 	gkey := q.apiKey + "|" + path // venue 限频档=User ID 规则——凭据×端点键
-	if err := okxGateWait(ctx, gkey); err != nil {
+	if err := okxrate.Wait(ctx, gkey); err != nil {
 		return nil, err
 	}
 	body, err := q.get(ctx, base+pathWithQuery, headers)
-	okxGateResult(gkey, err)
+	okxrate.Result(err)
 	return body, err
 }
 
