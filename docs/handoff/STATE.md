@@ -1253,7 +1253,7 @@ WHERE venue=v.venue)——有户才插无户幂等跳过；注释钉「户缺席
 <!-- D-651 五修向立票（10-21 决策席——全谱运维缺陷同治，细文读 decisions.md D-651）
 | 票 | 状态 |
 | a) venue 适配器注册表 | ✅并入部署 @9380dfed3——VenueAdapter(Pricer/Sigma/Disposal) map[venue]+exchange_configs 行驱动；spotPriceVenue 收敛为入口，sigmaDaily/usdOf/disposal_sweep 同消费 |
-| b) 评估卡绑定纪律 | 已立待派——APR 修已并（f21a58f31）；余面=gross 之外字段（params/strike/tenor）同绑 product_ref 指针+「快照与判定异源」KB high 条目+评估卡审项进 review 清单 |
+| b) 评估卡绑定纪律 | ✅并入 @a145f8a95——代码绑定面本拍核证已齐（dsel.row 全同源写）；KB canon+审项 I 落文（D# 误引复审微修）|
 | c) 闸收口账 | 已立待派（取证型）——sellHighGate/dciPremiumGate/FundingRegimeOK/custody_share/TailCostAnn 五闸现域盘点→risk.Check 单入口归编路线 |
 | d) 多席并发协议 | B①③ ✅并入部署 @68ae4692e——check-deploy-tree.sh 闸+NOX_TEST_SEAT 逐席库锚（件已在产，补锚）+漏提交桩修；B②④ 归落文票待派 |
 | e) 投资人接触面犬哨 | ✅并入部署 @704d08bc4（三通道 last_hit 透出+registered_at 观察阈——SG 实拍 dump 三行在报、首拍嫌疑 warn 零发=观察窗生效；「watchdog 无视窗判嫌=boot 假阳」坑 staging 挂账）| 决策席 | **实证（D-651 审计病灶⑥）**：入站命令径（feishu webhook）历史命中=0 死约一月系统零自报——交易面有 reconcile/alert 自盯，**投资人面零犬哨**；若业主不手动试「go」，死径永不被发现。**范围**：①入站面三通道挂 dephealth——feishu webhook 端点/前端 RPC 会话流/命令处理径（AckProposal/go 链路），每通道记 last_hit_at+累计计数（拒因计数器同族形态，计数只测不判）；②死径嫌疑标报——通道「应活」（配置在/接线在）且连续零命中超阈（裁 72h——正常空闲不警，30min 零事件天然无义）→ warn 级「接触面死径嫌疑：通道 X 零命中 Nh」InsertAlertDedup 24h；③有命中即清嫌疑态。**禁线**：不判空闲为死（阈值按日级非分钟级）；不动交易面自盯；计数零业务副作用。**验收**：机检——零命中超阈→标报+命中→无标报双锚；SG——部署后三通道 last_hit 面在 dephealth 可见+webhook 实测发令后 last_hit 更新。**开工指令**：`[角色:实施] 投资人接触面犬哨（读 STATE 本行——三通道 last_hit+死径嫌疑标报；无 skills 域）` |
