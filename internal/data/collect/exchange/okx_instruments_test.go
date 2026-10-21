@@ -46,6 +46,8 @@ func instSrv(t *testing.T, code string) *httptest.Server {
 			body = `{"code":"0","data":[{"instId":"BTC-USDT","state":"live"},{"instId":"PRE-USDT","state":"preopen"},{"instId":"XAUT-USDT","state":"live"}]}`
 		case "SWAP":
 			body = `{"code":"0","data":[{"instId":"BTC-USDT-SWAP","state":"live"},{"instId":"XAU-USDT-SWAP","state":"live"},{"instId":"SUS-USDT-SWAP","state":"suspend"}]}`
+		case "FUTURES":
+			body = `{"code":"0","data":[{"instId":"ETH-USD-261225","state":"live"}]}`
 		default:
 			t.Errorf("unexpected instType %q", r.URL.Query().Get("instType"))
 		}

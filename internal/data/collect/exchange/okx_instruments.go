@@ -83,7 +83,7 @@ func (c *okxInstCatalog) ensure(ctx context.Context) {
 
 func (c *okxInstCatalog) fetch(ctx context.Context) error {
 	set := make(map[string]bool, 2048)
-	for _, instType := range []string{"SPOT", "SWAP"} {
+	for _, instType := range []string{"SPOT", "SWAP", "FUTURES"} {
 		var out struct {
 			Code string `json:"code"`
 			Data []struct {
@@ -118,6 +118,13 @@ func (c *okxInstCatalog) fetch(ctx context.Context) error {
 	c.set, c.at, c.failed = set, time.Now(), false
 	c.mu.Unlock()
 	return nil
+}
+
+// has instId 是否在目录（loaded 前提下调用）。
+func (c *okxInstCatalog) has(instID string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.set[instID]
 }
 
 // loaded 目录是否已成功拉取过（false → pick 透传候选，判决不可用）。
