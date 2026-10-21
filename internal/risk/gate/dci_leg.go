@@ -47,21 +47,40 @@ func (l DCILeg) StrikePass(q *pgstore.CexDCIQuote, bound float64) bool {
 // StrikeBound %OTM 闸界=spot×约束比率（R8 SQL 下推源；R9 比率由约束表供）。
 func StrikeBound(spot, ratio float64) float64 { return spot * ratio }
 
+// CustodyShareOf 托管可动份额上限读面（D-644 venue 粒度修）：
+// venue 键 `custody_share@<venue>` 优先生效（okx 池=纯托管钱应×1.0，
+// 非共享池语义再×0.34）；无 venue 键回落全局 `custody_share`
+// （binance 共享池=自营+托管混存上限 0.34——向后兼容不 fail-closed）。
+// venue="" 只查全局键。
+func CustodyShareOf(cons []pgstore.CapabilityConstraint, venue string) *float64 {
+	var global *float64
+	for _, c := range cons {
+		if c.ValueNum == nil {
+			continue
+		}
+		if venue != "" && c.Subject == "custody_share@"+venue {
+			return c.ValueNum
+		}
+		if c.Subject == "custody_share" {
+			global = c.ValueNum
+		}
+	}
+	return global
+}
+
 // TenorCapOf 期限上限=custody_redeemable.value_num（票面钦定读 90；行在无数值→14）。
+// share 返回=全局键（venue 粒度读面走 CustodyShareOf——binance 共享池语义）。
 func TenorCapOf(cons []pgstore.CapabilityConstraint) (share *float64, cap int) {
 	cap = 30 // 无 redeemable 约束=非托管语义，保守中间档
 	for _, c := range cons {
-		switch c.Subject {
-		case "custody_share":
-			share = c.ValueNum
-		case "custody_redeemable":
+		if c.Subject == "custody_redeemable" {
 			cap = 14
 			if c.ValueNum != nil {
 				cap = int(*c.ValueNum)
 			}
 		}
 	}
-	return share, cap
+	return CustodyShareOf(cons, ""), cap
 }
 
 // CexExposurePctOf CEX 侧权益敞口上限（AGENTS §1 硬线誊录行）——
