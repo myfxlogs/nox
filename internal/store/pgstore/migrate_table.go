@@ -259,4 +259,5 @@ var migrationFiles = []struct {
 	{1064, migrations.HoldHoursPriorSQL, false},          // funding_carry hh 输入源修：hold_hours_prior 列+种子168h
 	{1065, migrations.EconKbVerdictsSQL, false},          // 经济经验库消化裁定表（canon/dismiss/merge+理由必填）
 	{1066, migrations.CgVenueTypeFuturesSQL, false},      // cg venue_type 漂移修：活约束回补 'futures'（基线就地改不回流生产）
+	{1067, migrations.VenueTypeFuturesSweepSQL, false},   // venue_type 'futures' 全谱 CHECK 修（D-648——8 表+ticks 族）
 }
