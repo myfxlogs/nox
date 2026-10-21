@@ -159,15 +159,16 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 						gateNote, dsel = why, sel
 					}
 				}
-				propN++
-				// 保活键=tid@venue 对；earn 族提案 rail 覆盖集各键都保活同
-				// 旧语义（cash_mgmt 分 venue 由 idleGapScan 产/过期自管）。
+				propN++ // 保活键=tid@venue 对；earn 族提案 rail 覆盖集各键都保活（cash_mgmt 分 venue 归 idleGapScan 独域）
 				liveVenues := venues
 				if gate.EarnTemplates[r.TemplateID] {
-					liveVenues = execVenueList(ctx, st, r.TemplateID)
+					liveVenues = execVenueList(ctx, st, r.TemplateID) // earn 族 venue 集投影
 				}
 				for _, lv := range liveVenues {
 					liveTmpls = append(liveTmpls, r.TemplateID+"@"+lv)
+				}
+				if !earnPreGate(ctx, st, r.TemplateID, venue) { // earn 前提闸（run_venue.go 注⑦判据）
+					continue
 				}
 				// earn_apr_lending 提案 venue=报价所取 venue——apr/证源随 venue
 				// 换（跨 venue 顶档价不贴别所提案，执行轨按 venue 路由不悬空）。
