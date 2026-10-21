@@ -354,6 +354,8 @@ message OverviewWaitingRow {
   string label = 2;   // 对象摘要（后端拼）
   string detail = 3;  // 等待因/关键值（后端拼）
   int64 since_unix = 4; // 等待起点（0=未知）
+  int64 proposal_id = 5;  // kind=proposal 时提案 id（拒批/go 口令接活键；0=非提案行）
+  string exec_track = 6;  // 提案轨（auto/semi/proposal——前端分形零猜）
 }
 
 // PipelineStageHealth 工序段健康行（十段固定枚举 key 后文注释面）。

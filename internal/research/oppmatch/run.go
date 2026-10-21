@@ -226,7 +226,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 				if !created {
 					tag = "提案#（在册）"
 				}
-				if err := st.InsertAlert(ctx, nil, "info", fmt.Sprintf(
+				if err := st.InsertAlert(ctx, nil, proposalAlertLevel(ctx, st, r.TemplateID, r.ExecTrack), fmt.Sprintf(
 					"机会%s%d %s@%s（轨=%s，%s，评估卡=%s）", tag, pid, r.TemplateID, venue, r.ExecTrack, apr, card.Verdict)); err != nil {
 					log.Printf("[oppmatch] proposal alert %s: %v", r.TemplateID, err)
 				}
