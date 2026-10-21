@@ -13,9 +13,10 @@ import (
 
 // ContactRow 接触面通道快照行（last_hit+命中计数）。
 type ContactRow struct {
-	Channel     string
-	Hits        uint64
-	LastHitUnix int64
+	Channel          string
+	Hits             uint64
+	LastHitUnix      int64
+	RegisteredAtUnix int64 // 注册时标（返修②——Suspects 须先满观察阈：注册即嫌=假阳）
 }
 
 var contactReg = struct {
@@ -30,7 +31,7 @@ func ContactRegister(channels ...string) {
 	defer contactReg.Unlock()
 	for _, ch := range channels {
 		if contactReg.rows[ch] == nil {
-			contactReg.rows[ch] = &ContactRow{Channel: ch}
+			contactReg.rows[ch] = &ContactRow{Channel: ch, RegisteredAtUnix: time.Now().Unix()}
 		}
 	}
 }
@@ -58,14 +59,19 @@ func ContactSnapshot() []ContactRow {
 	return out
 }
 
-// ContactSuspects 死径嫌疑集：注册应活且零命中连续超 idleFor——
-// 日级阈值（裁 72h——正常空闲不警，分钟级零事件天然无义）。
+// ContactSuspects 死径嫌疑集（返修②观察阈版）：须同时成立——①注册满
+// idleFor（观察窗未满不判嫌——注册即嫌=假阳：boot 后 72h 窗内自然零命中
+// 非死径）＋②零命中（从未命中）或末次命中龄>idleFor。
 func ContactSuspects(idleFor time.Duration) []ContactRow {
 	contactReg.Lock()
 	defer contactReg.Unlock()
+	now := time.Now()
 	var out []ContactRow
 	for _, r := range contactReg.rows {
-		if r.Hits == 0 || time.Since(time.Unix(r.LastHitUnix, 0)) > idleFor {
+		if now.Sub(time.Unix(r.RegisteredAtUnix, 0)) <= idleFor {
+			continue // 观察窗未满
+		}
+		if r.Hits == 0 || now.Sub(time.Unix(r.LastHitUnix, 0)) > idleFor {
 			out = append(out, *r)
 		}
 	}

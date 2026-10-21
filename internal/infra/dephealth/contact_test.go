@@ -8,7 +8,16 @@ import (
 
 func TestContactWatch_DualAnchor(t *testing.T) {
 	ContactRegister("t_chan")
-	// 未命中通道=嫌疑（Hits=0 从未命中）。
+	// 返修②锚①：注册即判嫌=false（观察窗未满不判嫌）。
+	for _, r := range ContactSuspects(72 * time.Hour) {
+		if r.Channel == "t_chan" {
+			t.Fatalf("注册即嫌=假阳: %+v", r)
+		}
+	}
+	// 返修②锚②：满阈未命中=true（回填注册时标过观察窗）。
+	contactReg.Lock()
+	contactReg.rows["t_chan"].RegisteredAtUnix = time.Now().Add(-73 * time.Hour).Unix()
+	contactReg.Unlock()
 	found := false
 	for _, r := range ContactSuspects(72 * time.Hour) {
 		if r.Channel == "t_chan" {
@@ -16,7 +25,7 @@ func TestContactWatch_DualAnchor(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatal("零命中通道应入嫌疑集")
+		t.Fatal("满阈未命中通道应入嫌疑集")
 	}
 	// 命中后清嫌疑。
 	ContactHit("t_chan")
