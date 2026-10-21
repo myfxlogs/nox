@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 
+	"nox/internal/data/keydomain"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/exec"
 )
@@ -97,22 +98,28 @@ func (e *Engine) resolveXAssetSizing(ctx context.Context, opp pgstore.Opportunit
 		// JIT 归集前置（划转执行件）：缺资腿 earn 桶赎缺口额→交易户→重读
 		// 权益原路 sizing；归集败/仍非正才落业主请求箱。败因 kind=落箱分类
 		// （permission=授权面 key scope 缺——票面②）。
-		if spec.VenueBuy == spec.VenueSell && eqB <= 0 && eqS <= 0 {
-			// 双零触发器（D-649 返修）：同池双腿皆零——缺口额=票面名义锚
+		if jitSamePool(spec.VenueBuy, spec.VenueSell) && eqB <= 0 && eqS <= 0 {
+			// 双零触发器（D-649 返修②）：同池双腿皆零——缺口额=票面名义锚
 			// （NotionalUSD→MaxGrossUSD→MarginUSD 序，非对腿参照 0−0=0 空洞），
-			// venue 粒度单次归集非逐腿（combo#25 双腿同池皆零实证）。
+			// 池粒度单次归集非逐腿（combo#25 okx:spot×okx:futures 同 unified 池实证）。
+			// 归集落腿=交易户腿优先（jitTradingWallet 同口径 vt 集——spot 腿免二跳
+			// 赎落 funding 即达，perp/futures/unified 腿须落 trading 户才抵保证金）。
+			vk := spec.VenueBuy
+			if jitTradingLegVT(keydomain.TypeOf(spec.VenueSell)) {
+				vk = spec.VenueSell
+			}
 			if need := jitNotionalAnchor(spec); need > 0 {
-				if kind, err := e.JitSweepFn(ctx, spec.VenueBuy, need, opp.NetBps/10000); err != nil {
-					log.Printf("[autotrade] jit 双零归集 %s 票面名义 %.2f 败（%s 落箱面）: %v", spec.VenueBuy, need, kind, err)
+				if kind, err := e.JitSweepFn(ctx, vk, need, opp.NetBps/10000); err != nil {
+					log.Printf("[autotrade] jit 双零归集 %s 票面名义 %.2f 败（%s 落箱面）: %v", vk, need, kind, err)
 					jitGapKind = kind
 				} else {
-					e.service.RefreshAccountEquity(ctx, spec.VenueBuy)
-					if v, _, _, ok := e.service.AccountEquityUSDAt(spec.VenueBuy); ok && v > 0 {
-						eqB, eqS = v, v
+					e.service.RefreshAccountEquity(ctx, vk)
+					if v, _, _, ok := e.service.AccountEquityUSDAt(vk); ok && v > 0 {
+						eqB, eqS = v, v // 池身份同——读数即池值双腿共见
 					}
 				}
 			} else {
-				log.Printf("[autotrade] jit 双零同池 %s 票面名义锚缺（fail-closed 落箱）", spec.VenueBuy)
+				log.Printf("[autotrade] jit 双零同池 %s 票面名义锚缺（fail-closed 落箱）", vk)
 			}
 		} else {
 			for _, lg := range []struct {
@@ -173,4 +180,29 @@ func jitNotionalAnchor(spec *exec.XAssetComboAllowSpec) float64 {
 		return *spec.MarginUSD
 	}
 	return 0
+}
+
+// jitSamePool 双腿池身份判（D-649 返修②：venueKey 字面相等错层——okx:spot×
+// okx:futures 异键同 unified 池）。口径同 livePoolQuerier 池键钉法：okx 任意
+// 交易 vt 同 unified 池；binance/gate 按 venue_type 精确配腿（spot 腿禁读
+// perp 池→vt 相同才算同池）；funding/earn 子账户不入双零域（子账户精确池）。
+func jitSamePool(vkA, vkB string) bool {
+	bA, bB := keydomain.BareOf(vkA), keydomain.BareOf(vkB)
+	if bA == "" || bA != bB {
+		return false
+	}
+	tA, tB := keydomain.TypeOf(vkA), keydomain.TypeOf(vkB)
+	if tA == "funding" || tA == "earn" || tB == "funding" || tB == "earn" {
+		return false // 子账户精确池——禁归并交易池（livePoolQuerier 同禁线）
+	}
+	if bA == "okx" {
+		return true // 统一账户——任意 okx 交易 vt 同池
+	}
+	return tA == tB
+}
+
+// jitTradingLegVT 交易户腿 vt 判（dciexec.jitTradingWallet 同口径镜像——
+// 跨包不引：perp/unified/futures=落 trading 户才抵保证金）。
+func jitTradingLegVT(vt string) bool {
+	return vt == "perp" || vt == "unified" || vt == "futures"
 }
