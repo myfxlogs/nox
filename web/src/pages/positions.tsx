@@ -20,6 +20,10 @@ import { PaperCarry } from "../components/PaperCarry";
 
 const key = (p: { venueKey: string; ticket: string }) => p.venueKey + "/" + p.ticket;
 
+// ACTIVE_POS_STATUSES 在跑桶枚举（后端 positions status IN ('OPEN','OPENING','LEGGED','CLOSING')
+// 同源——positions_query.go:22/86；CLOSED/FAILED=终态落已平仓区）。
+const ACTIVE_POS_STATUSES = new Set(["OPEN", "OPENING", "LEGGED", "CLOSING"]);
+
 export default function PositionsPage() {
   const [sysPos, setSysPos] = useState<Map<number, Position>>(new Map());
   const [broker, setBroker] = useState<Map<string, BrokerPosition>>(new Map());
@@ -207,8 +211,10 @@ export default function PositionsPage() {
 
       <h2>系统仓台账</h2>
       {(() => {
-        const act = [...sysPos.values()].filter((p) => p.status === "ACTIVE");
-        const closed = [...sysPos.values()].filter((p) => p.status !== "ACTIVE");
+        // 活跃桶=后端 OPEN 族四态（positions_query.go:22 同源枚举）——
+        // status==='ACTIVE' 恒空病灶修：OPEN/OPENING/LEGGED/CLOSING 全属在跑。
+        const act = [...sysPos.values()].filter((p) => ACTIVE_POS_STATUSES.has(p.status));
+        const closed = [...sysPos.values()].filter((p) => !ACTIVE_POS_STATUSES.has(p.status));
         return (
           <>
             {act.length > 0 ? (
