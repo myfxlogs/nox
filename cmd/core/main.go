@@ -49,6 +49,7 @@ func main() {
 		log.Fatalf("migrate: %v", err)
 	}
 	log.Println("migrations applied")
+	reportCheckDrift(ctx, st)                  // 约束漂移启动自检：迁移链 CHECK 终态 vs 活库 pg_get_constraintdef
 	sealExchangeKeysOrFatal(ctx, st)           // D-515 S2：密钥明文→enc 自封（MASTER_KEY 缺失且需封 → fatal）
 	seedConfigFromEnv(ctx, st)                 // D-515 S4：空表播种 env→库（一次性，幂等）
 	secrets := applyAppSecretsOrFatal(ctx, st) // D-515 S3：密键注入 env（须在 config.Load 前；缺 KEY 表非空 → fatal）
