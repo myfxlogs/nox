@@ -151,6 +151,13 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 					}
 					gateNote = why
 				}
+				if r.TemplateID == "dci_sell_high_covered_call" {
+					if ok, why := sellHighGateEnforce(ctx, st, r.TemplateID, venue); !ok {
+						continue
+					} else {
+						gateNote = why
+					}
+				}
 				propN++
 				// 保活键=tid@venue 对；earn 族提案 rail 覆盖集各键都保活同
 				// 旧语义（cash_mgmt 分 venue 由 idleGapScan 产/过期自管）。
@@ -198,7 +205,8 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 					}
 				}
 				rv.Venue = venue
-				card := evalProposal(ctx, st, rv, pid) // D-258 M4.1：一提案一卡（每扫一拍复算）
+				card := evalProposal(ctx, st, rv, pid)
+				sellHighStructBelt(r.TemplateID, params, card) // D-646 结构闸 belt // D-258 M4.1：一提案一卡（每扫一拍复算）
 				streak, uerr := st.UpsertOppEval(ctx, card)
 				if uerr != nil {
 					log.Printf("[oppmatch] eval card proposal#%d: %v", pid, uerr)
