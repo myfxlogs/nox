@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"strings"
+
 	"nox/internal/platform/alerttext"
 )
 
@@ -86,12 +88,33 @@ func (s *Store) saveEpisodes(ctx context.Context, doc *alertEpisodeDoc) error {
 	return s.UpsertAppConfig(ctx, cfgAlertEpisodes, string(buf), "D-168 飞书告警 episode 态机（内部状态键）")
 }
 
+// cfgAlertReceiptPatterns 回执类消息子串键（app_config 逗分清单 Contains——终态
+// 事件知会推一次即闭不进「仍待确认」重推；判据表化禁代码枚举散落）。
+const cfgAlertReceiptPatterns = "alert_receipt_patterns"
+
+// isReceiptAlert 回执级判定（Contains 子串匹配——生产真文案带「EARN /DCI 」
+// 前缀，HasPrefix 全哑；读败=非回执 fail-open 按 needs_ack 处理不吞推）。
+func (s *Store) isReceiptAlert(ctx context.Context, message string) bool {
+	v, ok, err := s.AppConfigString(ctx, cfgAlertReceiptPatterns)
+	if err != nil || !ok {
+		return false
+	}
+	for _, p := range strings.Split(v, ",") {
+		if p = strings.TrimSpace(p); p != "" && strings.Contains(message, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // AlertEpisodeGate 推送闸裁决：新集/旧集已闭→Push（开集记账）；open/acked 续期抑制；
 // open 未 ack 超提醒阈→Remind 一次。返回 dedup 键供 push_msg_id 对位。
+// 回执级（alert_receipt_patterns 子串命中）=推一次即闭：Reminded 置位免重推。
 func (s *Store) AlertEpisodeGate(ctx context.Context, level, message string, now time.Time) (AlertEpisodeAction, string, error) {
 	episodeMu.Lock()
 	defer episodeMu.Unlock()
 	key := alerttext.AlertDedupKey(level, message)
+	receipt := s.isReceiptAlert(ctx, message)
 	doc, err := s.loadEpisodes(ctx)
 	if err != nil {
 		return EpisodeSuppress, "", err
@@ -105,6 +128,9 @@ func (s *Store) AlertEpisodeGate(ctx context.Context, level, message string, now
 	switch {
 	case e == nil:
 		e = &alertEpisode{State: episodeOpen, FirstFired: now, LastFired: now, LastPush: now}
+		if receipt {
+			e.Reminded = true // 推一次即闭——Reminded 置位=永不进「仍待确认」重推
+		}
 		doc.Episodes[key] = e
 		act = EpisodePush
 	default:
