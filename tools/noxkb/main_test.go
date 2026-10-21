@@ -165,9 +165,9 @@ func TestD173_SkillsIndex(t *testing.T) {
 
 // TestBudgetExceed 预算超限报错
 func TestBudgetExceed(t *testing.T) {
-	// 构造超 maxLines(260) 行的输出
+	// 构造超 maxLines 行的输出（从常量派生——顶随条目量上浮后测试不再脱锚，935754766 教训）
 	var entries []*Entry
-	for i := 0; i < 300; i++ {
+	for i := 0; i < maxLines+50; i++ {
 		entries = append(entries, &Entry{
 			ID:   "entry-" + string(rune('a'+i%26)) + string(rune('a'+i/26)),
 			Kind: "pitfall", Risk: "low", Status: "verified",
@@ -176,6 +176,6 @@ func TestBudgetExceed(t *testing.T) {
 	}
 	output := render(entries)
 	if err := checkBudget(output); err == nil {
-		t.Error("checkBudget should fail on >200 lines, got nil")
+		t.Errorf("checkBudget should fail on >%d lines, got nil", maxLines)
 	}
 }
