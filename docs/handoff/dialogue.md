@@ -318,3 +318,8 @@
 
 ## 2026-10-21 jit 双零池级判据实施纪要（wip/jit-yield @b9caee585）
 - 池身份裁定（实施域）：池键=livePoolQuerier 同口径——okx 任意交易 vt 钉 `okx:unified`（统一账户实证 combo#25 legPools）；binance/gate 按 vt 精确配腿（vt 相同才同池——spot 腿禁读 perp 池语义不破坏）；funding/earn 子账户不入双零域（精确池禁并——同 livePoolQuerier 禁线）。归集落腿=交易户腿优先（vt∈{perp,unified,futures}——spot 腿赎落 funding 即达无须二跳，futures 腿须落 trading 户抵保证金）。
+
+## 2026-10-21 眠钱瓦片判据纠偏（业主令——wip/idle-meter-truth）
+- 业主三连问推进：①瓦片贴帧问「按设计显示什么」→三态设计核实；②「之前有 0·无眠钱 字样对吗」→git 沿革核实（03:28Z 294dfd532 引入、06:36Z 6cfc84dda 业主令删缀）；③**「我们修的不是文案层，而是要修断供，现在的情况是这个 0 就是不对的」+「前端用户第 1 性原则是什么」**——业主定性：0=假健康非文案问题。
+- 实施域取证证实业主定性（三违反）：buffer_multiple 全量 NULL→BelowFloor 恒 false=永假健康零（指标出生即死）；buffer_multiple=margin 域锚非收益计量=判据错域；MT5 四池 ~5420 USD 零收益真眠钱不被计量。
+- 裁定（实施域，D-286/D-612 口径锚）：sleepmon 判据 BelowFloor→Idle（余额>0 且 30d 零收入）+runner 36h 快照闸+读面 48h 鲜度闸；三态结构不动；sub 措辞随语义。业主参与=本轮对话全程；无新 owner 合作项。

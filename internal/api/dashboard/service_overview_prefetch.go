@@ -177,15 +177,16 @@ func (s *Service) prefetchOverview(ctx context.Context, now time.Time, resp *v1.
 		})
 		return nil
 	})
-	// §10 眠钱时长（idle_floor_streak 最长连破天数——D-286 计量呈现面）。
+	// §10 眠钱时长（idle_floor_streak 最长连眠天数——D-286 计量呈现面；10-21
+	// 判据修：眠钱=Idle 收益域+鲜度闸，BelowFloor/buffer_multiple 归还 margin 域）。
 	g.Go(func() error {
 		overviewSeg("idle_streak", func() {
 			streaks, err := s.store.GetStreaks(ctx)
-			state, days, pool := summarizeIdleStreak(streaks, err)
+			state, days, pool := summarizeIdleStreak(streaks, err, time.Now())
 			resp.IdleStreakState = state
 			resp.IdleStreakDays = days
 			resp.IdleStreakPool = pool
-			resp.IdleStreakAvailable = err == nil // F4/F1：读败不冒「无在册破地板池」
+			resp.IdleStreakAvailable = err == nil // F4/F1：读败不冒「无在册眠钱池」
 		})
 		return nil
 	})
@@ -201,18 +202,31 @@ func (s *Service) prefetchOverview(ctx context.Context, now time.Time, resp *v1.
 	return pf
 }
 
-// summarizeIdleStreak 眠钱瓦片后端分态（10-21 修——前端零算零猜）：
-// 读败或读模零行=NO_DATA（断供，「—」警示态）；在册零破地板池=HEALTHY_ZERO
-// （健康零，「0 · 无眠钱」常志态）；有破地板池=STREAK（携最长天数+池名）。
-func summarizeIdleStreak(streaks map[string]pgstore.IdleStreak, err error) (v1.IdleStreakState, int32, string) {
-	if err != nil || len(streaks) == 0 {
+// summarizeIdleStreak 眠钱瓦片后端分态（10-21 修——前端零算零猜；同日判据修：
+// BelowFloor→Idle 收益域+鲜度闸）：读败/读模零行/**无鲜行**=NO_DATA（断供，「—」
+// 警示态——sleepmon 停跑后冻结旧行不得冒健康零）；鲜行全零眠=HEALTHY_ZERO
+// （健康零，「0」常志态）；有眠钱池=STREAK（携最长天数+池名）。
+// idleStreakFreshMax 读面鲜度闸：streak 行 CheckDay 超此龄=冻结行不作数。
+// 定标：BJ 历日节奏+1d 宽（单日漏拍容忍），与 runner 侧 idleSnapFreshMax（36h
+// 快照闸）分层——本闸管「簿行当天性」，钉值惯例同 coverageStaleMax。
+const idleStreakFreshMax = 48 * time.Hour
+
+func summarizeIdleStreak(streaks map[string]pgstore.IdleStreak, err error, now time.Time) (v1.IdleStreakState, int32, string) {
+	if err != nil {
 		return v1.IdleStreakState_IDLE_STREAK_STATE_NO_DATA, 0, ""
 	}
-	bestDays, bestPool := 0, ""
+	bestDays, bestPool, freshSeen := 0, "", false
 	for k, st := range streaks {
+		if now.Sub(st.CheckDay) > idleStreakFreshMax {
+			continue // 冻结行不作数（sleepmon 停跑=断供非健康）
+		}
+		freshSeen = true
 		if st.Days > bestDays {
 			bestDays, bestPool = st.Days, k
 		}
+	}
+	if !freshSeen {
+		return v1.IdleStreakState_IDLE_STREAK_STATE_NO_DATA, 0, ""
 	}
 	if bestDays == 0 {
 		return v1.IdleStreakState_IDLE_STREAK_STATE_HEALTHY_ZERO, 0, ""

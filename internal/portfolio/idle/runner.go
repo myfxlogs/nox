@@ -1,8 +1,15 @@
-// sleepmon —— D-534 B4：睡钱触发层（议题集裁决 7d 窗钉常量）。
+// sleepmon —— D-534 B4 睡钱触发层（10-21 判据修：业主令「0 就是不对的」——
+// 原 BelowFloor=buffer_multiple<1 判据三违反：①buffer_multiple 全量 NULL（MT5=
+// mt_frame/binance:earn=rest_poll 皆无此列值）→COALESCE 0→恒 false=**永假健康零**
+// （指标自出生不可能非零，SG 10-21 实拍 10 池全 NULL）；②buffer_multiple 本是
+// margin 域隐含率锚（service_margin 消费）非收益计量=判据错域；③真眠钱（余额>0
+// 且 30d 零收入）存在却不被计量（4 个 MT5 池 ~5420 USD 零收益实拍）。
+// 判据改 Idle（收益域，D-286 钱不眠/D-612 低效仓零容忍口径）+快照鲜度闸
+// （陈行池不判不写——断供不冒健康）。
 // BJ 历日每 30min tick 检查「今日未跑」→ 拉 ExplorerIdleFunds 逐池计
-// consecutive_below_days；连破地板 >=7 天且本轮未告警 → warn 级 InsertAlert +
+// consecutive_below_days；连眠 >=7 天且本轮未告警 → warn 级 InsertAlert +
 // 收件箱提案行（source=sleep_money，动钱永不自动，再配置走业主通道）。
-// 非 below → streak 归零+alerted 复位（本轮 resolved 下轮重计）。
+// 非 idle → streak 归零+alerted 复位（本轮 resolved 下轮重计）。
 // 只写 idle_floor_streak 自表+alert+inbox，无外部副作用。
 package idle
 
@@ -35,6 +42,12 @@ type Deps struct {
 // belowFloorAlertDays 议题集裁决钉值（D-534 设计稿；7d 连续才告警，业务假设钉码出处=KB
 // business-assumptions-in-code-audit 口径——常量+注释）。
 const belowFloorAlertDays = 7
+
+// idleSnapFreshMax 池快照鲜度闸：行龄超此值=该池今日不可判（数据断供面）——
+// 跳过判定不写簿（冻结行由瓦片读面鲜度闸兜底翻 NO_DATA，断供不冒健康零）。
+// 定标：BJ 历日节奏+1.5d 宽（覆盖单日漏拍/愈合窗），钉值惯例同
+// goldStaleTicks/coverageStaleMax（常量+出处注释）。
+const idleSnapFreshMax = 36 * time.Hour
 
 var bjLoc = time.FixedZone("BJ", 8*3600)
 
@@ -83,22 +96,25 @@ func checkDay(ctx context.Context, deps Deps, day string, loc *time.Location) er
 		return err
 	}
 	for _, p := range pools {
+		if time.Since(p.FetchedAt) > idleSnapFreshMax {
+			continue // 陈行池不判不写——断供面不冒健康（读面鲜度闸兜底）
+		}
 		key := p.Venue + "\x00" + p.VenueType
 		st := streaks[key]
 		sameDay := st.CheckDay.Format("2006-01-02") == day
 		days, alerted := st.Days, st.Alerted
-		if p.BelowFloor {
+		if p.Idle {
 			if !sameDay {
 				days++
 			}
 			if days >= belowFloorAlertDays && !alerted {
 				alerted = true
-				msg := fmt.Sprintf("[sleepmon] 睡钱告警 %s/%s：余额 %.2f %s 连续 %d 天低于地板线（缓冲 %.2f），近 30 日收益 %.2f",
-					p.Venue, p.VenueType, p.Balance, p.Currency, days, p.BufferMultiple, p.Income30dUSD)
+				msg := fmt.Sprintf("[sleepmon] 睡钱告警 %s/%s：余额 %.2f %s 连续 %d 天零收益眠钱（近 30 日收益 %.2f）",
+					p.Venue, p.VenueType, p.Balance, p.Currency, days, p.Income30dUSD)
 				if err := deps.Store.InsertAlert(ctx, nil, "warn", msg); err != nil {
 					log.Printf("[sleepmon] alert %s/%s: %v", p.Venue, p.VenueType, err)
 				}
-				reason := fmt.Sprintf("余额 %.2f 连续 %d 天低于地板线，近 30 日收益 %.2f", p.Balance, days, p.Income30dUSD)
+				reason := fmt.Sprintf("余额 %.2f %s 连续 %d 天零收益（近 30 日收益 %.2f）", p.Balance, p.Currency, days, p.Income30dUSD)
 				if err := inboxfmt.Append(deps.InboxPath, day, []inboxfmt.Row{{
 					Source: inboxfmt.SrcSleepMoney, Title: p.Venue + "/" + p.VenueType,
 					Reason: reason, Action: "再配置决策走业主通道",
