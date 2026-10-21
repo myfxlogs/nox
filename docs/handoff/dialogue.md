@@ -305,6 +305,9 @@
 - 存量卡处置选型：闸不过→DeferProposalsByPair 翻 deferred（如实非删——券到自动复产，#1687 随首拍闸判自然翻态）。
 - flake 二分纪律实证：两红（TestD526 无提案/TestD135 kick 时序）经「无改动基线复跑+单跑」双法定性=座库 stale/时序环境伤，非票伤。
 
+## 2026-10-21 venue_type futures 全谱修实施纪要（wip/vtype-futures @新推）
+- 域裁定（实施域）：8 表 9 值通道枚举全补 'futures'；ticks 族（4 值行情通道）同补——futures 行情腿在域内；**broker_accounts_venue_type_chk 不补**——MT 通道域（mt4|mt5）语义不含 futures，补之=放开错域。非漂移型缺口（链/库同缺）→上票自检器不报属设计内，谱系清扫靠枚举不靠告警。
+- ticks 分区处理裁定为父表 DROP+ADD 级联传播（分区约束 PG 自动全子同步+新建 PARTITION OF 承父）；首版 ONLY+DO 枚举误用（分区存在时父约束不可 ONLY 删）已纠——实测锁死点。
 ## 2026-10-21 jit 收益比对起仓环实施纪要（wip/jit-yield @65d59557d）
 - oppAPR 口径裁定（实施域）：armed 组合机会年化取 `opp.NetBps/1e4`（armed 机会卡净 bps 年化原生字段——票面「本拍卡片 expected_apr」对应物）；earn 侧取 `LatestEarnAPR(venue,USDT)` 同币种在册现值——异币种/陈旧行销档不入基准（同 D-514 基准口径纪律）。
 - 净额账隔离裁定：闲置段用 `jit-idle:` 前缀独立记账——jit-ret/jit-swp 差分=jit 挪出净额口径，闲置回申非挪出金混入会冲负净额账（账目语义钉）。

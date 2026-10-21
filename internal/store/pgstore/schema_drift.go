@@ -19,6 +19,11 @@ import (
 	"sort"
 )
 
+// driftExemptTables 运行时遗留表豁免集（精确表名——禁宽掩码）：
+// ticks_old=D-626 阶段 C rename 回滚件（收口注记72 钦定观察期保留，非迁移链
+// 声明面；其 CHECK 随改名表体自带=运行时产物非漂移）。ticks_old 裁弃后本行随删。
+var driftExemptTables = map[string]bool{"ticks_old": true}
+
 // CheckDrift 单处 CHECK 约束漂移描述。
 type CheckDrift struct {
 	Table, Name, Detail string
@@ -60,7 +65,7 @@ func (s *Store) SchemaCheckDrift(ctx context.Context) ([]CheckDrift, error) {
 		tables[t] = true
 	}
 	for t := range live {
-		if !parts[t] {
+		if !parts[t] && !driftExemptTables[t] { // 运行时遗留表豁免（精确名）
 			tables[t] = true
 		}
 	}

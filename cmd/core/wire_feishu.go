@@ -47,7 +47,7 @@ func wireFeishuPush(st *pgstore.Store, feishu *notify.FeishuClient) func(pgstore
 				if id := chat(ctx); id != "" {
 					text := "【" + levelCN(a.Level) + "】" + a.Message
 					if act == pgstore.EpisodeRemind {
-						text = "【" + levelCN(a.Level) + "】「仍待确认」" + a.Message
+						text = "【" + levelCN(a.Level) + "】「告警超时未确认·重推」" + a.Message
 					}
 					msgID, err := feishu.SendText(ctx, id, text)
 					if err != nil {
