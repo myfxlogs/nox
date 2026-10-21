@@ -1171,3 +1171,10 @@ earnLabel 死函数删（键径换代后零调用）。机检：dashboard 820 �
 机检：TestSchemaCheckDrift_ExemptRuntimeLegacy——豁免表零报+非豁免 live-only 表仍报（宽掩码回归锚）；TestSchemaCheckDrift 三锚绿。
 SG 验收锚（复审席）：重启/部署后 boot 日志无 ticks_old 漂移告警（其余真漂移面照报）。
 -->
+
+<!-- 实施席 10-21：告警两级语义修 施工完候复审
+病灶：EpisodeRemind 对所有未 ack warn 告警 24h 重推「仍待确认」——成交回执类终态知会被误读为待办。
+修件（wip/alert-twolevel）：①`alert_receipt_patterns` app_config 逗分前缀判据（迁移 1068 种子：申购已提交/已申购/成交/已结清/已平仓/划转完成/接货已处置；descs 册登记）；②`isReceiptAlert` 前缀命中→episode Reminded 置位=推一次即闭免重推；读败=非回执 fail-open 不吞推；③needs_ack 缺省域零动。
+机检：TestAlertReceipt_OnePushNoRemind——回执首推 Push+Remind 永不发+needs_ack 缺省照 Remind；migrate_empty_dbfull 含 1068 由注册闸覆盖。
+SG 验收锚（复审席）：部署后 earn/DCI 成交回执推一次，24h 零「告警超时未确认·重推」。
+-->

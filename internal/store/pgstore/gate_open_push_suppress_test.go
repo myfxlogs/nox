@@ -178,3 +178,31 @@ func TestD168_GateConcurrentOnce(t *testing.T) {
 		t.Fatalf("pushes=%d, want exactly 1", pushes)
 	}
 }
+
+// TestAlertReceipt_OnePushNoRemind 两级语义锚：回执类（alert_receipt_patterns 命中）
+// 推一次即闭——>24h 新行零 Remind；needs_ack 缺省照 Remind；判据读败=非回执。
+func TestAlertReceipt_OnePushNoRemind(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `INSERT INTO app_config (key,value) VALUES
+		('alert_receipt_patterns','已申购,成交') ON CONFLICT (key) DO UPDATE SET value=excluded.value`); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	// 回执级：首推 Push，>remind 阈续发=Suppress（Reminded 已置位）。
+	act, _, err := s.AlertEpisodeGate(ctx, "warn", "已申购 okx USDT 100", now)
+	if err != nil || act != EpisodePush {
+		t.Fatalf("回执首推=%v err=%v", act, err)
+	}
+	act, _, _ = s.AlertEpisodeGate(ctx, "warn", "已申购 okx USDT 100", now.Add(25*time.Hour))
+	// 注：>24h 无新行=新集再推（惰性关闭），但 Remind 永不发——断言无 Remind。
+	if act == EpisodeRemind {
+		t.Fatal("回执类不应产 Remind")
+	}
+	// needs_ack 缺省照 Remind（同键 >24h 有新行）。先建 open 集。
+	s.AlertEpisodeGate(ctx, "warn", "venue=z gap", now)
+	act, _, _ = s.AlertEpisodeGate(ctx, "warn", "venue=z gap", now.Add(25*time.Hour))
+	if act != EpisodeRemind && act != EpisodePush {
+		t.Fatalf("needs_ack 缺省级应可 Remind/新集: %v", act)
+	}
+}
