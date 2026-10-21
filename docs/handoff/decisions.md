@@ -837,3 +837,12 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 
 
 **锚点落定（10-21 02:4xZ，决策席 claude 补注——业主令代行，devin 席任务拥塞）**：原锚「吞吐恢复日」被吞吐定谳重释（491 过期+闲资已入 earn 承接位=无闲钱即无提案=闭环正常态，非回归）——锚改=**2026-10-21（计量健康日：判据部署+hh 修产验 555→5.21%+吞吐重释三件齐）**，窗至 11-04。窗内四门（稿 §5）照 D-637 原文不变。
+
+## D-644（2026-10-21 业主令，session 直裁）托管 BTC 份额开口：covered call 可动域
+
+- **业主令原文**：「我的1/3是可以动的」——D-619（非 USDT 一律不碰）域内 carve-out：**binance 托管池内 `custody_share`(0.34) 域的 BTC 份额（≈0.019-0.024 BTC≈$1.7k）可动用于 `dci_sell_high_covered_call`**。属性=yield_on_holdings（持币卖 call 收权利金）非裸方向仓——不动用者义务豁免面=业主自营 2/3 + spot 外部流 BTC（0.01278）仍 D-619 不碰。source=owner:session-1021。
+- **休眠撤令**：`dormant:dci_sell_high_covered_call@binance` 撤——休眠实因=#11 `dci_buy_low` PUT 行权单 −6.06 吃三息（income_events 对拍），属 buy_low 腿病灶（已 D-409 结构性停板）；covered_call 腿零亏损史，同一休眠令属误伤面。
+- **venue 实判（本裁定的核心依据）**：binance BTC CALL 产品架实拍（2h 窗）strike max=83750≈现货+1%近平值/tenor≤9d/APY~0.65%——σ 尾险界（CALL≥spot×(1+1.5σ√t)≈+11%）全场不达标，**binance 面即便撤眠也产不出合格单**（「无达标档」如实评估=正确行为）；okx 架 strike→140000/tenor→338d 远月真 OTM 档在流——**covered call 唯一可执行 venue=okx，但 okx 零 BTC**。
+- **条件请求**：holding 类缺口——划转托管份额 BTC（业主定量，建议 ~0.02）binance→okx 资金户；请求箱落行待业主回执。
+- **sizing 语义裁**：`custody_share` 语义=「共享池（自营+托管混存）的可动上限」；划至 okx 的整笔即托管钱，okx 池应乘 **1.0** 非再×0.34（再乘→0.0065 BTC 破 okx 最小申购档=转了也开不了）——立票将约束键升 venue 粒度（`custody_share@okx=1.0` 域行，binance 共享池仍 0.34）。
+- **反证锚**：①okx CALL 远月档（tenor≤30d、strike≥界）连续 48h 无一达标档=okx 架同样枯，本裁定白搭如实记；②托管份额划转后首单若再触「1 单亏 2 单利润」型行权损（BTC 行权价上方被拒收）→sell_high 回 dormant 同形态；③coverd call 上线后 net premium_ann（premium−tail）连 5 拍 ≤0=尾损盖溢价=如实停。**失效自查**：本裁定的「动」仅限 yield_on_holdings covered call——任何以托管 BTC 作裸方向仓/保证金/申购非 call 产品=违 D-619 本体，闸面凭此拒。
