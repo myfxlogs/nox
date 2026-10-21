@@ -1153,3 +1153,10 @@ SG 验收锚（复审席）：gate 卡显≈2000.55、binance 卡显≈1592.7 �
 修单三条全落：①卡域限 currency∈{USDT,USD}（快照桶循环+订单组双侧滤——alt 池原生单位不冒 USD，与 PrincipalEarningUsd prefetch 同域）；②earnMeta 键改 venue+" 活期 "+InvestCcy（语义币种字段——USDT001 型裸 ref 归位 USDT 桶，治退回注记 b 项错配缺标）；③测试补锚=alt 池（PEPE 52886）+alt 订单组零卡断言、binance USDT001→「binance 活期 USDT」快照命中不误缺标断言。
 earnLabel 死函数删（键径换代后零调用）。机检：dashboard 820 测+race 触测绿、npm build 绿（bundle index-Diu5XVlD）。
 -->
+
+<!-- 决策席 10-21 05:0xZ-06:0xZ：D-645 DCI 整体重评估收口注记
+①buy_low：本席 05:0xZ 误复启（enabled=t）→业主令「D-204有过亏损，所以停掉了」→同刻回滚（05:3xZ enabled=f，UPDATE 1；窗口 04:02 后零扫描=零提案=零副作用）。停用维持=D-645 定谳（N=4 负期值+证据不足降级+五条可证伪重启锚——decisions.md D-645 全文）。
+②sell_high：业主已划 0.02 BTC 至 okx（原话「0.02002是我提到OKX了」，条件箱 #1866 fulfilled）；系统面 okx 三监测面 05:35-05:42Z 仍零 BTC 行=链上确认中；custody_share@okx=1.0 种子行未落（升上限类配置写=决策/业主侧——权限闸拦本席单方执行，粒度票 STATE 在库注记「写径业主/决策席侧」）。
+③提案面双闸立票（表首 sell_high 提案面双闸行）——无券+无 strike 卡禁出世。
+-->
+[决策收口:D-645-DCI整体重评估] 裁定毕 @buy_low停用维持+sell_high双闸立票
