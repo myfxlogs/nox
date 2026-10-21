@@ -140,7 +140,7 @@ export default function OverviewPage() {
             healthy_zero=「0 · 无眠钱」常志态 vs no_data=「—」警示态（断供≠无眠钱） */}
         <StatTile label="眠钱时长"
           value={b?.idleStreakState === IdleStreakState.STREAK ? `${b.idleStreakDays} 天`
-            : b?.idleStreakState === IdleStreakState.HEALTHY_ZERO ? "0 · 无眠钱" : "—"}
+            : b?.idleStreakState === IdleStreakState.HEALTHY_ZERO ? "0" : "—"}
           valueClass={b?.idleStreakState === IdleStreakState.NO_DATA ? "u-amber" : undefined}
           sub={b?.idleStreakState === IdleStreakState.STREAK ? `最长池 ${b.idleStreakPool}`
             : b?.idleStreakState === IdleStreakState.HEALTHY_ZERO ? "在册零破地板池" : undefined}
