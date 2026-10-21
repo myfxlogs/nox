@@ -327,3 +327,7 @@
 - 业主三连问推进：①瓦片贴帧问「按设计显示什么」→三态设计核实；②「之前有 0·无眠钱 字样对吗」→git 沿革核实（03:28Z 294dfd532 引入、06:36Z 6cfc84dda 业主令删缀）；③**「我们修的不是文案层，而是要修断供，现在的情况是这个 0 就是不对的」+「前端用户第 1 性原则是什么」**——业主定性：0=假健康非文案问题。
 - 实施域取证证实业主定性（三违反）：buffer_multiple 全量 NULL→BelowFloor 恒 false=永假健康零（指标出生即死）；buffer_multiple=margin 域锚非收益计量=判据错域；MT5 四池 ~5420 USD 零收益真眠钱不被计量。
 - 裁定（实施域，D-286/D-612 口径锚）：sleepmon 判据 BelowFloor→Idle（余额>0 且 30d 零收入）+runner 36h 快照闸+读面 48h 鲜度闸；三态结构不动；sub 措辞随语义。业主参与=本轮对话全程；无新 owner 合作项。
+
+## 2026-10-21 合约锚+订阅面实施纪要（wip/perp-deliv @5180859a9）
+- 合约身份裁定（实施域）：canonical（'ETH'）=品种归一名非合约名——universe.expiry 精确对改道 provenance_id→carry_graduations.symbol（'ETH-USD_UM-261225'）；canonical 回退兜底非毕业源组合。报价侧同钉：delivCanon instId→combos canonical=hint.SellCanonical 同键（detector snapshot 键精确对）。
+- 订阅注入裁定：DeliverySymbolsFn 不读表直连装配（wire_quotes fn 内 ListArmedDeliveryPairs 直查——订阅面变动经每 ping tick subscribeArgs 重建自然生效，无 TTL 层）；instId=DelivInstID 单源归一（_UM=USD 本位标记剥离）。
