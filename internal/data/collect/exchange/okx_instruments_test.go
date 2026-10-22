@@ -116,8 +116,8 @@ func TestOKXSubscribeArgs_Filtered(t *testing.T) {
 	defer srv.Close()
 	o := &OKXWebSocket{catalog: testCatalog(srv)}
 	subscribed, quarantined := map[string]bool{}, map[string]bool{}
-	args := o.subscribeArgs(context.Background(),
-		[]string{"BTC", "XAU-USDT-SWAP", "ATOMUSDT", "牛来"}, subscribed, quarantined)
+	syms := []string{"BTC", "XAU-USDT-SWAP", "ATOMUSDT", "牛来"}
+	args := o.subscribeArgs(context.Background(), syms, syms, subscribed, quarantined)
 	// BTC→tickers(spot+perp)+funding+mark-price+index-tickers 共5 arg；
 	// XAU-USDT-SWAP→perp 3 arg（tickers+funding+mark-price，spot 目录无）；
 	// ATOMUSDT→目录无=隔离零 arg；牛来→零 arg；D-566 包B S6-d 连接级
@@ -139,7 +139,26 @@ func TestOKXSubscribeArgs_Filtered(t *testing.T) {
 		t.Fatalf("quarantine missing: %v", quarantined)
 	}
 	// 差集语义：重复调用不再重发已订阅
-	if args2 := o.subscribeArgs(context.Background(), []string{"BTC"}, subscribed, quarantined); len(args2) != 0 {
+	if args2 := o.subscribeArgs(context.Background(), []string{"BTC"}, nil, subscribed, quarantined); len(args2) != 0 {
 		t.Fatalf("resubscribe should emit nothing, got %v", args2)
+	}
+}
+
+// D-665 返修④锚：执行面空集时，消费面集符号 funding-rate 订阅件仍在 args
+// （funding 与 exec-face quote 集解耦——非执行面 perp facts 不断供）。
+func TestOKXSubscribeArgs_FundingDecoupledFromExec(t *testing.T) {
+	srv := instSrv(t, "0")
+	defer srv.Close()
+	o := &OKXWebSocket{catalog: testCatalog(srv)}
+	subscribed, quarantined := map[string]bool{}, map[string]bool{}
+	args := o.subscribeArgs(context.Background(), nil, []string{"BTC"}, subscribed, quarantined)
+	var funding bool
+	for _, a := range args {
+		if a["channel"] == "funding-rate" && a["instId"] == "BTC-USDT-SWAP" {
+			funding = true
+		}
+	}
+	if !funding {
+		t.Fatalf("非执行面符号 funding-rate 订阅件缺: %v", args)
 	}
 }

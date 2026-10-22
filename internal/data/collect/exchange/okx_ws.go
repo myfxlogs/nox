@@ -85,11 +85,11 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 		DataIdle:  o.dataIdle, // D-154：业务帧窗（默认 quoteWSDataIdle）
 		OnConnect: func() { subscribed = map[string]bool{} },
 		InitialSubs: func() []any {
-			return []any{map[string]any{"op": "subscribe", "args": o.subscribeArgs(ctx, o.execSyms(ctx), subscribed, quarantined)}}
+			return []any{map[string]any{"op": "subscribe", "args": o.subscribeArgs(ctx, o.execSyms(ctx), o.syms(), subscribed, quarantined)}}
 		},
 		// provider 符号集变化 → ping tick 差集补订（服务端拒则读报错走重连）
 		OnAliveTick: func(s Sender) {
-			if args := o.subscribeArgs(ctx, o.execSyms(ctx), subscribed, quarantined); len(args) > 0 {
+			if args := o.subscribeArgs(ctx, o.execSyms(ctx), o.syms(), subscribed, quarantined); len(args) > 0 {
 				_ = s.Send(map[string]any{"op": "subscribe", "args": args})
 			}
 		},
@@ -104,7 +104,7 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 // subscribeArgs 构造订阅 args（D-369 S2：subscribed 集跟踪，ping 期差集增量订阅；
 // watchlist 方言归一化 + instruments 目录存在性闸——不存在 instId 跳过不伪造；
 // quarantined 进程级隔离表：目录判决对同符号稳定，逐符号只记一行日志）。
-func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms []string, subscribed, quarantined map[string]bool) []map[string]string {
+func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms, fundingSyms []string, subscribed, quarantined map[string]bool) []map[string]string {
 	o.catalog.ensure(ctx)
 	var args []map[string]string
 	// 包B S6-d：instruments 目录变更推送（SWAP+SPOT 各一 arg）——连接级合成键
@@ -142,9 +142,6 @@ func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms []string, subscri
 		if perpID != "" {
 			args = append(args,
 				map[string]string{"channel": "tickers", "instId": perpID},
-				// funding-rate 公共频道（SWAP 实例）同订阅件，
-				// ping 期差集增量覆盖 watchlist 新增。
-				map[string]string{"channel": "funding-rate", "instId": perpID},
 				// 方案A：mark-price=SWAP 活性脉冲源（前置实证门：XAU-USDT-SWAP
 				// 实测 ~10 帧/s 密推，簿面静止期照流——薄品种 est 夹层根治脉冲）。
 				map[string]string{"channel": "mark-price", "instId": perpID},
@@ -155,6 +152,7 @@ func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms []string, subscri
 			args = append(args, map[string]string{"channel": "index-tickers", "instId": spotID})
 		}
 	}
+	args = append(args, o.fundingSubArgs(fundingSyms, subscribed)...) // D-665 返修④：funding 集与执行面解耦
 	return args
 }
 

@@ -53,10 +53,13 @@ func (g *GateWebSocket) runGateTickerPoll(ctx context.Context, publish func(bus.
 			}
 		}
 		var futRows []struct {
-			Contract string `json:"contract"`
-			Ask      string `json:"lowest_ask"`
-			Bid      string `json:"highest_bid"`
-			MarkPx   string `json:"mark_price"`
+			Contract         string  `json:"contract"`
+			Ask              string  `json:"lowest_ask"`
+			Bid              string  `json:"highest_bid"`
+			MarkPx           string  `json:"mark_price"`
+			FundingRate      string  `json:"funding_rate"`
+			FundingNextApply float64 `json:"funding_next_apply"` // unix s（D-509 ws 帧同义映射）
+			FundingInterval  float64 `json:"funding_interval"`   // s
 		}
 		if err := getJSONInto(ctx, client, base+"/api/v4/futures/usdt/tickers", &futRows); err != nil {
 			log.Printf("[gate-ws] universe ticker futures: %v", err)
