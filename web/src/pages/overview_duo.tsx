@@ -75,7 +75,13 @@ export function OrderWaitDuo({ b, setCardModal }: {
                 <p className="opp-card-narrative muted clamp-2" title={w.detail}>{w.detail}</p>
                 {(w.kind === "proposal" || w.kind === "proposal_armed") && w.execTrack !== "auto" && (
                   <div>
-                    {/* 待授权提案接活：批准=飞书 go 口令；拒批=既有 AckProposal RPC */}
+                    {/* 待授权提案接活：批准=AckProposal approve（D-661 决策席直批轨）；拒批=decline */}
+                    {w.kind === "proposal" && w.execTrack !== "auto" && (
+                      <button onClick={(e) => {
+                        e.stopPropagation();
+                        void client.ackProposal({ proposalId: w.proposalId, action: "approve" });
+                      }}>批准</button>
+                    )}
                     <button onClick={(e) => {
                       e.stopPropagation();
                       void client.ackProposal({ proposalId: w.proposalId, action: "decline" });

@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"nox/internal/api/dashboard"
 	"nox/internal/data/bus"
 	"nox/internal/ledger/settlement"
 	"nox/internal/platform/analyst"
@@ -23,7 +24,8 @@ import (
 // wireJit jit 划转执行件装配：armed 缺资归集缝（atEngine.JitSweepFn——败因分类
 // 落箱 permission=授权面）+结算回转钩（settlements 径 PostSettled——平仓腿保证
 // 金释放权威时点，票面核验②：非 ClosePositionFn 挂钩）。
-func wireJit(atEngine *autotrade.Engine, settleDeps settlement.Deps, ex *dciexec.Executor) {
+func wireJit(atEngine *autotrade.Engine, settleDeps settlement.Deps, ex *dciexec.Executor, dashSvc *dashboard.Service) {
+	dashSvc.SetProposalGoRunner(ex.GoProposal) // D-661：approve 轨=GoProposal 同径（闸链零绕）
 	if h, ok := settleDeps.(interface {
 		SetPostSettleHook(func(context.Context, int64))
 	}); ok {
