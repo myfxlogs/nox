@@ -68,6 +68,23 @@ func CustodyShareOf(cons []pgstore.CapabilityConstraint, venue string) *float64 
 	return global
 }
 
+// CustodyAssetShareOf 资产份额判据读面（业主令 10-22「BTC 只能用 1/3」
+// constraint#41 消费面）：subject=`custody_share:<CCY>`=资产域 cap（max 语义
+// ——venue 池份额之外的第二闸，消费点双闸取小）；无键行=nil 不设限向后兼容。
+// 合并域=全仓资产合计语义——份额为比率，各池各自取小即等效全仓 cap
+// （Σ min(share_venue,share_asset)×pool_i ≤ share_asset×Σ pool_i）。
+func CustodyAssetShareOf(cons []pgstore.CapabilityConstraint, ccy string) *float64 {
+	for _, c := range cons {
+		if c.ValueNum == nil {
+			continue
+		}
+		if c.Subject == "custody_share:"+ccy {
+			return c.ValueNum
+		}
+	}
+	return nil
+}
+
 // TenorCapOf 期限上限=custody_redeemable.value_num（票面钦定读 90；行在无数值→14）。
 // share 返回=全局键（venue 粒度读面走 CustodyShareOf——binance 共享池语义）。
 func TenorCapOf(cons []pgstore.CapabilityConstraint) (share *float64, cap int) {

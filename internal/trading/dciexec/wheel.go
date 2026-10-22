@@ -50,7 +50,12 @@ func (e *Executor) GoWheel(ctx context.Context) (string, error) {
 					"请喂约束 dci_*_otm_k/dci_tenor_max_days 或 σ 源可用（%v）——D-526 尾险闸 fail-closed", serr)))
 			continue
 		}
-		msg, err := e.tryLeg(ctx, l, *share, tenorCap,
+		// 资产域 cap 第二闸（custody_share:<ccy>——同 GoProposal 双闸取小）。
+		eff := *share
+		if as := gate.CustodyAssetShareOf(cons, l.QtyCcy); as != nil && *as < eff {
+			eff = *as
+		}
+		msg, err := e.tryLeg(ctx, l, eff, tenorCap,
 			spot*gate.SigmaBoundRatio(l.OptType, sigma, k, tmax), spot, sigma, nil)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.Name, err))

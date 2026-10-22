@@ -65,6 +65,11 @@ func sellHighGate(ctx context.Context, st *pgstore.Store, venue string) (bool, s
 	if share == nil {
 		return false, fmt.Sprintf("custody_share 约束缺（custody_share@%s 行——券定界不可判 fail-closed）", venue), nil
 	}
+	// 资产域 cap 第二闸（custody_share:BTC——constraint#41「BTC 只能用 1/3」
+	// 消费面）：评估/执行 sizing 同口径双闸取小；无键行=不设限。
+	if as := gate.CustodyAssetShareOf(cons, "BTC"); as != nil && *as < *share {
+		share = as
+	}
 	minQty := sellHighMinQty(ctx, st)
 	avail, err := custodyBTCAvail(ctx, st, *share)
 	if err != nil {
