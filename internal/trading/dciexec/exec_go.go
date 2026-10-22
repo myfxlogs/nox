@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -23,7 +24,9 @@ func (e *Executor) kbSuffix(sig string) string {
 }
 
 // Go 裸口令主径：最新 pending 可执行提案→GoProposal 绑 id 执行（D-189③）。
+// 前置段失败（读败/无提案）自落审计行；GoProposal 段审计在包壳内不双记。
 func (e *Executor) Go(ctx context.Context) (string, error) {
+	start := e.nowOr()
 	var tmpls []string
 	for t := range gate.ExecTemplates {
 		tmpls = append(tmpls, t)
@@ -33,16 +36,20 @@ func (e *Executor) Go(ctx context.Context) (string, error) {
 	}
 	p, err := e.Store.LatestPendingProposal(ctx, tmpls)
 	if err != nil {
+		e.goAudit(ctx, 0, "reject", err.Error(), start)
 		return "", err
 	}
 	// 裸 go 跳休眠提案取次席。
 	if p != nil {
 		if p, err = e.skipDormant(ctx, p, tmpls); err != nil {
+			e.goAudit(ctx, 0, "reject", err.Error(), start)
 			return "", err
 		}
 	}
 	if p == nil {
-		return "", fmt.Errorf("无可执行 pending 提案（fin_proposal 空——待 oppmatch 扫描产出）")
+		err := fmt.Errorf("无可执行 pending 提案（fin_proposal 空——待 oppmatch 扫描产出）")
+		e.goAudit(ctx, 0, "reject", err.Error(), start)
+		return "", err
 	}
 	msg, err := e.GoProposal(ctx, p.ID)
 	if err != nil {
@@ -52,10 +59,45 @@ func (e *Executor) Go(ctx context.Context) (string, error) {
 }
 
 // GoProposal —— [exec-entry:named-gate:CheckDCI] D-262 M4.3②：DCI 提案执行
-// （「go N」口令/RPC 同径）：态机闸（proposed 才执行，
-// expired/declined 拒单带因）+模板→腿子集+订单回链 proposal_id；
-// strike/qty 实时闸复验保留——提案 params 快照是审计锚非钉价。
+// （「go N」口令/RPC 同径）。包壳层：终态审计行+委托 goProposalExec。
 func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
+	start := e.nowOr()
+	msg, err := e.goProposalExec(ctx, id)
+	if err != nil {
+		e.goAudit(ctx, id, "reject", err.Error(), start)
+	} else {
+		e.goAudit(ctx, id, "executed", msg, start)
+	}
+	return msg, err
+}
+
+// goAudit 口令执行审计行（10-22 实证缺口：feishu 不可达期 4 go 全经真径执行
+// 但回执仅走 SendText=零落账零日志）——终态落 alerts 档：executed/declined=
+// info、reject=warn（拒单非事故不升 critical；拒因签名=err 文本首句+耗时）。
+func (e *Executor) goAudit(ctx context.Context, id int64, outcome, detail string, start time.Time) {
+	tmpl := "-"
+	if p, perr := e.Store.GetProposal(ctx, id); perr == nil && p != nil {
+		tmpl = p.TemplateID
+	}
+	level := "info"
+	if outcome == "reject" {
+		level = "warn"
+	}
+	reason := detail
+	if i := strings.IndexAny(reason, "；\n"); i >= 0 { // 拒因签名=首句（多腿回执/复合 err 截首段）
+		reason = reason[:i]
+	}
+	if aerr := e.Store.InsertAlert(ctx, nil, level, fmt.Sprintf(
+		"提案执行审计 #%d %s %s：%s（耗时 %dms）",
+		id, tmpl, outcome, reason, time.Since(start).Milliseconds())); aerr != nil {
+		log.Printf("[dciexec] go audit 落行败: %v", aerr)
+	}
+}
+
+// goProposalExec GoProposal 执行体（D-262 M4.3② 原径全件——包壳拆分零语义改）：
+// 态机闸（proposed 才执行，expired/declined 拒单带因）+模板→腿子集+订单回链
+// proposal_id；strike/qty 实时闸复验保留——提案 params 快照是审计锚非钉价。
+func (e *Executor) goProposalExec(ctx context.Context, id int64) (string, error) {
 	// D-620⑤ 真金双径归一：提案执行（DCI/earn 全真 venue）首步过控制面——
 	// nil=未接线拒、!allowed=拒带因、mode≠LIVE=拒（kill 覆盖 DCI/earn 写面）。
 	if e.ModeGate == nil {
@@ -183,8 +225,20 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 	return strings.Join(msgs, "；"), nil
 }
 
-// DeclineProposal 「不go N」→declined（业主拒批态机推进）。
+// DeclineProposal 「不go N」→declined（业主拒批态机推进）+审计行包壳。
 func (e *Executor) DeclineProposal(ctx context.Context, id int64) (string, error) {
+	start := e.nowOr()
+	msg, err := e.declineProposal(ctx, id)
+	if err != nil {
+		e.goAudit(ctx, id, "reject", err.Error(), start)
+	} else {
+		e.goAudit(ctx, id, "declined", msg, start)
+	}
+	return msg, err
+}
+
+// declineProposal DeclineProposal 执行体（原径全件——包壳拆分零语义改）。
+func (e *Executor) declineProposal(ctx context.Context, id int64) (string, error) {
 	p, err := e.Store.GetProposal(ctx, id)
 	if err != nil {
 		return "", fmt.Errorf("提案#%d 查询败: %w", id, err)
