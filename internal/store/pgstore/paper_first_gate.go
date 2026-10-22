@@ -50,7 +50,7 @@ func (s *Store) HasPaperEvidence(ctx context.Context, templateID string) (bool, 
 	err := s.pool.QueryRow(ctx, `
 		SELECT count(*) FROM paper_spot_carry psc
 		WHERE psc.structure = ANY(
-			SELECT paper_structures FROM fin_opp_template WHERE id=$1)`, templateID).Scan(&n)
+			SELECT unnest(fot.paper_structures) FROM fin_opp_template fot WHERE fot.id=$1)`, templateID).Scan(&n)
 	if err != nil {
 		return false, fmt.Errorf("paper evidence %s: %w", templateID, err)
 	}
