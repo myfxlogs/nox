@@ -15,7 +15,7 @@ func TestD155_OkxPulseSubscription(t *testing.T) {
 	// catalog 注入存活集（否则 ensure 走真实 HTTP 拉取）
 	o.catalog = &okxInstCatalog{set: map[string]bool{"XAU-USDT": true, "XAU-USDT-SWAP": true}, at: time.Now()}
 	ctx := context.Background()
-	args := o.subscribeArgs(ctx, o.syms(), map[string]bool{}, map[string]bool{})
+	args := o.subscribeArgs(ctx, o.syms(), o.syms(), map[string]bool{}, map[string]bool{})
 	var tickersPerp, funding, markPrice, indexTick bool
 	for _, a := range args {
 		switch a["channel"] {

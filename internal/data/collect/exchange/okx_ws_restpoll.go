@@ -142,3 +142,29 @@ func execFaceDesired(ctx context.Context, cfg Config, venue string, lastGood []s
 	}
 	return out, lastGood
 }
+
+// fundingSubArgs D-665 返修④：funding-rate 订阅集与执行面解耦——tickers
+// 收窄执行面后，funding 仍须消费面全谱（FundingRegimeOK 候选闸对非执行面
+// 品种结构性瞎眼实证：BTCUSDT stale 7h+；帧稀疏廉价不违 ≤200KB/s 锚）。
+// 集源=fundingSyms（o.syms() 原动态消费面——env∪provider）；
+// subscribed 键域 "funding-rate:" 前缀与 tickers 键域隔离。
+func (o *OKXWebSocket) fundingSubArgs(fundingSyms []string, subscribed map[string]bool) []map[string]string {
+	var args []map[string]string
+	for _, sym := range fundingSyms {
+		_, perpID := okxSubCandidates(sym)
+		if perpID == "" {
+			continue
+		}
+		_, perpID = o.catalog.pick("", perpID)
+		if perpID == "" {
+			continue
+		}
+		key := "funding-rate:" + perpID
+		if subscribed[key] {
+			continue
+		}
+		subscribed[key] = true
+		args = append(args, map[string]string{"channel": "funding-rate", "instId": perpID})
+	}
+	return args
+}
