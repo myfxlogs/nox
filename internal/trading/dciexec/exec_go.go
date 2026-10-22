@@ -139,6 +139,11 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 		return "", e.gap(ctx, gate.CallLeg, "constraint", "custody_share",
 			"请喂约束 custody_share 或 custody_share@%s（托管可动份额上限）", p.Venue)
 	}
+	// D-658 归集前置段：USDT 投资币提案缺资→JitSweep 复用件（armed 径同件
+	// 零分叉；BTC 担保品/earn 反向提案不接——票面③④）。
+	if err := e.jitProposalSweep(ctx, p, card, *share); err != nil {
+		return "", err
+	}
 	spot, err := e.spotPriceVenue(ctx, p.Venue, "BTCUSDT")
 	if err != nil {
 		if errors.Is(err, errSpotNoBase) {

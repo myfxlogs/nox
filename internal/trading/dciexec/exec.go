@@ -115,6 +115,9 @@ type Executor struct {
 	// TradingFreeFn/JitTransferFn jit 测试注口（回转可动读/划转写径；nil=实件）。
 	TradingFreeFn func(ctx context.Context, venue, venueType string) (float64, error)
 	JitTransferFn func(ctx context.Context, venue, ccy string, amt float64, from, to string) error
+	// JitSweepFn 提案轨 jit 归集测试缝（jitProposalSweep 专用；nil=JitSweep
+	// 实件——armed 径与本径同一 Executor 方法零分叉）。
+	JitSweepFn func(ctx context.Context, venueKey string, shortfall, oppAPR float64) error
 	// ModeGate D-620⑤：真金单闸控制面（*gate.ControlPlane 实形；nil=提案执行拒「控制面未接线」）。
 	ModeGate ModeGate
 	// LiveEquityMapFn 浓度透视分母实拉钩（venue:type:ccy→equity 判定拍单次调用；
