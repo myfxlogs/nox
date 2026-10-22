@@ -162,6 +162,10 @@ func renderDaily(ctx context.Context, d Deps, since time.Time, ok bool, ev *scan
 			structureHuman(paperWindowStructure), ev.ActiveN, ev.NotionalUSD, ev.DemoN, ev.ExitedN))
 		b.WriteString(fmt.Sprintf("计息缺数据 %d 行｜计息停滞 %d 行（结算水位落后>2 期）\n",
 			ev.FailClosed, ev.Stalled))
+		if ev.InsaneRows > 0 {
+			b.WriteString(fmt.Sprintf("伪损行隔离 %d 行（%s）——超物理界不入净额\n",
+				ev.InsaneRows, ev.InsaneDetail))
+		}
 		if ev.FirstProbeErr != "" {
 			b.WriteString("探针错误：" + ev.FirstProbeErr + "\n")
 		}
