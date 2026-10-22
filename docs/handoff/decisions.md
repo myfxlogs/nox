@@ -905,3 +905,25 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **对象**：`docs/D651-venue适配层与多席并发协议设计.md`（A venue 适配器注册层/B 多席并发协议）。
 - **裁定：照准**——方向/架构对拍/病灶定性全过（A.1 五病灶亲证在码面含 disposal_sweep.go:65 硬编码 binance 实锤；§4-6 对拍合——DB 驱动装配兑现 D-162、σ 口径换如实申报、写面留 executor 纪律保持）；**补正六条进施工票面**（非结构性返工）：㊀B①闸谓词改可执行形（MERGE_HEAD/纯 docs/branch≠master 三判据）；㊁B②补 boot 远端对拍探针（同库文件不治 pull 时延病根）；㊂B③席库入 test_db_gc 清扫模式；㊃A 三适配器 REST 接 okxrate 共额闸；㊄A okx/gate 端点形探针实证禁记忆直写；㊅A.3 迁移表定位修正（Venues map 实位 risk/gate）+全仓盲写面清点。轻项二可选（B④ pre-push 红查/exec_venue 投影种源）。
 - **移交**：a)/d) 两票翻「核验完→移交决策席」派工（A 票 12-25 settle 前必修窗承 D-651 派序）。
+
+## D-654（2026-10-22 决策席晨检·假设裁决批——fin_opp_hypothesis 积压 29 行清零）
+
+- **缘起**：告警#3500 hypothesis_ruling 积压 29 行最老 7.5 天超阈——决策席本职裁决面，直裁不派。
+- **裁定口径（venue 实证+结构纪律+去重）**：批=两腿 venue 目录实证存在**且**市场中性结构（cfd_swap_hedged）；拒=①裸空 delta 换薄 swap bps（同族 10-15 批先例——市场中性为纲）②venue 目录无此合约的方言伪腿（gate 真名全下划线形 XAG_USDT/NAS100_USDT，NAS100USDT 类拼写=臆造）③对冲腿到期窗不足 carry 持仓（XAU-USD_UM-261030 仅 8 天）④标的不匹配（SPCXUSDT=SpaceX 股权 perp 非标普 500）。
+- **结果**：批 10（15032313 金属×7：gate XAG_USDT/XAU_USDT、okx XAG-USDT-SWAP、XAU-USD_UM-261127、binance XAGUSDT/XAUUSDT/XAUTUSDT；110660304 股指×3：gate NAS100_USDT/US30_USDT/SPX500_USDT）/拒 19；DecideHypothesis RPC 全落账 actor=决策席。
+- **反证锚**：评估层对任一批件给出「对冲腿不可交易/合约不存在」证据 → 本批 venue 实证面有误（凭据=api.okx/gateio/fapi 目录 2026-10-22 实拍）。
+- **失效自查**：批件进入评估/试单后 7 天内若全族连环 miss_count 至死=口径过宽，复口径。
+
+## D-655（2026-10-22 决策席·perp_delivery/combo#25 收口裁定——机制成活，零候选=经济拒非缺陷）
+
+- **亲证链**：okx/futures/ETHUSDT 帧在流（venue 天然稀疏节拍）→delivCanon 发布键=行情键双腿同域快照→legQuote 回退解析→tryPair 评估达 net_min 门（拒因计数器 38.7k/19min）。
+- **经济裁定**：universe ETH-USD_UM-261225 ann=**−2.2%**+腿 bid/ask 差~1%→可执行基差≈1%/yr≪进场阈；combo#25 armed 但市场无物可吃。验收锚「opportunities 出行」由「机制链全段实证+净门诚实拒」替代验收——**判据工作=拒错单，拒因正确即健康**。
+- **衍生**：STATE 行已翻✅；jit 链/双零归集机制保持备战——基差转富自动链发（armed 组合照评）。
+- **反证锚**：ETH-USD_UM-261225 ann 持续>8% 且 tick 鲜度达标仍零 opportunities 行 → 链路仍有暗伤，重开。
+
+## D-656（2026-10-22 决策席·term_basis 伪 APR 病灶——#1938 decline+判据修票）
+
+- **病灶三伤**：`termBasisQuote` 全表 MAX 无 venue 过滤（okx 合约挂 binance 名）+无流动性地板（XAU-USD_UM-261030 vol24h=0 陈价合约 ann 43.5% 假值）+提案 params 不具名合约（执行面对象不存在）。#1938 gross=35.1%=伪值，已 AckProposal decline。
+- **裁定**：立修票（venue 过滤+流动性地板+近到期剔除+params 具名合约——阈值走 app_config）；同类 MAX 取径（cfdSwapCarry/crossVenueSpot）同查归因。
+- **反证锚**：修票部署后 term_basis 提案 params 仍不具合约或零成交合约继续入围 → 判据面未根治，退回。
+- **失效自查**：修票并后下一 term_basis 提案拍对拍。
