@@ -51,9 +51,13 @@ type Config struct {
 	// BinanceSpotInfoURL D-551 S2：现货 exchangeInfo 端点（spot 订阅有效性过滤）；
 	// 空=env NOX_BINANCE_SPOT_INFO_URL→默认 data-api.binance.vision 公开域。
 	BinanceSpotInfoURL string
-	GateBaseURL        string
-	OKXBaseURL         string
-	Client             *http.Client
+	// BinanceFuturesInfoURL perp exchangeInfo 端点（indiv perp 存在性闸目录源）；
+	// 空=env NOX_BINANCE_FUTURES_INFO_URL→默认 fapi.binance.com 官方端点（D-127 P2
+	// 预留：CN/受限部署可覆盖指 cex-proxy 域名避 451）。
+	BinanceFuturesInfoURL string
+	GateBaseURL           string
+	OKXBaseURL            string
+	Client                *http.Client
 	// AlertFn 可选告警通道（D-507 重连风暴 fail-loud）；nil=静默跳过（测试默认）。
 	AlertFn func(level, msg string)
 	// DepthTimeout per-venue depth REST 每请求预算（egress 劣化带病工作面——

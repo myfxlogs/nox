@@ -56,6 +56,9 @@ func buildCexExchangeConfig(ctx context.Context, st *pgstore.Store, configKick *
 	cexCfg.SymProvider = exchange.MultiSymbolProvider{cexCfg.SymProvider, tradifi}
 	// D-551 S2：现货 exchangeInfo 端点注入（空=采集器内默认 vision 公开域）。
 	cexCfg.BinanceSpotInfoURL = cfg.BinanceSpotInfoURL
+	// perp exchangeInfo 端点注入（indiv 存在性闸目录源——D-127 P2 钦定键，
+	// 空=采集器内默认 fapi.binance.com 官方端点）。
+	cexCfg.BinanceFuturesInfoURL = cfg.BinanceFuturesInfoURL
 	if cfg.OKXProxyURL != "" {
 		cexCfg.OKXBaseURL = cfg.OKXProxyURL
 	}
