@@ -103,13 +103,14 @@ func (s *Store) ListDCIQuotes(ctx context.Context, venue, underlying, optType, i
 	return out, rows.Err()
 }
 
-// InsertPersonalPosition 回执入账（kind='other' 合规 CHECK；qty/note/price_symbol）。
-func (s *Store) InsertPersonalPosition(ctx context.Context, asset, kind, priceSymbol, note string, qty *float64, openedAt *time.Time) (int64, error) {
+// InsertPersonalPosition 回执入账（kind='other' 合规 CHECK；qty/note/price_symbol；
+// venue=机器归因列（1071 转正——空串=未归因如实写 NULL，禁塞别名义）。
+func (s *Store) InsertPersonalPosition(ctx context.Context, asset, kind, priceSymbol, note string, qty *float64, openedAt *time.Time, venue string) (int64, error) {
 	var id int64
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO personal_positions (asset, kind, price_symbol, qty, note, opened_at)
-		VALUES ($1,$2,$3,$4,$5,COALESCE($6,now())) RETURNING id`,
-		asset, kind, priceSymbol, qty, note, openedAt).Scan(&id)
+		INSERT INTO personal_positions (asset, kind, price_symbol, qty, note, opened_at, venue)
+		VALUES ($1,$2,$3,$4,$5,COALESCE($6,now()),NULLIF($7,'')) RETURNING id`,
+		asset, kind, priceSymbol, qty, note, openedAt, venue).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("insert personal position: %w", err)
 	}

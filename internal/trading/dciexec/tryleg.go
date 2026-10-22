@@ -210,7 +210,7 @@ func (e *Executor) tryLeg(ctx context.Context, l gate.DCILeg, share float64, ten
 	opened := now
 	asset := l.QtyCcy
 	if _, err := e.Store.InsertPersonalPosition(ctx, asset, "other", asset+"USDT",
-		note, &qty, &opened); err != nil {
+		note, &qty, &opened, "binance"); err != nil {
 		return "", fmt.Errorf("回执入账: %w", err)
 	}
 	// 成交终局回执升 warn——info 级被 feishu 滤噪闸拦截不推，

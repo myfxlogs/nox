@@ -84,7 +84,7 @@ func (e *Executor) markPendingDisposal(ctx context.Context, o pgstore.FilledDCIO
 	now := e.Now()
 	if _, err := e.Store.InsertPersonalPosition(ctx, ccy, "other", "USDT",
 		fmt.Sprintf("pending_disposal D-517：DCI#%d 行权接货待卖回（%s）", o.ID, why),
-		&qty, &now); err != nil {
+		&qty, &now, o.Venue); err != nil {
 		log.Printf("[dci-dispose] order %d pending_disposal 落行: %v", o.ID, err)
 	}
 	if aerr := e.Store.InsertAlert(ctx, nil, "warn", fmt.Sprintf(

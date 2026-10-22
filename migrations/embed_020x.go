@@ -207,3 +207,6 @@ var GapCapitalMarkedSQL string // D-652-C：capital 回执核验环（marked 态
 
 //go:embed 1070_exec_venue_capability.sql
 var ExecVenueCapabilitySQL string // D-651 A 段：venue 执行面归能力账本投影种子
+
+//go:embed 1071_personal_positions_venue.sql
+var PersonalPositionsVenueSQL string // STATE 行49：venue 列转正（note 词解析退役）

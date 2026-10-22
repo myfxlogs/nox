@@ -26,6 +26,7 @@ type PersonalPosition struct {
 	Leverage        *int
 	OpenedAt        *time.Time
 	CMCInstrumentID *string // D-208 v2：CMC instrument_id（如 'X-AFQUL'）；列可空（staking 行=NULL）→ 指针（止血修复：非指针 string 扫 NULL 即 500）
+	Venue           *string // 1071：venue 归因列（NULL=未归因——写入径供给，机器归因走列非 note 词）
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	ClosedAt        *time.Time
@@ -38,7 +39,7 @@ func (s *Store) ListPersonalPositions(ctx context.Context, status string, limit,
 	}
 	q := `SELECT id, asset, kind, price_symbol, warn_high, crit_high, note, status,
 	             qty, entry_price, leverage, opened_at, cmc_instrument_id,
-	             created_at, updated_at, closed_at
+	             created_at, updated_at, closed_at, venue
 		FROM personal_positions
 		WHERE ($1 = '' OR status = $1)
 		ORDER BY id ASC LIMIT $2 OFFSET $3`
@@ -53,7 +54,7 @@ func (s *Store) ListPersonalPositions(ctx context.Context, status string, limit,
 		if err := rows.Scan(&p.ID, &p.Asset, &p.Kind, &p.PriceSymbol, &p.WarnHigh, &p.CritHigh,
 			&p.Note, &p.Status, &p.Qty, &p.EntryPrice, &p.Leverage, &p.OpenedAt,
 			&p.CMCInstrumentID,
-			&p.CreatedAt, &p.UpdatedAt, &p.ClosedAt); err != nil {
+			&p.CreatedAt, &p.UpdatedAt, &p.ClosedAt, &p.Venue); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

@@ -186,7 +186,7 @@ func (e *Executor) tryLegOKX(ctx context.Context, l gate.DCILeg, share float64, 
 		l.Name, q.ProductRef, strike, gate.DCITenor(q), qty, l.QtyCcy, reqID)
 	opened := now
 	if _, err := e.Store.InsertPersonalPosition(ctx, l.QtyCcy, "other", l.QtyCcy+"USDT",
-		note, &qty, &opened); err != nil {
+		note, &qty, &opened, "okx"); err != nil {
 		return "", fmt.Errorf("回执入账: %w", err)
 	}
 	if err := e.Store.InsertAlert(ctx, nil, "warn", fmt.Sprintf(

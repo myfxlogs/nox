@@ -2,20 +2,27 @@
 // okx DCI 回执行剔出 binance 池 ledger 口径（#41 0.0207 ping-pong 病灶）。
 package dciexec
 
-import "testing"
+import (
+	"testing"
+
+	"nox/internal/store/pgstore"
+)
 
 func TestDciPoolVenue_Attribution(t *testing.T) {
+	okx, bn := "okx", "binance"
 	cases := []struct {
-		note string
+		name string
+		pos  pgstore.PersonalPosition
 		want string
 	}{
-		{"DCI x 申购回执：okx DCD strike 95000 tenor 7d qty 0.0207 BTC（单号 a）", "okx"},
-		{"DCI x 申购回执：binance RWUSDT strike 8 tenor 30d qty 0.01 BTC（单号 b）", "binance"},
-		{"手动池行无 venue 词（存量向后兼容=binance 域）", "binance"},
+		{"列读 okx", pgstore.PersonalPosition{Venue: &okx, Note: "DCI x 申购回执：binance x"}, "okx"}, // 列优先于 note 词（1071 列转正钉）
+		{"列空回落 note 词 okx", pgstore.PersonalPosition{Note: "DCI x 申购回执：okx DCD strike"}, "okx"},
+		{"note 词 binance", pgstore.PersonalPosition{Venue: &bn, Note: "DCI x 申购回执：binance RWUSDT"}, "binance"},
+		{"无列无词=binance 兜底", pgstore.PersonalPosition{Note: "手动池行无 venue 词"}, "binance"},
 	}
 	for _, c := range cases {
-		if got := dciPoolVenue(c.note); got != c.want {
-			t.Fatalf("note=%q → %s want %s", c.note, got, c.want)
+		if got := dciPoolVenue(c.pos); got != c.want {
+			t.Fatalf("%s → %s want %s", c.name, got, c.want)
 		}
 	}
 }
