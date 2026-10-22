@@ -236,7 +236,7 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venu
 					// 路由（funding 是 perp 语义，spot 连接恒 bookTicker 不进此分支）。
 					// kind 不 lowercase：新端点流名大小写敏感（实证 btcusdt@markprice
 					// /bookticker 全小写=ack 成功+零帧静默断流，与旧端点退役同形态）。
-					params = append(params, strings.ToLower(sym+"usdt")+"@"+kind)
+					params = append(params, bookTickerStreamSym(sym)+"@"+kind)
 				}
 			}
 			// merge 面修复：单帧 SUBSCRIBE 超服务端解析上限（实拍 1008 +

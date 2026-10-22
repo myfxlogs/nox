@@ -20,6 +20,20 @@ import (
 // indivRescan 逐符号集重扫节拍（watchlist 差集生效窗）。
 const indivRescan = 60 * time.Second
 
+// bookTickerStreamSym canonical→bookTicker 流名（normalize 消费面——
+// XAGUSDT 死流实证：watchlist canonical 已带计价尾被再拼 "+usdt"=
+// xagusdtusdt 无流零帧；已带 USDT/USDC/FDUSD 尾直 lowercase 不再拼，
+// 裸基才 +usdt）。主径/ indiv 径同件单源。
+func bookTickerStreamSym(sym string) string {
+	l := strings.ToLower(sym)
+	for _, q := range []string{"usdt", "usdc", "fdusd"} {
+		if strings.HasSuffix(l, q) {
+			return l
+		}
+	}
+	return l + "usdt"
+}
+
 // startIndivBookTickers armed/watchlist 腿逐符号 bookTicker 增订两路扇出
 // （10-22 量子化修——聚合流不动=全宇宙托底；一符号一连接=每连接单流唯一
 // 存活形，被杀常态重连）。spot 路先 ensureSpotInfo 与主流同款序。
@@ -50,7 +64,7 @@ func (b *BinanceMarketWS) runIndivBookTickers(ctx context.Context, venueType str
 			if venueType == "spot" && !b.spotOK(sym) {
 				continue
 			}
-			desired[strings.ToLower(sym)+"usdt"] = true
+			desired[bookTickerStreamSym(sym)] = true
 		}
 		for sym := range running {
 			if !desired[sym] {
