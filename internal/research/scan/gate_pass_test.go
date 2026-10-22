@@ -100,8 +100,12 @@ func TestD051_GateReject(t *testing.T) {
 		if err != nil {
 			t.Fatalf("step: %v", err)
 		}
-		if len(opened) != 0 || skips.Snapshot()["depth_missing"] != 1 {
-			t.Fatalf("perp 腿无样本应拒且计 depth_missing，opened=%v skips=%v", opened, skips.Snapshot())
+		// D-663 族降级件：无样本不再硬拒——落 depth_unproven 档可开（Note 标）。
+		if len(opened) != 1 {
+			t.Fatalf("perp 腿无样本应落 unproven 档开（opened=%v skips=%v）", opened, skips.Snapshot())
+		}
+		if skips.Snapshot()["depth_missing"] != 0 {
+			t.Fatalf("无样本不再计 depth_missing: %v", skips.Snapshot())
 		}
 	})
 
@@ -158,8 +162,11 @@ func TestD051_GateReject(t *testing.T) {
 		if err != nil {
 			t.Fatalf("step: %v", err)
 		}
-		if len(opened) != 0 || skips.Snapshot()["depth_missing"] != 1 {
-			t.Fatalf("gate 零深度应拒且计 depth_missing，opened=%v skips=%v", opened, skips.Snapshot())
+		if len(opened) != 1 {
+			t.Fatalf("gate 零深度应落 unproven 档开（opened=%v skips=%v）", opened, skips.Snapshot())
+		}
+		if skips.Snapshot()["depth_missing"] != 0 {
+			t.Fatalf("无样本不再计 depth_missing: %v", skips.Snapshot())
 		}
 	})
 }
