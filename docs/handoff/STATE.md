@@ -2,6 +2,7 @@
 
 ## 现状
 
+- **生产冻结（10-22 业主令，全席遵守）**：nox-core 停机禁上线——10-22 10:5xZ 决策席 `docker stop`（策略 unless-stopped 不回弹），ens17 rx 603→42KB/s。施工可并码，**部署/`compose up` 一律冻结至业主令解禁**；涉 SG 产验锚的票照常施工、验收段顺延。
 - **首席决策席交接（D-252，2026-10-13；M4 期唯一派单与验收依据，与下条「重建期须知」冲突以本条为准）**
   - **席位**：首席=本席（架构裁定 D-246/247/248 作者）；**次级决策席**=本条读者，权限=在 v3 框架内派单、独立复审、验收、D# 续号。**次级不得改**：v3 六域与写权表、三条红线、D-247 接触面硬规则、D-248 票序、§4.3 六指标、钱径零 LLM——改须回首席（新会话 `[角色:首席决策] <议题>`，附实证）。
   - **派单序（硬）**：M4.0 → M4.1 → M4.2 → M4.3 → M4.4 → {M4.5, D-249①②④} → M4.6；可并行的独立票：DCI 轨 4 件系统病灶、MT4 退役。**一票未验收不放下一票**（实施席空转时可领独立票）。M4.1–M4.6 票面由次级按 v3 §7 + 本条「票级验收数」起草，起草后**先过 D-251 方案核验**再放实施。
@@ -1344,5 +1345,5 @@ venue 权威直探 `!bookTicker` 40s：4457帧/788品种总量正常、BTCUSDT 8
 
 <!-- D-663 分层报价+订阅预算闸立票（10-22 10:18Z 决策席——业主受控实验定谳后立）
 | 票 | 状态 | 席位 | 内容 |
-| D-663 分层报价+订阅预算闸 | **施工完→待复审**（wip/bn-indiv @4368736ea——A执行面集 ExecFaceBinanceSymbols〔armed∪毕业∪open 腿〕+B预算闸 NOX_INDIV_MAX_CONNS 键缺=indiv 显式关+cap 截断+rejects 拒因+补正① !ticker@arr→REST 15min+markprice 无工事对版；三态锚测+577 绿）| 决策席 | 病灶=indiv 逐符号集实取整动态宇宙（binance 113 符号）榨干 SG ~5Mbps 管道（nox-core steady 604KB/s=100% 饱和，业主停/起对照实验定谳）→一切新流饿死（okx 重连/MT5 RPC/ssh/部署同病异象；此前「绕远路由」工单结论作废勿转发）。方案=A indiv 集改执行面（armed∪在仓∪毕业腿）+B 订阅预算闸（app_config 硬顶+D-652-A rejects 计数+告警；键缺=indiv 显式关非静默）+C markprice 同族面排查（binance_market_ws_markprice.go:55 亦遍历 effectiveSymbols）。验收=D-652-B 出生实证四锚（armed 腿 <1s 帧/非执行面零 indiv 连接/预算闸 cap 夹具三态/ens17 steady ≤200KB/s）+审项 I 集合同源对拍。反证锚=7 天内出现非执行面需 <5s 报价的决策实证则收回重裁。**当前生产态：nox-core 业主停机中（09:5xZ 起）——本票并入+123 commits 部署积压同停机窗收账后重启，重启后 30min 盯入向/okx/MT5 swap 三面自愈**。开工指令（复审设计核验通过后）：`[角色:实施] 分层报价+订阅预算闸（读 STATE 本行+docs/D663 设计稿全文；无 skills 域）` |
+| D-663 分层报价+订阅预算闸 | **施工完→待复审**（wip/bn-indiv @4368736ea——A执行面集 ExecFaceBinanceSymbols〔armed∪毕业∪open 腿〕+B预算闸 NOX_INDIV_MAX_CONNS 键缺=indiv 显式关+cap 截断+rejects 拒因+补正① !ticker@arr→REST 15min+markprice 无工事对版；三态锚测+577 绿）| 决策席 | 病灶=indiv 逐符号集实取整动态宇宙（binance 113 符号）榨干 SG ~5Mbps 管道（nox-core steady 604KB/s=100% 饱和，业主停/起对照实验定谳）→一切新流饿死（okx 重连/MT5 RPC/ssh/部署同病异象；此前「绕远路由」工单结论作废勿转发）。方案=A indiv 集改执行面（armed∪在仓∪毕业腿）+B 订阅预算闸（app_config 硬顶+D-652-A rejects 计数+告警；键缺=indiv 显式关非静默）+C markprice 同族面排查（binance_market_ws_markprice.go:55 亦遍历 effectiveSymbols）。验收=D-652-B 出生实证四锚（armed 腿 <1s 帧/非执行面零 indiv 连接/预算闸 cap 夹具三态/ens17 steady ≤200KB/s）+审项 I 集合同源对拍。反证锚=7 天内出现非执行面需 <5s 报价的决策实证则收回重裁。**当前生产态（10-22 10:5xZ 实修）**：部署批 09:58Z 已随停机窗重启（镜像 09:57Z 建、迁移 1073 在产=积压清）——ens17 rx 回 603KB/s 满管+MT5 resubscribe DeadlineExceeded 刷屏+okx ticks 5min 窗缺席=饱和病灶原样复现（本票未施工预期内）；**业主令「nox-core 还在修不要上线」→决策席 10:5xZ docker stop（unless-stopped 不回弹），rx 落 42KB/s——施工可并码，部署/上线冻结至业主令解禁**。开工指令（复审设计核验通过后）：`[角色:实施] 分层报价+订阅预算闸（读 STATE 本行+docs/D663 设计稿全文；无 skills 域）` |
 -->

@@ -32,3 +32,5 @@
 | binance armed/watchlist 腿报价升级逐符号流（域界已钉：spot 直用/perp 重连环） | `[角色:实施] binance armed 腿逐符号 bookTicker 双轨增订（读 STATE 本行+skills/bn-market+bn-fapi-market〔ws 杀阈方言坑〕——spot 裸路径直用、perp 每符号单连接+重连环+聚合托底）` | STATE 票表新行 |
 | AckProposal approve 轨开（P1·D-661 feishu 断链裁决面停摆直通） | `[角色:实施] AckProposal approve 轨（读 STATE 本行+D-661——action 扩 approve 映 GoProposal 同径+前端批准钮；无 skills 域）` | STATE 票表新行 |
 | 跨所划转轨可行性票（D-662 USD $5.2k 锁定解锁备用径） | `[角色:实施] 跨所划转轨可行性取证（读 STATE 本行+D-662——broker 出金面+CEX 入金面对拍+成本模型；无 skills 域报）` | STATE 票表新行 |
+| D-663 分层报价+订阅预算闸复审 | `[角色:复审] 分层报价+订阅预算闸复审（读 STATE 本行+docs/D663-分层报价与数据面管道预算设计.md——wip/bn-indiv @4368736ea 独立重跑机检+diff+执行面集/预算闸/cap 夹具三态核验；**部署/compose up 冻结至业主令解禁——可并码禁上线**；无 skills 域）` | STATE 票表行（施工完→待复审） |
+| 跨所划转轨可行性复审 | `[角色:复审] 跨所划转轨可行性复审（读 STATE 本行——报告 docs/能力账/cross-venue-transfer-feasibility-2026-10-22.md 独立核验+径在/径缺裁定+条件请求面复核；无 skills 域）` | STATE 票表行（施工完→待复审） |
