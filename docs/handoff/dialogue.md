@@ -370,3 +370,9 @@
 
 - **业主令**：BTC 本金仅 1/3 可用。
 - **落账**：constraint#41 custody_share:BTC max=0.3333（跨 venue 合计域）；D-659 裁；消费面缺口立票——#41 已锁 0.0207≈配额满，covered_call 道定性=配额到顶。
+
+## 2026-10-22 决策席·业主令「读今日 feishu 推送全按序处理」
+
+- **读面**：app_secrets 解密凭据→OpenAPI im/v1/messages 拉会话史——今日 67 条全为系统推送（业主零发件）。
+- **正名**：feishu 实通（凭据在 app_secrets 非 env——晨判误）；go 回执×4 已送达。
+- **分诊**：立票 3（方言键归一 P1/roster 心跳/symdig 截断）+试单授权押后（数据面先修）+余为信息面。
