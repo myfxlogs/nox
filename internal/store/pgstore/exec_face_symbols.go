@@ -49,27 +49,6 @@ func (s *Store) ExecFaceVenueSymbols(ctx context.Context, venue string) (map[str
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	// D-663 族续修：xasset-monitor 观测集并入订阅面——fin_carry_universe
-	// cex_venue 腿（监控盯集十几符号带宽可忽略；REST 3min 拍对 120s 阈
-	// 结构性撞=真节拍变慢非断流，订阅层复供非放宽阈值）。
-	monRows, err := s.pool.Query(ctx, `
-		SELECT canonical, cex_venue FROM fin_carry_universe`)
-	if err != nil {
-		return nil, fmt.Errorf("exec_face monitor universe: %w", err)
-	}
-	defer monRows.Close()
-	for monRows.Next() {
-		var canon, venue string
-		if err := monRows.Scan(&canon, &venue); err != nil {
-			return nil, err
-		}
-		if venue == "gate" || venue == "okx" || venue == "binance" {
-			add(strings.ToUpper(canon), venue, "perp") // carry 腿=perp 侧盯
-		}
-	}
-	if err := monRows.Err(); err != nil {
-		return nil, err
-	}
 	// 在仓 open 腿（position_legs venue_key='binance'、phase='open'——symbol
 	// 原生 venue 形去尾缀到 canonical 域，vt 判 spot/perp）。
 	legRows, err := s.pool.Query(ctx, `
@@ -93,4 +72,32 @@ func (s *Store) ExecFaceVenueSymbols(ctx context.Context, venue string) (map[str
 // 薄壳兼容器）。
 func (s *Store) ExecFaceBinanceSymbols(ctx context.Context) (map[string]string, error) {
 	return s.ExecFaceVenueSymbols(ctx, "binance")
+}
+
+// MonitorFaceSymbols xasset-monitor 观测集（fin_carry_universe **达标行**——
+// derive_inputs.go 同阈：structure 两型+note 空+net_annual_pct∈[8,300]
+// 常数同 scan 口径〔PaperCfdOpenNetPct/PaperCfdMaxNetPct——真源行内联防
+// import 环〕）。与执行面集分层：订阅占额序=exec 先、monitor 填余
+// （armed/在仓腿不被监控集挤掉=返修①优先占额修）。
+func (s *Store) MonitorFaceSymbols(ctx context.Context) (map[string]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT canonical, cex_venue FROM fin_carry_universe
+		WHERE structure IN ('long_cfd_short_perp','short_cfd_long_perp')
+		  AND note = '' AND net_annual_pct >= 8 AND net_annual_pct <= 300`)
+	if err != nil {
+		return nil, fmt.Errorf("monitor_face universe: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var canon, venue string
+		if err := rows.Scan(&canon, &venue); err != nil {
+			return nil, err
+		}
+		if venue == "gate" || venue == "okx" || venue == "binance" {
+			sym := strings.ToLower(keydomain.MarketCanonical(canon))
+			out[sym] = venue // canonical→stream 形同 add() 归一径
+		}
+	}
+	return out, rows.Err()
 }

@@ -71,6 +71,7 @@ func startQuoteStreams(ctx context.Context, cexCfg exchange.Config, qbus *bus.Qu
 		return st.ExecFaceBinanceSymbols(ctx)
 	}
 	cexCfg.ExecFaceVenueFn = st.ExecFaceVenueSymbols // D-665 okx/gate 同律执行面集
+	cexCfg.MonitorFaceFn = st.MonitorFaceSymbols     // xasset 监控观测集（达标行同阈）
 	cexCfg.IndivBudgetFn = func(ctx context.Context) (int64, bool, error) {
 		return st.AppConfigInt64(ctx, "NOX_INDIV_MAX_CONNS")
 	}

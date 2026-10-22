@@ -168,6 +168,21 @@ func (b *BinanceMarketWS) indivDesiredSet(ctx context.Context, venueType string,
 		}
 		desired[stream] = true
 	}
+	// D-663 族返修①：监控观测集并入 desired（exec 先占额、monitor 填余——
+	// monSet 键域于 desired 外另立，cap 截断时 monitor 先让额）。
+	monSet := map[string]bool{}
+	if venueType == "perp" && b.cfg.MonitorFaceFn != nil {
+		if mset, merr := b.cfg.MonitorFaceFn(ctx); merr == nil {
+			for sym, v := range mset {
+				if v == "binance" && !desired[sym] && b.perpOK(sym) {
+					monSet[sym] = true
+				}
+			}
+		}
+	}
+	for k := range monSet {
+		desired[k] = true
+	}
 	if b.cfg.IndivBudgetFn == nil {
 		return desired, quarantined, false, nil, ""
 	}
@@ -184,12 +199,18 @@ func (b *BinanceMarketWS) indivDesiredSet(ctx context.Context, venueType string,
 		cap = 0 // app_config 负值误配=视同 0 走 over 径（防 slice 越界 panic）
 	}
 	if len(desired) > int(cap) {
-		msg = fmt.Sprintf("[binance-indiv] %s desired %d 超预算 cap=%d——超出符号不建 indiv（留聚合流覆盖）", venueType, len(desired), cap)
-		var syms []string
+		msg = fmt.Sprintf("[binance-indiv] %s desired %d 超预算 cap=%d——监控集让额于 exec 先占", venueType, len(desired), cap)
+		var execSyms, monSyms []string
 		for k := range desired {
-			syms = append(syms, k)
+			if monSet[k] {
+				monSyms = append(monSyms, k)
+			} else {
+				execSyms = append(execSyms, k)
+			}
 		}
-		sort.Strings(syms)
+		sort.Strings(execSyms)
+		sort.Strings(monSyms)
+		syms := append(execSyms, monSyms...)
 		desired = map[string]bool{}
 		for _, k := range syms[:cap] {
 			desired[k] = true
