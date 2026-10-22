@@ -22,10 +22,13 @@ import (
 
 // Service 实现 DashboardServiceHandler 接口。
 type Service struct {
-	store      *pgstore.Store
-	storeMoney *pgstore.Store // D-633 拆票：钱径保底池句柄（probe-close PositionNetUSD 走此——nil=回落 store）
-	qbus       *bus.QuoteBus
-	pipeline   *exec.Pipeline
+	store *pgstore.Store
+	// proposalGoFn D-661：approve 轨后端（cmd/core 装配 dciexec.Executor.GoProposal
+	// 同径——全闸链不绕；nil=未接线 approve 返「未接线」）。
+	proposalGoFn func(ctx context.Context, id int64) (string, error)
+	storeMoney   *pgstore.Store // D-633 拆票：钱径保底池句柄（probe-close PositionNetUSD 走此——nil=回落 store）
+	qbus         *bus.QuoteBus
+	pipeline     *exec.Pipeline
 	// D-195-A：执行控制面检查器（避免 dashboard→autotrade 循环依赖，用接口注入）。
 	// D-620ⓑ：nil=控制面未接线 fail-closed（执行径 FAILED/展示径 kill=true）。
 	gateChecker GateChecker
