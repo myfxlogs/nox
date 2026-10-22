@@ -74,8 +74,8 @@ func (b *BinanceMarketWS) runIndivBookTickers(ctx context.Context, venueType str
 	var lastGood map[string]bool // ExecFaceFn err 支 fail-safe：保 last-good desired（瞬态 DB 错不拆 armed 腿 indiv——残③选型=保旧非显式拒建）
 	for {
 		desired, quarantined, over, gateOff, gateMsg := b.indivDesiredSet(ctx, venueType, lastGood)
-		if gateOff != nil && *gateOff {
-			lastGood = desired // 保旧快照（err 径 desired=lastGood 已回传）
+		if gateOff == nil || !*gateOff { // 非关态才保 last-good（键缺空集不入快照——返修②条件反写修）
+			lastGood = desired
 		}
 		if over {
 			rejects.Inc(rejects.Key{Face: "binance_indiv", Gate: "budget_cap"})

@@ -54,3 +54,28 @@ func TestIndivDesired_BudgetCap(t *testing.T) {
 		t.Fatalf("cap10: desired=%v over=%v want 3 false", d, over)
 	}
 }
+
+// 返修②锚：ExecFaceFn err 径=保 last-good desired 非空拆+execface_err 计数动
+// （fail-safe 出生实证——先返集再返 err，断言 desired==lastGood）。
+func TestIndivDesired_ExecFaceErrKeepsLastGood(t *testing.T) {
+	var fail bool
+	b := &BinanceMarketWS{cfg: Config{
+		ExecFaceFn: func(ctx context.Context) (map[string]string, error) {
+			if fail {
+				return nil, context.DeadlineExceeded
+			}
+			return map[string]string{"xagusdt": "perp"}, nil
+		},
+	}}
+	ctx := context.Background()
+	d, _, _, _, _ := b.indivDesiredSet(ctx, "perp", nil)
+	if len(d) != 1 {
+		t.Fatalf("首返集应有 xagusdt: %v", d)
+	}
+	lastGood := d
+	fail = true
+	d, _, _, _, _ = b.indivDesiredSet(ctx, "perp", lastGood)
+	if !d["xagusdt"] {
+		t.Fatalf("err 径应保 last-good desired 非空: %v", d)
+	}
+}
