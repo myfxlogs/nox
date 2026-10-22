@@ -88,7 +88,7 @@ func quoteForVenue(ctx context.Context, st *pgstore.Store, tid, venue string) (*
 	case tid == "earn_apr_lending" || tid == "cash_mgmt":
 		f, ok, err = st.MaxEarnAPR(ctx)
 	case tid == "funding_carry":
-		f, ok, err = st.MaxFactValue(ctx, "funding") // facts 永续 funding（pct_annualized）
+		f, ok, err = fundingCarryQuote(ctx, st, venue) // venue 过滤+极端值/鲜度闸后最优 fact
 	case tid == "cfd_swap_carry":
 		f, ok, err = cfdSwapCarryQuote(ctx, st) // swap 收息−funding 对冲成本同源现值
 	case tid == "cross_venue_spot":
