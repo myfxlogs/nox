@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -26,6 +27,7 @@ var (
 // pairs=REST failover 主备基址对）。boot 先于一切 Client/WSDialer 消费点调用。
 func Configure(caPath, token string, pairs [][2]string) {
 	proxyCAPath, proxyToken, failoverPairs = caPath, token, pairs
+	sharedRTOnce, sharedRT = sync.Once{}, nil // 再注入须重建单例（boot 期幂等/测试隔离面）
 }
 
 // Client 返回带 Binance 静态代理信任的 http.Client：
@@ -33,15 +35,23 @@ func Configure(caPath, token string, pairs [][2]string) {
 //   - proxyToken 非空 → 所有请求自动带 X-Proxy-Token（防开放中继鉴权）
 //
 // 两者都未配置时返回默认客户端（OKX/Gate 等直连场景）。
-func Client() *http.Client {
-	c := &http.Client{Timeout: 15 * time.Second}
+// sharedRT D-667：Transport 栈进程级单例（Configure 后首 Client() 构建——
+// 每调用新建 Transport=逐请求独立 TLS 握手零复用，SG 实测 20conn/s×5.2KB
+// ≈104KB/s churn 病灶；共享 RoundTripper=同 host 连接池复用）。
+// Timeout 仍在 Client 层各调用自携（传输层共享≠超时策略共享）。
+var (
+	sharedRTOnce sync.Once
+	sharedRT     http.RoundTripper
+)
+
+func buildSharedRT() http.RoundTripper {
 	caPath, tok := proxyCAPath, proxyToken
 	if caPath == "" && tok == "" {
-		return c
+		return nil // 零值=直连——http.Client 无 Transport 走 DefaultTransport 复用面
 	}
 	tr, ok := http.DefaultTransport.(*http.Transport)
 	if !ok {
-		return c
+		return nil
 	}
 	tr = tr.Clone()
 	if caPath != "" {
@@ -55,16 +65,29 @@ func Client() *http.Client {
 			}
 		}
 	}
-	c.Transport = tr
+	var rt http.RoundTripper = tr
 	if tok != "" {
-		c.Transport = tokenRT{base: tr, tok: tok}
+		rt = tokenRT{base: rt, tok: tok}
 	}
-	if fb := newFailoverRT(c.Transport); fb != nil {
-		c.Transport = fb
+	if fb := newFailoverRT(rt); fb != nil {
+		rt = fb
 	}
 	// 418 感知全局退避闸——最外包（封禁响应层语义先于 failover 传输层尝试；
 	// 单闸全 bn REST 消费径同过=封禁自持病灶单点治理）。
-	c.Transport = newBanGateRT(c.Transport)
+	return &sharedWrap{rt: newBanGateRT(rt)} // 指针壳=接口可比（锚测单例断言面）
+}
+
+// sharedWrap 指针壳：内层 RT 族含 map 字段不可比——单例断言须指针身分。
+type sharedWrap struct{ rt http.RoundTripper }
+
+func (w *sharedWrap) RoundTrip(r *http.Request) (*http.Response, error) { return w.rt.RoundTrip(r) }
+
+func Client() *http.Client {
+	c := &http.Client{Timeout: 15 * time.Second}
+	sharedRTOnce.Do(func() { sharedRT = buildSharedRT() })
+	if sharedRT != nil {
+		c.Transport = sharedRT
+	}
 	return c
 }
 
