@@ -10,8 +10,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+
 	"math"
 	"nox/internal/risk/gate"
+	"nox/internal/store/pgstore"
 	"strings"
 )
 
@@ -59,7 +61,7 @@ func (e *Executor) ReconcilePoolOnce(ctx context.Context) (ledger, live float64,
 		// 否则 live(binance)×share vs 账(binance+okx 锁仓) 往复对打 ping-pong
 		// （10-21 14:12/15:01 两 warn 同值实证 #41 0.0207）。归因=note venue
 		// 词解析（personal_positions 无 venue 列——schema 列=后续票余量）。
-		if poss[i].Asset == "BTC" && poss[i].Kind == "other" && dciPoolVenue(poss[i].Note) == "binance" {
+		if poss[i].Asset == "BTC" && poss[i].Kind == "other" && dciPoolVenue(poss[i]) == "binance" {
 			if poss[i].Qty != nil {
 				poolQty += *poss[i].Qty
 			}
@@ -106,12 +108,16 @@ func (e *Executor) ReconcilePoolOnce(ctx context.Context) (ledger, live float64,
 	return ledger, live, true, nil
 }
 
-// dciPoolVenue BTC other 池行 venue 归因：note 载「申购回执：<venue>」词解
-// （okx/binance 回执双写入面 venue 词钉死）；无 venue 词行=binance（存量
-// 池行向后兼容——venue 盲时代行默认归 binance 域如实）。
-func dciPoolVenue(note string) string {
-	if i := strings.Index(note, "申购回执："); i >= 0 {
-		tok := note[i+len("申购回执："):]
+// dciPoolVenue BTC other 池行 venue 归因（1071 列转正）：机器归因读 venue
+// 列——列空才回落 note 词解（存量未归因行安全垫；新行 venue 列写入径供给
+// 永不落空）。无 venue 词且列空行=binance（向后兼容兜底——venue 盲时代行
+// 默认归 binance 域如实，与迁移 1071 回填三态同构）。
+func dciPoolVenue(p pgstore.PersonalPosition) string {
+	if p.Venue != nil && *p.Venue != "" {
+		return *p.Venue
+	}
+	if i := strings.Index(p.Note, "申购回执："); i >= 0 {
+		tok := p.Note[i+len("申购回执："):]
 		if j := strings.IndexAny(tok, " \t"); j > 0 {
 			return tok[:j]
 		}

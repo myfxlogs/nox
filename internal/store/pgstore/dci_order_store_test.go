@@ -79,7 +79,7 @@ func TestD191_DCIOrderStore(t *testing.T) {
 
 	// 回执入账。
 	qty := 0.018
-	pid, err := s.InsertPersonalPosition(ctx, "BTC", "other", "BTCUSDT", "d191 回执", &qty, nil)
+	pid, err := s.InsertPersonalPosition(ctx, "BTC", "other", "BTCUSDT", "d191 回执", &qty, nil, "binance")
 	if err != nil || pid == 0 {
 		t.Fatalf("回执入账: %v", err)
 	}

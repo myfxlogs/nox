@@ -44,7 +44,7 @@ type Store interface {
 	ClosePersonalPositionsByMarker(ctx context.Context, marker, suffix string) (int64, error)
 	ExchangeConfigID(ctx context.Context, venue, venueType string) (int64, error)
 	InsertIncomeEvents(ctx context.Context, evs []pgstore.IncomeEvent) (int64, error)
-	InsertPersonalPosition(ctx context.Context, asset, kind, priceSymbol, note string, qty *float64, openedAt *time.Time) (int64, error)
+	InsertPersonalPosition(ctx context.Context, asset, kind, priceSymbol, note string, qty *float64, openedAt *time.Time, venue string) (int64, error)
 	OutstandingDCIQty(ctx context.Context, venue, investCcy string) (float64, error)
 	ListOpenPersonalPositions(ctx context.Context) ([]pgstore.PersonalPosition, error)
 	// DCIOrderByID pending_disposal 清扫损益锚（DCI#id→原单 qty/underlying；

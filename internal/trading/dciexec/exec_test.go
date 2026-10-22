@@ -166,7 +166,7 @@ func (f *fakeStore) FinishDCIOrder(_ context.Context, id int64, status, resp str
 	}
 	return nil
 }
-func (f *fakeStore) InsertPersonalPosition(context.Context, string, string, string, string, *float64, *time.Time) (int64, error) {
+func (f *fakeStore) InsertPersonalPosition(context.Context, string, string, string, string, *float64, *time.Time, string) (int64, error) {
 	f.posRows++
 	return 1, nil
 }
