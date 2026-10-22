@@ -73,9 +73,11 @@ func (e *Executor) jitProposalSweep(ctx context.Context, p *pgstore.Proposal, ca
 	return nil
 }
 
-// proposalUSDTDemand 票面需求/扣款户可动双读（venue 分派——口径与腿径池公式
-// 同源：binance=poolBalance×share vs spotFree；okx=(unified+funding+savings)
-// ×share vs unified+funding〔savings 属 earn 在册，归集消费面不双计〕）。
+// proposalUSDTDemand 票面需求/扣款户可动双读（venue 分派——okx 三源
+// 同构已位：binance=poolBalance〔spot+earn 全集〕×share vs spotFree
+// 〔savings→spot 归集径=JitSweep 同件——avail 只计当下可动现货，
+// earn 锁仓经 sweep 赎入〕；okx=(unified+funding+savings)×share vs
+// unified+funding〔savings 属 earn 在册，归集消费面不双计〕）。
 func (e *Executor) proposalUSDTDemand(ctx context.Context, venue string, share float64) (demand, avail float64, err error) {
 	switch venue {
 	case "binance":
