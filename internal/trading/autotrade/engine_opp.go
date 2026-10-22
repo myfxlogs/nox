@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"nox/internal/risk"
 	"nox/internal/risk/gate"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/exec"
@@ -125,7 +126,7 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 			log.Printf("[autotrade] skip %s: funding window %s/%s query: %v (fail-closed)", opp.ID, perpVenue, opp.Canonical, err)
 			return
 		}
-		if gate, _, reason := exec.FundingRegimeOK(rows, +1, e.cfg.CarryRegime.FloorPct, e.cfg.CarryRegime.MinSamples, e.cfg.CarryRegime.PulsedAware); !gate {
+		if gate, _, reason := risk.FundingRegimeOK(rows, +1, e.cfg.CarryRegime.FloorPct, e.cfg.CarryRegime.MinSamples, e.cfg.CarryRegime.PulsedAware); !gate {
 			log.Printf("[autotrade] skip %s: funding regime 未持续 (%s/%s %s)", opp.ID, perpVenue, opp.Canonical, reason)
 			return
 		}
