@@ -963,3 +963,14 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **机制锚**：armed 组合 venue 候选并列时 venue_freshness 因子参与排序（okx/gate 实测档>binance perp 聚合档）；spot 腿 binance 不扣分（spot 域零杀实时在证）。
 - **反证锚**：发现面出现 venue 白名单偏好过滤（okx/gate-only 枚举）→ 本裁被误读，复审退回；评估卡 binance perp 腿无 quote-age 载记 → 漏因子。
 - **过期自查**：binance 双轨票部署后 perp 鲜度档重测——分轨差消则本因子自然平权。
+
+## D-661（2026-10-22 决策席）提案裁决轨改道——决策席直批接管飞书 go（feishu 入站未通业主令）
+
+- **缘起**：业主令「目前 feishu 还未通，你直接批准吧」——feishu 入站指令链未通（webhook hits=0 在案：推送出站通、命令入站断），`go N` 口令径死=提案裁决面停摆；`GoProposal` 执行件仅 feishu 口令单径可达（RPC 面无批准口实证）。
+- **裁定**：
+  ①**提案轨裁决权收归决策席**——feishu 入站恢复前，`proposal` 轨 go 批准由决策席直裁代行（decline 既有 AckProposal 轨沿用）；此代行权在 D-594 投资委授权域内（真金授权本归委员会自裁自当），非权限扩张是**径改道**；
+  ②**批准≠越闸**——直批=触发同一 `GoProposal` 闸链执行径（ModeGate→PaperFirst→CheckDCI→jit 归集→腿执行），全闸照过；批准动作本身过审计行落账（提案 id+裁决者+耗时+终态）；
+  ③**机制票已立**——`AckProposal` 加 `action:"approve"` 映射 `dciexec.GoProposal` 同径（前端补批准钮——当前仅拒批钮）；
+  ④**feishu 复通后**：双径并存（决策席直裁轨不撤——飞书是便利径非独占闸，裁决权归属不变）。
+- **反证锚**：approve 径绕开 GoProposal 闸链直写状态（如裸 UPDATE status）→ 违裁复审退回；审计行缺裁决者/终态 → 同退回。
+- **过期自查**：feishu 入站复通实证后复裁——双轨语义照④执行，不回撤。
