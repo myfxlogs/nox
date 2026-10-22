@@ -73,6 +73,9 @@ type Config struct {
 	// ExecFaceFn D-663：indiv 执行面集合源（map[streamSym]venueType——
 	// armed∪毕业∪在仓 open 腿；nil=indiv 集空=全面不订）。
 	ExecFaceFn func(ctx context.Context) (map[string]string, error)
+	// ExecFaceVenueFn D-665 泛化件：执行面集按 venue 取（okx/gate 同律收窄——
+	// 返回 map[canonical]venueType；nil=该 venue 宇宙面 REST 拍接管 ws 零订）。
+	ExecFaceVenueFn func(ctx context.Context, venue string) (map[string]string, error)
 	// IndivBudgetFn D-663 订阅预算闸：返回 (cap, ok, err)——ok=false&&err=nil=键缺
 	// →indiv 显式关+告警（预算未声明=不启动该面，显式不静默）；
 	// err 支=读败非键缺——rejects 计数+保 desired 不误关（瞬态 DB 错）。

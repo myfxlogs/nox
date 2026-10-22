@@ -44,6 +44,7 @@ type GateWebSocket struct {
 	// 时距字段化（默认=ws_keepalive.go 常量族；测试覆写缩小观察窗）。
 	readIdle         time.Duration
 	pingEvery        time.Duration
+	execFaceLastGood []string // D-665 返修②
 	reconnectBackoff time.Duration
 	// emitFacts D-509：funding fact 发射口（FactEmitter 去重节流；nil=不 emit）。
 	emitFacts func(ctx context.Context, fs []fact.Fact) error
@@ -88,6 +89,8 @@ func (g *GateWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 		g.runLoop(ctx, g.spotURLs, []string{"spot.tickers"}, gateSpotWSURL, g.spotWL, g.handleSpot, publish, nil)
 		wg.Done() // D-115：尾部非 defer——panic 重启不预支 Done
 	})
+	// D-665：宇宙面 REST 拍接管（ws 收窄执行面——同 okx/binance 律）。
+	safego.GoLoopPlain("gate_ws:universe-ticker", func() { g.runGateTickerPoll(ctx, publish) })
 	safego.GoLoopPlain("gate_ws:futures-loop", func() {
 		// 包C：futures 连接订阅面=4 频道同连接（清单/固定帧入常量函数=A14/A16 锚）。
 		g.runLoop(ctx, g.futuresURLs, gateFuturesTickerChannels, gateFuturesWSURL, g.futuresWL, g.handleFuturesDispatch, publish, gateFuturesExtraSubs())
@@ -161,7 +164,7 @@ func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channels []s
 		OnConnect: func() { subscribed = map[string]bool{} },
 		InitialSubs: func() []any {
 			// 订阅前白名单过滤——spot.tickers 对任一非法 pair 静默拒整批。
-			all := pairsD369(g.syms(), "_USDT")
+			all := pairsD369(g.execSyms(ctx), "_USDT")
 			pairs := wl.filter(all)
 			if dropped := len(all) - len(pairs); dropped > 0 {
 				log.Printf("[gate-ws] 订阅对过滤 dropped=%d/%d（非gate合法pair）", dropped, len(all))
@@ -177,7 +180,7 @@ func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channels []s
 		OnAliveTick: func(s Sender) {
 			var newPairs []string
 			// 差集同过白名单——非法 pair 不进 subscribed 不发帧（防静默拒批+重试循环）。
-			for _, p := range wl.filter(pairsD369(g.syms(), "_USDT")) {
+			for _, p := range wl.filter(pairsD369(g.execSyms(ctx), "_USDT")) {
 				if !subscribed[p] {
 					newPairs = append(newPairs, p)
 				}
@@ -246,8 +249,17 @@ func canonicalFromGate(pair string) string {
 	return strings.ReplaceAll(pair, "_", "")
 }
 
-// syms D-369 S2：gate WS 订阅符号集（env ∪ provider 动态集，连接期可增量）。
-func (g *GateWebSocket) syms() []string { return g.cfg.effectiveSymbols("gate") }
+// execSyms D-665：ws 订阅集收窄至执行面（ExecFaceVenueFn canonical→vt；
+// nil/err=空集零订非静默——宇宙面由 runGateTickerPoll REST 拍接管）。
+func (g *GateWebSocket) execSyms(ctx context.Context) []string {
+	raw, last := execFaceDesired(ctx, g.cfg, "gate", g.execFaceLastGood)
+	g.execFaceLastGood = last
+	out := make([]string, 0, len(raw))
+	for _, sym := range raw {
+		out = append(out, strings.ToUpper(strings.TrimSuffix(sym, "usdt"))) // canonical→裸基 pairsD369 再拼
+	}
+	return out
+}
 
 // pairs 符号→gate 交易对后缀拼接（BTC → BTC_USDT）。
 func pairsD369(syms []string, suffix string) []string {

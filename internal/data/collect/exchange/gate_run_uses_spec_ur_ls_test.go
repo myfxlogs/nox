@@ -74,7 +74,14 @@ func TestD511_OkxDeltaResubscribe(t *testing.T) {
 	frames := make(chan []byte, 32)
 	url, _ := wsRunnerServer(t, false, frames)
 	dyn := &d511DynSyms{}
-	o := NewOKXWebSocket(Config{Symbols: []string{"BTC"}, SymProvider: dyn})
+	o := NewOKXWebSocket(Config{Symbols: []string{"BTC"}, SymProvider: dyn,
+		ExecFaceVenueFn: func(ctx context.Context, venue string) (map[string]string, error) {
+			m := map[string]string{"btcusdt": "perp"}
+			for _, s := range dyn.Symbols("okx") {
+				m[strings.ToLower(s)+"usdt"] = "perp"
+			}
+			return m, nil
+		}})
 	o.wsURLs = []string{url}
 	o.readIdle, o.pingEvery, o.reconnectBackoff = 400*time.Millisecond, 60*time.Millisecond, 40*time.Millisecond
 
