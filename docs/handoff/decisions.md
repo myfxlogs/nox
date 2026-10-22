@@ -944,3 +944,12 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **缺口记名**：跨所划转轨（binance→okx 类提币 API 面）未建——#1890 类二次 covered_call 想吃 binance 托管池自由 BTC（0.0169）时，轨缺即如实拒或落「transfer 轨缺」请求；建轨票待立。
 - **反证锚**：系统内存在可拨资金且有轨而仍向业主发 capital 请求 → 本裁未执行，复审退回。
 - **失效自查**：下一资本类请求箱行落账时对拍「系统内可拨面已穷尽」证据（池快照+轨清单）。
+
+## D-659（2026-10-22 决策席·业主约束令「BTC 只能用 1/3」落账）
+
+- **业主令**：BTC 只能使用我的 1/3，不能全额使用——资产域本金保全线。
+- **落账**：`fin_capability_constraint#41`——scope=bucket / subject=`custody_share:BTC` / qualifier=max / value_num=0.3333 / source=owner:session-1022。
+- **语义定谳**：份额域=**业主 BTC 本金总量**（跨 venue 合并口径——非 per-venue 各 1/3）；覆盖=covered_call 类 BTC 担保品消费面合计。现状：#41 DCI 已锁 0.0207 BTC≈配额用满——covered_call 道=**配额到顶**（非缺资非未激活），#1890 类新开仓在本配额下如实拒=正解。
+- **消费缺口记名**：sizing 现只读 `custody_share@<venue>` 池份额，资产键无消费面=装饰账——判据消费票已立（`custody_share:<ccy>` 读面+min(池份额,资产份额) 双闸取小）。
+- **反证锚**：判据消费部署后仍发生 BTC 担保品合计>持有×0.3333 的新开仓 → 本约束未生效，复审退回。
+- **失效自查**：业主改令额度或 BTC 总量结构变化时重校 value_num。
