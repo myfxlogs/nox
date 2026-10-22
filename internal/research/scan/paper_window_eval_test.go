@@ -35,6 +35,9 @@ func (f *fakeEvalStore) TicksWindow(context.Context, string, string, time.Time) 
 func (f *fakeEvalStore) ListCexUniverse(context.Context) (map[string]pgstore.CexUniverseRow, error) {
 	return f.uni, nil
 }
+func (f *fakeEvalStore) AppConfigFloat(context.Context, string) (float64, bool, error) {
+	return 0, false, nil // 阈键缺=缺省 10×（测试锚同缺省物理界）
+}
 func (f *fakeEvalStore) ListAssetEquiv(context.Context) ([]pgstore.AssetEquivEntry, error) {
 	return f.equiv, nil
 }
@@ -173,3 +176,27 @@ func TestD033_EvalComboStats(t *testing.T) {
 }
 
 func ptr(t time.Time) *time.Time { return &t }
+
+// 纸面水位伪损行票锚③：|accrued|>名义×阈 行隔离——窗内净额不含超界行+
+// InsaneRows/Detail 透出；界内行照算不误伤（真亏损不藏禁线）。
+func TestEvalPaperCohort_InsaneRowIsolated(t *testing.T) {
+	st := &fakeEvalStore{}
+	now := time.Now()
+	exit := now.Add(-time.Hour)
+	rows := []pgstore.PaperSpotCarry{
+		{ID: 1, Status: "exited", Symbol: "X", VenueA: "m", VenueB: "b",
+			ExitTs: &exit, AccruedUSD: -4652936.90, QtyUSD: 55000, Structure: "s"},
+		{ID: 2, Status: "exited", Symbol: "Y", VenueA: "m", VenueB: "b",
+			ExitTs: &exit, AccruedUSD: -100.0, QtyUSD: 5000, Structure: "s"},
+	}
+	ev, err := EvalPaperCohort(context.Background(), st, rows, now.Add(-48*time.Hour), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev.InsaneRows != 1 || ev.NetExited != -100.0 || ev.WindowNet != -100.0 {
+		t.Fatalf("伪损行应隔离（净额=-100 真损行照算）: %+v", ev)
+	}
+	if ev.ExitedN != 1 {
+		t.Fatalf("隔离行不计入行数面: %d", ev.ExitedN)
+	}
+}

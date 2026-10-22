@@ -6,6 +6,7 @@ package scan
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 // PaperWindowStore 自盯评估窄读面（*pgstore.Store 原生实现）。
 type PaperWindowStore interface {
 	PaperFactSource
+	// AppConfigFloat sanity 闸判据读口（paper_insane_pnl_multiple；缺=缺省阈）。
+	AppConfigFloat(ctx context.Context, key string) (float64, bool, error)
 	ListCexUniverse(ctx context.Context) (map[string]pgstore.CexUniverseRow, error)
 	// ListAssetEquiv D-043：等价类映射（class 键行 legs 解析单源）。
 	ListAssetEquiv(ctx context.Context) ([]pgstore.AssetEquivEntry, error)
@@ -59,6 +62,8 @@ type PaperWindowEval struct {
 	Combos        []PaperComboStat // 配对维度在仓天数/accrued（Stage 1 组合证据）
 	LatestAccrue  *time.Time       // active 行水位最迟者（D-028 在线佐证）
 	FirstProbeErr string           // 首个探针错误摘要（fail-closed 行明细告警用）
+	InsaneRows    int              // 伪损行隔离计数（|accrued|>名义×阈=数据伪影不入合计）
+	InsaneDetail  string           // 首个伪损行明细（行号+symbol+accrued/名义）
 }
 
 // EvalPaperCohort 评估 cohort 行（rows=PaperWindowCohort 结果，结构过滤由调用方完成）。
@@ -88,6 +93,13 @@ func EvalPaperCohort(ctx context.Context, st PaperWindowStore, rows []pgstore.Pa
 		}
 		return m[NormalizeJoinKey(canonical)]
 	}
+	// 伪损行 sanity 闸（纸面水位伪损行票③）：|accrued|>名义×阈=数据伪影
+	// 隔离不污染窗内净额——app_config paper_insane_pnl_multiple 覆盖，
+	// 键缺=缺省 10×（单仓亏超名义 10 倍无物理路径；真亏损不藏=闸只对超界值）。
+	mult := 10.0
+	if v, ok, cerr := st.AppConfigFloat(ctx, "paper_insane_pnl_multiple"); cerr == nil && ok && v > 0 {
+		mult = v
+	}
 	ev := &PaperWindowEval{}
 	actDay, exitDay := map[string]*PaperDayBucket{}, map[string]*PaperDayBucket{}
 	combos := map[string]*PaperComboStat{}
@@ -115,6 +127,20 @@ func EvalPaperCohort(ctx context.Context, st PaperWindowStore, rows []pgstore.Pa
 		return 0
 	}
 	for _, p := range rows {
+		// 伪损行隔离：名义≤0 行 accrued≠0=纯伪影；名义>0 行 |accrued|>名义×阈。
+		// 退出行先窗判（窗外伪行不属本窗不计隔离——与 §3 窗内退出口径同）。
+		inWindow := p.Status == "active" ||
+			(p.Status == "exited" && p.ExitTs != nil && !p.ExitTs.Before(since))
+		insane := p.QtyUSD <= 0 && p.AccruedUSD != 0 ||
+			p.QtyUSD > 0 && math.Abs(p.AccruedUSD) > p.QtyUSD*mult
+		if insane && inWindow {
+			ev.InsaneRows++
+			if ev.InsaneDetail == "" {
+				ev.InsaneDetail = fmt.Sprintf("行%d %s accrued=$%.2f 名义=$%.0f（阈 ×%.0f 超界）",
+					p.ID, p.Symbol, p.AccruedUSD, p.QtyUSD, mult)
+			}
+			continue // 隔离不计入净额/分桶/组合——污染行不决策面
+		}
 		if p.Status == "exited" {
 			if p.ExitTs == nil || p.ExitTs.Before(since) { // 窗内退出口径同脚本 §3
 				continue
