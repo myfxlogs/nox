@@ -106,25 +106,28 @@ func StepPaperCexCarryOpen(ctx context.Context, st PaperStore, cands []CexPaperC
 	}
 	// openCand 返回 ""=已开，否则跳过原因标签（D-051②：depth_missing/depth_low/
 	// funding_low/quote_dead/cooldown 五闸因 + flag/exists/insert）——计数+日报分布源。
-	openCand := func(c CexPaperCand, key string) string {
+	// D-663 族降级件：无样本不再硬拒，落 depth_unproven 档可开（paper 档标注，
+	// Note=depth_unproven——毕业判据纸面口径成文=成本未证档不加毕业分）。
+	openCand := func(c CexPaperCand, key string) (string, bool) {
 		if f := blockedFlagHit(keydomain.BareOf(c.SpotVenueKey), keydomain.BareOf(c.PerpVenueKey), c.Canonical, nil, flags); f != nil {
 			log.Printf("[cex paper] blocked flag 拦截: %s（%s@%s|%s）", key, f.Reason, f.Venue, f.Symbol)
-			return "flag"
+			return "flag", false
 		}
-		// D-051②a：双腿 24h 均 mid_depth_usd ≥ MinDepthUSD（fail-closed——读失败/
-		// 任一无样本同拒；同所双腿命中同 venue×symbol 行=同一深度证据）。
+		depthUnproven := false // D-663 族：无样本落 unproven 档（非硬拒）
+		// D-051②a：双腿 24h 均 mid_depth_usd ≥ MinDepthUSD（有样本仍按阈判，
+		// MinDepthUSD 判据不变；无样本=采集覆盖缺非机会不合格——改 unproven
+		// 档可开，同所双腿命中同 venue×symbol 行=同一深度证据）。
 		if opts.MinDepthUSD > 0 {
 			spAvg, spN, spErr := depthOf(spVenue(c), c.Canonical)
 			ppAvg, ppN, ppErr := depthOf(ppVenue(c), c.Canonical)
 			if spErr != nil || ppErr != nil {
 				log.Printf("[cex paper] 深度读失败 拦开: %s（spot=%v perp=%v）", key, spErr, ppErr)
-				return "depth_missing"
+				return "depth_missing", false // 读败仍 fail-closed（样本真缺席≠读败）
 			}
 			if spN == 0 || ppN == 0 {
-				return "depth_missing" // 无样本不开（D-058 fail-closed；零覆盖所天然排除）
-			}
-			if spAvg < opts.MinDepthUSD || ppAvg < opts.MinDepthUSD {
-				return "depth_low"
+				depthUnproven = true // 无样本=采集未覆盖候选集——落档不拒开
+			} else if spAvg < opts.MinDepthUSD || ppAvg < opts.MinDepthUSD {
+				return "depth_low", false
 			}
 		}
 		// D-051②b：perp 腿 funding_history 7d 年化均值 ≥ MinFundingPct（fail-closed——
@@ -133,10 +136,10 @@ func StepPaperCexCarryOpen(ctx context.Context, st PaperStore, cands []CexPaperC
 			sa, ok := fundingAvgOf(ppVenue(c), c.Canonical)
 			if fundingErr != nil {
 				log.Printf("[cex paper] funding 均值读失败 拦开: %s（%v）", key, fundingErr)
-				return "funding_low"
+				return "funding_low", false
 			}
 			if !ok || sa.Avg < opts.MinFundingPct {
-				return "funding_low"
+				return "funding_low", false
 			}
 		}
 		// ②：双腿近 1h 报价缺席=0 才开——双腿各自 bus 最新报价时间 1h 内
@@ -146,18 +149,18 @@ func StepPaperCexCarryOpen(ctx context.Context, st PaperStore, cands []CexPaperC
 		if quoteAlive != nil {
 			if t, ok := quoteAlive(c.SpotVenueKey, c.Canonical); !ok || now.Sub(t) > time.Hour {
 				log.Printf("[cex paper] 报价连续性不足 拦开: %s（spot 腿近 1h 无报价变更）", key)
-				return "quote_dead"
+				return "quote_dead", false
 			}
 			if t, ok := quoteAlive(c.PerpVenueKey, c.Canonical); !ok || now.Sub(t) > time.Hour {
 				log.Printf("[cex paper] 报价连续性不足 拦开: %s（perp 腿近 1h 无报价变更）", key)
-				return "quote_dead"
+				return "quote_dead", false
 			}
 		}
 		// ①：data_lost 冷却守卫——同对 24h 内 ≥2 次 data_lost 退出 → 24h 内不再开仓
 		//（openCand 入口统一生效：保底段+发现段两路同闸）。
 		if dataLostCooldown(ctx, st, spVenue(c), ppVenue(c), c.Canonical, now) {
 			log.Printf("[cex paper] data_lost 冷却 拦开: %s（24h 内 ≥2 次 data_lost）", key)
-			return "cooldown"
+			return "cooldown", false
 		}
 		sp, pp := keydomain.Parse(c.SpotVenueKey), keydomain.Parse(c.PerpVenueKey)
 		p := &pgstore.PaperSpotCarry{
@@ -166,6 +169,9 @@ func StepPaperCexCarryOpen(ctx context.Context, st PaperStore, cands []CexPaperC
 			Symbol: c.Canonical, Side: "short_perp",
 			EntryFundingAnn: c.FundingAnn, QtyUSD: PaperQtyUSDAt(ctx, st),
 			Structure: "long_spot_short_perp",
+		}
+		if depthUnproven {
+			p.Note = "depth_unproven" // D-663 族：成本未证档如实标——毕业口径不加毕业分
 		}
 		// est_fee=两腿 CEX 真费（spot 往返+perp 往返，paper_fees 真值表；
 		// venue 未覆盖→NULL 诚实缺拒填——同 spot/cfd 轨口径）；basis=perp−spot 腿间
@@ -177,15 +183,15 @@ func StepPaperCexCarryOpen(ctx context.Context, st PaperStore, cands []CexPaperC
 		}
 		if err := st.InsertPaperSpotCarry(ctx, p); err != nil {
 			if err == pgstore.ErrPaperExists {
-				return "exists"
+				return "exists", false
 			}
 			// 单行失败不炸整轮（paper 轨惯例），WP1 禁静默：日志留痕续跑。
 			log.Printf("[cex paper] insert %s: %v", key, err)
-			return "insert"
+			return "insert", false
 		}
 		activeByKey[key] = struct{}{}
 		opened = append(opened, c.Canonical)
-		return ""
+		return "", depthUnproven
 	}
 	// ① 保底段：enabled∧非 simulated 组合先行（不占发现槽额）。
 	combos, err := st.LoadXAssetAllowCombos(ctx, "real")
@@ -203,7 +209,7 @@ func StepPaperCexCarryOpen(ctx context.Context, st PaperStore, cands []CexPaperC
 	}
 	// ②/D-051③：跳过原因计数（opts.Skips 累计→日报分布；skipN 逐调返回→轮聚合日志）。
 	skipN = map[string]int{}
-	count := func(reason string) {
+	count := func(reason string, _ bool) {
 		if reason == "" {
 			return
 		}
@@ -226,7 +232,7 @@ func StepPaperCexCarryOpen(ctx context.Context, st PaperStore, cands []CexPaperC
 				return opened, skipN, fmt.Errorf("cex paper step: exit ts %s: %w", key, err)
 			}
 			if lastExit != nil && now.Sub(*lastExit) < opts.ReopenCooldown {
-				count("cooldown")
+				count("cooldown", false)
 				continue // D-042 R1：拦截本体在 openCand 双闸；可见性归 selfwatch data_lost 项（R1 ③）
 			}
 		}
