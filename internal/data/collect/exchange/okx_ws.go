@@ -76,6 +76,7 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 	var subscribed map[string]bool
 	// quarantined 隔离表进程级（重连不重置）——目录判决对同符号稳定，逐符号只记一行。
 	quarantined := map[string]bool{}
+	safego.GoLoopPlain("okx-ws:universe-ticker", func() { o.runOKXTickerPoll(ctx, publish) }) // D-665 宇宙面 REST 拍接管（序位：RunWS 阻塞——必须在调用前 spawn）
 	RunWS(ctx, WSSpec{
 		Name: "okx-ws", URLs: o.wsURLs, Dialer: o.dialer, Header: o.header,
 		DepKey:   "okx:ws-market", // D-579：dephealth 记账键
@@ -98,7 +99,6 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 		OnFrame:     func(data []byte) bool { return o.handleMessage(ctx, data, publish) },
 		OnReconnect: meter.record,
 	})
-	safego.GoLoopPlain("okx-ws:universe-ticker", func() { o.runOKXTickerPoll(ctx, publish) }) // D-665 宇宙面 REST 拍接管
 }
 
 // subscribeArgs 构造订阅 args（D-369 S2：subscribed 集跟踪，ping 期差集增量订阅；
