@@ -84,9 +84,9 @@ func mtBareCanon(c string) string {
 func comboBookTriple(c pgstore.XAssetAllowRow) (pair, cex, mt, mtCanon string) {
 	switch {
 	case keydomain.IsMTKey(c.VenueBuy) && !keydomain.IsMTKey(c.VenueSell):
-		return c.CanonicalSell + "-" + mtBareCanon(c.CanonicalBuy), c.VenueSell, c.VenueBuy, c.CanonicalBuy
+		return keydomain.BookCanonical(c.CanonicalSell) + "-" + mtBareCanon(c.CanonicalBuy), c.VenueSell, c.VenueBuy, c.CanonicalBuy
 	case keydomain.IsMTKey(c.VenueSell) && !keydomain.IsMTKey(c.VenueBuy):
-		return c.CanonicalBuy + "-" + mtBareCanon(c.CanonicalSell), c.VenueBuy, c.VenueSell, c.CanonicalSell
+		return keydomain.BookCanonical(c.CanonicalBuy) + "-" + mtBareCanon(c.CanonicalSell), c.VenueBuy, c.VenueSell, c.CanonicalSell
 	}
 	return "", "", "", ""
 }

@@ -26,7 +26,7 @@ func loadDerivationInputs(ctx context.Context, st *pgstore.Store) ([]allowComboR
 	// 在拆列后=裸号/裸名（"3001157"/"gate"），IsMTKey 全 false → mt×cex 组合误判同所
 	// 拒采 → monitor 簿停写 49h（回归实证见 derive_test T3）。
 	rows, err := st.Pool().Query(ctx, `SELECT canonical_buy, venue_key_buy, canonical_sell, venue_key_sell
-		FROM xasset_allow_combos WHERE enabled = true ORDER BY id`)
+		FROM xasset_allow_combos WHERE enabled = true OR tier = 'armed' ORDER BY id`)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, fmt.Errorf("list combos: %w", err)
 	}

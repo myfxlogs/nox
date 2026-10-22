@@ -76,3 +76,16 @@ func MarketCanonical(c string) string {
 	}
 	return c + "USDT"
 }
+
+// BookCanonical 簿/行情联查键归一（venue 方言形→归一形单源——S2 新册
+// canonical=下划线/连字符方言而 ticks/簿键=归一形的零行假象族根治）：
+// '-SWAP'/'_SWAP' 尾裁→'-'/'_' 剥除→MarketCanonical 计价尾规约。
+// XAG_USDT→XAGUSDT、XAG-USDT-SWAP→XAGUSDT、NAS100_USDT→NAS100USDT、
+// ETH→ETHUSDT、XAUUSDT→XAUUSDT（幂等——归一形再入不变）。
+func BookCanonical(c string) string {
+	c = strings.TrimSuffix(c, "-SWAP")
+	c = strings.TrimSuffix(c, "_SWAP")
+	c = strings.ReplaceAll(c, "-", "")
+	c = strings.ReplaceAll(c, "_", "")
+	return MarketCanonical(c)
+}
