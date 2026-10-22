@@ -59,13 +59,13 @@ export function OrderWaitDuo({ b, setCardModal }: {
           <ul className="opp-cards opp-grid scroll-cap">
             {b.waiting.map((w: import("../gen/dashboardv1/account_pb").OverviewWaitingRow, i: number) => (
               <li key={i} className="opp-card" onClick={() => setCardModal({
-                title: `${w.kind === "graduation_pending" ? "待批" : w.kind === "graduation_watch" ? "观察中" : w.execTrack === "auto" ? "提案" : "待授权"} · ${w.label}`,
-                body: w.detail + (w.kind === "proposal" && w.execTrack !== "auto" ? `｜批准：飞书回「go ${w.proposalId}」` : "")
+                title: `${w.kind === "graduation_pending" ? "待批" : w.kind === "graduation_watch" ? "观察中" : w.kind === "proposal_armed" ? "武装待资" : w.execTrack === "auto" ? "提案" : "待授权"} · ${w.label}`,
+                body: w.detail + ((w.kind === "proposal" || w.kind === "proposal_armed") && w.execTrack !== "auto" ? `｜批准：飞书回「go ${w.proposalId}」` : "")
                   + (w.sinceUnix > 0 ? "｜自 " + new Date(Number(w.sinceUnix) * 1000).toISOString().replace("T", " ").slice(0, 19) + "Z" : ""),
               })}>
                 <div className="opp-card-head">
                   <Chip tone={w.kind === "proposal" ? "warn" : "neutral"}>
-                    {w.kind === "graduation_pending" ? "待批" : w.kind === "graduation_watch" ? "观察中" : w.execTrack === "auto" ? "提案" : "待授权"}
+                    {w.kind === "graduation_pending" ? "待批" : w.kind === "graduation_watch" ? "观察中" : w.kind === "proposal_armed" ? "武装待资" : w.execTrack === "auto" ? "提案" : "待授权"}
                   </Chip>
                   <span className="opp-card-friction">
                     {w.sinceUnix > 0 ? "自 " + new Date(Number(w.sinceUnix) * 1000).toISOString().slice(5, 16).replace("T", " ") + "Z" : "—"}
@@ -73,7 +73,7 @@ export function OrderWaitDuo({ b, setCardModal }: {
                 </div>
                 <span className="opp-card-who">{w.label}</span>
                 <p className="opp-card-narrative muted clamp-2" title={w.detail}>{w.detail}</p>
-                {w.kind === "proposal" && w.execTrack !== "auto" && (
+                {(w.kind === "proposal" || w.kind === "proposal_armed") && w.execTrack !== "auto" && (
                   <div>
                     {/* 待授权提案接活：批准=飞书 go 口令；拒批=既有 AckProposal RPC */}
                     <button onClick={(e) => {

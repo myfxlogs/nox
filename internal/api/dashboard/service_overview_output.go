@@ -165,7 +165,15 @@ func (s *Service) appendOverviewWaiting(ctx context.Context, resp *v1.GetOvervie
 			SinceUnix: g.CreatedAt.Unix(),
 		})
 	}
+	var goAttempted map[int64]bool
 	if props, err := s.store.ListProposals(ctx, "proposed", perKind); err == nil {
+		ids := make([]int64, 0, len(props))
+		for _, pr := range props {
+			ids = append(ids, pr.ID)
+		}
+		// 待授权面两义分层：审计痕命中=已 go 尝试被闸拒→武装待资（条件到
+		// 自动跑，非待裁决）；读败=降级同显不分层（fail-open 不堵面）。
+		goAttempted, _ = s.store.ProposalGoAttempted(ctx, ids)
 		for _, pr := range props {
 			apr := "—"
 			if pr.ExpectedAPR != nil {
@@ -175,11 +183,16 @@ func (s *Service) appendOverviewWaiting(ctx context.Context, resp *v1.GetOvervie
 			// 候执行；proposal/semi 无执行轨=业主 go 口令决策项——不得混标
 			// 「自动候执行」防误读为等条件非等人。
 			track := "待 go 授权（飞书回 go 批准）"
+			kind := "proposal"
 			if pr.ExecTrack == "auto" {
 				track = "自动候执行（等条件：闲钱/档位）"
+			} else if goAttempted[pr.ID] {
+				// 武装待资≠可执行——go 已过闸拒、条件到位自动跑（业主须能分辨真待裁决面）。
+				kind = "proposal_armed"
+				track = "武装待资（已 go 尝试·条件到位自动跑，非待裁决）"
 			}
 			resp.Waiting = append(resp.Waiting, &v1.OverviewWaitingRow{
-				Kind:       "proposal",
+				Kind:       kind,
 				Label:      fmt.Sprintf("提案#%d %s@%s", pr.ID, pr.TemplateID, pr.Venue),
 				Detail:     fmt.Sprintf("%s·APR %s", track, apr),
 				SinceUnix:  pr.CreatedAt.Unix(),
