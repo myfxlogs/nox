@@ -74,37 +74,30 @@ func (s *Store) ExecFaceBinanceSymbols(ctx context.Context) (map[string]string, 
 	return s.ExecFaceVenueSymbols(ctx, "binance")
 }
 
-// MonitorFaceSymbols xasset-monitor 观测集（fin_carry_universe **达标行**——
-// derive_inputs.go 同阈：structure 两型+note 空+net∈[minNet,maxNet] 参化
-// 单源〔调用方传 scan.PaperCfdOpenNetPct/PaperCfdMaxNetPct——返修②字面量
-// 双源修〕）。与执行面集分层：订阅占额序=exec 先、monitor 填余
-// （armed/在仓腿不被监控集挤掉=返修①优先占额修）。
-func (s *Store) MonitorFaceSymbols(ctx context.Context, minNet, maxNet float64) (map[string]string, error) {
-	// 返修④：canonical→venue 原生档名单源映射——carry canonical=资产
-	// canonical（SILVERUSDT/WTIUSDT 形），venue 档名经
-	// fin_cex_universe.hedge_canonical 同键联查（monitor CexNativeSym 径
-	// 消费面同域）；无档行=该 venue 未上市如实不出（零订阅不误造）。
+// MonitorCarryRow xasset-monitor 观测集 raw 行（fin_carry_universe 达标行——
+// derive_inputs.go 同阈：structure 两型+note 空+net∈[minNet,maxNet] 参化单源）。
+// 译名权归 wire 层（返修⑤：canonical=资产名须过 CfdBookSpecs equiv 链→
+// CexNativeSym 才得 venue 档名——pgstore→scan import 环指向正确分层）。
+type MonitorCarryRow struct{ Canonical, MtVenue, CexVenue string }
+
+// MonitorFaceRows 达标行 raw 读（canonical 资产形——SILVER/WTI/BRENT/JP225，
+// **不译** venue 档名；档名决议见 wire 层 MonitorFaceFn 装配）。
+func (s *Store) MonitorFaceRows(ctx context.Context, minNet, maxNet float64) ([]MonitorCarryRow, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT u.symbol, cu.cex_venue FROM fin_carry_universe cu
-		JOIN fin_cex_universe u
-		  ON u.venue = cu.cex_venue AND (
-		     u.hedge_canonical IN (upper(cu.canonical), upper(cu.canonical)||'USDT')
-		     OR regexp_replace(upper(u.symbol),'[^A-Z0-9]','','g') = upper(cu.canonical)||'USDT')
-		WHERE cu.structure IN ('long_cfd_short_perp','short_cfd_long_perp')
-		  AND cu.note = '' AND cu.net_annual_pct >= $1 AND cu.net_annual_pct <= $2`, minNet, maxNet)
+		SELECT canonical, mt_venue, cex_venue FROM fin_carry_universe
+		WHERE structure IN ('long_cfd_short_perp','short_cfd_long_perp')
+		  AND note = '' AND net_annual_pct >= $1 AND net_annual_pct <= $2`, minNet, maxNet)
 	if err != nil {
 		return nil, fmt.Errorf("monitor_face universe: %w", err)
 	}
 	defer rows.Close()
-	out := map[string]string{}
+	var out []MonitorCarryRow
 	for rows.Next() {
-		var nat, venue string
-		if err := rows.Scan(&nat, &venue); err != nil {
+		var r MonitorCarryRow
+		if err := rows.Scan(&r.Canonical, &r.MtVenue, &r.CexVenue); err != nil {
 			return nil, err
 		}
-		if venue == "gate" || venue == "okx" || venue == "binance" {
-			out[strings.ToLower(keydomain.MarketCanonical(nat))] = venue // 原生档名→canonical 键形同形归一
-		}
+		out = append(out, r)
 	}
 	return out, rows.Err()
 }
