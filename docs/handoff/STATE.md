@@ -1409,3 +1409,7 @@ verdict=退回返修②（单项残——上轮三阻断全对版，机检重跑
 1. **阻断**：`safego.GoLoopPlain("okx-ws:universe-ticker", …)` 位于 `RunWS(ctx, spec)` **之后**顺序调用（okx_ws.go:101）——RunWS 为阻塞重连循环仅 ctx.Done 返回→该行永不到达→okx 宇宙 REST 拍**死代码**。生产实证：ticks venue=okx max ts=boot 刻零供给；对照 binance/gate univpoll 均以独立 GoLoopPlain 先启（binance_market_ws.go:183、gate_ws.go:92）=正确先例。修=该行前移至 RunWS 调用之前，无需改函数体。
 2. 产验顺带定谳（非本返修项，转 D-667）：外联 TLS churn **20conn/s×5.2KB≈104KB/s**——601 新 conn/30s 全 https；estab 积 1667；http.Client 逐请求新建病灶实测坐实为主残面。
 3. 复审漏检自陈：GoLoopPlain 序位属「阻塞调用后死代码」族——与 D-663 死看门狗支同族；三轮未追到调用序位，教训入坑正典。
+
+---
+
+**决策席裁定·DCI 复启（10-22 20:4xZ）**：`dci_buy_low` **enabled=f→t 已翻+回读在案**（exec_track=proposal·autoexec=f 低保本径——提案管恢复非真金直发）。裁据四件：①sizing 尘 qty 病灶三修已并码且在产（89f448dbe/05983a96d/18a7ca8c9+尘量级锚测）；②fin_capability_constraint 无 `dormant:dci_buy_low@binance` 行（现行 dormant 集=xasset_carry:XAU@okx、option_spread@binance、earn_rotation×3——不含本模板）；③venue 粒度 dormant 修在产实证（休眠拦截日志 25min 零行=okx 枚举不再被 binance 连带掐）；④纸闸自防：资金/休眠/量界闸均 fail-closed，sizing 若再畸=失败单非资损。**验收窗**：下次扫描拍内 buy_low 提案达闸或如实拒因行；若 24h 零提案/零拒因=枚举面仍未达→回票排查。sell_high 侧保持 enabled=t 原态（holding BTC min_qty 条件大概率结构性不满足——零提案是闸拒非断供，不判病）。
