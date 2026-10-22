@@ -6,7 +6,9 @@ package pgstore
 
 import (
 	"context"
+
 	"fmt"
+	"nox/internal/data/keydomain"
 	"strings"
 )
 
@@ -27,8 +29,8 @@ func (s *Store) ExecFaceBinanceSymbols(ctx context.Context) (map[string]string, 
 		if venue != "binance" || canonical == "" {
 			return
 		}
-		sym := strings.ToLower(canonical)
-		if vt != "spot" { // perp/futures/delivery 全归 perp 流面（bookTicker=永续）
+		sym := strings.ToLower(keydomain.MarketCanonical(canonical)) // 残⑤方言归一（XAG_USDT→xagusdt——canonical 第四形态坑）
+		if vt != "spot" {                                            // perp/futures/delivery 全归 perp 流面（bookTicker=永续）
 			if _, dup := out[sym]; !dup || out[sym] == "spot" {
 				out[sym] = "perp"
 			}

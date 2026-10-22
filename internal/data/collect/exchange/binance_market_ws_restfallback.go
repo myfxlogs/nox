@@ -33,6 +33,10 @@ func (b *BinanceMarketWS) restClientFor(rawURL string) *http.Client {
 // restFallbackEvery 死流窗 REST 拉取周期（验收=断流期 facts 陈旧≤本周期）。
 const restFallbackEvery = 60 * time.Second
 
+// tickerEmitEvery vol24h 每符号节流（D-591 S6 语义沿——REST 轨同节流；
+// 原 ticker ws 件随流退役收编至本件）。
+const tickerEmitEvery = 15 * time.Minute
+
 // restFallbackStaleAfter D-109 R1①：帧年龄闸阈值——now-lastFrame 超龄=死流。
 // markPrice@arr@1s/!ticker@arr 理论 1s 一帧，5min 无帧=venue 侧断供实锤。
 const restFallbackStaleAfter = 5 * time.Minute
@@ -40,7 +44,6 @@ const restFallbackStaleAfter = 5 * time.Minute
 // 死流依赖键（与 runLoop DepKey 构造 "binance:ws-"+venueType+"-"+kind 同源字面量）。
 const (
 	binanceDepKeyPerpMarkPrice = "binance:ws-perp-markPrice"
-	binanceDepKeyPerpTicker    = "binance:ws-perp-ticker"
 )
 
 // REST 兜底轨 facts src（与 WS 轨 binance_ws_markprice/binance_ws_ticker 区分，复盘可辨）。
@@ -80,18 +83,17 @@ func (b *BinanceMarketWS) frameStale(last *atomic.Int64) bool {
 	return t > 0 && b.now().Sub(time.Unix(0, t)) > restFallbackStaleAfter
 }
 
-// restFallbackRound 一拍：markPrice 流死 → premiumIndex 补 funding/index facts；
-// ticker 流死 → 24hr 补 vol24h facts。流活=零拉取。emitFacts/匹配 client 未装配=静默跳过。
+// restFallbackRound 一拍：markPrice 流死 → premiumIndex 补 funding/index facts。
+// 流活=零拉取。emitFacts/匹配 client 未装配=静默跳过。
 // 死流=帧超龄 OR dephealth degraded（dial 连败极端窗多一层）。
+// ticker 支已随 !ticker@arr 退役收编（D-663 补正①——vol24h 改 runTickerPoll
+// 15min 常驻轮询，看门狗无流可守）。
 func (b *BinanceMarketWS) restFallbackRound(ctx context.Context) {
 	if b.emitFacts == nil {
 		return
 	}
 	if b.frameStale(&b.lastFrameMarkPrice) || b.degraded(binanceDepKeyPerpMarkPrice) {
 		b.fetchPremiumIndex(ctx)
-	}
-	if b.frameStale(&b.lastFrameTicker) || b.degraded(binanceDepKeyPerpTicker) {
-		b.fetchTicker24h(ctx)
 	}
 }
 

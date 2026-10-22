@@ -13,11 +13,11 @@ func TestIndivDesired_ExecFaceOnly(t *testing.T) {
 			return map[string]string{"xagusdt": "perp", "btcusdt": "spot", "ethusdt": "perp"}, nil
 		},
 	}}
-	d, _, _ := b.indivDesiredSet(context.Background(), "perp")
+	d, _, _, _, _ := b.indivDesiredSet(context.Background(), "perp", nil)
 	if len(d) != 2 || !d["xagusdt"] || !d["ethusdt"] {
 		t.Fatalf("perp desired=%v want {xagusdt,ethusdt}", d)
 	}
-	d, _, _ = b.indivDesiredSet(context.Background(), "spot")
+	d, _, _, _, _ = b.indivDesiredSet(context.Background(), "spot", nil)
 	if len(d) != 1 || !d["btcusdt"] {
 		t.Fatalf("spot desired=%v want {btcusdt}", d)
 	}
@@ -30,22 +30,26 @@ func TestIndivDesired_BudgetCap(t *testing.T) {
 			ExecFaceFn: func(ctx context.Context) (map[string]string, error) {
 				return map[string]string{"a": "perp", "b": "perp", "c": "perp"}, nil
 			},
-			IndivBudgetFn: func(ctx context.Context) (int64, bool) { return cap, ok },
+			IndivBudgetFn: func(ctx context.Context) (int64, bool, error) { return cap, ok, nil },
 		}}
 	}
 	// cap 超=截断至 cap+over=true（字母序稳定 {a}）
-	d, _, over := mk(1, true).indivDesiredSet(context.Background(), "perp")
+	d, _, over, _, _ := mk(1, true).indivDesiredSet(context.Background(), "perp", nil)
 	if !over || len(d) != 1 || !d["a"] {
 		t.Fatalf("cap1: desired=%v over=%v want {a} true", d, over)
 	}
 	// 键缺=全空+indivOff 旗（indiv 显式关）
-	indivOffFlag = false
-	d, _, _ = mk(0, false).indivDesiredSet(context.Background(), "perp")
-	if len(d) != 0 || !indivOff() {
-		t.Fatalf("键缺应 indiv 关：desired=%v off=%v", d, indivOff())
+	d, _, _, off, _ := mk(0, false).indivDesiredSet(context.Background(), "perp", nil)
+	if len(d) != 0 || off == nil || !*off {
+		t.Fatalf("键缺应 indiv 关：desired=%v off=%v", d, off)
+	}
+	// 残④：cap 负值误配=视同 0 不 panic（空集+over）
+	d, _, over, _, _ = mk(-1, true).indivDesiredSet(context.Background(), "perp", nil)
+	if !over || len(d) != 0 {
+		t.Fatalf("cap 负应视同 0：desired=%v over=%v", d, over)
 	}
 	// 键在 cap 足=全放行
-	d, _, over = mk(10, true).indivDesiredSet(context.Background(), "perp")
+	d, _, over, _, _ = mk(10, true).indivDesiredSet(context.Background(), "perp", nil)
 	if over || len(d) != 3 {
 		t.Fatalf("cap10: desired=%v over=%v want 3 false", d, over)
 	}

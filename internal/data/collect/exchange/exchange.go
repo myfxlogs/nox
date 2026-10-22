@@ -69,9 +69,10 @@ type Config struct {
 	// ExecFaceFn D-663：indiv 执行面集合源（map[streamSym]venueType——
 	// armed∪毕业∪在仓 open 腿；nil=indiv 集空=全面不订）。
 	ExecFaceFn func(ctx context.Context) (map[string]string, error)
-	// IndivBudgetFn D-663 订阅预算闸：返回 (cap, ok)——ok=false=键缺
-	// →indiv 显式关+告警（预算未声明=不启动该面，显式不静默）。
-	IndivBudgetFn func(ctx context.Context) (int64, bool)
+	// IndivBudgetFn D-663 订阅预算闸：返回 (cap, ok, err)——ok=false&&err=nil=键缺
+	// →indiv 显式关+告警（预算未声明=不启动该面，显式不静默）；
+	// err 支=读败非键缺——rejects 计数+保 desired 不误关（瞬态 DB 错）。
+	IndivBudgetFn func(ctx context.Context) (int64, bool, error)
 }
 
 // DefaultConfig 返回默认配置。

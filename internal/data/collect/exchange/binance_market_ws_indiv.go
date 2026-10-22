@@ -24,7 +24,7 @@ import (
 // indivRescan 逐符号集重扫节拍（watchlist 差集生效窗）。
 const indivRescan = 60 * time.Second
 
-func init() { rejects.Register("binance_indiv", "budget_cap") } // D-663 预算闸拒因键
+func init() { rejects.Register("binance_indiv", "budget_cap", "execface_err", "budget_err") } // D-663 预算闸拒因键
 
 // bookTickerStreamSym canonical→bookTicker 流名（normalize 消费面——
 // XAGUSDT 死流实证：watchlist canonical 已带计价尾被再拼 "+usdt"=
@@ -71,17 +71,22 @@ func (b *BinanceMarketWS) runIndivBookTickers(ctx context.Context, venueType str
 		b.ensurePerpInfo(ctx) // 目录一次拉取（fail-open——拉败全量订阅不误杀）
 	}
 	budgetWarned := false
+	var lastGood map[string]bool // ExecFaceFn err 支 fail-safe：保 last-good desired（瞬态 DB 错不拆 armed 腿 indiv——残③选型=保旧非显式拒建）
 	for {
-		desired, quarantined, over := b.indivDesiredSet(ctx, venueType)
+		desired, quarantined, over, gateOff, gateMsg := b.indivDesiredSet(ctx, venueType, lastGood)
+		if gateOff != nil && *gateOff {
+			lastGood = desired // 保旧快照（err 径 desired=lastGood 已回传）
+		}
 		if over {
 			rejects.Inc(rejects.Key{Face: "binance_indiv", Gate: "budget_cap"})
 		}
-		if (over || indivOff()) && !budgetWarned {
+		gateBad := over || (gateOff != nil && *gateOff)
+		if gateBad && !budgetWarned {
 			budgetWarned = true
-			if b.cfg.AlertFn != nil {
-				b.cfg.AlertFn("warn", indivAlertMsg)
+			if b.cfg.AlertFn != nil && gateMsg != "" {
+				b.cfg.AlertFn("warn", gateMsg)
 			}
-		} else if !over && !indivOff() {
+		} else if !gateBad {
 			budgetWarned = false
 		}
 		if quarantined != indivQuarantined.Load() {
@@ -130,24 +135,25 @@ func (b *BinanceMarketWS) runIndivBookTickers(ctx context.Context, venueType str
 	}
 }
 
-// indivAlertMsg/budgetCapState 预算闸态机共享面（单测锚可直读）。
-var indivAlertMsg string
-var indivOffFlag bool
-
-func indivOff() bool { return indivOffFlag }
-
-// indivDesiredSet desired 集构建（D-663 单测锚——执行面集过滤+预算闸
-// 截断三段逻辑出函数体）：face=ExecFaceFn 集（nil fn=空）；perp/spot
-// 目录判沿用；cap 超=字母序截断稳定成员；键缺=全空+off 旗。
-func (b *BinanceMarketWS) indivDesiredSet(ctx context.Context, venueType string) (desired map[string]bool, quarantined int64, over bool) {
+// indivDesiredSet desired 集构建（D-663 单测锚——返修②③④对版）：
+// face=ExecFaceFn 集（err=保 lastGood 非空拆——瞬态 DB 错不拆 armed
+// 腿 indiv+rejects 计数；nil fn=空）；perp/spot 目录判沿用；预算闸
+// cap 计 desired 集——cap<0 clamp 视同 0（app_config 负值误配不 panic）；
+// 键缺（ok=false 且 err=nil）=全空+off=true；err 支与键缺文案分；
+// 返参 gateOff 指针=闸状态（true=关；nil=无闸件=放行面非关态）。
+func (b *BinanceMarketWS) indivDesiredSet(ctx context.Context, venueType string, lastGood map[string]bool) (desired map[string]bool, quarantined int64, over bool, off *bool, msg string) {
 	desired = map[string]bool{}
 	if b.cfg.ExecFaceFn == nil {
-		return desired, 0, false
+		return desired, 0, false, nil, ""
 	}
 	face, err := b.cfg.ExecFaceFn(ctx)
 	if err != nil {
-		log.Printf("[binance-indiv] 执行面集查询失败 %v（保空集）", err)
-		return desired, 0, false
+		rejects.Inc(rejects.Key{Face: "binance_indiv", Gate: "execface_err"})
+		log.Printf("[binance-indiv] 执行面集查询失败 %v（保 last-good desired）", err)
+		if lastGood != nil {
+			return lastGood, 0, false, nil, ""
+		}
+		return desired, 0, false, nil, ""
 	}
 	for stream, vt := range face {
 		if vt != venueType {
@@ -162,18 +168,23 @@ func (b *BinanceMarketWS) indivDesiredSet(ctx context.Context, venueType string)
 		}
 		desired[stream] = true
 	}
-	indivOffFlag = false
 	if b.cfg.IndivBudgetFn == nil {
-		return desired, quarantined, false
+		return desired, quarantined, false, nil, ""
 	}
-	cap, ok := b.cfg.IndivBudgetFn(ctx)
+	cap, ok, berr := b.cfg.IndivBudgetFn(ctx)
+	if berr != nil { // err 支≠键缺——rejects 计数+保 desired 非关态（瞬态错不误关）
+		rejects.Inc(rejects.Key{Face: "binance_indiv", Gate: "budget_err"})
+		return desired, quarantined, false, nil, ""
+	}
 	if !ok {
-		indivOffFlag = true
-		indivAlertMsg = "[binance-indiv] 订阅预算键缺失——indiv 面显式关闭"
-		return map[string]bool{}, quarantined, false
+		t := true
+		return map[string]bool{}, quarantined, false, &t, "[binance-indiv] 订阅预算键缺失——indiv 面显式关闭"
+	}
+	if cap < 0 {
+		cap = 0 // app_config 负值误配=视同 0 走 over 径（防 slice 越界 panic）
 	}
 	if len(desired) > int(cap) {
-		indivAlertMsg = fmt.Sprintf("[binance-indiv] %s desired %d 超预算 cap=%d——超出符号不建 indiv（留聚合流覆盖）", venueType, len(desired), cap)
+		msg = fmt.Sprintf("[binance-indiv] %s desired %d 超预算 cap=%d——超出符号不建 indiv（留聚合流覆盖）", venueType, len(desired), cap)
 		var syms []string
 		for k := range desired {
 			syms = append(syms, k)
@@ -183,7 +194,7 @@ func (b *BinanceMarketWS) indivDesiredSet(ctx context.Context, venueType string)
 		for _, k := range syms[:cap] {
 			desired[k] = true
 		}
-		return desired, quarantined, true
+		return desired, quarantined, true, nil, msg
 	}
-	return desired, quarantined, false
+	return desired, quarantined, false, nil, ""
 }

@@ -32,8 +32,8 @@ func d109WS(baseURL string, client *http.Client, degradedFn func(string) bool, s
 	}
 }
 
-// TestD109_RestFallbackGated 红窗闸：仅 markPrice 键红 → 只拉 premiumIndex、
-// ticker24h 零拉取；全绿 → 零拉取（复绿即停）。
+// TestD109_RestFallbackGated 红窗闸：仅 markPrice 键红 → 只拉 premiumIndex；
+// 全绿 → 零拉取（复绿即停）。ticker 支已收编（D-663——零 ticker 拉取锚）。
 func TestD109_RestFallbackGated(t *testing.T) {
 	var mktHits, tkrHits atomic.Int32
 	mux := http.NewServeMux()
@@ -64,13 +64,10 @@ func TestD109_RestFallbackGated(t *testing.T) {
 		t.Fatalf("绿窗不应拉取: mkt=%d tkr=%d", mktHits.Load(), tkrHits.Load())
 	}
 
-	// ticker 键独立红：只拉 24hr。
-	tickerRed := d109WS(srv.URL, srv.Client(), func(key string) bool {
-		return key == binanceDepKeyPerpTicker
-	}, &got)
-	tickerRed.restFallbackRound(context.Background())
-	if mktHits.Load() != 1 || tkrHits.Load() != 1 {
-		t.Fatalf("ticker 红应只拉 24hr: mkt=%d tkr=%d", mktHits.Load(), tkrHits.Load())
+	// ticker 支已随 !ticker@arr 退役收编（D-663 补正①）——restFallbackRound
+	// 无 ticker 调用面，tkrHits 应恒 0（看门狗无流可守=不拉不扰）。
+	if tkrHits.Load() != 0 {
+		t.Fatalf("ticker 支已收编应零拉: tkr=%d", tkrHits.Load())
 	}
 }
 
@@ -172,25 +169,16 @@ func TestD109_FrameAgeGate(t *testing.T) {
 
 	// 从未交付帧但已超启动基线 5min（生产基线=Run 启动刻，此处直接钉超龄刻）。
 	b.lastFrameMarkPrice.Store(time.Now().Add(-restFallbackStaleAfter - time.Minute).UnixNano())
-	b.lastFrameTicker.Store(time.Now().UnixNano()) // ticker 帧新鲜
 	b.restFallbackRound(context.Background())
 	if mktHits.Load() != 1 || tkrHits.Load() != 0 {
-		t.Fatalf("markPrice 超龄应点火、ticker 新鲜应停: mkt=%d tkr=%d", mktHits.Load(), tkrHits.Load())
+		t.Fatalf("markPrice 超龄应点火、ticker 轨已收编应停: mkt=%d tkr=%d", mktHits.Load(), tkrHits.Load())
 	}
 
-	// markPrice 帧复到 → 闸自落；ticker 转超龄 → 换轨点火。
+	// markPrice 帧复到 → 闸自落（ticker 面已无分支——tkrHits 恒 0 锚）。
 	b.lastFrameMarkPrice.Store(time.Now().UnixNano())
-	b.lastFrameTicker.Store(time.Now().Add(-restFallbackStaleAfter - time.Minute).UnixNano())
 	b.restFallbackRound(context.Background())
-	if mktHits.Load() != 1 || tkrHits.Load() != 1 {
-		t.Fatalf("流复绿应停、转死轨应点: mkt=%d tkr=%d", mktHits.Load(), tkrHits.Load())
-	}
-
-	// 两轨帧新鲜 → 全停。
-	b.lastFrameTicker.Store(time.Now().UnixNano())
-	b.restFallbackRound(context.Background())
-	if mktHits.Load() != 1 || tkrHits.Load() != 1 {
-		t.Fatalf("全活应零拉取: mkt=%d tkr=%d", mktHits.Load(), tkrHits.Load())
+	if mktHits.Load() != 1 || tkrHits.Load() != 0 {
+		t.Fatalf("流复绿应停: mkt=%d tkr=%d", mktHits.Load(), tkrHits.Load())
 	}
 }
 

@@ -52,7 +52,6 @@ type BinanceMarketWS struct {
 	validPerp     map[string]struct{}
 	perpOnce      sync.Once
 	spotInfoFetch func(ctx context.Context, url string) (map[string]struct{}, error) // 测试注入点；nil=实拉 spotInfoURL
-	tickerEmit    map[string]time.Time                                               // D-591 S6：vol24h 每符号节流（仅 ticker 连接 goroutine 访问）
 	indexEmit     map[string]time.Time                                               // D-595 S1：index_price 每符号节流（仅 market 连接 goroutine 访问）
 	// degradedFn D-109：死流判定注入点（REST 兜底看门狗用；nil=dephealth.Degraded 生产读口）。
 	degradedFn func(key string) bool
@@ -61,7 +60,6 @@ type BinanceMarketWS struct {
 	// （now-lastFrame>staleAfter=死流），dial 死与静默两形态同覆，流复绿帧到闸自落。
 	// unixnano；markPrice/ticker 连接 goroutine 写、rest-fallback goroutine 读。
 	lastFrameMarkPrice atomic.Int64
-	lastFrameTicker    atomic.Int64
 	// restNative D-109 R1②：币安原生域 REST 裸 client——cfg.Client（httpx tokenRT）
 	// 会把 X-Proxy-Token 注入每请求，带向 fapi.binance.com=凭据出域（D-106 红线）。
 	restNative *http.Client
@@ -158,7 +156,6 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 	// R1①：帧年龄闸基线=采集器启动刻——若订阅从未交付帧（含开集即静默形态），
 	// 启动刻起算超龄即判定死流；首帧到达后改写为真实帧刻。
 	b.lastFrameMarkPrice.Store(b.now().UnixNano())
-	b.lastFrameTicker.Store(b.now().UnixNano())
 	if b == nil {
 		return // baseURL 解析失败静默（REST 兜底在跑）
 	}
@@ -211,12 +208,6 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venu
 			if venueType == "perp" && kind == "bookTicker" {
 				// E1：binance 上游杀招针对逐符号订阅突发——聚合流单订阅存活。
 				params = []string{"!bookTicker"}
-			} else if venueType == "perp" && kind == "ticker" {
-				// 24hrTicker 全市场聚合流（radar 宇宙枚举全量所需，不过滤——
-				// 资格判定须覆盖未监控新上市符号；灌水由每符号 15min 节流控制）。
-				// 复审实拍：futures 无 "!ticker@arr@1s" 变体（ack 后零帧，@1s 仅 markPrice
-				// 有），流名=文档 All Market Tickers "!ticker@arr"（1000ms）。
-				params = []string{"!ticker@arr"}
 			} else if venueType == "perp" && kind == "markPrice" {
 				// markPrice 逐符号订阅同中 D-535 杀招（上游按连接 epoch 概率性
 				// 裁断，wscloseprobe 同参数集复现 frames=1 后 1006 被杀）——改全市场
@@ -264,13 +255,6 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venu
 			// D-109 R1③：帧到喂 dephealth（节流件内建 1/min/键）——
 			// 「连接活帧死」形态 lastEventUnix 前移可证，解禁判据机读达标。
 			dephealth.MarkFrameOK("binance:ws-" + venueType + "-" + kind)
-			if kind == "ticker" {
-				b.lastFrameTicker.Store(b.now().UnixNano()) // D-109 R1①：帧到=流活（含解析失败帧——有流量即非死流）
-				// 24hrTicker 数组帧→vol24h facts（D-591 S6 handler 自创建日起
-				// 零调用者，OnFrame 缺 ticker 分流=帧落 handleBookTicker 被静默丢弃；
-				// ticker 连接不订 bookTicker，全帧归 handleTicker，解析失败静默）。
-				return b.handleTicker(ctx, data)
-			}
 			if kind == "markPrice" {
 				b.lastFrameMarkPrice.Store(b.now().UnixNano()) // D-109 R1①
 			}
