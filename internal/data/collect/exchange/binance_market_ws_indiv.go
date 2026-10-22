@@ -9,6 +9,7 @@ package exchange
 
 import (
 	"context"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -58,13 +59,26 @@ func (b *BinanceMarketWS) runIndivBookTickers(ctx context.Context, venueType str
 			cancel()
 		}
 	}()
+	if venueType == "perp" {
+		b.ensurePerpInfo(ctx) // 目录一次拉取（fail-open——拉败全量订阅不误杀）
+	}
 	for {
 		desired := map[string]bool{}
+		var quarantined int64
 		for _, sym := range b.cfg.effectiveSymbols("binance") {
 			if venueType == "spot" && !b.spotOK(sym) {
 				continue
 			}
-			desired[bookTickerStreamSym(sym)] = true
+			stream := bookTickerStreamSym(sym)
+			if venueType == "perp" && !b.perpOK(stream) {
+				quarantined++ // 目录不载=幽灵流不订（xpdusdusdt/clusdtusdt 实证）
+				continue
+			}
+			desired[stream] = true
+		}
+		if quarantined != indivQuarantined.Load() {
+			indivQuarantined.Store(quarantined)
+			log.Printf("[binance-indiv] perp 目录隔离 %d 符号（幽灵流连发阻断）", quarantined)
 		}
 		for sym := range running {
 			if !desired[sym] {

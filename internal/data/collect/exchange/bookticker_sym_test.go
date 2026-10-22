@@ -18,3 +18,19 @@ func TestBookTickerStreamSym(t *testing.T) {
 		}
 	}
 }
+
+// 存在性闸锚：validPerp 未建立=fail-open；已建=目录不载形不产 desired
+// （xpdusdusdt/clusdtusdt 幽灵流实证——tradifi 名 normalize 形对≠venue 存在）。
+func TestPerpOKGate(t *testing.T) {
+	b := &BinanceMarketWS{}
+	if !b.perpOK("xagusdt") {
+		t.Fatal("目录未建应 fail-open")
+	}
+	b.validPerp = map[string]struct{}{"BTCUSDT": {}, "XAGUSDT": {}}
+	if !b.perpOK("xagusdt") {
+		t.Fatal("目录在载 XAGUSDT 应放行")
+	}
+	if b.perpOK("xpdusdusdt") || b.perpOK("clusdtusdt") {
+		t.Fatal("目录不载幽灵形应隔离")
+	}
+}
