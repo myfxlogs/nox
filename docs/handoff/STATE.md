@@ -1280,3 +1280,10 @@ WHERE venue=v.venue)——有户才插无户幂等跳过；注释钉「户缺席
 ⑥覆盖簿断供告警族（XAU/XAG/WTI/BRENT/XPT/XPD/CL 七条 warn）=MT5 夜盘休市窗行龄超阈——开市全谱复流（MT5 全品种<60s）自消，无票。
 ⑦探针 #96/#97 已被 D-163 机审拒（premise 化石/权益不足）零遗留；fin_condition_gap 待决=0；earn 三提案 viable 但 spotFree≈0 机制内自陈不动；#1890 covered_call viable 挂等待面（σ界+券闸已过——go 决策另案，非晨检即兴件）。
 ⑧派发：告警两级语义返修（实施）、dciexec venue 化（复审）、term_basis quoteFor 修（实施）、经验库 high 坑正典批（实施）——TICKETS.md 已广播。 -->
+
+<!-- 决策席 2026-10-22 ~00:5xZ（业主令「等待面待授权统一授权」——全批执行完毕）
+①授权径=feishu webhook go N 口令（/webhook/feishu，GoProposal 链：控制面 LIVE→纸面闸→CheckDCI→租约→腿执行）；四件可执行行全经真径：#1890 covered_call@okx 推进至腿执行被 okx notionalSz 最低面额闸如实拒（critical#3559 签名 okx_notional_sz——okx 可卖 BTC=0，0.0207 系 #41 DCI 锁仓担保品）；earn 三件（#1801 okx/#1757 binance/#1304 gate）第一真门 spotFree=0「无眠钱可申」如实静默拒（USDT 全锁 binance 4 笔 DCI PUT——全系统零眠钱非病）。
+②三伪件先杀后授：#1943 term_basis 43.5%（#1938 同族伪 APR 再生——termBasisQuote 修票未部前会持续再生，修票已派）、#1942 funding_carry 1414%、#1940 cross_venue 0.9%（均 verdict=reject）→AckProposal declined 落账。
+③条件请求 #2778 已落（capital okx:unified:BTC open，target $2200≈0.02BTC）：covered-call 道激活需自由 BTC 至交易户——业主不供=此道如实拒无害。
+④观测缺口记名：go 径执行回执仅走 feishu SendText——feishu env 空=回执不可达且无日志痕（command hits=4 计数是仅存证），执行为何拒须查 alerts/gap 反推——go 执行落审计行票待立。
+⑤S2 桥实证成活：D-654 批 10 假设→xasset_allow_combos 白名单批量入册（alerts #3547-3552）；前提塌告警 #3553-3558 簿行活性失暂停级待复流观察。 -->
