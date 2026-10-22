@@ -8,6 +8,7 @@ package exchange
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"nox/internal/data/fact"
@@ -25,7 +26,23 @@ func (g *GateContractMeta) Kind() string { return fact.KindFundingInterval }
 // Poll 逐符号拉 contract detail → KindFundingInterval（venue 原生 funding_interval 秒）。
 func (g *GateContractMeta) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var out []fact.Fact
-	for _, sym := range g.cfg.effectiveSymbols("gate") {
+	// 返修④：轮询集∪监控观测集（SAND/ARB 类监控独符号不在 effectiveSymbols
+	// →interval 零行→fetch fatal 实证）——MonitorFaceFn map 键 canonical
+	// 小写形，gate contract 需裸基（xag→XAG_USDT）。
+	symSet := map[string]bool{}
+	for _, s := range g.cfg.effectiveSymbols("gate") {
+		symSet[s] = true
+	}
+	if g.cfg.MonitorFaceFn != nil {
+		if mset, merr := g.cfg.MonitorFaceFn(ctx); merr == nil {
+			for sym, v := range mset {
+				if v == "gate" {
+					symSet[strings.ToUpper(strings.TrimSuffix(sym, "usdt"))] = true
+				}
+			}
+		}
+	}
+	for sym := range symSet {
 		contract := sym + "_USDT"
 		url := fmt.Sprintf("%s/api/v4/futures/usdt/contracts/%s", g.cfg.GateBaseURL, contract)
 		body, err := getJSON(ctx, g.cfg.Client, url)
