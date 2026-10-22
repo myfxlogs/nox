@@ -37,6 +37,9 @@ type PaperStore interface {
 	CountDataLostExits(ctx context.Context, venueA, venueB, symbol string, since time.Time) (int, error)
 	// 保底槽宇宙行缺席 warn 节流（禁 `_ =` 吞错，cashflow-write-error 同族条款）。
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
+	// InsertAlertDedup 签名分级 dedup 写径（est_fee 负基差经济拒 24h 窗；
+	// *pgstore.Store 原生实现）。
+	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
 	PaperCexGateStore // D-051② 纸面入口质量闸读面（子接口，paper_cex_gate_store.go）
 	// mt×mt 轨 entry_basis/费用 tick 读面（*pgstore.Store 原生实现）。
 	TicksWindow(ctx context.Context, venue, symbol string, since time.Time) ([]pgstore.TickRow, error)
