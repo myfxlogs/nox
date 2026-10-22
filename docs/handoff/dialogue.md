@@ -403,3 +403,9 @@
 
 - 10-22 清洁批（决策席）：worktree 95 棵已并删（77 净+18 残件件〔node_modules/编译 bin/gen 件全可再生零真改〕）、远端已并枝 113 删、本地已并残留枝 54 删；余 6 棵 unmerged worktree（10-21 批在飞疑在册）+~40 unmerged 枝待逐票分诊非盲删；KB 待归纳-分析员 3 枚 high 件（okx 限频定性/COALESCE 永假健康/读败零值冒真零）待正典批立票。
 - 10-22 SG 磁盘清洁（决策席）：43G/74%→41G/70%——docker 悬空镜像 263M+journald 120M+apt cache+go build/modcache ~450M；pgdata 11G/containerd 3.1G（docker 共享存活的）/snap（无旧版）/备份（9+10 在 14 滚动窗）/cleanup-quarantine/agent 会话态全保留；chromium+cups snap 头无服务器冗余记观察未删。
+
+## 2026-10-22 决策席·CEX 鲜活度三面取证收口
+
+- binance：聚合流 ~5s 量子=venue 属性；逐符号杀=**fstream 域独有**（spot 裸路径 270s 零杀 168fps）——票分轨。
+- okx：**反案**——tickers 频道实测 0.14-0.16s 实时零杀，产线 85-148s 全谱同陈=**我方连接级静默**（dataIdle=3min 漏检）——票重写为静默排查。
+- MT5 逐帧 ~1.0s=基线最优。
