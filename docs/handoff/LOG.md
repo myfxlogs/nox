@@ -1098,3 +1098,43 @@ docker exec nox-postgres psql -U nox -d nox -v ON_ERROR_STOP=1 -f /tmp/archive_e
 ### MT5 io 源位取证（ticket 76 前置）
 - **源=mtapi OrderHistory 的 DEAL_BALANCE 类 deal（proto `DealType_Balance=2`，`internal/data/adapter/gen/mtapi/mt5/mt5.pb.go:462`）**：MT5 充提在协议层以 balance deal 落历史，现有 `orderHistoryScan`（broker_order_history_scan.go，D-181 swap 回溯复用径）可直读——过滤 DealType=Balance/Profit_Balance 入 fin_venue_io direction=deposit/withdraw。
 - **实现面**：扫频挂既有日拍或 5min 拍（零新定时器），幂等键=deal ticket→external_id。**本段为取证留档，施工件须另续——剩余 ctx 不足以交付代码+机检五件套。**
+
+## 2026-10-22 实施席批量交付（十一票——venue 返修/jit 前置/簿键归一/报价闸/roster/approve 轨等）
+
+**背景/范围**：执行面盲区清扫批——提案钱径/簿键/报价源/告警签名/台账/裁决轨/前端语义分层，全走 wip 分支报审。
+
+### 交付清单（branch@hash）
+
+| 票 | 分支@hash | 机检 |
+|---|---|---|
+| dciexec venue 化返修 | `wip/dciexec-venue-default`@337da62c2 | dciexec 绿+kraken 锚 |
+| 提案轨 jit 归集前置（P1） | `wip/jit-goprop`@7d0ad2b5e | dciexec 112 绿 |
+| custody_share:BTC 消费面 | `wip/asset-share`@c7ec77157 | gate+dciexec 绿 |
+| go 执行回执审计行 | `wip/go-audit`@f28d49c54 | dciexec 绿 |
+| paper 闸 SQL 类型错 | `wip/paper-sql`@b18756cff | pgstore DB 锚绿 |
+| funding_carry quoteFor 同伤 | `wip/fcarry-sanity`@954c0799a | oppmatch 62 绿 |
+| monitor 簿键归一（返修②毕） | `wip/mon-canon`@d29d20ab4 | 迁移实跑+方言 pair 锚 |
+| roster 建模错位+tradifi/bridge-push 补登 | `wip/roster-model`@575baba6b / `wip/roster-bpush`@51e75a4dc | pgstore 雇员锚 |
+| symdig 截断续提（返修①毕） | `wip/fix-batch`@3cdf01af2 | symdig 14 绿 |
+| est_fee 负值签名分级 | `wip/estfee-sign`@53eb4a1cc | scan 176 绿 |
+| 待授权面分层 | `wip/proposed-layers`@d5d876f29 | pgstore 锚 |
+| 纸面水位伪损行隔离闸 | `wip/paper-insane`@34e40c4e6 | scan+selfwatch 绿 |
+| binance 逐符号 bookTicker | `wip/bn-indiv`@0bb81c9a0 | exchange 224 绿 |
+| okx bbo-tbt 增订 | `wip/okx-bbo`@a83fca77c | exchange 224 绿 |
+| idle 地板档透出 | `wip/idle-floor` | overview 绿+tsc 净 |
+| AckProposal approve 轨（D-661） | `wip/ack-approve`@1bf1bc03d | RPC 测绿 tsc 净 |
+| KB high 坑正典批② | `wip/kb-canon2`@49db55452 | noxkb gen 过 |
+
+### 关键修复/决策
+- **jit 没接通**（业主亲诊）：`GoProposal` 缺资直拒——前置 `JitSweep` 复用件（armed 径同件零分叉，oppAPR=卡 net_apr）。
+- **venue 方言 canonical 病灶族**（S2 #26-31）：`BookCanonical` 单源——pairs/regime/engine_opp 三消费面+迁移 1072 存量归一+armed 播种 `enabled OR tier='armed'`。
+- **报价伪源两伤**：paper 闸 `text=text[]`→unnest；funding_carry 全表极值→venue 过滤+鲜度 48h+物理界 cap。
+- **D-661 裁决轨改道**：feishu 入站断供→approve=GoProposal 同径全闸链（非状态直写）。
+- **binance 量子指纹**：聚合流 ~5s 桶→逐符号增订（spot raw-path/perp 1conn1sym+重连环），skills 注记口径修正同 commit。
+
+### 验证
+✅ 各包 go test 全绿（dciexec 112/oppmatch 62/scan 176/exchange 224/selfwatch 29/pgstore/symdig 14）；✅ go vet/gofmt/行数门禁；✅ tsc 净；✅ 迁移 pg 实跑。
+⚠️ D348 两红=并行会话共测试库污染（无码基线同刻同红且值漂移实证非票伤）；web/dist 缺=既有面（桩过编译）。
+
+### 状态/下一步
+⬜ 全部「施工完→待复审」待复审席核验并入；STATE 行全翻带 hash 锚。坑处置：无新增条目（bn-fapi-market 注记修正件随票落）。
