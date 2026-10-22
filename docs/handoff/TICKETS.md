@@ -23,3 +23,4 @@
 | monitor 簿/coverage 联查 venue 方言键归一（P1） | `[角色:实施] monitor 簿键归一修（读 STATE 本行——MarketCanonical 联查键三消费面+存量迁移；无 skills 域）` | STATE 票表新行 |
 | roster 心跳未登记 main:tradifi-syms | `[角色:实施] roster tradifi-syms 心跳排查（读 STATE 本行；无 skills 域）` | STATE 票表新行 |
 | symdig 提案 AI 输出截断 | `[角色:实施] symdig 提案输出截断修（读 STATE 本行；无 skills 域）` | STATE 票表新行 |
+| 纸面水位伪损行排查（01-01 ×1 $-4.65M 伪值） | `[角色:实施] 纸面水位伪损行排查（读 STATE 本行——01-01 行写入源+聚合 sanity 闸；无 skills 域）` | STATE 票表新行 |
