@@ -927,3 +927,11 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：立修票（venue 过滤+流动性地板+近到期剔除+params 具名合约——阈值走 app_config）；同类 MAX 取径（cfdSwapCarry/crossVenueSpot）同查归因。
 - **反证锚**：修票部署后 term_basis 提案 params 仍不具合约或零成交合约继续入围 → 判据面未根治，退回。
 - **失效自查**：修票并后下一 term_basis 提案拍对拍。
+
+## D-657（2026-10-22 决策席·业主令「feishu 暂时不通，本席直接授权」——授权通道替代裁定）
+
+- **缘起**：feishu 通道暂不可达（NOX_FEISHU_* 配置空、回执 SendText 不可达）——业主亲令绕口令直授权。
+- **裁定**：①授权语义与触发机制分离——授权凭=**业主会话亲令 ∪ D-594 委任面**（决策席权责内自裁），feishu `go N` 仅是触发面之一非授权源；②feishu 不可达期执行径不变——GoProposal 真链（webhook 事件入径/等效调用），控制面 LIVE/纸面闸/CheckDCI/租约/坑表全闸照过——绕口令不绕闸；③回执不可达期拒因取证走 alerts/fin_condition_gap/DB 态机反推（执行审计行缺口已记名待立票）。
+- **本批实证**：4 go（#1890/#1801/#1757/#1304）全经真径如实拒（okx 面额闸/spotFree=0），3 伪件 decline——业主直授权语义下批授权合法有效。
+- **反证锚**：feishu_webhook 接触面 hits 复流证明通道复通后，仍绕过口令面直执 → 本裁未失效属违规，复审退回。
+- **失效自查**：feishu 通道复通即自动失效——回 feishu 口令单径（业主手动确认无硬性需要，通道在=口令在）。
