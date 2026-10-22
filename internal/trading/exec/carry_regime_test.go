@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"nox/internal/risk"
 	"nox/internal/store/pgstore"
 )
 
@@ -27,7 +28,7 @@ var regimeBase = time.Date(2026, 9, 17, 6, 0, 0, 0, time.UTC)
 // （latest=−12 收入成立）但窗口含归零 → 拒。设计 §2 判据实证形态。
 func TestFundingRegimeOK_T1_485Replay(t *testing.T) {
 	rows := mkRows(regimeBase, -17, -4, 0, -12, 0, 0, 0, 0, 0, 0, 0, 0, -12) // n=13 ≥ 12
-	gate, income, reason := FundingRegimeOK(rows, -1, 2.0, 12, false)
+	gate, income, reason := risk.FundingRegimeOK(rows, -1, 2.0, 12, false)
 	if gate {
 		t.Errorf("窗口含归零应拒绝, gate=true (%s)", reason)
 	}
@@ -42,7 +43,7 @@ func TestFundingRegimeOK_T1_485Replay(t *testing.T) {
 // TestFundingRegimeOK_T1b_NonIncomeSkip T1b：latest 归零（非收入腿）→ 跳过不约束（防误杀支出腿）。
 func TestFundingRegimeOK_T1b_NonIncomeSkip(t *testing.T) {
 	rows := mkRows(regimeBase, -17, -4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) // latest=0
-	gate, income, reason := FundingRegimeOK(rows, -1, 2.0, 12, false)
+	gate, income, reason := risk.FundingRegimeOK(rows, -1, 2.0, 12, false)
 	if !gate {
 		t.Errorf("非收入腿应放行（跳过不约束）, gate=false (%s)", reason)
 	}
@@ -58,7 +59,7 @@ func TestFundingRegimeOK_T1b_NonIncomeSkip(t *testing.T) {
 func TestFundingRegimeOK_T2_Pass(t *testing.T) {
 	vals := []float64{-25, -20, -18, -15, -12, -11, -10, -10, -9, -9, -8.5, -8, -2} // 13 样本，末位 -2=floor 边界（≥ 通过；变异 <= 时转红）
 	rows := mkRows(regimeBase, vals...)
-	gate, income, reason := FundingRegimeOK(rows, -1, 2.0, 12, false)
+	gate, income, reason := risk.FundingRegimeOK(rows, -1, 2.0, 12, false)
 	if !gate || !income {
 		t.Errorf("全程深负应放行, gate=%v income=%v (%s)", gate, income, reason)
 	}
@@ -67,11 +68,11 @@ func TestFundingRegimeOK_T2_Pass(t *testing.T) {
 // TestFundingRegimeOK_T3_SellSide T3 卖侧对称：requiredSign=+1，含 +0.5（<floor）→ 拒；全程 ≥+5 → 放。
 func TestFundingRegimeOK_T3_SellSide(t *testing.T) {
 	bad := mkRows(regimeBase, 25, 12, 8, 5.5, 5, 5, 5, 5, 5, 5, 5, 0.5) // 含 +0.5 < floor
-	if gate, _, reason := FundingRegimeOK(bad, 1, 2.0, 12, false); gate {
+	if gate, _, reason := risk.FundingRegimeOK(bad, 1, 2.0, 12, false); gate {
 		t.Errorf("含 +0.5 应拒绝, gate=true (%s)", reason)
 	}
 	good := mkRows(regimeBase, 25, 12, 8, 5.5, 5, 5, 5, 5, 5, 5, 5, 5)
-	if gate, income, reason := FundingRegimeOK(good, 1, 2.0, 12, false); !gate || !income {
+	if gate, income, reason := risk.FundingRegimeOK(good, 1, 2.0, 12, false); !gate || !income {
 		t.Errorf("全程 ≥+5 应放行, gate=%v income=%v (%s)", gate, income, reason)
 	}
 }
@@ -79,14 +80,14 @@ func TestFundingRegimeOK_T3_SellSide(t *testing.T) {
 // TestFundingRegimeOK_T4_FailClosed T4：样本不足 / 零样本 → 拒（fail-closed，未知 regime 不放行）。
 func TestFundingRegimeOK_T4_FailClosed(t *testing.T) {
 	rows := mkRows(regimeBase, -25, -20, -18, -15, -12) // n=5 < 12，全程深负仍拒
-	gate, income, reason := FundingRegimeOK(rows, -1, 2.0, 12, false)
+	gate, income, reason := risk.FundingRegimeOK(rows, -1, 2.0, 12, false)
 	if gate || income {
 		t.Errorf("样本不足应拒绝, gate=%v income=%v (%s)", gate, income, reason)
 	}
 	if !containsAll(reason, "insufficient") {
 		t.Errorf("reason 应标 insufficient, got %q", reason)
 	}
-	if gate, _, _ := FundingRegimeOK(nil, -1, 2.0, 12, false); gate {
+	if gate, _, _ := risk.FundingRegimeOK(nil, -1, 2.0, 12, false); gate {
 		t.Error("零样本应拒绝")
 	}
 }

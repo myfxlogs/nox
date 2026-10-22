@@ -1,4 +1,4 @@
-package exec
+package risk
 
 // D-328 闸 demo 域脉动语义（PulsedAware）——
 // T1 脉动窗：6 零+18 热（mean=15%）→ PulsedAware=true 过 / false 拒（红=现码两域同拒）；

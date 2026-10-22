@@ -277,6 +277,11 @@ internal/trading/autotrade -> internal/platform/rejects
 internal/trading/engine -> internal/platform/rejects
 internal/trading/exec -> internal/platform/rejects
 
+internal/api/dashboard -> internal/risk
+internal/risk -> internal/store/pgstore
+internal/trading/autotrade -> internal/risk
+internal/trading/exec -> internal/risk
+
 EOF
 )
 

@@ -12,6 +12,7 @@ import (
 	"nox/internal/data/keydomain"
 	"nox/internal/econkb"
 	"nox/internal/platform/combo"
+	"nox/internal/risk"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/exec"
 
@@ -211,7 +212,7 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 		if err != nil {
 			return kind, fmt.Sprintf("息差数据查询失败（保守不放行）: %v", err), 4, false
 		}
-		if gate, _, r := exec.FundingRegimeOK(rows, +1, 2.0, 12, false); !gate {
+		if gate, _, r := risk.FundingRegimeOK(rows, +1, 2.0, 12, false); !gate {
 			return kind, "息差环境未持续: " + r, 4, false
 		}
 	}

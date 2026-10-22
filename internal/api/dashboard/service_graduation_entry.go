@@ -11,6 +11,7 @@ import (
 	"nox/internal/data/keydomain"
 	v1 "nox/internal/gen/dashboardv1"
 	"nox/internal/research/scan"
+	"nox/internal/risk"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/exec"
 )
@@ -98,7 +99,7 @@ func (s *Service) entryWindowOf(ctx context.Context, g *pgstore.CarryGraduation,
 		if err != nil {
 			return "closed:funding 查询失败 " + err.Error()
 		}
-		if gate, _, reason := exec.FundingRegimeOK(rows, sign, cfg.FloorPct, cfg.MinSamples, cfg.PulsedAware); !gate {
+		if gate, _, reason := risk.FundingRegimeOK(rows, sign, cfg.FloorPct, cfg.MinSamples, cfg.PulsedAware); !gate {
 			return "closed:perp腿 " + reason
 		}
 		return "open"
