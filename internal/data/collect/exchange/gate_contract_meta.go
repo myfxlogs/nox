@@ -37,8 +37,15 @@ func (g *GateContractMeta) Poll(ctx context.Context) ([]fact.Fact, error) {
 		if !ok || iv <= 0 {
 			continue // 缺字段=缺省不造（venue 禁借用律）
 		}
+		ts := time.Now()
 		out = append(out, fact.Fact{Kind: fact.KindFundingInterval, Venue: VenueGate,
-			Symbol: sym + "USDT", Value: iv, Unit: fact.UnitSeconds, Ts: time.Now(), Src: "gate_v4_contract_meta"})
+			Symbol: sym + "USDT", Value: iv, Unit: fact.UnitSeconds, Ts: ts, Src: "gate_v4_contract_meta"})
+		// D-665 收口挂账：detail 响应 funding_next_apply 域→next_settle 补供
+		// （REST tickers 无该字段=parity 假设误实证；缺字段=缺省不造）。
+		if na, ok := body["funding_next_apply"].(float64); ok && na > 0 {
+			out = append(out, fact.Fact{Kind: fact.KindFundingNextSettle, Venue: VenueGate,
+				Symbol: sym + "USDT", Value: na, Unit: fact.UnitUnixSec, Ts: ts, Src: "gate_v4_contract_meta"})
+		}
 	}
 	return out, nil
 }
