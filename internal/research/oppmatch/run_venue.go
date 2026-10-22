@@ -31,6 +31,56 @@ func execVenueList(ctx context.Context, st *pgstore.Store, tid string) []string 
 	return nil
 }
 
+// earnPreMinSub earn 前提闸最低可申增量（USD）：spotFree<阈=无可申增量
+// 不产提案（10-18 决策注记⑦——#836/837/895 前提陈旧病灶：venue 已部署
+// +spot 可动≈0 产提案=decline 噪音面）。闸只挡「无增量可申」不碰 APR 面。
+const earnPreMinSub = 10.0
+
+// earnIncrementOK earn 族提案前提闸（earn_apr_lending/earn_rotation）：
+// spotFree≥earnPreMinSub 且 spot 可动未全入 earn（增量=spot 现值——earn 在
+// 息不减可申域）。判定输入=CapitalPoolSnapshots 现值读面（非新源）；读败
+// =如实过闸（不臆阻——前提缺失不新增拒绝径）。
+func earnIncrementOK(ctx context.Context, st *pgstore.Store, venue string) (bool, string) {
+	pools, err := st.CapitalPoolSnapshots(ctx)
+	if err != nil {
+		return true, fmt.Sprintf("池快照读败过闸: %v", err)
+	}
+	var spotFree, earnUSD float64
+	for _, p := range pools {
+		if p.Venue != venue || p.Stale || p.Ghost {
+			continue
+		}
+		switch p.VenueType {
+		case "spot":
+			if idleGapUSDish(p.Currency) {
+				spotFree += p.Equity
+			}
+		case "earn":
+			if idleGapUSDish(p.Currency) {
+				earnUSD += p.Equity
+			}
+		}
+	}
+	if spotFree < earnPreMinSub {
+		return false, fmt.Sprintf("spotFree $%.2f<min_subscribe $%.0f（earn 在息 $%.2f——无可申增量）",
+			spotFree, earnPreMinSub, earnUSD)
+	}
+	return true, ""
+}
+
+// earnPreGate earn 族提案前提闸入口（10-18 注记⑦）：earn 族且无可申增量
+// →false 不产提案+log；非 earn 族/读败如实过（前提缺失不新增拒绝径）。
+func earnPreGate(ctx context.Context, st *pgstore.Store, tid, venue string) bool {
+	if !gate.EarnTemplates[tid] {
+		return true
+	}
+	ok, why := earnIncrementOK(ctx, st, venue)
+	if !ok {
+		log.Printf("[oppmatch] earn 前提闸 %s@%s 不产: %s", tid, venue, why)
+	}
+	return ok
+}
+
 // earnQuoteVenues earn_apr_lending 提案 venue 枚举：rail 覆盖集内有 USDT
 // 报价行的 venue 各出独立提案（报价所取 venue 如实写提案 venue——旧单 binance
 // venue+跨所顶档价=「okx 利率被 binance 轨执行」错 venue 错价面）。报价读败
