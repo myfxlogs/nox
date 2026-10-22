@@ -29,4 +29,4 @@
 | roster 台账建模错位修（7 员假离线） | `[角色:实施] roster 建模错位修（读 STATE 本行——任务型 spawn 分型+条件门注册同步；无 skills 域）` | STATE 票表新行 |
 | est_fee 负值闸签名分级（XPD 真负基差误标） | `[角色:实施] est_fee 负值签名分级（读 STATE 本行——簿真负基差签名改+dedup；无 skills 域）` | STATE 票表新行 |
 | okx 行情频道升级 bbo-tbt | `[角色:实施] okx bbo-tbt 频道升级（读 STATE 本行+skills/bn-fapi-market〔okx 方言对拍参考〕——armed/watchlist 域 bbo-tbt 增订对版；无 skills 域报）` | STATE 票表新行 |
-| binance armed/watchlist 腿报价升级逐符号流 | `[角色:实施] binance armed 腿逐符号 bookTicker 增订（读 STATE 本行+skills/bn-market〔ws 方言坑〕——E1 式小集探针先行；无 skills 域报）` | STATE 票表新行 |
+| binance armed/watchlist 腿报价升级逐符号流（域界已钉：spot 直用/perp 重连环） | `[角色:实施] binance armed 腿逐符号 bookTicker 双轨增订（读 STATE 本行+skills/bn-market+bn-fapi-market〔ws 杀阈方言坑〕——spot 裸路径直用、perp 每符号单连接+重连环+聚合托底）` | STATE 票表新行 |
