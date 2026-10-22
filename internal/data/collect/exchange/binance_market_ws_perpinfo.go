@@ -12,9 +12,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"nox/internal/platform/httpx"
 )
 
 // indivQuarantined 目录不载符号计数透出（拒因计数器族消费面——读侧=告警/
@@ -25,12 +28,17 @@ var indivQuarantined atomic.Int64
 // 拉败=fail-open+warn，目录缺期不阻塞采集）。复用 infoOnce 闸面不动。
 func (b *BinanceMarketWS) ensurePerpInfo(ctx context.Context) {
 	b.perpOnce.Do(func() {
-		client := b.restNative
+		// 走 BinanceApiSegBase 段基址（代理域=裸host+/fapi 前缀路由，原生域=
+		// fapi.binance.com/fapi）——裸拼 BaseURL+"/v1/..." 会撞代理 403。
+		infoURL := httpx.BinanceApiSegBase(b.cfg.BinanceBaseURL, "fapi") + "/v1/exchangeInfo"
+		client := b.cfg.Client // 代理域须 token+CA（spotInfoClient 同款裁定）
+		if pu, err := url.Parse(infoURL); err == nil && isNativeBinance(pu.Host) {
+			client = b.restNative // 原生域裸 client——token 不泄币安域
+		}
 		if client == nil {
 			client = &http.Client{Timeout: 15 * time.Second}
 		}
-		url := strings.TrimRight(b.cfg.BinanceBaseURL, "/") + "/v1/exchangeInfo"
-		set, err := fetchPerpExchangeInfo(ctx, client, url)
+		set, err := fetchPerpExchangeInfo(ctx, client, infoURL)
 		if err != nil {
 			log.Printf("[binance-mkt-ws] perp exchangeInfo 拉取失败 %v（fail-open 全量订阅）", err)
 			return
