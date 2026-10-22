@@ -143,8 +143,8 @@ export default function OverviewPage() {
         <StatTile label="可动用" value={b?.principalAvailable ? fmtUsd(b.principalIdleUsd) : "—"}
           sub={bStaleSub(b)}
           active={tile === "idle"} onClick={() => setTile(tile === "idle" ? null : "idle")} />
-        <StatTile label="在息" value={b?.principalAvailable ? fmtUsd(b.principalEarningUsd) : "—"}
-          sub={[b?.principalAvailable && b.principalLockedUsd > 0 ? `含锁定 ${fmtUsd(b.principalLockedUsd)}${b.earliestRelease ? "·最早回笼 " + utc(timestampDate(b.earliestRelease)) : ""}` : "", bStaleSub(b)].filter(Boolean).join("｜") || undefined}
+        <StatTile label="地板承接（活期·非达标）" value={b?.principalAvailable ? fmtUsd(b.principalFloorCarryUsd) : "—"}
+          sub={["活期 earn 池全额=地板档承接非达标档", b?.principalAvailable && b.principalLockedUsd > 0 ? `含锁定 ${fmtUsd(b.principalLockedUsd)}${b.earliestRelease ? "·最早回笼 " + utc(timestampDate(b.earliestRelease)) : ""}` : "", bStaleSub(b)].filter(Boolean).join("｜") || undefined}
           active={tile === "earning"} onClick={() => setTile(tile === "earning" ? null : "earning")} />
         {/* 眠钱时长：后端 idle_streak_state 显式分态全信——healthy_zero=「0」常志态
             （10-21 判据修后=真量过的零：Idle 收益域+鲜度闸）vs no_data=「—」警示态
@@ -158,7 +158,7 @@ export default function OverviewPage() {
           title={b?.idleStreakState === IdleStreakState.NO_DATA
             ? "idle_floor_streak 零行/读败/无鲜行=断供（D-612 首轮动窗前零行为预期）" : undefined} />
         <StatTile label="基线后业绩" value={b?.perfAvailable ? (b.perfUsd >= 0 ? "+" : "") + fmtUsd(b.perfUsd) : "—"}
-          sub={[(b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%｜目标≥8%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"), bStaleSub(b)].filter(Boolean).join("｜")}
+          sub={[(b?.perfAvailable ? `年化 ${b.perfAnnPct.toFixed(2)}%｜目标≥${b.perfTargetAnnPct}%${b.perfFlowProvisional ? "（provisional）" : ""}` : "基线未配置"), b?.perf30dAvailable ? `30d 年化 ${b.perf30dAnnPct.toFixed(2)}%（达成度 ${(b.perf30dAnnPct / b.perfTargetAnnPct * 100).toFixed(0)}%）` : "", bStaleSub(b)].filter(Boolean).join("｜")}
           active={tile === "perf"} onClick={() => setTile(tile === "perf" ? null : "perf")} />
         {/* D-630 权威口径：权益差−io 净流（穿透归因层；缺盖池如实标注） */}
         <StatTile label="真实净盈利（权威口径）"

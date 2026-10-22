@@ -112,7 +112,8 @@ func (s *Service) prefetchOverview(ctx context.Context, now time.Time, resp *v1.
 				}
 				resp.PrincipalIdleUsd = idle
 				resp.PrincipalEarningUsd = earning
-				resp.PrincipalAvailable = true // F1：读成才真（读败=缺省 false→前端显「—」不冒 $0）
+				resp.PrincipalAvailable = true                          // F1：读成才真（读败=缺省 false→前端显「—」不冒 $0）
+				s.applyFloorCarryPerf30d(ctx, resp, now, idle, earning) // §12 地板档+达成度
 				// 审计②：NAV 族陈值标注（五瓦片同染——本金/可动用/在息/业绩/真实净盈利）。
 				resp.NavStalePools, resp.NavStaleUsd, resp.NavStaleDetail = navStaleNote(nav.Pools, now)
 			}

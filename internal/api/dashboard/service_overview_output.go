@@ -217,3 +217,30 @@ func truncateRunes(s string, n int) string {
 	}
 	return string(r[:n]) + "…"
 }
+
+// applyFloorCarryPerf30d §12 idle 地板档分层（10-22：活期承接≠达标）：
+// earn 池=地板承接档独列（D-285 口径 earn 池全额即活期理财仓）；idle 原义
+// 不动=未承接。8% 达成度（D-030 线）后端直算：fin_nav_daily 30d 差分年化
+// ——窗内日切行缺→available=false 显「—」不冒 0。
+func (s *Service) applyFloorCarryPerf30d(ctx context.Context, resp *v1.GetOverviewBundleResponse, now time.Time, idle, earning float64) {
+	resp.PrincipalFloorCarryUsd = earning
+	resp.PerfTargetAnnPct = 8
+	hist, err := s.store.NavDailyNear(ctx, now.Add(-30*24*time.Hour))
+	if err != nil || len(hist) == 0 {
+		return
+	}
+	var past float64
+	var oldest time.Time
+	for _, r := range hist {
+		if r.Currency == "USDT" || r.Currency == "USD" {
+			past += r.NavUSD
+			if oldest.IsZero() || r.DayStart.Before(oldest) {
+				oldest = r.DayStart
+			}
+		}
+	}
+	if days := now.Sub(oldest).Hours() / 24; past > 0 && days > 1 {
+		resp.Perf_30DAnnPct = (idle + earning - past) / past * 365 / days * 100
+		resp.Perf_30DAvailable = true
+	}
+}
