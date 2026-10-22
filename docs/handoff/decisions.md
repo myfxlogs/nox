@@ -1015,3 +1015,4 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - 若做：形态=胖管机跑宇宙采集+本地筛后写/转发回 SG（exec-face 留 SG）；开发机禁用（须常开 VPS）；禁直连远程 PG 逐 tick 写（须批/队列+断点回补）。
   - 采集机规格备案（业主问）：2vCPU/2GB/≥20GB（10GB=SG 断链 spool ~5h 缓冲）+≥50Mbps 口月流量≥2TB（宇宙流 ~1.3TB/月）+东京地域首选（venue 端点 AWS 东京）+静态 IP/仅出向 WG-mTLS/NTP 必校；预算 ~$10-15/月（Linode Tokyo 2GB 4TB 最合档）。禁：开发机充数/1TB 流量档/欧美地域。
   - 开发机资格翻案→再出局（10-22 两轮实证）：出口 IP=108.186.33.30 香港 Zenlayer 系 **mihomo 用户态代理**（业主指正）——会话级代理非基础设施，节点换/链断/6Mbps 持续吞吐不可期=闸①「系统级常驻出口」**fail**；「200 OK」探针只证此刻连通不证资格（连通性≠资格，探针过会话代理会误绿）。开发机不任采集机——触发③成立时仍须第三台 offshore VPS（~$10-15/月）。D-666 不建裁定不变（触发①②仍缺）。
+  - 开发机直连实测补证（10-22）：绑 eno1 绕 mihomo→TCP 出向全灭（binance/okx/gate/1.1.1.1/baidu 全 FAIL，仅 ICMP ping 通）——本机出网=mihomo TUN 单点依赖非可选径；采集资格出局定谳（非「代理不稳」是「无代理即断网」）。另：SG /dev/vda1 17G 可用（docker 占 17G 主耗）——非紧急，靠 ops_disk_guard 盯趋势。
