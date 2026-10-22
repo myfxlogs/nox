@@ -132,6 +132,15 @@ func proposalParams(ctx context.Context, st *pgstore.Store, r Result, venue stri
 		}
 		return p
 	}
+	if r.TemplateID == "funding_carry" {
+		// 提案具名 funding 行（#1947 修②）：实选 fact symbol+ts——执行面/评估
+		// 卡须能说出吃哪条 funding（与 fundingCarryApplyVenue 同查询径同选）。
+		if best, berr := fundingCarryBest(ctx, st, venue); berr == nil && best != nil {
+			p["symbol"] = best.Symbol
+			p["funding_ts"] = best.Ts.UTC().Format("2006-01-02 15:04Z")
+		}
+		return p
+	}
 	if r.TemplateID == "term_basis" {
 		// 提案具名合约（#1938 修②）：venue 域实选行 symbol+expiry——执行面/评估
 		// 卡须能说出买什么（与 termBasisApplyVenue 同查询径同选）。
@@ -186,5 +195,36 @@ func termBasisApplyVenue(ctx context.Context, st *pgstore.Store, venue string, r
 		exp = best.ExpiryTS.Format("2006-01-02")
 	}
 	rv.GrossEvidence = fmt.Sprintf("fin_cex_universe %s basis_ann（%s 过滤后最优；vol24h/tenor 阈过）", best.Symbol, exp)
+	return true
+}
+
+// quoteVenueApply venue 域实选接线合口（term_basis 合约/funding_carry fact
+// 同形——无合格行=false 本 venue 不产；run.go 行数门禁归位件）。
+func quoteVenueApply(ctx context.Context, st *pgstore.Store, tid, venue string, rv *Result) bool {
+	switch tid {
+	case "term_basis":
+		return termBasisApplyVenue(ctx, st, venue, rv)
+	case "funding_carry":
+		return fundingCarryApplyVenue(ctx, st, venue, rv)
+	}
+	return true
+}
+
+// fundingCarryApplyVenue funding_carry venue 域实选接线（#1947 同伤修③）：
+// 本 venue 合格最优 funding fact→rv.APR=其 value+GrossEvidence 具名行
+// （venue 过滤+极端值剔+鲜度窗已在 fundingCarryBest）；无合格行=false 不产
+// ——伪 APR 提案宁可不产（unevaluable 语义在闸上游如实收敛）。
+func fundingCarryApplyVenue(ctx context.Context, st *pgstore.Store, venue string, rv *Result) bool {
+	best, err := fundingCarryBest(ctx, st, venue)
+	if err != nil {
+		log.Printf("[oppmatch] funding_carry %s facts 读败（本拍不产）: %v", venue, err)
+		return false
+	}
+	if best == nil {
+		return false
+	}
+	rv.APR = &best.Value
+	rv.GrossEvidence = fmt.Sprintf("facts funding %s %s ts=%s（venue 过滤+极端值/鲜度闸后最优）",
+		best.Venue, best.Symbol, best.Ts.UTC().Format("2006-01-02 15:04Z"))
 	return true
 }

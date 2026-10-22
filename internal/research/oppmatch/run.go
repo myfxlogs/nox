@@ -175,8 +175,8 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 					rv.APR = &va
 					rv.GrossEvidence = fmt.Sprintf("fin_cex_earn_apr %s USDT 最新行", venue)
 				}
-				applyDciSel(&rv, dsel)                                                         // dci 脱节修：APR/eval gross=闸实选档 apy
-				if r.TemplateID == "term_basis" && !termBasisApplyVenue(ctx, st, venue, &rv) { // 无合格合约不产
+				applyDciSel(&rv, dsel)                                   // dci 脱节修：APR/eval gross=闸实选档 apy
+				if !quoteVenueApply(ctx, st, r.TemplateID, venue, &rv) { // venue 域实选合口（term_basis 合约/funding_carry fact 同形——无合格行不产）
 					continue
 				}
 
