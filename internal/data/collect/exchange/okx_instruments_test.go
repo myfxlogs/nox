@@ -118,21 +118,13 @@ func TestOKXSubscribeArgs_Filtered(t *testing.T) {
 	subscribed, quarantined := map[string]bool{}, map[string]bool{}
 	args := o.subscribeArgs(context.Background(),
 		[]string{"BTC", "XAU-USDT-SWAP", "ATOMUSDT", "牛来"}, subscribed, quarantined)
-	// BTC→tickers+bbo-tbt(spot+perp)+funding+mark-price+index-tickers 共7 arg；
-	// XAU-USDT-SWAP→perp 4 arg（tickers+bbo-tbt+funding+mark-price，spot 目录无）；
+	// BTC→tickers(spot+perp)+funding+mark-price+index-tickers 共5 arg；
+	// XAU-USDT-SWAP→perp 3 arg（tickers+funding+mark-price，spot 目录无）；
 	// ATOMUSDT→目录无=隔离零 arg；牛来→零 arg；D-566 包B S6-d 连接级
-	// instruments SWAP+SPOT 各一 arg。合计 13（bbo-tbt 增订 +2）。
-	if len(args) != 13 {
-		t.Fatalf("args len=%d want 13: %v", len(args), args)
-	}
-	var bbo int
-	for _, a := range args {
-		if a["channel"] == "bbo-tbt" {
-			bbo++
-		}
-	}
-	if bbo != 3 {
-		t.Fatalf("bbo-tbt args=%d want 3（BTC spot+perp、XAU perp）", bbo)
+	// instruments SWAP+SPOT 各一 arg。合计 10（D-155 脉冲频道 +3；
+	// bbo-tbt 增订 10-22 裁撤=连接静默非 venue 节拍）。
+	if len(args) != 10 {
+		t.Fatalf("args len=%d want 10: %v", len(args), args)
 	}
 	var instArgs int
 	for _, a := range args {

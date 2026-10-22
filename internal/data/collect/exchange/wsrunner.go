@@ -204,8 +204,11 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 	if dataIdle == 0 {
 		dataIdle = quoteWSDataIdle
 	}
-	var lastDataAt atomic.Int64             // unixnano；数据帧到达即更新，ping goroutine 判读
+	var lastDataAt atomic.Int64             // unixnano；业务帧到达即更新，ping goroutine 判读
 	lastDataAt.Store(time.Now().UnixNano()) // 连接起点=订阅完成时刻，防握手窗误杀
+	var lastAnyAt atomic.Int64              // 全帧龄（含 ack/杂帧）——静默归因观测点①
+	lastAnyAt.Store(time.Now().UnixNano())
+	var silenceLogged atomic.Bool // 每静默窗一次事件（窗破帧到复位）
 
 	pingEvery := spec.PingEvery
 	if pingEvery == 0 {
@@ -237,6 +240,11 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 					st.dataKil.Store(true) // D-541 S3：僵尸杀归当前候选（连续达阈→冷却）
 					_ = conn.Close()
 					return
+				}
+				// 观测点①：连接级零帧窗>30s 记静默事件（okx 连接周期性静默
+				// 归因——全帧计非业务帧闸，30s≪任何判死阈纯观测不误杀）。
+				if elapsed := time.Since(time.Unix(0, lastAnyAt.Load())); elapsed > 30*time.Second && silenceLogged.CompareAndSwap(false, true) {
+					log.Printf("[%s] 静默观测: 连接级零帧窗 %v>30s（归因观测点——判死阈不变）", spec.Name, elapsed.Round(time.Second))
 				}
 				// 回主：兜底连接在服而早候选冷却已到期→断连重拨（主端恒优先）。
 				if st.cur.Load() > 0 && st.earlierReady() {
@@ -273,6 +281,8 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 			return fmt.Errorf("read: %w", err)
 		}
 		_ = conn.SetReadDeadline(time.Now().Add(readIdle))
+		lastAnyAt.Store(time.Now().UnixNano())
+		silenceLogged.Store(false) // 帧到=窗破复位（下窗可再记）
 		// 帧≠业务数据——OnFrame 回报本帧是否业务产出帧，仅业务帧刷新
 		// lastDataAt/sawData（杂帧遮死判径病灶根治）；nil=全帧计兼容锚。
 		if spec.OnFrame == nil || spec.OnFrame(data) {

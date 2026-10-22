@@ -20,6 +20,12 @@ import (
 // okxPublicWSURL OKX 公共 WS 端点（spot+perp tickers 同连接）。
 const okxPublicWSURL = "wss://ws.okx.com:8443/ws/v5/public"
 
+// okxTickersDataIdle 业务帧看门狗阈=75s（10-22 收紧 3min→60-90s 带中段：
+// tickers p50 ~150ms 频谱下 60s 零帧=死连接该重连——原 3min 阈漏检
+// 60-150s 静默；armed 腿 120s flap 闸不撞；venue 维护窗误伤面=75s>真
+// 静默期低频容忍带）。
+const okxTickersDataIdle = 75 * time.Second
+
 // OKXWebSocket 订阅 OKX tickers 频道（spot + perp）。
 type OKXWebSocket struct {
 	cfg    Config
@@ -56,7 +62,7 @@ func NewOKXWebSocket(cfg Config) *OKXWebSocket {
 	return &OKXWebSocket{cfg: cfg, dialer: d, header: h,
 		wsURLs:   wsViaProxyURLs("/okxws/ws/v5/public", okxPublicWSURL),
 		readIdle: quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff,
-		dataIdle: mktWSDataIdle, // 2762/2825 案：静默停帧谱——10min 阈送盲窗（mt-health 5m 先于骨架检出=检出延迟反超），3min 对齐 mkt-ws 降档先例（okx tickers ≥1/s 频谱，3min 零帧=订阅态丢非静默期）
+		dataIdle: okxTickersDataIdle, // 2762/2825 案：静默停帧谱——10min 阈送盲窗（mt-health 5m 先于骨架检出=检出延迟反超），3min 对齐 mkt-ws 降档先例（okx tickers ≥1/s 频谱，3min 零帧=订阅态丢非静默期）
 		catalog:  newOKXInstCatalog(cfg)}
 }
 
@@ -128,15 +134,11 @@ func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms []string, subscri
 		}
 		subscribed[key] = true
 		if spotID != "" {
-			args = append(args, map[string]string{"channel": "tickers", "instId": spotID},
-				// bbo-tbt 增订（10-22 tickers ~60-90s 变更驱动节拍病灶——tick-by-tick
-				// 最优价；armed/watchlist 小集域帧费受控，tickers 保留同连接托底）。
-				map[string]string{"channel": "bbo-tbt", "instId": spotID})
+			args = append(args, map[string]string{"channel": "tickers", "instId": spotID})
 		}
 		if perpID != "" {
 			args = append(args,
 				map[string]string{"channel": "tickers", "instId": perpID},
-				map[string]string{"channel": "bbo-tbt", "instId": perpID},
 				// funding-rate 公共频道（SWAP 实例）同订阅件，
 				// ping 期差集增量覆盖 watchlist 新增。
 				map[string]string{"channel": "funding-rate", "instId": perpID},
@@ -153,9 +155,9 @@ func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms []string, subscri
 	return args
 }
 
-// handleMessage D-154：返回「本帧是否业务产出帧」（tickers/bbo-tbt bid/ask
-// 非零走 publish=true——bbo-tbt 字段同构同径；funding-rate 是 fact 面产出但
-// 审计实证不入业务帧集——同帧流会遮订阅死，独立死由 SwapFactMaxAge 兜底）。
+// handleMessage D-154：返回「本帧是否业务产出帧」（仅 tickers bid/ask 非零走
+// publish=true——10-22 裁：tickers 实测 p50 0.14s 实时，慢帧病灶在连接级静默
+// 非 venue 节拍，bbo-tbt 增订撤销=带病加荷；funding-rate 不入业务帧集）。
 func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish func(bus.Quote)) bool {
 	var msg wsMsg
 	if err := json.Unmarshal(data, &msg); err != nil {
@@ -187,7 +189,7 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 		o.handleInstruments(msg)
 		return false
 	}
-	if (msg.Arg.Channel != "tickers" && msg.Arg.Channel != "bbo-tbt") || len(msg.Data) == 0 {
+	if msg.Arg.Channel != "tickers" || len(msg.Data) == 0 {
 		return false
 	}
 
