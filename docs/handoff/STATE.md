@@ -1341,3 +1341,8 @@ StreamUpdates 70s 直采：MT5 58帧/p50=1.04s，binance 14帧/p50=5.02s exact 5
 handleBookTicker 零节流+qbus 零去重+flush 1s→我方链零延时实证。
 venue 权威直探 `!bookTicker` 40s：4457帧/788品种总量正常、BTCUSDT 8帧 gaps 全 5.03s 网格——binance 聚合流逐品种 ~5s 量子化=venue 属性非我方聚合。
 「聚合致延时」第二判定：是聚合，但是 binance 上游聚合流非我方 qbus；逐符号实时变体因 D-531 venue 突发杀弃用，小集增订票已立。 -->
+
+<!-- D-663 分层报价+订阅预算闸立票（10-22 10:18Z 决策席——业主受控实验定谳后立）
+| 票 | 状态 | 席位 | 内容 |
+| D-663 分层报价+订阅预算闸 | 📝讨论稿待复审设计核验（docs/D663-分层报价与数据面管道预算设计.md） | 决策席 | 病灶=indiv 逐符号集实取整动态宇宙（binance 113 符号）榨干 SG ~5Mbps 管道（nox-core steady 604KB/s=100% 饱和，业主停/起对照实验定谳）→一切新流饿死（okx 重连/MT5 RPC/ssh/部署同病异象；此前「绕远路由」工单结论作废勿转发）。方案=A indiv 集改执行面（armed∪在仓∪毕业腿）+B 订阅预算闸（app_config 硬顶+D-652-A rejects 计数+告警；键缺=indiv 显式关非静默）+C markprice 同族面排查（binance_market_ws_markprice.go:55 亦遍历 effectiveSymbols）。验收=D-652-B 出生实证四锚（armed 腿 <1s 帧/非执行面零 indiv 连接/预算闸 cap 夹具三态/ens17 steady ≤200KB/s）+审项 I 集合同源对拍。反证锚=7 天内出现非执行面需 <5s 报价的决策实证则收回重裁。**当前生产态：nox-core 业主停机中（09:5xZ 起）——本票并入+123 commits 部署积压同停机窗收账后重启，重启后 30min 盯入向/okx/MT5 swap 三面自愈**。开工指令（复审设计核验通过后）：`[角色:实施] 分层报价+订阅预算闸（读 STATE 本行+docs/D663 设计稿全文；无 skills 域）` |
+-->
