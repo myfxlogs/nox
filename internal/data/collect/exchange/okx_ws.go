@@ -128,11 +128,15 @@ func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms []string, subscri
 		}
 		subscribed[key] = true
 		if spotID != "" {
-			args = append(args, map[string]string{"channel": "tickers", "instId": spotID})
+			args = append(args, map[string]string{"channel": "tickers", "instId": spotID},
+				// bbo-tbt 增订（10-22 tickers ~60-90s 变更驱动节拍病灶——tick-by-tick
+				// 最优价；armed/watchlist 小集域帧费受控，tickers 保留同连接托底）。
+				map[string]string{"channel": "bbo-tbt", "instId": spotID})
 		}
 		if perpID != "" {
 			args = append(args,
 				map[string]string{"channel": "tickers", "instId": perpID},
+				map[string]string{"channel": "bbo-tbt", "instId": perpID},
 				// funding-rate 公共频道（SWAP 实例）同订阅件，
 				// ping 期差集增量覆盖 watchlist 新增。
 				map[string]string{"channel": "funding-rate", "instId": perpID},
@@ -149,9 +153,9 @@ func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms []string, subscri
 	return args
 }
 
-// handleMessage D-154：返回「本帧是否业务产出帧」（仅 tickers bid/ask 非零走
-// publish=true；funding-rate 是 fact 面产出但审计实证不入业务帧集——同帧流
-// 会遮订阅死，独立死由 SwapFactMaxAge 兜底）。
+// handleMessage D-154：返回「本帧是否业务产出帧」（tickers/bbo-tbt bid/ask
+// 非零走 publish=true——bbo-tbt 字段同构同径；funding-rate 是 fact 面产出但
+// 审计实证不入业务帧集——同帧流会遮订阅死，独立死由 SwapFactMaxAge 兜底）。
 func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish func(bus.Quote)) bool {
 	var msg wsMsg
 	if err := json.Unmarshal(data, &msg); err != nil {
@@ -183,7 +187,7 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 		o.handleInstruments(msg)
 		return false
 	}
-	if msg.Arg.Channel != "tickers" || len(msg.Data) == 0 {
+	if (msg.Arg.Channel != "tickers" && msg.Arg.Channel != "bbo-tbt") || len(msg.Data) == 0 {
 		return false
 	}
 
