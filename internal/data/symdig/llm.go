@@ -82,7 +82,9 @@ func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error
 			[]analyst.Message{analyst.TextContent("user", "未配对/错配品种清单：\n```json\n"+string(payload)+"\n```")},
 			analyst.LoopCallbacks{OnDelta: func(t string) { aiText.WriteString(t) }})
 		if err != nil {
+			// run 败不得静默出零提案（复审退回①）——置结案标走 warn 告警面。
 			log.Printf("[symdig] analyst run 批败: %v", err)
+			lastMalformed, lastStop = true, "run_error"
 			return true
 		}
 		props, malformed := parseProposals(aiText.String())
