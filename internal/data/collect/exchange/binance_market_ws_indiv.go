@@ -24,7 +24,9 @@ import (
 // indivRescan 逐符号集重扫节拍（watchlist 差集生效窗）。
 const indivRescan = 60 * time.Second
 
-func init() { rejects.Register("binance_indiv", "budget_cap", "execface_err", "budget_err") } // D-663 预算闸拒因键
+func init() {
+	rejects.Register("binance_indiv", "budget_cap", "execface_err", "budget_err", "monitorface_err")
+} // D-663 预算闸拒因键
 
 // bookTickerStreamSym canonical→bookTicker 流名（normalize 消费面——
 // XAGUSDT 死流实证：watchlist canonical 已带计价尾被再拼 "+usdt"=
@@ -172,7 +174,10 @@ func (b *BinanceMarketWS) indivDesiredSet(ctx context.Context, venueType string,
 	// monSet 键域于 desired 外另立，cap 截断时 monitor 先让额）。
 	monSet := map[string]bool{}
 	if venueType == "perp" && b.cfg.MonitorFaceFn != nil {
-		if mset, merr := b.cfg.MonitorFaceFn(ctx); merr == nil {
+		mset, merr := b.cfg.MonitorFaceFn(ctx)
+		if merr != nil {
+			rejects.Inc(rejects.Key{Face: "binance_indiv", Gate: "monitorface_err"}) // 返修③：binance indiv 镜像补（读败如实计非静默缩）
+		} else {
 			for sym, v := range mset {
 				if v == "binance" && !desired[sym] && b.perpOK(sym) {
 					monSet[sym] = true
