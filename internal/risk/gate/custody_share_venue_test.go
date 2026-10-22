@@ -45,6 +45,30 @@ func TestCustodyShareOf_VenueGranularity(t *testing.T) {
 	}
 }
 
+// TestCustodyAssetShareOf 资产域键读面锚（constraint#41「BTC 只能用 1/3」
+// 消费面）：custody_share:<ccy> 命中、无键=nil 不设限、venue 键不互串。
+func TestCustodyAssetShareOf(t *testing.T) {
+	cons := []pgstore.CapabilityConstraint{
+		{Subject: "custody_share", Qualifier: "max", ValueNum: f64(0.34)},
+		{Subject: "custody_share@okx", Qualifier: "max", ValueNum: f64(1.0)},
+		{Subject: "custody_share:BTC", Qualifier: "max", ValueNum: f64(0.3333)},
+	}
+	if got := CustodyAssetShareOf(cons, "BTC"); got == nil || *got != 0.3333 {
+		t.Fatalf("BTC 资产键应命中: %v", got)
+	}
+	if got := CustodyAssetShareOf(cons, "USDT"); got != nil {
+		t.Fatalf("无键资产应 nil 不设限: %v", *got)
+	}
+	// venue/全局键不进资产域（BTC 键缺席时不得拿 custody_share 顶替）。
+	cons2 := []pgstore.CapabilityConstraint{
+		{Subject: "custody_share", ValueNum: f64(0.34)},
+		{Subject: "custody_share:BTC"},
+	}
+	if got := CustodyAssetShareOf(cons2, "BTC"); got != nil {
+		t.Fatalf("无数值资产键应 nil: %v", *got)
+	}
+}
+
 // TestTenorCapOf_GlobalOnly D-644 后 TenorCapOf share=全局键语义不变锚：
 // venue 键不污染全局读面（reconcile/wheel binance 域经 CustodyShareOf(binance) 取）。
 func TestTenorCapOf_GlobalOnly(t *testing.T) {

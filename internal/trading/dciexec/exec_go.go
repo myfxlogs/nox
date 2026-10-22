@@ -168,7 +168,13 @@ func (e *Executor) GoProposal(ctx context.Context, id int64) (string, error) {
 					"请喂约束 dci_*_otm_k/dci_tenor_max_days 或 σ 源可用（%v）——D-526 尾险闸 fail-closed", serr)))
 			continue
 		}
-		msg, err := try(ctx, l, *share, tenorCap,
+		// 资产域 cap 第二闸（custody_share:<ccy>——业主令「BTC 只能用 1/3」
+		// constraint#41 消费面）：venue 池份额×资产份额双闸取小；无键行=不设限。
+		eff := *share
+		if as := gate.CustodyAssetShareOf(cons, l.QtyCcy); as != nil && *as < eff {
+			eff = *as
+		}
+		msg, err := try(ctx, l, eff, tenorCap,
 			spot*gate.SigmaBoundRatio(l.OptType, sigma, k, tmax), spot, sigma, &p.ID)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("%s腿未执行：%v", l.Name, err))
