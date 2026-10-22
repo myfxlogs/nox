@@ -17,3 +17,6 @@
 | dciexec 现货参考价 venue 化复审 | `[角色:复审] dciexec 现货参考价 venue 化复审（读 STATE 本行——施工完成待复审，独立重跑机检+diff；无 skills 域）` | STATE 票表行 |
 | term_basis quoteFor venue/流动性/具名修 | `[角色:实施] term_basis quoteFor 过滤修（读 STATE 本行——venue 过滤+流动性地板+近到期剔除+合约具名；无 skills 域）` | STATE 票表新行（D-656） |
 | 经验库待归纳 high 坑正典批 | `[角色:实施] 经验库 high 坑正典批（读 STATE 本行+D-618——待归纳高危件即升条目+noxkb gen 重生；无 skills 域）` | STATE 票表新行 |
+| go 口令执行回执审计行 | `[角色:实施] go 执行回执审计行（读 STATE 本行——GoProposal 终态落审计+双轨透出；无 skills 域）` | STATE 票表新行 |
+| custody_share:BTC 资产份额判据消费面 | `[角色:实施] BTC 资产份额判据消费（读 STATE 本行——custody_share:<ccy> 键读面+covered_call sizing 双闸取小；无 skills 域）` | STATE 票表新行 |
+| 提案轨 jit 缺资归集前置（P1） | `[角色:实施] 提案轨 jit 归集前置（读 STATE 本行+D-647/D-658——GoProposal 缺资→JitSweep 复用件前置；无 skills 域）` | STATE 票表新行 |
