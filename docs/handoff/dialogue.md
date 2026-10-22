@@ -442,3 +442,5 @@
 - **业主令（原话）**：「nox-core有问题，还在修，不要上线」（同令重复两次）。
 - **实况交叉**：业主 09:5xZ 停机后，部署批 09:58Z 已自动重启过一次（镜像 09:57Z 建、迁移 1073 在产）——ens17 rx 回 603KB/s 满管、MT5 resubscribe DeadlineExceeded 刷屏、okx ticks 5min 窗缺席=饱和病灶原样复现（D-663 未施工预期内）。
 - **结论/执行**：10:5xZ 决策席 `docker stop nox-core`（unless-stopped 不回弹），rx 落 42KB/s；部署/上线全面冻结至业主令解禁；STATE 现状行+D-663 行同步修。
+- 10-22 12:2xZ 业主纠正+决策席重裁：本席收口行「部署解禁裁量在业主」被业主指错——按总纲 D-594/D-597 部署属决策席权域（业主保留域=出入金/凭据/许可条款），业主令「还在修不要上线」为前提条件令非权限让渡；D-663 已并码前提灭→决策席即裁部署（NOX_INDIV_MAX_CONNS=10+compose up），失格 1 件计档。（D-600 记失格）
+- 10-22 12:4xZ 决策席部署回执+归因翻案：D-663 上产（indiv=exec-face {trxusdt} 实证/闸键在产/MT5·okx 复通），ens17 steady 512KB/s——per-conn ss -tio 差分定谳：大头=okx 150+binance 聚合 190+gate/mt5/churn 150，indiv 原摊算 ~90KB/s 属巧合；立 D-665 收宇宙级订阅面全族。部署工具坑=deploy_sync 无 --delete 陈件炸 build（KB 正典×2 已立）。
