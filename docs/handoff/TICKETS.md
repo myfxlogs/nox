@@ -37,3 +37,4 @@
 | D-663 分层报价+订阅预算闸返修① | `[角色:实施] 分层报价+订阅预算闸返修（读 STATE 本行+文末复审注记块——阻断②残④逐条：ticker 看门狗支+死码清、indiv 包级变量 race 修、ExecFaceFn err 拒因+键缺文案分、cap<0 clamp、keydomain 归一；部署仍冻结；无 skills 域）` | STATE 票表行（退回返修①） |
 | D-663 返修②·lastGood 条件写反 | `[角色:实施] D-663 返修②（读 STATE 本行+文末二轮注记块——lastGood 更新条件反写+err 径锚测，续 wip/bn-indiv；无 skills 域）` | STATE 票表行（退回返修②） |
 - 10-22 13:2xZ [返修①广播:D-665] 退回实施席 @5b623dc16——阻断 3（REST 拍 15min 撞 paper 5min 闸→≤3min；okx/gate execface err 空集→last-good+rejects；okx/gate 执行面零预算闸→闸键三 venue 同律）+残 3，详件=STATE 本行+文末注记块。
+- 10-22 14:1xZ [返修②广播:D-665] 退回实施席 @351724e6e——单项残：gate execFaceLastGood 单字段被 spot+futures 两 loop 无同步共写（slice 竞写 panic 面；okx 单 loop 无伤）；修=lastGood 下沉 runLoop 闭包局部变量。详件=STATE 文末注记块。

@@ -1393,3 +1393,10 @@ verdict=退回返修（阻断 3+残 3——机检独立重跑全绿 build=0/exch
 残③（留痕非阻断）：markPrice perp 聚合面按 D-663 裁定保留（部署后 per-conn 复测须计入 ≤200 账）；TLS churn 票面已注未落=续件转下票；okx FUTURES instType REST 面未拍（交割集仅 exec-face 注入域——与旧 ws 面 parity 判无断供）。
 坑处置：①「REST 拍周期按票面不设闸」=立票面错判已认；②D-663 fail-safe 跨 venue 泛化丢件=同族坑第三形态（泛化丢语义——KB 检索命中既有 last-good 条目未迁移）；③新面零锚测=机检绿遮蔽老坑（测试覆盖率非 verdict 面）。
 -->
+
+<!-- 复审席 10-22 14:1xZ：D-665 返修① 二轮收口注记（worktree /opt/nox-wt/d665-r2 @351724e6e）
+verdict=退回返修②（单项残——上轮三阻断全对版，机检重跑 TestExecFaceDesired×2 绿+build 净）。
+阻断对版：①三处拍常量 15min→3min（paper 5min 闸内留余）对版；②execFaceDesired 共件 err→lastGood+rejects.Inc(execface_err) 对版（键缺不误入快照——D-663 语义迁版正确）；③IndivBudgetFn 复用同键+cap<0 clamp+sort 确定性截断+budget_err/budget_cap 计数+AlertFn over 告警对版（注册 okx_indiv/gate_indiv 三键在案）；锚测 err-保快照/cap 截断/键缺三径绿。
+单项残：gate_ws.go:47 `execFaceLastGood []string` 为 GateWebSocket 单字段——spot runLoop(:89)+futures runLoop(:96) 两 GoLoopPlain goroutine 经共享 runLoop(:167/:183) 同调 g.execSyms 并发读写该字段：slice header(ptr/len/cap 3 字)非原子竞写→torn read 可 panic；helper 注释自称「gate 两 loop 各持自快照无共享态」与实现矛盾（okx 单一 ws loop 无此伤）。修：execSyms 改签名携 lastGood 参/返，或 lastGood 下沉 runLoop 闭包局部变量——每 goroutine 一快照即注释原意。
+坑处置：fail-safe 泛化丢件上轮已修；本轮残=「共享可变状态跨 goroutine」同族坑第四形态（D-663 包级变量→字段级变量——KB 既有 race 条目命中，实施时未检同族）。
+-->
