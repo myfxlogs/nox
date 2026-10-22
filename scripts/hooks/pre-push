@@ -18,6 +18,15 @@ esac
 
 while read -r local_ref local_sha remote_ref remote_sha; do
     [ "$remote_ref" = "refs/heads/master" ] || continue
+    # B④ 红查真漏同修：refspec 变形面 fail-open——+force 前缀/全零 sha
+    # （remote 删除 master）原两查全过=放行；变形禁绝于源。
+    if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+        echo "FAIL: 远端删除 refs/heads/master 禁绝（pre-push 闸——变形 refspec 面）" >&2
+        exit 1
+    fi
+    case "$local_ref" in
+        +*|refs/tags/*|*:*) echo "FAIL: master 推送禁 refspec 变形（force/映射/tag）——refs/heads/<branch> 直推" >&2; exit 1 ;;
+    esac
     repo="$(git rev-parse --show-toplevel 2>/dev/null || echo "${GIT_DIR:-unknown}")"
     case "$repo" in
         /opt/nox)
