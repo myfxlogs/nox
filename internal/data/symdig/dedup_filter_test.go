@@ -226,8 +226,9 @@ func TestSymdigBatchAdversarial(t *testing.T) {
 	if err := llmDig(context.Background(), deps, d530Sum(syms...), time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if calls.Load() != 2 {
-		t.Fatalf("12 品种应两批 calls=%d", calls.Load())
+	// 二分续提后调用序：批1(malformed)→未覆盖 9 品种二分(4+5)→批2——calls=4。
+	if calls.Load() != 4 {
+		t.Fatalf("12 品种批1截断二分续提应 calls=4, got %d", calls.Load())
 	}
 	data, _ := os.ReadFile(inbox)
 	for _, want := range []string{"GOLD→CGOLD", "SILVER→CSILVER"} {
@@ -244,7 +245,8 @@ func TestSymdigBatchAdversarial(t *testing.T) {
 			warns++
 		}
 	}
-	if errs != 1 || warns != 0 {
-		t.Fatalf("混合序应 critical 恰一条零 warn: %v", st.alerts)
+	// 二分全捞回=提案集完整——零 critical 零 warn（完整校验语义：捞回即不报缺）。
+	if errs != 0 || warns != 0 {
+		t.Fatalf("二分续提全捞回应零告警: %v", st.alerts)
 	}
 }
