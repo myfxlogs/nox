@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"nox/internal/data/bus"
+	"nox/internal/data/fact"
 )
 
 // gateUniversePollEvery D-665：REST 宇宙拍周期（paper_mtm_tick_max_age=5min 闸对齐）。
@@ -75,8 +76,34 @@ func (g *GateWebSocket) runGateTickerPoll(ctx context.Context, publish func(bus.
 				if bid == 0 {
 					continue
 				}
-				publish(bus.Quote{Symbol: canonicalFromGate(r.Contract), Venue: VenueGate,
-					VenueSymbol: r.Contract, Bid: bid, Ask: ask, Time: time.Now(), VenueType: "perp"})
+				canonical := canonicalFromGate(r.Contract)
+				ts := time.Now()
+				publish(bus.Quote{Symbol: canonical, Venue: VenueGate,
+					VenueSymbol: r.Contract, Bid: bid, Ask: ask, Time: ts, VenueType: "perp"})
+				// D-665 返修⑤：funding 三字段经 g.emitFacts 发射——REST 拍行
+				// 消费面唯一供给（ws tickers 收窄执行面后非执行面断供实证；
+				// 镜像 gate_ws_futures.go 发射径语义——缺字段=缺省不造，
+				// FactEmitter 去重天然兼容 exec 符号双供）。
+				if g.emitFacts != nil && r.FundingRate != "" {
+					var rate float64
+					if _, err := fmt.Sscanf(r.FundingRate, "%f", &rate); err != nil {
+						log.Printf("[gate-ws] funding rate %q dirty: %v", r.FundingRate, err)
+						continue
+					}
+					fs := []fact.Fact{
+						{Kind: fact.KindFunding, Venue: VenueGate, Symbol: canonical,
+							Value: annualizeFunding(rate, fundingPeriodsPerDay(r.FundingInterval*1000)),
+							Unit:  fact.UnitPctAnnualized, Ts: ts, Src: "gate_rest_futures"},
+					}
+					if r.FundingNextApply > 0 {
+						fs = append(fs, fact.Fact{Kind: fact.KindFundingNextSettle,
+							Venue: VenueGate, Symbol: canonical, Value: r.FundingNextApply,
+							Unit: fact.UnitUnixSec, Ts: ts, Src: "gate_rest_futures"})
+					}
+					if err := g.emitFacts(ctx, fs); err != nil {
+						log.Printf("[gate-ws] universe funding emit %s: %v", r.Contract, err)
+					}
+				}
 			}
 		}
 		select {
