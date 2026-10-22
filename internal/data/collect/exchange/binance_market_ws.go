@@ -47,9 +47,13 @@ type BinanceMarketWS struct {
 	spotInfoClient *http.Client
 	validSpot      map[string]struct{}
 	infoOnce       sync.Once
-	spotInfoFetch  func(ctx context.Context, url string) (map[string]struct{}, error) // 测试注入点；nil=实拉 spotInfoURL
-	tickerEmit     map[string]time.Time                                               // D-591 S6：vol24h 每符号节流（仅 ticker 连接 goroutine 访问）
-	indexEmit      map[string]time.Time                                               // D-595 S1：index_price 每符号节流（仅 market 连接 goroutine 访问）
+	// perp 存在性闸（normalize 残件②）：validPerp=fapi exchangeInfo TRADING
+	// 集（nil=fail-open——目录缺期不阻塞采集）；perpOnce 拉一次缓存。
+	validPerp     map[string]struct{}
+	perpOnce      sync.Once
+	spotInfoFetch func(ctx context.Context, url string) (map[string]struct{}, error) // 测试注入点；nil=实拉 spotInfoURL
+	tickerEmit    map[string]time.Time                                               // D-591 S6：vol24h 每符号节流（仅 ticker 连接 goroutine 访问）
+	indexEmit     map[string]time.Time                                               // D-595 S1：index_price 每符号节流（仅 market 连接 goroutine 访问）
 	// degradedFn D-109：死流判定注入点（REST 兜底看门狗用；nil=dephealth.Degraded 生产读口）。
 	degradedFn func(key string) bool
 	// R1①：帧年龄闸——dephealth.Degraded 需连败 3 次才红，但「dial 成功→ack→
