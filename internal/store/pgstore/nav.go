@@ -187,3 +187,25 @@ func (s *Store) ListStrategyBudgets(ctx context.Context) ([]StrategyBudget, erro
 	}
 	return out, rows.Err()
 }
+
+// NavDailyNear 指定日标最近不晚于该日的分账行（30d 窗差分读面——每币种取
+// day_start<=target 的最新一行；缺行 len=0 非错误）。
+func (s *Store) NavDailyNear(ctx context.Context, target time.Time) ([]NavDailyRow, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (currency) day_start, currency, nav_usd, idle_usd, venues, computed_at
+		FROM fin_nav_daily WHERE day_start <= $1
+		ORDER BY currency, day_start DESC`, target)
+	if err != nil {
+		return nil, fmt.Errorf("nav_daily near: %w", err)
+	}
+	defer rows.Close()
+	var out []NavDailyRow
+	for rows.Next() {
+		var r NavDailyRow
+		if err := rows.Scan(&r.DayStart, &r.Currency, &r.NavUSD, &r.IdleUSD, &r.Venues, &r.ComputedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

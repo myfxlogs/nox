@@ -2297,8 +2297,14 @@ type GetOverviewBundleResponse struct {
 	NavStalePools  int32   `protobuf:"varint,37,opt,name=nav_stale_pools,json=navStalePools,proto3" json:"nav_stale_pools,omitempty"`   // 陈值池计数（USD/USDT 桶内非幽灵池，快照龄>36h）
 	NavStaleUsd    float64 `protobuf:"fixed64,38,opt,name=nav_stale_usd,json=navStaleUsd,proto3" json:"nav_stale_usd,omitempty"`        // 陈值池 equity 合计
 	NavStaleDetail string  `protobuf:"bytes,39,opt,name=nav_stale_detail,json=navStaleDetail,proto3" json:"nav_stale_detail,omitempty"` // 陈池清单（venue:vt·龄——下钻可见）
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// §12 idle 地板档语义分层（10-22：活期承接≠达标——earn 池=地板承接档独列；
+	// 8% 达成度后端直算禁前端算；idle 原义不动=未承接）。
+	PrincipalFloorCarryUsd float64 `protobuf:"fixed64,40,opt,name=principal_floor_carry_usd,json=principalFloorCarryUsd,proto3" json:"principal_floor_carry_usd,omitempty"` // earn 池活期承接合计（地板档·非达标）
+	Perf_30DAnnPct         float64 `protobuf:"fixed64,41,opt,name=perf_30d_ann_pct,json=perf30dAnnPct,proto3" json:"perf_30d_ann_pct,omitempty"`                            // 30d 净值增速年化（fin_nav_daily 差分，后端直算）
+	Perf_30DAvailable      bool    `protobuf:"varint,42,opt,name=perf_30d_available,json=perf30dAvailable,proto3" json:"perf_30d_available,omitempty"`                      // 窗内日切行缺→false（显「—」不冒 0）
+	PerfTargetAnnPct       float64 `protobuf:"fixed64,43,opt,name=perf_target_ann_pct,json=perfTargetAnnPct,proto3" json:"perf_target_ann_pct,omitempty"`                   // 目标线明示（D-030=8——达成度分母单源）
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *GetOverviewBundleResponse) Reset() {
@@ -2588,6 +2594,34 @@ func (x *GetOverviewBundleResponse) GetNavStaleDetail() string {
 		return x.NavStaleDetail
 	}
 	return ""
+}
+
+func (x *GetOverviewBundleResponse) GetPrincipalFloorCarryUsd() float64 {
+	if x != nil {
+		return x.PrincipalFloorCarryUsd
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetPerf_30DAnnPct() float64 {
+	if x != nil {
+		return x.Perf_30DAnnPct
+	}
+	return 0
+}
+
+func (x *GetOverviewBundleResponse) GetPerf_30DAvailable() bool {
+	if x != nil {
+		return x.Perf_30DAvailable
+	}
+	return false
+}
+
+func (x *GetOverviewBundleResponse) GetPerfTargetAnnPct() float64 {
+	if x != nil {
+		return x.PerfTargetAnnPct
+	}
+	return 0
 }
 
 // OverviewCritAlert 24h critical 告警明细行（全行 level 恒=critical 不复列）。
@@ -3707,7 +3741,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"amount_usd\x18\x03 \x01(\x01R\tamountUsd\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x120\n" +
 	"\x05until\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x05until\"\x1a\n" +
-	"\x18GetOverviewBundleRequest\"\xa2\x0e\n" +
+	"\x18GetOverviewBundleRequest\"\xe3\x0f\n" +
 	"\x19GetOverviewBundleResponse\x12)\n" +
 	"\x10pending_requests\x18\x01 \x01(\x05R\x0fpendingRequests\x12.\n" +
 	"\x13principal_total_usd\x18\x02 \x01(\x01R\x11principalTotalUsd\x12,\n" +
@@ -3753,7 +3787,11 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\x12true_net_uncovered\x18# \x01(\tR\x10trueNetUncovered\x12&\n" +
 	"\x0fnav_stale_pools\x18% \x01(\x05R\rnavStalePools\x12\"\n" +
 	"\rnav_stale_usd\x18& \x01(\x01R\vnavStaleUsd\x12(\n" +
-	"\x10nav_stale_detail\x18' \x01(\tR\x0enavStaleDetail\"\xa6\x01\n" +
+	"\x10nav_stale_detail\x18' \x01(\tR\x0enavStaleDetail\x129\n" +
+	"\x19principal_floor_carry_usd\x18( \x01(\x01R\x16principalFloorCarryUsd\x12'\n" +
+	"\x10perf_30d_ann_pct\x18) \x01(\x01R\rperf30dAnnPct\x12,\n" +
+	"\x12perf_30d_available\x18* \x01(\bR\x10perf30dAvailable\x12-\n" +
+	"\x13perf_target_ann_pct\x18+ \x01(\x01R\x10perfTargetAnnPct\"\xa6\x01\n" +
 	"\x11OverviewCritAlert\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12*\n" +
 	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x14\n" +

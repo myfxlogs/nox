@@ -300,6 +300,12 @@ message GetOverviewBundleResponse {
   int32 nav_stale_pools = 37;       // 陈值池计数（USD/USDT 桶内非幽灵池，快照龄>36h）
   double nav_stale_usd = 38;        // 陈值池 equity 合计
   string nav_stale_detail = 39;     // 陈池清单（venue:vt·龄——下钻可见）
+  // §12 idle 地板档语义分层（10-22：活期承接≠达标——earn 池=地板承接档独列；
+  // 8% 达成度后端直算禁前端算；idle 原义不动=未承接）。
+  double principal_floor_carry_usd = 40; // earn 池活期承接合计（地板档·非达标）
+  double perf_30d_ann_pct = 41;          // 30d 净值增速年化（fin_nav_daily 差分，后端直算）
+  bool perf_30d_available = 42;          // 窗内日切行缺→false（显「—」不冒 0）
+  double perf_target_ann_pct = 43;       // 目标线明示（D-030=8——达成度分母单源）
 }
 
 // IdleStreakState 眠钱瓦片分态（前端零算零猜——断供与健康零可判读）。
