@@ -88,6 +88,8 @@ func (g *GateWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 		g.runLoop(ctx, g.spotURLs, []string{"spot.tickers"}, gateSpotWSURL, g.spotWL, g.handleSpot, publish, nil)
 		wg.Done() // D-115：尾部非 defer——panic 重启不预支 Done
 	})
+	// D-665：宇宙面 REST 拍接管（ws 收窄执行面——同 okx/binance 律）。
+	safego.GoLoopPlain("gate_ws:universe-ticker", func() { g.runGateTickerPoll(ctx, publish) })
 	safego.GoLoopPlain("gate_ws:futures-loop", func() {
 		// 包C：futures 连接订阅面=4 频道同连接（清单/固定帧入常量函数=A14/A16 锚）。
 		g.runLoop(ctx, g.futuresURLs, gateFuturesTickerChannels, gateFuturesWSURL, g.futuresWL, g.handleFuturesDispatch, publish, gateFuturesExtraSubs())
@@ -153,6 +155,8 @@ func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channels []s
 	meter := newReconnectMeter(urls[0], g.cfg.AlertFn)
 	// subscribed 差集表为每连接状态——OnConnect 每拨号重置（重连全量重订阅语义不变）。
 	var subscribed map[string]bool
+	var execMu sync.Mutex // exec-face lastGood 互斥（InitialSubs 主 loop 与 OnAliveTick ping goroutine 双调用面——race 修）
+	var execLastGood []string
 	RunWS(ctx, WSSpec{
 		Name: "gate-ws:" + urls[0], Candidates: g.candidates(urls, native),
 		DepKey:   "gate:ws-market", // D-579：dephealth 记账键（同连接多频道一族一键）
@@ -161,7 +165,7 @@ func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channels []s
 		OnConnect: func() { subscribed = map[string]bool{} },
 		InitialSubs: func() []any {
 			// 订阅前白名单过滤——spot.tickers 对任一非法 pair 静默拒整批。
-			all := pairsD369(g.syms(), "_USDT")
+			all := pairsD369(g.execSymsNow(ctx, &execMu, &execLastGood), "_USDT")
 			pairs := wl.filter(all)
 			if dropped := len(all) - len(pairs); dropped > 0 {
 				log.Printf("[gate-ws] 订阅对过滤 dropped=%d/%d（非gate合法pair）", dropped, len(all))
@@ -177,7 +181,7 @@ func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channels []s
 		OnAliveTick: func(s Sender) {
 			var newPairs []string
 			// 差集同过白名单——非法 pair 不进 subscribed 不发帧（防静默拒批+重试循环）。
-			for _, p := range wl.filter(pairsD369(g.syms(), "_USDT")) {
+			for _, p := range wl.filter(pairsD369(g.execSymsNow(ctx, &execMu, &execLastGood), "_USDT")) {
 				if !subscribed[p] {
 					newPairs = append(newPairs, p)
 				}
@@ -246,8 +250,28 @@ func canonicalFromGate(pair string) string {
 	return strings.ReplaceAll(pair, "_", "")
 }
 
-// syms D-369 S2：gate WS 订阅符号集（env ∪ provider 动态集，连接期可增量）。
-func (g *GateWebSocket) syms() []string { return g.cfg.effectiveSymbols("gate") }
+// execSyms D-665：ws 订阅集收窄至执行面（ExecFaceVenueFn canonical→vt；
+// nil/err=空集零订非静默——宇宙面由 runGateTickerPoll REST 拍接管）。
+// execSymsFor lastGood 由 caller loop 局部快照携（返修②——两 runLoop
+// goroutine 各持自件，struct 字段共享写 race 修活）。
+// execSymsNow mutex 护 lastGood（InitialSubs 与 OnAliveTick 跨 goroutine
+// 共享快照——D-665 返修② race 对版）。
+func (g *GateWebSocket) execSymsNow(ctx context.Context, mu *sync.Mutex, lastGood *[]string) []string {
+	mu.Lock()
+	defer mu.Unlock()
+	out, last := g.execSymsFor(ctx, *lastGood)
+	*lastGood = last
+	return out
+}
+
+func (g *GateWebSocket) execSymsFor(ctx context.Context, lastGood []string) ([]string, []string) {
+	raw, last := execFaceDesired(ctx, g.cfg, "gate", lastGood)
+	out := make([]string, 0, len(raw))
+	for _, sym := range raw {
+		out = append(out, strings.ToUpper(strings.TrimSuffix(sym, "usdt"))) // canonical→裸基 pairsD369 再拼
+	}
+	return out, last
+}
 
 // pairs 符号→gate 交易对后缀拼接（BTC → BTC_USDT）。
 func pairsD369(syms []string, suffix string) []string {

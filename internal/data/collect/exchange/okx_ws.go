@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"nox/internal/platform/safego"
 	"strings"
 	"time"
 
@@ -52,7 +53,8 @@ type OKXWebSocket struct {
 	DeliverySymbolsFn func(ctx context.Context) []DeliverySub
 	// delivCanon instId→canonical 映射（subscribeArgs 每次重建；读侧在
 	// handleMessage tickers 分流）。
-	delivCanon map[string]string
+	delivCanon       map[string]string
+	execFaceLastGood []string // D-665 返修②：exec-face err 径保 last-good（loop 串行持有）
 }
 
 // NewOKXWebSocket 创建 OKX WS 采集器（NOX_CEX_WS_BASE 置位→经 cex-proxy /okxws 前缀）。
@@ -82,11 +84,11 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 		DataIdle:  o.dataIdle, // D-154：业务帧窗（默认 quoteWSDataIdle）
 		OnConnect: func() { subscribed = map[string]bool{} },
 		InitialSubs: func() []any {
-			return []any{map[string]any{"op": "subscribe", "args": o.subscribeArgs(ctx, o.syms(), subscribed, quarantined)}}
+			return []any{map[string]any{"op": "subscribe", "args": o.subscribeArgs(ctx, o.execSyms(ctx), subscribed, quarantined)}}
 		},
 		// provider 符号集变化 → ping tick 差集补订（服务端拒则读报错走重连）
 		OnAliveTick: func(s Sender) {
-			if args := o.subscribeArgs(ctx, o.syms(), subscribed, quarantined); len(args) > 0 {
+			if args := o.subscribeArgs(ctx, o.execSyms(ctx), subscribed, quarantined); len(args) > 0 {
 				_ = s.Send(map[string]any{"op": "subscribe", "args": args})
 			}
 		},
@@ -96,6 +98,7 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 		OnFrame:     func(data []byte) bool { return o.handleMessage(ctx, data, publish) },
 		OnReconnect: meter.record,
 	})
+	safego.GoLoopPlain("okx-ws:universe-ticker", func() { o.runOKXTickerPoll(ctx, publish) }) // D-665 宇宙面 REST 拍接管
 }
 
 // subscribeArgs 构造订阅 args（D-369 S2：subscribed 集跟踪，ping 期差集增量订阅；
@@ -258,14 +261,6 @@ type wsMsg struct {
 		InstType string `json:"instType"` // D-166：私有流 subscribe ack 键分（orders SWAP/SPOT 各证）
 	} `json:"arg"`
 	Data []map[string]any `json:"data"`
-}
-
-// syms D-369 S2：okx WS 订阅符号集（env ∪ provider 动态集，连接期可增量）。
-func (o *OKXWebSocket) syms() []string { return o.cfg.effectiveSymbols("okx") }
-
-// SetFactEmit 注入 fact 发射口（wiring 期；先于 Run）。
-func (o *OKXWebSocket) SetFactEmit(fn func(ctx context.Context, fs []fact.Fact) error) {
-	o.emitFacts = fn
 }
 
 // SetPulseFn 注入活性脉冲打点口（D-155 方案A；wiring 期先于 Run；nil 安全）。

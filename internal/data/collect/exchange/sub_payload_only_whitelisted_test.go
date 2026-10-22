@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -63,9 +64,10 @@ func d537GateWSTestable(cfg Config) *GateWebSocket {
 func TestD537_SubPayloadOnlyWhitelisted(t *testing.T) {
 	rest := d537DirREST(t, []string{"BTC_USDT", "ETH_USDT"}, []string{"BTC_USDT"})
 	cfg := Config{
-		Symbols:     []string{"BTC", "COPPER", "牛来"},
-		GateBaseURL: rest.URL,
-		Client:      rest.Client(),
+		ExecFaceVenueFn: testExecFace("BTC", "COPPER", "牛来"),
+		Symbols:         []string{"BTC", "COPPER", "牛来"},
+		GateBaseURL:     rest.URL,
+		Client:          rest.Client(),
 	}
 	g := d537GateWSTestable(cfg)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -90,7 +92,7 @@ func TestD537_SubPayloadOnlyWhitelisted(t *testing.T) {
 // TestD537_RestFailFallbackUnfiltered 目录 REST 失败（死端点）→ 从未成功=不过滤，
 // payload=全集（回退现状不放大故障面）。
 func TestD537_RestFailFallbackUnfiltered(t *testing.T) {
-	cfg := Config{Symbols: []string{"BTC", "COPPER"}, GateBaseURL: "http://127.0.0.1:1", Client: &http.Client{Timeout: 300 * time.Millisecond}}
+	cfg := Config{ExecFaceVenueFn: testExecFace("BTC", "COPPER"), Symbols: []string{"BTC", "COPPER"}, GateBaseURL: "http://127.0.0.1:1", Client: &http.Client{Timeout: 300 * time.Millisecond}}
 	g := d537GateWSTestable(cfg)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -127,6 +129,15 @@ func TestD537_DiffResubFiltered(t *testing.T) {
 	rest := d537DirREST(t, []string{"BTC_USDT", "ETH_USDT"}, nil)
 	prov := &atomic.Value{}
 	cfg := Config{
+		ExecFaceVenueFn: func(ctx context.Context, venue string) (map[string]string, error) {
+			m := map[string]string{"btcusdt": "spot"}
+			if v, ok := prov.Load().([]string); ok {
+				for _, s := range v {
+					m[strings.ToLower(s)+"usdt"] = "spot"
+				}
+			}
+			return m, nil
+		},
 		Symbols:     []string{"BTC"},
 		SymProvider: d537Provider{set: prov},
 		GateBaseURL: rest.URL,
@@ -182,5 +193,17 @@ func TestD537_DiffResubFiltered(t *testing.T) {
 			t.Fatalf("纯非法新增应零差集帧: %v", got)
 		}
 	case <-time.After(400 * time.Millisecond):
+	}
+}
+
+// testExecFace D-665 夹具：执行面集=env 符号 canonical 化（ws 收窄执行面后
+// 测试同域注入——nil fn=空集语义属生产面）。
+func testExecFace(symbols ...string) func(ctx context.Context, venue string) (map[string]string, error) {
+	return func(ctx context.Context, venue string) (map[string]string, error) {
+		out := map[string]string{}
+		for _, s := range symbols {
+			out[strings.ToLower(s)+"usdt"] = "spot"
+		}
+		return out, nil
 	}
 }

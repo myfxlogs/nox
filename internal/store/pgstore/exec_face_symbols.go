@@ -12,9 +12,9 @@ import (
 	"strings"
 )
 
-// ExecFaceBinanceSymbols 执行面 binance 腿集（map[streamSym]venueType——
-// 两腿异面同 canonical 罕见但可能：perp 优先（执行腿鲜度需求强）。
-func (s *Store) ExecFaceBinanceSymbols(ctx context.Context) (map[string]string, error) {
+// ExecFaceVenueSymbols 执行面指定 venue 腿集（map[streamSym]venueType——
+// D-665 泛化：okx/gate 同律收窄）。perp 优先（执行腿鲜度需求强）。
+func (s *Store) ExecFaceVenueSymbols(ctx context.Context, venue string) (map[string]string, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT canonical_buy, venue_buy, venue_type_buy, canonical_sell, venue_sell, venue_type_sell
 		FROM xasset_allow_combos
@@ -25,8 +25,8 @@ func (s *Store) ExecFaceBinanceSymbols(ctx context.Context) (map[string]string, 
 	}
 	defer rows.Close()
 	out := map[string]string{}
-	add := func(canonical, venue, vt string) {
-		if venue != "binance" || canonical == "" {
+	add := func(canonical, v, vt string) {
+		if v != venue || canonical == "" {
 			return
 		}
 		sym := strings.ToLower(keydomain.MarketCanonical(canonical)) // 残⑤方言归一（XAG_USDT→xagusdt——canonical 第四形态坑）
@@ -53,7 +53,7 @@ func (s *Store) ExecFaceBinanceSymbols(ctx context.Context) (map[string]string, 
 	// 原生 venue 形去尾缀到 canonical 域，vt 判 spot/perp）。
 	legRows, err := s.pool.Query(ctx, `
 		SELECT symbol, venue_type FROM position_legs
-		WHERE venue_key='binance' AND phase='open'`)
+		WHERE venue_key=$1 AND phase='open'`, venue)
 	if err != nil {
 		return nil, fmt.Errorf("exec_face open legs: %w", err)
 	}
@@ -63,7 +63,13 @@ func (s *Store) ExecFaceBinanceSymbols(ctx context.Context) (map[string]string, 
 		if err := legRows.Scan(&sym, &vt); err != nil {
 			return nil, err
 		}
-		add(strings.ToUpper(sym), "binance", vt)
+		add(strings.ToUpper(sym), venue, vt)
 	}
 	return out, legRows.Err()
+}
+
+// ExecFaceBinanceSymbols 执行面 binance 腿集（D-663 原签名沿——D-665 泛化后
+// 薄壳兼容器）。
+func (s *Store) ExecFaceBinanceSymbols(ctx context.Context) (map[string]string, error) {
+	return s.ExecFaceVenueSymbols(ctx, "binance")
 }

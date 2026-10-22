@@ -178,17 +178,18 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 	// perp bookTicker 切 !bookTicker 聚合流——D-531 取证=binance 上游
 	// 对逐符号高突发订阅短窗杀（分片/路径/源IP 全排除），E1 实测聚合流
 	// 单订阅存活 ≥10min 零断；D-529 双拆随聚合流天然单连接退役。
-	safego.GoLoopPlain("binance_market_ws:perp-public", func() {
-		b.runLoop(ctx, b.publicCands, "perp", "bookTicker", publish, mktWSDataIdle)
-		wg.Done() // D-115：尾部非 defer——panic 重启不预支 Done（计数器只随逻辑循环终结 -1）
+	// D-665：perp 宇宙面聚合流→REST 拍（见 univpoll 件；indiv 执行腿不动）。
+	safego.GoLoopPlain("binance_market_ws:univ-poll", func() {
+		b.runUniversePoll(ctx, publish)
+		wg.Done()
 	})
 	safego.GoLoopPlain("binance_market_ws:perp-market", func() {
 		b.runLoop(ctx, b.marketCands, "perp", "markPrice", publish, mktWSDataIdle)
 		wg.Done()
 	})
+	// D-665：spot 宇宙面同收窄——spot exchangeInfo 缓存保留（indiv spotOK 判用）。
 	safego.GoLoopPlain("binance_market_ws:spot", func() {
-		b.ensureSpotInfo(ctx)                                         // D-551 S2：首连前建立现货有效符号缓存
-		b.runLoop(ctx, b.spotCands, "spot", "bookTicker", publish, 0) // spot 低频阈不动（票面禁线）
+		b.ensureSpotInfo(ctx)
 		wg.Done()
 	})
 	// 24hrTicker 改 REST 15min 轮询（D-663 补正①——!ticker@arr ~300KB/帧
