@@ -36,3 +36,4 @@
 | 跨所划转轨可行性复审 | `[角色:复审] 跨所划转轨可行性复审（读 STATE 本行——报告 docs/能力账/cross-venue-transfer-feasibility-2026-10-22.md 独立核验+径在/径缺裁定+条件请求面复核；无 skills 域）` | STATE 票表行（施工完→待复审） |
 | D-663 分层报价+订阅预算闸返修① | `[角色:实施] 分层报价+订阅预算闸返修（读 STATE 本行+文末复审注记块——阻断②残④逐条：ticker 看门狗支+死码清、indiv 包级变量 race 修、ExecFaceFn err 拒因+键缺文案分、cap<0 clamp、keydomain 归一；部署仍冻结；无 skills 域）` | STATE 票表行（退回返修①） |
 | D-663 返修②·lastGood 条件写反 | `[角色:实施] D-663 返修②（读 STATE 本行+文末二轮注记块——lastGood 更新条件反写+err 径锚测，续 wip/bn-indiv；无 skills 域）` | STATE 票表行（退回返修②） |
+- 10-22 13:2xZ [返修①广播:D-665] 退回实施席 @5b623dc16——阻断 3（REST 拍 15min 撞 paper 5min 闸→≤3min；okx/gate execface err 空集→last-good+rejects；okx/gate 执行面零预算闸→闸键三 venue 同律）+残 3，详件=STATE 本行+文末注记块。
