@@ -1481,4 +1481,10 @@ func TestSpotPriceVenue(t *testing.T) {
 	if _, err := e2.spotPriceVenue(context.Background(), "okx", "BTCUSDT"); !errors.Is(err, errSpotNoBase) {
 		t.Fatalf("okx 凭据缺应 errSpotNoBase: %v", err)
 	}
+	// 未知 venue 且 APIBase 在位→errSpotNoBase 无条件（复审退回锚——
+	// 禁静默走 binance 径取价，注册表查无 venue 即哨兵）。
+	e3 := &Executor{Store: newFake(), Client: srv.Client(), APIBase: srv.URL + "/api"}
+	if _, err := e3.spotPriceVenue(context.Background(), "kraken", "BTCUSDT"); !errors.Is(err, errSpotNoBase) {
+		t.Fatalf("未知 venue 应 errSpotNoBase: %v", err)
+	}
 }
