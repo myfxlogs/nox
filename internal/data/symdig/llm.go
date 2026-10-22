@@ -74,33 +74,59 @@ func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error
 	var lastStop string
 	var anyTruncMalformed bool // ③荐位：任一批 max_tokens+malformed 累计——
 	// 票面原意「任一批截断→error」（原 lastStop 仅最后 malformed 批=混合序降级 warn 病灶）
-	for bi := 0; bi < len(picks); bi += symdigLLMBatch {
-		end := bi + symdigLLMBatch
-		if end > len(picks) {
-			end = len(picks)
-		}
-		batch := picks[bi:end]
+	var digBatch func(batch []pgstore.SymdigFinding, depth int) (malformed bool)
+	digBatch = func(batch []pgstore.SymdigFinding, depth int) (malformed bool) {
 		payload, _ := json.Marshal(batch)
 		var aiText strings.Builder
 		res, err := deps.Run(ctx, deps.Client, nil, nil, symdigSystemPrompt,
 			[]analyst.Message{analyst.TextContent("user", "未配对/错配品种清单：\n```json\n"+string(payload)+"\n```")},
 			analyst.LoopCallbacks{OnDelta: func(t string) { aiText.WriteString(t) }})
 		if err != nil {
-			return fmt.Errorf("analyst run batch %d: %w", bi/symdigLLMBatch+1, err)
+			// run 败不得静默出零提案（复审退回①）——置结案标走 warn 告警面。
+			log.Printf("[symdig] analyst run 批败: %v", err)
+			lastMalformed, lastStop = true, "run_error"
+			return true
 		}
 		props, malformed := parseProposals(aiText.String())
 		all = append(all, props...)
 		for _, p := range props {
 			covered[p.Symbol] = true
 		}
-		if malformed {
-			lastMalformed, lastStop = malformed, res.StopReason
-			if res.StopReason == "max_tokens" {
-				anyTruncMalformed = true
-			}
-			log.Printf("[symdig] 批 %d 输出异常（%s）——%d/%d 品种提案落空（续批照跑）",
-				bi/symdigLLMBatch+1, res.StopReason, len(batch)-countCovered(props, batch), len(batch))
+		if !malformed {
+			return false
 		}
+		// 截断批二分续提（10-22 病灶：大批结构化输出截断→尾元素不可救失——
+		// 已容忍解析的保留，只对未覆盖品种半批重调〔短输出不撞截断〕；
+		// 全捞回=完整不告警，仍 malformed=如实累计不递归降级）。
+		if depth == 0 && len(batch) > 1 {
+			var uncovered []pgstore.SymdigFinding
+			for _, r := range batch {
+				if !covered[r.Symbol] {
+					uncovered = append(uncovered, r)
+				}
+			}
+			if len(uncovered) > 1 {
+				mid := len(uncovered) / 2
+				log.Printf("[symdig] 批输出异常（%s）——未覆盖 %d 品种二分续提", res.StopReason, len(uncovered))
+				if !digBatch(uncovered[:mid], depth+1) && !digBatch(uncovered[mid:], depth+1) {
+					return false // 二分全捞回=提案集完整
+				}
+			}
+		}
+		lastMalformed, lastStop = malformed, res.StopReason
+		if res.StopReason == "max_tokens" {
+			anyTruncMalformed = true
+		}
+		log.Printf("[symdig] 批输出异常（%s）——%d/%d 品种提案落空（续批照跑）",
+			res.StopReason, len(batch)-countCovered(props, batch), len(batch))
+		return true
+	}
+	for bi := 0; bi < len(picks); bi += symdigLLMBatch {
+		end := bi + symdigLLMBatch
+		if end > len(picks) {
+			end = len(picks)
+		}
+		digBatch(picks[bi:end], 0)
 	}
 	// 结案：任一批 max_tokens+malformed → error；其余 malformed → warn（两文案分级不变）。
 	if lastMalformed || anyTruncMalformed {
