@@ -214,7 +214,7 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdD
 			// 组合行 canonical=裸形（TRX）而 ticks 实写键=全形（TRXUSDT），裸形键
 			// 直进 tick 查询必 MISS（TRX 簿 03:35 停写实锤）——acctSyms NJK 命中
 			// 在流实写键，命中退 mtCanon 兜底（无在流 tick 账户行为不变=仍 skip）。
-			emit(monitorPair{cexVenue: cexVenue, sym: sym, pair: cexCanon + "-" + bare,
+			emit(monitorPair{cexVenue: cexVenue, sym: sym, pair: keydomain.BookCanonical(cexCanon) + "-" + bare,
 				exSym: demandExSym(keydomain.BareOf(v), mtCanon, ""), mtVenueKey: v})
 			emitted++
 		}

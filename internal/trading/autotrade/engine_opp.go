@@ -160,7 +160,7 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 		// pair 键以 monitor 工具存储现值为准（"XAUUSDT-XAU"/"PAXGUSDT-XAU"，S2 钉死）：
 		// 首段=CEX 腿 canonical，第二段=MT 腿 canonical 去 USD 后缀——两向同构。
 		// canonical_sell 空（同 canonical 组合）→ 回退裸 canonical 旧语义。
-		pairKey := cexCanon + "-" + strings.TrimSuffix(mtCanon, "USD")
+		pairKey := keydomain.BookCanonical(cexCanon) + "-" + strings.TrimSuffix(mtCanon, "USD")
 		if opp.CanonicalSell == nil || *opp.CanonicalSell == "" {
 			pairKey = opp.Canonical
 		}

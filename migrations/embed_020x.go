@@ -210,3 +210,6 @@ var ExecVenueCapabilitySQL string // D-651 A 段：venue 执行面归能力账�
 
 //go:embed 1071_personal_positions_venue.sql
 var PersonalPositionsVenueSQL string // STATE 行49：venue 列转正（note 词解析退役）
+
+//go:embed 1072_monitor_pair_canon.sql
+var MonitorPairCanonSQL string // monitor 簿 pair 键归一·存量回填（S2 方言 canonical 病灶）
