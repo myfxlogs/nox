@@ -35,8 +35,8 @@ ops_disk_guard 日跑只管 builder cache>24h——tagged 废镜像（旧版本/
 已清（常规面可自主）：`docker builder prune -af` →1.6G + `docker rmi golang:1.24-alpine`（1.26 已取代）→0.4G，76%→**73%** 落阈下。
 
 待业主裁（非 NOX 域/破坏面）：
-- arb-backups 2.4G + arb 卷/镜像（备份停 10-12、容器零存活=项目死）
-- /opt/ant + ant_* 卷 5.6G（死项目）
+- arb-backups 2.4G + arb-core 镜像（arb=NOX 前任项目，10-12 切流——已归档本机后清毕）
+- /opt/ant 2.5G + ant_nats/ant_redis 卷（死项目——已归档后清毕；**ant_postgres_data 例外：实为 alphaforge 活 pg 卷，禁删**）
 - nox-postgres-test Exited 容器+1.1G 卷+postgres:16 镜像 642M（测试台退役则清）
 - nox-pgdata 11G 结构性增长——ticks 保留口径治理件（非本次域）
 
