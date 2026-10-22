@@ -16,6 +16,9 @@ EnvironmentFile=/etc/alert-bridge.env
 # WorkingDirectory=/opt/nox 使分诊会话落仓库根（skills/草案径全可及）。
 Environment="PATH=/home/mluser/.npm-global/bin:/home/mluser/.local/bin:/usr/local/bin:/usr/bin:/bin"
 WorkingDirectory=/opt/nox
+# D-667 族：ReadWritePaths 目录缺失=NAMESPACE 死（10-21 报告目录缺 30h 停摆实证）——
+# ExecStartPre 先建写面目录兜底（目录清理/换机同型复发防）。
+ExecStartPre=/bin/mkdir -p /var/lib/alert-bridge /opt/nox/docs/handoff "/opt/nox/docs/报告" /opt/nox/docs/经验库
 ExecStart=/usr/bin/python3 /opt/nox/tools/alert-bridge/bridge.py
 Restart=always
 RestartSec=10
