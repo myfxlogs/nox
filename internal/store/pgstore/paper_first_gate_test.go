@@ -57,6 +57,26 @@ func TestPaperFirstGate_EndToEnd(t *testing.T) {
 	if ok || why == "" {
 		t.Fatal("未注册模板应拒")
 	}
+	// ⑦探针 SQL 类型锚（42883 回归——gocall #1947：text=text[] 比较撞
+	// operator does not exist）：非豁免模板实探 unnest 径不撞类型错；
+	// 插匹配结构行→true 锚证匹配语义在（非仅不报错）。
+	if _, err := st.HasPaperEvidence(ctx, "funding_carry"); err != nil {
+		t.Fatalf("探针 SQL 类型错回归: %v", err)
+	}
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO paper_spot_carry (venue_a,venue_b,venue_type_a,venue_type_b,symbol,side,
+		 entry_funding_ann,qty_usd,last_funding_ann,status,exit_ts,structure)
+		 VALUES ('binance','okx','perp','perp','PROBE','long',0,1,0,'exited',now(),'perp_perp')`); err != nil {
+		t.Fatalf("证据行插入: %v", err)
+	}
+	ok2, err := st.HasPaperEvidence(ctx, "funding_carry")
+	if err != nil || !ok2 {
+		t.Fatalf("匹配结构证据行应 ok: ok=%v err=%v", ok2, err)
+	}
+	if _, err := st.Pool().Exec(ctx,
+		`DELETE FROM paper_spot_carry WHERE symbol='PROBE'`); err != nil {
+		t.Fatalf("探针行清场: %v", err)
+	}
 	// ⑥payoff_class NOT NULL：新插行缺 payoff_class 撞约束
 	if _, err := st.Pool().Exec(ctx,
 		`INSERT INTO fin_opp_template (id, mechanism, net_apr) VALUES ('probe_null','m','n')`); err == nil {
