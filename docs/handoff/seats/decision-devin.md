@@ -1,1 +1,1 @@
-2026-10-22 10:5xZ 决策席巡检+业主令 nox-core 停机执行+D-663 派单（devin-cli session）
+2026-10-22 22:2xZ 决策席 双报审复核——xa-fix 返修①→退回②、paper-depth→照准补记+呆行清账

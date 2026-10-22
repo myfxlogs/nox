@@ -40,3 +40,4 @@
 - 10-22 14:1xZ [返修②广播:D-665] 退回实施席 @351724e6e——单项残：gate execFaceLastGood 单字段被 spot+futures 两 loop 无同步共写（slice 竞写 panic 面；okx 单 loop 无伤）；修=lastGood 下沉 runLoop 闭包局部变量。详件=STATE 文末注记块。
 
 [角色:实施] D-665 返修③（读 STATE 本行+文末产验注记块——okx univpoll GoLoopPlain 序位移前 RunWS 前；skills/bn-fapi-market+bn-market）
+- 10-22 22:2xZ [返修②广播:xasset-采集排障] 退回实施席 @5f64007b5——阻断 1（MonitorFaceSymbols net∈[8,300] 字面量→参化签名+wire 传 scan.PaperCfd*）+残 1（MonitorFaceFn 读败两处 merr==nil 静默→rejects.Inc monitorface_err+三行注册）；照准件与详件=STATE 本行+文末注记块。
