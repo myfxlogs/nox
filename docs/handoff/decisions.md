@@ -997,3 +997,4 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **裁定**：①主解=分层报价——indiv 集收窄执行面（armed∪在仓∪毕业腿）+订阅预算闸（app_config 键硬顶+rejects 计数+告警；键缺=indiv 显式关）；设计稿 docs/D663-分层报价与数据面管道预算设计.md，**待复审席设计核验（D-251）后开工**。②不加带宽——分层后 steady ≤200KB/s=5Mbps 余量 >60%，升级条件请求不立。③带宽合同规格核对（承诺 vs 实得 5Mbps）=业主一句话事，不阻塞主解。④nox-core 停机窗收 123 commits 部署积压+本票同车部署后重启；重启后 30min 三面盯守。
 - **反证锚**：部署后 7 天内出现非执行面符号需 <5s 报价方能成立/避损的成交或评估实证 → 分级判据错，本席收回重裁。
 - **过期自查**：部署后首日报 ens17 入向实测+okx/MT5 自愈态；7 日复反证锚。
+- **复审补正（10-22 复审核验后照准）**：①补主刀——`!ticker@arr` 聚合流（~300KB/帧@1s，REST 同构载荷实测）退役改 `/fapi/v1/ticker/24hr` 15min 轮询（下游 vol24h 消费全 ≥15min 判据=零鲜度损失；D-004 例外举证=链路硬顶实证）；②审项 C 更正——markprice.go:55 系聚合帧过滤非逐符号扇出，无工事、过滤集保宽口径（markPrice facts 喂发现面）；③执行面表源销号=`xasset_allow_combos.tier='armed'`∪`carry_graduations.status='approved'`∪在仓 open；④预算闸 cap 计 desired 集非瞬时连接；⑤nox-core 已重启在跑（§9 停机态描述过期）。
