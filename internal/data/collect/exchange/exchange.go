@@ -76,6 +76,10 @@ type Config struct {
 	// ExecFaceVenueFn D-665 泛化件：执行面集按 venue 取（okx/gate 同律收窄——
 	// 返回 map[canonical]venueType；nil=该 venue 宇宙面 REST 拍接管 ws 零订）。
 	ExecFaceVenueFn func(ctx context.Context, venue string) (map[string]string, error)
+	// MonitorFaceFn D-663 族续：xasset-monitor 观测集（fin_carry_universe
+	// 达标行——armed∪毕业∪在仓**先占额**、监控集填余〔同闸竞争监管序〕。
+	// map[canonical]venueType（carry 腿=perp 侧盯）。
+	MonitorFaceFn func(ctx context.Context) (map[string]string, error)
 	// IndivBudgetFn D-663 订阅预算闸：返回 (cap, ok, err)——ok=false&&err=nil=键缺
 	// →indiv 显式关+告警（预算未声明=不启动该面，显式不静默）；
 	// err 支=读败非键缺——rejects 计数+保 desired 不误关（瞬态 DB 错）。

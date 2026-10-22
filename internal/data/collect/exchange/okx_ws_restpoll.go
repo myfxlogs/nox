@@ -98,8 +98,8 @@ func (o *OKXWebSocket) SetFactEmit(fn func(ctx context.Context, fs []fact.Fact) 
 }
 
 func init() {
-	rejects.Register("okx_indiv", "execface_err", "budget_err", "budget_cap")
-	rejects.Register("gate_indiv", "execface_err", "budget_err", "budget_cap")
+	rejects.Register("okx_indiv", "execface_err", "budget_err", "budget_cap", "monitorface_err")
+	rejects.Register("gate_indiv", "execface_err", "budget_err", "budget_cap", "monitorface_err")
 }
 
 // execFaceDesired D-665 返修②③：venue exec 集取径——ExecFaceVenueFn err=
@@ -116,10 +116,29 @@ func execFaceDesired(ctx context.Context, cfg Config, venue string, lastGood []s
 		rejects.Inc(rejects.Key{Face: venue + "_indiv", Gate: "execface_err"})
 		return lastGood, lastGood
 	}
-	out := make([]string, 0, len(face))
+	// 占额序=exec 先、monitor 填余（armed/在仓腿不被观测集挤掉——返修①修）。
+	exec := make([]string, 0, len(face))
 	for sym := range face {
-		out = append(out, sym)
+		exec = append(exec, sym)
 	}
+	sort.Strings(exec)
+	var mon []string
+	if cfg.MonitorFaceFn != nil {
+		mset, merr := cfg.MonitorFaceFn(ctx)
+		if merr != nil {
+			rejects.Inc(rejects.Key{Face: venue + "_indiv", Gate: "monitorface_err"}) // 返修②残随修：读败如实计非静默缩 desired
+		} else {
+			for sym, v := range mset {
+				if v == venue { // 监控观测集按 venue 分流（carry 腿=perp 侧盯）
+					if _, dup := face[sym]; !dup {
+						mon = append(mon, sym)
+					}
+				}
+			}
+			sort.Strings(mon)
+		}
+	}
+	out := append(exec, mon...)
 	lastGood = out
 	if cfg.IndivBudgetFn == nil {
 		return out, lastGood
@@ -133,11 +152,10 @@ func execFaceDesired(ctx context.Context, cfg Config, venue string, lastGood []s
 	} else if cap < 0 {
 		cap = 0
 	} else if len(out) > int(cap) {
-		sort.Strings(out)
-		out = out[:cap]
+		out = out[:cap] // 序截断保 exec 先占（monitor 集尾部优先让额）
 		rejects.Inc(rejects.Key{Face: venue + "_indiv", Gate: "budget_cap"})
 		if cfg.AlertFn != nil {
-			cfg.AlertFn("warn", fmt.Sprintf("[%s-ws] exec desired %d 超预算 cap=%d——超出符号不建订阅（留 REST 拍覆盖）", venue, len(face), cap))
+			cfg.AlertFn("warn", fmt.Sprintf("[%s-ws] desired %d 超预算 cap=%d——监控集让额于 exec 先占", venue, len(exec)+len(mon), cap))
 		}
 	}
 	return out, lastGood

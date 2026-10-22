@@ -79,3 +79,20 @@ func TestIndivDesired_ExecFaceErrKeepsLastGood(t *testing.T) {
 		t.Fatalf("err 径应保 last-good desired 非空: %v", d)
 	}
 }
+
+// 返修①锚：cap 截断时监控集让额于 exec 先占（armed 腿不被观测集挤掉）。
+func TestIndivDesired_MonitorYieldsExec(t *testing.T) {
+	b := &BinanceMarketWS{cfg: Config{
+		ExecFaceFn: func(ctx context.Context) (map[string]string, error) {
+			return map[string]string{"zzzexec": "perp", "aaaexec": "perp"}, nil
+		},
+		MonitorFaceFn: func(ctx context.Context) (map[string]string, error) {
+			return map[string]string{"bbmon": "binance"}, nil
+		},
+		IndivBudgetFn: func(ctx context.Context) (int64, bool, error) { return 2, true, nil },
+	}}
+	d, _, over, _, _ := b.indivDesiredSet(context.Background(), "perp", nil)
+	if !over || len(d) != 2 || !d["zzzexec"] || !d["aaaexec"] {
+		t.Fatalf("cap=2 应两 exec 占满、monitor 让额: %v over=%v", d, over)
+	}
+}

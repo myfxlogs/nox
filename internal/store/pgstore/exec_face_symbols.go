@@ -73,3 +73,31 @@ func (s *Store) ExecFaceVenueSymbols(ctx context.Context, venue string) (map[str
 func (s *Store) ExecFaceBinanceSymbols(ctx context.Context) (map[string]string, error) {
 	return s.ExecFaceVenueSymbols(ctx, "binance")
 }
+
+// MonitorFaceSymbols xasset-monitor 观测集（fin_carry_universe **达标行**——
+// derive_inputs.go 同阈：structure 两型+note 空+net∈[minNet,maxNet] 参化
+// 单源〔调用方传 scan.PaperCfdOpenNetPct/PaperCfdMaxNetPct——返修②字面量
+// 双源修〕）。与执行面集分层：订阅占额序=exec 先、monitor 填余
+// （armed/在仓腿不被监控集挤掉=返修①优先占额修）。
+func (s *Store) MonitorFaceSymbols(ctx context.Context, minNet, maxNet float64) (map[string]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT canonical, cex_venue FROM fin_carry_universe
+		WHERE structure IN ('long_cfd_short_perp','short_cfd_long_perp')
+		  AND note = '' AND net_annual_pct >= $1 AND net_annual_pct <= $2`, minNet, maxNet)
+	if err != nil {
+		return nil, fmt.Errorf("monitor_face universe: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var canon, venue string
+		if err := rows.Scan(&canon, &venue); err != nil {
+			return nil, err
+		}
+		if venue == "gate" || venue == "okx" || venue == "binance" {
+			sym := strings.ToLower(keydomain.MarketCanonical(canon))
+			out[sym] = venue // canonical→stream 形同 add() 归一径
+		}
+	}
+	return out, rows.Err()
+}
