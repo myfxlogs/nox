@@ -235,6 +235,10 @@ func (f *fakeMtmPaperStore) AnchorPaperEntryBasis(_ context.Context, id int64, b
 	}
 	return false, nil
 }
+func (f *fakeMtmPaperStore) InsertAlertDedup(_ context.Context, level, msg string, _ time.Duration) error {
+	f.alerts = append(f.alerts, level+"|"+msg)
+	return nil
+}
 func (f *fakeMtmPaperStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
 	f.alerts = append(f.alerts, level+"|"+msg) // D-144：闸/哨兵断言面
 	return nil

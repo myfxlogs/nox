@@ -131,10 +131,19 @@ func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, 
 	// 毕业取证病灶修（10-15：多行 est_fee∈−2.5~−39）：费为负=模型自相矛盾
 	// （monitor 簿 entry_basis 负值曾被当 spread 分量直接喂入）→ fail-closed
 	// 拒开仓+warn，历史负行注记不改判据。
+	// 签名分级（10-22 XPD 实证：簿鲜+持续真负基差=真市况非簿异常——spread 非 nil
+	// =RowNear 命中簿在 maxGap 内鲜，负 fee 只可能由负 spread 灌入；簿陈/伪值支原签名）。
 	if p.EstRoundTripFeeUSD != nil && *p.EstRoundTripFeeUSD < 0 {
-		_ = st.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
-			"[paper] est_fee 负值拒开仓：%s %s fee=%.4f（簿/费率面异常如实记）",
-			r.Canonical, side, *p.EstRoundTripFeeUSD))
+		if spread != nil { // 固定文案 24h dedup 降噪——fee 变值走 log 不入 dedup 键
+			log.Printf("[paper] est_fee 负基差经济拒：%s %s fee=%.4f", r.Canonical, side, *p.EstRoundTripFeeUSD)
+			_ = st.InsertAlertDedup(ctx, "warn", fmt.Sprintf(
+				"[paper] est_fee 负基差经济拒开仓：%s %s（簿鲜负基差持续——经济拒非簿异常，fee 值见日志）",
+				r.Canonical, side), 24*time.Hour)
+		} else {
+			_ = st.InsertAlert(ctx, nil, "warn", fmt.Sprintf(
+				"[paper] est_fee 负值拒开仓：%s %s fee=%.4f（簿/费率面异常如实记）",
+				r.Canonical, side, *p.EstRoundTripFeeUSD))
+		}
 		return nil
 	}
 	return st.InsertPaperSpotCarry(ctx, p)
