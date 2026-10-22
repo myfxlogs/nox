@@ -120,8 +120,7 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 			continue
 		}
 		if len(r.Missing) == 0 {
-			// dci 族 venue 参化/earn_apr_lending 按有 USDT 报价行的 rail venue
-			// 各出独立提案（报价所取 venue 如实写提案）；其余族照旧 binance 单 venue。
+			// dci/earn 族 venue 参化各出独立提案（报价所取 venue 如实写提案）；其余照旧 binance 单 venue。
 			venues := []string{"binance"}
 			var venueAPR map[string]float64
 			if _, ok := gate.ExecTemplates[r.TemplateID]; ok {
@@ -170,21 +169,22 @@ func RunOnce(ctx context.Context, st *pgstore.Store, capitalBase, perStrategyCap
 				if !earnPreGate(ctx, st, r.TemplateID, venue) { // earn 前提闸（run_venue.go 注⑦判据）
 					continue
 				}
-				// earn_apr_lending 提案 venue=报价所取 venue——apr/证源随 venue
-				// 换（跨 venue 顶档价不贴别所提案，执行轨按 venue 路由不悬空）。
+				// earn_apr_lending 提案 venue=报价所取 venue（跨所顶档价不贴别所提案）。
 				rv := r
 				if va, ok := venueAPR[venue]; ok {
 					rv.APR = &va
 					rv.GrossEvidence = fmt.Sprintf("fin_cex_earn_apr %s USDT 最新行", venue)
 				}
-				applyDciSel(&rv, dsel) // dci 脱节修：APR/eval gross=闸实选档 apy
+				applyDciSel(&rv, dsel)                                                         // dci 脱节修：APR/eval gross=闸实选档 apy
+				if r.TemplateID == "term_basis" && !termBasisApplyVenue(ctx, st, venue, &rv) { // 无合格合约不产
+					continue
+				}
 
 				apr := "报价缺"
 				if rv.APR != nil {
 					apr = fmt.Sprintf("apy=%.4g（venue原生口径）", *rv.APR)
 				}
-				// 提案实体化——行即稳定 id（同模板 pending 复用），
-				// params=快照审计锚（执行时实时闸复验，非钉价）。
+				// 提案实体化（pending 复用；params=快照审计锚非钉价）。
 				params := proposalParams(ctx, st, rv, venue, dsel)
 				if gateNote != "" {
 					params["gate_note"] = gateNote

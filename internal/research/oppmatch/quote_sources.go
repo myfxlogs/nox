@@ -5,6 +5,8 @@ package oppmatch
 import (
 	"context"
 
+	"time"
+
 	"nox/internal/store/pgstore"
 )
 
@@ -70,22 +72,64 @@ func crossVenueSpotQuote(ctx context.Context, st *pgstore.Store) (float64, bool,
 	return best, ok, nil
 }
 
-// termBasisQuote 期限基差年化现值——fin_cex_universe FUTURES 行 last_basis_ann
-// 已有采集面直接取 MAX（precomputed 列=采集层实算，禁二次估值）。
-func termBasisQuote(ctx context.Context, st *pgstore.Store) (float64, bool, error) {
+// term_basis 流动性/期限阈（app_config 键覆盖——禁字面量硬线，默认值=实施裁
+// 小阈防死价行：vol24h=0 陈价合约=伪基差病灶实证〔okx XAU-USD_UM-261030
+// ann=43.5 vol24h=0 挂 binance 名出 #1938〕；min_tenor=近到期剔除）。
+const (
+	termBasisMinVol24h    = 1000.0 // app_config: term_basis_min_vol24h
+	termBasisMinTenorDays = 14.0   // app_config: term_basis_min_tenor_days
+)
+
+// termBasisThresholds 阈读（app_config 键优先生效——配置面非字面量硬线）。
+func termBasisThresholds(ctx context.Context, st *pgstore.Store) (minVol, minTenor float64) {
+	minVol, minTenor = termBasisMinVol24h, termBasisMinTenorDays
+	if v, ok, err := st.AppConfigFloat(ctx, "term_basis_min_vol24h"); err == nil && ok {
+		minVol = v
+	}
+	if v, ok, err := st.AppConfigFloat(ctx, "term_basis_min_tenor_days"); err == nil && ok {
+		minTenor = v
+	}
+	return
+}
+
+// termBasisBest venue 过滤后基差最优行（#1938 伪 APR 病灶三伤修）：
+// ①venue==提案 venue（okx 合约不挂 binance 名）；②Vol24h 流动性地板
+// （nil/低于阈剔——陈价零成交合约伪基差不入围）；③近到期剔除
+// （expiry−now<minTenor 剔——到期挤压期价非真实基差面）。
+// 返回 *CexUniverseRow——提案 params 须能具名买什么合约（symbol+expiry）。
+func termBasisBest(ctx context.Context, st *pgstore.Store, venue string) (*pgstore.CexUniverseRow, error) {
 	rows, err := st.ListCexUniverse(ctx)
 	if err != nil {
-		return 0, false, err
+		return nil, err
 	}
-	var best float64
-	var ok bool
-	for _, r := range rows {
-		if r.ContractType != "FUTURES" || r.BasisAnn == nil {
+	minVol, minTenor := termBasisThresholds(ctx, st)
+	now := time.Now()
+	var best *pgstore.CexUniverseRow
+	for k := range rows {
+		r := rows[k]
+		if r.Venue != venue || r.ContractType != "FUTURES" || r.BasisAnn == nil {
 			continue
 		}
-		if *r.BasisAnn > best {
-			best, ok = *r.BasisAnn, true
+		if r.Vol24h == nil || *r.Vol24h < minVol {
+			continue // 流动性地板——零成交陈价伪基差剔
+		}
+		if r.ExpiryTS != nil && r.ExpiryTS.Sub(now) < time.Duration(minTenor*24)*time.Hour {
+			continue // 近到期剔除——8 天到期合约实证病灶面
+		}
+		if best == nil || *r.BasisAnn > *best.BasisAnn {
+			cp := r // map 元素不可取址——拷贝具名行回传
+			best = &cp
 		}
 	}
-	return best, ok, nil
+	return best, nil
+}
+
+// termBasisQuote 期限基差年化现值——venue 过滤后最优行 BasisAnn（预计算列
+// 采集层实算禁二次估值；无合格合约=ok=false unevaluable 诚实缺非造零）。
+func termBasisQuote(ctx context.Context, st *pgstore.Store, venue string) (float64, bool, error) {
+	best, err := termBasisBest(ctx, st, venue)
+	if err != nil || best == nil {
+		return 0, false, err
+	}
+	return *best.BasisAnn, true, nil
 }

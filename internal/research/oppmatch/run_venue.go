@@ -132,6 +132,17 @@ func proposalParams(ctx context.Context, st *pgstore.Store, r Result, venue stri
 		}
 		return p
 	}
+	if r.TemplateID == "term_basis" {
+		// 提案具名合约（#1938 修②）：venue 域实选行 symbol+expiry——执行面/评估
+		// 卡须能说出买什么（与 termBasisApplyVenue 同查询径同选）。
+		if best, berr := termBasisBest(ctx, st, venue); berr == nil && best != nil {
+			p["symbol"] = best.Symbol
+			if best.ExpiryTS != nil {
+				p["expiry"] = best.ExpiryTS.Format("2006-01-02")
+			}
+		}
+		return p
+	}
 	var opt, inv string
 	switch r.TemplateID {
 	case "dci_sell_high_covered_call":
@@ -155,4 +166,25 @@ func proposalParams(ctx context.Context, st *pgstore.Store, r Result, venue stri
 		}
 	}
 	return p
+}
+
+// termBasisApplyVenue term_basis venue 域实选接线（#1938 修③）：本 venue 合格
+// 最优 FUTURES 行→rv.APR=其 BasisAnn+GrossEvidence 具名合约（venue 过滤+流动
+// 性地板+近到期剔除已在 termBasisBest）；无合格行=false 本 venue 不产。
+func termBasisApplyVenue(ctx context.Context, st *pgstore.Store, venue string, rv *Result) bool {
+	best, err := termBasisBest(ctx, st, venue)
+	if err != nil {
+		log.Printf("[oppmatch] term_basis %s universe 读败（本拍不产）: %v", venue, err)
+		return false
+	}
+	if best == nil {
+		return false
+	}
+	rv.APR = best.BasisAnn
+	exp := "无到期日"
+	if best.ExpiryTS != nil {
+		exp = best.ExpiryTS.Format("2006-01-02")
+	}
+	rv.GrossEvidence = fmt.Sprintf("fin_cex_universe %s basis_ann（%s 过滤后最优；vol24h/tenor 阈过）", best.Symbol, exp)
+	return true
 }
