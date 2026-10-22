@@ -180,12 +180,10 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 		b.runLoop(ctx, b.spotCands, "spot", "bookTicker", publish, 0) // spot 低频阈不动（票面禁线）
 		wg.Done()
 	})
-	// perp 24hrTicker 全量聚合流——vol24h facts 落库（radar 全量宇宙
-	// 资格判定源；批处理 24hr REST 轮询退役）。
-	safego.GoLoopPlain("binance_market_ws:perp-ticker", func() {
-		b.runLoop(ctx, b.marketCands, "perp", "ticker", publish, mktWSDataIdle)
-		wg.Done()
-	})
+	// 24hrTicker 改 REST 15min 轮询（D-663 补正①——!ticker@arr ~300KB/帧
+	// @1s=单流最肥面；下游 vol24h 消费全 ≥15min 判据=零鲜度损失；D-004
+	// 例外举证=SG 链路 5Mbps 硬顶实证）。复用 restfallback fetchTicker24h。
+	safego.GoLoopPlain("binance_market_ws:perp-ticker", func() { b.runTickerPoll(ctx); wg.Done() })
 	b.startIndivBookTickers(ctx, publish, &wg) // armed/watchlist 腿逐符号增订（indiv 件）
 	// 死流 REST 看门狗兜底——dephealth 判 markPrice/ticker 流红才低频拉
 	// REST 补观测 facts，复绿即停零轮询（D-004 例外留痕 decisions.md D-109）。

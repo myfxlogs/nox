@@ -66,6 +66,12 @@ type Config struct {
 	// 非持有时返回；探针未接线/帧缺合约=关联不明，处理侧 fail-safe 视同命中
 	// （宁多告不漏告——禁把真风险静默降档）。
 	ADLPositionHit func(venueSymbol string) bool
+	// ExecFaceFn D-663：indiv 执行面集合源（map[streamSym]venueType——
+	// armed∪毕业∪在仓 open 腿；nil=indiv 集空=全面不订）。
+	ExecFaceFn func(ctx context.Context) (map[string]string, error)
+	// IndivBudgetFn D-663 订阅预算闸：返回 (cap, ok)——ok=false=键缺
+	// →indiv 显式关+告警（预算未声明=不启动该面，显式不静默）。
+	IndivBudgetFn func(ctx context.Context) (int64, bool)
 }
 
 // DefaultConfig 返回默认配置。

@@ -64,6 +64,19 @@ func startQuoteStreams(ctx context.Context, cexCfg exchange.Config, qbus *bus.Qu
 	// 失效闭包须寻址 collect 侧 ws 实例，构造时不在场）。
 	// D-505 S2 + D-508 S14：Binance 公开报价单轨=WS 流（双连接 SUBSCRIBE）；
 	// REST 兜底已删（断流→reconnectMeter 告警 + 报价龄期闸 fail_closed 拒新鲜度不足报价）。
+	// D-663：indiv 执行面集+预算闸装配（armed∪毕业∪在仓 open 腿——
+	// 集与执行面查询同源对拍；cap=app_config NOX_INDIV_MAX_CONNS 键缺
+	// =indiv 显式关）。
+	cexCfg.ExecFaceFn = func(ctx context.Context) (map[string]string, error) {
+		return st.ExecFaceBinanceSymbols(ctx)
+	}
+	cexCfg.IndivBudgetFn = func(ctx context.Context) (int64, bool) {
+		v, ok, err := st.AppConfigInt64(ctx, "NOX_INDIV_MAX_CONNS")
+		if err != nil {
+			return 0, false
+		}
+		return v, ok
+	}
 	if ws := exchange.NewBinanceMarketWS(cexCfg); ws != nil {
 		ws.SetFactEmit(emitFacts)
 		ws.SetFundingIntervals(fundingIntervals)

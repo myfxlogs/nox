@@ -206,3 +206,16 @@ func (b *BinanceMarketWS) fetchTicker24h(ctx context.Context) {
 		log.Printf("[binance-mkt-ws] rest fallback ticker emit: %v", err)
 	}
 }
+
+// runTickerPoll D-663 补正①：!ticker@arr 聚合流退役→REST 15min 轮询
+// （节拍对齐 facts_retention 既有 15min 节流粒度——零鲜度损失面）。
+func (b *BinanceMarketWS) runTickerPoll(ctx context.Context) {
+	for {
+		b.fetchTicker24h(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(15 * time.Minute):
+		}
+	}
+}
