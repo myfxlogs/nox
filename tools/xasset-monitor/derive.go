@@ -134,7 +134,7 @@ func fetchGateGold(ctx context.Context, pool *pgxpool.Pool, contract string) (bi
 	if bid, ask, err = readGoldTicks(ctx, pool, "gate", sym); err != nil {
 		return 0, 0, 0, 0, err
 	}
-	if fundingRate, periodsPerDay, err = readGoldFunding(ctx, pool, "gate", []string{"gate_ws_futures"}, sym); err != nil {
+	if fundingRate, periodsPerDay, err = readGoldFunding(ctx, pool, "gate", []string{"gate_ws_futures", "gate_rest_futures"}, sym); err != nil {
 		return 0, 0, 0, 0, err
 	}
 	return bid, ask, fundingRate, periodsPerDay, nil

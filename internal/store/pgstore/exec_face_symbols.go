@@ -49,6 +49,27 @@ func (s *Store) ExecFaceVenueSymbols(ctx context.Context, venue string) (map[str
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	// D-663 族续修：xasset-monitor 观测集并入订阅面——fin_carry_universe
+	// cex_venue 腿（监控盯集十几符号带宽可忽略；REST 3min 拍对 120s 阈
+	// 结构性撞=真节拍变慢非断流，订阅层复供非放宽阈值）。
+	monRows, err := s.pool.Query(ctx, `
+		SELECT canonical, cex_venue FROM fin_carry_universe`)
+	if err != nil {
+		return nil, fmt.Errorf("exec_face monitor universe: %w", err)
+	}
+	defer monRows.Close()
+	for monRows.Next() {
+		var canon, venue string
+		if err := monRows.Scan(&canon, &venue); err != nil {
+			return nil, err
+		}
+		if venue == "gate" || venue == "okx" || venue == "binance" {
+			add(strings.ToUpper(canon), venue, "perp") // carry 腿=perp 侧盯
+		}
+	}
+	if err := monRows.Err(); err != nil {
+		return nil, err
+	}
 	// 在仓 open 腿（position_legs venue_key='binance'、phase='open'——symbol
 	// 原生 venue 形去尾缀到 canonical 域，vt 判 spot/perp）。
 	legRows, err := s.pool.Query(ctx, `
