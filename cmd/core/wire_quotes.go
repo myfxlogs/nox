@@ -20,6 +20,7 @@ import (
 	"nox/internal/data/keydomain"
 	"nox/internal/platform/alertcool"
 	"nox/internal/platform/safego"
+	"nox/internal/research/scan"
 	"nox/internal/store/pgstore"
 	"nox/internal/trading/engine"
 	"nox/internal/trading/exec"
@@ -71,7 +72,9 @@ func startQuoteStreams(ctx context.Context, cexCfg exchange.Config, qbus *bus.Qu
 		return st.ExecFaceBinanceSymbols(ctx)
 	}
 	cexCfg.ExecFaceVenueFn = st.ExecFaceVenueSymbols // D-665 okx/gate 同律执行面集
-	cexCfg.MonitorFaceFn = st.MonitorFaceSymbols     // xasset 监控观测集（达标行同阈）
+	cexCfg.MonitorFaceFn = func(ctx context.Context) (map[string]string, error) {
+		return st.MonitorFaceSymbols(ctx, scan.PaperCfdOpenNetPct, scan.PaperCfdMaxNetPct)
+	} // xasset 监控观测集（达标行同阈）
 	cexCfg.IndivBudgetFn = func(ctx context.Context) (int64, bool, error) {
 		return st.AppConfigInt64(ctx, "NOX_INDIV_MAX_CONNS")
 	}

@@ -75,15 +75,15 @@ func (s *Store) ExecFaceBinanceSymbols(ctx context.Context) (map[string]string, 
 }
 
 // MonitorFaceSymbols xasset-monitor 观测集（fin_carry_universe **达标行**——
-// derive_inputs.go 同阈：structure 两型+note 空+net_annual_pct∈[8,300]
-// 常数同 scan 口径〔PaperCfdOpenNetPct/PaperCfdMaxNetPct——真源行内联防
-// import 环〕）。与执行面集分层：订阅占额序=exec 先、monitor 填余
+// derive_inputs.go 同阈：structure 两型+note 空+net∈[minNet,maxNet] 参化
+// 单源〔调用方传 scan.PaperCfdOpenNetPct/PaperCfdMaxNetPct——返修②字面量
+// 双源修〕）。与执行面集分层：订阅占额序=exec 先、monitor 填余
 // （armed/在仓腿不被监控集挤掉=返修①优先占额修）。
-func (s *Store) MonitorFaceSymbols(ctx context.Context) (map[string]string, error) {
+func (s *Store) MonitorFaceSymbols(ctx context.Context, minNet, maxNet float64) (map[string]string, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT canonical, cex_venue FROM fin_carry_universe
 		WHERE structure IN ('long_cfd_short_perp','short_cfd_long_perp')
-		  AND note = '' AND net_annual_pct >= 8 AND net_annual_pct <= 300`)
+		  AND note = '' AND net_annual_pct >= $1 AND net_annual_pct <= $2`, minNet, maxNet)
 	if err != nil {
 		return nil, fmt.Errorf("monitor_face universe: %w", err)
 	}

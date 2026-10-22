@@ -98,8 +98,8 @@ func (o *OKXWebSocket) SetFactEmit(fn func(ctx context.Context, fs []fact.Fact) 
 }
 
 func init() {
-	rejects.Register("okx_indiv", "execface_err", "budget_err", "budget_cap")
-	rejects.Register("gate_indiv", "execface_err", "budget_err", "budget_cap")
+	rejects.Register("okx_indiv", "execface_err", "budget_err", "budget_cap", "monitorface_err")
+	rejects.Register("gate_indiv", "execface_err", "budget_err", "budget_cap", "monitorface_err")
 }
 
 // execFaceDesired D-665 返修②③：venue exec 集取径——ExecFaceVenueFn err=
@@ -124,7 +124,10 @@ func execFaceDesired(ctx context.Context, cfg Config, venue string, lastGood []s
 	sort.Strings(exec)
 	var mon []string
 	if cfg.MonitorFaceFn != nil {
-		if mset, merr := cfg.MonitorFaceFn(ctx); merr == nil {
+		mset, merr := cfg.MonitorFaceFn(ctx)
+		if merr != nil {
+			rejects.Inc(rejects.Key{Face: venue + "_indiv", Gate: "monitorface_err"}) // 返修②残随修：读败如实计非静默缩 desired
+		} else {
 			for sym, v := range mset {
 				if v == venue { // 监控观测集按 venue 分流（carry 腿=perp 侧盯）
 					if _, dup := face[sym]; !dup {
