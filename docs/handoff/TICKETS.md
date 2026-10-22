@@ -27,3 +27,4 @@
 | funding_carry quoteFor 同伤修（1414% 伪 APR 复发） | `[角色:实施] funding_carry quoteFor 同伤修（读 STATE 本行+term_basis 修票 @2285af9c0 同配方；无 skills 域）` | STATE 票表新行 |
 | 前端待授权面语义分层 | `[角色:实施] 待授权面语义分层（读 STATE 本行+go 审计行票——proposed 两义分层渲染；无 skills 域）` | STATE 票表新行 |
 | roster 台账建模错位修（7 员假离线） | `[角色:实施] roster 建模错位修（读 STATE 本行——任务型 spawn 分型+条件门注册同步；无 skills 域）` | STATE 票表新行 |
+| est_fee 负值闸签名分级（XPD 真负基差误标） | `[角色:实施] est_fee 负值签名分级（读 STATE 本行——簿真负基差签名改+dedup；无 skills 域）` | STATE 票表新行 |
