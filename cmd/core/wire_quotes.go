@@ -10,6 +10,7 @@ import (
 	"context"
 	"log"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -73,7 +74,27 @@ func startQuoteStreams(ctx context.Context, cexCfg exchange.Config, qbus *bus.Qu
 	}
 	cexCfg.ExecFaceVenueFn = st.ExecFaceVenueSymbols // D-665 okx/gate 同律执行面集
 	cexCfg.MonitorFaceFn = func(ctx context.Context) (map[string]string, error) {
-		return st.MonitorFaceSymbols(ctx, scan.PaperCfdOpenNetPct, scan.PaperCfdMaxNetPct)
+		// 返修⑤钦定单源译名：raw canonical 资产名→scan.CfdBookSpecs equiv 链
+		// →CexNativeSym venue 档名→BookCanonical 归一（SILVER→XAG 等价族
+		// 全通；无档行如实不出）。
+		rows, err := st.MonitorFaceRows(ctx, scan.PaperCfdOpenNetPct, scan.PaperCfdMaxNetPct)
+		if err != nil {
+			return nil, err
+		}
+		equiv, err := st.ListAssetEquiv(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := map[string]string{}
+		for _, r := range rows {
+			cexBare := keydomain.BareOf(r.CexVenue)
+			for _, sp := range scan.CfdBookSpecs(equiv, r.Canonical, cexBare, r.MtVenue) {
+				if nat := scan.CexNativeSym(cexBare, sp.CexCanon); nat != "" {
+					out[strings.ToLower(keydomain.BookCanonical(nat))] = cexBare
+				}
+			}
+		}
+		return out, nil
 	} // xasset 监控观测集（达标行同阈）
 	cexCfg.IndivBudgetFn = func(ctx context.Context) (int64, bool, error) {
 		return st.AppConfigInt64(ctx, "NOX_INDIV_MAX_CONNS")
