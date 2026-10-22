@@ -148,8 +148,16 @@ func runPair(ctx context.Context, st *pgstore.Store, p monitorPair, mtVenue stri
 		}
 	}
 
+	// equivGuardBps 量级守卫阈（SPCXUSDT↔SPX500 −9808bps 假等价实证上界取
+	// 3000bps=30%——真对价差分布远低；毒仓防复现非判精度）。
+	const equivGuardBps = 3000.0
 	// 算指标（口径分离 D1）。
 	entrySpread := (bid - exAsk) / exAsk * 10000
+	// D-663 族量级守卫：|entry_spread|>阈=等价假配（SPCXUSDT↔SPX500 −9808bps
+	// 实证）——不产簿如实 uncovered（毒仓防复现）。
+	if math.Abs(entrySpread) > equivGuardBps {
+		return fmt.Errorf("pair=%s 量级守卫拒产簿 entry_spread=%.0fbps（等价假配疑——不产簿）", pair, entrySpread)
+	}
 	exitSpread := (ask - exBid) / exBid * 10000
 	// 三 venue VIP0 maker 费率同为 0.02%×2=4bps（binance 单 C 档；gate fee 表
 	// gate.com/announcements/article/101365 VIP0 maker 0.0200%）→ 常量化共享。

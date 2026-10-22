@@ -8,6 +8,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 func capVenueHas(pairs []monitorPair, key, pair string) bool {
@@ -31,7 +32,7 @@ func TestCapabilityFilter_ComboExpansion(t *testing.T) {
 		{"TRXUSDT", "binance:perp", "TRX", "15032313:mt5"},    // 1055 后裸形（现役）
 		{"TRXUSDT", "binance:perp", "TRXUSDT", "3001157:mt5"}, // 1055 前全形（存量形态鲁棒）
 	}
-	uni := []universeRow{{"binance", "TRXUSDT", "TRXUSDT"}}
+	uni := []universeRow{{"binance", "TRXUSDT", "TRXUSDT", time.Time{}}}
 	accts := []mtAcct{
 		{venue: "110660304", vtype: "mt5"},
 		{venue: "15032313", vtype: "mt5"},
@@ -65,7 +66,7 @@ func TestCapabilityFilter_ComboExpansion(t *testing.T) {
 // 不静默（派生面自身的 accounting 纪律：静默丢对=下一个「簿塌缩无人知」）。
 func TestCapabilityFilter_AllFilteredUncovered(t *testing.T) {
 	combos := []allowComboRow{{"TRXUSDT", "binance:perp", "TRX", "99999999:mt5"}} // 1055 后裸形
-	uni := []universeRow{{"binance", "TRXUSDT", "TRXUSDT"}}
+	uni := []universeRow{{"binance", "TRXUSDT", "TRXUSDT", time.Time{}}}
 	accts := []mtAcct{{venue: "110660304", vtype: "mt5"}}
 	caps := map[string]map[string]bool{"110660304": {"XAU": true}}
 	pairs, uncovered := deriveMonitorPairs(combos, uni, nil, accts, nil, caps)
@@ -86,7 +87,7 @@ func TestCapabilityFilter_AllFilteredUncovered(t *testing.T) {
 // TestCapabilityFilter_DemandUnfiltered demand 绑定对不受能力滤（仓驱动必须继续
 // 暴露——死腿仓退出判定/覆盖告警面在簿对在册的前提上，能力滤只治「无仓空展开」）。
 func TestCapabilityFilter_DemandUnfiltered(t *testing.T) {
-	uni := append(d472Universe(), universeRow{"binance", "SOLUSDT", "SOL"})
+	uni := append(d472Universe(), universeRow{"binance", "SOLUSDT", "SOL", time.Time{}})
 	demand := []cfdDemandRow{{canonical: "SOL", mtVenue: "110660304", cexVenue: "binance"}}
 	accts := []mtAcct{{venue: "110660304", vtype: "mt5"}}
 	caps := map[string]map[string]bool{"110660304": {"XAU": true}} // 无 SOL 映射
@@ -141,7 +142,7 @@ func TestCapabilityBuildNormalized(t *testing.T) {
 		{"CAPTOPTESTUSDT", "binance:perp", "CAPTOPTEST", "99999001:mt5"},
 		{"CAPTOPTESTUSDT", "binance:perp", "CAPTOPTESTUSDT", "99999001:mt5"},
 	}
-	uni := []universeRow{{"binance", "CAPTOPTESTUSDT", "CAPTOPTESTUSDT"}}
+	uni := []universeRow{{"binance", "CAPTOPTESTUSDT", "CAPTOPTESTUSDT", time.Time{}}}
 	accts := []mtAcct{{venue: "99999001", vtype: "mt5"}}
 	pairs, _ := deriveMonitorPairs(combos, uni, nil, accts, nil, caps)
 	hasTriple := func(key, pair, exSym string) bool {
@@ -166,7 +167,7 @@ func TestCapabilityBuildNormalized(t *testing.T) {
 // 对抗锚：emit 回退 exSym=mtCanon 直填→本测红（簿停写复现）。
 func TestComboExSymResolved(t *testing.T) {
 	combos := []allowComboRow{{"TRXUSDT", "binance:perp", "TRX", "15032313:mt5"}}
-	uni := []universeRow{{"binance", "TRXUSDT", "TRXUSDT"}}
+	uni := []universeRow{{"binance", "TRXUSDT", "TRXUSDT", time.Time{}}}
 	// acctSyms=ticks 在流实写键面（15032313 采到的是全形 TRXUSDT——生产实况）。
 	accts := []mtAcct{{venue: "15032313", vtype: "mt5", syms: []string{"TRXUSDT"}}}
 	caps := map[string]map[string]bool{"15032313": {"TRX": true}}

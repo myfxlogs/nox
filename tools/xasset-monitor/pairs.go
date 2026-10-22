@@ -11,6 +11,8 @@
 package main
 
 import (
+	"time"
+
 	"nox/internal/data/keydomain"
 	"nox/internal/research/scan"
 	"nox/internal/store/pgstore"
@@ -28,7 +30,10 @@ type monitorPair struct{ cexVenue, sym, pair, exSym, mtVenueKey string }
 type allowComboRow struct{ canonicalBuy, venueBuy, canonicalSell, venueSell string }
 
 // universeRow 派生入参：fin_cex_universe（status='TRADING'）行投影。
-type universeRow struct{ venue, symbol, hedgeCanonical string }
+type universeRow struct {
+	venue, symbol, hedgeCanonical string
+	lastSeen                      time.Time // 现行行择优锚（同 venue 新旧符号共存——_USDT/USDT 双形）
+}
 
 // cfdDemandRow D-144：簿需求行——fin_carry_universe 达标行 ∪ active 纸面仓
 // (canonical,mt,cex) 三元组（venue 皆裸名）。
@@ -73,37 +78,47 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdD
 	accts []mtAcct, equiv []pgstore.AssetEquivEntry, caps map[string]map[string]bool) (pairs []monitorPair, uncovered []string) {
 	byKey := map[string]string{} // venue|hc → symbol
 	symsByVenue := map[string]map[string]bool{}
+	symSeen := map[string]map[string]time.Time{} // venue → symbol → last_seen
 	for _, r := range uni {
 		byKey[r.venue+"|"+r.hedgeCanonical] = r.symbol
 		if symsByVenue[r.venue] == nil {
 			symsByVenue[r.venue] = map[string]bool{}
+			symSeen[r.venue] = map[string]time.Time{}
 		}
 		symsByVenue[r.venue][r.symbol] = true
+		symSeen[r.venue][r.symbol] = r.lastSeen
 	}
 	isMT := keydomain.IsMTKey
 	bareOf := bareCanon // MT canonical 裸形归一单源（capabilities.go；组合行/map 两侧键域合流点）
-	// cexSymFor：universe 命中（venue+hedge_canonical）→ miss 按 venue 约定构造+回查
-	// 存在性 → 仍 miss=false（fail-closed 不静默丢，调用方 skip+warn）。
-	cexSymFor := func(cexVenueKey, mtCanonical, bare string) (string, bool) {
+	// cexSymFor：universe 命中（venue+hedge_canonical）→ miss 走 CfdBookSpecs equiv
+	// 链→CexNativeSym 单源译名（D-663 族返修⑤同款——资产名→档名唯一决议径；
+	// 等价族 SILVER→XAGUSDT 类全通），双形候选按 last_seen 现行行择优（SAND_USDT
+	// 残行抢占修）→ 仍 miss=false（fail-closed 不静默丢，调用方 skip+warn）。
+	cexSymFor := func(cexVenueKey, mtCanonical, bare, mtVenueBare string) (string, bool) {
 		v := keydomain.BareOf(cexVenueKey)
 		if s, ok := byKey[v+"|"+mtCanonical]; ok {
 			return s, true
 		}
-		var guess string
-		switch v {
-		case "okx":
-			guess = bare + "-USDT-SWAP"
-		case "gate":
-			guess = bare + "_USDT"
-		case "binance":
-			guess = bare + "USDT"
-		default:
-			return "", false
+		var cands []string
+		seen := map[string]bool{}
+		add := func(c string) {
+			if c != "" && !seen[c] {
+				seen[c] = true
+				cands = append(cands, c)
+			}
 		}
-		if symsByVenue[v][guess] {
-			return guess, true
+		for _, sp := range scan.CfdBookSpecs(equiv, mtCanonical, v, mtVenueBare) {
+			add(scan.CexNativeSym(v, sp.CexCanon))
 		}
-		return "", false
+		add(scan.CexNativeSym(v, bare+"USDT")) // legacy 形兜底（_USDT/USDT 双形覆盖）
+		var best string
+		var bestSeen time.Time
+		for _, c := range cands {
+			if symsByVenue[v][c] && !symSeen[v][c].Before(bestSeen) {
+				best, bestSeen = c, symSeen[v][c]
+			}
+		}
+		return best, best != ""
 	}
 
 	// mt venue 集——ticks 在流账户 ∪ enabled 组合 MT 腿（venue 键全集；
@@ -198,8 +213,12 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow, demand []cfdD
 		} else {
 			mtCanon, cexCanon, cexVenue = c.canonicalBuy, c.canonicalSell, c.venueSell
 		}
+		mtVenueKey := c.venueBuy
+		if !buyMT {
+			mtVenueKey = c.venueSell
+		}
 		bare := bareOf(mtCanon)
-		sym, ok := cexSymFor(cexVenue, mtCanon, bare)
+		sym, ok := cexSymFor(cexVenue, mtCanon, bare, keydomain.BareOf(mtVenueKey))
 		if !ok {
 			// universe 既无 hedge_canonical 命中也无约定构造命中 → fail-closed 暴露
 			uncovered = append(uncovered, name+"（universe 无合约行，簿行缺失）")

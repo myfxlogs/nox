@@ -3,6 +3,7 @@
 // ——与 ticks/消费侧联查键同域（verbatim 键=零行假象族回归防）。
 package main
 
+import "time"
 import "testing"
 
 func TestDerivePair_DialectCanonNormalized(t *testing.T) {
@@ -11,8 +12,8 @@ func TestDerivePair_DialectCanonNormalized(t *testing.T) {
 		{"XAG-USDT-SWAP", "okx:perp", "XAG", "3001157:mt5"},
 	}
 	uni := []universeRow{
-		{"gate", "NAS100_USDT", "NAS100"},
-		{"okx", "XAG-USDT-SWAP", "XAG"},
+		{"gate", "NAS100_USDT", "NAS100", time.Time{}},
+		{"okx", "XAG-USDT-SWAP", "XAG", time.Time{}},
 	}
 	accts := []mtAcct{{venue: "15032313", vtype: "mt5"}, {venue: "3001157", vtype: "mt5"}}
 	caps := map[string]map[string]bool{

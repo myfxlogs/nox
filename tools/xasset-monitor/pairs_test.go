@@ -5,6 +5,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // d472Combos 生产 xasset_allow_combos enabled 行投影（2026-09-25 实拉，id 1-14 中 enabled=11 行）。
@@ -27,13 +28,13 @@ func d472Combos() []allowComboRow {
 // d472Universe 生产 fin_cex_universe TRADING 行投影（本票相关子集）。
 func d472Universe() []universeRow {
 	return []universeRow{
-		{"gate", "XAU_USDT", "XAUUSD"},
-		{"gate", "XPT_USDT", "XPTUSD"},
-		{"gate", "XPD_USDT", "XPDUSD"},
-		{"binance", "XAUUSDT", "XAUUSD"},
-		{"binance", "PAXGUSDT", "XAUUSD"},
-		{"okx", "XAU-USDT-SWAP", "XAUUSD"},
-		{"okx", "BTC-USDT-SWAP", "BTCUSDT"},
+		{"gate", "XAU_USDT", "XAUUSD", time.Time{}},
+		{"gate", "XPT_USDT", "XPTUSD", time.Time{}},
+		{"gate", "XPD_USDT", "XPDUSD", time.Time{}},
+		{"binance", "XAUUSDT", "XAUUSD", time.Time{}},
+		{"binance", "PAXGUSDT", "XAUUSD", time.Time{}},
+		{"okx", "XAU-USDT-SWAP", "XAUUSD", time.Time{}},
+		{"okx", "BTC-USDT-SWAP", "BTCUSDT", time.Time{}},
 	}
 }
 
@@ -156,7 +157,7 @@ func d144HasPair(pairs []monitorPair, cexVenue, pair, exSym, mtKey string) bool 
 // TestD144_UniverseDemandDerivesPair 锚①：universe 达标行无白名单匹配也派生簿对
 // （旧口径=白名单独有→33 行纸面仓 basis 恒 NULL 根修）。
 func TestD144_UniverseDemandDerivesPair(t *testing.T) {
-	uni := append(d472Universe(), universeRow{"binance", "SOLUSDT", "SOL"})
+	uni := append(d472Universe(), universeRow{"binance", "SOLUSDT", "SOL", time.Time{}})
 	pairs, _ := deriveMonitorPairs(nil, uni,
 		[]cfdDemandRow{{canonical: "SOL", mtVenue: "277842155", cexVenue: "binance"}},
 		[]mtAcct{{venue: "277842155", vtype: "mt5"}}, nil, nil)
@@ -167,7 +168,7 @@ func TestD144_UniverseDemandDerivesPair(t *testing.T) {
 
 // TestD144_NewStreamAccountDerives 锚②：ticks 在流新账户→该账户键簿对（各账户独立采样）。
 func TestD144_NewStreamAccountDerives(t *testing.T) {
-	uni := append(d472Universe(), universeRow{"binance", "SOLUSDT", "SOL"})
+	uni := append(d472Universe(), universeRow{"binance", "SOLUSDT", "SOL", time.Time{}})
 	demand := []cfdDemandRow{{canonical: "SOL", mtVenue: "99999999", cexVenue: "binance"}}
 	pairs, _ := deriveMonitorPairs(nil, uni, demand,
 		[]mtAcct{{venue: "99999999", vtype: "mt5"}}, nil, nil)

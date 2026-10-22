@@ -72,10 +72,17 @@ func normalize(venue string, rows []Row, hedgeSet map[string]bool, classOf map[s
 		}
 		canon := canonicalOf(normBase(r.Symbol))
 		hit, hedge := hedgeHit(r, canon, hedgeSet)
+		// D-663 族：hedge_canonical 存 MT canonical（asset_equiv 命中返
+		// asset_class=MT 名，broker 腿无类保原键）——pairs.go byKey 键域
+		// 与 mtCanonical 同侧（XAGUSDT 自键→SILVER 档名面修）。
+		hc := hit
+		if c := classOf[hit]; c != "" {
+			hc = c
+		}
 		nr := normRow{Row: r, Venue: venue, Canonical: canon,
 			Tier:           tierOf(r, hedge),
 			FundingAnn:     annualize(r.FundingRate, r.IntervalH),
-			HedgeCanonical: hit, HedgeClass: classOf[hit]}
+			HedgeCanonical: hc, HedgeClass: classOf[hit]}
 		out = append(out, nr)
 	}
 	return out
