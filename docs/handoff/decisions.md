@@ -953,3 +953,13 @@ D-288｜2026-10-13｜cash_mgmt+earn_apr_lending 升 live：earn 执行接线验�
 - **消费缺口记名**：sizing 现只读 `custody_share@<venue>` 池份额，资产键无消费面=装饰账——判据消费票已立（`custody_share:<ccy>` 读面+min(池份额,资产份额) 双闸取小）。
 - **反证锚**：判据消费部署后仍发生 BTC 担保品合计>持有×0.3333 的新开仓 → 本约束未生效，复审退回。
 - **失效自查**：业主改令额度或 BTC 总量结构变化时重校 value_num。
+
+## D-660（2026-10-22 决策席）venue 鲜度档入评估面——「多挖 okx/gate」定向裁准
+
+- **缘起**：业主令「以后要多挖掘 OKX/gate 的机会」——缘 venue 权威探针谱（okx tickers 0.15s 零杀/gate book_ticker ~17fps 零杀 vs binance perp 聚合 ~5s 量子）。
+- **裁定（域分两层）**：
+  - **评估域=收**：venue 报价鲜度入评估卡因子——**同机会多 venue 候选时，鲜度档作 tiebreaker**（okx/gate 优先）；**binance perp 腿评估卡须载 ~5s 报价量子**（spread 收敛类对延时敏感——判据窗内 venue 腿 quote.Age 如实记，不隐）。
+  - **发现域=不收**：模板枚举×能力账匹配面**不 pref-过滤 venue**——机会在 venue 间分布独立于鲜度（funding 差/息差/收敛面 venue 无偏枚举照旧）；binance 腿机会照样评照产，鲜度差只在执行精确度计账非否决。
+- **机制锚**：armed 组合 venue 候选并列时 venue_freshness 因子参与排序（okx/gate 实测档>binance perp 聚合档）；spot 腿 binance 不扣分（spot 域零杀实时在证）。
+- **反证锚**：发现面出现 venue 白名单偏好过滤（okx/gate-only 枚举）→ 本裁被误读，复审退回；评估卡 binance perp 腿无 quote-age 载记 → 漏因子。
+- **过期自查**：binance 双轨票部署后 perp 鲜度档重测——分轨差消则本因子自然平权。
