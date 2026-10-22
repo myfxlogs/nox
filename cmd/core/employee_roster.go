@@ -14,6 +14,7 @@ import (
 
 	"nox/internal/api/dashboard"
 	"nox/internal/data/bus"
+	"nox/internal/platform/config"
 	"nox/internal/platform/safego"
 	"nox/internal/store/pgstore"
 )
@@ -27,6 +28,7 @@ var employeeRoster = []pgstore.Employee{
 	{Name: "macro:calendar", Role: "宏观日历循环", Dept: "数据", Assembly: "wire_macro.go"},
 	{Name: "macro:actuals", Role: "宏观实绩循环", Dept: "数据", Assembly: "wire_macro.go"},
 	{Name: "main:ticker", Role: "行情", Dept: "数据", Assembly: "wire_quotes.go"},
+	{Name: "main:tradifi-syms", Role: "TRADIFI 品种枚举", Dept: "数据", Assembly: "wire_cexscan.go"},
 	{Name: "main:watchlist-provider", Role: "自选行情", Dept: "数据", Assembly: "wire_dashboard.go"},
 	{Name: "main:funding-done-bridge", Role: "funding 桥", Dept: "数据", Assembly: "wire_quotes.go"},
 	{Name: "main:gate-ws", Role: "Gate WS", Dept: "数据", Assembly: "wire_gate.go"},
@@ -84,14 +86,14 @@ var employeeRoster = []pgstore.Employee{
 	{Name: "main:dci-pool-reconcile", Role: "DCI 池对账", Dept: "账本", Assembly: "dci_go.go"},
 	{Name: "setup:swapReconciler", Role: "swap 对账", Dept: "账本", Assembly: "setup.go"},
 	{Name: "setup:swapLedger", Role: "swap 账本", Dept: "账本", Assembly: "setup.go"},
-	{Name: "main:trxvote", Role: "TRX 投票", Dept: "账本", Assembly: "wire_trx.go"},
+	{Name: "main:trxvote", Role: "TRX 投票", Dept: "账本", Assembly: "wire_trx.go", EventDriven: true},
 	{Name: "trxvote:rebalance", Role: "TRX 调仓", Dept: "账本", Assembly: "trxvote.go"},
-	{Name: "trxvote:confirmSelfTx", Role: "TRX 交易确认", Dept: "账本", Assembly: "trxvote.go"},
+	{Name: "trxvote:confirmSelfTx", Role: "TRX 交易确认", Dept: "账本", Assembly: "trxvote.go", EventDriven: true},
 	{Name: "wire_trx:aprWatchdog", Role: "TRX APR 看门狗", Dept: "账本", Assembly: "wire_trx.go"},
 	{Name: "wire_trx:accountWatchdog", Role: "TRX 账户看门狗", Dept: "账本", Assembly: "wire_trx.go"},
 	{Name: "wire_trx:dailyRollup", Role: "TRX 日汇总", Dept: "账本", Assembly: "wire_trx.go"},
 	{Name: "main:sysretroDaily", Role: "日复盘", Dept: "账本", Assembly: "main_monitors.go"},
-	{Name: "main:reviewRun", Role: "复盘触发", Dept: "账本", Assembly: "main.go"},
+	{Name: "main:reviewRun", Role: "复盘触发", Dept: "账本", Assembly: "main.go", EventDriven: true},
 	{Name: "main:posreview", Role: "复盘员判决书", Dept: "账本", Assembly: "wire_posreview.go"},
 	{Name: "main:sysretroWeekly", Role: "周复盘", Dept: "账本", Assembly: "main_monitors.go"},
 	// 平台域（横切）
@@ -99,7 +101,7 @@ var employeeRoster = []pgstore.Employee{
 	{Name: "sched:runSource", Role: "调度源循环", Dept: "平台", Assembly: "sched.go"},
 	{Name: "main:feishu-push", Role: "飞书推送", Dept: "平台", Assembly: "wire_feishu.go"},
 	{Name: "main:alertFanoutSweep", Role: "告警扇出扫带", Dept: "运维", Assembly: "wire_alert_sweep.go"},
-	{Name: "feishu_query:handle", Role: "飞书查询处理", Dept: "平台", Assembly: "feishu_query.go"},
+	{Name: "feishu_query:handle", Role: "飞书查询处理", Dept: "平台", Assembly: "feishu_query.go", EventDriven: true},
 	{Name: "main:deptreport", Role: "公司日报", Dept: "平台", Assembly: "wire_dashboard.go", CadenceSec: 86400},
 	{Name: "main:kbReport", Role: "KB 报告", Dept: "平台", Assembly: "wire_kbreport.go"},
 	{Name: "main:tableHealth", Role: "表健康", Dept: "平台", Assembly: "main_monitors.go"},
@@ -108,15 +110,32 @@ var employeeRoster = []pgstore.Employee{
 	{Name: "main:allowRulesReload", Role: "规则重载", Dept: "平台", Assembly: "wire_whitelist.go"},
 	{Name: "setup:httpServer", Role: "HTTP 服务", Dept: "平台", Assembly: "setup_http.go"},
 	{Name: "wire_dashboard:stepMeta", Role: "步骤元数据", Dept: "平台", Assembly: "wire_dashboard.go"},
-	{Name: "service_snapshots:purge-acked", Role: "快照清理", Dept: "平台", Assembly: "service_snapshots.go"},
+	{Name: "service_snapshots:purge-acked", Role: "快照清理", Dept: "平台", Assembly: "service_snapshots.go", EventDriven: true},
 	{Name: "main:cexProxyHealth", Role: "代理健康", Dept: "平台", Assembly: "wire_health.go"},
 	{Name: "main:egressProbe", Role: "出口探针", Dept: "平台", Assembly: "wire_health.go"},
 }
 
 // wireEmployeeRoster 装配：编制入库 + safego 心跳/退出钩→PG。未注册名心跳=
 // 装配漏登或子节拍误走带 Beat 形态——转聚合 warn 告警（24h 去重），不落台账行。
-func wireEmployeeRoster(ctx context.Context, st *pgstore.Store, refreshTopic *bus.Topic[string]) {
+func wireEmployeeRoster(ctx context.Context, st *pgstore.Store, cfg *config.Config, refreshTopic *bus.Topic[string]) {
+	// 条件门同步（roster 建模错位修②）：gate 未开=该 daemon 本设计不启——
+	// 不注册对应行+存底翻离职（enabled=f 如实注销，非假离线）。BINANCE_
+	// PROXY_URL 空=cexProxyHealth fail-open 不启（wire_health.go 同判据）；
+	// mt5a adapter cfg nil=mt5-quote-fwd 门内不 spawn（setup.go 同判据）。
+	gated := map[string]bool{}
+	if cfg.BinanceProxyURL == "" {
+		gated["main:cexProxyHealth"] = true
+	}
+	if loadMT5Config() == nil {
+		gated["setup:mt5-quote-fwd"] = true
+	}
 	for i := range employeeRoster {
+		if gated[employeeRoster[i].Name] {
+			if err := st.RetireEmployee(ctx, employeeRoster[i].Name); err != nil {
+				log.Printf("[roster] retire %s: %v", employeeRoster[i].Name, err)
+			}
+			continue
+		}
 		if err := st.RegisterEmployee(ctx, &employeeRoster[i]); err != nil {
 			log.Printf("[roster] register %s: %v", employeeRoster[i].Name, err)
 		}

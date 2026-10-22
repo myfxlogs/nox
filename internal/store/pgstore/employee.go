@@ -12,22 +12,26 @@ import (
 
 // Employee 花名册行（编制实况）。
 type Employee struct {
-	Name       string
-	Role       string
-	Dept       string
-	Assembly   string
-	CadenceSec int
-	Running    bool
-	Exits      int
-	Task       string
-	BeatTs     *time.Time
-	Enabled    bool
+	Name        string
+	Role        string
+	Dept        string
+	Assembly    string
+	CadenceSec  int
+	EventDriven bool // 事件驱动型（任务型 spawn——跑完即退正常，不入 running 判生死域）
+	Running     bool
+	Exits       int
+	Task        string
+	BeatTs      *time.Time
+	Enabled     bool
 }
 
 // EmployeeStatus 看板态：在职 | 滞跳 | 离线 | 离职。
 func (e Employee) EmployeeStatus(now time.Time) string {
 	if !e.Enabled {
 		return "离职"
+	}
+	if e.EventDriven {
+		return "事件驱动" // 非永驻 spawn——跑完即退属正常，不判离线/滞跳
 	}
 	if !e.Running {
 		return "离线"
@@ -42,11 +46,11 @@ func (e Employee) EmployeeStatus(now time.Time) string {
 // RegisterEmployee 入职登记（幂等 upsert；name/role/dept/assembly/cadence 更新面）。
 func (s *Store) RegisterEmployee(ctx context.Context, e *Employee) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO fin_employee_registry (name, role, dept, assembly, cadence_sec)
-		VALUES ($1,$2,$3,$4,$5)
+		INSERT INTO fin_employee_registry (name, role, dept, assembly, cadence_sec, event_driven)
+		VALUES ($1,$2,$3,$4,$5,$6)
 		ON CONFLICT (name) DO UPDATE SET role=$2, dept=$3, assembly=$4,
-		    cadence_sec=$5, updated_at=now()`,
-		e.Name, e.Role, e.Dept, e.Assembly, e.CadenceSec)
+		    cadence_sec=$5, event_driven=$6, updated_at=now()`,
+		e.Name, e.Role, e.Dept, e.Assembly, e.CadenceSec, e.EventDriven)
 	return err
 }
 
@@ -81,7 +85,7 @@ func (s *Store) EmployeeExit(ctx context.Context, name string) error {
 func (s *Store) ListEmployees(ctx context.Context) ([]Employee, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT name, role, dept, assembly, cadence_sec, running, exits,
-		       task, beat_ts, enabled
+		       task, beat_ts, enabled, event_driven
 		FROM fin_employee_registry ORDER BY name`)
 	if err != nil {
 		return nil, err
@@ -91,10 +95,18 @@ func (s *Store) ListEmployees(ctx context.Context) ([]Employee, error) {
 	for rows.Next() {
 		var e Employee
 		if err := rows.Scan(&e.Name, &e.Role, &e.Dept, &e.Assembly, &e.CadenceSec,
-			&e.Running, &e.Exits, &e.Task, &e.BeatTs, &e.Enabled); err != nil {
+			&e.Running, &e.Exits, &e.Task, &e.BeatTs, &e.Enabled, &e.EventDriven); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// RetireEmployee 条件门注销：gate 未开（env/cfg 缺）的注册行→enabled=f
+// （离职态如实，非假离线；无行=零影响天然幂等）。
+func (s *Store) RetireEmployee(ctx context.Context, name string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE fin_employee_registry SET enabled=false, updated_at=now() WHERE name=$1`, name)
+	return err
 }
