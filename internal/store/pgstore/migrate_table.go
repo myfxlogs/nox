@@ -264,4 +264,5 @@ var migrationFiles = []struct {
 	{1069, migrations.GapCapitalMarkedSQL, false},        // D-652-C：capital 回执核验环（marked+核验锚列+legacy 降标）
 	{1070, migrations.ExecVenueCapabilitySQL, false},     // D-651：venue 执行面归能力账本投影（1069=symmap-4 支占用避号）
 	{1071, migrations.PersonalPositionsVenueSQL, false},  // STATE 行49：personal_positions.venue 列转正
+	{1073, migrations.EmployeeEventDrivenSQL, false},     // roster 建模错位：事件驱动分型（1072=monitor pair 归一已占）
 }

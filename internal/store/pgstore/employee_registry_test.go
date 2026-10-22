@@ -78,3 +78,40 @@ func TestD190_EmployeeRegistry(t *testing.T) {
 	}
 	s.pool.Exec(ctx, `DELETE FROM fin_employee_registry WHERE name LIKE 'd190test%'`)
 }
+
+// roster 建模错位修①锚：事件驱动型 spawn 注册后 running=f 不判离线
+// （feishu_query:handle/confirmSelfTx/reviewRun/purge-acked/trxvote 型）。
+func TestEmployeeEventDriven(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+	e := &Employee{Name: "d190test:event", Role: "事件员", Dept: "测", Assembly: "test.go", EventDriven: true}
+	if err := s.RegisterEmployee(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	defer s.pool.Exec(ctx, `DELETE FROM fin_employee_registry WHERE name='d190test:event'`)
+	rows, _ := s.ListEmployees(ctx)
+	var got *Employee
+	for i := range rows {
+		if rows[i].Name == e.Name {
+			got = &rows[i]
+		}
+	}
+	if got == nil || !got.EventDriven {
+		t.Fatalf("event_driven 应落库读回: %+v", got)
+	}
+	if st := got.EmployeeStatus(time.Now()); st != "事件驱动" {
+		t.Fatalf("事件驱动型 running=f 不判离线: %s", st)
+	}
+	if err := s.RetireEmployee(ctx, e.Name); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ = s.ListEmployees(ctx)
+	for i := range rows {
+		if rows[i].Name == e.Name {
+			got = &rows[i]
+		}
+	}
+	if got.Enabled || got.EmployeeStatus(time.Now()) != "离职" {
+		t.Fatalf("Retire 应翻离职: %+v", got)
+	}
+}
