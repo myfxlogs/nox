@@ -75,6 +75,7 @@ internal/data/collect/exchange -> internal/data/venue
 internal/data/collect/exchange -> internal/infra/dephealth
 internal/data/collect/exchange -> internal/platform/alerttext
 internal/data/collect/exchange -> internal/platform/httpx
+internal/data/collect/exchange -> internal/platform/rejects
 internal/data/collect/exchange -> internal/platform/safego
 internal/data/collect/exchange -> internal/platform/signutil
 internal/data/collect/exchange -> internal/store/pgstore

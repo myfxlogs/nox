@@ -55,7 +55,6 @@ type BinanceMarketWS struct {
 	validPerp      map[string]struct{}
 	perpOnce       sync.Once
 	spotInfoFetch  func(ctx context.Context, url string) (map[string]struct{}, error) // 测试注入点；nil=实拉 spotInfoURL
-	tickerEmit     map[string]time.Time                                               // D-591 S6：vol24h 每符号节流（仅 ticker 连接 goroutine 访问）
 	indexEmit      map[string]time.Time                                               // D-595 S1：index_price 每符号节流（仅 market 连接 goroutine 访问）
 	// degradedFn D-109：死流判定注入点（REST 兜底看门狗用；nil=dephealth.Degraded 生产读口）。
 	degradedFn func(key string) bool
@@ -64,7 +63,6 @@ type BinanceMarketWS struct {
 	// （now-lastFrame>staleAfter=死流），dial 死与静默两形态同覆，流复绿帧到闸自落。
 	// unixnano；markPrice/ticker 连接 goroutine 写、rest-fallback goroutine 读。
 	lastFrameMarkPrice atomic.Int64
-	lastFrameTicker    atomic.Int64
 	// restNative D-109 R1②：币安原生域 REST 裸 client——cfg.Client（httpx tokenRT）
 	// 会把 X-Proxy-Token 注入每请求，带向 fapi.binance.com=凭据出域（D-106 红线）。
 	restNative *http.Client
@@ -172,7 +170,6 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 	// R1①：帧年龄闸基线=采集器启动刻——若订阅从未交付帧（含开集即静默形态），
 	// 启动刻起算超龄即判定死流；首帧到达后改写为真实帧刻。
 	b.lastFrameMarkPrice.Store(b.now().UnixNano())
-	b.lastFrameTicker.Store(b.now().UnixNano())
 	if b == nil {
 		return // baseURL 解析失败静默（REST 兜底在跑）
 	}
@@ -194,12 +191,10 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 		b.runLoop(ctx, b.spotCands, "spot", "bookTicker", publish, 0) // spot 低频阈不动（票面禁线）
 		wg.Done()
 	})
-	// perp 24hrTicker 全量聚合流——vol24h facts 落库（radar 全量宇宙
-	// 资格判定源；批处理 24hr REST 轮询退役）。
-	safego.GoLoopPlain("binance_market_ws:perp-ticker", func() {
-		b.runLoop(ctx, b.marketCands, "perp", "ticker", publish, mktWSDataIdle)
-		wg.Done()
-	})
+	// 24hrTicker 改 REST 15min 轮询（D-663 补正①——!ticker@arr ~300KB/帧
+	// @1s=单流最肥面；下游 vol24h 消费全 ≥15min 判据=零鲜度损失；D-004
+	// 例外举证=SG 链路 5Mbps 硬顶实证）。复用 restfallback fetchTicker24h。
+	safego.GoLoopPlain("binance_market_ws:perp-ticker", func() { b.runTickerPoll(ctx); wg.Done() })
 	b.startIndivBookTickers(ctx, publish, &wg) // armed/watchlist 腿逐符号增订（indiv 件）
 	// 死流 REST 看门狗兜底——dephealth 判 markPrice/ticker 流红才低频拉
 	// REST 补观测 facts，复绿即停零轮询（D-004 例外留痕 decisions.md D-109）。
