@@ -159,7 +159,7 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 		return // baseURL 解析失败静默（REST 兜底在跑）
 	}
 	var wg sync.WaitGroup
-	wg.Add(4)
+	wg.Add(6)
 	// perp bookTicker 切 !bookTicker 聚合流——D-531 取证=binance 上游
 	// 对逐符号高突发订阅短窗杀（分片/路径/源IP 全排除），E1 实测聚合流
 	// 单订阅存活 ≥10min 零断；D-529 双拆随聚合流天然单连接退役。
@@ -182,6 +182,7 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 		b.runLoop(ctx, b.marketCands, "perp", "ticker", publish, mktWSDataIdle)
 		wg.Done()
 	})
+	b.startIndivBookTickers(ctx, publish, &wg) // armed/watchlist 腿逐符号增订（indiv 件）
 	// 死流 REST 看门狗兜底——dephealth 判 markPrice/ticker 流红才低频拉
 	// REST 补观测 facts，复绿即停零轮询（D-004 例外留痕 decisions.md D-109）。
 	wg.Add(1)
