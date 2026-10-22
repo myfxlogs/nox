@@ -122,3 +122,26 @@ func TestJitProposal_BtcLegSkipped(t *testing.T) {
 		t.Fatalf("BTC 担保品腿误发 sweep %d 次", calls)
 	}
 }
+
+// 锚：binance demand=pool〔spot+earn〕×share、avail=spot free——savings
+// 计入需求面使 shortfall 如实触发 sweep 赎径（okx 三源同构锚）。
+func TestJitProposal_DemandIncludesSavings(t *testing.T) {
+	e := execR3(newFake(), "http://x", nil, nil)
+	e.BalanceFn = func(context.Context, string) (float64, error) { return 100, nil }
+	e.EarnFn = func(context.Context, string) ([]EarnPosition, error) {
+		return []EarnPosition{
+			{ProductID: "flex", Amount: 1600, Locked: false},
+			{ProductID: "lock", Amount: 500, Locked: true},
+		}, nil
+	}
+	demand, avail, err := e.proposalUSDTDemand(context.Background(), "binance", 0.5)
+	if err != nil {
+		t.Fatalf("demand 读败: %v", err)
+	}
+	if demand != 1100 { // (100+1600+500)×0.5
+		t.Fatalf("demand 应含 savings=1100, got %v", demand)
+	}
+	if avail != 100 {
+		t.Fatalf("avail 应=spot free=100, got %v", avail)
+	}
+}
