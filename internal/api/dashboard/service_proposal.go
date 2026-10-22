@@ -5,6 +5,7 @@ package dashboard
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"connectrpc.com/connect"
 
@@ -81,8 +82,8 @@ func (s *Service) SetProposalGoRunner(fn func(ctx context.Context, id int64) (st
 
 // approveProposal D-661：approve=触发 GoProposal 同径执行（闸链零绕——
 // ModeGate/PaperFirst/CheckDCI/jit 全过）。仅 status=proposed 行（幂等——
-// 已裁行返拒）；审计行由 GoProposal 包壳自落（终态+耗时在案），此处补
-// 裁决者注记行（裁决面=dashboard RPC approve）——双轨透出语义不动。
+// 已裁行返拒）；终态审计行由 GoProposal 包壳自落（耗时在案），本处补
+// 裁决者注记行（裁决者=dashboard RPC——与 feishu go 审计行可分辨）。
 func (s *Service) approveProposal(ctx context.Context, id int64) (*connect.Response[dashv1.AckProposalResponse], error) {
 	p, err := s.store.GetProposal(ctx, id)
 	if err != nil {
@@ -97,6 +98,14 @@ func (s *Service) approveProposal(ctx context.Context, id int64) (*connect.Respo
 			Status: p.Status, Message: "approve 轨未接线（GoProposal 后端缺）"}), nil
 	}
 	out, err := s.proposalGoFn(ctx, id)
+	// 裁决者审计行（D-661 票面②钦定件——GoProposal goAudit 行无裁决面字段，
+	// dashboard approve 与 feishu go 审计行据此分辨；终态+模板同源在案）。
+	auditTerm := "executed"
+	if err != nil {
+		auditTerm = "reject:" + err.Error()
+	}
+	_ = s.store.InsertAlert(ctx, nil, "info",
+		fmt.Sprintf("提案裁决审计 #%d approve 裁决者=dashboard RPC 模板=%s 终态=%s", id, p.TemplateID, auditTerm))
 	if err != nil {
 		return connect.NewResponse(&dashv1.AckProposalResponse{
 			Status: "proposed", Message: "闸链拒：" + err.Error()}), nil // 拒因首句如实透出（不改状态）
