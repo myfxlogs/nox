@@ -73,6 +73,12 @@ func ledgerView(l *pgstore.CapabilityLedger) LedgerView {
 
 // quoteFor 模板→报价源（dci_*=DCI 表 BTC+ETH 最佳、earn/cash=理财表；其余报价缺）。
 func quoteFor(ctx context.Context, st *pgstore.Store, tid string) (*float64, error) {
+	return quoteForVenue(ctx, st, tid, "binance") // 模板级 APR=默认提案 venue（非 Exec/Earn 模板 venues=["binance"] 同域——venue 过滤不悬空）
+}
+
+// quoteForVenue venue 参化报价（term_basis venue 过滤须知提案 venue——
+// 其余模板 venue 无关同签名转调）。
+func quoteForVenue(ctx context.Context, st *pgstore.Store, tid, venue string) (*float64, error) {
 	var f float64
 	var ok bool
 	var err error
@@ -88,7 +94,7 @@ func quoteFor(ctx context.Context, st *pgstore.Store, tid string) (*float64, err
 	case tid == "cross_venue_spot":
 		f, ok, err = crossVenueSpotQuote(ctx, st) // 同符号跨所 index_price 价差（单周转）
 	case tid == "term_basis":
-		f, ok, err = termBasisQuote(ctx, st) // universe FUTURES last_basis_ann 预计算面
+		f, ok, err = termBasisQuote(ctx, st, venue) // universe FUTURES venue 过滤最优行
 	}
 	if err != nil {
 		return nil, err
