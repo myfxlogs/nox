@@ -67,11 +67,11 @@ func buildSharedRT() http.RoundTripper {
 			}
 		}
 	}
-	// D-667 续修：h2 僵尸 conn 自愈合——Go 默认 transport 无 h2 PING 保活，
-	// CF 边缘静默丢 h2 会话态但 TCP 存活→conn 永不判死→全量请求复用僵尸
-	// （okx 全谱 deadline 实证：≥6 栈泊 roundTrip 同 conn 等流响应）。
-	// ReadIdleTimeout/PingTimeout=健检注入：conn 静默超 ping 窗即逐出重建
-	// （秒级自愈合——非重启当修复）。WS 面零动。
+	// D-667 续修：h1 回退止血（h2 健检保留码件——产验若 okx deadline 未消
+	// 即 h2 会话面病灶深于健检域=降 h1.1 全谱，TLS churn 观测同位）。
+	// ForceAttemptHTTP2=false=conn 全走 h1.1（h2 会话面病灶归零；
+	// h2 健检件保留待复启用验——CloseIdleConnections 语义不涉）。
+	tr.ForceAttemptHTTP2 = false
 	if t2, h2err := http2.ConfigureTransports(tr); h2err == nil {
 		t2.ReadIdleTimeout = 30 * time.Second
 		t2.PingTimeout = 15 * time.Second
