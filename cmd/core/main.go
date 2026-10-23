@@ -113,6 +113,7 @@ func main() {
 	gateWs := startQuoteStreams(ctx, cexCfg, qbus, alertCooler, st, fundingEmit, fundingIntervals) // D-570 包C：ref 透传 monitors 装配 OnContractInfo
 	// 5b. 轮询 Fact 源（CEX funding + MT swap）→ FactSink → 存储 + FactCache。
 	//      Scheduler 在 brokerMgr 创建后启动（mt_swap 源依赖其 SwapFacts 聚合，D-036）。
+	cexCfg.MonitorFaceFn = monitorFaceFn(st)                                                                                // 装配序修：先于 collectors 赋（gate meta 监控集消费面——值拷贝序病修）
 	cexCollectors := buildCexFundingCollectors(st, cexCfg, alertCooler, universeDepthBases(ctx, st), fundingIntervals, cfg) // D-178 提取至 wiring.go 保 main() ≤300 行；D-057④ 深度基名改接 universe
 	// D-469a S4：私有 WS 事件 kick 通道（buffered(1) 非阻塞合并——同 sched.Kick 先例；
 	// 事件只改「何时醒」，定时路径保留为断流兜底）。
