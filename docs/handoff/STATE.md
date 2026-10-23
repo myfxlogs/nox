@@ -1465,3 +1465,5 @@ verdict=退回返修②（单项残——上轮三阻断全对版，机检重跑
 坑处置：无新坑（读败 vs 无样本区分正确=fail-closed 边界对）。
 -->
 [复审收口:paper-depth-三层降级] 照准 @dec2d634f（补记——前会话已并 master；SG 验随冻结顺延）
+
+| **exec 径真钱加固（下单专用传输——新鲜 conn 每单不复用+超时按 clOrdId 查询定真态）** | **立项→待开工**（决策席裁——依据：业主令「要真盈非纸面」+取证实证一次性新 conn 全通〔探针 200/200〕死的是复用流非单发请求；现状 POST /api/v5/trade/order 走共享池=复用流死则下单死+超时=状态未知〔重发=重复单真钱险〕。范围：①exec 专用 http.Client——DisableKeepAlives/短 dial+req 超时〔不复用池=瞬死流病灶面与钱径脱钩〕②下单超时→GET /api/v5/trade/order?clOrdId 查询定真态〔placed→ack 成功；absent→可重试〕③幂等 clOrdId 已有件复用不新造。禁线：MT 腿 mtapi RPC 零动；下单语义/风控闸零动；未验真态不补单。验收：机检——超时→查询定态分支断言+幂等键稳定；SG——下单探针在病灶窗内成交且状态可定） | | 决策席 | **开工指令**：`[角色:实施] exec 径真钱加固（读 STATE 本行+cex_executor_okx_order/dephealth 域；无 skills 域）` |
