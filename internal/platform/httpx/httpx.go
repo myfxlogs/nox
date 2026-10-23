@@ -5,6 +5,7 @@ package httpx
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"golang.org/x/net/http2"
 )
 
 // 运行期代理配置——D-145 env 收口：装配层 boot 时 Configure 注入（cfg/ secrets 供值），
@@ -64,6 +66,17 @@ func buildSharedRT() http.RoundTripper {
 				tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
 			}
 		}
+	}
+	// D-667 续修：h2 僵尸 conn 自愈合——Go 默认 transport 无 h2 PING 保活，
+	// CF 边缘静默丢 h2 会话态但 TCP 存活→conn 永不判死→全量请求复用僵尸
+	// （okx 全谱 deadline 实证：≥6 栈泊 roundTrip 同 conn 等流响应）。
+	// ReadIdleTimeout/PingTimeout=健检注入：conn 静默超 ping 窗即逐出重建
+	// （秒级自愈合——非重启当修复）。WS 面零动。
+	if t2, h2err := http2.ConfigureTransports(tr); h2err == nil {
+		t2.ReadIdleTimeout = 30 * time.Second
+		t2.PingTimeout = 15 * time.Second
+	} else {
+		log.Printf("[httpx] h2 configure 失败（降级 h1.1 域照跑）: %v", h2err)
 	}
 	var rt http.RoundTripper = tr
 	if tok != "" {
