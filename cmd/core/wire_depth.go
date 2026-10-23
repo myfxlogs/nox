@@ -54,6 +54,15 @@ func (c *cexDepthCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 	var quotes []exchange.DepthQuote
 	for _, venue := range venues {
+		// 兜底闸关默认 fail-closed（业主令行情全转实时流）——books5 ws 断=
+		// 数据缺不开单，不再静默降级 REST。闸开（NOX_DEPTH_REST_OKX=1）方可拍。
+		if venue == exchange.VenueOKX {
+			if v, ok, err := c.st.AppConfigInt64(ctx, "NOX_DEPTH_REST_OKX"); err == nil && !(ok && v == 1) {
+				continue
+			} else if err != nil {
+				continue // 读败=闸关 fail-closed 守
+			}
+		}
 		quotes = append(quotes, exchange.FetchCexDepthsVenue(ctx, c.cfg, venue, c.bases(venue))...)
 	}
 	if len(quotes) == 0 {
