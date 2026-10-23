@@ -61,3 +61,20 @@ func TestJitIdleSweep_OpenBookConservative(t *testing.T) {
 		t.Fatalf("有仓超额不足应如实静默非报错: %v", err)
 	}
 }
+
+// /v2/balance 实载荷形字段名锚（返修⑨——walletBalance 键不在此端点，
+// maxWithdrawAmount 权威可转额）。
+func TestBinanceFapiFreeUSDT_FieldAnchor(t *testing.T) {
+	v, err := binanceFapiFreeUSDT([]byte(`[
+		{"asset":"USDT","balance":"1000.0200","maxWithdrawAmount":"900.5000","availableBalance":"1344.0560"},
+		{"asset":"BFUSD","balance":"346.21","maxWithdrawAmount":"0"}
+	]`))
+	if err != nil || v != 900.5 {
+		t.Fatalf("maxWithdrawAmount 字段锚: v=%v err=%v", v, err)
+	}
+	// 缺 maxWithdrawAmount 键→0 静默证（同病灶复现面如实 0）。
+	v, _ = binanceFapiFreeUSDT([]byte(`[{"asset":"USDT","walletBalance":"1000.02"}]`))
+	if v != 0 {
+		t.Fatalf("walletBalance 错键应返 0（端点面锚）: %v", v)
+	}
+}
