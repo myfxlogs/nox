@@ -4,6 +4,7 @@ package exec
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -155,6 +156,10 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 		body, err = send() // 一次性重发（再遇 50102 落错误上抛）
 	}
 	if err != nil {
+		var hs *httpStatusError
+		if !errors.As(err, &hs) && o.ClientOrderID != "" { // 传输层败（非业务拒）→clOrdId 定态
+			return e.okxOrderResolveByClOrdID(ctx, o, instID, side, ctVal, err)
+		}
 		e.alertCritical(o, fmt.Sprintf("okx 平仓单被交易所拒绝（持仓#%d %s %s）：%v", o.PosID, o.Symbol, side, err))
 		return Fill{}, fmt.Errorf("okx order: %w", err)
 	}

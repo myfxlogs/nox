@@ -176,10 +176,12 @@ func TestD415_OKXMaxAvailSize(t *testing.T) {
 	// qty=0.5 基础币, ctVal=0.01 → szContracts=50。0.8 安全垫: maxSell<62.5 拒, ≥62.5 放。
 	e := NewCEXExecutor("okx", "perp", "k", "s", "p", "http://x", false)
 	e.client = &http.Client{Transport: &d415RT{maxSell: "60"}}
+	e.execClient = e.client
 	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XAUT-USDT-SWAP", Side: "SELL", Qty: 0.5, Venue: "okx:perp"}); err == nil {
 		t.Fatal("maxSell=60 < 50/0.8=62.5 应拒开")
 	}
 	e.client = &http.Client{Transport: &d415RT{maxSell: "100"}}
+	e.execClient = e.client
 	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XAUT-USDT-SWAP", Side: "SELL", Qty: 0.5, Venue: "okx:perp"}); err != nil {
 		t.Fatalf("maxSell=100 ≥ 62.5 应放行: %v", err)
 	}
@@ -190,6 +192,7 @@ func TestD415_OKXMaxAvailSize(t *testing.T) {
 func TestD429_AvailShapeFailsClosed(t *testing.T) {
 	e := NewCEXExecutor("okx", "perp", "k", "s", "p", "http://x", false)
 	e.client = &http.Client{Transport: &d415RT{availShape: true}}
+	e.execClient = e.client
 	err := e.MarginPrecheck(context.Background(), Order{Symbol: "XAUT-USDT-SWAP", Side: "SELL", Qty: 0.5, Venue: "okx:perp"})
 	if err == nil || !strings.Contains(err.Error(), `avail="" invalid`) {
 		t.Fatalf("max-avail-size 形态应响亮失败 avail=\"\" invalid，got %v", err)
@@ -202,6 +205,7 @@ func TestD429_AvailShapeFailsClosed(t *testing.T) {
 func TestD429_UnitAnchorContracts(t *testing.T) {
 	e := NewCEXExecutor("okx", "perp", "k", "s", "p", "http://x", false)
 	e.client = &http.Client{Transport: &d415RT{maxSell: "5.38"}}
+	e.execClient = e.client
 	err := e.MarginPrecheck(context.Background(), Order{Symbol: "XAUT-USDT-SWAP", Side: "SELL", Qty: 0.1, Venue: "okx:perp"})
 	if err == nil {
 		t.Fatal("sz=10 张 > maxSell=5.38×0.8=4.30 应拒开")
@@ -219,6 +223,7 @@ func TestD415_RPCFailClosed(t *testing.T) {
 	}
 	e := NewCEXExecutor("okx", "perp", "k", "s", "p", "http://x", false)
 	e.client = &http.Client{Transport: &d415RT{specErr: true}}
+	e.execClient = e.client
 	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XAUT-USDT-SWAP", Side: "SELL", Qty: 0.5, Venue: "okx:perp"}); err == nil {
 		t.Fatal("OKX 端点 5xx 应 fail-closed 拒开")
 	}

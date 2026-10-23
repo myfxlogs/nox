@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 // asString 容错取 string 字段（json.Number / float64 / string 都接受）。
@@ -172,7 +173,11 @@ func (e *CEXExecutor) post(ctx context.Context, url, bodyStr string, headers htt
 			req.Header.Add(k, v)
 		}
 	}
-	resp, err := e.client.Do(req)
+	rt := e.client
+	if e.execClient != nil {
+		rt = e.execClient // POST 皆下单径——专用传输（GET 保共享池）
+	}
+	resp, err := rt.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -201,4 +206,12 @@ func f64z(s string) (float64, error) {
 		return 0, nil
 	}
 	return strconv.ParseFloat(s, 64)
+}
+
+// execFreshClient exec 径专用传输：DisableKeepAlives 每单新鲜 conn——
+// 复用流瞬死病灶（h2 僵尸/h1 会话丢态）与钱径脱钩；TLS 每单新握=
+// 下单低频域可承受（探针实证一次性新 conn 全通）。
+func execFreshClient() *http.Client {
+	tr := &http.Transport{DisableKeepAlives: true}
+	return &http.Client{Transport: tr, Timeout: 15 * time.Second}
 }
