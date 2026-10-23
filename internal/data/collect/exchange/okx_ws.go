@@ -40,6 +40,7 @@ type OKXWebSocket struct {
 	dataIdle         time.Duration // D-154 g)：业务帧看门狗字段化（测试缩窗同 D-507 先例）
 	// emitFacts D-509：funding fact 发射口（FactEmitter 去重节流；nil=不 emit）。
 	emitFacts func(ctx context.Context, fs []fact.Fact) error
+	depthEmit func(ctx context.Context, rows []CexDepthRowLite) error // books5 顶档→cex_depth 发射（nil=不 emit）
 	// catalog D-524：instruments 存在性闸（watchlist 方言符号归一化后过目录，不伪造）。
 	catalog *okxInstCatalog
 	// OnInstrumentChange instruments 频道变更帧回调，nil=不通知。
@@ -142,6 +143,7 @@ func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms, fundingSyms []st
 		if perpID != "" {
 			args = append(args,
 				map[string]string{"channel": "tickers", "instId": perpID},
+				map[string]string{"channel": "books5", "instId": perpID}, // D-667 族：books5 深度采集——cex_depth 顶档 REST 拍降为断线兜底
 				// 方案A：mark-price=SWAP 活性脉冲源（前置实证门：XAU-USDT-SWAP
 				// 实测 ~10 帧/s 密推，簿面静止期照流——薄品种 est 夹层根治脉冲）。
 				map[string]string{"channel": "mark-price", "instId": perpID},
@@ -183,6 +185,11 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 	// 证明的是本频道活，tickers 独死不被掩——dataIdle 杀仍归其咎）。
 	if msg.Arg.Channel == "mark-price" || msg.Arg.Channel == "index-tickers" {
 		o.handlePulse(msg)
+		return false
+	}
+	// books5 帧消费：顶档 bid1/ask1 → cex_depth 行（restPoll 拍降为断线兜底）。
+	if msg.Arg.Channel == "books5" {
+		o.handleBooks5(ctx, msg)
 		return false
 	}
 	// 包B S6-d：instruments 变更帧 → 逐 instId 失效规格缓存（事件主失效通道）。
