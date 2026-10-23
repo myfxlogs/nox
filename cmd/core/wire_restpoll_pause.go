@@ -18,3 +18,15 @@ func restPollPausedFn(st *pgstore.Store) func(context.Context, string) (bool, er
 		return ok && v == 1, nil
 	}
 }
+
+// marketWsPausedFn 行情 WS 停止闸读键件（NOX_MARKET_WS_PAUSED_<VENUE>=1 停——
+// 正键域独立于 REST 暂停键；读败 fail-open 不闸）。
+func marketWsPausedFn(st *pgstore.Store) func(context.Context, string) (bool, error) {
+	return func(ctx context.Context, venue string) (bool, error) {
+		v, ok, err := st.AppConfigInt64(ctx, "NOX_MARKET_WS_PAUSED_"+strings.ToUpper(venue))
+		if err != nil {
+			return false, err
+		}
+		return ok && v == 1, nil
+	}
+}

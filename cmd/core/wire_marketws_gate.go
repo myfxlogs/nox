@@ -14,7 +14,7 @@ import (
 )
 
 func marketWsPaused(pause func(context.Context, string) (bool, error), venue string) bool {
-	p, err := pause(context.Background(), "MARKET_WS_"+venue)
+	p, err := pause(context.Background(), venue)
 	if err != nil {
 		log.Printf("[wire] market ws pause 读败 fail-open 不起闸: %v", err)
 		return false
