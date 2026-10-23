@@ -1473,3 +1473,6 @@ verdict=退回返修②（单项残——上轮三阻断全对版，机检重跑
 | **okx REST 全退役→WS 固化（业主令行情全转实时流）** | **✅merged**（复审照准+部署 07:31——SG 验：okx REST depth 零请求+books5 183行/2min+syms=7 订阅活+0 败件） | | 决策席 | **开工指令**：`[角色:实施] okx REST 退役 WS 固化（读 STATE 本行——行情 REST 收官+私面 WS 迁移分票；无 skills 域）` |
 
 | **私面监护 WS 化迁移（okx 先行——capitalview/earn 快照 REST 死面收编）** | **✅merged+deployed 08:14**（三返修毕全对版——心跳刷源/键域归一探供收口/跳变节流+spawn 幂等〔ctx 进程级验过〕；机检 1064 测绿；SG 产验：okx_event 快照 ~5s 拍流〔balPos 含浮盈变即心跳〕+0 capitalview 败件+零监护缺告警——**okx 私面监护 WS 化落地=earn 回腿事件源就位**） | | 决策席 | **开工指令**：`[角色:实施] 私面监护 WS 化迁移（读 STATE 本行+okx_private_ws_events/capitalview/earn 采集件域；无 skills 域）` |
+
+| **等待面休眠 venue 语义标注（gate/binance 已停≠等待恢复）** | **立项→待开工**（决策席裁——业主实证：feishu/等待面仍报 binance 相关——私面余额系有意监护〔$445 在押非 bug〕，但行情行显「等待中」=已停面被误显成待恢复面。范围：暂停 venue〔NOX_*_PAUSED_*=1〕在等待面标「休眠/已停」非「等待中」；读暂停键同域热读；私面余额面照报不误伤。验收：SG——等待面 gate/binance 行情行显休眠非等待） | | 决策席 | **开工指令**：`[角色:实施] 等待面休眠 venue 标注（读 STATE 本行；无 skills 域）` |
+| **okx 全链实证→skills 沉淀（验收毕后一件出）** | **立项→待验收毕**（决策席裁——业主令「okx 完工验收后做 skills」。范围四件+一条：①`okx-market-ws`〔books5 语义/节流/异步队列/原生 instId/REST 兜底闸〕②`okx-private-ws`〔balance_and_position/心跳刷源/键域归一/活性探针〕③`okx-exec`〔clOrdId 定态/fresh-conn/歧态势禁补单〕④环境病灶取证法→经验库条目〔半开死流/h2 裸帧画像/探针证伪谱〕。触发=earn 回腿验收毕后立施） | | 决策席 | **开工指令**：`[角色:实施] okx skills 沉淀四件+经验库一条（读 STATE 本行+产验档；无 skills 域）` |
