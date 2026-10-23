@@ -60,6 +60,9 @@ type Deps struct {
 	// 单一常量两处消费）。
 	MTFrames   func(venueKey string) (MTFrame, bool)
 	MTFrameTTL func() time.Duration
+	// PrivWsFresh 私面 WS 事件活性探针（src=<venue>_event 快照新度；nil=不闸）。
+	PrivWsFresh func(ctx context.Context, venue, venueType string) (time.Time, bool, error)
+	AlertFn     func(level, msg string) // 监护缺告警口；nil=log 降级留痕
 }
 
 // MTFrame MT5 实时账户帧读口返回值（ObserveStreamAccount 落缓存数据面）。
@@ -198,6 +201,9 @@ func (v *View) calibrate(ctx context.Context, venueKey string, force, exact bool
 				}
 			}
 		}
+	}
+	if f, gated, ok := v.privWsGate(ctx, venueKey, k); gated {
+		return f, ok // 私面 WS 化闸（okx 先行——live_exact.go 件）
 	}
 	if v.d.QuerierFor == nil {
 		return Funds{}, false

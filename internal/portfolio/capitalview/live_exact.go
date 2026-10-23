@@ -5,6 +5,7 @@ package capitalview
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -131,4 +132,46 @@ func (v *View) restTTL() time.Duration {
 		return v.d.RestTTL()
 	}
 	return DefaultRestTTL
+}
+
+// privWsGate 私面 WS 化闸（okx 先行）：事件快照新→免 REST 校准（快照行同源供）；
+// 陈→监护缺 critical 告警 fail-closed 返回（不静默降级 REST）。gated=false 放行。
+func (v *View) privWsGate(ctx context.Context, venueKey string, k keydomain.VenueKey) (f Funds, gated, ok bool) {
+	if v.d.PrivWsFresh == nil || k.Venue != "okx" {
+		return Funds{}, false, false
+	}
+	ts, has, perr := v.d.PrivWsFresh(ctx, k.Venue, k.Type)
+	if perr != nil {
+		log.Printf("[capitalview] %s 私面 ws 新度读败 fail-closed: %v", venueKey, perr)
+		return Funds{}, true, false
+	}
+	if has && time.Since(ts) < 5*time.Minute {
+		if sf, sok := v.snapshotFunds(ctx, venueKey); sok {
+			return sf, true, true // WS 活=免 REST（快照行已供）
+		}
+	}
+	msg := fmt.Sprintf("okx 私面监护 WS 事件缺监护（venue=%s type=%s 快照陈/缺）——REST 闸关不降级", venueKey, k.Type)
+	if v.d.AlertFn != nil {
+		v.d.AlertFn("critical", msg)
+	}
+	log.Printf("[capitalview] %s", msg)
+	return Funds{}, true, false
+}
+
+// snapshotFunds WS 事件快照行→Funds（okx_event 活径免 REST——同键快照读面）。
+func (v *View) snapshotFunds(ctx context.Context, venueKey string) (Funds, bool) {
+	if v.d.Snapshots == nil {
+		return Funds{}, false
+	}
+	snaps, err := v.d.Snapshots(ctx)
+	if err != nil {
+		return Funds{}, false
+	}
+	k := keydomain.Parse(venueKey)
+	for _, r := range snaps {
+		if r.Venue == k.Venue && r.VenueType == k.Type && r.EquityRaw != nil {
+			return SnapFundsOf(r, time.Now()), true
+		}
+	}
+	return Funds{}, false
 }
