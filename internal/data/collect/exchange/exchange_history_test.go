@@ -102,7 +102,7 @@ func TestOKXFundingHistory_Poll(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+	cfg := Config{Symbols: []string{"BTC"}, RestFamilyOnFn: func(context.Context, string) bool { return true }, OKXBaseURL: srv.URL, Client: srv.Client()}
 	c := NewOKXFundingHistory(cfg, zeroResolver)
 	out, err := c.Poll(context.Background())
 	if err != nil {
@@ -238,7 +238,7 @@ func TestFundingHistoryFailOpen(t *testing.T) {
 	}))
 	defer okxSrv.Close()
 	okx := NewOKXFundingHistory(
-		Config{Symbols: []string{"COPPER", "PGFAIL", "BTC"}, OKXBaseURL: okxSrv.URL, Client: okxSrv.Client()}, zeroResolver)
+		Config{Symbols: []string{"COPPER", "PGFAIL", "BTC"}, RestFamilyOnFn: func(context.Context, string) bool { return true }, OKXBaseURL: okxSrv.URL, Client: okxSrv.Client()}, zeroResolver)
 	out, err = okx.Poll(ctx)
 	if err != nil {
 		t.Fatalf("okx Poll should not fail on single-symbol error: %v", err)
@@ -351,7 +351,7 @@ func TestOKXFundingHistory_IncrementalDirection(t *testing.T) {
 	defer srv.Close()
 
 	resolver := func(context.Context, string, string) (time.Time, error) { return t0, nil }
-	cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+	cfg := Config{Symbols: []string{"BTC"}, RestFamilyOnFn: func(context.Context, string) bool { return true }, OKXBaseURL: srv.URL, Client: srv.Client()}
 	out, err := NewOKXFundingHistory(cfg, resolver).Poll(context.Background())
 	if err != nil {
 		t.Fatalf("Poll: %v", err)
@@ -385,7 +385,7 @@ func TestOKXFundingHistory_PagingWithinWindow(t *testing.T) {
 	defer srv.Close()
 
 	resolver := func(context.Context, string, string) (time.Time, error) { return t0, nil }
-	cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+	cfg := Config{Symbols: []string{"BTC"}, RestFamilyOnFn: func(context.Context, string) bool { return true }, OKXBaseURL: srv.URL, Client: srv.Client()}
 	out, err := NewOKXFundingHistory(cfg, resolver).Poll(context.Background())
 	if err != nil {
 		t.Fatalf("Poll: %v", err)
@@ -427,7 +427,7 @@ func TestOKXFundingHistory_EmptyWindow(t *testing.T) {
 
 	t0 := time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC)
 	resolver := func(context.Context, string, string) (time.Time, error) { return t0, nil }
-	cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+	cfg := Config{Symbols: []string{"BTC"}, RestFamilyOnFn: func(context.Context, string) bool { return true }, OKXBaseURL: srv.URL, Client: srv.Client()}
 	out, err := NewOKXFundingHistory(cfg, resolver).Poll(context.Background())
 	if err != nil {
 		t.Fatalf("Poll: %v", err)
@@ -461,7 +461,7 @@ func TestOKXFundingHistory_PeriodsProbe(t *testing.T) {
 			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": hist})
 		}))
 		defer srv.Close()
-		cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+		cfg := Config{Symbols: []string{"BTC"}, RestFamilyOnFn: func(context.Context, string) bool { return true }, OKXBaseURL: srv.URL, Client: srv.Client()}
 		out, err := NewOKXFundingHistory(cfg, resolver).Poll(context.Background())
 		if err != nil {
 			t.Fatalf("Poll: %v", err)
@@ -489,7 +489,7 @@ func TestOKXFundingHistory_PeriodsProbe(t *testing.T) {
 			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": hist})
 		}))
 		defer srv.Close()
-		cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+		cfg := Config{Symbols: []string{"BTC"}, RestFamilyOnFn: func(context.Context, string) bool { return true }, OKXBaseURL: srv.URL, Client: srv.Client()}
 		out, err := NewOKXFundingHistory(cfg, resolver).Poll(context.Background())
 		if err != nil {
 			t.Fatalf("Poll: %v", err)
@@ -534,7 +534,7 @@ func TestOKXFundingHistory_NoProgressGuard(t *testing.T) {
 	defer srv.Close()
 
 	resolver := func(context.Context, string, string) (time.Time, error) { return t0, nil }
-	cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+	cfg := Config{Symbols: []string{"BTC"}, RestFamilyOnFn: func(context.Context, string) bool { return true }, OKXBaseURL: srv.URL, Client: srv.Client()}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	out, err := NewOKXFundingHistory(cfg, resolver).Poll(ctx)
@@ -573,7 +573,7 @@ func TestOKXFundingHistory_PeriodCache(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+	cfg := Config{Symbols: []string{"BTC"}, RestFamilyOnFn: func(context.Context, string) bool { return true }, OKXBaseURL: srv.URL, Client: srv.Client()}
 	c := NewOKXFundingHistory(cfg, zeroResolver)
 	for i := 0; i < 2; i++ {
 		if _, err := c.Poll(context.Background()); err != nil {

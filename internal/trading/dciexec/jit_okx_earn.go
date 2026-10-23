@@ -49,19 +49,34 @@ func (e *Executor) jitOkxEarnSweep(ctx context.Context) error {
 	if !ok {
 		return fmt.Errorf("okx earn rail 缺席")
 	}
-	r, ok := rail.(*okxEarnRail)
-	if !ok {
-		return fmt.Errorf("okx earn rail 类型不符")
-	}
 	// 留备式预留（返修⑤钦定式）：armed 保证金头备=NOX_OKX_MARGIN_RESERVE_USD
 	// 读败=保守默认 500（宁多备不欠保证金=fail-closed 守）。
 	reserve := jitOkxReserveDefaultUSD
 	if rv, rok, rerr := e.Store.AppConfigInt64(ctx, jitOkxReserveKey); rerr == nil && rok && rv > 0 {
 		reserve = float64(rv)
 	}
-	free, err := r.FreeBalance(ctx, jitCcy) // 双源：unified availBal+funding 户
-	if err != nil {
-		return fmt.Errorf("okx 闲额读败 fail-closed: %w", err)
+	// 顺带优化钉（业主令）：闲额改读 okx_event 快照行〔WS 供数病灶免疫〕——
+	// REST 仅申购时额度复核（rail.Subscribe 内 fundingAvail 读径仍在）。
+	snaps, serr := e.Store.LatestVenueAccountSnapshots(ctx)
+	if serr != nil {
+		return fmt.Errorf("okx 快照读败 fail-closed: %w", serr)
+	}
+	var free float64
+	found := false
+	for _, sn := range snaps {
+		if sn.Venue == "okx" && sn.VenueType == "unified" && sn.Currency == jitCcy &&
+			sn.EquityRaw != nil {
+			if sn.FreeMarginRaw != nil {
+				free = *sn.FreeMarginRaw
+			} else {
+				free = *sn.EquityRaw // free_margin 不采=equity 回退同 REST 口径
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("okx_event 快照行缺 fail-closed 不扫")
 	}
 	excess := sweepExcess(free, reserve) // sweepable=free−armedReserve−floor（同函数单源）
 	log.Printf("[dciexec] okx earn jit free %.4f reserve %.4f excess %.4f", free, reserve, excess)

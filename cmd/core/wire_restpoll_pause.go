@@ -30,3 +30,11 @@ func marketWsPausedFn(st *pgstore.Store) func(context.Context, string) (bool, er
 		return ok && v == 1, nil
 	}
 }
+
+// okxRestFamilyOnFn okx REST 实名豁免族闸装配（NOX_OKX_REST_<FAMILY>=1 开）。
+func okxRestFamilyOnFn(st *pgstore.Store) func(context.Context, string) bool {
+	return func(ctx context.Context, family string) bool {
+		v, ok, err := st.AppConfigInt64(ctx, "NOX_OKX_REST_"+strings.ToUpper(family))
+		return err == nil && ok && v == 1 // 读败=关闸 fail-closed
+	}
+}

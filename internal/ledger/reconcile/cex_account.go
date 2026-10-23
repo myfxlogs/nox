@@ -82,6 +82,12 @@ func (q *CEXAccountQuerier) Account(ctx context.Context) (*AccountInfo, error) {
 // === OKX ===
 
 func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error) {
+	// 私面 REST 单点闸（续段收编③——monitor/calibrate/earn 全谱消费方同径收编；
+	// NOX_OKX_REST_ACCOUNT=0 默认关闸 fail-closed；WS 事件监护面〔balance_and_position〕
+	// 在供=REST 兜底仅豁免键开——事务面〔earn 申购赎回/划转/instruments〕不落此闸另域）。
+	if !OkxPrivRestAllowed(ctx) {
+		return nil, fmt.Errorf("okx priv REST 闸关（WS 私面供数域——NOX_OKX_REST_ACCOUNT=1 方可开）")
+	}
 	const path = "/api/v5/account/balance"
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	prehash := ts + "GET" + path + ""
@@ -248,4 +254,12 @@ func (q *CEXAccountQuerier) get(ctx context.Context, u string, headers http.Head
 		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
 	}
 	return data, nil
+}
+
+// OkxPrivRestAllowed 私面 REST 豁免闸读口（装配=wire 注入 appConfig 读件；
+// nil=默认关闸 fail-closed——WS 私面供数域）。
+var OkxPrivRestAllowedFn func(ctx context.Context) bool
+
+func OkxPrivRestAllowed(ctx context.Context) bool {
+	return OkxPrivRestAllowedFn != nil && OkxPrivRestAllowedFn(ctx)
 }
