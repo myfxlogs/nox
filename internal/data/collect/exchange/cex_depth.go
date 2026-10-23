@@ -60,6 +60,9 @@ func FetchCexDepths(ctx context.Context, cfg Config, bases []string) []DepthQuot
 // FetchCexDepthsVenue D-280 方案 A：单所×基名集顶档采样——分所精集口径
 // （每所基名集独立，候选腿真实集合天然自对齐；失败符号跳过同惯例）。
 func FetchCexDepthsVenue(ctx context.Context, cfg Config, venue string, bases []string) []DepthQuote {
+	if restPollPaused(ctx, cfg, venue) { // REST 采集暂停开关同闸——深度 fetch 域（收窄本意=REST 面全停）
+		return nil
+	}
 	var out []DepthQuote
 	for _, base := range bases {
 		dq, err := fetchDepth(ctx, cfg, venue, base)
