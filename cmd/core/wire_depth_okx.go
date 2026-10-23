@@ -17,9 +17,18 @@ func okxDepthEmit(st *pgstore.Store) func(context.Context, []exchange.CexDepthRo
 				Venue: r.Venue, Symbol: r.Symbol, Ts: r.Ts,
 				Bid1USD: r.Bid1USD, Ask1USD: r.Ask1USD,
 				Bid1Qty: r.Bid1Qty, Ask1Qty: r.Ask1Qty,
-				MidDepthUSD: (r.Bid1USD + r.Ask1USD) / 2,
+				// 名义深度=mid×min(bidQty,askQty)（契约有据 MidDepthUSD 深度列位）。
+				MidDepthUSD: (r.Bid1USD + r.Ask1USD) / 2 * minF(r.Bid1Qty, r.Ask1Qty),
 			})
 		}
 		return st.InsertCexDepth(ctx, out)
 	}
+}
+
+// minF 小额件——两 qty 取小（mid×min 名义深度件参）。
+func minF(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }

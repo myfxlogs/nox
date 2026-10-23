@@ -103,3 +103,13 @@ func (s *Store) LatestDepthHalfSpread(ctx context.Context, venue, symbol string)
 	}
 	return v, v > 0, nil
 }
+
+// CexDepthFreshWithin (venue,symbol) 有行 <within——books5 ws 主供存活
+// 探针：REST 拍兜底闸用（新=跳拍，陈/缺=REST 兜底补拍——双写同表防断档）。
+func (s *Store) CexDepthFreshWithin(ctx context.Context, venue, symbol string, within time.Duration) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM fin_cex_depth
+		WHERE venue=$1 AND symbol=$2 AND ts > now() - $3::interval)`,
+		venue, symbol, within.String()).Scan(&ok)
+	return ok, err
+}
