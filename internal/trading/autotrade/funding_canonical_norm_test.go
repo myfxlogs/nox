@@ -31,3 +31,26 @@ func TestFundingReadPath_CanonicalNorm(t *testing.T) {
 		t.Fatalf("窗均径残形应归一命中")
 	}
 }
+
+// 裸键族命中锚（返修②钦定——map 键域混形实证：SPX500 裸键 vs TRXUSDT 带尾，
+// 预归一砸断裸键族回归；候选双键并集应中）。
+func TestMtCandidateUnion_BareKeyHits(t *testing.T) {
+	s := testAccumStore(t)
+	e := &Engine{store: s}
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE facts CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	now := time.Now().UTC()
+	// 裸键 SPX500 trade_mode 行（裸键族实证形——facts 落 SPX500 非 SPX500USDT）。
+	if err := s.InsertFacts(ctx, []fact.Fact{
+		{Kind: fact.KindTradeMode, Venue: "gate", Symbol: "SPX500", Value: float64(fact.TradeModeDisabled), Unit: "mode", Ts: now, Src: "t"},
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// canonical=SPX500（裸键）→候选集应含原键命中 disabled→true（预归一径
+	// SPX500USDT 落空返 false=回归实证面锚）。
+	if !e.mtMarketClosedFor(ctx, "gate", "SPX500") {
+		t.Fatalf("裸键 SPX500 trade_mode 行应命中（候选双键并集含原键）")
+	}
+}
