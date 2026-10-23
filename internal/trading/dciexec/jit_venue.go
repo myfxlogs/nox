@@ -146,6 +146,7 @@ func (e *Executor) tradingFree(ctx context.Context, venue, vt string) (float64, 
 		}
 		var rows []struct {
 			Asset     string `json:"asset"`
+			Wallet    string `json:"walletBalance"`
 			Available string `json:"availableBalance"`
 		}
 		if err := json.Unmarshal(b, &rows); err != nil {
@@ -153,7 +154,10 @@ func (e *Executor) tradingFree(ctx context.Context, venue, vt string) (float64, 
 		}
 		for _, r := range rows {
 			if r.Asset == jitCcy {
-				return parseF(r.Available), nil
+				// 返修⑧：划转上限=USDT 单币 walletBalance——UM 多资产模式
+				// availableBalance=USDT+BFUSD 合成折值（SAPI asset=USDT 划转
+				// 上限实持单币额，BFUSD=抵押收益资产留 UM 不入扫）。
+				return parseF(r.Wallet), nil
 			}
 		}
 		return 0, nil
