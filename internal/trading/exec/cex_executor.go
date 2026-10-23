@@ -31,6 +31,7 @@ type CEXExecutor struct {
 	simulated    bool   // D-516：demo 域收编后纯标记位——构造期 fail-closed 闸用，不再改请求
 	keyOverride  string // D-362 S3：撞键非赢家注册键（"venue:type#<id>"；空=canonical）
 	client       *http.Client
+	execClient   *http.Client // 下单专用：DisableKeepAlives 新鲜 conn 每单不复用
 
 	// Binance perp 双仓模式探测缓存（per executor 实例，避免每单探测）。
 	dualSide       bool // true=hedge mode（双仓），false=one-way（单仓）
@@ -86,8 +87,10 @@ func NewCEXExecutor(venue, venueType, apiKey, apiSecret, passphrase, baseURL str
 		apiSecret:  apiSecret,
 		passphrase: passphrase,
 		baseURL:    baseURL,
+
 		simulated:  simulated,
-		client:     wrapDepHealth(venue, venueType, httpx.Client()), // CA 信任 + X-Proxy-Token 注入（D-055）；OKX 公网忽略注入头；D-579 dephealth 记账 RT
+		client:     wrapDepHealth(venue, venueType, httpx.Client()),      // CA 信任 + X-Proxy-Token 注入（D-055）；OKX 公网忽略注入头；D-579 dephealth 记账 RT
+		execClient: wrapDepHealth(venue, venueType, httpx.FreshClient()), // 钱径专用传输：每单新鲜 conn 不复用+装配层全继承（httpx fresh 形——exec 返修⑤）
 
 		marginReservePct:       defaultMarginReservePct,
 		crossNotionalEquityCap: DefaultCrossNotionalEquityCap,

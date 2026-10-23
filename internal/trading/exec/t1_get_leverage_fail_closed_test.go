@@ -62,12 +62,16 @@ func TestD564_T1_GetLeverageFailClosed(t *testing.T) {
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	rt := &d564GateRT{lever: `{"Lever":""}`}
 	e.client = &http.Client{Transport: rt}
+	e.execClient = e.client
+	e.execClient = e.client
 	if _, err := e.gateGetLeverage(context.Background(), "XAU_USDT", "isolated", ""); err == nil || !strings.Contains(err.Error(), "Lever 空") {
 		t.Fatalf("Lever 空→fail-closed: %v", err)
 	}
 	rt2 := &d564GateRT{lever: `{"Lever":"abc"}`}
 	e2 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e2.client = &http.Client{Transport: rt2}
+	e2.execClient = e2.client
+	e2.execClient = e2.client
 	if _, err := e2.gateGetLeverage(context.Background(), "XAU_USDT", "isolated", "dual_long"); err == nil || !strings.Contains(err.Error(), "非正/非数字") {
 		t.Fatalf("非数字→fail-closed: %v", err)
 	}
@@ -80,6 +84,8 @@ func TestD564_T2_PrecheckModeRouting(t *testing.T) {
 	rt := &d564GateRT{accounts: `{"available":"800","total":"800","position_mode":"dual"}`, lever: `{"Lever":"2"}`}
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: rt}
+	e.execClient = e.client
+	e.execClient = e.client
 	// 单独核 dual_side 参数与双 margin：直接走 gateEffectiveLeverage（precheck 语义同源）。
 	lv, err := e.gateEffectiveLeverage(context.Background(), "XAU_USDT", gateModeDual, true)
 	if err != nil || lv != 2 {
@@ -97,6 +103,8 @@ func TestD564_T2_PrecheckModeRouting(t *testing.T) {
 	rtPre := &d564GateRT{accounts: `{"available":"800","total":"800","position_mode":"dual"}`, lever: `{"Lever":"10"}`}
 	ePre := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	ePre.client = &http.Client{Transport: rtPre}
+	ePre.execClient = ePre.client
+	ePre.execClient = ePre.client
 	if err := ePre.MarginPrecheck(context.Background(), Order{Symbol: "XAU_USDT", Side: "SELL", Qty: 0.01, Venue: "gate:perp"}); err != nil {
 		t.Fatalf("dual precheck 放行: %v", err)
 	}
@@ -114,6 +122,8 @@ func TestD564_T4_PositionsDualRouting(t *testing.T) {
 	}
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: rt}
+	e.execClient = e.client
+	e.execClient = e.client
 	_, ps, err := e.GatePositionsRaw(context.Background(), "XAU_USDT")
 	if err != nil {
 		t.Fatalf("dual positions: %v", err)
@@ -125,6 +135,8 @@ func TestD564_T4_PositionsDualRouting(t *testing.T) {
 	rt2 := &d564GateRT{accounts: `{"position_mode":"dual"}`, dualPos: `[]`}
 	e2 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e2.client = &http.Client{Transport: rt2}
+	e2.execClient = e2.client
+	e2.execClient = e2.client
 	// e.get 非 2xx 报错含 body——fake 直接 200 空数组模拟 flat（404 分支由 error 文案路径覆盖，
 	// flat 实测主径=200 空数组/POSITION_NOT_FOUND 错误串）。
 	if _, ps2, err2 := e2.GatePositionsRaw(context.Background(), "XAU_USDT"); err2 != nil || len(ps2) != 0 {
@@ -134,6 +146,8 @@ func TestD564_T4_PositionsDualRouting(t *testing.T) {
 	rt3 := &d564GateRT{accounts: `{"position_mode":"single"}`, positions: `{"contract":"XAU_USDT","size":0}`}
 	e3 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e3.client = &http.Client{Transport: rt3}
+	e3.execClient = e3.client
+	e3.execClient = e3.client
 	if _, ps3, err3 := e3.GatePositionsRaw(context.Background(), "XAU_USDT"); err3 != nil || ps3 != nil {
 		t.Fatalf("single size=0 → nil: %v %v", ps3, err3)
 	}
@@ -146,6 +160,8 @@ func TestD564_T5_CloseOrderDual(t *testing.T) {
 	rt := &d564GateRT{accounts: `{"position_mode":"dual"}`, lever: `{"Lever":"10"}`}
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: rt}
+	e.execClient = e.client
+	e.execClient = e.client
 	// R1 反转：auto_size 按持仓侧 PositionSide 驱动——PositionSide=short（平空腿，
 	// BUY 平）→ close_short。旧版按下单侧 o.Side 推导会把「SELL 平多」错写成
 	// close_short，本锚 BUY+short→close_short 钉死正确映射。
@@ -172,6 +188,7 @@ func TestD564_T5_CloseOrderDual(t *testing.T) {
 	rtBad := &d564GateRT{accounts: `{"position_mode":"dual"}`, lever: `{"Lever":"10"}`}
 	eBad := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	eBad.client = &http.Client{Transport: rtBad}
+	eBad.execClient = eBad.client
 	_, _, errBad := eBad.placeGateRaw(context.Background(), Order{Symbol: "XAU_USDT", Side: "SELL", Qty: 0.01, PositionSide: "both"})
 	if errBad == nil || !strings.Contains(errBad.Error(), "PositionSide") {
 		t.Fatalf("非法 PositionSide 应 fail-closed: %v", errBad)
@@ -183,6 +200,8 @@ func TestD564_T5_CloseOrderDual(t *testing.T) {
 	rt2 := &d564GateRT{accounts: `{"position_mode":"single"}`, lever: `{"Lever":"10"}`}
 	e2 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e2.client = &http.Client{Transport: rt2}
+	e2.execClient = e2.client
+	e2.execClient = e2.client
 	_, _, _ = e2.placeGateRaw(context.Background(), Order{Symbol: "XAU_USDT", Side: "SELL", Qty: 0.01, PositionSide: "long"})
 	if !strings.Contains(rt2.orderBodies[0], `"reduce_only":true`) || strings.Contains(rt2.orderBodies[0], "auto_size") {
 		t.Fatalf("single 平仓应 reduce_only:true 无 auto_size: %s", rt2.orderBodies[0])
@@ -194,18 +213,21 @@ func TestD564_T6_ContractSpecGates(t *testing.T) {
 	// in_delisting=true → 拒。
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: &specRT{spec: `{"quanto_multiplier":"0.01","order_size_min":1,"enable_decimal":false,"in_delisting":true,"mark_price":"1000"}`}}
+	e.execClient = e.client
 	if _, _, err := e.gateSpecCheck(context.Background(), "DEAD_USDT", 1); err == nil || !strings.Contains(err.Error(), "退市") {
 		t.Fatalf("in_delisting 应拒: %v", err)
 	}
 	// qty 张数 < order_size_min → 拒。
 	e2 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e2.client = &http.Client{Transport: &specRT{spec: `{"quanto_multiplier":"0.01","order_size_min":10,"enable_decimal":false,"mark_price":"1000"}`}}
+	e2.execClient = e2.client
 	if _, _, err := e2.gateSpecCheck(context.Background(), "MIN_USDT", 0.05); err == nil || !strings.Contains(err.Error(), "不足最小张数") {
 		t.Fatalf("size<min 应拒: %v", err)
 	}
 	// 整数张 floor：qty=0.059 → 5.9 张 floor=5。
 	e3 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e3.client = &http.Client{Transport: &specRT{spec: `{"quanto_multiplier":"0.01","order_size_min":1,"enable_decimal":false,"mark_price":"1000"}`}}
+	e3.execClient = e3.client
 	sz, _, err := e3.gateSpecCheck(context.Background(), "INT_USDT", 0.059)
 	if err != nil || sz != 5 {
 		t.Fatalf("整数张 floor want 5, got %v err=%v", sz, err)
@@ -226,12 +248,14 @@ func TestD564_T10_OKXPosModeAndState(t *testing.T) {
 	okxSwapSpecCache.Range(func(k, v any) bool { okxSwapSpecCache.Delete(k); return true })
 	e := NewCEXExecutor("okx", "perp", "k", "s", "pp", "http://x", false)
 	e.client = &http.Client{Transport: &okxConfigRT{config: `{"code":"0","data":[{"posMode":"net_mode"}]}`, instruments: `{"code":"0","data":[{"state":"live"}]}`}}
+	e.execClient = e.client
 	err := e.okxPosModeCheck(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "net_mode") {
 		t.Fatalf("net_mode 应拒且报实测值: %v", err)
 	}
 	e2 := NewCEXExecutor("okx", "perp", "k", "s", "pp", "http://x", false)
 	e2.client = &http.Client{Transport: &okxConfigRT{config: `{"code":"0","data":[{"posMode":"long_short_mode"}]}`, instruments: `{"code":"0","data":[{"state":"preopen"}]}`}}
+	e2.execClient = e2.client
 	if err := e2.okxPosModeCheck(context.Background()); err != nil {
 		t.Fatalf("long_short_mode 应过 posMode 闸: %v", err)
 	}
@@ -264,6 +288,7 @@ func TestD564_T11_BinanceFilters(t *testing.T) {
 	binanceFiltersMu.Unlock()
 	e := NewCEXExecutor("binance", "perp", "k", "s", "", "https://fapi.binance.com", false)
 	e.client = &http.Client{Transport: &bFilterRT{}}
+	e.execClient = e.client
 	q, err := e.binanceQtyGuard(context.Background(), "BTCUSDT", 0.0014, 200)
 	if err != nil {
 		t.Fatalf("floor: %v", err)

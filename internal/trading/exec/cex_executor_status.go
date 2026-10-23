@@ -14,6 +14,7 @@ import (
 
 // okxOrderStatusResult GET /api/v5/trade/order 单条订单状态。
 type okxOrderStatusResult struct {
+	OrdID              string `json:"ordId"`
 	AccFillSz          string `json:"accFillSz"`
 	AvgPx              string `json:"avgPx"`
 	State              string `json:"state"`

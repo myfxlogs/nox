@@ -61,11 +61,13 @@ func d472BinAccHedge(avail, levLong, levShort, isolated string) string {
 func TestD472_BinanceMarginOneWay(t *testing.T) {
 	e := NewCEXExecutor("binance", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: &d472BinRT{dual: "false", account: d472BinAcc("1000", "1000", "10", "false"), markPrice: "100"}}
+	e.execClient = e.client
 	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPTUSDT", Side: "BUY", Qty: 2, Venue: "binance:perp"}); err != nil {
 		t.Fatalf("required=20 ≤ 1000×0.8 应放行: %v", err)
 	}
 	e2 := NewCEXExecutor("binance", "perp", "k", "s", "", "http://x", false)
 	e2.client = &http.Client{Transport: &d472BinRT{dual: "false", account: d472BinAcc("10", "10", "10", "false"), markPrice: "100"}}
+	e2.execClient = e2.client
 	err := e2.MarginPrecheck(context.Background(), Order{Symbol: "XPTUSDT", Side: "BUY", Qty: 2, Venue: "binance:perp"})
 	if err == nil || !strings.Contains(err.Error(), "binance margin insufficient") {
 		t.Fatalf("required=20 > 10×0.8=8 应拒: %v", err)
@@ -80,6 +82,7 @@ func TestD472_BinanceMarginOneWay(t *testing.T) {
 func TestD472_BinanceHedgeSideMatch(t *testing.T) {
 	e := NewCEXExecutor("binance", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: &d472BinRT{dual: "true", account: d472BinAccHedge("15", "5", "20", "false"), markPrice: "100"}}
+	e.execClient = e.client
 	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPTUSDT", Side: "SELL", Qty: 2, Venue: "binance:perp"}); err != nil {
 		t.Fatalf("hedge SELL 应匹配 SHORT 行（lev=20）放行: %v", err)
 	}
@@ -91,6 +94,8 @@ func TestD472_BinanceHedgeNoSideRow(t *testing.T) {
 	// 只有 BOTH 行的假响应在 hedge 探测下应不匹配（wantSide=SHORT ≠ BOTH）
 	rt := &d472BinRT{dual: "true", account: d472BinAcc("1000", "1000", "10", "false"), markPrice: "100"}
 	e.client = &http.Client{Transport: rt}
+	e.execClient = e.client
+	e.execClient = e.client
 	err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPTUSDT", Side: "SELL", Qty: 2, Venue: "binance:perp"})
 	if err == nil || !strings.Contains(err.Error(), "不猜") {
 		t.Fatalf("hedge 同侧无行应 error 不猜，got %v", err)
@@ -101,6 +106,7 @@ func TestD472_BinanceHedgeNoSideRow(t *testing.T) {
 func TestD472_BinanceAPIFailClosed(t *testing.T) {
 	e := NewCEXExecutor("binance", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: &d472BinRT{dual: "false", account: "", markPrice: "100"}}
+	e.execClient = e.client
 	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPTUSDT", Side: "BUY", Qty: 2, Venue: "binance:perp"}); err == nil {
 		t.Fatal("account 5xx 应 fail-closed 拒开")
 	}
@@ -113,6 +119,7 @@ func TestD472_BinanceLiqGuardIsolated(t *testing.T) {
 	mk := func(minPct float64) *CEXExecutor {
 		e := NewCEXExecutor("binance", "perp", "k", "s", "", "http://x", false)
 		e.client = &http.Client{Transport: &d472BinRT{dual: "false", account: d472BinAcc("1000", "1000", "10", "true"), markPrice: "100", brackets: br}}
+		e.execClient = e.client
 		e.SetLiqGuards(minPct, 0.3)
 		return e
 	}
@@ -130,6 +137,7 @@ func TestD472_BinanceLiqGuardCrossCap(t *testing.T) {
 	mk := func(equity, cap float64) *CEXExecutor {
 		e := NewCEXExecutor("binance", "perp", "k", "s", "", "http://x", false)
 		e.client = &http.Client{Transport: &d472BinRT{dual: "false", account: d472BinAcc("1000", ftoa(equity), "10", "false"), markPrice: "100"}}
+		e.execClient = e.client
 		e.SetLiqGuards(0.05, cap)
 		return e
 	}
@@ -147,6 +155,7 @@ func TestD472_LiqGuardDefaultOff(t *testing.T) {
 	e := NewCEXExecutor("binance", "perp", "k", "s", "", "http://x", false)
 	// account: equity=1（名义 200 → ratio=200 巨额）——闸关=不因占比拒
 	e.client = &http.Client{Transport: &d472BinRT{dual: "false", account: d472BinAcc("1000", "1", "10", "false"), markPrice: "100", brackets: `[{"symbol":"XPTUSDT","brackets":[{"mmr":"0.99"}]}]`}}
+	e.execClient = e.client
 	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPTUSDT", Side: "BUY", Qty: 2, Venue: "binance:perp"}); err != nil {
 		t.Fatalf("闸缺省关（minPct=0）应放行: %v", err)
 	}
@@ -209,12 +218,14 @@ func TestD472_GateMargin(t *testing.T) {
 	// lev=10 → need=1×1000/10=100 ≤ 500×0.8=400 放行
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"500","total":"500"}`, mark: "1000"}}
+	e.execClient = e.client
 	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err != nil {
 		t.Fatalf("lev=10 need=100 ≤ 400 应放行: %v", err)
 	}
 	// 量纲+拒：available=50 → need=100 > 40 拒，need 断言=100.00（非 0.1）
 	e2 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e2.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"50","total":"50"}`, mark: "1000"}}
+	e2.execClient = e2.client
 	err := e2.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
 	if err == nil || !strings.Contains(err.Error(), "gate margin insufficient") || !strings.Contains(err.Error(), "need 100.00") {
 		t.Fatalf("量纲锚 need=100.00（quanto 禁二次乘），got %v", err)
@@ -223,12 +234,14 @@ func TestD472_GateMargin(t *testing.T) {
 	// 兜底链——实况可读即判（need=100 ≤ 250×0.8=200 放行）。
 	e3 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e3.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"250","total":"250"}`, mark: "1000"}}
+	e3.execClient = e3.client
 	if err := e3.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err != nil {
 		t.Fatalf("实况 lev=10（need=100 ≤ 200）放行: %v", err)
 	}
 	// get_leverage 实况不可读 → fail-closed 拒开（lev 实况上界=保守）。
 	e7 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e7.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"250","total":"250"}`, mark: "1000", leverBroken: true}}
+	e7.execClient = e7.client
 	if err := e7.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err == nil ||
 		!strings.Contains(err.Error(), "fail-closed") {
 		t.Fatalf("杠杆实况不可读应 fail-closed, got %v", err)
@@ -236,6 +249,7 @@ func TestD472_GateMargin(t *testing.T) {
 	// API err → fail-closed
 	e6 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e6.client = &http.Client{Transport: &d472GateRT{accounts: "", mark: "1000"}}
+	e6.execClient = e6.client
 	if err := e6.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err == nil {
 		t.Fatal("accounts 5xx 应 fail-closed 拒开")
 	}
@@ -245,6 +259,7 @@ func TestD472_GateMargin(t *testing.T) {
 func TestD472_GateCrossLiqGuard(t *testing.T) {
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"500","total":"100"}`, mark: "1000"}}
+	e.execClient = e.client
 	e.SetLiqGuards(0.05, 0.3)
 	// qty=1 base、mark=1000 → notional=1000；equity=100 → ratio=10 > 0.3 拒
 	err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
@@ -262,6 +277,8 @@ func TestD564_GatePrecheckPureRead(t *testing.T) {
 	rt := &d472GateRT{accounts: `{"available":"800","total":"800","position_mode":"dual"}`, mark: "1000", levers: map[string]string{"isolated": "2", "cross": "10"}}
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: rt}
+	e.execClient = e.client
+	e.execClient = e.client
 	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "SELL", Qty: 1, Venue: "gate:perp"}); err != nil {
 		t.Fatalf("dual min(2,10)=2 → need=500 ≤ 800×0.8=640 放行, got %v", err)
 	}
@@ -275,6 +292,8 @@ func TestD564_GatePrecheckPureRead(t *testing.T) {
 	rt2 := &d472GateRT{accounts: `{"available":"800","total":"800","position_mode":"single"}`, mark: "1000", levers: map[string]string{"isolated": "10"}}
 	e2 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e2.client = &http.Client{Transport: rt2}
+	e2.execClient = e2.client
+	e2.execClient = e2.client
 	if err := e2.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "SELL", Qty: 1, Venue: "gate:perp"}); err != nil {
 		t.Fatalf("single 单读放行, got %v", err)
 	}
@@ -287,6 +306,8 @@ func TestD564_GatePrecheckPureRead(t *testing.T) {
 	rt3 := &d472GateRT{accounts: `{"available":"800","total":"800","position_mode":"dual"}`, mark: "1000", leverBroken: true}
 	e3 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e3.client = &http.Client{Transport: rt3}
+	e3.execClient = e3.client
+	e3.execClient = e3.client
 	if err := e3.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "SELL", Qty: 1, Venue: "gate:perp"}); err == nil ||
 		!strings.Contains(err.Error(), "fail-closed") {
 		t.Fatalf("杠杆实况不可读应 fail-closed 拒开, got %v", err)

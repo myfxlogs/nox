@@ -172,7 +172,11 @@ func (e *CEXExecutor) post(ctx context.Context, url, bodyStr string, headers htt
 			req.Header.Add(k, v)
 		}
 	}
-	resp, err := e.client.Do(req)
+	rt := e.client
+	if e.execClient != nil {
+		rt = e.execClient // POST 皆下单径——专用传输（GET 保共享池）
+	}
+	resp, err := rt.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -202,3 +206,8 @@ func f64z(s string) (float64, error) {
 	}
 	return strconv.ParseFloat(s, 64)
 }
+
+// （execFreshClient 已删——exec 返修⑤：裸 transport 绕过 httpx 装配层三件
+// 〔自签 CA/tokenRT/banGateRT〕=venue 走代理面/需 CA 即死的平台契约破口；
+// 收编为 httpx.FreshClient（assembleRT〔keepalive 开关〕参数化全继承），
+// 调用面=cex_executor.go 构造处。）

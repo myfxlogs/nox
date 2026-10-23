@@ -59,6 +59,8 @@ func TestMarginAssembly_OKX(t *testing.T) {
 	rt := &d550okxRT{funding: "50", savings: "500"}
 	e := NewCEXExecutor("okx", "perp", "k", "s", "p", "http://x", false)
 	e.client = &http.Client{Transport: rt}
+	e.execClient = e.client
+	e.execClient = e.client
 	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "X-USDT-SWAP", Side: "SELL", Qty: 1, Venue: "okx:perp"}); err != nil {
 		t.Fatalf("装配后应放行: %v (seq=%v)", err, rt.seq)
 	}
@@ -84,6 +86,8 @@ func TestMarginAssembly_OKXSavingsReadFail(t *testing.T) {
 	rt := &d550okxRT{funding: "50", savings: "500", savFail: true}
 	e := NewCEXExecutor("okx", "perp", "k", "s", "p", "http://x", false)
 	e.client = &http.Client{Transport: rt}
+	e.execClient = e.client
+	e.execClient = e.client
 	err := e.MarginPrecheck(context.Background(), Order{Symbol: "X-USDT-SWAP", Side: "SELL", Qty: 1, Venue: "okx:perp"})
 	if err == nil || !strings.Contains(err.Error(), "装配败") {
 		t.Fatalf("savings 读败应 fail-closed 拒: %v", err)
@@ -165,6 +169,8 @@ func TestMarginAssembly_Gate(t *testing.T) {
 	rt := &d550gateRT{spot: "200"}
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: rt}
+	e.execClient = e.client
+	e.execClient = e.client
 	err := e.MarginPrecheck(context.Background(), Order{Symbol: "X_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
 	// 杠杆实况读走 get_leverage 链——fake 未覆写即读败 fail-closed 也可接受；
 	// 只锚「若走到不足分支」装配序列与读败语义。
@@ -196,6 +202,8 @@ func TestMarginAssembly_GateEarnRedeem(t *testing.T) {
 	rt := &d550gateRT{spot: "50", spotPostRedeem: "500", lent: "500"}
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: rt}
+	e.execClient = e.client
+	e.execClient = e.client
 	_ = e.MarginPrecheck(context.Background(), Order{Symbol: "X_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
 	if !rt.redeemed {
 		t.Fatalf("spot 短应收 earn 赎回段: seq=%v", rt.seq)
@@ -229,6 +237,8 @@ func TestMarginAssembly_GateEarnLendsReadFail(t *testing.T) {
 	rt := &d550gateRT{spot: "50", lent: "500", lendsFail: true}
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: rt}
+	e.execClient = e.client
+	e.execClient = e.client
 	err := e.MarginPrecheck(context.Background(), Order{Symbol: "X_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
 	if err == nil {
 		t.Fatalf("lends 读败不应放行")
@@ -248,6 +258,8 @@ func TestMarginAssembly_GateSpotReadFail(t *testing.T) {
 	rt := &d550gateRT{spot: "200", spotFail: true}
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: rt}
+	e.execClient = e.client
+	e.execClient = e.client
 	err := e.MarginPrecheck(context.Background(), Order{Symbol: "X_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
 	if err == nil {
 		// 若杠杆实况段先拒，spot 读根本未触发——仍是 fail-closed 语义，过。
