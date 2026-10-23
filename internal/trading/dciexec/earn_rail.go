@@ -191,6 +191,8 @@ func (r *okxEarnRail) Redeem(ctx context.Context, _ string, amount float64) (str
 }
 
 // FreeBalance 可动=unified 交易户 availBal + funding 资金户 availBal 合并口径
+// （JIT 判定格：unified 读 okx_event 快照行〔须鲜〕+funding 读本件 REST——
+// 本件仅申购时额度复核/单边不判面）
 // （两池都可经划转达申购；SG 实证自划转后 funding=1958 单读 unified 报 0 假贫）。
 func (r *okxEarnRail) FreeBalance(ctx context.Context, ccy string) (float64, error) {
 	u, err := r.unifiedAvail(ctx, ccy)

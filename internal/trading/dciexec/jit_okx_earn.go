@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 )
 
 // jitOkxEarnMu per-venue 单飞锁（钉①——并发余额事件双过闲额判定=超归集险防；
@@ -55,22 +56,25 @@ func (e *Executor) jitOkxEarnSweep(ctx context.Context) error {
 	if rv, rok, rerr := e.Store.AppConfigInt64(ctx, jitOkxReserveKey); rerr == nil && rok && rv > 0 {
 		reserve = float64(rv)
 	}
-	// 顺带优化钉（业主令）：闲额改读 okx_event 快照行〔WS 供数病灶免疫〕——
-	// REST 仅申购时额度复核（rail.Subscribe 内 fundingAvail 读径仍在）。
+	// 混源钉（返修⑥钦定式）：free = unified〔okx_event 快照行须鲜〕+
+	// fundingAvail〔asset/balances REST=钦定保留面〕——快照行不鲜=funding
+	// 单边也不判 fail-closed（单读 unified 报 0 假贫病灶防复返）。
 	snaps, serr := e.Store.LatestVenueAccountSnapshots(ctx)
 	if serr != nil {
 		return fmt.Errorf("okx 快照读败 fail-closed: %w", serr)
 	}
-	var free float64
+	var unified float64
+	var ts time.Time
 	found := false
 	for _, sn := range snaps {
 		if sn.Venue == "okx" && sn.VenueType == "unified" && sn.Currency == jitCcy &&
 			sn.EquityRaw != nil {
 			if sn.FreeMarginRaw != nil {
-				free = *sn.FreeMarginRaw
+				unified = *sn.FreeMarginRaw
 			} else {
-				free = *sn.EquityRaw // free_margin 不采=equity 回退同 REST 口径
+				unified = *sn.EquityRaw // free_margin 不采=equity 回退同 REST 口径
 			}
+			ts = sn.FetchedAt
 			found = true
 			break
 		}
@@ -78,6 +82,18 @@ func (e *Executor) jitOkxEarnSweep(ctx context.Context) error {
 	if !found {
 		return fmt.Errorf("okx_event 快照行缺 fail-closed 不扫")
 	}
+	if time.Since(ts) > 5*time.Minute {
+		return fmt.Errorf("okx_event 快照陈 %.0fs>300s fail-closed 不扫（funding 单边不判）", time.Since(ts).Seconds())
+	}
+	r, ok := rail.(*okxEarnRail)
+	if !ok {
+		return fmt.Errorf("okx earn rail 类型不符")
+	}
+	funding, ferr := r.fundingAvail(ctx, jitCcy) // 钦定保留面 REST 读
+	if ferr != nil {
+		return fmt.Errorf("okx funding 余额读败 fail-closed: %w", ferr)
+	}
+	free := unified + funding            // 混源合成=unified〔WS 鲜〕+funding〔REST 钦定保留面〕
 	excess := sweepExcess(free, reserve) // sweepable=free−armedReserve−floor（同函数单源）
 	log.Printf("[dciexec] okx earn jit free %.4f reserve %.4f excess %.4f", free, reserve, excess)
 	if excess < jitIdleMinSweepUSD {
