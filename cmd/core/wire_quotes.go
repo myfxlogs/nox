@@ -73,10 +73,24 @@ func startQuoteStreams(ctx context.Context, cexCfg exchange.Config, qbus *bus.Qu
 		return st.ExecFaceBinanceSymbols(ctx)
 	}
 	cexCfg.ExecFaceVenueFn = st.ExecFaceVenueSymbols // D-665 okx/gate 同律执行面集
-	cexCfg.MonitorFaceFn = func(ctx context.Context) (map[string]string, error) {
-		// 返修⑤钦定单源译名：raw canonical 资产名→scan.CfdBookSpecs equiv 链
-		// →CexNativeSym venue 档名→BookCanonical 归一（SILVER→XAG 等价族
-		// 全通；无档行如实不出）。
+	cexCfg.MonitorFaceFn = monitorFaceFn(st)         // 装配序修：同一 helper 供 main 层先赋
+	cexCfg.IndivBudgetFn = func(ctx context.Context) (int64, bool, error) {
+		return st.AppConfigInt64(ctx, "NOX_INDIV_MAX_CONNS")
+	}
+	if ws := exchange.NewBinanceMarketWS(cexCfg); ws != nil {
+		ws.SetFactEmit(emitFacts)
+		ws.SetFundingIntervals(fundingIntervals)
+		safego.Go("main:binance-mkt-ws", func() { ws.Run(ctx, qbus.Publish) })
+	}
+	return gateWs
+}
+
+// monitorFaceFn xasset 监控观测集决议（返修⑤单源——raw canonical 资产名→
+// scan.CfdBookSpecs equiv 链→CexNativeSym venue 档名→BookCanonical 归一；
+// SILVER→XAG 等价族全通、无档行如实不出）。装配序修：main 层先于
+// buildCexFundingCollectors 赋值（值拷贝序病修——gate meta 轮询集消费面）。
+func monitorFaceFn(st *pgstore.Store) func(ctx context.Context) (map[string]string, error) {
+	return func(ctx context.Context) (map[string]string, error) {
 		rows, err := st.MonitorFaceRows(ctx, scan.PaperCfdOpenNetPct, scan.PaperCfdMaxNetPct)
 		if err != nil {
 			return nil, err
@@ -95,16 +109,7 @@ func startQuoteStreams(ctx context.Context, cexCfg exchange.Config, qbus *bus.Qu
 			}
 		}
 		return out, nil
-	} // xasset 监控观测集（达标行同阈）
-	cexCfg.IndivBudgetFn = func(ctx context.Context) (int64, bool, error) {
-		return st.AppConfigInt64(ctx, "NOX_INDIV_MAX_CONNS")
 	}
-	if ws := exchange.NewBinanceMarketWS(cexCfg); ws != nil {
-		ws.SetFactEmit(emitFacts)
-		ws.SetFundingIntervals(fundingIntervals)
-		safego.Go("main:binance-mkt-ws", func() { ws.Run(ctx, qbus.Publish) })
-	}
-	return gateWs
 }
 
 // startTickSampler TickSampler 采样（60s 窗）→ ticks 落库（月分区惰性创建）。
