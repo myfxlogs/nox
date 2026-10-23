@@ -64,6 +64,10 @@ func buildCexExchangeConfig(ctx context.Context, st *pgstore.Store, configKick *
 	}
 	dashboard.SetBinanceProxyBase(cfg.BinanceProxyURL) // D-145：dashboard 缺省 base 回退同径
 	cexCfg.Client = httpx.Client()                     // CA 信任 + X-Proxy-Token 注入（D-055 静态代理）
+	// venue REST 采集暂停开关装配在 cfg 出生点——值拷贝消费面（WS 构造面+collect
+	// 径 collector 群）全员可见；后赋于 startQuoteStreams 局部副本=collect 径
+	// 漏罩实证（depth fetch 暂停无效病灶）。
+	cexCfg.RestPollPausedFn = restPollPausedFn(st)
 	return cexCfg, cexSymbols
 }
 
