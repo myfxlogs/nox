@@ -94,7 +94,7 @@ func buildDCIExecutor(ctx context.Context, st *pgstore.Store, modeGate dciexec.M
 	dciexec.ArmedShortfallFn = func(ctx context.Context, venue string) (float64, error) {
 		var n int
 		err := st.Pool().QueryRow(ctx, `SELECT count(*) FROM xasset_allow_combos
-			WHERE tier='armed' AND enabled`).Scan(&n)
+			WHERE tier='armed' AND enabled AND (venue_buy=$1 OR venue_sell=$1)`, venue).Scan(&n)
 		if err != nil {
 			return 0, fmt.Errorf("armed combos: %w", err)
 		}
