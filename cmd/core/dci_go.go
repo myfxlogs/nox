@@ -87,6 +87,7 @@ func buildDCIExecutor(ctx context.Context, st *pgstore.Store, modeGate dciexec.M
 			}
 		}
 	}
+	startJitIdleSweep(ctx, ex)
 	return ex
 }
 
@@ -188,5 +189,23 @@ func newDBEliminator(st *pgstore.Store) func(ctx context.Context, totalTrades in
 	return lifecycle.NewEliminator(func(ctx context.Context, kind string) ([]lifecycle.Criterion, error) {
 		rows, err := st.ListStrategyCriteria(ctx, "*", kind)
 		return lifecycleCriteria(rows), err
+	})
+}
+
+// startJitIdleSweep perp 闲钱常态化扫周期环（hourly 与 pool-reconcile 同
+// 节律件——JitReturn 只管平仓回转；常态化面本环补）。
+func startJitIdleSweep(ctx context.Context, ex *dciexec.Executor) {
+	safego.GoLoop("main:jit-idle-sweep", func() {
+		ex.JitIdleSweep(ctx)
+		for {
+			t := time.NewTimer(time.Hour)
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return
+			case <-t.C:
+				ex.JitIdleSweep(ctx)
+			}
+		}
 	})
 }

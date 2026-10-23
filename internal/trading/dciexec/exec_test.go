@@ -21,6 +21,7 @@ import (
 
 type fakeStore struct {
 	cons      []pgstore.CapabilityConstraint
+	snaps     []pgstore.VenueAccountLatest
 	quotes    []pgstore.CexDCIQuote // ListDCIQuotes 原样回（opt/invest 过滤在 fake 内做）
 	orders    map[string]*pgstore.DCIOrder
 	listErr   error
@@ -1487,4 +1488,8 @@ func TestSpotPriceVenue(t *testing.T) {
 	if _, err := e3.spotPriceVenue(context.Background(), "kraken", "BTCUSDT"); !errors.Is(err, errSpotNoBase) {
 		t.Fatalf("未知 venue 应 errSpotNoBase: %v", err)
 	}
+}
+
+func (f *fakeStore) LatestVenueAccountSnapshots(_ context.Context) ([]pgstore.VenueAccountLatest, error) {
+	return f.snaps, nil
 }
