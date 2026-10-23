@@ -25,3 +25,8 @@ description: mtapi MT5 订单/流面——OpenedOrders/OrderHistory 族/Subscrib
 **复跑**：同 mt5-account（--window 控窗）。
 
 <!-- 方法全名索引：OpenedOrders OpenedOrder OpenedOrdersTickets OrderHistory PendingOrderHistory OrderHistoryPagination Subscribe SubscribeMany UnSubscribe UnSubscribeMany SubscribeOrderProfit SubscribeTickValue SubscribeOrderUpdate SubscribeMarketWatch SubscribeOpenedOrdersTickets Events OnOrderUpdate OnQuote OnTickValue OnOrderProfit OnMarketWatch OnMail OnOpenedOrdersTickets MarketWatchMany -->
+## 平仓事件仲裁坑（ant 实证移植——nox 事件轨同病预防件）
+- **部分平也发 close 事件**：close-kind push 命中≠全平——事件路径必进 RAW 仲裁：票在+量<源=部分平→仅刷快照；票消失=全平→迁移+删快照（ant PARTIAL-CLOSE-EVENT-ARBITRATION 实证）。
+- **close push 不携余量**：push 报 remaining=0 不可靠——命中后仍须 OpenedOrders RAW 取余量；RAW 取证败=fail-closed UNKNOWN 禁猜 0（ant CLOSE-PUSH-REMAINING-ZERO 实证）。
+- **票号 int32 溢出**：MT5 票域超 int32（Exness 实拍 2.66e9）——下游凡 int32 票槽皆截断回绕为负；VM/表侧票号须 uint64/合成句柄桥（ant MT5-TICKET-INT32-OVERFLOW 实证）。
+- **双流归一 fail 语义**：fail 须 `close(done chan)`，send 端 `select{ch<-, <-done}`，Recv 端 `select{ch,done}`——只存 err 不关信号=Recv 永久阻塞；close(ch)=他 pump send panic（ant STREAM-MERGE-FAIL-SHAPE 实证）。
