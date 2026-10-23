@@ -27,3 +27,10 @@ description: mtapi 网关连接/服务面——Connect token 语义/Service 族/
 - **adapter 层**：`internal/data/adapter/mt5.go`——`NewMT5Adapter(venue,host,server,port,user,pass)` 每户一适配器；conn=google.golang.org/grpc。
 - **会话生命周期**：`mt5_session.go reconnectSession`——复用 conn 重调 Connect 刷 token（token 即 Request.Id）；`OnReconnect` 钩=对账 kick 单点（D-004）；token 日志须 maskToken。
 - **生成层**：`internal/data/adapter/gen/mtapi/mt5`——mt5.pb+grpc+mt5connect 三件（权威源 `/opt/grpc-proto/mt5/protos/mt5.proto` 对拍纪律在案）。
+## 凭据装配链（ant gateway/mt5 实证移植——重建第一日件）
+- **Credentials 字段**：`{MTType, Login(string→uint64), Password, Server, Host, MtapiToken}`；Endpoint.Addr=mtapi 网关址（非 broker 址——broker 址在 Host/Server 里）。
+- **双轨寻址**（实证）：`Server` 非空→`ConnectEx{User,Password,Server,Id}`〔server 名=MT 终端所见名〕；否则 `Host`→`Connect{User,Password,Host,Port,Id}`——Host 为**逗号分隔多候选**逐个试〔broker_search 搜得的 Access 列表直接灌〕，`splitHostPort` 末 `:` 剥端口、缺省 **443**。
+- **id/token 双层**（坑密集面）：Connect 前先以 metadata `id=alpha-<login>-<base36ns>` 临时会话号发起；Connect 返回的 session id 成为后续每 Request 的 `Id` **字段**（体域非 header——nox 账已钉）。**另轨**：流/订阅类调用须 metadata 双发 `id` + `authorization: Bearer <MtapiToken>`——MtapiToken 空=免费公共端点轨省发（公共端点不校验 Bearer 实拍），付费/私有端点必须带。
+- **dial 参数**（ant 实证集）：TLS1.2+、`MaxCallMsgSize 16MB`、keepalive `30s/20s/PermitWithoutStream`（**长流必须**，无则被中间件静默割）。
+- **Disconnect 排水窗**：Disconnect RPC 后等 ~200ms 再 `cc.Close`——让在飞 Recv 观察到取消，防级联重连（ant QUOTE-RECONNECT-LOOP 实证）。
+- **Ping**=`CheckConnect{Id}`；**登出纪律**：Disconnect 只应由持有方 actor 发起。
