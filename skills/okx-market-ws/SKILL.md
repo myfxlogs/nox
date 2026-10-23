@@ -17,3 +17,4 @@ description: okx 公开行情 WS 面能力账——books5/tickers/funding-rate/m
 - **ack≠存活**：订阅 ack 收讫不代表帧在流——存活判据=帧时戳前移（同 binance 族教训）。
 - **REST depth 兜底闸关**：`NOX_DEPTH_REST_OKX=1` 才开，默认 fail-closed（缺数据≠降级数据——宁缺交易不静默降级）。
 - **WS 即 h1 升级**：okx WS 是 HTTP/1.1 Upgrade（RFC6455 非 h2/h3）——WS 通≠h2 通证；REST 传输病灶须单测（见 `docs/经验库/条目/` h2 感染条目）。
+- **端点**：`wss://ws.okx.com:8443/ws/v5/public`；代理约定 `wsViaProxyURLs("/okxws/ws/v5/public", 直连URL)`——禁裸写 URL 不挂代理备径。
