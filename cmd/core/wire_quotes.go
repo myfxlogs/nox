@@ -75,18 +75,12 @@ func startQuoteStreams(ctx context.Context, cexCfg exchange.Config, qbus *bus.Qu
 	// canonical=行情键（与 spot 帧同域——返修③；读败=不订静默下一拍重试）。
 	okxWs.DeliverySymbolsFn = okxDeliverySubs(st)
 	safego.GoLoop("main:okx-ws", func() { okxWs.Run(ctx, qbus.Publish) })
-	gateWs := exchange.NewGateWebSocket(cexCfg)
-	gateWs.SetFactEmit(emitFacts)
-	safego.Go("main:gate-ws", func() { gateWs.Run(ctx, qbus.Publish) })
+	gateWs := wireGateMarketWS(ctx, cexCfg, marketWsPausedFn(st), emitFacts, qbus) // 停止闸+Run 一件（nil=闸停）
 	// D-570 包C S6⑤：返回 ref 供 main_monitors 装配 OnContractInfo（cexStreamMgr 后造——
 	// 失效闭包须寻址 collect 侧 ws 实例，构造时不在场）。
 	// D-505 S2 + D-508 S14：Binance 公开报价单轨=WS 流（双连接 SUBSCRIBE）；
 	// REST 兜底已删（断流→reconnectMeter 告警 + 报价龄期闸 fail_closed 拒新鲜度不足报价）。
-	if ws := exchange.NewBinanceMarketWS(cexCfg); ws != nil {
-		ws.SetFactEmit(emitFacts)
-		ws.SetFundingIntervals(fundingIntervals)
-		safego.Go("main:binance-mkt-ws", func() { ws.Run(ctx, qbus.Publish) })
-	}
+	wireBinanceMarketWS(ctx, cexCfg, marketWsPausedFn(st), emitFacts, fundingIntervals, qbus)
 	return gateWs
 }
 
