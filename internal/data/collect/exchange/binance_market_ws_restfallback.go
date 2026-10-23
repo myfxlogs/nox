@@ -213,6 +213,12 @@ func (b *BinanceMarketWS) fetchTicker24h(ctx context.Context) {
 // （节拍对齐 facts_retention 既有 15min 节流粒度——零鲜度损失面）。
 func (b *BinanceMarketWS) runTickerPoll(ctx context.Context) {
 	for {
+		if restPollPaused(ctx, b.cfg, "binance") { // REST 采集暂停开关同域
+			if waitRestPollResume(ctx) {
+				continue
+			}
+			return
+		}
 		b.fetchTicker24h(ctx)
 		select {
 		case <-ctx.Done():

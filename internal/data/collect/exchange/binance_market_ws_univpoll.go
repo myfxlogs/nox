@@ -30,6 +30,12 @@ func (b *BinanceMarketWS) runUniversePoll(ctx context.Context, publish func(bus.
 	}
 	spotURL := spotBase + "/api/v3/ticker/bookTicker"
 	for {
+		if restPollPaused(ctx, b.cfg, "binance") { // REST 采集暂停开关——WS/earn/持仓零动
+			if waitRestPollResume(ctx) {
+				continue
+			}
+			return
+		}
 		b.univPollOne(ctx, perpURL, "perp", publish)
 		b.univPollOne(ctx, spotURL, "spot", publish)
 		select {

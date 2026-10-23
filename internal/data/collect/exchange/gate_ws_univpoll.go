@@ -31,6 +31,12 @@ func (g *GateWebSocket) runGateTickerPoll(ctx context.Context, publish func(bus.
 		base = "https://api.gateio.ws"
 	}
 	for {
+		if restPollPaused(ctx, g.cfg, "gate") { // REST 采集暂停开关——WS/earn/持仓零动
+			if waitRestPollResume(ctx) {
+				continue
+			}
+			return
+		}
 		// spot：currency_pair/last/bid_ask_spread 家族——REST tickers 返回
 		// lowest_ask/highest_bid 键名。
 		var spotRows []struct {

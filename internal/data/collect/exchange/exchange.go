@@ -80,6 +80,10 @@ type Config struct {
 	// 达标行——armed∪毕业∪在仓**先占额**、监控集填余〔同闸竞争监管序〕。
 	// map[canonical]venueType（carry 腿=perp 侧盯）。
 	MonitorFaceFn func(ctx context.Context) (map[string]string, error)
+	// RestPollPausedFn venue REST 轮询暂停开关（app_config
+	// NOX_REST_POLL_PAUSED_<VENUE>=1 停——仅 REST 拍面，WS/earn/持仓零动；
+	// venue 面收窄应急闸）。nil=不暂停。
+	RestPollPausedFn func(ctx context.Context, venue string) (bool, error)
 	// IndivBudgetFn D-663 订阅预算闸：返回 (cap, ok, err)——ok=false&&err=nil=键缺
 	// →indiv 显式关+告警（预算未声明=不启动该面，显式不静默）；
 	// err 支=读败非键缺——rejects 计数+保 desired 不误关（瞬态 DB 错）。
