@@ -21,3 +21,7 @@ description: okx 下单径能力账——FreshClient 钱径、clOrdId 定态三�
 - **REST 签名**：`signutil.OkxSign(secret,ts,method,pathWithQuery,body)`=`base64(HMAC-SHA256(secret, ts+method+path含query+body))`；四头 `OK-ACCESS-KEY/SIGN/TIMESTAMP/PASSPHRASE`；ts=ISO8601 毫秒串。demo 户加头 `x-simulated-trading:1`。
 - **下单方言**：`tdMode`=cash〔spot〕/cross〔perp 全仓〕〔isolated 码内有备未产验〕；`posSide`=net〔单向持仓户〕vs long/short〔双向户——arms 簿须与账户持仓模式一致〕；`instId`=`BTC-USDT-SWAP`〔perp〕/`BTC-USDT`〔spot〕原生键。
 - **WS 下单未迁**：见钱径节——文档有等价面但产验缺，REST 下单是已验证桥。
+## 错误码族谱（docs-v5#error-code 取证 2026-10-23——总表 50000-53999，子码形 `51008_1000`）
+- **50004 超时歧义**：「接口请求超时（不代表请求成功或失败，请检查请求结果）」——与 clOrdId 定态轨同语义：传输/超时败≠业务败，**必查单定真态**，禁直接重试。
+- **鉴权族 501xx**：50101 key/环境不匹配、50102 时间戳过期〔**UTC 偏差=最常见因**，装表须 NTP〕、50110/50121 IP 白名单〔业主配合域〕、50113 签名无效〔sign_string 序错——ts+method+path+body〕、50120 权限不足〔提币/划转域权限缺——gate 同族病灶先例〕。
+- **交易类 51xxx**：51000 参数错、51001 instId 不存在〔目录脏符触发——SILVER-USDT-SWAP 实证〕、51003 ordId/clOrdId 至少填一、**51008 可用余额不足**〔子码 _1101/_1103=杠杆档位持仓上限——调杠杆或减张〕、51131 仓位可用余额不足。
