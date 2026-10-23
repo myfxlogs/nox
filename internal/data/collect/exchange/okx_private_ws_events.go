@@ -40,6 +40,7 @@ func (o *OKXPrivateWS) handleData(ctx context.Context, channel string, raw []byt
 			return
 		}
 		o.balLedger.Put("okx:unified", avail, row.EquityRaw, "USDT", "ws", row.FetchedAt) // D-542 S1
+		o.lastSnap.Store(&row)                                                            // 心跳刷源：静户无推送=快照陈→WS 活也被判死误杀（返修①）
 		if err := o.sink.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{row}); err != nil {
 			log.Printf("[okx-private-ws] insert snapshot: %v", err) // 写失败不杀读循环，下条推送重试
 		}

@@ -58,11 +58,10 @@ type Deps struct {
 	// MTFrames D-572 S2：MT 键先走 AccountMonitor.StreamAccount 帧缓存（装配处包装，
 	// 零新依赖方向）；nil=帧源未接线→快照直通。帧龄窗=MTFrameTTL（快照龄闸同值注入，
 	// 单一常量两处消费）。
-	MTFrames   func(venueKey string) (MTFrame, bool)
-	MTFrameTTL func() time.Duration
-	// PrivWsFresh 私面 WS 事件活性探针（src=<venue>_event 快照新度；nil=不闸）。
-	PrivWsFresh func(ctx context.Context, venue, venueType string) (time.Time, bool, error)
-	AlertFn     func(level, msg string) // 监护缺告警口；nil=log 降级留痕
+	MTFrames    func(venueKey string) (MTFrame, bool)
+	MTFrameTTL  func() time.Duration
+	PrivWsFresh func(ctx context.Context, venue, venueType string) (time.Time, bool, error) // 私面 WS 事件活性探针（src=<venue>_event 新度；nil=不闸）
+	AlertFn     func(level, msg string)                                                     // 监护缺告警口；nil=log 降级留痕
 }
 
 // MTFrame MT5 实时账户帧读口返回值（ObserveStreamAccount 落缓存数据面）。
@@ -79,10 +78,11 @@ const DefaultRestTTL = 30 * time.Second
 
 // View 统一读口（全消费点共享一实例——mu=REST 校准单飞）。
 type View struct {
-	d         Deps
-	mu        sync.Mutex // REST 校准单飞
-	calibMu   sync.Mutex // D-523①：快照去重基准独立锁（mu 持锁段内不可再取）
-	calibBase map[string]pgstore.VenueAccountSnapshot
+	d           Deps
+	mu          sync.Mutex // REST 校准单飞
+	calibMu     sync.Mutex // D-523①：快照去重基准独立锁（mu 持锁段内不可再取）
+	calibBase   map[string]pgstore.VenueAccountSnapshot
+	privAlerted sync.Map // venueKey→已报态
 }
 
 func New(d Deps) *View { return &View{d: d} }

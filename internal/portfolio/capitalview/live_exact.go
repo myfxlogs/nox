@@ -140,21 +140,31 @@ func (v *View) privWsGate(ctx context.Context, venueKey string, k keydomain.Venu
 	if v.d.PrivWsFresh == nil || k.Venue != "okx" {
 		return Funds{}, false, false
 	}
-	ts, has, perr := v.d.PrivWsFresh(ctx, k.Venue, k.Type)
+	probeType := k.Type
+	if probeType != "unified" {
+		probeType = "unified" // okx 统一账户制：非 unified 键同探 unified 源（键域归一——写面只落 unified）
+	}
+	ts, has, perr := v.d.PrivWsFresh(ctx, k.Venue, probeType)
 	if perr != nil {
 		log.Printf("[capitalview] %s 私面 ws 新度读败 fail-closed: %v", venueKey, perr)
 		return Funds{}, true, false
 	}
 	if has && time.Since(ts) < 5*time.Minute {
+		v.privAlerted.Delete(venueKey) // 恢复清报态（状态跳变域——再缺再报）
 		if sf, sok := v.snapshotFunds(ctx, venueKey); sok {
 			return sf, true, true // WS 活=免 REST（快照行已供）
 		}
 	}
-	msg := fmt.Sprintf("okx 私面监护 WS 事件缺监护（venue=%s type=%s 快照陈/缺）——REST 闸关不降级", venueKey, k.Type)
-	if v.d.AlertFn != nil {
-		v.d.AlertFn("critical", msg)
+	// 告警节流（返修①③）：alerted 集命中=状态已报不再重——跳变才报（恢复后
+	// ws 新→下次闸过即清 alerted，再缺再报=状态跳变域）。
+	if _, alerted := v.privAlerted.Load(venueKey); !alerted {
+		msg := fmt.Sprintf("okx 私面监护 WS 事件缺监护（venue=%s type=%s 快照陈/缺）——REST 闸关不降级", venueKey, k.Type)
+		if v.d.AlertFn != nil {
+			v.d.AlertFn("critical", msg)
+		}
+		log.Printf("[capitalview] %s", msg)
+		v.privAlerted.Store(venueKey, true)
 	}
-	log.Printf("[capitalview] %s", msg)
 	return Funds{}, true, false
 }
 
