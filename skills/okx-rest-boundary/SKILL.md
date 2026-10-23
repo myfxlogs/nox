@@ -29,3 +29,9 @@ description: okx REST 界桩账——钦定保留面（事务操作）vs 退役�
 - **根因**：`http.DefaultTransport` 一经使用即被懒配 h2（`onceSetNextProtoDefaults`→TLSNextProto 注 handler+`TLSClientConfig.NextProtos` 注 `"h2"`）；`tr.Clone()` **浅继中毒字段**→ALPN 供 h2→服务端回 h2 帧→h1 client 判 malformed。`ForceAttemptHTTP2=false` 只挡懒配时机、不挡已染字段继承。
 - **修法**：`assembleRT` clone 后 `NextProtos=[]string{"http/1.1"}`+`TLSNextProto` 空表清零；CA 并入同 tc 防覆写丢钉
 - **排查法**：裸 tr vs 装配栈**同进程交错对照**（fresh 5/5 败 vs bare 5/5 通）→二分钉出 httpx 层；DNS/IPv6/中间盒/指纹诸嫌疑逐件否证
+## 错误码·资产/JIT 域（581xx——划转/earn 钱径判读面）
+- **58110 市场风控锁**：交易/持仓产品触发平台风控→转出暂锁——**非代码病灶，业主配合域**（联系客服）。
+- **58111 资金费收取中**：划转撞 funding 结算窗——**瞬态可重试**，稍后重发即可（非 fail）。
+- **58113 币种不支持划转** / **58114 金额≤0** / **58107 校验未过**：入参/资格面——查 ccy+amt。
+- **划转中判定**：返回 `trId` 挂起→查 `GET /api/v5/asset/transfer-state` 定真态（同 exec clOrdId 歧态势处置律——禁盲重发）。
+- 全表 50000-53999+581xx+59200-59300/60000-64002 分域，子码形 `{码}_{子码}` 细分场景。
