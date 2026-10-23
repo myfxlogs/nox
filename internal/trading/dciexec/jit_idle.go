@@ -58,6 +58,8 @@ func (e *Executor) jitIdleSweepVenue(ctx context.Context, venue, vt string) erro
 	}
 	minFree := used*jitIdleBufferFactor + jitIdleFloorUSD
 	excess := free - minFree
+	log.Printf("[dciexec] jit idle %s:%s free %.4f used %.4f minFree %.4f excess %.4f",
+		venue, vt, free, used, minFree, excess) // 观测面：静默径须带 info 日志（产验实证可查）
 	if excess < jitIdleMinSweepUSD {
 		return nil // 闲钱未超闸=如实静默（下拍再试）
 	}

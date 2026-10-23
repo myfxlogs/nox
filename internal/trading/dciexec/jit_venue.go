@@ -144,23 +144,28 @@ func (e *Executor) tradingFree(ctx context.Context, venue, vt string) (float64, 
 		if err != nil {
 			return 0, err
 		}
-		var rows []struct {
-			Asset     string `json:"asset"`
-			Wallet    string `json:"walletBalance"`
-			Available string `json:"availableBalance"`
-		}
-		if err := json.Unmarshal(b, &rows); err != nil {
-			return 0, fmt.Errorf("binance fapi balance 解析: %w", err)
-		}
-		for _, r := range rows {
-			if r.Asset == jitCcy {
-				// 返修⑧：划转上限=USDT 单币 walletBalance——UM 多资产模式
-				// availableBalance=USDT+BFUSD 合成折值（SAPI asset=USDT 划转
-				// 上限实持单币额，BFUSD=抵押收益资产留 UM 不入扫）。
-				return parseF(r.Wallet), nil
-			}
-		}
-		return 0, nil
+		return binanceFapiFreeUSDT(b)
 	}
 	return 0, fmt.Errorf("trading free venue %s 未支", venue)
+}
+
+// binanceFapiFreeUSDT /v2/balance 实载荷解析（可测锚件）：返修⑨——划转
+// 上限字段=maxWithdrawAmount（单币权威可转额，已扣在仓锁仓；
+// walletBalance 键在 /v2/account 对错了端点恒空返 0 静默病灶修；
+// balance 含在仓保证金勿用；availableBalance=UM 多资产合成折值勿用）。
+// BFUSD=抵押收益资产留 UM 不入扫。
+func binanceFapiFreeUSDT(body []byte) (float64, error) {
+	var rows []struct {
+		Asset string `json:"asset"`
+		MaxWD string `json:"maxWithdrawAmount"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return 0, fmt.Errorf("binance fapi balance 解析: %w", err)
+	}
+	for _, r := range rows {
+		if r.Asset == jitCcy {
+			return parseF(r.MaxWD), nil
+		}
+	}
+	return 0, nil
 }
