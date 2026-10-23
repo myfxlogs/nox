@@ -61,7 +61,8 @@ func startQuoteStreams(ctx context.Context, cexCfg exchange.Config, qbus *bus.Qu
 	}
 	cexCfg.ExecFaceVenueFn = st.ExecFaceVenueSymbols // D-665 okx/gate 同律执行面集
 	cexCfg.MonitorFaceFn = monitorFaceFn(st)         // 装配序修：同一 helper 供 main 层先赋
-	cexCfg.RestPollPausedFn = restPollPausedFn(st)   // venue REST 采集暂停开关（app_config 热读——pre-construction 块同域）
+	// RestPollPausedFn 装配位=cexCfg 出生点（buildCexExchangeConfig 内——
+	// 本函数收值拷贝，在此再赋仅罩本域 WS 构造面、collect 径漏罩实证）。
 	cexCfg.IndivBudgetFn = func(ctx context.Context) (int64, bool, error) {
 		return st.AppConfigInt64(ctx, "NOX_INDIV_MAX_CONNS")
 	}
