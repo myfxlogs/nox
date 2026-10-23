@@ -27,6 +27,9 @@ func (o *OKXPrivateWS) heartbeatSnapLoop(ctx context.Context) {
 
 // heartbeatSnapLoopSpawn 装配件（Run 内 GoLoopPlain 一行调用）。
 func (o *OKXPrivateWS) heartbeatSnapLoopSpawn(ctx context.Context) {
+	if !o.hbSpawned.CompareAndSwap(false, true) {
+		return // 幂等——重连叠加 goroutine 防（每进程一次，ctx 终随主 ctx 退）
+	}
 	safego.GoLoopPlain("okx_private_ws:heartbeat-snap", func() { o.heartbeatSnapLoop(ctx) })
 }
 

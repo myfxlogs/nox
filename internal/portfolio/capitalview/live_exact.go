@@ -178,8 +178,12 @@ func (v *View) snapshotFunds(ctx context.Context, venueKey string) (Funds, bool)
 		return Funds{}, false
 	}
 	k := keydomain.Parse(venueKey)
+	rowType := k.Type
+	if k.Venue == "okx" && rowType != "unified" {
+		rowType = "unified" // 供行侧同 normalize——okx 统一账户制非 unified 键读 unified 行（探/供不分裂）
+	}
 	for _, r := range snaps {
-		if r.Venue == k.Venue && r.VenueType == k.Type && r.EquityRaw != nil {
+		if r.Venue == k.Venue && r.VenueType == rowType && r.EquityRaw != nil {
 			return SnapFundsOf(r, time.Now()), true
 		}
 	}

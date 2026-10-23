@@ -84,8 +84,9 @@ type OKXPrivateWS struct {
 	onReconnect func()
 	// writeMu D-166：gorilla conn 单写者契约——login/订阅/探针写与 ping goroutine
 	// 共用 conn，统一 writeMu 串行化（gate D-477 同型）。
-	writeMu  sync.Mutex
-	lastSnap atomic.Pointer[pgstore.VenueAccountSnapshot] // 心跳刷源（返修①）
+	writeMu   sync.Mutex
+	lastSnap  atomic.Pointer[pgstore.VenueAccountSnapshot] // 心跳刷源（返修①）
+	hbSpawned atomic.Bool                                  // 心跳 spawn 幂等化（返修②）
 }
 
 // NewOKXPrivateWS 创建采集器（凭据=REST querier 同源 exchange_configs，不新增 secret 配置项）。
