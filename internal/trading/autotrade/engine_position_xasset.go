@@ -117,6 +117,7 @@ func (e *Engine) xassetLegCarryAnnual(ctx context.Context, venueKey, canonical, 
 // LatestFacts(venue="") 返回该 canonical 全 venue 最新 fact，按 bare venue 匹配。
 // ok=false = 该 venue 无 fact（fail-closed）。
 func (e *Engine) fundingRateForVenue(ctx context.Context, bareVenue, canonical string) (rate float64, ts time.Time, ok bool) {
+	canonical = keydomain.BookCanonical(canonical) // 读径归一——facts 写侧同构（SPX500_USDT 残形命中归一形行）
 	facts, err := e.store.LatestFacts(ctx, fact.KindFunding, "", canonical)
 	if err != nil {
 		return 0, time.Time{}, false
@@ -137,6 +138,7 @@ func (e *Engine) fundingRateMeanForVenue(ctx context.Context, bareVenue, canonic
 	if window <= 0 {
 		return e.fundingRateForVenue(ctx, bareVenue, canonical)
 	}
+	canonical = keydomain.BookCanonical(canonical) // 读径归一同上（窗均径漏点补）
 	// err 分流：查询败 ≠ 缺行——静默吞成 missing 是「数据在而读不到」
 	// 假病灶形（读径错位票实证：SG 直查 5243 行在库却逐拍 missing）。
 	avg, maxTs, n, err := e.store.FundingWindowAvg(ctx, bareVenue, canonical, time.Now().Add(-window))
@@ -153,6 +155,24 @@ func (e *Engine) fundingRateMeanForVenue(ctx context.Context, bareVenue, canonic
 // xassetSpecFactFresh MT 腿 spec 源 swap fact 新鲜度检查（SwapFactMaxAge）。
 // swapRateFor 返回 spec 源时调用；任一 spec fact 陈旧 → false（fail-closed 不决策）。
 func (e *Engine) xassetSpecFactFresh(ctx context.Context, bare, canonical, side string) bool {
+	// 候选双键并集（返修②钦定——原键+归一键各入列去重并查，
+	// 预归一砸断裸键族回归实证〔SPX500→SPX500USDT map 落空修〕）。
+	cands := e.swapSymbolsFor(ctx, bare, canonical)
+	cands = append(cands, e.swapSymbolsFor(ctx, bare, keydomain.BookCanonical(canonical))...)
+	seen := map[string]bool{}
+	for _, cand := range cands {
+		if seen[cand] {
+			continue
+		}
+		seen[cand] = true
+		if e.specFactFreshFor(ctx, bare, cand, side) {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *Engine) specFactFreshFor(ctx context.Context, bare, canonical, side string) bool {
 	maxAge := e.cfg.SwapFactMaxAge
 	if maxAge <= 0 {
 		return true

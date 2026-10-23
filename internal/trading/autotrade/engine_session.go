@@ -60,6 +60,25 @@ func (e *Engine) loadSessionTable(ctx context.Context) sessionTable {
 // mtMarketClosedFor 单 MT 腿休市判定（venue=bare、canonical=腿 canonical——R1 ②：动态径
 // ticks 按 canonical 键查（与 MT ticks 落库键一致），入场径/持仓径同口径）。
 func (e *Engine) mtMarketClosedFor(ctx context.Context, bare, canonical string) bool {
+	// 候选双键并集（返修②钦定——map 键域混形：TRXUSDT 带尾 vs SPX500 裸键；
+	// 预归一砸断裸键族回归实证）——swapSymbolsFor(原 canonical)∪
+	// swapSymbolsFor(BookCanonical) 去重并查，任一命中即成立。
+	cands := e.swapSymbolsFor(ctx, bare, canonical)
+	cands = append(cands, e.swapSymbolsFor(ctx, bare, keydomain.BookCanonical(canonical))...)
+	seen := map[string]bool{}
+	for _, cand := range cands {
+		if seen[cand] {
+			continue
+		}
+		seen[cand] = true
+		if e.mtMarketClosedForSym(ctx, bare, cand) {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *Engine) mtMarketClosedForSym(ctx context.Context, bare, canonical string) bool {
 	// 径 1：trade_mode 静态权限（CloseOnly/Disabled 拦截；Full/缺=过）。
 	tm, terr := e.store.LatestFacts(ctx, fact.KindTradeMode, bare, canonical)
 	if terr == nil && len(tm) > 0 {
