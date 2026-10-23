@@ -49,16 +49,22 @@ func isStablecoin(ccy string) bool {
 // venue_buy=低价所，venue_sell=高价所
 // 稳定币（USDT/USDC）跳过——跟自身比 USDT-USDT/USDTUSDT 无意义（D-271 R5）。
 // 单币种错误跳过（log warn 继续）。
-func CalcSpreads(ctx context.Context, client *http.Client, bnAPIURL, okxBase string, symbols []string) ([]SpreadResult, error) {
+// okxPriceFn 残面收尾①钉：okx 价改 WS 事实读口（LatestTickMidWithin 装配——
+// fetchOKXTicker REST 轮询退留码做断流兜底/交割现货缺 key 例外名）。
+func CalcSpreads(ctx context.Context, client *http.Client, bnAPIURL, okxBase string, symbols []string, okxPriceFn func(context.Context, string) (float64, bool)) ([]SpreadResult, error) {
 	var out []SpreadResult
 	for _, ccy := range symbols {
 		if isStablecoin(ccy) {
 			continue
 		}
-		okxPrice, err := fetchOKXTicker(ctx, client, okxBase, ccy)
-		if err != nil {
-			log.Printf("[cexscan] okx ticker %s: %v", ccy, err)
-			continue
+		okxPrice, ok := okxPriceFn(ctx, ccy)
+		if !ok {
+			if p, err := fetchOKXTicker(ctx, client, okxBase, ccy); err != nil { // WS 事实缺→REST 兜底拍
+				log.Printf("[cexscan] okx ticker %s: %v", ccy, err)
+				continue
+			} else {
+				okxPrice = p
+			}
 		}
 		bnPrice, err := fetchBinanceTicker(ctx, client, bnAPIURL, ccy)
 		if err != nil {
