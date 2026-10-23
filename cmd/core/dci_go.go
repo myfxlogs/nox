@@ -87,7 +87,9 @@ func buildDCIExecutor(ctx context.Context, st *pgstore.Store, modeGate dciexec.M
 			}
 		}
 	}
+	dciexec.BalanceEventHook = ex.JitOkxEarnEvent // 余额事件即拍钩（account push 消费缝）
 	startJitIdleSweep(ctx, ex)
+	safego.GoPlain("dci:okx-earn-boot", func() { ex.JitOkxEarnEvent(ctx) }) // okx earn 归集 boot 一判（断窗恢复拍同重连语义）
 	return ex
 }
 
