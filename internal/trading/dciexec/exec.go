@@ -84,6 +84,7 @@ type Store interface {
 	// D-647：jit 收益比对闸读面（earn 桶在册 APR）+闲置回申 armed 面。
 	LatestEarnAPR(ctx context.Context, venue, ccy string) (float64, bool, error)
 	JitArmedComboCount(ctx context.Context, venue string) (int, error)
+	LatestVenueAccountSnapshots(ctx context.Context) ([]pgstore.VenueAccountLatest, error)
 }
 
 // Executor binance DCI 申购执行器（凭据由装配侧从 exchange_configs 注入）。

@@ -17,6 +17,14 @@ import (
 
 const jitCcy = "USDT"
 
+// 闲钱扫闸口径（业主令 10-23——「钱不眠」perp 闲置保证金常态化扫入 earn）：
+// min_free=MMR×bufferFactor+floorUSD（宁保守——MMR 读缺 fail-closed 不扫）。
+const (
+	jitIdleBufferFactor = 2.0   // 维保证金缓冲倍数
+	jitIdleFloorUSD     = 100.0 // 绝对下限
+	jitIdleMinSweepUSD  = 10.0  // 单笔扫入下限（粉尘不扫）
+)
+
 // jitVenues earn rail 可达所白名单（venue 内划转执行面——其余裸名如实拒）。
 var jitVenues = map[string]bool{"binance": true, "okx": true, "gate": true}
 
