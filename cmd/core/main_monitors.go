@@ -154,9 +154,12 @@ func setupMonitorsAndServices(a monitorsSetupArgs) *dashboard.Service {
 	cexStreamMgr.BalLedger = balLedger
 	cexStreamMgr.KickTopic = a.configKick             // D-469b S2
 	cexStreamMgr.OKXHooks = exchange.OKXPrivateHooks{ // D-469b S1：OKX 流纳管后 hooks 挂 manager
-		OnFundingFee:  func() { kickChanSend(a.okxIncomeKickCh) },
-		OnAccountPush: func() { acctMon.Kick("okx") }, // D-571 包B：venue 定向（hooks 内隐含 okx）
-		OnOrderPush:   func() { bpMon.Kick("okx") },   // D-571 包A：venue 定向
+		OnFundingFee: func() { kickChanSend(a.okxIncomeKickCh) },
+		OnAccountPush: func() {
+			acctMon.Kick("okx")
+			dciexec.EmitBalanceEvent(ctx) // okx 活期→earn 事件即拍（钉件——余额变动即判定源）
+		}, // D-571 包B：venue 定向+earn 归集事件源同拍
+		OnOrderPush: func() { bpMon.Kick("okx") }, // D-571 包A：venue 定向
 		// D-566 包B S7：爆仓预警 critical（binance MARGIN_CALL 同通道先例）。
 		OnLiqWarning: func(instID, posSide, mgnRatio string) {
 			cexAlertFn(nil, "critical", fmt.Sprintf("okx 爆仓预警 inst=%s posSide=%s mgnRatio=%s", instID, posSide, mgnRatio))
