@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"nox/internal/platform/safego"
 	"strings"
+	"sync"
 	"time"
 
 	"nox/internal/data/bus"
@@ -39,7 +40,12 @@ type OKXWebSocket struct {
 	reconnectBackoff time.Duration
 	dataIdle         time.Duration // D-154 g)：业务帧看门狗字段化（测试缩窗同 D-507 先例）
 	// emitFacts D-509：funding fact 发射口（FactEmitter 去重节流；nil=不 emit）。
-	emitFacts func(ctx context.Context, fs []fact.Fact) error
+	emitFacts    func(ctx context.Context, fs []fact.Fact) error
+	depthEmit    func(ctx context.Context, rows []CexDepthRowLite) error // books5 顶档→cex_depth 发射（nil=不 emit）
+	depthQ       chan CexDepthRowLite                                    // 异步深队列（背压不连坐 tickers）
+	depthLast    map[string]time.Time                                    // 逐 instId 节流戳
+	depthMu      sync.Mutex
+	depthDropped int64 // 异步满丢弃计数（观测面）
 	// catalog D-524：instruments 存在性闸（watchlist 方言符号归一化后过目录，不伪造）。
 	catalog *okxInstCatalog
 	// OnInstrumentChange instruments 频道变更帧回调，nil=不通知。
@@ -65,7 +71,9 @@ func NewOKXWebSocket(cfg Config) *OKXWebSocket {
 		wsURLs:   wsViaProxyURLs("/okxws/ws/v5/public", okxPublicWSURL),
 		readIdle: quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff,
 		dataIdle: okxTickersDataIdle, // 2762/2825 案：静默停帧谱——10min 阈送盲窗（mt-health 5m 先于骨架检出=检出延迟反超），3min 对齐 mkt-ws 降档先例（okx tickers ≥1/s 频谱，3min 零帧=订阅态丢非静默期）
-		catalog:  newOKXInstCatalog(cfg)}
+		catalog:  newOKXInstCatalog(cfg),
+		depthQ:   make(chan CexDepthRowLite, 256), depthLast: map[string]time.Time{}}
+
 }
 
 // Run 连接 OKX WS 并持续推送报价到 publish 回调。阻塞至 ctx 取消。
@@ -77,6 +85,7 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 	// quarantined 隔离表进程级（重连不重置）——目录判决对同符号稳定，逐符号只记一行。
 	quarantined := map[string]bool{}
 	safego.GoLoopPlain("okx-ws:universe-ticker", func() { o.runOKXTickerPoll(ctx, publish) }) // D-665 宇宙面 REST 拍接管（序位：RunWS 阻塞——必须在调用前 spawn）
+	safego.GoLoopPlain("okx-ws:depth-emit", func() { o.runDepthEmit(ctx) })                   // books5 异步深度协程（序位同前——RunWS 阻塞先 spawn）
 	RunWS(ctx, WSSpec{
 		Name: "okx-ws", URLs: o.wsURLs, Dialer: o.dialer, Header: o.header,
 		DepKey:   "okx:ws-market", // D-579：dephealth 记账键
@@ -142,6 +151,7 @@ func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms, fundingSyms []st
 		if perpID != "" {
 			args = append(args,
 				map[string]string{"channel": "tickers", "instId": perpID},
+				map[string]string{"channel": "books5", "instId": perpID}, // D-667 族：books5 深度采集——cex_depth 顶档 REST 拍降为断线兜底
 				// 方案A：mark-price=SWAP 活性脉冲源（前置实证门：XAU-USDT-SWAP
 				// 实测 ~10 帧/s 密推，簿面静止期照流——薄品种 est 夹层根治脉冲）。
 				map[string]string{"channel": "mark-price", "instId": perpID},
@@ -183,6 +193,11 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 	// 证明的是本频道活，tickers 独死不被掩——dataIdle 杀仍归其咎）。
 	if msg.Arg.Channel == "mark-price" || msg.Arg.Channel == "index-tickers" {
 		o.handlePulse(msg)
+		return false
+	}
+	// books5 帧消费：顶档价语义+节流+异步 emit（restPoll 拍降为断线兜底）。
+	if msg.Arg.Channel == "books5" {
+		o.handleBooks5(ctx, msg)
 		return false
 	}
 	// 包B S6-d：instruments 变更帧 → 逐 instId 失效规格缓存（事件主失效通道）。
@@ -240,15 +255,6 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 		VenueType:   venueType,
 	})
 	return true
-}
-
-func parseOKXTS(s string) (time.Time, error) {
-	var ms int64
-	fmt.Sscanf(s, "%d", &ms)
-	if ms == 0 {
-		return time.Time{}, fmt.Errorf("bad ts")
-	}
-	return time.UnixMilli(ms), nil
 }
 
 type wsMsg struct {

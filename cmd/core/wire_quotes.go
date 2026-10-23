@@ -54,7 +54,8 @@ func startQuoteStreams(ctx context.Context, cexCfg exchange.Config, qbus *bus.Qu
 	okxWs := exchange.NewOKXWebSocket(cexCfg)
 	okxWs.OnInstrumentChange = exec.OKXSpecInvalidate
 	okxWs.SetFactEmit(emitFacts)
-	okxWs.SetPulseFn(qbus.Touch) // D-155 方案A：mark-price/index-tickers 活性脉冲打点
+	okxWs.SetPulseFn(qbus.Touch)         // D-155 方案A：mark-price/index-tickers 活性脉冲打点
+	okxWs.SetDepthEmit(okxDepthEmit(st)) // books5 顶档→fin_cex_depth 同形写（REST 拍降为断线兜底——ws 主供）
 	// D-649续④：armed 交割腿订阅源——毕业档 symbol→okx FUTURES instId，
 	// canonical=行情键（与 spot 帧同域——返修③；读败=不订静默下一拍重试）。
 	okxWs.DeliverySymbolsFn = okxDeliverySubs(st)

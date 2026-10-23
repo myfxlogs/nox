@@ -186,3 +186,12 @@ func (o *OKXWebSocket) fundingSubArgs(fundingSyms []string, subscribed map[strin
 	}
 	return args
 }
+
+func parseOKXTS(s string) (time.Time, error) {
+	var ms int64
+	fmt.Sscanf(s, "%d", &ms)
+	if ms == 0 {
+		return time.Time{}, fmt.Errorf("bad ts")
+	}
+	return time.UnixMilli(ms), nil
+}

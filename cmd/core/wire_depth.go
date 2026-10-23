@@ -62,6 +62,11 @@ func (c *cexDepthCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	now := time.Now()
 	rows := make([]pgstore.CexDepthRow, 0, len(quotes))
 	for _, q := range quotes {
+		// 兜底闸：ws books5 行新（<90s）即跳写——REST 降为断线兜底（ws 断=
+		// 无新行自然落拍补供）。读败=不跳（fail-open 写非静默）。
+		if ok, err := c.st.CexDepthFreshWithin(ctx, q.Venue, q.Symbol, 90*time.Second); err == nil && ok {
+			continue
+		}
 		rows = append(rows, pgstore.CexDepthRow{
 			Venue: q.Venue, Symbol: q.Symbol, Ts: now,
 			Bid1USD: q.Bid1, Ask1USD: q.Ask1, Bid1Qty: q.BidQty, Ask1Qty: q.AskQty,
