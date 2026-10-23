@@ -69,6 +69,21 @@ func assembleRT(disableKeepAlives bool) http.RoundTripper {
 	}
 	tr = tr.Clone()
 	tr.DisableKeepAlives = disableKeepAlives
+	// h2 感染清零（SG 产证 10-23）：DefaultTransport 一经使用即懒配 h2
+	// （onceSetNextProtoDefaults→TLSNextProto 注 h2 handler + TLSClientConfig.
+	// NextProtos 注 "h2"）——Clone 浅继中毒字段则 ALPN 供 h2，对端回 h2 帧
+	// 落 h1 解析器（malformed HTTP response \x00\x00\x12\x04 实证）。显式
+	// 钉 h1：NextProtos 只供 http/1.1 + TLSNextProto 空表（ForceAttemptHTTP2
+	// flag 只挡懒配时机不挡已染字段继承）。
+	tr.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
+	tc := tr.TLSClientConfig
+	if tc == nil {
+		tc = &tls.Config{}
+	} else {
+		tc = tc.Clone()
+	}
+	tc.NextProtos = []string{"http/1.1"}
+	tr.TLSClientConfig = tc
 	if proxyCAPath != "" {
 		if pem, err := os.ReadFile(proxyCAPath); err == nil {
 			pool, err := x509.SystemCertPool() // 系统根 + 自签 CA，勿替换（OKX 等仍须信任公网 CA）
@@ -76,7 +91,8 @@ func assembleRT(disableKeepAlives bool) http.RoundTripper {
 				pool = x509.NewCertPool()
 			}
 			if pool.AppendCertsFromPEM(pem) {
-				tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+				tc.RootCAs = pool // 并入既有 tc——勿整体替换（会丢 NextProtos h1 钉）
+				tc.MinVersion = tls.VersionTLS12
 			}
 		}
 	}
