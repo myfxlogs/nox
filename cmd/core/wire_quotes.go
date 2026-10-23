@@ -75,11 +75,7 @@ func startQuoteStreams(ctx context.Context, cexCfg exchange.Config, qbus *bus.Qu
 	// canonical=行情键（与 spot 帧同域——返修③；读败=不订静默下一拍重试）。
 	okxWs.DeliverySymbolsFn = okxDeliverySubs(st)
 	safego.GoLoop("main:okx-ws", func() { okxWs.Run(ctx, qbus.Publish) })
-	gateWs := newGateWebSocketGated(cexCfg, marketWsPausedFn(st)) // 停止闸件见 wire_marketws_gate.go（正键域 NOX_MARKET_WS_PAUSED_*）
-	if gateWs != nil {                                            // 停闸=nil——行情件不起（私面监护另径保，armed 簿 fail-closed 休眠）
-		gateWs.SetFactEmit(emitFacts)
-		safego.Go("main:gate-ws", func() { gateWs.Run(ctx, qbus.Publish) })
-	}
+	gateWs := wireGateMarketWS(ctx, cexCfg, marketWsPausedFn(st), emitFacts, qbus) // 停止闸+Run 一件（nil=闸停）
 	// D-570 包C S6⑤：返回 ref 供 main_monitors 装配 OnContractInfo（cexStreamMgr 后造——
 	// 失效闭包须寻址 collect 侧 ws 实例，构造时不在场）。
 	// D-505 S2 + D-508 S14：Binance 公开报价单轨=WS 流（双连接 SUBSCRIBE）；
