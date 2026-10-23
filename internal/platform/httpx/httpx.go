@@ -5,7 +5,6 @@ package httpx
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,7 +13,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"golang.org/x/net/http2"
 )
 
 // 运行期代理配置——D-145 env 收口：装配层 boot 时 Configure 注入（cfg/ secrets 供值），
@@ -67,17 +65,10 @@ func buildSharedRT() http.RoundTripper {
 			}
 		}
 	}
-	// D-667 续修：h1 回退止血（h2 健检保留码件——产验若 okx deadline 未消
-	// 即 h2 会话面病灶深于健检域=降 h1.1 全谱，TLS churn 观测同位）。
-	// ForceAttemptHTTP2=false=conn 全走 h1.1（h2 会话面病灶归零；
-	// h2 健检件保留待复启用验——CloseIdleConnections 语义不涉）。
+	// D-667 续修③：h1 回退止血——ForceAttemptHTTP2=false 全 conn 走 h1.1
+	// （ConfigureTransports 会覆写 flag 使 h2 仍生效=flag 死字段病灶修——
+	// 整段删使 flag 真生效；h2 会话面病灶归零。健检码件不入 h1 径）。
 	tr.ForceAttemptHTTP2 = false
-	if t2, h2err := http2.ConfigureTransports(tr); h2err == nil {
-		t2.ReadIdleTimeout = 30 * time.Second
-		t2.PingTimeout = 15 * time.Second
-	} else {
-		log.Printf("[httpx] h2 configure 失败（降级 h1.1 域照跑）: %v", h2err)
-	}
 	var rt http.RoundTripper = tr
 	if tok != "" {
 		rt = tokenRT{base: rt, tok: tok}
