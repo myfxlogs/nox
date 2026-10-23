@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,7 @@ type AgentBridgeSink struct {
 	jobs     chan bridgePayload
 	mu       sync.Mutex
 	seen     map[string]time.Time // dedup_hash→最近推桥戳（24h 去重）
+	digest   map[string]int       // info 级摘要桶（文首 60 字符前缀键计频）
 	// O1 桥活性计数（digest 06:10 批消费面）
 	Posted, Failed, Dropped uint64
 }
@@ -47,6 +49,7 @@ func NewAgentBridgeSink(url, token func() string, patterns func() []string) *Age
 		client: &http.Client{Timeout: 10 * time.Second},
 		jobs:   make(chan bridgePayload, 64),
 		seen:   map[string]time.Time{},
+		digest: map[string]int{},
 	}
 	return s
 }
@@ -54,6 +57,16 @@ func NewAgentBridgeSink(url, token func() string, patterns func() []string) *Age
 // Push 告警入桥径——critical 全级+warn 白名单；24h 同文案去重；fail-open。
 func (s *AgentBridgeSink) Push(id int64, level, message string) {
 	lvl := strings.ToLower(level)
+	if lvl == "info" { // 分级投递：info 聚合成小时摘要（告警疲劳病灶修——运营流水不刷投资人面）
+		s.mu.Lock()
+		key := message
+		if len(key) > 60 {
+			key = key[:60]
+		}
+		s.digest[key]++
+		s.mu.Unlock()
+		return
+	}
 	if lvl != "critical" {
 		if lvl != "warn" || !s.warnAllowed(message) {
 			return
@@ -103,10 +116,14 @@ func (s *AgentBridgeSink) warnAllowed(msg string) bool {
 
 // Run worker——单协程串行消费（桥侧已串行，sink 再串行=双闸对拍）。
 func (s *AgentBridgeSink) Run(ctx context.Context) {
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-t.C:
+			s.flushDigest(ctx)
 		case p := <-s.jobs:
 			if err := s.post(ctx, p); err != nil {
 				s.Failed++
@@ -115,6 +132,39 @@ func (s *AgentBridgeSink) Run(ctx context.Context) {
 				s.Posted++
 			}
 		}
+	}
+}
+
+// flushDigest 小时摘要单推（info 级聚合面——dedup 键计频透出）。
+func (s *AgentBridgeSink) flushDigest(ctx context.Context) {
+	s.mu.Lock()
+	if len(s.digest) == 0 {
+		s.mu.Unlock()
+		return
+	}
+	lines := make([]string, 0, len(s.digest))
+	for k, n := range s.digest {
+		if n > 1 {
+			lines = append(lines, fmt.Sprintf("%s×%d", k, n))
+		} else {
+			lines = append(lines, k)
+		}
+	}
+	s.digest = map[string]int{}
+	s.mu.Unlock()
+	sort.Strings(lines)
+	sum := sha256.Sum256([]byte(strings.Join(lines, ";")))
+	p := bridgePayload{
+		AlertID: 0, Level: "info",
+		Message:   "info 摘要（小时聚合）:\n" + strings.Join(lines, "\n"),
+		TsUTC:     time.Now().UTC().Format(time.RFC3339),
+		DedupHash: hex.EncodeToString(sum[:16]),
+	}
+	if err := s.post(ctx, p); err != nil {
+		s.Failed++
+		fmt.Printf("[bridge] digest post fail: %v\n", err)
+	} else {
+		s.Posted++
 	}
 }
 
