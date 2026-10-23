@@ -155,7 +155,17 @@ func (e *Engine) fundingRateMeanForVenue(ctx context.Context, bareVenue, canonic
 // xassetSpecFactFresh MT 腿 spec 源 swap fact 新鲜度检查（SwapFactMaxAge）。
 // swapRateFor 返回 spec 源时调用；任一 spec fact 陈旧 → false（fail-closed 不决策）。
 func (e *Engine) xassetSpecFactFresh(ctx context.Context, bare, canonical, side string) bool {
-	canonical = keydomain.BookCanonical(canonical) // 读径归一同上（spec swap fact 同域）
+	// 裸资产族候选集反解（返修钦定件——TRX vs facts TRXUSD 双族并查，
+	// 任一 fresh 即过；归一不能治裸资产形）。
+	for _, cand := range e.swapSymbolsFor(ctx, bare, keydomain.BookCanonical(canonical)) {
+		if e.specFactFreshFor(ctx, bare, cand, side) {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *Engine) specFactFreshFor(ctx context.Context, bare, canonical, side string) bool {
 	maxAge := e.cfg.SwapFactMaxAge
 	if maxAge <= 0 {
 		return true
