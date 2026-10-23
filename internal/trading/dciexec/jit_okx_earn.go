@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 )
 
 // jitOkxEarnMu per-venue 单飞锁（钉①——并发余额事件双过闲额判定=超归集险防；
@@ -49,20 +50,50 @@ func (e *Executor) jitOkxEarnSweep(ctx context.Context) error {
 	if !ok {
 		return fmt.Errorf("okx earn rail 缺席")
 	}
-	r, ok := rail.(*okxEarnRail)
-	if !ok {
-		return fmt.Errorf("okx earn rail 类型不符")
-	}
 	// 留备式预留（返修⑤钦定式）：armed 保证金头备=NOX_OKX_MARGIN_RESERVE_USD
 	// 读败=保守默认 500（宁多备不欠保证金=fail-closed 守）。
 	reserve := jitOkxReserveDefaultUSD
 	if rv, rok, rerr := e.Store.AppConfigInt64(ctx, jitOkxReserveKey); rerr == nil && rok && rv > 0 {
 		reserve = float64(rv)
 	}
-	free, err := r.FreeBalance(ctx, jitCcy) // 双源：unified availBal+funding 户
-	if err != nil {
-		return fmt.Errorf("okx 闲额读败 fail-closed: %w", err)
+	// 混源钉（返修⑥钦定式）：free = unified〔okx_event 快照行须鲜〕+
+	// fundingAvail〔asset/balances REST=钦定保留面〕——快照行不鲜=funding
+	// 单边也不判 fail-closed（单读 unified 报 0 假贫病灶防复返）。
+	snaps, serr := e.Store.LatestVenueAccountSnapshots(ctx)
+	if serr != nil {
+		return fmt.Errorf("okx 快照读败 fail-closed: %w", serr)
 	}
+	var unified float64
+	var ts time.Time
+	found := false
+	for _, sn := range snaps {
+		if sn.Venue == "okx" && sn.VenueType == "unified" && sn.Currency == jitCcy &&
+			sn.EquityRaw != nil {
+			if sn.FreeMarginRaw != nil {
+				unified = *sn.FreeMarginRaw
+			} else {
+				unified = *sn.EquityRaw // free_margin 不采=equity 回退同 REST 口径
+			}
+			ts = sn.FetchedAt
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("okx_event 快照行缺 fail-closed 不扫")
+	}
+	if time.Since(ts) > 5*time.Minute {
+		return fmt.Errorf("okx_event 快照陈 %.0fs>300s fail-closed 不扫（funding 单边不判）", time.Since(ts).Seconds())
+	}
+	r, ok := rail.(*okxEarnRail)
+	if !ok {
+		return fmt.Errorf("okx earn rail 类型不符")
+	}
+	funding, ferr := r.fundingAvail(ctx, jitCcy) // 钦定保留面 REST 读
+	if ferr != nil {
+		return fmt.Errorf("okx funding 余额读败 fail-closed: %w", ferr)
+	}
+	free := unified + funding            // 混源合成=unified〔WS 鲜〕+funding〔REST 钦定保留面〕
 	excess := sweepExcess(free, reserve) // sweepable=free−armedReserve−floor（同函数单源）
 	log.Printf("[dciexec] okx earn jit free %.4f reserve %.4f excess %.4f", free, reserve, excess)
 	if excess < jitIdleMinSweepUSD {

@@ -233,6 +233,9 @@ func TestD475b_Contract_BinanceOrders(t *testing.T) {
 // ==== account/balance 三所对拍 ====
 
 func TestD475b_Contract_Accounts(t *testing.T) {
+	prev := reconcile.OkxPrivRestAllowedFn
+	reconcile.OkxPrivRestAllowedFn = func(context.Context) bool { return true } // 测径=闸开放行
+	defer func() { reconcile.OkxPrivRestAllowedFn = prev }()
 	ctx := context.Background()
 	// okx account push vs accountOKX：eqUsd 求和同口径。
 	okxSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

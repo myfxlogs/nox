@@ -44,6 +44,9 @@ func (o *OKXWebSocket) runOKXTickerPoll(ctx context.Context, publish func(bus.Qu
 					Ts     string `json:"ts"`
 				} `json:"data"`
 			}
+			if !okxRestFamilyOn(ctx, o.cfg, "TICKER") {
+				continue // WS tickers 频道在收=REST 轮询闸关（漏网名收编）
+			}
 			url := base + "/api/v5/market/tickers?instType=" + it.instType
 			if err := getJSONInto(ctx, client, url, &out); err != nil {
 				log.Printf("[okx-ws] universe ticker %s: %v", it.instType, err)

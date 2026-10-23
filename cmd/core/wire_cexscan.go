@@ -5,6 +5,7 @@ import (
 	"context"
 	"log"
 	"nox/internal/data/bus"
+	"nox/internal/ledger/reconcile"
 
 	"nox/internal/api/dashboard"
 	"nox/internal/data/cexscan"
@@ -68,6 +69,11 @@ func buildCexExchangeConfig(ctx context.Context, st *pgstore.Store, configKick *
 	// 径 collector 群）全员可见；后赋于 startQuoteStreams 局部副本=collect 径
 	// 漏罩实证（depth fetch 暂停无效病灶）。
 	cexCfg.RestPollPausedFn = restPollPausedFn(st)
+	cexCfg.RestFamilyOnFn = okxRestFamilyOnFn(st)                     // 续段收编：okx REST 族闸（NOX_OKX_REST_<FAMILY>）
+	reconcile.OkxPrivRestAllowedFn = func(ctx context.Context) bool { // 私面 REST 单点闸收口
+		v, ok, err := st.AppConfigInt64(ctx, "NOX_OKX_REST_ACCOUNT")
+		return err == nil && ok && v == 1 // 读败=关闸 fail-closed（WS 私面供数域）
+	}
 	return cexCfg, cexSymbols
 }
 

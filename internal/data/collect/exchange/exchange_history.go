@@ -170,6 +170,9 @@ func (o *OKXFundingHistory) okxFundingPeriodsPerDay(ctx context.Context, instID 
 }
 
 func (o *OKXFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
+	if restPollPaused(ctx, o.cfg, "okx") || !okxRestFamilyOn(ctx, o.cfg, "FUNDING") {
+		return nil, nil // WS funding-rate 频道在收=REST 轮询闸关退役（0=fail-closed 静默退出）
+	}
 	var out []fact.Fact
 	o.catalog.ensure(ctx)
 symLoop:
@@ -273,3 +276,10 @@ func (b *BinanceFundingHistory) syms() []string { return b.cfg.effectiveSymbols(
 
 // syms D-369 S2：okx funding history 符号集。
 func (o *OKXFundingHistory) syms() []string { return o.cfg.effectiveSymbols("okx") }
+
+// okxRestFamilyOn okx REST 实名豁免族闸（NOX_OKX_REST_<FAMILY>=1 开；
+// 默认 0=关闸 fail-closed——实时数据零轮询钦定；事务面〔earn 申购赎回/
+// 划转提现史/instruments 冷调〕不落此闸另域）。
+func okxRestFamilyOn(ctx context.Context, cfg Config, family string) bool {
+	return cfg.RestFamilyOnFn != nil && cfg.RestFamilyOnFn(ctx, family) // 读口缺=默认关 fail-closed
+}
