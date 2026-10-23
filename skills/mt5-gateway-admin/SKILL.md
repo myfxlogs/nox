@@ -22,3 +22,8 @@ description: mtapi 网关连接/服务面——Connect token 语义/Service 族/
 **能力定谳三足**：官方清单数（reflection+权威源 proto）×实测证据（能力账 JSON）×skills 正典（本目录）——三者同源对拍。
 
 <!-- 方法全名索引：Connect ConnectEx ConnectProxy CheckConnect Disconnect Ping PingHost PingHostMany Health MemorySnapshot Search GetClients GetDemo Version -->
+## 装配面（重建件——skills 原只有 RPC 面）
+- **网关配置键**：`NOX_MT5_GATEWAY`（缺省 `mt5grpc3.mtapi.io:443`）+`NOX_MT5_GATEWAY_FALLBACKS`（缺省 `mt5grpc1,mt5grpc4,mt5grpc2.mtapi.io:443`）——`internal/platform/config/config_mt_health.go`。
+- **adapter 层**：`internal/data/adapter/mt5.go`——`NewMT5Adapter(venue,host,server,port,user,pass)` 每户一适配器；conn=google.golang.org/grpc。
+- **会话生命周期**：`mt5_session.go reconnectSession`——复用 conn 重调 Connect 刷 token（token 即 Request.Id）；`OnReconnect` 钩=对账 kick 单点（D-004）；token 日志须 maskToken。
+- **生成层**：`internal/data/adapter/gen/mtapi/mt5`——mt5.pb+grpc+mt5connect 三件（权威源 `/opt/grpc-proto/mt5/protos/mt5.proto` 对拍纪律在案）。
