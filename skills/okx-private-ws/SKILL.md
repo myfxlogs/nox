@@ -17,3 +17,4 @@ description: okx 私有 WS 面能力账——balance_and_position/account 频道
 - **活性探针量对象**：探「快照行新鲜度」而非「事件到达率」——静户事件零到达≠WS 死，须靠心跳行活性判定。
 - **告警节流**：监护缺告警须状态跳变才发，事件级连发=洪刷（返修①实证）。
 - **残面·querier 首探噪声**（2026-10-23 产验在案）：`account-monitor` 的 cex querier 每拍仍对 okx:spot/perp/futures 发 REST first-poll→被私面闸挡刷 `first-poll error`（5s 级）——闸工作正确但 querier 不识「WS 快照已鲜则免探」。修法=首探前查 okx_event 快照龄，鲜则跳探；陈/缺再 REST 兜底。小票级，未施工。
+- **WS login 握手**（重建件）：`op=login` args=`{apiKey,passphrase,timestamp,sign}`，`sign=base64(HMAC-SHA256(secret, ts+"GET"+"/users/self/verify"))`；login/权限错误 fail-loud 重连不静默退化。端点：`wss://ws.okx.com:8443/ws/v5/private`（公开面 `/public`）；代理前缀约定 `wsViaProxyURLs("/okxws/ws/v5/private", 直连URL)`。conn 单写者契约（gorilla writeMu）。

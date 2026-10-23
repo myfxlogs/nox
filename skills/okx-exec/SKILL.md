@@ -17,3 +17,7 @@ description: okx 下单径能力账——FreshClient 钱径、clOrdId 定态三�
 - **裸 transport 禁行**：钱径自造 `http.Transport` 绕过 CA/token/failover/banGate=破口（exec 返修⑤实证）——一律走 assembleRT/FreshClient
 - **POST 不回退**：failoverRT 只对 GET/HEAD 重试——非幂等方法主端败即上抛，防备端二次下单
 - **WS 下单未迁**：`/ws` trade 域文档有等价面，但缺生产验证——REST 下单为已验证桥，迁移须独立票+协议取证
+## 鉴权与方言（重建第一日件）
+- **REST 签名**：`signutil.OkxSign(secret,ts,method,pathWithQuery,body)`=`base64(HMAC-SHA256(secret, ts+method+path含query+body))`；四头 `OK-ACCESS-KEY/SIGN/TIMESTAMP/PASSPHRASE`；ts=ISO8601 毫秒串。demo 户加头 `x-simulated-trading:1`。
+- **下单方言**：`tdMode`=cash〔spot〕/cross〔perp 全仓〕〔isolated 码内有备未产验〕；`posSide`=net〔单向持仓户〕vs long/short〔双向户——arms 簿须与账户持仓模式一致〕；`instId`=`BTC-USDT-SWAP`〔perp〕/`BTC-USDT`〔spot〕原生键。
+- **WS 下单未迁**：见钱径节——文档有等价面但产验缺，REST 下单是已验证桥。
