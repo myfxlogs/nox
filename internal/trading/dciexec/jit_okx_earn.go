@@ -18,6 +18,12 @@ import (
 // 幂等键兜写不兜判，判定段须串行）。
 var jitOkxEarnMu sync.Mutex
 
+// ArmedShortfallFn armed 缺资查询件（返修③——设计锚测#3：armed 缺资时归集
+// 不触发〔赎回时延卡开单=优先权倒挂防〕；装配=dci_go 注入 opp-margin 缺资面
+// 读口；nil=不查〔零仓测试面兼容〕）。返 (shortfall>0, err)——读败 fail-closed
+// 停归集（armed 保证金优先权高于 earn 占用=禁线钦定）。
+var ArmedShortfallFn func(ctx context.Context, venue string) (float64, error)
+
 // jitOkxIdleFloorUSD okx 活期归集地板（binance $100 同域）。
 const jitOkxIdleFloorUSD = 100.0
 
@@ -35,6 +41,18 @@ func (e *Executor) JitOkxEarnEvent(ctx context.Context) {
 
 // jitOkxEarnSweep 闲额判定→归集执行（评估闸不合格如实报闲——如实非静默）。
 func (e *Executor) jitOkxEarnSweep(ctx context.Context) error {
+	// armed 缺资闸（返修③——设计锚测#3）：缺资本拍停归集如实静默；读败
+	// fail-closed 同停（armed 保证金优先权高于 earn 占用）。
+	if ArmedShortfallFn != nil {
+		short, serr := ArmedShortfallFn(ctx, "okx")
+		if serr != nil {
+			return fmt.Errorf("armed 缺资读败 fail-closed 停归集: %w", serr)
+		}
+		if short > 0 {
+			log.Printf("[dciexec] okx earn jit armed 缺资 %.4f 本拍停归集（armed 优先）", short)
+			return nil // 如实静默——armed 面优先（earn 占用不抢保证金）
+		}
+	}
 	rail, ok := e.earnRail("okx")
 	if !ok {
 		return fmt.Errorf("okx earn rail 缺席")
