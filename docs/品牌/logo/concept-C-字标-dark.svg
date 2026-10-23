@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 320" width="620" height="320">
+  <!-- NOX 字标 概念C: 几何笔画 N-O-X, O 即枭(枭面瞳+喙+耳羽嵌在 O 环上)。字形无字体依赖, 全路径可控。 -->
+  <title>NOX wordmark — 概念C O中之枭</title>
+  <g stroke="#F4F1E8" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- N -->
+    <path d="M60,250 L60,70 L170,250 L170,70"/>
+    <!-- O (环) -->
+    <circle cx="300" cy="160" r="90"/>
+    <!-- X -->
+    <path d="M450,70 L560,250"/>
+    <path d="M560,70 L450,250"/>
+  </g>
+  <!-- O 内枭面 -->
+  <circle cx="274" cy="136" r="12" fill="#E9B44C"/>
+  <circle cx="326" cy="136" r="12" fill="#E9B44C"/>
+  <path fill="#E9B44C" d="M291,156 L309,156 L300,174 Z"/>
+  <!-- 耳羽立在 O 环顶 -->
+  <path fill="#F4F1E8" d="M243,72 L263,20 L295,58 Z"/>
+  <path fill="#F4F1E8" d="M357,72 L337,20 L305,58 Z"/>
+</svg>

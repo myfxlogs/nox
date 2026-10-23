@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- NOX emblem 概念B「双市之枭」: 双环=双眼=双市场(CFD×Crypto), 环交叠出的金菱区=价差/套利落点, 顶部双耳羽保夜枭辨识。极简, favicon 级可用。 -->
+  <title>NOX 夜枭 emblem — 概念B 双市之枭</title>
+  <!-- 双环(双眼/双市) -->
+  <circle cx="180" cy="278" r="138" fill="none" stroke="#F4F1E8" stroke-width="20"/>
+  <circle cx="332" cy="278" r="138" fill="none" stroke="#F4F1E8" stroke-width="20"/>
+  <!-- 交叠镜面区=价差(vesica piscis) -->
+  <path fill="#E9B44C" d="M256,162.8 A138,138 0 0 0 256,393.2 A138,138 0 0 0 256,162.8 Z"/>
+  <!-- 耳羽 -->
+  <path fill="#F4F1E8" d="M84,206 L112,76 L198,120 Z"/>
+  <path fill="#F4F1E8" d="M428,206 L400,76 L314,120 Z"/>
+</svg>
