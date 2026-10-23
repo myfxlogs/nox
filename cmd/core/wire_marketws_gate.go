@@ -6,10 +6,12 @@ package main
 import (
 	"context"
 	"log"
+	"strings"
 
 	"nox/internal/data/bus"
 	"nox/internal/data/collect/exchange"
 	"nox/internal/data/fact"
+	"nox/internal/infra/dephealth"
 	"nox/internal/platform/safego"
 )
 
@@ -21,6 +23,7 @@ func marketWsPaused(pause func(context.Context, string) (bool, error), venue str
 	}
 	if p {
 		log.Printf("[wire] %s 行情 WS 停闸命中（NOX_MARKET_WS_PAUSED_%s=1）", venue, venue)
+		markMarketDormant(venue) // dephealth 休眠标——等待面显「休眠」非「等待」
 	}
 	return p
 }
@@ -56,5 +59,18 @@ func wireBinanceMarketWS(ctx context.Context, cfg exchange.Config, pause func(co
 		ws.SetFactEmit(emitFacts)
 		ws.SetFundingIntervals(intervals)
 		safego.Go("main:binance-mkt-ws", func() { ws.Run(ctx, qbus.Publish) })
+	}
+}
+
+// markMarketDormant 停闸 venue 行情面 dephealth 键注册休眠谓词
+// （私面监护键铁边界不入：gate:ws-private / binance:*-user 全保）。
+func markMarketDormant(venue string) {
+	switch venue {
+	case "GATE":
+		dephealth.Dormant(func(k string) bool { return k == "gate:ws-market" })
+	case "BINANCE":
+		dephealth.Dormant(func(k string) bool {
+			return strings.HasPrefix(k, "binance:ws-") && !strings.HasSuffix(k, "-user")
+		})
 	}
 }

@@ -69,7 +69,7 @@ func (s *Service) pipelineStages(ctx context.Context) []*stageRow {
 // ① 采集：dephealth 注册表聚合——err 键存在=故障（首键原文透出），ok 键=工作，
 // 无行=未建簿 idle。venue_online 状态走同一注册表面不另判据。
 func (s *Service) stageCollect(_ context.Context) *stageRow {
-	var okN int
+	var okN, dormantN int
 	var firstErr dephealth.Row
 	var last time.Time
 	var suspect dephealth.Row
@@ -78,6 +78,10 @@ func (s *Service) stageCollect(_ context.Context) *stageRow {
 		// 归责——采集段只聚合采集面键（venue/ws/egress 族）。
 		if strings.HasPrefix(d.Key, "engine:") || strings.HasPrefix(d.Key, "scan:") ||
 			strings.HasPrefix(d.Key, "gate_eval:") {
+			continue
+		}
+		if d.State == dephealth.StateDormant {
+			dormantN++ // 停闸休眠键——不当事故事件算（显式停采≠断流嫌疑）
 			continue
 		}
 		if d.LastEventUnix > last.Unix() {
@@ -99,11 +103,18 @@ func (s *Service) stageCollect(_ context.Context) *stageRow {
 	if firstErr.Key != "" {
 		return stageNow("collect", "error", fmt.Sprintf("依赖 %s 断供", firstErr.Key), "", firstErr.State, last)
 	}
+	dormNote := ""
+	if dormantN > 0 {
+		dormNote = fmt.Sprintf("·休眠 %d 路（行情已停）", dormantN)
+	}
 	if suspect.Key != "" {
-		return stageNow("collect", "waiting", fmt.Sprintf("%d 路依赖在通", okN), fmt.Sprintf("%s 连败未达阈（suspect）", suspect.Key), "", last)
+		return stageNow("collect", "waiting", fmt.Sprintf("%d 路依赖在通%s", okN, dormNote), fmt.Sprintf("%s 连败未达阈（suspect）", suspect.Key), "", last)
 	}
 	if okN > 0 {
-		return stageNow("collect", "working", fmt.Sprintf("%d 路依赖在通", okN), "", "", last)
+		return stageNow("collect", "working", fmt.Sprintf("%d 路依赖在通%s", okN, dormNote), "", "", last)
+	}
+	if dormantN > 0 {
+		return stageNow("collect", "idle", fmt.Sprintf("采集依赖未记账%s", dormNote), "", "", last)
 	}
 	return stageNow("collect", "idle", "采集依赖未记账", "", "", last)
 }

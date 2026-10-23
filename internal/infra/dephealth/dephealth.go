@@ -251,7 +251,9 @@ func Snapshot() []Row {
 	rows := make([]Row, 0, len(reg))
 	for k, e := range reg {
 		st := e.state
-		if st != StateDegraded && st != StateUnknown && now.Sub(e.lastEventAt) > IdleWindow {
+		if isDormant(k) {
+			st = StateDormant // 停闸键覆写——休眠如实透出，不落 idle/waiting 误读
+		} else if st != StateDegraded && st != StateUnknown && now.Sub(e.lastEventAt) > IdleWindow {
 			st = StateIdle
 		}
 		r := Row{Key: k, State: st, ConsecFails: e.consecFails, LastErr: e.lastErr}
