@@ -236,3 +236,18 @@ func (s *Store) LatestVenueAccountSnapshots(ctx context.Context) ([]VenueAccount
 				src.BalanceRaw, src.EquityRaw, src.FreeMarginRaw, src.BufferMultiple, src.FetchedAt
 		}), nil
 }
+
+// LatestVenueAccountSnapshotTsBySrc (venue,venue_type,src) 最新快照戳——
+// WS 事件监护活性探针（src=okx_event 新=私面 WS 活，陈=监护缺）。
+func (s *Store) LatestVenueAccountSnapshotTsBySrc(ctx context.Context, venue, venueType, src string) (time.Time, error) {
+	var ts *time.Time
+	err := s.pool.QueryRow(ctx, `SELECT max(fetched_at) FROM fin_venue_account_snapshot
+		WHERE venue=$1 AND venue_type=$2 AND src=$3`, venue, venueType, src).Scan(&ts)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if ts == nil {
+		return time.Time{}, nil
+	}
+	return *ts, nil
+}

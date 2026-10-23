@@ -44,6 +44,18 @@ func (s *Service) capitalView() *capitalview.View {
 		},
 		MTFrames:   s.mtFrameAt,                                         // D-572 S2：MT 键流帧读口
 		MTFrameTTL: func() time.Duration { return snapshotStaleWindow }, // 帧龄窗=快照龄闸同值
+		PrivWsFresh: func(ctx context.Context, venue, venueType string) (time.Time, bool, error) {
+			if s.store == nil {
+				return time.Time{}, false, nil
+			}
+			ts, err := s.store.LatestVenueAccountSnapshotTsBySrc(ctx, venue, venueType, "okx_event")
+			return ts, err == nil && !ts.IsZero(), err // WS 事件快照戳（新=私面活监护）
+		},
+		AlertFn: func(level, msg string) { // 监护缺告警（fail-closed 不静默降级 REST）
+			if s.store != nil {
+				_ = s.store.InsertAlert(context.Background(), nil, level, msg) // 留痕不阻断
+			}
+		},
 	})
 	return s.capView
 }

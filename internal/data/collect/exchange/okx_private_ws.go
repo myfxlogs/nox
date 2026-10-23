@@ -16,6 +16,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"nox/internal/data/bus"
@@ -83,7 +84,9 @@ type OKXPrivateWS struct {
 	onReconnect func()
 	// writeMu D-166：gorilla conn 单写者契约——login/订阅/探针写与 ping goroutine
 	// 共用 conn，统一 writeMu 串行化（gate D-477 同型）。
-	writeMu sync.Mutex
+	writeMu   sync.Mutex
+	lastSnap  atomic.Pointer[pgstore.VenueAccountSnapshot] // 心跳刷源（返修①）
+	hbSpawned atomic.Bool                                  // 心跳 spawn 幂等化（返修②）
 }
 
 // NewOKXPrivateWS 创建采集器（凭据=REST querier 同源 exchange_configs，不新增 secret 配置项）。
@@ -173,6 +176,7 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 	defer close(done)
 	probe := newSubProbe() // D-166：本连接期 per-channel pending→ack 探针记账
 	safego.GoPlain("okx_private_ws:probe", func() { o.probeSubLoop(ctx, conn, done, probe) })
+	o.heartbeatSnapLoopSpawn(ctx) // 静户心跳刷快照（件见 okx_private_ws_heartbeat.go）
 	safego.GoLoopPlain("okx_private_ws:ping", func() {
 		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()
