@@ -156,7 +156,10 @@ func (s *Scanner) scanOnce(ctx context.Context) error {
 	bus.MarkPermProbeBootDone()
 
 	// ③ 跨所价差 → 入库（okxSpotBase=D-011 S2 OKX 腿直连传输层错误的 cex-proxy 回落通道）
-	spreads, err := CalcSpreads(ctx, s.client, s.bnAPIURL, s.okxSpotBase, s.symbols)
+	spreads, err := CalcSpreads(ctx, s.client, s.bnAPIURL, s.okxSpotBase, s.symbols,
+		func(ctx context.Context, ccy string) (float64, bool) { // 残面收尾①：okx 价 WS 事实读（60s 龄窗 fail-closed→REST 兜底拍）
+			return s.store.LatestTickMidWithin(ctx, "okx", ccy+"USDT", 60*time.Second)
+		})
 	if err != nil {
 		log.Printf("[cexscan] calc spreads: %v", err)
 	} else {

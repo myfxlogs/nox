@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nox/internal/platform/httpx"
 	"strconv"
 	"strings"
 
@@ -85,7 +86,7 @@ func (r *okxEarnRail) req(ctx context.Context, method, pathWithQuery, body strin
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := r.e.client().Do(req)
+	resp, err := httpx.FreshClient().Do(req) // FreshClient 每请新 conn（h2 僵守病灶免疫同 exec 径修——JIT funding 读败病灶修）
 	if err != nil {
 		return nil, err
 	}
