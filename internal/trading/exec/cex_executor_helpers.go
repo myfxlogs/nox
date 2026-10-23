@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
 )
 
 // asString 容错取 string 字段（json.Number / float64 / string 都接受）。
@@ -208,10 +207,7 @@ func f64z(s string) (float64, error) {
 	return strconv.ParseFloat(s, 64)
 }
 
-// execFreshClient exec 径专用传输：DisableKeepAlives 每单新鲜 conn——
-// 复用流瞬死病灶（h2 僵尸/h1 会话丢态）与钱径脱钩；TLS 每单新握=
-// 下单低频域可承受（探针实证一次性新 conn 全通）。
-func execFreshClient() *http.Client {
-	tr := &http.Transport{DisableKeepAlives: true}
-	return &http.Client{Transport: tr, Timeout: 15 * time.Second}
-}
+// （execFreshClient 已删——exec 返修⑤：裸 transport 绕过 httpx 装配层三件
+// 〔自签 CA/tokenRT/banGateRT〕=venue 走代理面/需 CA 即死的平台契约破口；
+// 收编为 httpx.FreshClient（assembleRT〔keepalive 开关〕参数化全继承），
+// 调用面=cex_executor.go 构造处。）

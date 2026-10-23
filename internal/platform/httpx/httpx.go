@@ -28,6 +28,7 @@ var (
 func Configure(caPath, token string, pairs [][2]string) {
 	proxyCAPath, proxyToken, failoverPairs = caPath, token, pairs
 	sharedRTOnce, sharedRT = sync.Once{}, nil // 再注入须重建单例（boot 期幂等/测试隔离面）
+	freshRTOnce, freshRT = sync.Once{}, nil   // 同律（exec 返修⑤——fresh 单例随注入重建）
 }
 
 // Client 返回带 Binance 静态代理信任的 http.Client：
@@ -42,20 +43,34 @@ func Configure(caPath, token string, pairs [][2]string) {
 var (
 	sharedRTOnce sync.Once
 	sharedRT     http.RoundTripper
+	freshRTOnce  sync.Once
+	freshRT      http.RoundTripper
 )
 
 func buildSharedRT() http.RoundTripper {
-	caPath, tok := proxyCAPath, proxyToken
-	if caPath == "" && tok == "" {
+	if proxyCAPath == "" && proxyToken == "" {
 		return nil // 零值=直连——http.Client 无 Transport 走 DefaultTransport 复用面
 	}
+	rt := assembleRT(false)
+	if rt == nil {
+		return nil
+	}
+	return &sharedWrap{rt: rt} // 指针壳=接口可比（锚测单例断言面）
+}
+
+// assembleRT 参数化传输装配（exec 返修⑤——sharedRT 装配抽 keepalive 开关）：
+// disableKeepAlives=true → exec 钱径 fresh 形（每请求新 conn 不复用）；
+// 装配层（自签 CA/tokenRT/failoverRT/banGateRT）两形同源全继承——exec 侧裸
+// transport 绕层破口（venue 走代理面/需 CA 即死）由 fresh 形收编。
+func assembleRT(disableKeepAlives bool) http.RoundTripper {
 	tr, ok := http.DefaultTransport.(*http.Transport)
 	if !ok {
 		return nil
 	}
 	tr = tr.Clone()
-	if caPath != "" {
-		if pem, err := os.ReadFile(caPath); err == nil {
+	tr.DisableKeepAlives = disableKeepAlives
+	if proxyCAPath != "" {
+		if pem, err := os.ReadFile(proxyCAPath); err == nil {
 			pool, err := x509.SystemCertPool() // 系统根 + 自签 CA，勿替换（OKX 等仍须信任公网 CA）
 			if err != nil {
 				pool = x509.NewCertPool()
@@ -70,15 +85,15 @@ func buildSharedRT() http.RoundTripper {
 	// 整段删使 flag 真生效；h2 会话面病灶归零。健检码件不入 h1 径）。
 	tr.ForceAttemptHTTP2 = false
 	var rt http.RoundTripper = tr
-	if tok != "" {
-		rt = tokenRT{base: rt, tok: tok}
+	if proxyToken != "" {
+		rt = tokenRT{base: rt, tok: proxyToken}
 	}
 	if fb := newFailoverRT(rt); fb != nil {
 		rt = fb
 	}
 	// 418 感知全局退避闸——最外包（封禁响应层语义先于 failover 传输层尝试；
 	// 单闸全 bn REST 消费径同过=封禁自持病灶单点治理）。
-	return &sharedWrap{rt: newBanGateRT(rt)} // 指针壳=接口可比（锚测单例断言面）
+	return newBanGateRT(rt)
 }
 
 // sharedWrap 指针壳：内层 RT 族含 map 字段不可比——单例断言须指针身分。
@@ -91,6 +106,20 @@ func Client() *http.Client {
 	sharedRTOnce.Do(func() { sharedRT = buildSharedRT() })
 	if sharedRT != nil {
 		c.Transport = sharedRT
+	}
+	return c
+}
+
+// FreshClient exec 钱径专用 fresh 形（exec 返修⑤）：base transport DisableKeepAlives
+// ＝每单新鲜 conn 不复用（复用流瞬死病灶与钱径脱钩；TLS 每单新握=下单低频域可
+// 承受）；装配层与 Client() 同源全继承（自签 CA/X-Proxy-Token/failover/banGate），
+// banGate/failover 状态随单例跨单存续（418 退避连续性）。零配置直连形 Transport
+// 非 nil——显式 fresh 基座（nil 会走 DefaultTransport=keepalive 复用击穿 fresh 语义）。
+func FreshClient() *http.Client {
+	c := &http.Client{Timeout: 15 * time.Second}
+	freshRTOnce.Do(func() { freshRT = assembleRT(true) })
+	if freshRT != nil {
+		c.Transport = freshRT
 	}
 	return c
 }

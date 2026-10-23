@@ -89,8 +89,8 @@ func NewCEXExecutor(venue, venueType, apiKey, apiSecret, passphrase, baseURL str
 		baseURL:    baseURL,
 
 		simulated:  simulated,
-		client:     wrapDepHealth(venue, venueType, httpx.Client()),    // CA 信任 + X-Proxy-Token 注入（D-055）；OKX 公网忽略注入头；D-579 dephealth 记账 RT
-		execClient: wrapDepHealth(venue, venueType, execFreshClient()), // 钱径专用传输：每单新鲜 conn 不复用（复用流瞬死病灶与钱径脱钩——真钱加固）
+		client:     wrapDepHealth(venue, venueType, httpx.Client()),      // CA 信任 + X-Proxy-Token 注入（D-055）；OKX 公网忽略注入头；D-579 dephealth 记账 RT
+		execClient: wrapDepHealth(venue, venueType, httpx.FreshClient()), // 钱径专用传输：每单新鲜 conn 不复用+装配层全继承（httpx fresh 形——exec 返修⑤）
 
 		marginReservePct:       defaultMarginReservePct,
 		crossNotionalEquityCap: DefaultCrossNotionalEquityCap,
