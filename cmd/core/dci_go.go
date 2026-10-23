@@ -89,30 +89,6 @@ func buildDCIExecutor(ctx context.Context, st *pgstore.Store, modeGate dciexec.M
 		}
 	}
 	dciexec.BalanceEventHook = ex.JitOkxEarnEvent // 余额事件即拍钩（account push 消费缝）
-	// armed 缺资闸读口（返修③——armed 待开位=缺资：armed 组合有 enabled 行且
-	// 无开单仓位即缺资阻归集；armed 保证金优先权高于 earn 占用=禁线钦定）。
-	dciexec.ArmedShortfallFn = func(ctx context.Context, venue string) (float64, error) {
-		var n int
-		err := st.Pool().QueryRow(ctx, `SELECT count(*) FROM xasset_allow_combos
-			WHERE tier='armed' AND enabled AND (venue_buy=$1 OR venue_sell=$1)`, venue).Scan(&n)
-		if err != nil {
-			return 0, fmt.Errorf("armed combos: %w", err)
-		}
-		if n == 0 {
-			return 0, nil
-		}
-		var openN int
-		err = st.Pool().QueryRow(ctx, `SELECT count(DISTINCT p.id) FROM positions p
-			JOIN position_legs l ON l.position_id = p.id
-			WHERE p.status='open' AND l.venue=$1`, venue).Scan(&openN)
-		if err != nil {
-			return 0, fmt.Errorf("armed open positions: %w", err)
-		}
-		if openN < n {
-			return float64(n - openN), nil // armed 待开位=缺资域（估额=位差如实）
-		}
-		return 0, nil
-	}
 	startJitIdleSweep(ctx, ex)
 	safego.GoPlain("dci:okx-earn-boot", func() { ex.JitOkxEarnEvent(ctx) }) // okx earn 归集 boot 一判（断窗恢复拍同重连语义）
 	return ex

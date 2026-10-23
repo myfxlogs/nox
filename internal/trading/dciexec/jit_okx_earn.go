@@ -18,11 +18,15 @@ import (
 // 幂等键兜写不兜判，判定段须串行）。
 var jitOkxEarnMu sync.Mutex
 
-// ArmedShortfallFn armed 缺资查询件（返修③——设计锚测#3：armed 缺资时归集
-// 不触发〔赎回时延卡开单=优先权倒挂防〕；装配=dci_go 注入 opp-margin 缺资面
-// 读口；nil=不查〔零仓测试面兼容〕）。返 (shortfall>0, err)——读败 fail-closed
-// 停归集（armed 保证金优先权高于 earn 占用=禁线钦定）。
-var ArmedShortfallFn func(ctx context.Context, venue string) (float64, error)
+// sweepExcess 留备式可扫额（sweepable=free−armedReserve−floor——同函数单源
+// 供判定件+测试双态断言）。
+func sweepExcess(free, reserve float64) float64 { return free - reserve - jitOkxIdleFloorUSD }
+
+// jitOkxReserveKey armed 保证金预留键（返修⑤钦定留备式——sweepable=
+// free−armedReserve−floor：预留头备即时开单+超出照常归集=优先权与
+// 钱不眠同立；枚举式缺资闸根除〔armed-enabled-无仓位恒真=归集永停死胎修〕）。
+const jitOkxReserveKey = "NOX_OKX_MARGIN_RESERVE_USD"
+const jitOkxReserveDefaultUSD = 500.0
 
 // jitOkxIdleFloorUSD okx 活期归集地板（binance $100 同域）。
 const jitOkxIdleFloorUSD = 100.0
@@ -41,18 +45,6 @@ func (e *Executor) JitOkxEarnEvent(ctx context.Context) {
 
 // jitOkxEarnSweep 闲额判定→归集执行（评估闸不合格如实报闲——如实非静默）。
 func (e *Executor) jitOkxEarnSweep(ctx context.Context) error {
-	// armed 缺资闸（返修③——设计锚测#3）：缺资本拍停归集如实静默；读败
-	// fail-closed 同停（armed 保证金优先权高于 earn 占用）。
-	if ArmedShortfallFn != nil {
-		short, serr := ArmedShortfallFn(ctx, "okx")
-		if serr != nil {
-			return fmt.Errorf("armed 缺资读败 fail-closed 停归集: %w", serr)
-		}
-		if short > 0 {
-			log.Printf("[dciexec] okx earn jit armed 缺资 %.4f 本拍停归集（armed 优先）", short)
-			return nil // 如实静默——armed 面优先（earn 占用不抢保证金）
-		}
-	}
 	rail, ok := e.earnRail("okx")
 	if !ok {
 		return fmt.Errorf("okx earn rail 缺席")
@@ -61,12 +53,18 @@ func (e *Executor) jitOkxEarnSweep(ctx context.Context) error {
 	if !ok {
 		return fmt.Errorf("okx earn rail 类型不符")
 	}
+	// 留备式预留（返修⑤钦定式）：armed 保证金头备=NOX_OKX_MARGIN_RESERVE_USD
+	// 读败=保守默认 500（宁多备不欠保证金=fail-closed 守）。
+	reserve := jitOkxReserveDefaultUSD
+	if rv, rok, rerr := e.Store.AppConfigInt64(ctx, jitOkxReserveKey); rerr == nil && rok && rv > 0 {
+		reserve = float64(rv)
+	}
 	free, err := r.FreeBalance(ctx, jitCcy) // 双源：unified availBal+funding 户
 	if err != nil {
 		return fmt.Errorf("okx 闲额读败 fail-closed: %w", err)
 	}
-	excess := free - jitOkxIdleFloorUSD
-	log.Printf("[dciexec] okx earn jit free %.4f excess %.4f", free, excess) // 观测面：静默径带 info
+	excess := sweepExcess(free, reserve) // sweepable=free−armedReserve−floor（同函数单源）
+	log.Printf("[dciexec] okx earn jit free %.4f reserve %.4f excess %.4f", free, reserve, excess)
 	if excess < jitIdleMinSweepUSD {
 		return nil // 闲钱未超闸=如实静默（下一事件再判）
 	}
