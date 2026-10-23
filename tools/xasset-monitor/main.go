@@ -82,6 +82,23 @@ func run(ctx context.Context) (err error) {
 	return runPairs(ctx, st, pairs)
 }
 
+// errEquivGuard 量级守卫哨兵（runPairs 消费=warn+stills 落行，
+// 非 reportFatal 升级——票面钦定档=如实 uncovered warn 不产簿）。
+var errEquivGuard = errors.New("equiv_guard")
+
+// equivGuardBps 量级守卫阈（SPCXUSDT↔SPX500 −9808bps 假等价实证上界取
+// 3000bps=30%——真对价差分布远低；毒仓防复现非判精度）。
+const equivGuardBps = 3000.0
+
+// equivGuardCheck 量级守卫闸件（runPair+锚测同源消费——直提判据防双源漂移）：
+// |entry_spread|>equivGuardBps → 哨兵错（runPairs 消费=warn+stills 落行）。
+func equivGuardCheck(pair string, spread float64) error {
+	if math.Abs(spread) > equivGuardBps {
+		return fmt.Errorf("%w: pair=%s entry_spread=%.0fbps（等价假配疑）", errEquivGuard, pair, spread)
+	}
+	return nil
+}
+
 // runPairs S2：逐对取各自 exSym 报价（无新鲜 tick → 该对 skip+warn 逐对 fail-open，
 // 9-16 业主并存裁定）——禁止任何腿顶替、禁止跨账户借用（D-144：各账户独立采样，
 // p.mtVenueKey 携带该对所属账户）。返回首个 pair 失败错误（skip 非失败）。
@@ -99,6 +116,11 @@ func runPairs(ctx context.Context, st *pgstore.Store, pairs []monitorPair) error
 		if err := runPair(ctx, st, p, p.mtVenueKey, exBid, exAsk); err != nil {
 			// stale 命中二次判定——venue 活性锚成立=簿面静止降 warn
 			// （stale 价不落簿=D-591 指标纯洁不动）；锚失效/超帽/无行=dead 走原链。
+			if errors.Is(err, errEquivGuard) {
+				log.Printf("xasset-monitor: pair=%s 量级守卫拒产簿（warn 档不产簿）: %v", p.pair, err)
+				stills = append(stills, fmt.Sprintf("%s 量级守卫", p.pair))
+				continue
+			}
 			var sde *staleDataErr
 			if errors.As(err, &sde) && classifyStale(ctx, st.Pool(), sde) == "still" {
 				log.Printf("xasset-monitor: pair=%s 簿面静止（venue 活性锚成立，降 warn）: %v", p.pair, err)
@@ -150,6 +172,11 @@ func runPair(ctx context.Context, st *pgstore.Store, p monitorPair, mtVenue stri
 
 	// 算指标（口径分离 D1）。
 	entrySpread := (bid - exAsk) / exAsk * 10000
+	// D-663 族量级守卫：|entry_spread|>阈=等价假配（SPCXUSDT↔SPX500 −9808bps
+	// 实证）——不产簿如实 uncovered（毒仓防复现）。
+	if err := equivGuardCheck(pair, entrySpread); err != nil {
+		return err
+	}
 	exitSpread := (ask - exBid) / exBid * 10000
 	// 三 venue VIP0 maker 费率同为 0.02%×2=4bps（binance 单 C 档；gate fee 表
 	// gate.com/announcements/article/101365 VIP0 maker 0.0200%）→ 常量化共享。
