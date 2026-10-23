@@ -3,9 +3,20 @@ package exchange
 
 import (
 	"context"
+	"log"
 	"strconv"
 	"time"
 )
+
+// logSubscribeArgs 订阅真容落痕（频道计数诊断桩——零 books5/tickers exec arg
+// =订阅面缺席实证；execSyms 空集病灶抓漏件，行数门禁拆此）。
+func logSubscribeArgs(nSyms, nFunding int, args []map[string]string) {
+	ch := map[string]int{}
+	for _, a := range args {
+		ch[a["channel"]]++
+	}
+	log.Printf("[okx-ws] subscribeArgs: syms=%d fundingSyms=%d args=%d channels=%v", nSyms, nFunding, len(args), ch)
+}
 
 // CexDepthRowLite ws 侧深度行（InsertCexDepth 同形消费面——wire 期拼装）。
 type CexDepthRowLite struct {

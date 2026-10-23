@@ -163,6 +163,7 @@ func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms, fundingSyms []st
 		}
 	}
 	args = append(args, o.fundingSubArgs(fundingSyms, subscribed)...) // D-665 返修④：funding 集与执行面解耦
+	logSubscribeArgs(len(syms), len(fundingSyms), args)               // 订阅真容落痕（行数门禁拆 books5 件）
 	return args
 }
 

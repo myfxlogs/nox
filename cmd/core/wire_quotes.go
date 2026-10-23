@@ -51,6 +51,19 @@ func startQuoteStreams(ctx context.Context, cexCfg exchange.Config, qbus *bus.Qu
 		}
 		return slices.Contains(syms, venueSymbol)
 	}
+	// D-663：indiv 执行面集+预算闸装配（armed∪毕业∪在仓 open 腿——
+	// 集与执行面查询同源对拍；cap=app_config NOX_INDIV_MAX_CONNS 键缺
+	// =indiv 显式关）。**装配序硬约束：必须在各 New*WebSocket(cexCfg)
+	// 之前赋值——构造件 cfg 值拷贝快照，后赋字段对 ws 侧不可见（okx
+	// execSyms=0 空集病灶实证：books5/tickers exec 订阅自始缺席）。**
+	cexCfg.ExecFaceFn = func(ctx context.Context) (map[string]string, error) {
+		return st.ExecFaceBinanceSymbols(ctx)
+	}
+	cexCfg.ExecFaceVenueFn = st.ExecFaceVenueSymbols // D-665 okx/gate 同律执行面集
+	cexCfg.MonitorFaceFn = monitorFaceFn(st)         // 装配序修：同一 helper 供 main 层先赋
+	cexCfg.IndivBudgetFn = func(ctx context.Context) (int64, bool, error) {
+		return st.AppConfigInt64(ctx, "NOX_INDIV_MAX_CONNS")
+	}
 	okxWs := exchange.NewOKXWebSocket(cexCfg)
 	okxWs.OnInstrumentChange = exec.OKXSpecInvalidate
 	okxWs.SetFactEmit(emitFacts)
@@ -67,17 +80,6 @@ func startQuoteStreams(ctx context.Context, cexCfg exchange.Config, qbus *bus.Qu
 	// 失效闭包须寻址 collect 侧 ws 实例，构造时不在场）。
 	// D-505 S2 + D-508 S14：Binance 公开报价单轨=WS 流（双连接 SUBSCRIBE）；
 	// REST 兜底已删（断流→reconnectMeter 告警 + 报价龄期闸 fail_closed 拒新鲜度不足报价）。
-	// D-663：indiv 执行面集+预算闸装配（armed∪毕业∪在仓 open 腿——
-	// 集与执行面查询同源对拍；cap=app_config NOX_INDIV_MAX_CONNS 键缺
-	// =indiv 显式关）。
-	cexCfg.ExecFaceFn = func(ctx context.Context) (map[string]string, error) {
-		return st.ExecFaceBinanceSymbols(ctx)
-	}
-	cexCfg.ExecFaceVenueFn = st.ExecFaceVenueSymbols // D-665 okx/gate 同律执行面集
-	cexCfg.MonitorFaceFn = monitorFaceFn(st)         // 装配序修：同一 helper 供 main 层先赋
-	cexCfg.IndivBudgetFn = func(ctx context.Context) (int64, bool, error) {
-		return st.AppConfigInt64(ctx, "NOX_INDIV_MAX_CONNS")
-	}
 	if ws := exchange.NewBinanceMarketWS(cexCfg); ws != nil {
 		ws.SetFactEmit(emitFacts)
 		ws.SetFundingIntervals(fundingIntervals)
