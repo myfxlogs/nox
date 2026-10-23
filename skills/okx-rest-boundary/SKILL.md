@@ -19,6 +19,11 @@ description: okx REST 界桩账——钦定保留面（事务操作）vs 退役�
 - funding-rate(-history) REST ← WS `funding-rate` 频道
 - market tickers 轮询 ← WS `tickers` 频道
 - account/balance·positions 周期读 ← WS `balance_and_position`+account
+## JIT earn 归集（闲钱不眠执行面）
+- **闲额混源**：`free = unified〔WS 快照须鲜<5min〕+ funding〔/asset/balances REST〕`——单边读败/快照陈=fail-closed 整拍停，金不动（`okx_event` 行只含交易户，单读=假贫病灶实证复返过一次）。
+- **动态保证金留备**（D-业主令最优解，替静态 $500）：`reserve = Σ armed okx 腿组合保证金需`——`margin_usd 直值 > notional_usd/lever > 组合默认额`；零 armed/读败→静态兜底 `NOX_OKX_MARGIN_RESERVE_USD`（500）。键：`NOX_OKX_MARGIN_LEVER`(5)/`NOX_OKX_MARGIN_COMBO_USD`(pct 型组合默认 150)/`NOX_OKX_MARGIN_RESERVE_CAP`(2000 上限)。实现：`pgstore.JitOkxArmedMarginUSD`+`dciexec.jitOkxReserve`。
+- **扫额式**：`sweepable = free − reserve − floor(100)`——floor 防碎钱空转/滞回防抖；armed 优先权经留备保证（信号到时交易户当场有钱开单，不等赎回时延）。
+- **事件驱动+单飞**：balance_and_position push 钩子触发，`TryLock` 单飞防并发余额事件双过闲额判定。
 ## 坑注记——h2 感染病灶（根修实证 2026-10-23）
 - **签名**：`malformed HTTP response "\x00\x00\x12\x04..."`=h2 SETTINGS 帧落 h1 解析器
 - **根因**：`http.DefaultTransport` 一经使用即被懒配 h2（`onceSetNextProtoDefaults`→TLSNextProto 注 handler+`TLSClientConfig.NextProtos` 注 `"h2"`）；`tr.Clone()` **浅继中毒字段**→ALPN 供 h2→服务端回 h2 帧→h1 client 判 malformed。`ForceAttemptHTTP2=false` 只挡懒配时机、不挡已染字段继承。
