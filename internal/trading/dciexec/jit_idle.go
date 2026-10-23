@@ -27,29 +27,36 @@ func (e *Executor) JitIdleSweep(ctx context.Context) {
 }
 
 func (e *Executor) jitIdleSweepVenue(ctx context.Context, venue, vt string) error {
-	// min_free 闸件——snapshot MMR 读面（buffer_multiple=equity/MMR 反推）。
+	// min_free 闸件——返修⑦：buffer_multiple 全谱 NULL 死字段弃用
+	// （SG 产验 24h 恒 NULL 实证）。分判：空仓〔equity≈free_margin=零在仓
+	// 腿〕MMR 真值=0→minFree=$100 地板；有仓〔equity>free〕=used margin
+	// 真源（equity−free=在仓占用金——保守源同 buffer 域宁多留）。
 	snaps, err := e.Store.LatestVenueAccountSnapshots(ctx)
 	if err != nil {
 		return fmt.Errorf("%s snapshot 读败 fail-closed: %w", venue, err)
 	}
-	var mmr float64
+	var equity, snapFree float64
 	found := false
 	for _, sn := range snaps {
 		if sn.Venue == venue && sn.VenueType == vt && sn.Currency == jitCcy &&
-			sn.EquityRaw != nil && sn.BufferMultiple != nil && *sn.BufferMultiple > 0 {
-			mmr = *sn.EquityRaw / *sn.BufferMultiple
+			sn.EquityRaw != nil && sn.FreeMarginRaw != nil {
+			equity, snapFree = *sn.EquityRaw, *sn.FreeMarginRaw
 			found = true
 			break
 		}
 	}
 	if !found {
-		return fmt.Errorf("%s:%s MMR 快照行缺 fail-closed 不扫", venue, vt)
+		return fmt.Errorf("%s:%s 快照行缺 fail-closed 不扫", venue, vt)
 	}
 	free, err := e.tradingFree(ctx, venue, vt)
 	if err != nil {
 		return fmt.Errorf("%s 交易户可动读败: %w", venue, err)
 	}
-	minFree := mmr*jitIdleBufferFactor + jitIdleFloorUSD
+	used := equity - snapFree // 在仓占用金=MMR 保守近似（used≥MMR 常成立）
+	if used < 0 {
+		used = 0
+	}
+	minFree := used*jitIdleBufferFactor + jitIdleFloorUSD
 	excess := free - minFree
 	if excess < jitIdleMinSweepUSD {
 		return nil // 闲钱未超闸=如实静默（下拍再试）
@@ -91,7 +98,7 @@ func (e *Executor) jitIdleSweepVenue(ctx context.Context, venue, vt string) erro
 	}
 	e.ioTransfer(ctx, venue, jitCcy, excess, jitFundingWallet(venue), "earn",
 		fmt.Sprintf("jit-idle-auto:%s:%d:sub", venue, nonce), body)
-	log.Printf("[dciexec] jit idle sweep %s %.4f %s→earn 成（free %.4f minFree %.4f mmr %.4f）",
-		venue, excess, jitCcy, free, minFree, mmr)
+	log.Printf("[dciexec] jit idle sweep %s %.4f %s→earn 成（free %.4f minFree %.4f used %.4f）",
+		venue, excess, jitCcy, free, minFree, used)
 	return nil
 }
