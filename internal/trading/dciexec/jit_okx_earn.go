@@ -50,12 +50,8 @@ func (e *Executor) jitOkxEarnSweep(ctx context.Context) error {
 	if !ok {
 		return fmt.Errorf("okx earn rail 缺席")
 	}
-	// 留备式预留（返修⑤钦定式）：armed 保证金头备=NOX_OKX_MARGIN_RESERVE_USD
-	// 读败=保守默认 500（宁多备不欠保证金=fail-closed 守）。
-	reserve := jitOkxReserveDefaultUSD
-	if rv, rok, rerr := e.Store.AppConfigInt64(ctx, jitOkxReserveKey); rerr == nil && rok && rv > 0 {
-		reserve = float64(rv)
-	}
+	reserve, reserveSrc := e.jitOkxReserve(ctx) // 动态 armed 保证金需（业主令最优解）；败=静态兜底
+	log.Printf("[dciexec] okx earn jit reserve %.2f src=%s", reserve, reserveSrc)
 	// 混源钉（返修⑥钦定式）：free = unified〔okx_event 快照行须鲜〕+
 	// fundingAvail〔asset/balances REST=钦定保留面〕——快照行不鲜=funding
 	// 单边也不判 fail-closed（单读 unified 报 0 假贫病灶防复返）。
@@ -136,4 +132,36 @@ func EmitBalanceEvent(ctx context.Context) {
 	if BalanceEventHook != nil {
 		BalanceEventHook(ctx)
 	}
+}
+
+// jitOkxReserve 动态保证金留备（业主令最优解）：Σ armed okx 腿组合保证金需
+// （margin_usd 直值>notional/lever>组合默认额）——随 armed 簿配置自动伸缩。
+// 读败=静态兜底 NOX_OKX_MARGIN_RESERVE_USD/500（fail-closed 宁多备）。
+// 键：NOX_OKX_MARGIN_LEVER〔默认 5〕、NOX_OKX_MARGIN_COMBO_USD〔pct 型无静态名义额组合默认 150〕、
+// NOX_OKX_MARGIN_RESERVE_CAP〔动态值上限默认 2000〕。
+func (e *Executor) jitOkxReserve(ctx context.Context) (float64, string) {
+	fb := jitOkxReserveDefaultUSD
+	if rv, rok, rerr := e.Store.AppConfigInt64(ctx, jitOkxReserveKey); rerr == nil && rok && rv > 0 {
+		fb = float64(rv)
+	}
+	lever := 5.0
+	if v, ok, err := e.Store.AppConfigFloat(ctx, "NOX_OKX_MARGIN_LEVER"); err == nil && ok && v > 0 {
+		lever = v
+	}
+	comboDef := 150.0
+	if v, ok, err := e.Store.AppConfigFloat(ctx, "NOX_OKX_MARGIN_COMBO_USD"); err == nil && ok && v > 0 {
+		comboDef = v
+	}
+	cap := 2000.0
+	if v, ok, err := e.Store.AppConfigFloat(ctx, "NOX_OKX_MARGIN_RESERVE_CAP"); err == nil && ok && v > 0 {
+		cap = v
+	}
+	dyn, err := e.Store.JitOkxArmedMarginUSD(ctx, lever, comboDef)
+	if err != nil || dyn <= 0 {
+		return fb, "static-fallback" // 读败/零 armed=静态留备守
+	}
+	if dyn > cap {
+		return cap, "dynamic-capped"
+	}
+	return dyn, "dynamic"
 }

@@ -20,17 +20,20 @@ import (
 )
 
 type fakeStore struct {
-	cons      []pgstore.CapabilityConstraint
-	snaps     []pgstore.VenueAccountLatest
-	quotes    []pgstore.CexDCIQuote // ListDCIQuotes 原样回（opt/invest 过滤在 fake 内做）
-	orders    map[string]*pgstore.DCIOrder
-	listErr   error
-	outErr    error
-	gaps      []pgstore.ConditionGap
-	posRows   int
-	alerts    []string
-	positions []pgstore.PersonalPosition
-	updates   []struct {
+	cons  []pgstore.CapabilityConstraint
+	snaps []pgstore.VenueAccountLatest
+
+	armedMarginUSD float64 // 动态留备测试注口（0+nil err=静态兜底径）
+	armedMarginErr error
+	quotes         []pgstore.CexDCIQuote // ListDCIQuotes 原样回（opt/invest 过滤在 fake 内做）
+	orders         map[string]*pgstore.DCIOrder
+	listErr        error
+	outErr         error
+	gaps           []pgstore.ConditionGap
+	posRows        int
+	alerts         []string
+	positions      []pgstore.PersonalPosition
+	updates        []struct {
 		id   int64
 		qty  float64
 		note string
@@ -1492,4 +1495,8 @@ func TestSpotPriceVenue(t *testing.T) {
 
 func (f *fakeStore) LatestVenueAccountSnapshots(_ context.Context) ([]pgstore.VenueAccountLatest, error) {
 	return f.snaps, nil
+}
+
+func (f *fakeStore) JitOkxArmedMarginUSD(_ context.Context, _, _ float64) (float64, error) {
+	return f.armedMarginUSD, f.armedMarginErr
 }

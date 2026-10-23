@@ -85,6 +85,9 @@ type Store interface {
 	LatestEarnAPR(ctx context.Context, venue, ccy string) (float64, bool, error)
 	JitArmedComboCount(ctx context.Context, venue string) (int, error)
 	LatestVenueAccountSnapshots(ctx context.Context) ([]pgstore.VenueAccountLatest, error)
+	// JitOkxArmedMarginUSD okx 腿 armed 组合保证金需动态留备（业主令）——
+	// margin_usd>notional/lever>组合默认额；读败方回静态兜底。
+	JitOkxArmedMarginUSD(ctx context.Context, lever, comboDefault float64) (float64, error)
 }
 
 // Executor binance DCI 申购执行器（凭据由装配侧从 exchange_configs 注入）。
